@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Glyph_Metrics",
+  "manifest_cases": [
+    "layout_matches_c",
+    "loaded_glyph_metrics_match_c"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Glyph_Metrics.layout_matches_c",
+      "subject": "freetype.FT_Glyph_Metrics",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/freetype.h",
+          "symbol": "FT_Glyph_Metrics",
+          "fields_in_order": [
+            "width",
+            "height",
+            "horiBearingX",
+            "horiBearingY",
+            "horiAdvance",
+            "vertBearingX",
+            "vertBearingY",
+            "vertAdvance"
+          ],
+          "nested_public_records": [],
+          "probe": [
+            "sizeof",
+            "alignof",
+            "offsetof",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "area:abi_layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "offsets": "object<field,usize>",
+          "field_types": "object<field,c_type>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "offsets",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Glyph_Metrics.loaded_glyph_metrics_match_c",
+      "subject": "freetype.FT_Glyph_Metrics",
+      "case": "loaded_glyph_metrics_match_c",
+      "operation": "freetype.inspect_glyph_metrics",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          },
+          "vertical_font": {
+            "kind": "ref",
+            "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+          }
+        },
+        "params": {
+          "sizes": [
+            12,
+            20,
+            48
+          ],
+          "glyph_indices": [
+            "A",
+            "space",
+            "accented",
+            "vertical_representative"
+          ],
+          "load_flags": [
+            "FT_LOAD_DEFAULT",
+            "FT_LOAD_NO_HINTING",
+            "FT_LOAD_NO_SCALE",
+            "FT_LOAD_VERTICAL_LAYOUT"
+          ],
+          "probe": [
+            "face.glyph.metrics"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "metrics": "FT_Glyph_Metrics",
+          "units": "font_units_or_26_6_depending_on_load_flags"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "metrics.width",
+            "metrics.height",
+            "metrics.horiBearingX",
+            "metrics.horiBearingY",
+            "metrics.horiAdvance",
+            "metrics.vertBearingX",
+            "metrics.vertBearingY",
+            "metrics.vertAdvance",
+            "status"
+          ]
+        },
+        "fixture_requirements": [
+          "Font with real vertical metrics for vertical field coverage"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,275 @@
+{
+  "version": 1,
+  "subject": "ftmm.FT_Get_Multi_Master",
+  "manifest_cases": [
+    "import_contract",
+    "adobe_mm_descriptor_success",
+    "true_type_or_opentype_variation_error",
+    "null_output_error",
+    "invalid_or_non_variable_face_error"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmm.FT_Get_Multi_Master.import_contract",
+      "subject": "ftmm.FT_Get_Multi_Master",
+      "case": "import_contract",
+      "operation": "ftmm.get_multi_master_abi",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Get_Multi_Master",
+        "signature": "FT_Error FT_Get_Multi_Master(FT_Face face, FT_Multi_Master* amaster)",
+        "return": "FT_Error",
+        "params": [
+          "FT_Face face",
+          "FT_Multi_Master* amaster"
+        ]
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include_header": "freetype/ftmm.h",
+          "import_symbol": "FT_Get_Multi_Master"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmm",
+        "area:mm"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile": "symbol import succeeds",
+          "return": "FT_Error"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "signature"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmm.h:220-223"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmm.FT_Get_Multi_Master.adobe_mm_descriptor_success",
+      "subject": "ftmm.FT_Get_Multi_Master",
+      "case": "adobe_mm_descriptor_success",
+      "operation": "ftmm.get_multi_master",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Get_Multi_Master",
+        "signature": "FT_Error FT_Get_Multi_Master(FT_Face face, FT_Multi_Master* amaster)"
+      },
+      "inputs": {
+        "assets": {
+          "adobe_mm_font": {
+            "kind": "ref",
+            "id": "fonts/mm/adobe-multiple-master.pfb",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "face_kind": "adobe_multiple_master",
+          "amaster_initial": "sentinel-filled FT_Multi_Master"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmm",
+        "area:mm"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "num_axis": "FT_UInt <= T1_MAX_MM_AXIS",
+          "num_designs": "FT_UInt <= T1_MAX_MM_DESIGNS",
+          "axis": "FT_MM_Axis[T1_MAX_MM_AXIS] name/minimum/maximum"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "descriptor.num_axis",
+            "descriptor.num_designs",
+            "descriptor.axis[*].name",
+            "descriptor.axis[*].minimum",
+            "descriptor.axis[*].maximum",
+            "descriptor.unused_axis_sentinels"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmm.h:130-149",
+          "freetype/src/base/ftmm.c:69-91"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmm.FT_Get_Multi_Master.true_type_or_opentype_variation_error",
+      "subject": "ftmm.FT_Get_Multi_Master",
+      "case": "true_type_or_opentype_variation_error",
+      "operation": "ftmm.get_multi_master",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Get_Multi_Master",
+        "signature": "FT_Error FT_Get_Multi_Master(FT_Face face, FT_Multi_Master* amaster)"
+      },
+      "inputs": {
+        "assets": {
+          "variable_font": {
+            "kind": "ref",
+            "id": "fonts/variable/multi-axis-named-instances.ttf",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "face_kind": "opentype_or_truetype_variation",
+          "amaster_initial": "sentinel-filled FT_Multi_Master"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmm",
+        "area:mm"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "descriptor": "preserved sentinel when get_mm service slot is unavailable"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "descriptor_after"
+          ]
+        },
+        "error": "FT_Err_Invalid_Argument",
+        "source_refs": [
+          "freetype/src/base/ftmm.c:80-89",
+          "freetype/src/truetype/ttdriver.c:536"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmm.FT_Get_Multi_Master.null_output_error",
+      "subject": "ftmm.FT_Get_Multi_Master",
+      "case": "null_output_error",
+      "operation": "ftmm.get_multi_master",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Get_Multi_Master",
+        "signature": "FT_Error FT_Get_Multi_Master(FT_Face face, FT_Multi_Master* amaster)"
+      },
+      "inputs": {
+        "assets": {
+          "adobe_mm_font": {
+            "kind": "ref",
+            "id": "fonts/mm/adobe-multiple-master.pfb",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "face": "adobe_mm_font",
+          "amaster": null
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmm",
+        "area:mm"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "descriptor": "no output"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "descriptor"
+          ]
+        },
+        "error": "FT_Err_Invalid_Argument",
+        "source_refs": [
+          "freetype/src/base/ftmm.c:76-77"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmm.FT_Get_Multi_Master.invalid_or_non_variable_face_error",
+      "subject": "ftmm.FT_Get_Multi_Master",
+      "case": "invalid_or_non_variable_face_error",
+      "operation": "ftmm.get_multi_master",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Get_Multi_Master",
+        "signature": "FT_Error FT_Get_Multi_Master(FT_Face face, FT_Multi_Master* amaster)"
+      },
+      "inputs": {
+        "assets": {
+          "non_variable_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "argument_matrix": [
+            {
+              "face": null,
+              "amaster": "valid_sentinel_record"
+            },
+            {
+              "face": "non_variable_font",
+              "amaster": "valid_sentinel_record"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmm",
+        "area:mm"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "descriptor": "preserved sentinel"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].descriptor_after"
+          ]
+        },
+        "error": "FT_Err_Invalid_Face_Handle or FT_Err_Invalid_Argument",
+        "source_refs": [
+          "freetype/src/base/ftmm.c:24-45",
+          "freetype/src/base/ftmm.c:69-91"
+        ]
+      }
+    }
+  ]
+}

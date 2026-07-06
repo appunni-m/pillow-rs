@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_PaintExtend",
+  "manifest_cases": [
+    "enum_variants_match_header",
+    "gradient_extend_runtime"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_PaintExtend.enum_variants_match_header",
+      "subject": "ftcolor.FT_PaintExtend",
+      "case": "enum_variants_match_header",
+      "operation": "ftcolor.enum_values",
+      "schema": "enum_value_set",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftcolor.h>",
+          "enum": "FT_PaintExtend",
+          "expected_values": {
+            "FT_COLR_PAINT_EXTEND_PAD": 0,
+            "FT_COLR_PAINT_EXTEND_REPEAT": 1,
+            "FT_COLR_PAINT_EXTEND_REFLECT": 2
+          }
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:ftcolor",
+        "area:colr-v1",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "enum": "FT_PaintExtend",
+          "variant_count": 3
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "enum.values",
+            "enum.order",
+            "import"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_PaintExtend.gradient_extend_runtime",
+      "subject": "ftcolor.FT_PaintExtend",
+      "case": "gradient_extend_runtime",
+      "operation": "ftcolor.traverse_gradient_paints",
+      "schema": "paint_graph",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr_v1_gradients_extend.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyphs": [
+            "linear_pad",
+            "linear_repeat",
+            "radial_reflect",
+            "sweep_pad"
+          ],
+          "read_colorline_stops": true
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:ftcolor",
+        "area:colr-v1",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "paint_formats": [
+            "LINEAR_GRADIENT",
+            "RADIAL_GRADIENT",
+            "SWEEP_GRADIENT"
+          ],
+          "colorline": {
+            "extend": "FT_PaintExtend",
+            "stops": "iterator"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "paint.format",
+            "paint.colorline.extend",
+            "color_stop_iterator.num_color_stops",
+            "color_stops[].stop_offset",
+            "color_stops[].color.palette_index",
+            "color_stops[].color.alpha"
+          ]
+        },
+        "fixture_requirements": [
+          "COLR v1 gradient fixture with PAD, REPEAT, and REFLECT color lines and deterministic color stops"
+        ]
+      }
+    }
+  ]
+}

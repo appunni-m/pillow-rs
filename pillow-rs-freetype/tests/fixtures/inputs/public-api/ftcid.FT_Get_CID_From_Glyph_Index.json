@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "subject": "ftcid.FT_Get_CID_From_Glyph_Index",
+  "manifest_cases": [
+    "cid_face_returns_cid",
+    "opentype_cid_face_supported",
+    "non_cid_or_null_face_errors_and_clears_output",
+    "null_cid_output_matches_c"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcid.FT_Get_CID_From_Glyph_Index.cid_face_returns_cid",
+      "subject": "ftcid.FT_Get_CID_From_Glyph_Index",
+      "case": "cid_face_returns_cid",
+      "operation": "ftcid.get_cid_from_glyph_index",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "cid_keyed_font",
+            "path": "input/fonts/cid/type1-cid-ros-and-glyph-map.pfb",
+            "status": "required_future_asset",
+            "requires": "Non-SFNT CID-keyed Type 1/CFF font with known glyph-index-to-CID mapping"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_indices": [
+            0,
+            1,
+            "last_valid"
+          ],
+          "cid_output": "nonnull_initialized_sentinel"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcid",
+        "area:cid"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "cid": "FT_UInt",
+          "output_write": "cid from service"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].glyph_index",
+            "outputs[*].cid"
+          ]
+        },
+        "fixture_requirements": [
+          "Non-SFNT CID-keyed font with known glyph-index-to-CID mapping accepted by C FreeType"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcid.FT_Get_CID_From_Glyph_Index.opentype_cid_face_supported",
+      "subject": "ftcid.FT_Get_CID_From_Glyph_Index",
+      "case": "opentype_cid_face_supported",
+      "operation": "ftcid.get_cid_from_glyph_index",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "sfnt_wrapped_cid_font",
+            "path": "input/fonts/cid/ot-cff-cid-keyed.otf",
+            "status": "required_future_asset",
+            "requires": "OpenType CFF/CID font whose CFF service reports internally CID-keyed state"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_indices": [
+            0,
+            1,
+            "last_valid"
+          ],
+          "cid_output": "nonnull_initialized_sentinel"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcid",
+        "area:cid"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "cid": "service_result_for_sfnt_wrapped_cid"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].glyph_index",
+            "outputs[*].cid"
+          ]
+        },
+        "fixture_requirements": [
+          "SFNT-wrapped OpenType CFF/CID fixture with CID service enabled"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output",
+      "subject": "ftcid.FT_Get_CID_From_Glyph_Index",
+      "case": "non_cid_or_null_face_errors_and_clears_output",
+      "operation": "ftcid.get_cid_from_glyph_index",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "non_cid_control_font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "face": "non_cid_control",
+              "glyph_index": 1,
+              "cid_output": "nonnull_initialized_9999"
+            },
+            {
+              "face": "null",
+              "glyph_index": 1,
+              "cid_output": "nonnull_initialized_9999"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcid",
+        "area:cid"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "cid_output": "zeroed_when_nonnull"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "variants[*].status",
+            "variants[*].error",
+            "variants[*].cid"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    },
+    {
+      "case_id": "ftcid.FT_Get_CID_From_Glyph_Index.null_cid_output_matches_c",
+      "subject": "ftcid.FT_Get_CID_From_Glyph_Index",
+      "case": "null_cid_output_matches_c",
+      "operation": "ftcid.get_cid_from_glyph_index",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "cid_keyed_font",
+            "path": "input/fonts/cid/type1-cid-ros-and-glyph-map.pfb",
+            "status": "required_future_asset",
+            "requires": "Non-SFNT CID-keyed Type 1/CFF font with known glyph-index-to-CID mapping"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_index": 1,
+          "cid_output": "null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcid",
+        "area:cid"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "cid_output": "not_written_null_pointer",
+          "crash_policy": "C oracle behavior"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error",
+            "process_survival_class"
+          ]
+        },
+        "fixture_requirements": [
+          "Runner must isolate null-output probe because C source calls service with local cid and only skips final write"
+        ]
+      }
+    }
+  ]
+}

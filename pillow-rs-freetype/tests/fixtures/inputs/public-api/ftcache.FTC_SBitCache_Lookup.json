@@ -1,0 +1,303 @@
+{
+  "version": 1,
+  "subject": "ftcache.FTC_SBitCache_Lookup",
+  "manifest_cases": [
+    "rejects_null_sbit_output",
+    "clears_outputs_before_lookup",
+    "returns_cache_owned_sbit",
+    "optional_anode_locks_node",
+    "missing_bitmap_has_null_buffer"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcache.FTC_SBitCache_Lookup.rejects_null_sbit_output",
+      "subject": "ftcache.FTC_SBitCache_Lookup",
+      "case": "rejects_null_sbit_output",
+      "operation": "ftcache.sbit_cache_lookup",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "scalable_control_font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "cache": "live_sbit_cache",
+          "image_type": {
+            "face_id": "stable_pointer:dejavu",
+            "width": 16,
+            "height": 16,
+            "flags": "FT_LOAD_DEFAULT"
+          },
+          "glyph_index": 36,
+          "sbit_output": "null",
+          "anode_output": "nonnull"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:sbit-cache"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "outputs": "not_written"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_SBitCache_Lookup.clears_outputs_before_lookup",
+      "subject": "ftcache.FTC_SBitCache_Lookup",
+      "case": "clears_outputs_before_lookup",
+      "operation": "ftcache.sbit_cache_lookup",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "scalable_control_font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "cache": "live_sbit_cache",
+          "image_type": {
+            "face_id": "stable_pointer:dejavu",
+            "width": 16,
+            "height": 16,
+            "flags": "FT_LOAD_DEFAULT"
+          },
+          "glyph_index": "out_of_range",
+          "initial_outputs": {
+            "sbit": "sentinel_nonnull",
+            "anode": "sentinel_nonnull"
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:sbit-cache"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "sbit": "null",
+          "anode": "null"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error",
+            "outputs.sbit_null",
+            "outputs.anode_null"
+          ]
+        },
+        "error": "c_oracle"
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_SBitCache_Lookup.returns_cache_owned_sbit",
+      "subject": "ftcache.FTC_SBitCache_Lookup",
+      "case": "returns_cache_owned_sbit",
+      "operation": "ftcache.sbit_cache_lookup",
+      "schema": "cache_sbit_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "scalable_control_font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "cache": "live_sbit_cache",
+          "image_type": {
+            "face_id": "stable_pointer:dejavu",
+            "width": 16,
+            "height": 16,
+            "flags": [
+              "FT_LOAD_DEFAULT",
+              "FT_LOAD_RENDER"
+            ]
+          },
+          "glyph_indices": [
+            36,
+            68
+          ],
+          "anode_output": "null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:sbit-cache"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "sbit_fields": [
+            "width",
+            "height",
+            "left",
+            "top",
+            "format",
+            "max_grays",
+            "pitch",
+            "xadvance",
+            "yadvance",
+            "buffer_null",
+            "buffer_bytes"
+          ]
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "sbit.width",
+            "sbit.height",
+            "sbit.left",
+            "sbit.top",
+            "sbit.format",
+            "sbit.max_grays",
+            "sbit.pitch",
+            "sbit.xadvance",
+            "sbit.yadvance",
+            "sbit.buffer_null",
+            "sbit.buffer_bytes"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_SBitCache_Lookup.optional_anode_locks_node",
+      "subject": "ftcache.FTC_SBitCache_Lookup",
+      "case": "optional_anode_locks_node",
+      "operation": "ftcache.sbit_cache_lookup",
+      "schema": "cache_node_lifecycle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "scalable_control_font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "cache": "live_sbit_cache",
+          "image_type": {
+            "face_id": "stable_pointer:dejavu",
+            "width": 16,
+            "height": 16,
+            "flags": "FT_LOAD_DEFAULT"
+          },
+          "glyph_index": 36,
+          "anode_output": "nonnull",
+          "then_pressure_before_unref": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:sbit-cache"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "anode": "non_null",
+          "node_ref": "incremented",
+          "sbit_stability": "held_until_unref"
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "status",
+            "anode.nullness",
+            "node.ref_count_delta",
+            "held_node_survival_class"
+          ]
+        },
+        "fixture_requirements": [
+          "Runner support for cache node lock and pressure observation"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_SBitCache_Lookup.missing_bitmap_has_null_buffer",
+      "subject": "ftcache.FTC_SBitCache_Lookup",
+      "case": "missing_bitmap_has_null_buffer",
+      "operation": "ftcache.sbit_cache_lookup",
+      "schema": "cache_sbit_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "bitmap_strike_font",
+            "path": "input/fonts/cache/bitmap-strike-small-sbits.ttf",
+            "status": "required_future_asset",
+            "requires": "Font with embedded bitmap strike where selected glyphs fit FTC_SBitRec byte-sized metrics"
+          }
+        },
+        "params": {
+          "cache": "live_sbit_cache",
+          "image_type": {
+            "face_id": "stable_pointer:bitmap-strike",
+            "width": 9,
+            "height": 9,
+            "flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "glyph_index": "glyph_without_embedded_sbit",
+          "anode_output": "nonnull"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:sbit-cache"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "sbit": "descriptor_may_succeed_with_null_buffer",
+          "buffer": "null"
+        },
+        "compare": {
+          "mode": "nullness",
+          "paths": [
+            "status",
+            "sbit.buffer_null",
+            "sbit.width",
+            "sbit.height"
+          ]
+        },
+        "fixture_requirements": [
+          "Bitmap strike fixture with one glyph intentionally missing embedded bitmap data"
+        ]
+      }
+    }
+  ]
+}

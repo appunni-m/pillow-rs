@@ -1,0 +1,247 @@
+{
+  "version": 1,
+  "subject": "ftoutln.FT_Orientation",
+  "manifest_cases": [
+    "enum_variants_match_header",
+    "orientation_algorithm_contract",
+    "geometry_fixture_matrix"
+  ],
+  "cases": [
+    {
+      "case_id": "ftoutln.FT_Orientation.enum_variants_match_header",
+      "subject": "ftoutln.FT_Orientation",
+      "case": "enum_variants_match_header",
+      "operation": "abi.enum_layout",
+      "schema": "abi_enum",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ftoutln.h",
+          "symbol": "FT_Orientation",
+          "variants": {
+            "FT_ORIENTATION_TRUETYPE": 0,
+            "FT_ORIENTATION_POSTSCRIPT": 1,
+            "FT_ORIENTATION_FILL_RIGHT": 0,
+            "FT_ORIENTATION_FILL_LEFT": 1,
+            "FT_ORIENTATION_NONE": 2
+          },
+          "aliases": {
+            "FT_ORIENTATION_FILL_RIGHT": "FT_ORIENTATION_TRUETYPE",
+            "FT_ORIENTATION_FILL_LEFT": "FT_ORIENTATION_POSTSCRIPT"
+          }
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:ftoutln",
+        "area:abi_enum"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "variants": "object<string,int>",
+          "aliases": "object<string,string>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "variants",
+            "aliases",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftoutln.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftoutln.FT_Orientation.orientation_algorithm_contract",
+      "subject": "ftoutln.FT_Orientation",
+      "case": "orientation_algorithm_contract",
+      "operation": "ftoutln.outline_get_orientation",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "valid_outlines": {
+            "kind": "ref",
+            "id": "outline/orientation/valid-area-signs.json"
+          },
+          "invalid_outlines": {
+            "kind": "ref",
+            "id": "outline/orientation/invalid-collapsed-oversized.json"
+          }
+        },
+        "params": {
+          "function": "FT_Outline_Get_Orientation",
+          "algorithm": "ftoutln.c polygon area over control points after FT_Outline_Get_CBox",
+          "null_outline_returns": "FT_ORIENTATION_TRUETYPE",
+          "empty_outline_returns": "FT_ORIENTATION_TRUETYPE",
+          "collapsed_or_oversized_returns": "FT_ORIENTATION_NONE",
+          "area_sign_mapping": {
+            "area_gt_0": "FT_ORIENTATION_POSTSCRIPT",
+            "area_lt_0": "FT_ORIENTATION_TRUETYPE",
+            "area_eq_0": "FT_ORIENTATION_NONE"
+          },
+          "bounds_limit_26_6": 16777216
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "runtime:outline_orientation",
+        "area:outline_geometry"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "orientation": "FT_Orientation",
+          "cbox": "FT_BBox",
+          "area_class": "string"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].orientation",
+            "rows[*].cbox",
+            "rows[*].area_class"
+          ]
+        },
+        "fixture_requirements": [
+          "outline/orientation/valid-area-signs.json must include positive-area, negative-area, multi-contour, translated, and transformed outlines.",
+          "outline/orientation/invalid-collapsed-oversized.json must include collapsed, zero-area, and >0x1000000 coordinate outlines."
+        ],
+        "source_refs": [
+          "freetype/src/base/ftoutln.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftoutln.FT_Orientation.geometry_fixture_matrix",
+      "subject": "ftoutln.FT_Orientation",
+      "case": "geometry_fixture_matrix",
+      "operation": "ftoutln.outline_geometry_matrix",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "outline_matrix": {
+            "kind": "ref",
+            "id": "outline/matrix/lines-conics-cubics-valid-invalid.json"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          },
+          "curve_extrema_font": {
+            "kind": "ref",
+            "id": "fonts/outlines/curve-extrema.ttf"
+          }
+        },
+        "params": {
+          "operations": [
+            "FT_Outline_Check",
+            "FT_Outline_Copy",
+            "FT_Outline_Decompose",
+            "FT_Outline_Embolden",
+            "FT_Outline_Get_CBox",
+            "FT_Outline_Get_BBox",
+            "FT_Outline_Get_Bitmap",
+            "FT_Outline_Get_Orientation",
+            "FT_Outline_Reverse",
+            "FT_Outline_Transform",
+            "FT_Outline_Translate"
+          ],
+          "outline_rows": [
+            "valid_empty",
+            "valid_single_point",
+            "valid_line_clockwise",
+            "valid_line_counter_clockwise",
+            "valid_conic_consecutive_controls",
+            "valid_cubic",
+            "valid_multi_contour",
+            "invalid_null",
+            "invalid_count_mismatch",
+            "invalid_empty_contour",
+            "invalid_cubic_start",
+            "oversized_cbox"
+          ],
+          "bitmap_targets": [
+            "FT_PIXEL_MODE_MONO",
+            "FT_PIXEL_MODE_GRAY",
+            "FT_PIXEL_MODE_LCD",
+            "FT_PIXEL_MODE_LCD_V"
+          ],
+          "decompose_controls": {
+            "shift_values": [
+              0,
+              1
+            ],
+            "delta_values": [
+              0,
+              32
+            ],
+            "callback_error_at_event": [
+              null,
+              "move_to",
+              "line_to",
+              "conic_to",
+              "cubic_to"
+            ]
+          },
+          "embolden_strengths_26_6": [
+            0,
+            64,
+            -64
+          ],
+          "compare_assets_not_oracle_outputs": true
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "runtime:outline_geometry",
+        "runtime:outline_bitmap",
+        "error_path"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "check_error": "FT_Error",
+          "copy_error": "FT_Error",
+          "decompose_events": "array<callback_event>",
+          "embolden_error": "FT_Error",
+          "mutated_points": "array<FT_Vector>",
+          "cbox": "FT_BBox",
+          "bbox": "FT_BBox",
+          "bitmap": "FT_Bitmap descriptor plus bytes_hash",
+          "orientation": "FT_Orientation"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].check_error",
+            "rows[*].copy_error",
+            "rows[*].decompose_events",
+            "rows[*].embolden_error",
+            "rows[*].mutated_points",
+            "rows[*].cbox",
+            "rows[*].bbox",
+            "rows[*].bitmap",
+            "rows[*].orientation"
+          ]
+        },
+        "error": "Invalid outline rows must preserve C error classes, including Invalid_Outline and callback-propagated nonzero FT_Error values.",
+        "fixture_requirements": [
+          "outline/matrix/lines-conics-cubics-valid-invalid.json must contain split points/tags/contours/flags records, not embedded oracle outputs.",
+          "fonts/outlines/curve-extrema.ttf must contain Bezier extrema where FT_Outline_Get_BBox differs from FT_Outline_Get_CBox."
+        ],
+        "source_refs": [
+          "freetype/src/base/ftoutln.c",
+          "freetype/src/base/ftbbox.c"
+        ]
+      }
+    }
+  ]
+}

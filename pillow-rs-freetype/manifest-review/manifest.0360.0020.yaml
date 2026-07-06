@@ -1,0 +1,232 @@
+- id: fterrdef.FT_Err_Horiz_Header_Missing
+  kind: error
+  symbol: FT_Err_Horiz_Header_Missing
+  header: freetype/fterrdef.h
+  description: FreeType public error code for a missing horizontal header table.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x8F, matching the pinned fterrdef.h entry.
+    - id: sfnt_missing_hhea_table
+      description: A TrueType/OpenType SFNT with no hhea table returns this code from the sfnt/ttload.c hhea loader path before horizontal metrics are trusted.
+  # needs-input: operation=FT_New_Memory_Face or first face sizing/load path that validates SFNT metrics; fixture_asset=synthetic SFNT with head/maxp/hmtx but missing hhea; expected output shape=FT_Error; comparison=exact C oracle error FT_Err_Horiz_Header_Missing and no downstream metric fixture acceptance.
+
+- id: fterrdef.FT_Err_Ignore
+  kind: error
+  symbol: FT_Err_Ignore
+  header: freetype/fterrdef.h
+  description: FreeType public internal sentinel error used by Type 1/CFF style parsers to skip ignored data.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0xA2, matching the pinned fterrdef.h entry.
+    - id: parser_ignore_sentinel_not_public_success
+      description: CFF/Type1 parser paths that use FT_Err_Ignore as a control-flow sentinel must not collapse it to FT_Err_Ok if it escapes a public API.
+  # needs-input: operation=CFF/Type1 glyph or charset parse through FT_Load_Glyph; fixture_asset=font with a parser branch known to return Ignore internally plus a malformed variant where it escapes; expected output shape=FT_Error and glyph slot mutation classification; comparison=exact C oracle public error and output preservation.
+
+- id: fterrdef.FT_Err_Invalid_Argument
+  kind: error
+  symbol: FT_Err_Invalid_Argument
+  header: freetype/fterrdef.h
+  description: FreeType public error code for invalid public API arguments.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x06, matching the pinned fterrdef.h entry.
+    - id: null_output_or_bad_flag_arguments
+      description: Public API null-output and unsupported-flag checks, such as FT_New_Memory_Face null bytes or FT_Load_Glyph invalid load flags in ftobjs.c, return Invalid_Argument with C's output write behavior.
+
+- id: fterrdef.FT_Err_Invalid_Cache_Handle
+  kind: error
+  symbol: FT_Err_Invalid_Cache_Handle
+  header: freetype/fterrdef.h
+  description: FreeType public error code for invalid cache manager or cache handles.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x27, matching the pinned fterrdef.h entry.
+    - id: cache_lookup_rejects_null_manager
+      description: Cache APIs such as FTC_Manager_LookupFace and FTC_Manager_LookupSize return Invalid_Cache_Handle for a null or stale manager after applying C's documented output nulling behavior.
+  # needs-input: operation=FTC_Manager_LookupFace and FTC_Manager_LookupSize; fixture_asset=cache manager fixture plus null manager calls; expected output shape=FT_Error and aface/asize pointer state; comparison=exact C oracle error and pointer mutation.
+
+- id: fterrdef.FT_Err_Invalid_CharMap_Format
+  kind: error
+  symbol: FT_Err_Invalid_CharMap_Format
+  header: freetype/fterrdef.h
+  description: FreeType public error code for unsupported or malformed cmap subtables.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x96, matching the pinned fterrdef.h entry.
+    - id: sfnt_cmap_format_rejected
+      description: The sfnt/ttcmap.c validator returns Invalid_CharMap_Format for malformed cmap formats while valid neighboring cmap records remain usable.
+  # needs-input: operation=FT_New_Memory_Face followed by FT_Set_Charmap or FT_Get_Char_Index; fixture_asset=synthetic SFNT with malformed cmap subtable and valid control cmap; expected output shape=FT_Error plus charmap selection/index result; comparison=exact C oracle error and active-charmap state.
+
+- id: fterrdef.FT_Err_Invalid_CharMap_Handle
+  kind: error
+  symbol: FT_Err_Invalid_CharMap_Handle
+  header: freetype/fterrdef.h
+  description: FreeType public error code for invalid FT_CharMap handles.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x26, matching the pinned fterrdef.h entry.
+    - id: set_charmap_rejects_foreign_or_null_charmap
+      description: FT_Set_Charmap rejects null or non-face-owned charmap handles with Invalid_CharMap_Handle, matching ftobjs.c handle validation.
+
+- id: fterrdef.FT_Err_Invalid_Character_Code
+  kind: error
+  symbol: FT_Err_Invalid_Character_Code
+  header: freetype/fterrdef.h
+  description: FreeType public error code for a character code that cannot be represented by the selected charmap operation.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x11, matching the pinned fterrdef.h entry.
+    - id: char_index_name_lookup_invalid_code
+      description: Charmap/name APIs that distinguish an invalid character code from a missing glyph must return Invalid_Character_Code rather than zero glyph index semantics.
+  # needs-input: operation=FT_Get_Name_Index or charmap-specific lookup that reports invalid code; fixture_asset=font/charmap where the C oracle returns Invalid_Character_Code; expected output shape=FT_Error and output glyph/name index; comparison=exact C oracle error and output mutation.
+
+- id: fterrdef.FT_Err_Invalid_CodeRange
+  kind: error
+  symbol: FT_Err_Invalid_CodeRange
+  header: freetype/fterrdef.h
+  description: FreeType public TrueType bytecode error for an invalid instruction code range.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x8A, matching the pinned fterrdef.h entry.
+    - id: truetype_invalid_coderange
+      description: The src/truetype/ttinterp.c bytecode executor returns Invalid_CodeRange when CALL/LOOPCALL or instruction dispatch targets a non-existent code range.
+  # needs-input: operation=FT_Load_Glyph with bytecode execution enabled; fixture_asset=synthetic TrueType font with malformed prep/fpgm/glyf bytecode referencing an invalid code range; expected output shape=FT_Error and glyph slot state; comparison=exact C oracle error under matching load flags.
+
+- id: fterrdef.FT_Err_Invalid_Composite
+  kind: error
+  symbol: FT_Err_Invalid_Composite
+  header: freetype/fterrdef.h
+  description: FreeType public error code for malformed composite glyph data.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x15, matching the pinned fterrdef.h entry.
+    - id: truetype_composite_component_rejected
+      description: The TrueType glyph loader reports Invalid_Composite for malformed composite glyph component records, recursion, or invalid component references in ttgload.c.
+  # needs-input: operation=FT_Load_Glyph; fixture_asset=synthetic glyf composite with invalid component flags, truncated component data, and invalid referenced glyph index controls; expected output shape=FT_Error and slot outline/format state; comparison=exact C oracle error and slot mutation.
+
+- id: fterrdef.FT_Err_Invalid_Driver_Handle
+  kind: error
+  symbol: FT_Err_Invalid_Driver_Handle
+  header: freetype/fterrdef.h
+  description: FreeType public error code for invalid module or driver handles.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x22, matching the pinned fterrdef.h entry.
+    - id: module_driver_handle_validation
+      description: Module and driver management APIs reject null or non-driver module handles with Invalid_Driver_Handle rather than Invalid_Handle.
+  # needs-input: operation=FT_Get_TrueType_Engine_Type or module/driver service lookup using null and non-driver handles; fixture_asset=library with registered modules; expected output shape=FT_Error or enum result; comparison=exact C oracle handle classification.
+
+- id: fterrdef.FT_Err_Invalid_Face_Handle
+  kind: error
+  symbol: FT_Err_Invalid_Face_Handle
+  header: freetype/fterrdef.h
+  description: FreeType public error code for invalid FT_Face handles.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x23, matching the pinned fterrdef.h entry.
+    - id: face_api_rejects_null_face
+      description: Face APIs such as FT_Load_Glyph, FT_Get_Kerning, and FT_Select_Charmap return Invalid_Face_Handle for a null face before reading face fields.
+
+- id: fterrdef.FT_Err_Invalid_File_Format
+  kind: error
+  symbol: FT_Err_Invalid_File_Format
+  header: freetype/fterrdef.h
+  description: FreeType public error code for structurally broken font files.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x03, matching the pinned fterrdef.h entry.
+    - id: new_memory_face_rejects_broken_sfnt
+      description: FT_New_Memory_Face returns Invalid_File_Format for recognized but structurally broken SFNT data, preserving Unknown_File_Format for unrecognized data.
+
+- id: fterrdef.FT_Err_Invalid_Frame_Operation
+  kind: error
+  symbol: FT_Err_Invalid_Frame_Operation
+  header: freetype/fterrdef.h
+  description: FreeType public stream error for invalid frame access operations.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x56, matching the pinned fterrdef.h entry.
+    - id: stream_frame_access_rejects_invalid_sequence
+      description: The base/ftstream.c frame helpers return Invalid_Frame_Operation when a caller extracts or releases frame data in an invalid sequence.
+  # needs-input: operation=public API path that enters a malformed stream frame sequence, or an FFI stream harness exposing FT_Stream_EnterFrame/ExtractFrame behavior; fixture_asset=custom stream with short reads and invalid frame lifecycle calls; expected output shape=FT_Error and stream cursor state; comparison=exact C oracle error and cursor restoration.
+
+- id: fterrdef.FT_Err_Invalid_Frame_Read
+  kind: error
+  symbol: FT_Err_Invalid_Frame_Read
+  header: freetype/fterrdef.h
+  description: FreeType public stream error for reads past the current frame.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x58, matching the pinned fterrdef.h entry.
+    - id: stream_frame_bounds_rejected
+      description: The base/ftstream.c frame readers return Invalid_Frame_Read when table parsing reads beyond the active frame bounds.
+  # needs-input: operation=FT_New_Memory_Face or table accessor that parses a deliberately truncated framed table; fixture_asset=synthetic SFNT table with frame length shorter than required fields; expected output shape=FT_Error and stream position; comparison=exact C oracle error classification versus Invalid_Stream_Read.
+
+- id: fterrdef.FT_Err_Invalid_Glyph_Format
+  kind: error
+  symbol: FT_Err_Invalid_Glyph_Format
+  header: freetype/fterrdef.h
+  description: FreeType public error code for unsupported glyph image formats.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x12, matching the pinned fterrdef.h entry.
+    - id: render_or_load_rejects_unsupported_glyph_format
+      description: FT_Render_Glyph and glyph conversion paths return Invalid_Glyph_Format when the slot format is unsupported for the requested operation.
+
+- id: fterrdef.FT_Err_Invalid_Glyph_Index
+  kind: error
+  symbol: FT_Err_Invalid_Glyph_Index
+  header: freetype/fterrdef.h
+  description: FreeType public error code for glyph indexes outside the face's glyph count.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x10, matching the pinned fterrdef.h entry.
+    - id: load_glyph_rejects_out_of_range_index
+      description: FT_Load_Glyph returns Invalid_Glyph_Index when glyph_index is greater than or equal to face->num_glyphs, with no successful slot population.
+
+- id: fterrdef.FT_Err_Invalid_Handle
+  kind: error
+  symbol: FT_Err_Invalid_Handle
+  header: freetype/fterrdef.h
+  description: FreeType public generic error code for invalid opaque object handles.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x20, matching the pinned fterrdef.h entry.
+    - id: generic_object_handle_validation
+      description: Generic object APIs that cannot classify a bad handle as library, face, size, slot, charmap, cache, or stream must return Invalid_Handle exactly as C does.
+  # needs-input: operation=FT_Done_Glyph or another public object API with null/stale generic handle inputs; fixture_asset=allocated glyph object plus null/stale handle controls; expected output shape=FT_Error and object lifetime side effects; comparison=exact C oracle handle error classification.
+
+- id: fterrdef.FT_Err_Invalid_Horiz_Metrics
+  kind: error
+  symbol: FT_Err_Invalid_Horiz_Metrics
+  header: freetype/fterrdef.h
+  description: FreeType public error code for malformed horizontal metrics data.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x95, matching the pinned fterrdef.h entry.
+    - id: sfnt_hmtx_metrics_rejected
+      description: The sfnt/ttload.c and TrueType metrics loader paths return Invalid_Horiz_Metrics when hhea/hmtx counts or table lengths cannot provide requested advances and bearings.
+  # needs-input: operation=FT_New_Memory_Face followed by FT_Load_Glyph or metrics query; fixture_asset=synthetic SFNT with hhea.numberOfHMetrics inconsistent with hmtx length; expected output shape=FT_Error and metrics fields; comparison=exact C oracle error and no fabricated metrics.
+
+- id: fterrdef.FT_Err_Invalid_Library_Handle
+  kind: error
+  symbol: FT_Err_Invalid_Library_Handle
+  header: freetype/fterrdef.h
+  description: FreeType public error code for invalid FT_Library handles.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x21, matching the pinned fterrdef.h entry.
+    - id: library_api_rejects_null_library
+      description: Library-scoped APIs such as FT_New_Memory_Face and FT_Add_Module return Invalid_Library_Handle for a null library before inspecting other arguments.
+
+- id: fterrdef.FT_Err_Invalid_Offset
+  kind: error
+  symbol: FT_Err_Invalid_Offset
+  header: freetype/fterrdef.h
+  description: FreeType public error code for broken offsets within font tables.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0x09, matching the pinned fterrdef.h entry.
+    - id: table_offset_bounds_rejected
+      description: SFNT and color-table parsers return Invalid_Offset when an offset field points outside the containing table rather than treating the table as merely missing.
+  # needs-input: operation=FT_Load_Glyph or COLR/CPAL/SFNT table accessor that follows table-relative offsets; fixture_asset=synthetic font with out-of-range loca/glyf or COLR offsets plus valid control records; expected output shape=FT_Error and any output struct mutation; comparison=exact C oracle error classification versus Invalid_Table and Invalid_File_Format.

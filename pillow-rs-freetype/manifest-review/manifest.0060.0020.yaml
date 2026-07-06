@@ -1,0 +1,280 @@
+- id: freetype.FT_FSTYPE_EDITABLE_EMBEDDING
+  kind: flag
+  symbol: FT_FSTYPE_EDITABLE_EMBEDDING
+  header: freetype/freetype.h
+  description: FreeType public fsType flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Value matches the pinned C public header value 0x0008.
+    # needs-input: Add a font fixture whose OS/2 fsType contains 0x0008; call the public fsType query path, expect the returned u16 to include this bit exactly, and compare the value with the C oracle.
+    - id: fs_type_value_observable
+      description: Parsed OS/2 fsType exposes the editable embedding bit when present.
+
+- id: freetype.FT_FSTYPE_INSTALLABLE_EMBEDDING
+  kind: flag
+  symbol: FT_FSTYPE_INSTALLABLE_EMBEDDING
+  header: freetype/freetype.h
+  description: FreeType public fsType flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Value matches the pinned C public header value 0x0000.
+    # needs-input: Add a font fixture whose OS/2 fsType is 0; call the public fsType query path, expect exact value 0 to represent installable embedding, and compare the value with the C oracle.
+    - id: zero_fs_type_observable
+      description: Parsed OS/2 fsType exposes installable embedding as the exact zero value.
+
+- id: freetype.FT_FSTYPE_NO_SUBSETTING
+  kind: flag
+  symbol: FT_FSTYPE_NO_SUBSETTING
+  header: freetype/freetype.h
+  description: FreeType public fsType flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Value matches the pinned C public header value 0x0100.
+    # needs-input: Add a font fixture whose OS/2 fsType contains 0x0100; call the public fsType query path, expect the returned u16 to include this bit exactly, and compare the value with the C oracle.
+    - id: fs_type_value_observable
+      description: Parsed OS/2 fsType exposes the no-subsetting bit when present.
+
+- id: freetype.FT_FSTYPE_PREVIEW_AND_PRINT_EMBEDDING
+  kind: flag
+  symbol: FT_FSTYPE_PREVIEW_AND_PRINT_EMBEDDING
+  header: freetype/freetype.h
+  description: FreeType public fsType flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Value matches the pinned C public header value 0x0004.
+    # needs-input: Add a font fixture whose OS/2 fsType contains 0x0004; call the public fsType query path, expect the returned u16 to include this bit exactly, and compare the value with the C oracle.
+    - id: fs_type_value_observable
+      description: Parsed OS/2 fsType exposes the preview-and-print embedding bit when present.
+
+- id: freetype.FT_FSTYPE_RESTRICTED_LICENSE_EMBEDDING
+  kind: flag
+  symbol: FT_FSTYPE_RESTRICTED_LICENSE_EMBEDDING
+  header: freetype/freetype.h
+  description: FreeType public fsType flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Value matches the pinned C public header value 0x0002.
+    # needs-input: Add a font fixture whose OS/2 fsType contains 0x0002; call the public fsType query path, expect the returned u16 to include this bit exactly, and compare the value with the C oracle.
+    - id: fs_type_value_observable
+      description: Parsed OS/2 fsType exposes the restricted-license embedding bit when present.
+
+- id: freetype.FT_LOAD_ADVANCE_ONLY
+  kind: flag
+  symbol: FT_LOAD_ADVANCE_ONLY
+  header: freetype/freetype.h
+  description: FreeType public-header load flag used internally by some font drivers.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00000100.
+    # needs-input: Add load_glyph and load_char cases with FT_LOAD_ADVANCE_ONLY alone and with FT_LOAD_RENDER on a scalable TrueType glyph; compare C glyph-slot metrics/advance and Rust error classification, expected shape glyph_slot_or_error.
+    - id: unsupported_load_flag_error
+      description: Current FFI load flag decoder must classify this unimplemented public-header bit explicitly instead of silently dropping it.
+
+- id: freetype.FT_LOAD_BITMAP_METRICS_ONLY
+  kind: flag
+  symbol: FT_LOAD_BITMAP_METRICS_ONLY
+  header: freetype/freetype.h
+  description: FreeType public load flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00400000.
+    # needs-input: Add load_glyph and load_char cases using an embedded bitmap strike with FT_LOAD_BITMAP_METRICS_ONLY | FT_LOAD_RENDER; expect C to unset render and return bitmap metrics without bitmap bytes, compare slot metrics/format/bitmap fields or Rust unsupported error.
+    - id: bitmap_metrics_only_load_behavior
+      description: Loading bitmap metrics only is covered for bitmap glyphs and the unsupported Rust path is visible until implemented.
+    # needs-input: Add outline-glyph load_glyph and load_char cases with FT_LOAD_BITMAP_METRICS_ONLY; expect C no-effect slot parity against default load, compare glyph_slot fields exactly or Rust unsupported error.
+    - id: outline_no_effect_or_error
+      description: Non-bitmap glyph behavior is classified as C no-effect or Rust unsupported error.
+
+- id: freetype.FT_LOAD_COLOR
+  kind: flag
+  symbol: FT_LOAD_COLOR
+  header: freetype/freetype.h
+  description: FreeType public load flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00100000.
+    # needs-input: Add load_glyph and load_char cases using a color bitmap or COLR/CPAL fixture with FT_LOAD_COLOR | FT_LOAD_RENDER; expect C BGRA/color-layer observable output, compare bitmap pixel mode/bytes or Rust unsupported error.
+    - id: color_glyph_load_behavior
+      description: Color glyph loading is covered when a color glyph fixture is available and remains explicitly unsupported until then.
+
+- id: freetype.FT_LOAD_COMPUTE_METRICS
+  kind: flag
+  symbol: FT_LOAD_COMPUTE_METRICS
+  header: freetype/freetype.h
+  description: FreeType public load flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00200000.
+    # needs-input: Add load_glyph and load_char TrueType cases with FT_LOAD_COMPUTE_METRICS at sizes where hdmx or bundled metrics can affect results; compare C and Rust glyph_slot metrics or Rust unsupported error.
+    - id: compute_metrics_load_behavior
+      description: TrueType computed-metrics behavior is covered or explicitly classified as unsupported.
+
+- id: freetype.FT_LOAD_CROP_BITMAP
+  kind: flag
+  symbol: FT_LOAD_CROP_BITMAP
+  header: freetype/freetype.h
+  description: FreeType public deprecated load flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00000040.
+    # needs-input: Add load_glyph and load_char cases with FT_LOAD_CROP_BITMAP on a bitmap-capable fixture and on a scalable outline glyph; expect C deprecated ignored behavior against default load, compare glyph_slot fields or Rust unsupported error.
+    - id: deprecated_ignored_or_error
+      description: Deprecated ignored C behavior is distinguished from the current Rust unsupported flag classification.
+
+- id: freetype.FT_LOAD_DEFAULT
+  kind: flag
+  symbol: FT_LOAD_DEFAULT
+  header: freetype/freetype.h
+  description: FreeType public default load flag value from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00000000.
+    - id: load_char_default_slot
+      description: FT_Load_Char with FT_LOAD_DEFAULT returns default hinted glyph-slot metrics and no rendered bitmap.
+      coverage:
+        font_variability:
+          folder: input/fonts
+          sizes: [20]
+          char_codes: [65]
+          load_flags: [0]
+    - id: load_glyph_default_slot
+      description: FT_Load_Glyph with FT_LOAD_DEFAULT returns default hinted glyph-slot metrics and no rendered bitmap.
+      coverage:
+        font_variability:
+          folder: input/fonts
+          sizes: [20]
+          glyph_indices: [36]
+          load_flags: [0]
+
+- id: freetype.FT_LOAD_FORCE_AUTOHINT
+  kind: flag
+  symbol: FT_LOAD_FORCE_AUTOHINT
+  header: freetype/freetype.h
+  description: FreeType public load flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00000020.
+    - id: load_char_force_autohint_behavior
+      description: FT_Load_Char maps the C flag to the Rust force-autohint load mode and compares glyph-slot output through the matrix fixture corpus.
+      coverage:
+        font_variability:
+          folder: input/fonts_autohint
+          sizes: [10, 20]
+          load_flags: [32]
+    # needs-input: Add an FT_Load_Glyph matrix row with FT_LOAD_FORCE_AUTOHINT on the same autohint corpus; compare glyph_slot metrics/bitmap placement/bytes according to the row operation.
+    - id: load_glyph_force_autohint_behavior
+      description: FT_Load_Glyph force-autohint behavior is required when glyph-index matrix inputs are present.
+
+- id: freetype.FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH
+  kind: flag
+  symbol: FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH
+  header: freetype/freetype.h
+  description: FreeType public deprecated load flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00000200.
+    # needs-input: Add load_glyph and load_char cases with FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH on a TrueType font with observable advance data; expect C deprecated ignored behavior against default load, compare advance/metrics or Rust unsupported error.
+    - id: deprecated_ignored_or_error
+      description: Deprecated ignored C behavior is distinguished from the current Rust unsupported flag classification.
+
+- id: freetype.FT_LOAD_IGNORE_TRANSFORM
+  kind: flag
+  symbol: FT_LOAD_IGNORE_TRANSFORM
+  header: freetype/freetype.h
+  description: FreeType public load flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00000800.
+    # needs-input: After FT_Set_Transform coverage exists, add load_glyph and load_char cases with and without FT_LOAD_IGNORE_TRANSFORM; compare transformed vs untransformed glyph_slot metrics/outline/bitmap or Rust unsupported error.
+    - id: ignore_transform_load_behavior
+      description: Transform bypass behavior is covered once transforms are part of the public surface.
+
+- id: freetype.FT_LOAD_LINEAR_DESIGN
+  kind: flag
+  symbol: FT_LOAD_LINEAR_DESIGN
+  header: freetype/freetype.h
+  description: FreeType public load flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00002000.
+    # needs-input: Add load_glyph and load_char cases that expose linearHoriAdvance and linearVertAdvance with FT_LOAD_LINEAR_DESIGN; expect font-unit linear advances from C and compare slot fields or Rust unsupported error once those fields are public.
+    - id: linear_design_metrics_behavior
+      description: Linear design metrics are covered when glyph-slot linear advance fields are exposed.
+
+- id: freetype.FT_LOAD_MONOCHROME
+  kind: flag
+  symbol: FT_LOAD_MONOCHROME
+  header: freetype/freetype.h
+  description: FreeType public load flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00001000.
+    # needs-input: Add load_glyph and load_char cases with FT_LOAD_RENDER | FT_LOAD_MONOCHROME, distinct from FT_LOAD_TARGET_MONO; expect C 1-bit bitmap packing and compare pixel mode/pitch/bytes/placement exactly.
+    - id: render_monochrome_load_behavior
+      description: Render-time monochrome bitmap behavior is covered through FT_Load_Glyph and FT_Load_Char when explicit monochrome inputs exist.
+      coverage:
+        font_variability:
+          folder: input/fonts_autohint
+          sizes: [10, 20]
+          load_flags: [4100]
+
+- id: freetype.FT_LOAD_NO_AUTOHINT
+  kind: flag
+  symbol: FT_LOAD_NO_AUTOHINT
+  header: freetype/freetype.h
+  description: FreeType public load flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00008000.
+    # needs-input: Add load_glyph and load_char cases with FT_LOAD_NO_AUTOHINT on fonts where default may choose auto-hinting or tricky native behavior; compare glyph_slot metrics/bitmap bytes or Rust unsupported error.
+    - id: no_autohint_load_behavior
+      description: No-autohint behavior is distinguished from default and force-autohint paths.
+
+- id: freetype.FT_LOAD_NO_BITMAP
+  kind: flag
+  symbol: FT_LOAD_NO_BITMAP
+  header: freetype/freetype.h
+  description: FreeType public load flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00000008.
+    # needs-input: Add load_glyph and load_char cases with an embedded bitmap strike and FT_LOAD_NO_BITMAP, with and without FT_LOAD_RENDER; expect C to bypass embedded bitmap selection and compare outline-derived slot/bitmap output or Rust unsupported error.
+    - id: no_bitmap_load_behavior
+      description: Embedded-bitmap bypass behavior is covered when bitmap-strike fixtures are present.
+
+- id: freetype.FT_LOAD_NO_HINTING
+  kind: flag
+  symbol: FT_LOAD_NO_HINTING
+  header: freetype/freetype.h
+  description: FreeType public load flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00000002.
+    - id: load_char_no_hinting_behavior
+      description: FT_Load_Char maps the C flag to the Rust no-hinting load mode and compares unhinted glyph-slot output through the matrix fixture corpus.
+      coverage:
+        font_variability:
+          folder: input/fonts_autohint
+          sizes: [10, 20]
+          load_flags: [2]
+    - id: load_glyph_no_hinting_behavior
+      description: FT_Load_Glyph maps the C flag to the Rust no-hinting load mode and compares unhinted glyph-slot output through the matrix fixture corpus.
+      coverage:
+        font_variability:
+          folder: input/fonts_autohint
+          sizes: [10, 20]
+          load_flags: [2]
+    - id: no_hinting_render_error
+      description: FT_LOAD_NO_HINTING combined with FT_LOAD_RENDER has explicit public error classification coverage.
+
+- id: freetype.FT_LOAD_NO_RECURSE
+  kind: flag
+  symbol: FT_LOAD_NO_RECURSE
+  header: freetype/freetype.h
+  description: FreeType public load flag constant from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value matches the pinned FreeType header value 0x00000400.
+    # needs-input: Add load_glyph and load_char cases for a composite glyph with FT_LOAD_NO_RECURSE; expect C glyph format FT_GLYPH_FORMAT_COMPOSITE, populated subglyph metadata, implied FT_LOAD_NO_SCALE | FT_LOAD_IGNORE_TRANSFORM, and rudimentary metrics; compare slot/subglyph fields or Rust unsupported error.
+    - id: composite_no_recurse_behavior
+      description: Composite non-recursive loading and current unsupported classification are visible.

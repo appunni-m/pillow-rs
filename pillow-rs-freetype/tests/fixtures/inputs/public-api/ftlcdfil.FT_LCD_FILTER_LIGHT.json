@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "subject": "ftlcdfil.FT_LCD_FILTER_LIGHT",
+  "manifest_cases": [
+    "value_matches_header",
+    "preset_weights_match_c"
+  ],
+  "cases": [
+    {
+      "case_id": "ftlcdfil.FT_LCD_FILTER_LIGHT.value_matches_header",
+      "subject": "ftlcdfil.FT_LCD_FILTER_LIGHT",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftlcdfil.h",
+          "symbol": "FT_LCD_FILTER_LIGHT",
+          "enum": "FT_LcdFilter",
+          "header_value": 2
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftlcdfil"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": 2,
+          "type": "FT_LcdFilter"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftlcdfil.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlcdfil.FT_LCD_FILTER_LIGHT.preset_weights_match_c",
+      "subject": "ftlcdfil.FT_LCD_FILTER_LIGHT",
+      "case": "preset_weights_match_c",
+      "operation": "ftlcdfil.set_lcd_filter",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "filter": "FT_LCD_FILTER_LIGHT",
+          "source_weights": [
+            0,
+            85,
+            86,
+            85,
+            0
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "runtime:lcd_filter",
+        "source:ftlcdfil"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "error": "FT_Error",
+          "library_weights": "array<u8,5>"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "error",
+            "library_weights"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftlcdfil.c"
+        ]
+      }
+    }
+  ]
+}

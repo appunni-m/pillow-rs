@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_IS_NAMED_INSTANCE",
+  "manifest_cases": [
+    "encoded_named_instance_face_index_returns_true",
+    "base_face_or_coordinate_only_variation_returns_false"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_IS_NAMED_INSTANCE.encoded_named_instance_face_index_returns_true",
+      "subject": "freetype.FT_IS_NAMED_INSTANCE",
+      "case": "encoded_named_instance_face_index_returns_true",
+      "operation": "freetype.face_macro.is_named_instance",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/variable/inter-var.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_Open_Face",
+          "face_index": "0x00010000",
+          "flag_or_expression": "face_index_named_instance_bits_0x7FFF0000",
+          "open_face_indices": [
+            "0x00010000",
+            "0x00030000"
+          ],
+          "post_probe": [
+            "face.face_index",
+            "face.style_flags named-instance count bits"
+          ],
+          "include": "freetype/freetype.h",
+          "macro": "FT_IS_NAMED_INSTANCE",
+          "expected_truth": true,
+          "probe": [
+            "macro_result",
+            "face.face_flags",
+            "face.face_index"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face_property_macro",
+        "runtime:face_index"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_result": "FT_Bool-compatible int",
+          "face_flags": "FT_Long",
+          "face_index": "FT_Long",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "face_flags",
+            "face_index",
+            "import_compiles"
+          ]
+        },
+        "fixture_requirements": [
+          "variable font with at least one named instance"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_IS_NAMED_INSTANCE.base_face_or_coordinate_only_variation_returns_false",
+      "subject": "freetype.FT_IS_NAMED_INSTANCE",
+      "case": "base_face_or_coordinate_only_variation_returns_false",
+      "operation": "freetype.face_macro.is_named_instance",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/variable/inter-var.ttf"
+          },
+          "static_font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_Open_Face",
+          "face_index": 0,
+          "flag_or_expression": "face_index_named_instance_bits_0x7FFF0000",
+          "control_states": [
+            "base variable face opened with face_index 0",
+            "base variable face after FT_Set_Var_Design_Coordinates",
+            "static face opened with face_index 0"
+          ],
+          "post_probe": [
+            "face.face_index after FT_Set_Var_Design_Coordinates"
+          ],
+          "include": "freetype/freetype.h",
+          "macro": "FT_IS_NAMED_INSTANCE",
+          "expected_truth": false,
+          "probe": [
+            "macro_result",
+            "face.face_flags",
+            "face.face_index"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face_property_macro",
+        "runtime:face_index"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_result": "FT_Bool-compatible int",
+          "face_flags": "FT_Long",
+          "face_index": "FT_Long",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "face_flags",
+            "face_index",
+            "import_compiles"
+          ]
+        },
+        "fixture_requirements": [
+          "variable font with at least one named instance plus static control font"
+        ]
+      }
+    }
+  ]
+}

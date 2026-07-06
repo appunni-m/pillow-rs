@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "subject": "ftmodapi.FT_TRUETYPE_ENGINE_TYPE_UNPATENTED",
+  "manifest_cases": [
+    "value_matches_header",
+    "legacy_value_not_runtime_emitted"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmodapi.FT_TRUETYPE_ENGINE_TYPE_UNPATENTED.value_matches_header",
+      "subject": "ftmodapi.FT_TRUETYPE_ENGINE_TYPE_UNPATENTED",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_TRUETYPE_ENGINE_TYPE_UNPATENTED",
+          "include": "<freetype/ftmodapi.h>",
+          "value": 1,
+          "value_type": "FT_TrueTypeEngineType",
+          "status": "deprecated_and_removed_runtime_engine"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftmodapi",
+        "area:truetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "FT_TrueTypeEngineType"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "value_type",
+            "header_symbol"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmodapi.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmodapi.FT_TRUETYPE_ENGINE_TYPE_UNPATENTED.legacy_value_not_runtime_emitted",
+      "subject": "ftmodapi.FT_TRUETYPE_ENGINE_TYPE_UNPATENTED",
+      "case": "legacy_value_not_runtime_emitted",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_TRUETYPE_ENGINE_TYPE_UNPATENTED",
+          "include": "<freetype/ftmodapi.h>",
+          "runtime_probe": "FT_Get_TrueType_Engine_Type should emit NONE or PATENTED for the pinned source, not this legacy value"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftmodapi",
+        "area:truetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_TrueTypeEngineType",
+          "runtime_emitted_by_default_probe": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "runtime_emitted_by_default_probe"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmodapi.h",
+          "freetype/src/truetype/ttdriver.c"
+        ]
+      }
+    }
+  ]
+}

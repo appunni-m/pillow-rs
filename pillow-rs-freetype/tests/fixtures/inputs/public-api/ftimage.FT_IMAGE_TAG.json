@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_IMAGE_TAG",
+  "manifest_cases": [
+    "expansion_matches_header",
+    "glyph_format_values_match_c",
+    "override_contract_matches_c"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_IMAGE_TAG.expansion_matches_header",
+      "subject": "ftimage.FT_IMAGE_TAG",
+      "case": "expansion_matches_header",
+      "operation": "constant_eval",
+      "schema": "api_macro",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "macro": "FT_IMAGE_TAG",
+          "include": "<freetype/ftimage.h>",
+          "import": "#include <freetype/ftimage.h>",
+          "expansion": "value = ((unsigned long)_x1 << 24) | ((unsigned long)_x2 << 16) | ((unsigned long)_x3 << 8) | (unsigned long)_x4",
+          "chars": [
+            "o",
+            "u",
+            "t",
+            "l"
+          ],
+          "expected_value": 1869968492,
+          "expected_value_hex": "0x6f75746c"
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftimage",
+        "area:glyph-format",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro": "string",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "macro",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:696-720"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_IMAGE_TAG.glyph_format_values_match_c",
+      "subject": "ftimage.FT_IMAGE_TAG",
+      "case": "glyph_format_values_match_c",
+      "operation": "constant_eval",
+      "schema": "api_constant_set",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftimage.h>",
+          "symbols": {
+            "FT_GLYPH_FORMAT_NONE": 0,
+            "FT_GLYPH_FORMAT_COMPOSITE": 1668246896,
+            "FT_GLYPH_FORMAT_BITMAP": 1651078259,
+            "FT_GLYPH_FORMAT_OUTLINE": 1869968492,
+            "FT_GLYPH_FORMAT_PLOTTER": 1886154612,
+            "FT_GLYPH_FORMAT_SVG": 1398163232
+          },
+          "expected_hex": {
+            "FT_GLYPH_FORMAT_NONE": "0x00000000",
+            "FT_GLYPH_FORMAT_COMPOSITE": "0x636f6d70",
+            "FT_GLYPH_FORMAT_BITMAP": "0x62697473",
+            "FT_GLYPH_FORMAT_OUTLINE": "0x6f75746c",
+            "FT_GLYPH_FORMAT_PLOTTER": "0x706c6f74",
+            "FT_GLYPH_FORMAT_SVG": "0x53564720"
+          }
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftimage",
+        "area:glyph-format",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "values": "object<symbol,integer>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "values",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:723-774"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_IMAGE_TAG.override_contract_matches_c",
+      "subject": "ftimage.FT_IMAGE_TAG",
+      "case": "override_contract_matches_c",
+      "operation": "compile_probe",
+      "schema": "api_macro_override",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "default_probe": {
+            "kind": "ref",
+            "id": "c-probes/ftimage-image-tag-default.c",
+            "asset_kind": "c-probe"
+          },
+          "override_probe": {
+            "kind": "ref",
+            "id": "c-probes/ftimage-image-tag-override.c",
+            "asset_kind": "c-probe"
+          }
+        },
+        "params": {
+          "preinclude_define": "#define FT_IMAGE_TAG(value,_x1,_x2,_x3,_x4) value",
+          "expected_behavior": "Header leaves a pre-defined FT_IMAGE_TAG macro in place before declaring FT_Glyph_Format."
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftimage",
+        "area:glyph-format",
+        "path:compile"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "default_compile": "bool",
+          "override_compile": "bool",
+          "values": "object<symbol,integer>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "default_compile",
+            "override_compile",
+            "values"
+          ]
+        },
+        "fixture_requirements": [
+          "Future small C compile probes for default and pre-include FT_IMAGE_TAG override behavior."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:702-720"
+        ]
+      }
+    }
+  ]
+}

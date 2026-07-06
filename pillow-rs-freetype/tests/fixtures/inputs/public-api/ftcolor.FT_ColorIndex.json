@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_ColorIndex",
+  "manifest_cases": [
+    "layout_matches_c",
+    "field_order_matches_c",
+    "solid_and_color_stop_values"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_ColorIndex.layout_matches_c",
+      "subject": "ftcolor.FT_ColorIndex",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "record": "FT_ColorIndex",
+          "fields": [
+            "palette_index",
+            "alpha"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_ColorIndex",
+          "layout": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "C ABI probe for FT_ColorIndex sizeof/alignment/offsetof",
+          "Runner support for C FreeType, Rust FFI, C FFI, and Wasm FFI record layout comparison"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_ColorIndex.field_order_matches_c",
+      "subject": "ftcolor.FT_ColorIndex",
+      "case": "field_order_matches_c",
+      "operation": "abi.record_import",
+      "schema": "abi_record_fields",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "record": "FT_ColorIndex",
+          "fields": [
+            "palette_index",
+            "alpha"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_ColorIndex",
+          "fields": [
+            "palette_index",
+            "alpha"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "field_order",
+            "field_types",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "Compile/import probe for FT_ColorIndex with exact ftcolor.h field names"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_ColorIndex.solid_and_color_stop_values",
+      "subject": "ftcolor.FT_ColorIndex",
+      "case": "solid_and_color_stop_values",
+      "operation": "ftcolor.get_paint_and_colorline_stops",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 1 base glyph list",
+              "CPAL table with at least two palettes and named entries",
+              "paint graph containing solid, colr_layers, glyph, colr_glyph, linear, radial, sweep, transform, translate, scale, rotate, skew, and composite paints",
+              "static ColorLine records using PAD, REPEAT, and REFLECT extend modes",
+              "foreground palette index 0xFFFF references"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_roles": [
+            "solid_normal_palette",
+            "solid_foreground_ffff",
+            "linear_gradient_varied_alpha"
+          ],
+          "walk": [
+            "FT_Get_Color_Glyph_Paint",
+            "FT_Get_Paint",
+            "FT_Get_Colorline_Stops"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "records": [
+            "FT_PaintSolid.color",
+            "FT_ColorStop.color"
+          ],
+          "fields": [
+            "palette_index",
+            "alpha"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "paints[*].color.palette_index",
+            "paints[*].color.alpha",
+            "stops[*].color.palette_index",
+            "stops[*].color.alpha"
+          ]
+        },
+        "fixture_requirements": [
+          "Runtime C oracle generation; do not store generated outputs"
+        ]
+      }
+    }
+  ]
+}

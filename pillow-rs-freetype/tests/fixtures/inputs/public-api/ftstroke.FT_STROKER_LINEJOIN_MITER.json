@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "subject": "ftstroke.FT_STROKER_LINEJOIN_MITER",
+  "manifest_cases": [
+    "value_matches_header",
+    "alias_matches_variable_join_geometry"
+  ],
+  "metadata": {
+    "abi": {
+      "kind": "enum_variant",
+      "header": "freetype/ftstroke.h",
+      "enum": "FT_Stroker_LineJoin",
+      "symbol": "FT_STROKER_LINEJOIN_MITER",
+      "value": 2,
+      "alias_of": "FT_STROKER_LINEJOIN_MITER_VARIABLE"
+    }
+  },
+  "cases": [
+    {
+      "case_id": "ftstroke.FT_STROKER_LINEJOIN_MITER.value_matches_header",
+      "subject": "ftstroke.FT_STROKER_LINEJOIN_MITER",
+      "case": "value_matches_header",
+      "operation": "abi.enum_variant_value",
+      "schema": "abi_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftstroke.h",
+          "symbol": "FT_STROKER_LINEJOIN_MITER",
+          "expected_value": 2,
+          "equals_symbol": "FT_STROKER_LINEJOIN_MITER_VARIABLE"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftstroke",
+        "area:abi_enum"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "int",
+          "equals_alias_target": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "value",
+            "equals_alias_target"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_STROKER_LINEJOIN_MITER.alias_matches_variable_join_geometry",
+      "subject": "ftstroke.FT_STROKER_LINEJOIN_MITER",
+      "case": "alias_matches_variable_join_geometry",
+      "operation": "ftstroke.join_geometry_alias",
+      "schema": "outline_geometry_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "path": [[0, 0], [512, 0], [576, 512]],
+          "radius": 64,
+          "line_cap": "FT_STROKER_LINECAP_BUTT",
+          "line_joins": [
+            "FT_STROKER_LINEJOIN_MITER",
+            "FT_STROKER_LINEJOIN_MITER_VARIABLE"
+          ],
+          "miter_limit": 65536
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftstroke",
+        "area:stroker_geometry"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "outline_by_join": "object<join,FT_Outline>",
+          "alias_geometry_equal": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outline_by_join",
+            "alias_geometry_equal"
+          ]
+        }
+      }
+    }
+  ]
+}

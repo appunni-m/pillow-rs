@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "subject": "ftoutln.FT_Outline_Get_Bitmap",
+  "manifest_cases": ["gray_lcd_modes_select_aa_flag", "mono_target_uses_default_raster", "null_bitmap_and_delegate_errors"],
+  "cases": [
+    {
+      "case_id": "ftoutln.FT_Outline_Get_Bitmap.gray_lcd_modes_select_aa_flag",
+      "subject": "ftoutln.FT_Outline_Get_Bitmap",
+      "case": "gray_lcd_modes_select_aa_flag",
+      "operation": "ftoutln.outline_get_bitmap",
+      "schema": "bitmap_result",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/render/simple-filled-square.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-lcd-lcdv-16x16.json", "asset_kind": "bitmap_model"}}, "params": {"pixel_modes": ["FT_PIXEL_MODE_GRAY", "FT_PIXEL_MODE_LCD", "FT_PIXEL_MODE_LCD_V"], "inspect_raster_flags": true}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "operation:render"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Get_Bitmap", "kind": "function", "c_signature": "FT_Error FT_Outline_Get_Bitmap(FT_Library library, FT_Outline* outline, const FT_Bitmap* abitmap)"}, "source_behavior": "GRAY, LCD, and LCD_V bitmap targets set FT_RASTER_FLAG_AA before delegating to FT_Outline_Render."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "bitmap": {"pixel_mode": "FT_Pixel_Mode", "rows": "integer", "width": "integer", "pitch": "integer", "buffer_hash": "sha256"}, "raster_flags": "FT_Int"}, "compare": {"mode": "bytes", "paths": ["return", "raster_flags", "bitmap.pixel_mode", "bitmap.rows", "bitmap.width", "bitmap.pitch", "bitmap.buffer"]}, "source_refs": ["freetype/include/freetype/ftoutln.h:426-458", "freetype/src/base/ftoutln.c:669-689"], "fixture_requirements": ["Preallocated bitmap targets for gray, LCD, and LCD_V modes; no generated oracle buffers committed."]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_Get_Bitmap.mono_target_uses_default_raster",
+      "subject": "ftoutln.FT_Outline_Get_Bitmap",
+      "case": "mono_target_uses_default_raster",
+      "operation": "ftoutln.outline_get_bitmap",
+      "schema": "bitmap_result",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/render/simple-filled-square.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/mono-16x16.json", "asset_kind": "bitmap_model"}}, "params": {"pixel_mode": "FT_PIXEL_MODE_MONO", "expected_raster_flags": []}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "operation:render"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Get_Bitmap", "kind": "function", "c_signature": "FT_Error FT_Outline_Get_Bitmap(FT_Library library, FT_Outline* outline, const FT_Bitmap* abitmap)"}, "source_behavior": "MONO targets leave params.flags at zero, using the default outline renderer."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "bitmap": {"pixel_mode": "FT_Pixel_Mode", "buffer_hash": "sha256"}, "raster_flags": "FT_Int"}, "compare": {"mode": "bytes", "paths": ["return", "raster_flags", "bitmap.pixel_mode", "bitmap.buffer"]}, "source_refs": ["freetype/src/base/ftoutln.c:681-689"], "fixture_requirements": ["Preallocated mono bitmap target with adequate pitch and storage."]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_Get_Bitmap.null_bitmap_and_delegate_errors",
+      "subject": "ftoutln.FT_Outline_Get_Bitmap",
+      "case": "null_bitmap_and_delegate_errors",
+      "operation": "ftoutln.outline_get_bitmap",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/render/simple-filled-square.json", "asset_kind": "outline_model"}, "oversized": {"kind": "ref", "id": "outlines/render/cbox-beyond-render-limit.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-16x16.json", "asset_kind": "bitmap_model"}}, "params": {"scenarios": [{"abitmap_pointer": null}, {"library_pointer": null, "outline_ref": "outline", "bitmap_ref": "bitmap"}, {"outline_pointer": null, "bitmap_ref": "bitmap"}, {"outline_ref": "oversized", "bitmap_ref": "bitmap"}]}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "error:render-delegate"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Get_Bitmap", "kind": "function", "c_signature": "FT_Error FT_Outline_Get_Bitmap(FT_Library library, FT_Outline* outline, const FT_Bitmap* abitmap)"}, "source_behavior": "Null bitmap returns Invalid_Argument immediately; library, outline, and cbox limit checks are delegated to FT_Outline_Render."},
+      "expectation": {"status": "error", "output_shape": {"results": [{"return": "FT_Error"}]}, "compare": {"mode": "exact_error", "paths": ["results[*].return"]}, "error": ["FT_Err_Invalid_Argument", "FT_Err_Invalid_Library_Handle", "FT_Err_Invalid_Outline"], "source_refs": ["freetype/src/base/ftoutln.c:606-667", "freetype/src/base/ftoutln.c:669-689"], "fixture_requirements": ["Oversized outline whose cbox exceeds FT_Outline_Render's +/-0x1000000 limit."]}
+    }
+  ]
+}

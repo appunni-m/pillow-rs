@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Raster_Overflow",
+  "manifest_cases": [
+    "value_matches_header",
+    "raster_buffer_or_cell_overflow"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Raster_Overflow.value_matches_header",
+      "subject": "fterrdef.FT_Err_Raster_Overflow",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Raster_Overflow",
+          "include": "<freetype/fterrors.h>",
+          "public_import": "#include <freetype/freetype.h>",
+          "header": "freetype/fterrdef.h",
+          "expected_value_from_pinned_header": 98,
+          "expected_value_hex": "0x62",
+          "expected_error_string_from_pinned_header": "raster overflow",
+          "pinned_source": "freetype/include/freetype/fterrdef.h:167-168"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Raster_Overflow",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Raster_Overflow.raster_buffer_or_cell_overflow",
+      "subject": "fterrdef.FT_Err_Raster_Overflow",
+      "case": "raster_buffer_or_cell_overflow",
+      "operation": "FT_Outline_Render",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "outline": {
+            "kind": "ref",
+            "role": "synthetic_outline",
+            "id": "generated/raster/overflow-outline.json",
+            "requirements": "Oversized outline or constrained target bitmap that overflows monochrome or gray raster cells/bands."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Raster_Overflow",
+          "render_modes": [
+            "FT_RENDER_MODE_NORMAL",
+            "FT_RENDER_MODE_MONO"
+          ],
+          "target_bitmap": "small_or_sentinel_target",
+          "pinned_sources": [
+            "freetype/src/raster/ftraster.c:603",
+            "freetype/src/raster/ftraster.c:653",
+            "freetype/src/raster/ftraster.c:959",
+            "freetype/src/smooth/ftgrays.c:614",
+            "freetype/src/smooth/ftsmooth.c:323",
+            "freetype/src/raster/ftrend1.c:134",
+            "freetype/src/sdf/ftsdfrend.c:297"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:raster",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Raster_Overflow",
+        "fixture_requirements": "Oversized or resource-constrained raster fixture that C FreeType reports as Raster_Overflow, with a normal-size success control elsewhere.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "bitmap": "metadata_and_optional_partial_buffer_hash",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "bitmap.mutation_class",
+            "bitmap.width",
+            "bitmap.rows",
+            "bitmap.pitch"
+          ]
+        }
+      }
+    }
+  ]
+}

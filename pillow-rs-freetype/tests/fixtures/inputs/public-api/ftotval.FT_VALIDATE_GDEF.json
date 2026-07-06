@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "subject": "ftotval.FT_VALIDATE_GDEF",
+  "manifest_cases": [
+    "value_matches_header",
+    "validate_selects_gdef_table",
+    "malformed_table_error"
+  ],
+  "cases": [
+    {
+      "case_id": "ftotval.FT_VALIDATE_GDEF.value_matches_header",
+      "subject": "ftotval.FT_VALIDATE_GDEF",
+      "case": "value_matches_header",
+      "operation": "abi.constant_eval",
+      "schema": "constant_value",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ftotval.h",
+          "symbol": "FT_VALIDATE_GDEF",
+          "c_expression": "0x0200",
+          "value": 512,
+          "type": "FT_UInt validation flag"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftotval",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "constant_value": "FT_UInt"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "constant_value"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftotval.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftotval.FT_VALIDATE_GDEF.validate_selects_gdef_table",
+      "subject": "ftotval.FT_VALIDATE_GDEF",
+      "case": "validate_selects_gdef_table",
+      "operation": "ftotval.open_type_validate",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/opentype/valid-gdef.otf"
+          }
+        },
+        "params": {
+          "function": "FT_OpenType_Validate",
+          "validation_flags": [
+            "FT_VALIDATE_GDEF"
+          ],
+          "follow_up": "FT_OpenType_Free non-null GDEF table"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "runtime:opentype_validation"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "error": "FT_Error",
+          "GDEF_table": "nullable<FT_Bytes>",
+          "freed": "bool"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "error",
+            "GDEF_table.pointer_class",
+            "GDEF_table.bytes_hash",
+            "freed"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/opentype/valid-gdef.otf must contain a valid GDEF table."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftotval.h",
+          "freetype/src/base/ftotval.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftotval.FT_VALIDATE_GDEF.malformed_table_error",
+      "subject": "ftotval.FT_VALIDATE_GDEF",
+      "case": "malformed_table_error",
+      "operation": "ftotval.open_type_validate",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/opentype/malformed-gdef.otf"
+          }
+        },
+        "params": {
+          "validation_flags": [
+            "FT_VALIDATE_GDEF"
+          ],
+          "initialize_outputs_to": "null"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "runtime:opentype_validation",
+        "error_path"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error",
+          "GDEF_table": "nullable<FT_Bytes>",
+          "cleanup_obligation": "array<string>"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "GDEF_table.pointer_class",
+            "cleanup_obligation"
+          ]
+        },
+        "error": "OpenType validation service error for malformed GDEF data.",
+        "fixture_requirements": [
+          "fonts/opentype/malformed-gdef.otf must contain invalid GDEF offsets or indices."
+        ],
+        "source_refs": [
+          "freetype/src/base/ftotval.c",
+          "freetype/src/otvalid"
+        ]
+      }
+    }
+  ]
+}

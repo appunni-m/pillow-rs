@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "subject": "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING",
+  "manifest_cases": [
+    "value_matches_header",
+    "open_face_no_effect",
+    "null_data_accepted_or_ignored"
+  ],
+  "cases": [
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.value_matches_header",
+      "subject": "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING",
+      "case": "value_matches_header",
+      "operation": "abi.constant_value",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_PARAM_TAG_UNPATENTED_HINTING",
+          "include": "<freetype/ftparams.h>",
+          "ctype": "FT_ULong",
+          "macro": "FT_MAKE_TAG('u','n','p','a')",
+          "value_hex": "0x756e7061",
+          "value_decimal": 1970172001,
+          "description": "deprecated, no effect",
+          "source_refs": [
+            "freetype/include/freetype/ftparams.h"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftparams",
+        "area:open-params"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "ctype": "FT_ULong",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.open_face_no_effect",
+      "subject": "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING",
+      "case": "open_face_no_effect",
+      "operation": "freetype.open_face_with_params",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "control_parameters": [],
+          "test_parameters": [
+            {
+              "tag": "FT_PARAM_TAG_UNPATENTED_HINTING",
+              "data": "NULL"
+            }
+          ],
+          "probe": {
+            "glyph_index": 36,
+            "size_ppem": 20,
+            "load_flags": [
+              "FT_LOAD_DEFAULT"
+            ],
+            "render_mode": "FT_RENDER_MODE_NORMAL"
+          },
+          "c_behavior": "No current C source branch consumes this tag"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftparams",
+        "area:deprecated-open-param"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "control": "open/load/render public output",
+          "test": "open/load/render public output"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "control",
+            "test"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.null_data_accepted_or_ignored",
+      "subject": "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING",
+      "case": "null_data_accepted_or_ignored",
+      "operation": "freetype.open_face_with_params",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "parameters": [
+            {
+              "tag": "FT_PARAM_TAG_UNPATENTED_HINTING",
+              "data": "NULL"
+            },
+            {
+              "tag": "FT_PARAM_TAG_UNPATENTED_HINTING",
+              "data_pointer_class": "non_null_ignored"
+            }
+          ],
+          "observe": [
+            "open_error",
+            "face_flags",
+            "loaded_glyph_metrics"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftparams",
+        "area:deprecated-open-param"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "open_error": "FT_Error",
+          "face_flags": "FT_Long",
+          "glyph_slot": "public fields"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "open_error",
+            "face_flags",
+            "glyph_slot"
+          ]
+        }
+      }
+    }
+  ]
+}

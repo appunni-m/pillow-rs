@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "subject": "ftstroke.FT_Stroker_Export",
+  "manifest_cases": [
+    "exports_left_then_right",
+    "append_to_existing_outline",
+    "invalid_inputs_noop"
+  ],
+  "cases": [
+    {
+      "case_id": "ftstroke.FT_Stroker_Export.exports_left_then_right",
+      "subject": "ftstroke.FT_Stroker_Export",
+      "case": "exports_left_then_right",
+      "operation": "ftstroke.export",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_Export",
+        "signature": "void FT_Stroker_Export(FT_Stroker stroker, FT_Outline* outline)",
+        "return": "void"
+      },
+      "inputs": {
+        "assets": {
+          "paths": {
+            "kind": "ref",
+            "id": "outlines/stroker/closed-triangle.json",
+            "asset_kind": "outline_path_records",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "path": "closed_triangle",
+          "allocate_target_from": "FT_Stroker_GetCounts",
+          "preexisting_points": 0,
+          "preexisting_contours": 0
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:export"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "target_outline": "left border followed by right border",
+          "n_points": "FT_Short",
+          "n_contours": "FT_Short"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "target_outline.points",
+            "target_outline.tags",
+            "target_outline.contours",
+            "target_outline.n_points",
+            "target_outline.n_contours"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftstroke.h:647-664",
+          "freetype/src/base/ftstroke.c:2033-2038"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_Export.append_to_existing_outline",
+      "subject": "ftstroke.FT_Stroker_Export",
+      "case": "append_to_existing_outline",
+      "operation": "ftstroke.export",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_Export",
+        "signature": "void FT_Stroker_Export(FT_Stroker stroker, FT_Outline* outline)"
+      },
+      "inputs": {
+        "assets": {
+          "paths": {
+            "kind": "ref",
+            "id": "outlines/stroker/open-line-caps.json",
+            "asset_kind": "outline_path_records",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "preexisting_points": 2,
+          "preexisting_contours": 1,
+          "sentinel_prefix": true,
+          "capacity_policy": "caller allocates enough room before export"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:export"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sentinel_prefix": "unchanged",
+          "appended_outline": "points/tags/contours after prefix",
+          "n_points": "old plus appended",
+          "n_contours": "old plus appended"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "sentinel_prefix",
+            "appended_outline.points",
+            "appended_outline.tags",
+            "appended_outline.contours",
+            "n_points",
+            "n_contours"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftstroke.h:650-657",
+          "freetype/src/base/ftstroke.c:2011-2038"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_Export.invalid_inputs_noop",
+      "subject": "ftstroke.FT_Stroker_Export",
+      "case": "invalid_inputs_noop",
+      "operation": "ftstroke.export",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_Export",
+        "signature": "void FT_Stroker_Export(FT_Stroker stroker, FT_Outline* outline)"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "scenarios": [
+            {
+              "stroker": "null",
+              "outline": "sentinel_outline"
+            },
+            {
+              "stroker": "valid",
+              "outline": "null"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:null"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "target_outline_after": "unchanged where outline exists",
+          "crash": false
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].target_outline_after",
+            "rows[*].crash"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:2011-2038"
+        ]
+      }
+    }
+  ]
+}

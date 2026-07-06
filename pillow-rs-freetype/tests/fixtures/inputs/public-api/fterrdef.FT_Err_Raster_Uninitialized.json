@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Raster_Uninitialized",
+  "manifest_cases": [
+    "value_matches_header",
+    "raster_render_without_pool"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Raster_Uninitialized.value_matches_header",
+      "subject": "fterrdef.FT_Err_Raster_Uninitialized",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Raster_Uninitialized",
+          "include": "<freetype/fterrors.h>",
+          "public_import": "#include <freetype/freetype.h>",
+          "header": "freetype/fterrdef.h",
+          "expected_value_from_pinned_header": 96,
+          "expected_value_hex": "0x60",
+          "expected_error_string_from_pinned_header": "raster uninitialized",
+          "pinned_source": "freetype/include/freetype/fterrdef.h:163-164"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Raster_Uninitialized",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Raster_Uninitialized.raster_render_without_pool",
+      "subject": "fterrdef.FT_Err_Raster_Uninitialized",
+      "case": "raster_render_without_pool",
+      "operation": "FT_Outline_Render",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "outline": {
+            "kind": "ref",
+            "role": "synthetic_outline",
+            "id": "generated/raster/simple-valid-outline.json",
+            "requirements": "Valid simple outline used with a deliberately uninitialized monochrome raster worker or zero pool setup."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Raster_Uninitialized",
+          "render_mode": "FT_RENDER_MODE_MONO",
+          "raster_setup": "worker_or_pool_absent",
+          "target_bitmap": "sentinel_zeroed_bitmap",
+          "pinned_source": "freetype/src/raster/ftraster.c:2674"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:raster",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Raster_Uninitialized",
+        "fixture_requirements": "Harness support for invoking the monochrome raster facade before worker or pool initialization.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "bitmap": "target_bitmap_no_write_or_preservation_class",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "bitmap.mutation_class"
+          ]
+        }
+      }
+    }
+  ]
+}

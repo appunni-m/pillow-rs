@@ -1,0 +1,194 @@
+{
+  "version": 1,
+  "subject": "ftglyph.FT_GlyphRec",
+  "manifest_cases": [
+    "layout_matches_c",
+    "root_fields_match_created_glyphs",
+    "clazz_is_private_identity_only"
+  ],
+  "cases": [
+    {
+      "case_id": "ftglyph.FT_GlyphRec.layout_matches_c",
+      "subject": "ftglyph.FT_GlyphRec",
+      "case": "layout_matches_c",
+      "operation": "ftglyph.record_layout",
+      "schema": "api_abi_record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftglyph.h",
+          "ctype": "FT_GlyphRec"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "ctype": "FT_GlyphRec",
+          "field_order": [
+            "library",
+            "clazz",
+            "format",
+            "advance"
+          ],
+          "layout": [
+            "sizeof",
+            "alignof",
+            "offsetof fields"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "ctype",
+            "sizeof",
+            "alignof",
+            "field_offsets",
+            "field_order"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_GlyphRec.root_fields_match_created_glyphs",
+      "subject": "ftglyph.FT_GlyphRec",
+      "case": "root_fields_match_created_glyphs",
+      "operation": "ftglyph.record_inspect",
+      "schema": "glyph_record",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "bitmap_strike_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "creation_paths": [
+            "FT_Get_Glyph outline",
+            "FT_Get_Glyph bitmap",
+            "FT_Glyph_Copy"
+          ],
+          "glyph_indices": [
+            36,
+            43
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_GlyphRec",
+          "fields": [
+            "library identity",
+            "clazz identity class",
+            "format tag",
+            "advance 16.16"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "record.library_identity",
+            "record.clazz_identity_class",
+            "record.format",
+            "record.advance"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "fixture_requirements": [
+          "fonts/bitmap-strikes/public-bitmap-strike.ttf must contain at least one loadable embedded bitmap strike whose FT_GlyphSlot format becomes FT_GLYPH_FORMAT_BITMAP."
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_GlyphRec.clazz_is_private_identity_only",
+      "subject": "ftglyph.FT_GlyphRec",
+      "case": "clazz_is_private_identity_only",
+      "operation": "ftglyph.record_inspect",
+      "schema": "glyph_record",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "bitmap_strike_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+            "asset_kind": "font"
+          },
+          "svg_font": {
+            "kind": "ref",
+            "id": "fonts/svg/ot-svg-glyphs.ttf",
+            "asset_kind": "font",
+            "optional": true
+          },
+          "malformed_facade": {
+            "kind": "ref",
+            "id": "facades/glyph/malformed-slot-and-class-cases.json",
+            "asset_kind": "fixture"
+          }
+        },
+        "params": {
+          "glyph_kinds": [
+            "outline",
+            "bitmap",
+            "svg_optional",
+            "bad_null_clazz"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_GlyphRec",
+          "clazz": "opaque pointer; compare nullness and public class behavior only"
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "record.clazz_identity_class",
+            "operation_behavior"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "fixture_requirements": [
+          "fonts/bitmap-strikes/public-bitmap-strike.ttf must contain at least one loadable embedded bitmap strike whose FT_GlyphSlot format becomes FT_GLYPH_FORMAT_BITMAP.",
+          "fonts/svg/ot-svg-glyphs.ttf is optional and must contain a valid OT-SVG document for SVG rows; builds without FT_CONFIG_OPTION_SVG classify these rows as unsupported.",
+          "facades/glyph/malformed-slot-and-class-cases.json must describe synthetic C harness cases for null slot/output, bad clazz, unsupported formats, oversized advances, and render/copy allocation failures."
+        ]
+      }
+    }
+  ]
+}

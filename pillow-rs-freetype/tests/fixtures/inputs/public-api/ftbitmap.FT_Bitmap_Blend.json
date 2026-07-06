@@ -1,0 +1,568 @@
+{
+  "version": 1,
+  "subject": "ftbitmap.FT_Bitmap_Blend",
+  "manifest_cases": [
+    "success_empty_target_allocates_bgra",
+    "success_existing_bgra_reallocates_or_preserves",
+    "success_source_pixel_modes_and_flow",
+    "success_integerizes_offsets",
+    "error_invalid_arguments_or_target_mode",
+    "error_overflow_or_flow_mismatch"
+  ],
+  "cases": [
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Blend.success_empty_target_allocates_bgra",
+      "subject": "ftbitmap.FT_Bitmap_Blend",
+      "case": "success_empty_target_allocates_bgra",
+      "operation": "ftbitmap.bitmap_blend",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "success_empty_target_allocates_bgra",
+          "source_pixel_modes": [
+            "MONO",
+            "GRAY2",
+            "GRAY4",
+            "GRAY",
+            "LCD",
+            "LCD_V",
+            "BGRA"
+          ],
+          "offsets_26_6": [
+            [
+              31,
+              95
+            ],
+            [
+              -33,
+              130
+            ]
+          ],
+          "target_modes": [
+            "NONE",
+            "BGRA",
+            "GRAY"
+          ],
+          "flow": [
+            "positive_pitch",
+            "negative_pitch"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "target_offset": "FT_Vector",
+          "color": "FT_Color premultiplied BGRA blend"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "target.rows",
+            "target.width",
+            "target.pitch",
+            "target.pixel_mode",
+            "target.buffer_bgra_bytes",
+            "target_offset",
+            "allocator.events"
+          ]
+        },
+        "fixture_requirements": [
+          "Synthetic bitmap matrix covering all public pixel modes and pitch directions"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Blend.success_existing_bgra_reallocates_or_preserves",
+      "subject": "ftbitmap.FT_Bitmap_Blend",
+      "case": "success_existing_bgra_reallocates_or_preserves",
+      "operation": "ftbitmap.bitmap_blend",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "success_existing_bgra_reallocates_or_preserves",
+          "source_pixel_modes": [
+            "MONO",
+            "GRAY2",
+            "GRAY4",
+            "GRAY",
+            "LCD",
+            "LCD_V",
+            "BGRA"
+          ],
+          "offsets_26_6": [
+            [
+              31,
+              95
+            ],
+            [
+              -33,
+              130
+            ]
+          ],
+          "target_modes": [
+            "NONE",
+            "BGRA",
+            "GRAY"
+          ],
+          "flow": [
+            "positive_pitch",
+            "negative_pitch"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "target_offset": "FT_Vector",
+          "color": "FT_Color premultiplied BGRA blend"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "target.rows",
+            "target.width",
+            "target.pitch",
+            "target.pixel_mode",
+            "target.buffer_bgra_bytes",
+            "target_offset",
+            "allocator.events"
+          ]
+        },
+        "fixture_requirements": [
+          "Synthetic bitmap matrix covering all public pixel modes and pitch directions"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Blend.success_source_pixel_modes_and_flow",
+      "subject": "ftbitmap.FT_Bitmap_Blend",
+      "case": "success_source_pixel_modes_and_flow",
+      "operation": "ftbitmap.bitmap_blend",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "success_source_pixel_modes_and_flow",
+          "source_pixel_modes": [
+            "MONO",
+            "GRAY2",
+            "GRAY4",
+            "GRAY",
+            "LCD",
+            "LCD_V",
+            "BGRA"
+          ],
+          "offsets_26_6": [
+            [
+              31,
+              95
+            ],
+            [
+              -33,
+              130
+            ]
+          ],
+          "target_modes": [
+            "NONE",
+            "BGRA",
+            "GRAY"
+          ],
+          "flow": [
+            "positive_pitch",
+            "negative_pitch"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "target_offset": "FT_Vector",
+          "color": "FT_Color premultiplied BGRA blend"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "target.rows",
+            "target.width",
+            "target.pitch",
+            "target.pixel_mode",
+            "target.buffer_bgra_bytes",
+            "target_offset",
+            "allocator.events"
+          ]
+        },
+        "fixture_requirements": [
+          "Synthetic bitmap matrix covering all public pixel modes and pitch directions"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Blend.success_integerizes_offsets",
+      "subject": "ftbitmap.FT_Bitmap_Blend",
+      "case": "success_integerizes_offsets",
+      "operation": "ftbitmap.bitmap_blend",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "success_integerizes_offsets",
+          "source_pixel_modes": [
+            "MONO",
+            "GRAY2",
+            "GRAY4",
+            "GRAY",
+            "LCD",
+            "LCD_V",
+            "BGRA"
+          ],
+          "offsets_26_6": [
+            [
+              31,
+              95
+            ],
+            [
+              -33,
+              130
+            ]
+          ],
+          "target_modes": [
+            "NONE",
+            "BGRA",
+            "GRAY"
+          ],
+          "flow": [
+            "positive_pitch",
+            "negative_pitch"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "target_offset": "FT_Vector",
+          "color": "FT_Color premultiplied BGRA blend"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "target.rows",
+            "target.width",
+            "target.pitch",
+            "target.pixel_mode",
+            "target.buffer_bgra_bytes",
+            "target_offset",
+            "allocator.events"
+          ]
+        },
+        "fixture_requirements": [
+          "Synthetic bitmap matrix covering all public pixel modes and pitch directions"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Blend.error_invalid_arguments_or_target_mode",
+      "subject": "ftbitmap.FT_Bitmap_Blend",
+      "case": "error_invalid_arguments_or_target_mode",
+      "operation": "ftbitmap.bitmap_blend",
+      "schema": "bitmap_operation",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "error_invalid_arguments_or_target_mode",
+          "source_pixel_modes": [
+            "MONO",
+            "GRAY2",
+            "GRAY4",
+            "GRAY",
+            "LCD",
+            "LCD_V",
+            "BGRA"
+          ],
+          "offsets_26_6": [
+            [
+              31,
+              95
+            ],
+            [
+              -33,
+              130
+            ]
+          ],
+          "target_modes": [
+            "NONE",
+            "BGRA",
+            "GRAY"
+          ],
+          "flow": [
+            "positive_pitch",
+            "negative_pitch"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "target_offset": "FT_Vector",
+          "color": "FT_Color premultiplied BGRA blend"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "target.rows",
+            "target.width",
+            "target.pitch",
+            "target.pixel_mode",
+            "target.buffer_bgra_bytes",
+            "target_offset",
+            "allocator.events"
+          ]
+        },
+        "error": "Invalid_Argument",
+        "fixture_requirements": [
+          "Synthetic bitmap matrix covering all public pixel modes and pitch directions"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Blend.error_overflow_or_flow_mismatch",
+      "subject": "ftbitmap.FT_Bitmap_Blend",
+      "case": "error_overflow_or_flow_mismatch",
+      "operation": "ftbitmap.bitmap_blend",
+      "schema": "bitmap_operation",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "error_overflow_or_flow_mismatch",
+          "source_pixel_modes": [
+            "MONO",
+            "GRAY2",
+            "GRAY4",
+            "GRAY",
+            "LCD",
+            "LCD_V",
+            "BGRA"
+          ],
+          "offsets_26_6": [
+            [
+              31,
+              95
+            ],
+            [
+              -33,
+              130
+            ]
+          ],
+          "target_modes": [
+            "NONE",
+            "BGRA",
+            "GRAY"
+          ],
+          "flow": [
+            "positive_pitch",
+            "negative_pitch"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "target_offset": "FT_Vector",
+          "color": "FT_Color premultiplied BGRA blend"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "target.rows",
+            "target.width",
+            "target.pitch",
+            "target.pixel_mode",
+            "target.buffer_bgra_bytes",
+            "target_offset",
+            "allocator.events"
+          ]
+        },
+        "error": "Invalid_Argument",
+        "fixture_requirements": [
+          "Synthetic bitmap matrix covering all public pixel modes and pitch directions"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "subject": "ftoutln.FT_Outline_Render",
+  "manifest_cases": ["bitmap_render_matches_c", "direct_render_clip_and_spans", "renderer_fallback_and_errors"],
+  "cases": [
+    {
+      "case_id": "ftoutln.FT_Outline_Render.bitmap_render_matches_c",
+      "subject": "ftoutln.FT_Outline_Render",
+      "case": "bitmap_render_matches_c",
+      "operation": "ftoutln.outline_render",
+      "schema": "bitmap_result",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/render/simple-filled-square.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}}, "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "operation:render"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Render", "kind": "function", "c_signature": "FT_Error FT_Outline_Render(FT_Library library, FT_Outline* outline, FT_Raster_Params* params)"}, "source_behavior": "params->source is overwritten with the outline before raster_render; target bitmap contents are generated at runtime."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "params_source_is_outline": true, "bitmap": {"pixel_mode": "FT_Pixel_Mode", "rows": "integer", "width": "integer", "pitch": "integer", "buffer_hash": "sha256"}}, "compare": {"mode": "bytes", "paths": ["return", "params_source_is_outline", "bitmap.pixel_mode", "bitmap.rows", "bitmap.width", "bitmap.pitch", "bitmap.buffer"]}, "source_refs": ["freetype/include/freetype/ftoutln.h:466-498", "freetype/src/base/ftoutln.c:606-667"], "fixture_requirements": ["Preallocated gray bitmap target; runtime oracle must render the buffer rather than store generated output."]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_Render.direct_render_clip_and_spans",
+      "subject": "ftoutln.FT_Outline_Render",
+      "case": "direct_render_clip_and_spans",
+      "operation": "ftoutln.outline_render",
+      "schema": "span_trace",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/render/direct-spans-clipped.json", "asset_kind": "outline_model"}}, "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA", "FT_RASTER_FLAG_DIRECT"], "gray_spans": "recording_callback", "source": "ignored_sentinel"}, "expect_clip_box_from_cbox": true}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "operation:direct-render"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Render", "kind": "function", "c_signature": "FT_Error FT_Outline_Render(FT_Library library, FT_Outline* outline, FT_Raster_Params* params)"}, "source_behavior": "In direct mode without CLIP, FreeType presets clip_box from the outline cbox rounded to pixel bounds."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "clip_box": "FT_BBox", "spans": [{"y": "integer", "x": "integer", "len": "integer", "coverage": "integer"}]}, "compare": {"mode": "exact", "paths": ["return", "clip_box", "spans"]}, "source_refs": ["freetype/src/base/ftoutln.c:625-640"], "fixture_requirements": ["Direct-render outline that emits a stable span list through the gray_spans callback."]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_Render.renderer_fallback_and_errors",
+      "subject": "ftoutln.FT_Outline_Render",
+      "case": "renderer_fallback_and_errors",
+      "operation": "ftoutln.outline_render",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/render/simple-filled-square.json", "asset_kind": "outline_model"}, "oversized": {"kind": "ref", "id": "outlines/render/cbox-beyond-render-limit.json", "asset_kind": "outline_model"}}, "params": {"scenarios": [{"library_pointer": null}, {"outline_pointer": null}, {"params_pointer": null}, {"outline_ref": "oversized"}, {"library": "renderer_returns_cannot_render_then_fallback", "outline_ref": "outline"}]}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "error:render"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Render", "kind": "function", "c_signature": "FT_Error FT_Outline_Render(FT_Library library, FT_Outline* outline, FT_Raster_Params* params)"}, "source_behavior": "The function validates library, outline, params, and cbox limits, then iterates renderers while errors are Cannot_Render_Glyph."},
+      "expectation": {"status": "error", "output_shape": {"results": [{"return": "FT_Error", "renderer_attempts": "integer"}]}, "compare": {"mode": "exact_error", "paths": ["results[*].return", "results[*].renderer_attempts"]}, "error": ["FT_Err_Invalid_Library_Handle", "FT_Err_Invalid_Outline", "FT_Err_Invalid_Argument", "FT_Err_Cannot_Render_Glyph"], "source_refs": ["freetype/src/base/ftoutln.c:614-666"], "fixture_requirements": ["Synthetic library/renderer harness capable of modeling Cannot_Render_Glyph fallback without linking native FreeType at runtime."]}
+    }
+  ]
+}

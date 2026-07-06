@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Bad_Argument",
+  "manifest_cases": [
+    "value_matches_header",
+    "bytecode_invalid_jump_returns_error",
+    "svg_preset_slot_bad_argument"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Bad_Argument.value_matches_header",
+      "subject": "fterrdef.FT_Err_Bad_Argument",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Bad_Argument",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 132,
+          "expected_value_hex": "0x84",
+          "expected_error_string_from_pinned_header": "bad argument",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Bad_Argument",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Bad_Argument.bytecode_invalid_jump_returns_error",
+      "subject": "fterrdef.FT_Err_Bad_Argument",
+      "case": "bytecode_invalid_jump_returns_error",
+      "operation": "FT_Load_Glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/truetype/bad-argument-invalid-jump.ttf",
+            "requirements": "Generated TrueType font with fpgm/prep/glyf bytecode that executes an illegal JMPR target or invalid code range transition plus a valid control glyph."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Bad_Argument",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/truetype/ttinterp.c:1422,3056-3217",
+          "face_index": 0,
+          "glyph_index": "fixture_defined_error_glyph",
+          "size_ppem": 12,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Bad_Argument",
+        "fixture_requirements": "Generated TrueType font with fpgm/prep/glyf bytecode that executes an illegal JMPR target or invalid code range transition plus a valid control glyph.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "output_face": "pointer_nullness_or_preservation",
+          "slot_state": "mutation_class_if_slot_is_involved",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class",
+            "slot_state.mutation_class"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Bad_Argument.svg_preset_slot_bad_argument",
+      "subject": "fterrdef.FT_Err_Bad_Argument",
+      "case": "svg_preset_slot_bad_argument",
+      "operation": "svg.preset_slot",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/svg/bad-preset-slot-argument.otf",
+            "requirements": "SVG glyph fixture and hook path that invokes ftsvg.c preset-slot validation with an invalid slot argument when the SVG ABI path is enabled."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Bad_Argument",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/svg/ftsvg.c:118"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Bad_Argument",
+        "fixture_requirements": "SVG glyph fixture and hook path that invokes ftsvg.c preset-slot validation with an invalid slot argument when the SVG ABI path is enabled.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "output_face": "pointer_nullness_or_preservation",
+          "slot_state": "mutation_class_if_slot_is_involved",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class",
+            "slot_state.mutation_class"
+          ]
+        }
+      }
+    }
+  ]
+}

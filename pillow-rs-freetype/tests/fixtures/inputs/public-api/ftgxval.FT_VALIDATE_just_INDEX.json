@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "subject": "ftgxval.FT_VALIDATE_just_INDEX",
+  "manifest_cases": [
+    "value_matches_header",
+    "indexes_just_output_slot"
+  ],
+  "cases": [
+    {
+      "case_id": "ftgxval.FT_VALIDATE_just_INDEX.value_matches_header",
+      "subject": "ftgxval.FT_VALIDATE_just_INDEX",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftgxval.h>",
+          "symbol": "FT_VALIDATE_just_INDEX",
+          "expected_value_from_pinned_header": 4,
+          "table_tag": "just",
+          "pinned_sources": [
+            "freetype/include/freetype/ftgxval.h:81-91"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftgxval",
+        "area:gx-validation",
+        "coverage:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_UInt",
+          "symbol": "FT_VALIDATE_just_INDEX"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgxval.FT_VALIDATE_just_INDEX.indexes_just_output_slot",
+      "subject": "ftgxval.FT_VALIDATE_just_INDEX",
+      "case": "indexes_just_output_slot",
+      "operation": "FT_TrueTypeGX_Validate",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "valid_just_font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/fonts/aat-gx/valid-just.ttf",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "validation_flags": "FT_VALIDATE_just",
+          "table_length_values": [
+            4,
+            5,
+            "FT_VALIDATE_GX_LENGTH"
+          ],
+          "expected_slot": 4,
+          "future_operation_group": "gx_validate_index_short_length",
+          "c_behavior": "table is loaded and slot is set only when FT_VALIDATE_just_INDEX is less than table_count",
+          "pinned_sources": [
+            "freetype/src/gxvalid/gxvmod.c:79-89",
+            "freetype/src/gxvalid/gxvmod.c:105-172"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftgxval",
+        "area:gx-validation",
+        "coverage:future-runtime",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Needs future valid just sfnt fixture and short table_length runner support.",
+        "output_shape": {
+          "error": "FT_Error",
+          "table_length": "FT_UInt",
+          "slot_state": "absent_or_null_or_table_bytes"
+        },
+        "compare": {
+          "mode": "unsupported_until_runner_added",
+          "paths": [
+            "error",
+            "table_length",
+            "slot_state"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_SubGlyph",
+  "manifest_cases": [
+    "alias_defined",
+    "composite_subglyph_query_runtime"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_SubGlyph.alias_defined",
+      "subject": "freetype.FT_SubGlyph",
+      "case": "alias_defined",
+      "operation": "abi.type_alias",
+      "schema": "c_abi_type",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_SubGlyph",
+          "target": "struct FT_SubGlyphRec_*",
+          "include": "<freetype/freetype.h>",
+          "import": "#include <freetype/freetype.h>",
+          "pointer_alias": true
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "target": "string",
+          "pointer_alias": "bool",
+          "pointer_width": "integer",
+          "null_value": "zero",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "target",
+            "pointer_alias",
+            "pointer_width",
+            "null_value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_SubGlyph.composite_subglyph_query_runtime",
+      "subject": "freetype.FT_SubGlyph",
+      "case": "composite_subglyph_query_runtime",
+      "operation": "freetype.get_subglyph_info",
+      "schema": "composite_subglyph",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/composite/composite-flags.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_index": "composite glyph with at least two components",
+          "load_flags": [
+            "FT_LOAD_NO_RECURSE"
+          ],
+          "sub_indices": [
+            0,
+            1,
+            "last"
+          ],
+          "invalid_sub_indices": [
+            "num_subglyphs"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "slot_format": "FT_GLYPH_FORMAT_COMPOSITE",
+          "num_subglyphs": "integer",
+          "subglyphs": "array of index,flags,arg1,arg2,transform"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "slot_format",
+            "num_subglyphs",
+            "subglyphs[*].index",
+            "subglyphs[*].flags",
+            "subglyphs[*].arg1",
+            "subglyphs[*].arg2",
+            "subglyphs[*].transform",
+            "invalid.status"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/composite/composite-flags.ttf must contain components using XY args and transform flags"
+        ],
+        "source_refs": [
+          "freetype/include/freetype/freetype.h",
+          "freetype/src/base/ftobjs.c:5690-5724"
+        ]
+      }
+    }
+  ]
+}

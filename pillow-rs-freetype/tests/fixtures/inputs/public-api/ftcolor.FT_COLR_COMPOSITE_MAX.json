@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_COLR_COMPOSITE_MAX",
+  "manifest_cases": [
+    "value_matches_header",
+    "sentinel_not_emitted_by_valid_paint_graph"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_COLR_COMPOSITE_MAX.value_matches_header",
+      "subject": "ftcolor.FT_COLR_COMPOSITE_MAX",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_COLR_COMPOSITE_MAX",
+          "include": "<freetype/ftcolor.h>",
+          "header": "freetype/ftcolor.h",
+          "expected_value_from_pinned_header": 28
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftcolor",
+        "area:colr-v1",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Composite_Mode",
+          "symbol": "FT_COLR_COMPOSITE_MAX",
+          "header": "freetype/ftcolor.h",
+          "value": "integer"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "type",
+            "header_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph",
+      "subject": "ftcolor.FT_COLR_COMPOSITE_MAX",
+      "case": "sentinel_not_emitted_by_valid_paint_graph",
+      "operation": "ftcolor.get_paint_graph",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/color/colr-v1-composite-modes.ttf",
+            "requirements": "Future shared COLR v1 font whose BaseGlyphV1List contains PaintComposite nodes for all real FT_Composite_Mode values, with simple solid source/backdrop terminal paints and deterministic glyph IDs."
+          },
+          "control_font": {
+            "kind": "ref",
+            "role": "control_font",
+            "id": "fonts/color/colr-v0-layer-control.ttf",
+            "requirements": "Future shared COLR v0-only control font proving these COLR v1 paint cases are absent from legacy layer traversal."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_id": "all_composite_mode_probe_glyphs",
+          "palette_index": 0,
+          "root_transform": "FT_COLOR_NO_ROOT_TRANSFORM",
+          "traversal": "FT_Get_Color_Glyph_Paint then recursive FT_Get_Paint on opaque child paints",
+          "forbidden_composite_mode": "FT_COLR_COMPOSITE_MAX"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftcolor",
+        "area:colr-v1",
+        "requires:font",
+        "requires:paint-graph",
+        "sentinel"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Future COLR v1 font must contain valid PaintComposite nodes for real modes and no node with composite mode byte 28 or greater; ttcolr.c rejects composite_mode >= FT_COLR_COMPOSITE_MAX.",
+        "output_shape": {
+          "status": "FT_Bool",
+          "paint_graphs": [
+            {
+              "root_glyph_id": "FT_UInt",
+              "nodes": [
+                {
+                  "format": "FT_PaintFormat",
+                  "composite_mode": "optional FT_Composite_Mode",
+                  "source_paint": "optional opaque paint identity class",
+                  "backdrop_paint": "optional opaque paint identity class"
+                }
+              ]
+            }
+          ],
+          "forbidden": {
+            "composite_mode": "FT_COLR_COMPOSITE_MAX",
+            "value": 28
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "paint_graphs[].root_glyph_id",
+            "paint_graphs[].nodes[].format",
+            "paint_graphs[].nodes[].composite_mode",
+            "paint_graphs[].nodes[].source_paint.identity_class",
+            "paint_graphs[].nodes[].backdrop_paint.identity_class",
+            "absence.composite_mode.FT_COLR_COMPOSITE_MAX"
+          ]
+        }
+      }
+    }
+  ]
+}

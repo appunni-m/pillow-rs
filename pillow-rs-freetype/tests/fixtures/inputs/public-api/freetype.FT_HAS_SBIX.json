@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_HAS_SBIX",
+  "manifest_cases": [
+    "sbix_outline_face_returns_true",
+    "non_sbix_or_ignored_face_returns_false"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_HAS_SBIX.sbix_outline_face_returns_true",
+      "subject": "freetype.FT_HAS_SBIX",
+      "case": "sbix_outline_face_returns_true",
+      "operation": "freetype.face_macro.has_sbix",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/sbix-outline.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag_or_expression": "FT_FACE_FLAG_SBIX",
+          "open_variants": [
+            "default",
+            "FT_PARAM_TAG_IGNORE_SBIX"
+          ],
+          "include": "freetype/freetype.h",
+          "macro": "FT_HAS_SBIX",
+          "expected_truth": true,
+          "probe": [
+            "macro_result",
+            "face.face_flags",
+            "face.face_index"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face_property_macro",
+        "runtime:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_result": "FT_Bool-compatible int",
+          "face_flags": "FT_Long",
+          "face_index": "FT_Long",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "face_flags",
+            "face_index",
+            "import_compiles"
+          ]
+        },
+        "fixture_requirements": [
+          "SFNT with 'sbix' table and outline glyphs"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_HAS_SBIX.non_sbix_or_ignored_face_returns_false",
+      "subject": "freetype.FT_HAS_SBIX",
+      "case": "non_sbix_or_ignored_face_returns_false",
+      "operation": "freetype.face_macro.has_sbix",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag_or_expression": "FT_FACE_FLAG_SBIX",
+          "open_variants": [
+            "default",
+            "FT_PARAM_TAG_IGNORE_SBIX"
+          ],
+          "include": "freetype/freetype.h",
+          "macro": "FT_HAS_SBIX",
+          "expected_truth": false,
+          "probe": [
+            "macro_result",
+            "face.face_flags",
+            "face.face_index"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face_property_macro",
+        "runtime:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_result": "FT_Bool-compatible int",
+          "face_flags": "FT_Long",
+          "face_index": "FT_Long",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "face_flags",
+            "face_index",
+            "import_compiles"
+          ]
+        },
+        "fixture_requirements": [
+          "non-sbix SFNT outline control"
+        ]
+      }
+    }
+  ]
+}

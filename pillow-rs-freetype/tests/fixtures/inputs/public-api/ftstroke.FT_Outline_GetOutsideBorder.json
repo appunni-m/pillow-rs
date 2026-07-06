@@ -1,0 +1,178 @@
+{
+  "version": 1,
+  "subject": "ftstroke.FT_Outline_GetOutsideBorder",
+  "manifest_cases": [
+    "truetype_orientation_returns_left",
+    "non_truetype_orientation_returns_right",
+    "orientation_delegation"
+  ],
+  "cases": [
+    {
+      "case_id": "ftstroke.FT_Outline_GetOutsideBorder.truetype_orientation_returns_left",
+      "subject": "ftstroke.FT_Outline_GetOutsideBorder",
+      "case": "truetype_orientation_returns_left",
+      "operation": "ftstroke.outline_get_outside_border",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Outline_GetOutsideBorder",
+        "signature": "FT_StrokerBorder FT_Outline_GetOutsideBorder(FT_Outline* outline)",
+        "return": "FT_StrokerBorder"
+      },
+      "inputs": {
+        "assets": {
+          "outlines": {
+            "kind": "ref",
+            "id": "outlines/orientation/clockwise-and-empty.json",
+            "asset_kind": "outline_records",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "rows": [
+            "truetype_clockwise",
+            "empty_outline",
+            "null_outline"
+          ],
+          "orientation_expected": "FT_ORIENTATION_TRUETYPE"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:outline",
+        "area:border"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "orientation": "FT_Orientation",
+          "border": "FT_StrokerBorder"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].orientation",
+            "rows[*].border"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftstroke.h:226-244",
+          "freetype/src/base/ftstroke.c:46-55",
+          "freetype/src/base/ftoutln.c:1051-1114"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Outline_GetOutsideBorder.non_truetype_orientation_returns_right",
+      "subject": "ftstroke.FT_Outline_GetOutsideBorder",
+      "case": "non_truetype_orientation_returns_right",
+      "operation": "ftstroke.outline_get_outside_border",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Outline_GetOutsideBorder",
+        "signature": "FT_StrokerBorder FT_Outline_GetOutsideBorder(FT_Outline* outline)"
+      },
+      "inputs": {
+        "assets": {
+          "outlines": {
+            "kind": "ref",
+            "id": "outlines/orientation/counter-clockwise.json",
+            "asset_kind": "outline_records",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "rows": [
+            "postscript_counter_clockwise",
+            "zero_area_postscript_classified"
+          ],
+          "orientation_expected": "FT_ORIENTATION_POSTSCRIPT"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:outline",
+        "area:border"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "orientation": "FT_Orientation",
+          "border": "FT_StrokerBorder"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].orientation",
+            "rows[*].border"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:46-55"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Outline_GetOutsideBorder.orientation_delegation",
+      "subject": "ftstroke.FT_Outline_GetOutsideBorder",
+      "case": "orientation_delegation",
+      "operation": "ftstroke.outline_border_orientation_pair",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Outline_GetOutsideBorder",
+        "signature": "FT_StrokerBorder FT_Outline_GetOutsideBorder(FT_Outline* outline)"
+      },
+      "inputs": {
+        "assets": {
+          "outlines": {
+            "kind": "ref",
+            "id": "outlines/orientation/mixed-orientations.json",
+            "asset_kind": "outline_records",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "also_call": "FT_Outline_Get_Orientation",
+          "mapping": {
+            "FT_ORIENTATION_TRUETYPE": "FT_STROKER_BORDER_LEFT",
+            "other": "FT_STROKER_BORDER_RIGHT"
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:outline",
+        "area:border"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "orientation": "FT_Orientation",
+          "border": "FT_StrokerBorder"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].orientation",
+            "rows[*].border"
+          ]
+        },
+        "fixture_requirements": [
+          "Include null and empty outline rows; actual C behavior maps their FT_ORIENTATION_TRUETYPE result to FT_STROKER_BORDER_LEFT."
+        ],
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:46-55",
+          "freetype/src/base/ftoutln.c:1051-1114"
+        ]
+      }
+    }
+  ]
+}

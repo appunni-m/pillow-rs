@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_HAS_SBIX_OVERLAY",
+  "manifest_cases": [
+    "sbix_overlay_face_returns_true",
+    "no_overlay_or_no_sbix_returns_false"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_HAS_SBIX_OVERLAY.sbix_overlay_face_returns_true",
+      "subject": "freetype.FT_HAS_SBIX_OVERLAY",
+      "case": "sbix_overlay_face_returns_true",
+      "operation": "freetype.face_macro.has_sbix_overlay",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/sbix-overlay.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag_or_expression": "FT_FACE_FLAG_SBIX_OVERLAY",
+          "open_variants": [
+            "default"
+          ],
+          "include": "freetype/freetype.h",
+          "macro": "FT_HAS_SBIX_OVERLAY",
+          "expected_truth": true,
+          "probe": [
+            "macro_result",
+            "face.face_flags",
+            "face.face_index"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face_property_macro",
+        "runtime:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_result": "FT_Bool-compatible int",
+          "face_flags": "FT_Long",
+          "face_index": "FT_Long",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "face_flags",
+            "face_index",
+            "import_compiles"
+          ]
+        },
+        "fixture_requirements": [
+          "sbix flags bit 1 set"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_HAS_SBIX_OVERLAY.no_overlay_or_no_sbix_returns_false",
+      "subject": "freetype.FT_HAS_SBIX_OVERLAY",
+      "case": "no_overlay_or_no_sbix_returns_false",
+      "operation": "freetype.face_macro.has_sbix_overlay",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/sbix-no-overlay.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag_or_expression": "FT_FACE_FLAG_SBIX_OVERLAY",
+          "open_variants": [
+            "default"
+          ],
+          "include": "freetype/freetype.h",
+          "macro": "FT_HAS_SBIX_OVERLAY",
+          "expected_truth": false,
+          "probe": [
+            "macro_result",
+            "face.face_flags",
+            "face.face_index"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face_property_macro",
+        "runtime:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_result": "FT_Bool-compatible int",
+          "face_flags": "FT_Long",
+          "face_index": "FT_Long",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "face_flags",
+            "face_index",
+            "import_compiles"
+          ]
+        },
+        "fixture_requirements": [
+          "sbix flags bit 1 clear"
+        ]
+      }
+    }
+  ]
+}

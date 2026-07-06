@@ -1,0 +1,351 @@
+{
+  "version": 1,
+  "subject": "ftadvanc.FT_Get_Advance",
+  "manifest_cases": [
+    "success_horizontal_scaled_advance",
+    "success_unscaled_font_units",
+    "success_vertical_advance",
+    "fast_only_success_or_error",
+    "error_null_face_or_output",
+    "error_invalid_glyph_or_flags"
+  ],
+  "cases": [
+    {
+      "case_id": "ftadvanc.FT_Get_Advance.success_horizontal_scaled_advance",
+      "subject": "ftadvanc.FT_Get_Advance",
+      "case": "success_horizontal_scaled_advance",
+      "operation": "ftadvanc.get_advance",
+      "schema": "advance_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 20,
+          "glyph_indices": [
+            0,
+            36,
+            57
+          ],
+          "load_flags_matrix": [
+            [
+              "FT_LOAD_DEFAULT"
+            ],
+            [
+              "FT_LOAD_NO_HINTING"
+            ],
+            [
+              "FT_LOAD_TARGET_LIGHT"
+            ]
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftadvanc"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "advance": "FT_Fixed 16.16"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].advance"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftadvanc.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftadvanc.FT_Get_Advance.success_unscaled_font_units",
+      "subject": "ftadvanc.FT_Get_Advance",
+      "case": "success_unscaled_font_units",
+      "operation": "ftadvanc.get_advance",
+      "schema": "advance_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_indices": [
+            36,
+            57
+          ],
+          "load_flags": [
+            "FT_LOAD_NO_SCALE"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftadvanc"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "advance": "font_units"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].advance"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftadvanc.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftadvanc.FT_Get_Advance.success_vertical_advance",
+      "subject": "ftadvanc.FT_Get_Advance",
+      "case": "success_vertical_advance",
+      "operation": "ftadvanc.get_advance",
+      "schema": "advance_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "fonts": [
+            {
+              "kind": "file",
+              "role": "font",
+              "path": "input/fonts/vertical/cjk-vertical-metrics.ttf"
+            },
+            {
+              "kind": "file",
+              "role": "font",
+              "path": "input/fonts/DejaVuSans.ttf"
+            }
+          ]
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 20,
+          "glyph_indices": [
+            36,
+            57
+          ],
+          "load_flags": [
+            "FT_LOAD_VERTICAL_LAYOUT"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftadvanc"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "advance": "vertical FT_Fixed 16.16",
+          "vertical_metrics_source": "real_or_synthesized"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].advance",
+            "rows[*].vertical_metrics_source"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/vertical/cjk-vertical-metrics.ttf must expose real vertical metrics"
+        ],
+        "source_refs": [
+          "freetype/src/base/ftadvanc.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftadvanc.FT_Get_Advance.fast_only_success_or_error",
+      "subject": "ftadvanc.FT_Get_Advance",
+      "case": "fast_only_success_or_error",
+      "operation": "ftadvanc.get_advance",
+      "schema": "advance_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 20,
+          "glyph_indices": [
+            36
+          ],
+          "flag_sets": [
+            [
+              "FT_LOAD_NO_SCALE",
+              "FT_ADVANCE_FLAG_FAST_ONLY"
+            ],
+            [
+              "FT_LOAD_NO_HINTING",
+              "FT_ADVANCE_FLAG_FAST_ONLY"
+            ],
+            [
+              "FT_LOAD_DEFAULT",
+              "FT_ADVANCE_FLAG_FAST_ONLY"
+            ]
+          ],
+          "sentinel_padvance": "0x13572468"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftadvanc"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "status": "FT_Error",
+          "advance": "FT_Fixed_or_preserved_sentinel"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].error",
+            "rows[*].advance"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftadvanc.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftadvanc.FT_Get_Advance.error_null_face_or_output",
+      "subject": "ftadvanc.FT_Get_Advance",
+      "case": "error_null_face_or_output",
+      "operation": "ftadvanc.get_advance",
+      "schema": "error_matrix",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "probes": [
+            "null_face",
+            "null_padvance"
+          ],
+          "glyph_index": 0,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "sentinel_padvance": "0x24681357"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftadvanc"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "padvance_preserved": "bool"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].probe",
+            "rows[*].status",
+            "rows[*].error",
+            "rows[*].padvance"
+          ]
+        },
+        "error": "Invalid_Face_Handle_or_Invalid_Argument",
+        "source_refs": [
+          "freetype/src/base/ftadvanc.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftadvanc.FT_Get_Advance.error_invalid_glyph_or_flags",
+      "subject": "ftadvanc.FT_Get_Advance",
+      "case": "error_invalid_glyph_or_flags",
+      "operation": "ftadvanc.get_advance",
+      "schema": "error_matrix",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 20,
+          "glyph_indices": [
+            "num_glyphs",
+            "num_glyphs+1"
+          ],
+          "flag_sets": [
+            [
+              "FT_LOAD_DEFAULT"
+            ],
+            [
+              "unsupported_high_bits"
+            ]
+          ],
+          "sentinel_padvance": "0x24681357"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftadvanc"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "padvance": "preserved_or_c_written_value"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].error",
+            "rows[*].padvance"
+          ]
+        },
+        "error": "Invalid_Glyph_Index_or_C_oracle_flag_behavior",
+        "source_refs": [
+          "freetype/src/base/ftadvanc.c"
+        ]
+      }
+    }
+  ]
+}

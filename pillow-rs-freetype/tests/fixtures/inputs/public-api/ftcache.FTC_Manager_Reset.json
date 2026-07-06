@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "subject": "ftcache.FTC_Manager_Reset",
+  "manifest_cases": [
+    "null_manager_noop",
+    "clears_cached_faces_sizes_and_nodes",
+    "retained_manager_remains_usable"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcache.FTC_Manager_Reset.null_manager_noop",
+      "subject": "ftcache.FTC_Manager_Reset",
+      "case": "null_manager_noop",
+      "operation": "ftcache.manager_reset",
+      "schema": "api_void",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "manager": "null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-manager"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "writes": "none"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "side_effects"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_Manager_Reset.clears_cached_faces_sizes_and_nodes",
+      "subject": "ftcache.FTC_Manager_Reset",
+      "case": "clears_cached_faces_sizes_and_nodes",
+      "operation": "ftcache.manager_reset",
+      "schema": "cache_lifecycle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "manager_limits": {
+            "max_faces": 1,
+            "max_sizes": 2,
+            "max_bytes": 4096
+          },
+          "requester": "counting_memory_face_requester",
+          "face_id": "stable_pointer:dejavu",
+          "warmups": [
+            "FTC_Manager_LookupFace",
+            "FTC_Manager_LookupSize",
+            "FTC_SBitCache_Lookup"
+          ],
+          "glyph_indices": [
+            36,
+            37
+          ],
+          "sizes": [
+            12,
+            20
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-manager"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "requester_calls": "before_after_counts",
+          "cache_state": "face_size_node_identity_classes"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "requester_call_counts",
+            "face_identity_class_after_reset",
+            "size_identity_class_after_reset",
+            "node_count_class"
+          ]
+        },
+        "fixture_requirements": [
+          "Runner support for cache-manager oracle snapshots and requester call counters"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_Manager_Reset.retained_manager_remains_usable",
+      "subject": "ftcache.FTC_Manager_Reset",
+      "case": "retained_manager_remains_usable",
+      "operation": "ftcache.manager_reset",
+      "schema": "cache_lifecycle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "manager_limits": {
+            "max_faces": 2,
+            "max_sizes": 2,
+            "max_bytes": 8192
+          },
+          "requester": "counting_memory_face_requester",
+          "face_id": "stable_pointer:dejavu",
+          "post_reset_probe": [
+            "FTC_Manager_LookupFace",
+            "FTC_Manager_LookupSize",
+            "FTC_SBitCache_Lookup"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-manager"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "manager_handle": "same_identity_class",
+          "post_reset_status": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "post_reset.status",
+            "post_reset.face_identity_class",
+            "post_reset.size_metrics",
+            "requester_req_data_identity"
+          ]
+        }
+      }
+    }
+  ]
+}

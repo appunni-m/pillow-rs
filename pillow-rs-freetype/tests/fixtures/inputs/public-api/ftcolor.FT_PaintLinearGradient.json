@@ -1,0 +1,208 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_PaintLinearGradient",
+  "manifest_cases": [
+    "layout_matches_c",
+    "field_order_matches_c",
+    "get_paint_linear_gradient_values"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_PaintLinearGradient.layout_matches_c",
+      "subject": "ftcolor.FT_PaintLinearGradient",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "record": "FT_PaintLinearGradient",
+          "fields": [
+            "colorline",
+            "p0",
+            "p1",
+            "p2"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_PaintLinearGradient",
+          "layout": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "C ABI probe for FT_PaintLinearGradient sizeof/alignment/offsetof",
+          "Runner support for C FreeType, Rust FFI, C FFI, and Wasm FFI record layout comparison"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_PaintLinearGradient.field_order_matches_c",
+      "subject": "ftcolor.FT_PaintLinearGradient",
+      "case": "field_order_matches_c",
+      "operation": "abi.record_import",
+      "schema": "abi_record_fields",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "record": "FT_PaintLinearGradient",
+          "fields": [
+            "colorline",
+            "p0",
+            "p1",
+            "p2"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_PaintLinearGradient",
+          "fields": [
+            "colorline",
+            "p0",
+            "p1",
+            "p2"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "field_order",
+            "field_types",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "Compile/import probe for FT_PaintLinearGradient with exact ftcolor.h field names"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_values",
+      "subject": "ftcolor.FT_PaintLinearGradient",
+      "case": "get_paint_linear_gradient_values",
+      "operation": "ftcolor.get_paint_and_colorline_stops",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "static_font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 1 base glyph list",
+              "CPAL table with at least two palettes and named entries",
+              "paint graph containing solid, colr_layers, glyph, colr_glyph, linear, radial, sweep, transform, translate, scale, rotate, skew, and composite paints",
+              "static ColorLine records using PAD, REPEAT, and REFLECT extend modes",
+              "foreground palette index 0xFFFF references"
+            ]
+          },
+          "variable_font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-variable-gradients.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR v1 VarColorLine and variable paint records",
+              "fvar/gvar-compatible variation axes with non-zero COLR item variation deltas",
+              "gradient stops and linear gradient points that change at non-default design coordinates"
+            ]
+          },
+          "malformed_font": {
+            "kind": "ref",
+            "id": "fonts/color/malformed-colr-v1-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "truncated paint table records",
+              "out-of-range paint offsets",
+              "invalid ColorLine offsets",
+              "invalid LayerV1List offsets",
+              "bad BaseGlyphV1List paint offsets"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_roles": [
+            "linear_horizontal",
+            "linear_vertical",
+            "linear_diagonal",
+            "linear_p2_equals_p0",
+            "linear_p2_distinct",
+            "linear_negative_coords",
+            "linear_nested_transform",
+            "linear_variable"
+          ],
+          "design_coordinates": [
+            "default",
+            {
+              "wght": 900,
+              "GRAD": 1
+            }
+          ],
+          "iterate_stops": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_PaintLinearGradient",
+          "fields": [
+            "colorline",
+            "p0",
+            "p1",
+            "p2"
+          ],
+          "vector_units": "16.16 fixed-point font units"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "runs[*].return",
+            "runs[*].paint.format",
+            "runs[*].paint.u.linear_gradient.p0",
+            "runs[*].paint.u.linear_gradient.p1",
+            "runs[*].paint.u.linear_gradient.p2",
+            "runs[*].paint.u.linear_gradient.colorline",
+            "runs[*].color_stops"
+          ]
+        },
+        "fixture_requirements": [
+          "Runtime C oracle generation; do not store generated outputs"
+        ]
+      }
+    }
+  ]
+}

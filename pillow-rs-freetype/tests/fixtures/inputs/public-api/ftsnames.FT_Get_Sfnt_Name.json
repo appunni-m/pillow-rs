@@ -1,0 +1,178 @@
+{
+  "version": 1,
+  "subject": "ftsnames.FT_Get_Sfnt_Name",
+  "manifest_cases": [
+    "import_contract",
+    "indexed_name_success",
+    "invalid_argument_errors"
+  ],
+  "metadata": {
+    "abi": {
+      "kind": "function",
+      "header": "freetype/ftsnames.h",
+      "symbol": "FT_Get_Sfnt_Name",
+      "declaration": "FT_Error FT_Get_Sfnt_Name(FT_Face face, FT_UInt idx, FT_SfntName* aname)",
+      "source": "freetype/src/base/ftsnames.c",
+      "c_behavior": "requires non-null output, non-null SFNT face, and idx < num_names; on success fills platform_id, encoding_id, language_id, name_id, borrowed string pointer, and byte length"
+    }
+  },
+  "cases": [
+    {
+      "case_id": "ftsnames.FT_Get_Sfnt_Name.import_contract",
+      "subject": "ftsnames.FT_Get_Sfnt_Name",
+      "case": "import_contract",
+      "operation": "abi.function_import",
+      "schema": "abi_import",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftsnames.h",
+          "symbol": "FT_Get_Sfnt_Name",
+          "return_type": "FT_Error",
+          "arguments": [
+            "FT_Face face",
+            "FT_UInt idx",
+            "FT_SfntName* aname"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsnames",
+        "area:abi_import"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "import_compiles": "bool",
+          "symbol_resolves": "bool",
+          "signature": "FT_Error(FT_Face,FT_UInt,FT_SfntName*)"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "import_compiles",
+            "symbol_resolves",
+            "signature"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftsnames.FT_Get_Sfnt_Name.indexed_name_success",
+      "subject": "ftsnames.FT_Get_Sfnt_Name",
+      "case": "indexed_name_success",
+      "operation": "ftsnames.get_sfnt_name",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "indexes": [
+            0,
+            "last_valid_index"
+          ],
+          "probe_string_bytes": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsnames",
+        "area:sfnt_name"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return_sequence": "array<FT_Error>",
+          "names": "array<FT_SfntName_with_string_bytes>"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "return_sequence",
+            "names[].platform_id",
+            "names[].encoding_id",
+            "names[].language_id",
+            "names[].name_id",
+            "names[].string_len",
+            "names[].string_bytes"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftsnames.FT_Get_Sfnt_Name.invalid_argument_errors",
+      "subject": "ftsnames.FT_Get_Sfnt_Name",
+      "case": "invalid_argument_errors",
+      "operation": "ftsnames.get_sfnt_name",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          },
+          "non_sfnt_font": {
+            "kind": "ref",
+            "id": "fonts/non-sfnt/type1.pfa"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "face": "null",
+              "idx": 0,
+              "output": "valid_pointer"
+            },
+            {
+              "face": "valid",
+              "idx": 0,
+              "output": "null"
+            },
+            {
+              "face": "valid",
+              "idx": "name_count",
+              "output": "valid_pointer"
+            },
+            {
+              "face": "non_sfnt",
+              "idx": 0,
+              "output": "valid_pointer"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsnames",
+        "area:error_path"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "return_sequence": "array<FT_Error>"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status_sequence",
+            "error_sequence"
+          ]
+        },
+        "error": "Invalid_Argument",
+        "fixture_requirements": [
+          "Non-SFNT face fixture such as Type 1 PFA/PFB to exercise FT_IS_SFNT false"
+        ]
+      }
+    }
+  ]
+}

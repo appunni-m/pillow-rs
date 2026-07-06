@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_Pos",
+  "manifest_cases": [
+    "alias_matches_c",
+    "coordinate_outputs_use_ft_pos"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_Pos.alias_matches_c",
+      "subject": "ftimage.FT_Pos",
+      "case": "alias_matches_c",
+      "operation": "abi.type_alias",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftimage.h",
+          "symbol": "FT_Pos",
+          "typedef_target": "signed long",
+          "signed": true,
+          "used_by": [
+            "FT_Vector.x",
+            "FT_Vector.y",
+            "FT_BBox.xMin",
+            "FT_BBox.yMin",
+            "FT_BBox.xMax",
+            "FT_BBox.yMax",
+            "FT_Outline_Funcs.delta"
+          ],
+          "probe": [
+            "sizeof",
+            "alignof",
+            "signedness",
+            "min",
+            "max",
+            "import_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftimage",
+        "area:abi_layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "signedness": "bool",
+          "range": "object",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "signedness",
+            "range",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:47-57"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Pos.coordinate_outputs_use_ft_pos",
+      "subject": "ftimage.FT_Pos",
+      "case": "coordinate_outputs_use_ft_pos",
+      "operation": "coordinate_endpoint_parity",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          },
+          "synthetic_outline": {
+            "kind": "ref",
+            "id": "outlines/synthetic/negative-and-large-coordinates.json",
+            "asset_kind": "outline"
+          }
+        },
+        "params": {
+          "endpoints": [
+            "FT_Load_Glyph outline points",
+            "FT_Outline_Get_CBox",
+            "FT_Vector_Transform",
+            "FT_Outline_Decompose callbacks"
+          ],
+          "coordinate_cases": [
+            "negative_descender",
+            "large_positive",
+            "large_negative",
+            "transformed"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftimage",
+        "area:coordinates",
+        "runtime:public_record"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "coordinates": "array<FT_Pos>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "coordinates"
+          ]
+        },
+        "fixture_requirements": [
+          "Future synthetic outline with negative and large coordinates."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:52-57",
+          "freetype/include/freetype/ftimage.h:105-123"
+        ]
+      }
+    }
+  ]
+}

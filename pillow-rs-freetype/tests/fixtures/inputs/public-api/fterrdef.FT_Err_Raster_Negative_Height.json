@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Raster_Negative_Height",
+  "manifest_cases": [
+    "value_matches_header",
+    "monochrome_raster_negative_height"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Raster_Negative_Height.value_matches_header",
+      "subject": "fterrdef.FT_Err_Raster_Negative_Height",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Raster_Negative_Height",
+          "include": "<freetype/fterrors.h>",
+          "public_import": "#include <freetype/freetype.h>",
+          "header": "freetype/fterrdef.h",
+          "expected_value_from_pinned_header": 99,
+          "expected_value_hex": "0x63",
+          "expected_error_string_from_pinned_header": "negative height while rastering",
+          "pinned_source": "freetype/include/freetype/fterrdef.h:169-170"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Raster_Negative_Height",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Raster_Negative_Height.monochrome_raster_negative_height",
+      "subject": "fterrdef.FT_Err_Raster_Negative_Height",
+      "case": "monochrome_raster_negative_height",
+      "operation": "FT_Outline_Render",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "outline": {
+            "kind": "ref",
+            "role": "synthetic_outline",
+            "id": "generated/raster/mono-negative-height-outline.json",
+            "requirements": "Synthetic outline/profile that drives ftraster.c into the descending-profile negative height branch."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Raster_Negative_Height",
+          "render_mode": "FT_RENDER_MODE_MONO",
+          "raster_flags": [
+            "FT_RASTER_FLAG_AA_absent"
+          ],
+          "target_bitmap": "sentinel_zeroed_bitmap",
+          "pinned_source": "freetype/src/raster/ftraster.c:726"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:raster",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Raster_Negative_Height",
+        "fixture_requirements": "Synthetic outline or generated font that reliably reaches ftraster.c's negative-height profile path in monochrome rendering.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "bitmap": "target_bitmap_metadata_and_mutation_class",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "bitmap.mutation_class",
+            "bitmap.width",
+            "bitmap.rows",
+            "bitmap.pitch"
+          ]
+        }
+      }
+    }
+  ]
+}

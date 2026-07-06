@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "subject": "ftmoderr.FT_Mod_Err_CID",
+  "manifest_cases": [
+    "value_matches_header",
+    "module_error_prefix_used"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmoderr.FT_Mod_Err_CID.value_matches_header",
+      "subject": "ftmoderr.FT_Mod_Err_CID",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Mod_Err_CID",
+          "include": "<freetype/ftmoderr.h>",
+          "ftmoderrdef_entry": {
+            "name": "CID",
+            "enabled_value_expr": "0x600",
+            "module_label": "CID module"
+          },
+          "expected_values": {
+            "with_FT_CONFIG_OPTION_USE_MODULE_ERRORS": "0x600",
+            "without_FT_CONFIG_OPTION_USE_MODULE_ERRORS": "0"
+          },
+          "expected_cleanup": [
+            "FT_MODERR_START_LIST undefined",
+            "FT_MODERR_END_LIST undefined",
+            "FT_MODERRDEF undefined"
+          ],
+          "pinned_sources": [
+            "freetype/include/freetype/ftmoderr.h:118-128",
+            "freetype/include/freetype/ftmoderr.h:151-175",
+            "freetype/include/freetype/ftmoderr.h:195-198"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "kind:constant",
+        "header:ftmoderr",
+        "area:module-error-base",
+        "build-dependent"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "symbol": "string",
+          "active_build_value": "integer",
+          "enabled_value": "integer",
+          "disabled_value": "integer",
+          "module_label": "string",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "active_build_value",
+            "enabled_value",
+            "disabled_value",
+            "module_label",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmoderr.h:118-128",
+          "freetype/include/freetype/ftmoderr.h:151-175"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmoderr.FT_Mod_Err_CID.module_error_prefix_used",
+      "subject": "ftmoderr.FT_Mod_Err_CID",
+      "case": "module_error_prefix_used",
+      "operation": "freetype.module_error_base_runtime",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "cid_font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/cid/valid-cid.pfa",
+            "requirements": "Future valid CID-keyed font fixture."
+          },
+          "malformed_cid": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/cid/malformed-cid.pfa",
+            "requirements": "Future malformed CID fixture."
+          }
+        },
+        "params": {
+          "module_error_symbol": "FT_Mod_Err_CID",
+          "module_error_base_enabled": "0x600",
+          "module_error_base_disabled": "0",
+          "error_prefix": "CID_Err_",
+          "public_route": "FT_New_Memory_Face and CID query/load APIs for CID-keyed fonts",
+          "model_cases": [
+            {
+              "name": "module_errors_enabled",
+              "expected_base": "0x600",
+              "expected_module": "CID",
+              "compare_low_byte_to_public_FT_Err": true
+            },
+            {
+              "name": "module_errors_disabled",
+              "expected_base": "0",
+              "expected_module": "Base/none",
+              "compare_low_byte_to_public_FT_Err": true
+            }
+          ],
+          "probe": [
+            "FT_Error",
+            "FT_ERROR_BASE",
+            "FT_ERROR_MODULE",
+            "low_byte_error",
+            "output_side_effects"
+          ],
+          "pinned_sources": [
+            "freetype/src/cid/ciderrs.h:32-36",
+            "freetype/include/freetype/ftmoderr.h:23-34",
+            "freetype/include/freetype/ftmoderr.h:151-175"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:ftmoderr",
+        "area:module-error-base",
+        "runtime:public-error-path",
+        "build-dependent"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "status": "FT_Error",
+          "error_base": "integer",
+          "error_module": "integer_or_module_name",
+          "low_byte_error": "integer_or_public_error_name",
+          "output_side_effects": "operation_specific_snapshot"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error_base",
+            "error_module",
+            "low_byte_error",
+            "output_side_effects"
+          ]
+        },
+        "fixture_requirements": [
+          "Any asset ids under fonts/* or streams/* not already present are future shared fixtures; runner must generate C oracle output at execution time rather than storing it."
+        ],
+        "source_refs": [
+          "freetype/src/cid/ciderrs.h:32-36",
+          "freetype/include/freetype/ftmoderr.h:23-34"
+        ]
+      }
+    }
+  ]
+}

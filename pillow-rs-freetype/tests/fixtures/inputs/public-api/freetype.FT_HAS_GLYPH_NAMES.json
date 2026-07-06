@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_HAS_GLYPH_NAMES",
+  "manifest_cases": [
+    "face_flags_bit_probe",
+    "glyph_names_font_true",
+    "no_glyph_names_control_false"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_HAS_GLYPH_NAMES.face_flags_bit_probe",
+      "subject": "freetype.FT_HAS_GLYPH_NAMES",
+      "case": "face_flags_bit_probe",
+      "operation": "freetype.face_macro",
+      "schema": "macro_probe",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "flags": [
+            0,
+            "FT_FACE_FLAG_GLYPH_NAMES"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face-flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "int-like boolean",
+          "macro": "evaluated by C/Rust ABI probe"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "outputs[*].macro_result",
+            "outputs[*].face_flags"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_HAS_GLYPH_NAMES.glyph_names_font_true",
+      "subject": "freetype.FT_HAS_GLYPH_NAMES",
+      "case": "glyph_names_font_true",
+      "operation": "freetype.face_macro",
+      "schema": "macro_probe",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/glyph-names/post-glyph-names.otf",
+            "status": "required_future_asset",
+            "requires": "Font whose driver exposes glyph names through FT_Get_Glyph_Name"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_indices": [
+            1,
+            36
+          ],
+          "post_probe": "FT_Get_Glyph_Name and FT_Get_Name_Index"
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face-flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "int-like boolean",
+          "macro": "evaluated by C/Rust ABI probe"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "glyph_names",
+            "name_indices"
+          ]
+        },
+        "fixture_requirements": [
+          "Font exposing glyph names through the driver"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_HAS_GLYPH_NAMES.no_glyph_names_control_false",
+      "subject": "freetype.FT_HAS_GLYPH_NAMES",
+      "case": "no_glyph_names_control_false",
+      "operation": "freetype.face_macro",
+      "schema": "macro_probe",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/no-glyph-names/no-post-names.ttf",
+            "status": "required_future_asset",
+            "requires": "Accepted font without glyph-name service or post names"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "post_probe": "glyph-name APIs"
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face-flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "int-like boolean",
+          "macro": "evaluated by C/Rust ABI probe"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "glyph_name_status",
+            "name_index"
+          ]
+        }
+      }
+    }
+  ]
+}

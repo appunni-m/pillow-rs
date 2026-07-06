@@ -1,0 +1,188 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_PIXEL_MODE_MONO",
+  "manifest_cases": [
+    "value_matches_header",
+    "render_mode_mono_sets_bitmap_shape",
+    "embedded_bitmap_mono_preserves_mode"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_PIXEL_MODE_MONO.value_matches_header",
+      "subject": "ftimage.FT_PIXEL_MODE_MONO",
+      "case": "value_matches_header",
+      "operation": "ftimage.pixel_mode_value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_PIXEL_MODE_MONO",
+          "include": "<freetype/ftimage.h>",
+          "import": "#include <freetype/ftimage.h>",
+          "enum": "FT_Pixel_Mode",
+          "expected_value": 1,
+          "bit_order": "most_significant_bit_first"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftimage",
+        "area:pixel-mode",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:180-196"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_PIXEL_MODE_MONO.render_mode_mono_sets_bitmap_shape",
+      "subject": "ftimage.FT_PIXEL_MODE_MONO",
+      "case": "render_mode_mono_sets_bitmap_shape",
+      "operation": "freetype.render_glyph",
+      "schema": "glyph_slot_bitmap",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "glyph_indices": [
+            36,
+            44,
+            82
+          ],
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "render_mode": "FT_RENDER_MODE_MONO",
+          "expected_pixel_mode": "FT_PIXEL_MODE_MONO",
+          "pitch_rule": "((width + 15) >> 4) << 1",
+          "buffer_rule": "packed one-bit coverage, most significant bit first"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftimage",
+        "area:pixel-mode",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "bitmap": {
+            "pixel_mode": "FT_Pixel_Mode",
+            "rows": "integer",
+            "width": "integer",
+            "pitch": "integer",
+            "buffer_hash": "sha256"
+          }
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "bitmap.pixel_mode",
+            "bitmap.rows",
+            "bitmap.width",
+            "bitmap.pitch",
+            "bitmap.buffer"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:215-229",
+          "freetype/src/base/ftobjs.c:513-537"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_PIXEL_MODE_MONO.embedded_bitmap_mono_preserves_mode",
+      "subject": "ftimage.FT_PIXEL_MODE_MONO",
+      "case": "embedded_bitmap_mono_preserves_mode",
+      "operation": "freetype.load_embedded_bitmap",
+      "schema": "glyph_slot_bitmap",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/bitmap/monochrome-strikes.pcf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "strike_selection": "small monochrome bitmap strike",
+          "glyphs": "non-empty and empty embedded bitmap glyphs",
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "expected_pixel_mode": "FT_PIXEL_MODE_MONO",
+          "preserve_embedded_pitch_and_buffer": true
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftimage",
+        "area:embedded-bitmap",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "bitmap": {
+            "pixel_mode": "FT_Pixel_Mode",
+            "rows": "integer",
+            "width": "integer",
+            "pitch": "integer",
+            "buffer_hash": "sha256"
+          }
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "bitmap.pixel_mode",
+            "bitmap.rows",
+            "bitmap.width",
+            "bitmap.pitch",
+            "bitmap.buffer"
+          ]
+        },
+        "fixture_requirements": [
+          "Future shared bitmap font with at least one monochrome embedded strike."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:215-229"
+        ]
+      }
+    }
+  ]
+}

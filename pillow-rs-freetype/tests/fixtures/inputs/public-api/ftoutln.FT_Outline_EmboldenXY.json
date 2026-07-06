@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "subject": "ftoutln.FT_Outline_EmboldenXY",
+  "manifest_cases": ["anisotropic_strength_mutates_points", "empty_outline_success", "invalid_orientation_or_null_errors"],
+  "cases": [
+    {
+      "case_id": "ftoutln.FT_Outline_EmboldenXY.anisotropic_strength_mutates_points",
+      "subject": "ftoutln.FT_Outline_EmboldenXY",
+      "case": "anisotropic_strength_mutates_points",
+      "operation": "ftoutln.outline_embolden_xy",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/embolden/postscript-polygon-with-collinear-run.json", "asset_kind": "outline_model"}}, "params": {"xstrength_26_6": 96, "ystrength_26_6": 32, "inspect": ["points_before", "points_after", "orientation"]}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "operation:outline-mutation"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_EmboldenXY", "kind": "function", "c_signature": "FT_Error FT_Outline_EmboldenXY(FT_Outline* outline, FT_Pos xstrength, FT_Pos ystrength)"}, "source_behavior": "The algorithm halves input strengths and shifts points along lateral bisectors according to outline orientation."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "orientation": "FT_Orientation", "points_before": ["FT_Vector"], "points_after": ["FT_Vector"]}, "compare": {"mode": "exact", "paths": ["return", "orientation", "points_after"]}, "source_refs": ["freetype/src/base/ftoutln.c:917-1045"], "fixture_requirements": ["Non-degenerate outline with anisotropic x/y movement and at least one collinear or near-corner segment."]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_EmboldenXY.empty_outline_success",
+      "subject": "ftoutln.FT_Outline_EmboldenXY",
+      "case": "empty_outline_success",
+      "operation": "ftoutln.outline_embolden_xy",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/basic/empty.json", "asset_kind": "outline_model"}}, "params": {"xstrength_26_6": 64, "ystrength_26_6": 64, "inspect": ["n_points", "n_contours"]}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "behavior:empty-outline"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_EmboldenXY", "kind": "function", "c_signature": "FT_Error FT_Outline_EmboldenXY(FT_Outline* outline, FT_Pos xstrength, FT_Pos ystrength)"}, "source_behavior": "Empty outlines return success even though orientation resolves through the NONE branch with zero contours."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "points_after": []}, "compare": {"mode": "exact", "paths": ["return", "points_after"]}, "source_refs": ["freetype/src/base/ftoutln.c:934-940"]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_EmboldenXY.invalid_orientation_or_null_errors",
+      "subject": "ftoutln.FT_Outline_EmboldenXY",
+      "case": "invalid_orientation_or_null_errors",
+      "operation": "ftoutln.outline_embolden_xy",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {"assets": {"none_orientation": {"kind": "ref", "id": "outlines/orientation/collapsed-line.json", "asset_kind": "outline_model"}}, "params": {"xstrength_26_6": 64, "ystrength_26_6": 64, "scenarios": [{"outline_pointer": null}, {"outline_ref": "none_orientation"}]}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "error:invalid-input"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_EmboldenXY", "kind": "function", "c_signature": "FT_Error FT_Outline_EmboldenXY(FT_Outline* outline, FT_Pos xstrength, FT_Pos ystrength)"}, "source_behavior": "Null outline returns Invalid_Outline; a non-empty outline with orientation NONE returns Invalid_Argument."},
+      "expectation": {"status": "error", "output_shape": {"results": [{"return": "FT_Error"}]}, "compare": {"mode": "exact_error", "paths": ["results[*].return"]}, "error": ["FT_Err_Invalid_Outline", "FT_Err_Invalid_Argument"], "source_refs": ["freetype/src/base/ftoutln.c:923-940"], "fixture_requirements": ["Non-empty collapsed or zero-area outline whose orientation is FT_ORIENTATION_NONE."]}
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "subject": "t1tables.T1_Private",
+  "manifest_cases": ["alias_defined", "layout_alias_matches_ps_private", "import_contract"],
+  "cases": [
+    {
+      "case_id": "t1tables.T1_Private.alias_layout_and_import",
+      "subject": "t1tables.T1_Private",
+      "case": "alias_defined",
+      "covers_manifest_cases": ["alias_defined", "layout_alias_matches_ps_private", "import_contract"],
+      "operation": "c_abi.type_alias_layout",
+      "schema": "api_layout",
+      "expect_error": false,
+      "inputs": {"assets": {"font": {"kind": "ref", "role": "type1_font", "id": "input/fonts/type1/private-dict-populated.pfb", "requirements": "Type 1 face with populated Private dictionary for optional public-function decode alongside ABI layout."}}, "params": {"include": "<freetype/t1tables.h>", "alias": "T1_Private", "target": "PS_PrivateRec", "header_source": "freetype/include/freetype/t1tables.h:197", "declaration": "T1_Private private_dict;", "fields": ["unique_id", "lenIV", "num_blue_values", "num_other_blues", "num_family_blues", "num_family_other_blues", "blue_values", "other_blues", "family_blues", "family_other_blues", "blue_scale", "blue_shift", "blue_fuzz", "standard_width", "standard_height", "num_snap_widths", "num_snap_heights", "force_bold", "round_stem_up", "snap_widths", "snap_heights", "expansion_factor", "language_group", "password", "min_feature"]}},
+      "classifiers": ["kind:type", "header:t1tables", "area:abi_layout", "requires:future_asset"],
+      "expectation": {"status": "build_dependent", "fixture_requirements": "Optional runtime decode needs a Type 1 face with populated Private dictionary; pure ABI layout probe needs only the header.", "output_shape": {"sizeof": "size_t", "alignof": "size_t", "field_offsets": "map<string,size_t>", "copied_private": "PS_PrivateRec"}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "field_offsets", "copied_private"]}}
+    }
+  ]
+}

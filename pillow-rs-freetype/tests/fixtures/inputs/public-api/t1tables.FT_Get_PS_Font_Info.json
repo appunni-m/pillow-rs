@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "subject": "t1tables.FT_Get_PS_Font_Info",
+  "manifest_cases": ["signature_matches_header", "type1_success_copies_font_info", "cff_cid_type42_supported_formats", "non_postscript_or_missing_service_invalid_argument", "null_face_and_null_output_errors"],
+  "cases": [
+    {
+      "case_id": "t1tables.FT_Get_PS_Font_Info.signature_and_behavior_matrix",
+      "subject": "t1tables.FT_Get_PS_Font_Info",
+      "case": "signature_matches_header",
+      "covers_manifest_cases": ["signature_matches_header", "type1_success_copies_font_info", "cff_cid_type42_supported_formats", "non_postscript_or_missing_service_invalid_argument", "null_face_and_null_output_errors"],
+      "operation": "t1tables.get_ps_font_info",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "type1_font": {"kind": "ref", "role": "type1_font", "id": "input/fonts/type1/fontinfo-populated.pfb", "requirements": "Type 1 face with populated FontInfo strings and numeric underline/italic fields."},
+          "cff_font": {"kind": "ref", "role": "cff_font", "id": "input/fonts/cff/fontinfo-populated.otf", "requirements": "CFF face with top dict FontInfo values."},
+          "cff2_font": {"kind": "ref", "role": "cff2_font", "id": "input/fonts/cff2/fontinfo-invalid-argument.otf", "requirements": "CFF2 face exercising cffface->is_cff2 invalid argument branch."},
+          "cid_font": {"kind": "ref", "role": "cid_type1_font", "id": "input/fonts/cid/fontinfo-populated.cid", "requirements": "CID Type 1 face exposing cid_ps_get_font_info."},
+          "type42_font": {"kind": "ref", "role": "type42_font", "id": "input/fonts/type42/fontinfo-populated.t42", "requirements": "Type 42 face exposing t42_ps_get_font_info."},
+          "truetype_font": {"kind": "ref", "role": "truetype_font", "id": "input/fonts/DejaVuSans.ttf", "requirements": "Non-PostScript control face without POSTSCRIPT_INFO font-info service."}
+        },
+        "params": {
+          "include": "<freetype/t1tables.h>",
+          "signature": "FT_Error FT_Get_PS_Font_Info(FT_Face face, PS_FontInfo afont_info)",
+          "output_record": "PS_FontInfoRec",
+          "source_behavior": ["base/fttype1.c returns Invalid_Face_Handle for null face and Invalid_Argument for null output.", "Type 1, CID, and Type 42 services copy face-owned FontInfo records.", "CFF builds/caches PS_FontInfoRec from top dict values; CFF2 returns Invalid_Argument.", "Faces without ps_get_font_info return Invalid_Argument."],
+          "scenarios": [
+            {"id": "type1_success_copies_font_info", "asset": "type1_font", "face_index": 0, "output_pointer_mode": "valid"},
+            {"id": "cff_supported", "asset": "cff_font", "face_index": 0, "output_pointer_mode": "valid"},
+            {"id": "cff2_invalid_argument", "asset": "cff2_font", "face_index": 0, "output_pointer_mode": "valid", "expected_error": "FT_Err_Invalid_Argument"},
+            {"id": "cid_supported", "asset": "cid_font", "face_index": 0, "output_pointer_mode": "valid"},
+            {"id": "type42_supported", "asset": "type42_font", "face_index": 0, "output_pointer_mode": "valid"},
+            {"id": "non_postscript_invalid_argument", "asset": "truetype_font", "face_index": 0, "output_pointer_mode": "valid", "expected_error": "FT_Err_Invalid_Argument"},
+            {"id": "null_face", "face_pointer_mode": "null", "output_pointer_mode": "valid", "expected_error": "FT_Err_Invalid_Face_Handle"},
+            {"id": "null_output", "asset": "type1_font", "face_index": 0, "output_pointer_mode": "null", "expected_error": "FT_Err_Invalid_Argument"}
+          ]
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_font_info", "requires:future_asset"],
+      "expectation": {
+        "status": "build_dependent",
+        "fixture_requirements": "Needs Type 1, CFF, CFF2, CID Type 1, Type 42, and non-PostScript control faces for the full matrix.",
+        "output_shape": {"status": "FT_Error", "font_info": {"version": "nullable FT_String*", "notice": "nullable FT_String*", "full_name": "nullable FT_String*", "family_name": "nullable FT_String*", "weight": "nullable FT_String*", "italic_angle": "FT_Fixed", "is_fixed_pitch": "FT_Bool", "underline_position": "FT_Short", "underline_thickness": "FT_UShort"}},
+        "compare": {"mode": "exact", "paths": ["status", "font_info.version", "font_info.notice", "font_info.full_name", "font_info.family_name", "font_info.weight", "font_info.italic_angle", "font_info.is_fixed_pitch", "font_info.underline_position", "font_info.underline_thickness"]}
+      }
+    }
+  ]
+}

@@ -1,0 +1,178 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_RASTER_FLAG_CLIP",
+  "manifest_cases": [
+    "value_matches_header",
+    "direct_clip_box_limits_spans",
+    "direct_without_clip_presets_cbox"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_RASTER_FLAG_CLIP.value_matches_header",
+      "subject": "ftimage.FT_RASTER_FLAG_CLIP",
+      "case": "value_matches_header",
+      "operation": "ftimage.raster_flag_value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_RASTER_FLAG_CLIP",
+          "include": "<freetype/ftimage.h>",
+          "import": "#include <freetype/ftimage.h>",
+          "expected_value": 4,
+          "expected_value_hex": "0x4",
+          "flag_field": "FT_Raster_Params.flags"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftimage",
+        "area:raster-params",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:979-993"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_RASTER_FLAG_CLIP.direct_clip_box_limits_spans",
+      "subject": "ftimage.FT_RASTER_FLAG_CLIP",
+      "case": "direct_clip_box_limits_spans",
+      "operation": "ftoutln.outline_render",
+      "schema": "raster_params",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline": {
+            "kind": "ref",
+            "id": "outlines/synthetic/crossing-clip-boundaries.json",
+            "asset_kind": "outline"
+          }
+        },
+        "params": {
+          "flags": [
+            "FT_RASTER_FLAG_AA",
+            "FT_RASTER_FLAG_DIRECT",
+            "FT_RASTER_FLAG_CLIP"
+          ],
+          "gray_spans": "record",
+          "clip_box": {
+            "xMin": 1,
+            "yMin": 1,
+            "xMax": 6,
+            "yMax": 6
+          },
+          "expected_behavior": "smooth direct spans are clipped to caller clip_box"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftimage",
+        "area:raster-params",
+        "area:direct-render",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "spans": "array",
+          "clip_box": "FT_BBox"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "spans",
+            "clip_box"
+          ]
+        },
+        "fixture_requirements": [
+          "Future outline crossing the supplied integer-pixel clip box."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:979-985",
+          "freetype/src/smooth/ftgrays.c:1998-2006"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_RASTER_FLAG_CLIP.direct_without_clip_presets_cbox",
+      "subject": "ftimage.FT_RASTER_FLAG_CLIP",
+      "case": "direct_without_clip_presets_cbox",
+      "operation": "ftoutln.outline_render",
+      "schema": "raster_params",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline": {
+            "kind": "ref",
+            "id": "outlines/synthetic/crossing-clip-boundaries.json",
+            "asset_kind": "outline"
+          }
+        },
+        "params": {
+          "flags": [
+            "FT_RASTER_FLAG_AA",
+            "FT_RASTER_FLAG_DIRECT"
+          ],
+          "gray_spans": "record",
+          "initial_clip_box": {
+            "xMin": -999,
+            "yMin": -999,
+            "xMax": -998,
+            "yMax": -998
+          },
+          "expected_behavior": "FT_Outline_Render mutates clip_box to outline CBox in integer pixels when DIRECT is set and CLIP is absent"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftimage",
+        "area:raster-params",
+        "area:direct-render",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "spans": "array",
+          "mutated_clip_box": "FT_BBox"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "spans",
+            "mutated_clip_box"
+          ]
+        },
+        "fixture_requirements": [
+          "Future outline crossing clip boundaries."
+        ],
+        "source_refs": [
+          "freetype/src/base/ftoutln.c:635-642",
+          "freetype/src/smooth/ftgrays.c:1998-2006"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,190 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_PaintRadialGradient",
+  "manifest_cases": [
+    "layout_matches_c",
+    "field_order_matches_c",
+    "get_paint_radial_gradient_values"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_PaintRadialGradient.layout_matches_c",
+      "subject": "ftcolor.FT_PaintRadialGradient",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftcolor.h>",
+          "record": "FT_PaintRadialGradient",
+          "fields": [
+            "colorline",
+            "c0",
+            "r0",
+            "c1",
+            "r1"
+          ],
+          "field_types": {
+            "colorline": "FT_ColorLine",
+            "c0": "FT_Vector 16.16",
+            "r0": "FT_Pos 16.16",
+            "c1": "FT_Vector 16.16",
+            "r1": "FT_Pos 16.16"
+          }
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "abi:layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_PaintRadialGradient",
+          "size": "sizeof from pinned C",
+          "alignment": "_Alignof from pinned C",
+          "field_offsets": "offsetof for every public field"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "size",
+            "alignment",
+            "field_offsets",
+            "field_types",
+            "import"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_PaintRadialGradient.field_order_matches_c",
+      "subject": "ftcolor.FT_PaintRadialGradient",
+      "case": "field_order_matches_c",
+      "operation": "abi.record_field_order",
+      "schema": "record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftcolor.h>",
+          "record": "FT_PaintRadialGradient",
+          "expected_field_order": [
+            "colorline",
+            "c0",
+            "r0",
+            "c1",
+            "r1"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "abi:field-order"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_PaintRadialGradient",
+          "field_order": [
+            "colorline",
+            "c0",
+            "r0",
+            "c1",
+            "r1"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "field_order",
+            "field_types",
+            "nested_record_order"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values",
+      "subject": "ftcolor.FT_PaintRadialGradient",
+      "case": "get_paint_radial_gradient_values",
+      "operation": "ftcolor.get_color_glyph_paint_and_get_paint",
+      "schema": "paint_graph",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/color/colr-v1-radial-gradients.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "base_glyph": "paint_radial_gradient_matrix",
+          "root_transform_modes": [
+            "FT_COLOR_NO_ROOT_TRANSFORM",
+            "FT_COLOR_INCLUDE_ROOT_TRANSFORM"
+          ],
+          "traversal": "FT_Get_Color_Glyph_Paint then recursive FT_Get_Paint",
+          "expected_format": "FT_COLR_PAINTFORMAT_RADIAL_GRADIENT",
+          "active_union_member": "radial_gradient",
+          "variation_coords": [
+            "default",
+            "minmax if fixture is variable"
+          ],
+          "read_colorline_stops": "when record contains FT_ColorLine",
+          "malformed_controls": "separate malformed COLR fixture may assert false status/output preservation"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "requires:font",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Bool",
+          "paint": {
+            "format": "FT_COLR_PAINTFORMAT_RADIAL_GRADIENT",
+            "radial_gradient": {
+              "colorline": "C oracle value or identity class",
+              "c0": "C oracle value or identity class",
+              "r0": "C oracle value or identity class",
+              "c1": "C oracle value or identity class",
+              "r1": "C oracle value or identity class"
+            }
+          },
+          "children": "opaque child paint identity classes when present",
+          "color_stops": "FT_ColorStop sequence when present"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "paint.format",
+            "paint.u.radial_gradient",
+            "child_paint_identity_classes",
+            "color_stop_iterator",
+            "variation_interpolation",
+            "root_transform_mode"
+          ]
+        },
+        "fixture_requirements": [
+          "COLR v1 font with PaintRadialGradient nodes for equal centers, distinct centers, r0=0, r1=0, r0<r1, r0>r1, negative coordinates, PAD/REPEAT/REFLECT color lines, and at least one variable radial gradient if supported",
+          "Color stops must be deterministic and include alpha extremes so FT_Get_Colorline_Stops output is observable."
+        ]
+      }
+    }
+  ]
+}

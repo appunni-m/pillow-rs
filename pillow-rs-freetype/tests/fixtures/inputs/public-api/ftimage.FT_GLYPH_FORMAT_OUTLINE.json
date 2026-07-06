@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_GLYPH_FORMAT_OUTLINE",
+  "manifest_cases": ["value_matches_header", "produced_by_scalable_glyph_load", "outline_payload_matches_format"],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_GLYPH_FORMAT_OUTLINE.value_matches_header",
+      "subject": "ftimage.FT_GLYPH_FORMAT_OUTLINE",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"include": "<freetype/ftimage.h>", "symbol": "FT_GLYPH_FORMAT_OUTLINE", "enum": "FT_Glyph_Format", "expected_value": 1869968492, "tag": "outl"}},
+      "classifiers": ["kind:enum_variant", "header:ftimage", "abi:value"],
+      "expectation": {"status": "ok", "output_shape": {"symbol": "FT_GLYPH_FORMAT_OUTLINE", "value_type": "FT_Glyph_Format", "tag": "FT_IMAGE_TAG('o','u','t','l')"}, "compare": {"mode": "value", "paths": ["symbol", "numeric_value", "tag"]}}
+    },
+    {
+      "case_id": "ftimage.FT_GLYPH_FORMAT_OUTLINE.produced_by_scalable_glyph_load",
+      "subject": "ftimage.FT_GLYPH_FORMAT_OUTLINE",
+      "case": "produced_by_scalable_glyph_load",
+      "operation": "freetype.load_glyph",
+      "schema": "glyph_slot",
+      "expect_error": false,
+      "inputs": {"assets": {"font": {"kind": "file", "role": "font", "path": "input/fonts/DejaVuSans.ttf"}}, "params": {"glyph_indices": [36, 57], "pixel_sizes": [13, 20], "load_flags_matrix": [["FT_LOAD_DEFAULT"], ["FT_LOAD_NO_HINTING"], ["FT_LOAD_NO_SCALE"]]}},
+      "classifiers": ["kind:enum_variant", "header:ftimage", "path:runtime"],
+      "expectation": {"status": "ok", "output_shape": {"status": "FT_Error", "slot_format": "FT_GLYPH_FORMAT_OUTLINE", "outline": "FT_Outline descriptor"}, "compare": {"mode": "exact", "paths": ["rows[*].status", "rows[*].slot_format", "rows[*].outline.n_points", "rows[*].outline.n_contours"]}}
+    },
+    {
+      "case_id": "ftimage.FT_GLYPH_FORMAT_OUTLINE.outline_payload_matches_format",
+      "subject": "ftimage.FT_GLYPH_FORMAT_OUTLINE",
+      "case": "outline_payload_matches_format",
+      "operation": "freetype.load_glyph_outline",
+      "schema": "outline_result",
+      "expect_error": false,
+      "inputs": {"assets": {"font": {"kind": "file", "role": "font", "path": "input/fonts/DejaVuSans.ttf"}}, "params": {"glyph_indices": [36, 43, 57], "compare_cbox": true, "capture_arrays": ["points", "tags", "contours", "flags"]}},
+      "classifiers": ["kind:enum_variant", "header:ftimage", "path:runtime"],
+      "expectation": {"status": "ok", "output_shape": {"slot_format": "FT_GLYPH_FORMAT_OUTLINE", "outline_points": "FT_Vector array", "outline_tags": "bytes", "outline_contours": "short array", "cbox": "FT_BBox"}, "compare": {"mode": "exact", "paths": ["rows[*].slot_format", "rows[*].outline.points", "rows[*].outline.tags", "rows[*].outline.contours", "rows[*].outline.flags", "rows[*].cbox"]}}
+    }
+  ]
+}

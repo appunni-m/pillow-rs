@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "subject": "ftmodapi.FT_MODULE_STYLER",
+  "manifest_cases": [
+    "value_matches_header",
+    "styler_module_registration"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmodapi.FT_MODULE_STYLER.value_matches_header",
+      "subject": "ftmodapi.FT_MODULE_STYLER",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_MODULE_STYLER",
+          "include": "<freetype/ftmodapi.h>",
+          "value": 8,
+          "value_type": "FT_ULong",
+          "macro_family": "FT_MODULE_*"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftmodapi",
+        "area:module"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "FT_ULong",
+          "header": "freetype/ftmodapi.h"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "value_type",
+            "header_symbol"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmodapi.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmodapi.FT_MODULE_STYLER.styler_module_registration",
+      "subject": "ftmodapi.FT_MODULE_STYLER",
+      "case": "styler_module_registration",
+      "operation": "ftmodapi.add_module",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "new_from_FT_New_Library_then_FT_Add_Default_Modules",
+          "module_class": {
+            "module_flags": [
+              "FT_MODULE_STYLER"
+            ],
+            "module_size": "sizeof_synthetic_module",
+            "module_name": "fixture_styler",
+            "module_version": "0x00010000",
+            "module_requires": "0x00020000",
+            "module_interface": "fixture_private_interface",
+            "module_init": "record_call_then_ok",
+            "module_done": "record_call",
+            "get_interface": "returns_module_interface"
+          },
+          "expected_routing": "not_font_driver_not_renderer"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftmodapi",
+        "area:module"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "module_handle": "FT_Module",
+          "stored_module_flags": "FT_ULong",
+          "callback_log": "array"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "module_name",
+            "stored_module_flags",
+            "callback_log",
+            "routing"
+          ]
+        },
+        "fixture_requirements": [
+          "future ABI runner must compile a synthetic non-driver non-renderer FT_Module_Class"
+        ],
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Add_Module"
+        ]
+      }
+    }
+  ]
+}

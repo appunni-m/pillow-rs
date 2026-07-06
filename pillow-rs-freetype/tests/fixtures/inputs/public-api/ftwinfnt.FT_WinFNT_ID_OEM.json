@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "subject": "ftwinfnt.FT_WinFNT_ID_OEM",
+  "manifest_cases": [
+    "value_matches_header",
+    "charset_roundtrip_from_header"
+  ],
+  "cases": [
+    {
+      "case_id": "ftwinfnt.FT_WinFNT_ID_OEM.value_matches_header",
+      "subject": "ftwinfnt.FT_WinFNT_ID_OEM",
+      "case": "value_matches_header",
+      "operation": "abi.constant_eval",
+      "schema": "constant_value",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ftwinfnt.h",
+          "symbol": "FT_WinFNT_ID_OEM",
+          "value": 255,
+          "value_type": "charset byte macro",
+          "encoding_family": "OEM character set"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftwinfnt",
+        "area:winfnt_charset"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "constant_value": "int",
+          "symbol": "string"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "symbol",
+            "constant_value"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftwinfnt.h:78-99",
+          "freetype/include/freetype/ftwinfnt.h:153-171"
+        ]
+      }
+    },
+    {
+      "case_id": "ftwinfnt.FT_WinFNT_ID_OEM.charset_roundtrip_from_header",
+      "subject": "ftwinfnt.FT_WinFNT_ID_OEM",
+      "case": "charset_roundtrip_from_header",
+      "operation": "winfnt.get_header",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/winfnt/charset/oem-255.fnt"
+          }
+        },
+        "params": {
+          "function": "FT_Get_WinFNT_Header",
+          "face_index": 0,
+          "expected_charset_symbol": "FT_WinFNT_ID_OEM",
+          "expected_charset_value": 255,
+          "field": "FT_WinFNT_HeaderRec.charset"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftwinfnt",
+        "runtime:winfonts"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "error": "FT_Error",
+          "header": {
+            "charset": "FT_Byte"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "header.charset"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/winfnt/charset/oem-255.fnt must be a valid WinFNT face with header charset byte 255."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftwinfnt.h:153-171",
+          "freetype/src/winfonts/winfnt.c:1136-1146"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,473 @@
+{
+  "version": 1,
+  "subject": "ftcache.FTC_CMapCache_Lookup",
+  "manifest_cases": [
+    "planned_cache_subsystem_not_out_of_scope",
+    "success_lookup_hit_and_repeat_hit",
+    "success_lookup_miss_returns_zero",
+    "success_negative_cmap_index_uses_current_charmap",
+    "error_null_cache_returns_zero",
+    "lifecycle_remove_faceid_and_reset"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcache.FTC_CMapCache_Lookup.planned_cache_subsystem_not_out_of_scope",
+      "subject": "ftcache.FTC_CMapCache_Lookup",
+      "case": "planned_cache_subsystem_not_out_of_scope",
+      "operation": "ftcache.cmap_cache_lookup",
+      "schema": "cache_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          },
+          "alt_font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-serif.ttf",
+            "asset_kind": "font"
+          },
+          "multi_charmap_font": {
+            "kind": "ref",
+            "id": "fonts/charmap/multiple-charmaps.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "manager_limits": {
+            "max_faces": 0,
+            "max_sizes": 0,
+            "max_bytes": 0
+          },
+          "face_ids": [
+            "face-A",
+            "face-B"
+          ],
+          "requester": "path_face_requester_with_log",
+          "scenario": "planned_cache_subsystem_not_out_of_scope",
+          "cmap_indexes": [
+            0,
+            -1,
+            999
+          ],
+          "char_codes": [
+            65,
+            1114111,
+            57344
+          ],
+          "repeat_lookup": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-subsystem"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "return": "FT_UInt",
+          "glyph_index": true,
+          "active_charmap_identity": true,
+          "requester_log": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "glyph_index",
+            "requester_log",
+            "active_charmap_before",
+            "active_charmap_after"
+          ]
+        },
+        "fixture_requirements": [
+          "Harness support for persistent FTC_FaceID callback data and requester invocation log"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_CMapCache_Lookup.success_lookup_hit_and_repeat_hit",
+      "subject": "ftcache.FTC_CMapCache_Lookup",
+      "case": "success_lookup_hit_and_repeat_hit",
+      "operation": "ftcache.cmap_cache_lookup",
+      "schema": "cache_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          },
+          "alt_font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-serif.ttf",
+            "asset_kind": "font"
+          },
+          "multi_charmap_font": {
+            "kind": "ref",
+            "id": "fonts/charmap/multiple-charmaps.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "manager_limits": {
+            "max_faces": 0,
+            "max_sizes": 0,
+            "max_bytes": 0
+          },
+          "face_ids": [
+            "face-A",
+            "face-B"
+          ],
+          "requester": "path_face_requester_with_log",
+          "scenario": "success_lookup_hit_and_repeat_hit",
+          "cmap_indexes": [
+            0,
+            -1,
+            999
+          ],
+          "char_codes": [
+            65,
+            1114111,
+            57344
+          ],
+          "repeat_lookup": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-subsystem"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_UInt",
+          "glyph_index": true,
+          "active_charmap_identity": true,
+          "requester_log": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "glyph_index",
+            "requester_log",
+            "active_charmap_before",
+            "active_charmap_after"
+          ]
+        },
+        "fixture_requirements": [
+          "Harness support for persistent FTC_FaceID callback data and requester invocation log"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_CMapCache_Lookup.success_lookup_miss_returns_zero",
+      "subject": "ftcache.FTC_CMapCache_Lookup",
+      "case": "success_lookup_miss_returns_zero",
+      "operation": "ftcache.cmap_cache_lookup",
+      "schema": "cache_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          },
+          "alt_font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-serif.ttf",
+            "asset_kind": "font"
+          },
+          "multi_charmap_font": {
+            "kind": "ref",
+            "id": "fonts/charmap/multiple-charmaps.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "manager_limits": {
+            "max_faces": 0,
+            "max_sizes": 0,
+            "max_bytes": 0
+          },
+          "face_ids": [
+            "face-A",
+            "face-B"
+          ],
+          "requester": "path_face_requester_with_log",
+          "scenario": "success_lookup_miss_returns_zero",
+          "cmap_indexes": [
+            0,
+            -1,
+            999
+          ],
+          "char_codes": [
+            65,
+            1114111,
+            57344
+          ],
+          "repeat_lookup": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-subsystem"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_UInt",
+          "glyph_index": true,
+          "active_charmap_identity": true,
+          "requester_log": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "glyph_index",
+            "requester_log",
+            "active_charmap_before",
+            "active_charmap_after"
+          ]
+        },
+        "fixture_requirements": [
+          "Harness support for persistent FTC_FaceID callback data and requester invocation log"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_CMapCache_Lookup.success_negative_cmap_index_uses_current_charmap",
+      "subject": "ftcache.FTC_CMapCache_Lookup",
+      "case": "success_negative_cmap_index_uses_current_charmap",
+      "operation": "ftcache.cmap_cache_lookup",
+      "schema": "cache_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          },
+          "alt_font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-serif.ttf",
+            "asset_kind": "font"
+          },
+          "multi_charmap_font": {
+            "kind": "ref",
+            "id": "fonts/charmap/multiple-charmaps.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "manager_limits": {
+            "max_faces": 0,
+            "max_sizes": 0,
+            "max_bytes": 0
+          },
+          "face_ids": [
+            "face-A",
+            "face-B"
+          ],
+          "requester": "path_face_requester_with_log",
+          "scenario": "success_negative_cmap_index_uses_current_charmap",
+          "cmap_indexes": [
+            0,
+            -1,
+            999
+          ],
+          "char_codes": [
+            65,
+            1114111,
+            57344
+          ],
+          "repeat_lookup": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-subsystem"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_UInt",
+          "glyph_index": true,
+          "active_charmap_identity": true,
+          "requester_log": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "glyph_index",
+            "requester_log",
+            "active_charmap_before",
+            "active_charmap_after"
+          ]
+        },
+        "fixture_requirements": [
+          "Harness support for persistent FTC_FaceID callback data and requester invocation log"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_CMapCache_Lookup.error_null_cache_returns_zero",
+      "subject": "ftcache.FTC_CMapCache_Lookup",
+      "case": "error_null_cache_returns_zero",
+      "operation": "ftcache.cmap_cache_lookup",
+      "schema": "cache_operation",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          },
+          "alt_font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-serif.ttf",
+            "asset_kind": "font"
+          },
+          "multi_charmap_font": {
+            "kind": "ref",
+            "id": "fonts/charmap/multiple-charmaps.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "manager_limits": {
+            "max_faces": 0,
+            "max_sizes": 0,
+            "max_bytes": 0
+          },
+          "face_ids": [
+            "face-A",
+            "face-B"
+          ],
+          "requester": "path_face_requester_with_log",
+          "scenario": "error_null_cache_returns_zero",
+          "cmap_indexes": [
+            0,
+            -1,
+            999
+          ],
+          "char_codes": [
+            65,
+            1114111,
+            57344
+          ],
+          "repeat_lookup": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-subsystem"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_UInt",
+          "glyph_index": true,
+          "active_charmap_identity": true,
+          "requester_log": true
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "glyph_index"
+          ]
+        },
+        "fixture_requirements": [
+          "Harness support for persistent FTC_FaceID callback data and requester invocation log"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_CMapCache_Lookup.lifecycle_remove_faceid_and_reset",
+      "subject": "ftcache.FTC_CMapCache_Lookup",
+      "case": "lifecycle_remove_faceid_and_reset",
+      "operation": "ftcache.cmap_cache_lookup",
+      "schema": "cache_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          },
+          "alt_font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-serif.ttf",
+            "asset_kind": "font"
+          },
+          "multi_charmap_font": {
+            "kind": "ref",
+            "id": "fonts/charmap/multiple-charmaps.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "manager_limits": {
+            "max_faces": 0,
+            "max_sizes": 0,
+            "max_bytes": 0
+          },
+          "face_ids": [
+            "face-A",
+            "face-B"
+          ],
+          "requester": "path_face_requester_with_log",
+          "scenario": "lifecycle_remove_faceid_and_reset",
+          "cmap_indexes": [
+            0,
+            -1,
+            999
+          ],
+          "char_codes": [
+            65,
+            1114111,
+            57344
+          ],
+          "repeat_lookup": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-subsystem"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_UInt",
+          "glyph_index": true,
+          "active_charmap_identity": true,
+          "requester_log": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "glyph_index",
+            "requester_log",
+            "active_charmap_before",
+            "active_charmap_after"
+          ]
+        },
+        "fixture_requirements": [
+          "Harness support for persistent FTC_FaceID callback data and requester invocation log"
+        ]
+      }
+    }
+  ]
+}

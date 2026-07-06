@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "subject": "ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY",
+  "manifest_cases": [
+    "value_matches_header",
+    "fast_only_error_behavior"
+  ],
+  "cases": [
+    {
+      "case_id": "ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY.value_matches_header",
+      "subject": "ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_ADVANCE_FLAG_FAST_ONLY",
+          "include": "<freetype/ftadvanc.h>",
+          "import": "#include <freetype/ftadvanc.h>",
+          "expected_value_expr": "0x20000000L"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftadvanc",
+        "area:public-api",
+        "coverage:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "signed_or_unsigned_integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftadvanc.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY.fast_only_error_behavior",
+      "subject": "ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY",
+      "case": "fast_only_error_behavior",
+      "operation": "ftadvanc.get_advance",
+      "schema": "advance_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 20,
+          "glyph_index": 36,
+          "load_flags": [
+            "FT_LOAD_DEFAULT",
+            "FT_ADVANCE_FLAG_FAST_ONLY"
+          ],
+          "sentinel_padvance": "0x13572468"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftadvanc"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "padvance": "preserved_or_c_written_value"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error",
+            "padvance"
+          ]
+        },
+        "error": "Unimplemented_Feature_when_no_fast_path",
+        "source_refs": [
+          "freetype/include/freetype/ftadvanc.h",
+          "freetype/src/base/ftadvanc.c"
+        ]
+      }
+    }
+  ]
+}

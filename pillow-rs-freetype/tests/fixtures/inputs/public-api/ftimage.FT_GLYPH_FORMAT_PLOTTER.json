@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_GLYPH_FORMAT_PLOTTER",
+  "manifest_cases": ["value_matches_header", "source_emitter_inventory"],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_GLYPH_FORMAT_PLOTTER.value_matches_header",
+      "subject": "ftimage.FT_GLYPH_FORMAT_PLOTTER",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"include": "<freetype/ftimage.h>", "symbol": "FT_GLYPH_FORMAT_PLOTTER", "enum": "FT_Glyph_Format", "expected_value": 1886154612, "tag": "plot"}},
+      "classifiers": ["kind:enum_variant", "header:ftimage", "abi:value"],
+      "expectation": {"status": "ok", "output_shape": {"symbol": "FT_GLYPH_FORMAT_PLOTTER", "value_type": "FT_Glyph_Format", "tag": "FT_IMAGE_TAG('p','l','o','t')"}, "compare": {"mode": "value", "paths": ["symbol", "numeric_value", "tag"]}}
+    },
+    {
+      "case_id": "ftimage.FT_GLYPH_FORMAT_PLOTTER.source_emitter_inventory",
+      "subject": "ftimage.FT_GLYPH_FORMAT_PLOTTER",
+      "case": "source_emitter_inventory",
+      "operation": "ftimage.glyph_format_emitter_inventory",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"optional_plotter_font": {"kind": "ref", "id": "fonts/plotter/hershey-compatible.pfa"}}, "params": {"format": "FT_GLYPH_FORMAT_PLOTTER", "audit_paths": ["font drivers", "renderer classes"], "runtime_probe_if_asset_exists": true}},
+      "classifiers": ["kind:enum_variant", "header:ftimage", "path:source-audit"],
+      "expectation": {"status": "build_dependent", "output_shape": {"constant_value": "FT_Glyph_Format", "emitter_classification": "reachable or no-runtime-emitter", "runtime_probe": "optional glyph slot format"}, "compare": {"mode": "unsupported_until_runner_added", "paths": ["constant_value", "emitter_classification", "runtime_probe.status"]}, "fixture_requirements": ["Do not invent plotter output. Add a font asset only if the pinned FreeType build has a driver path that can emit PLOTTER."]}
+    }
+  ]
+}

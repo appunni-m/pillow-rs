@@ -1,0 +1,191 @@
+{
+  "version": 1,
+  "subject": "ftsynth.FT_GlyphSlot_Embolden",
+  "manifest_cases": [
+    "signature_and_wrapper_strength",
+    "outline_embolden_mutates_geometry_and_metrics",
+    "bitmap_embolden_mutates_bitmap_and_metrics",
+    "null_or_unsupported_format_noop"
+  ],
+  "metadata": {
+    "abi": {
+      "kind": "function",
+      "header": "freetype/ftsynth.h",
+      "symbol": "FT_GlyphSlot_Embolden",
+      "c_signature": "void FT_GlyphSlot_Embolden(FT_GlyphSlot slot)",
+      "return": "void",
+      "args": ["FT_GlyphSlot slot"]
+    },
+    "source_refs": [
+      "freetype/include/freetype/ftsynth.h",
+      "freetype/src/base/ftsynth.c:FT_GlyphSlot_Embolden"
+    ],
+    "source_behavior": "C is a convenience wrapper around FT_GlyphSlot_AdjustWeight(slot, 0x0AAA, 0x0AAA), preserving void/no-error semantics."
+  },
+  "cases": [
+    {
+      "case_id": "ftsynth.FT_GlyphSlot_Embolden.signature_and_wrapper_strength",
+      "subject": "ftsynth.FT_GlyphSlot_Embolden",
+      "case": "signature_and_wrapper_strength",
+      "operation": "abi.function_signature",
+      "schema": "abi_signature",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftsynth.h",
+          "symbol": "FT_GlyphSlot_Embolden",
+          "expected_signature": "void (*)(FT_GlyphSlot)",
+          "wrapper_equivalence": {
+            "operation": "FT_GlyphSlot_AdjustWeight",
+            "xdelta_16_16": 2730,
+            "ydelta_16_16": 2730
+          }
+        }
+      },
+      "classifiers": ["kind:function", "header:ftsynth", "abi:void", "behavior:wrapper"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "import_compiles": "bool",
+          "return_type": "void",
+          "argument_types": ["FT_GlyphSlot"],
+          "wrapper_strengths": {"xdelta": "FT_Fixed", "ydelta": "FT_Fixed"}
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": ["import_compiles", "return_type", "argument_types", "wrapper_strengths"]
+        }
+      }
+    },
+    {
+      "case_id": "ftsynth.FT_GlyphSlot_Embolden.outline_embolden_mutates_geometry_and_metrics",
+      "subject": "ftsynth.FT_GlyphSlot_Embolden",
+      "case": "outline_embolden_mutates_geometry_and_metrics",
+      "operation": "ftsynth.glyphslot_embolden_after_load",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf",
+            "role": "font"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "size_ppem": 24,
+          "load": {
+            "operation": "FT_Load_Glyph",
+            "glyph_indices": [36, 80],
+            "load_flags": ["FT_LOAD_DEFAULT", "FT_LOAD_NO_BITMAP"]
+          },
+          "compare_with_adjust_weight_strength": 2730,
+          "capture_before_after": true
+        }
+      },
+      "classifiers": ["kind:function", "header:ftsynth", "format:outline", "operation:glyph-slot-mutation"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "slot_format": "FT_GLYPH_FORMAT_OUTLINE",
+          "outline_points_after": ["FT_Vector"],
+          "outline_cbox_after": "FT_BBox",
+          "metrics_after": "FT_Glyph_Metrics",
+          "advance_after": "FT_Vector"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": ["slot_format", "outline_points_after", "outline_cbox_after", "metrics_after", "advance_after"]
+        }
+      }
+    },
+    {
+      "case_id": "ftsynth.FT_GlyphSlot_Embolden.bitmap_embolden_mutates_bitmap_and_metrics",
+      "subject": "ftsynth.FT_GlyphSlot_Embolden",
+      "case": "bitmap_embolden_mutates_bitmap_and_metrics",
+      "operation": "ftsynth.glyphslot_embolden_after_load",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "bitmap_strike_font": {
+            "kind": "ref",
+            "id": "input/fonts/bitmap/embedded-strike.ttf",
+            "role": "font",
+            "status": "required_future_asset",
+            "requires": "face with embedded bitmap strike"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "select_size_index": 0,
+          "load": {
+            "operation": "FT_Load_Glyph",
+            "glyph_indices": [1, 2],
+            "load_flags": ["FT_LOAD_DEFAULT", "FT_LOAD_COLOR"]
+          },
+          "capture_before_after": true
+        }
+      },
+      "classifiers": ["kind:function", "header:ftsynth", "format:bitmap", "operation:glyph-slot-mutation"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "slot_format": "FT_GLYPH_FORMAT_BITMAP",
+          "bitmap_after": "FT_Bitmap descriptor and bytes",
+          "bitmap_top_after": "FT_Int",
+          "metrics_after": "FT_Glyph_Metrics",
+          "advance_after": "FT_Vector"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": ["slot_format", "bitmap_after", "bitmap_top_after", "metrics_after", "advance_after"]
+        },
+        "fixture_requirements": ["Add an embedded-bitmap strike fixture that loads bitmap slots without outline fallback."]
+      }
+    },
+    {
+      "case_id": "ftsynth.FT_GlyphSlot_Embolden.null_or_unsupported_format_noop",
+      "subject": "ftsynth.FT_GlyphSlot_Embolden",
+      "case": "null_or_unsupported_format_noop",
+      "operation": "ftsynth.glyphslot_embolden_noop",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_slots": {
+            "kind": "ref",
+            "id": "slots/synthetic/unsupported-glyph-formats.json",
+            "role": "slot_model",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "scenarios": [
+            {"slot_pointer": null},
+            {"slot_ref": "synthetic_slots:composite"},
+            {"slot_ref": "synthetic_slots:none"}
+          ],
+          "initial_slot_snapshot": "sentinel_fields"
+        }
+      },
+      "classifiers": ["kind:function", "header:ftsynth", "behavior:no-op", "format:unsupported"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "void_return": "no_status",
+          "slot_after": "unchanged sentinel for non-null unsupported slots",
+          "null_call_completed": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": ["slot_after", "null_call_completed"]
+        }
+      }
+    }
+  ]
+}

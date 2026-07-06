@@ -1,0 +1,201 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_BBox",
+  "manifest_cases": [
+    "layout_matches_c",
+    "outline_cbox_output_shape",
+    "negative_and_empty_bounds"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_BBox.layout_matches_c",
+      "subject": "ftimage.FT_BBox",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftimage.h",
+          "symbol": "FT_BBox",
+          "fields_in_order": [
+            "xMin",
+            "yMin",
+            "xMax",
+            "yMax"
+          ],
+          "field_types": {
+            "xMin": "FT_Pos",
+            "yMin": "FT_Pos",
+            "xMax": "FT_Pos",
+            "yMax": "FT_Pos"
+          },
+          "nested_public_records": [],
+          "probe": [
+            "sizeof",
+            "alignof",
+            "offsetof",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftimage",
+        "area:abi_layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "offsets": "object<field,usize>",
+          "field_types": "object<field,c_type>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "offsets",
+            "field_types",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:83-123"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_BBox.outline_cbox_output_shape",
+      "subject": "ftimage.FT_BBox",
+      "case": "outline_cbox_output_shape",
+      "operation": "ftoutln.outline_get_cbox",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 32
+          },
+          "glyph_indices": [
+            36,
+            74,
+            77
+          ],
+          "load_flags": [
+            "FT_LOAD_DEFAULT",
+            "FT_LOAD_NO_HINTING",
+            "FT_LOAD_NO_SCALE"
+          ],
+          "probe": [
+            "FT_Outline_Get_CBox",
+            "FT_Outline_Render direct clip_box preset"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftimage",
+        "area:outline",
+        "runtime:public_record"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "bbox": "FT_BBox",
+          "units": "font_units_or_26_6",
+          "direct_clip_box": "FT_BBox integer pixels"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "bbox.xMin",
+            "bbox.yMin",
+            "bbox.xMax",
+            "bbox.yMax",
+            "direct_clip_box.xMin",
+            "direct_clip_box.yMin",
+            "direct_clip_box.xMax",
+            "direct_clip_box.yMax"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftoutln.c:623-648"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_BBox.negative_and_empty_bounds",
+      "subject": "ftimage.FT_BBox",
+      "case": "negative_and_empty_bounds",
+      "operation": "ftoutln.outline_get_cbox",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "negative_outline": {
+            "kind": "ref",
+            "id": "outlines/synthetic/negative-descender.json",
+            "asset_kind": "outline"
+          },
+          "empty_outline": {
+            "kind": "ref",
+            "id": "outlines/synthetic/empty-outline.json",
+            "asset_kind": "outline"
+          }
+        },
+        "params": {
+          "outline_cases": [
+            "negative_descender",
+            "zero_points_zero_contours",
+            "zero_area"
+          ],
+          "expected_behavior": "C preserves signed FT_Pos extrema and reports zero extrema for empty outlines."
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftimage",
+        "area:outline",
+        "path:edge-case"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "bbox": "FT_BBox",
+          "status": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "bbox.xMin",
+            "bbox.yMin",
+            "bbox.xMax",
+            "bbox.yMax"
+          ]
+        },
+        "fixture_requirements": [
+          "Future synthetic negative, empty, and zero-area outline assets."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:105-117",
+          "freetype/include/freetype/ftoutln.h:223-249"
+        ]
+      }
+    }
+  ]
+}

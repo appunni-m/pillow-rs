@@ -1,0 +1,189 @@
+{
+  "version": 1,
+  "subject": "ftgxval.FT_VALIDATE_APPLE",
+  "manifest_cases": [
+    "value_matches_header",
+    "runtime_selects_apple_classic_kern",
+    "absent_or_invalid_kern_table"
+  ],
+  "cases": [
+    {
+      "case_id": "ftgxval.FT_VALIDATE_APPLE.value_matches_header",
+      "subject": "ftgxval.FT_VALIDATE_APPLE",
+      "case": "value_matches_header",
+      "operation": "ftgxval.constant",
+      "schema": "constant_value",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ftgxval.h",
+          "symbol": "FT_VALIDATE_APPLE",
+          "expression": "(FT_VALIDATE_GX_START << 1)",
+          "expected_value": 32768,
+          "expected_hex": "0x8000",
+          "import_metadata": {
+            "include": "#include <freetype/ftgxval.h>",
+            "depends_on": {
+              "FT_VALIDATE_GX_START": 16384
+            },
+            "kind": "preprocessor_constant"
+          }
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftgxval"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_UInt-compatible integer",
+          "hex": "0x8000",
+          "import": "available from freetype/ftgxval.h"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "hex",
+            "import.available"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftgxval.h:276"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgxval.FT_VALIDATE_APPLE.runtime_selects_apple_classic_kern",
+      "subject": "ftgxval.FT_VALIDATE_APPLE",
+      "case": "runtime_selects_apple_classic_kern",
+      "operation": "ftgxval.classic_kern_validate",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "apple_classic_kern_font": {
+            "kind": "ref",
+            "id": "fonts/kern/apple-classic-kern.ttf"
+          },
+          "microsoft_classic_kern_font": {
+            "kind": "ref",
+            "id": "fonts/kern/ms-classic-kern.ttf"
+          }
+        },
+        "params": {
+          "validation_flags": [
+            "FT_VALIDATE_APPLE"
+          ],
+          "dialect_request": "KERN_DIALECT_APPLE",
+          "output_pointer": "valid_ckern_table_pointer",
+          "free_with": "FT_ClassicKern_Free",
+          "coverage_cases": [
+            "classic Apple coverage accepted",
+            "Microsoft-only coverage rejected when Apple-only validation is requested"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftgxval"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "ckern_table": "nullable copied kern table bytes",
+          "dialect": "Apple classic validation path"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "rows[*].status",
+            "rows[*].dialect_class",
+            "rows[*].ckern_table_nullness",
+            "rows[*].ckern_table_bytes",
+            "rows[*].free_events"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/kern/apple-classic-kern.ttf must contain a classic Apple kern table accepted by gxv_kern_coverage_classic_apple_validate",
+          "fonts/kern/ms-classic-kern.ttf must contain a Microsoft classic kern table for the rejection/control row"
+        ],
+        "source_refs": [
+          "freetype/src/gxvalid/gxvkern.c:596-630",
+          "freetype/src/gxvalid/gxvkern.c:687-735",
+          "freetype/src/gxvalid/gxvkern.c:907-916"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgxval.FT_VALIDATE_APPLE.absent_or_invalid_kern_table",
+      "subject": "ftgxval.FT_VALIDATE_APPLE",
+      "case": "absent_or_invalid_kern_table",
+      "operation": "ftgxval.classic_kern_validate",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "missing_kern_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "malformed_apple_kern_font": {
+            "kind": "ref",
+            "id": "fonts/kern/malformed-apple-classic-kern.ttf"
+          }
+        },
+        "params": {
+          "validation_flags": [
+            "FT_VALIDATE_APPLE"
+          ],
+          "rows": [
+            {
+              "font": "missing_kern_font",
+              "expected_table": null,
+              "expected_status_class": "C observable no-table behavior"
+            },
+            {
+              "font": "malformed_apple_kern_font",
+              "expected_status_class": "validator error",
+              "expected_table": null
+            }
+          ],
+          "initial_ckern_table": "sentinel_non_null"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftgxval"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error or no-table success depending C",
+          "ckern_table": "null on absent or invalid table",
+          "error": "exact C validator error for malformed data"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].ckern_table_nullness",
+            "rows[*].error_class"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/kern/malformed-apple-classic-kern.ttf must contain invalid Apple classic kern offsets, lengths, or coverage bits"
+        ],
+        "source_refs": [
+          "freetype/src/base/ftgxval.c:90-123",
+          "freetype/src/gxvalid/gxvmod.c:211-230",
+          "freetype/src/gxvalid/gxvkern.c:834-897"
+        ]
+      }
+    }
+  ]
+}

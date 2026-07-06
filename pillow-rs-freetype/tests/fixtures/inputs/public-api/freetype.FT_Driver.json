@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Driver",
+  "manifest_cases": [
+    "alias_defined",
+    "opaque_handle_policy"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Driver.alias_defined",
+      "subject": "freetype.FT_Driver",
+      "case": "alias_defined",
+      "operation": "abi.type_alias",
+      "schema": "c_abi_type",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Driver",
+          "target": "struct FT_DriverRec_*",
+          "include": "<freetype/freetype.h>",
+          "import": "#include <freetype/freetype.h>",
+          "pointer_alias": true
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "target": "string",
+          "pointer_alias": "bool",
+          "pointer_width": "integer",
+          "null_value": "zero",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "target",
+            "pointer_alias",
+            "pointer_width",
+            "null_value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Driver.opaque_handle_policy",
+      "subject": "freetype.FT_Driver",
+      "case": "opaque_handle_policy",
+      "operation": "abi.opaque_handle_policy",
+      "schema": "opaque_handle_runtime",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "handle_source": "live library/face graph where available",
+          "compare_policy": "nullness and identity class only; private record fields are not read"
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "handle": "opaque_pointer",
+          "nullness": "bool",
+          "identity_class": "library_owned|face_owned|module_owned|private"
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "handle.nullness",
+            "handle.identity_class",
+            "handle.owner_class",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h"
+        ]
+      }
+    }
+  ]
+}

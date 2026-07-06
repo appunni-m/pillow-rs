@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "subject": "fttrigon.FT_Vector_From_Polar",
+  "manifest_cases": ["signature_and_void_contract", "cardinal_diagonal_and_negative_lengths", "zero_length_and_zero_angle", "null_vector_noop"],
+  "metadata": {
+    "abi": {"kind": "function", "header": "freetype/fttrigon.h", "symbol": "FT_Vector_From_Polar", "c_signature": "void FT_Vector_From_Polar(FT_Vector* vec, FT_Fixed length, FT_Angle angle)", "return": "void", "args": ["FT_Vector* vec", "FT_Fixed length", "FT_Angle angle"]},
+    "source_refs": ["freetype/include/freetype/fttrigon.h", "freetype/src/base/fttrigon.c:FT_Vector_From_Polar", "freetype/src/base/fttrigon.c:FT_Vector_Rotate"],
+    "source_behavior": "C writes vec to {length,0} and then rotates it; a null vector pointer is a no-op and void return means comparison is by mutated vector fields."
+  },
+  "cases": [
+    {
+      "case_id": "fttrigon.FT_Vector_From_Polar.signature_and_void_contract",
+      "subject": "fttrigon.FT_Vector_From_Polar",
+      "case": "signature_and_void_contract",
+      "operation": "abi.function_signature",
+      "schema": "abi_signature",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"include": "freetype/fttrigon.h", "symbol": "FT_Vector_From_Polar", "expected_signature": "void (*)(FT_Vector*, FT_Fixed, FT_Angle)"}},
+      "classifiers": ["kind:function", "header:fttrigon", "area:trigonometry", "abi:void"],
+      "expectation": {"status": "ok", "output_shape": {"import_compiles": "bool", "return_type": "void", "argument_types": ["FT_Vector*", "FT_Fixed", "FT_Angle"]}, "compare": {"mode": "layout", "paths": ["import_compiles", "return_type", "argument_types"]}}
+    },
+    {
+      "case_id": "fttrigon.FT_Vector_From_Polar.cardinal_diagonal_and_negative_lengths",
+      "subject": "fttrigon.FT_Vector_From_Polar",
+      "case": "cardinal_diagonal_and_negative_lengths",
+      "operation": "fttrigon.vector_from_polar",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"cases": [{"length": 65536, "angle": 0}, {"length": 65536, "angle": 2949120}, {"length": 65536, "angle": 5898240}, {"length": 65536, "angle": 11796480}, {"length": -65536, "angle": 2949120}, {"length": 1234567, "angle": -7654321}], "initial_vec_sentinel": {"x": 305419896, "y": -305419896}}},
+      "classifiers": ["kind:function", "header:fttrigon", "area:trigonometry", "operation:polar-to-vector"],
+      "expectation": {"status": "ok", "output_shape": {"results": [{"length": "FT_Fixed", "angle": "FT_Angle", "vec_after": "FT_Vector"}]}, "compare": {"mode": "exact", "paths": ["results[*].vec_after"]}}
+    },
+    {
+      "case_id": "fttrigon.FT_Vector_From_Polar.zero_length_and_zero_angle",
+      "subject": "fttrigon.FT_Vector_From_Polar",
+      "case": "zero_length_and_zero_angle",
+      "operation": "fttrigon.vector_from_polar",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"cases": [{"length": 0, "angle": 0}, {"length": 0, "angle": 2949120}, {"length": 65536, "angle": 0}, {"length": -65536, "angle": 0}], "initial_vec_sentinel": {"x": -1, "y": -1}}},
+      "classifiers": ["kind:function", "header:fttrigon", "area:trigonometry", "edge:zero"],
+      "expectation": {"status": "ok", "output_shape": {"results": [{"length": "FT_Fixed", "angle": "FT_Angle", "vec_after": "FT_Vector"}]}, "compare": {"mode": "exact", "paths": ["results[*].vec_after"]}}
+    },
+    {
+      "case_id": "fttrigon.FT_Vector_From_Polar.null_vector_noop",
+      "subject": "fttrigon.FT_Vector_From_Polar",
+      "case": "null_vector_noop",
+      "operation": "fttrigon.vector_from_polar",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"cases": [{"vec_pointer": null, "length": 65536, "angle": 2949120}], "call_must_complete": true}},
+      "classifiers": ["kind:function", "header:fttrigon", "area:trigonometry", "edge:null-pointer"],
+      "expectation": {"status": "ok", "output_shape": {"null_call_completed": "bool", "void_return": "no_status"}, "compare": {"mode": "exact", "paths": ["null_call_completed"]}}
+    }
+  ]
+}

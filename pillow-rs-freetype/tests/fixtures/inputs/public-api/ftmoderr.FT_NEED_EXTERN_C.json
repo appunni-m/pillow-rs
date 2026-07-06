@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "subject": "ftmoderr.FT_NEED_EXTERN_C",
+  "manifest_cases": [
+    "cplusplus_default_wrapper",
+    "cleanup_undefines_macro",
+    "custom_moderrdef_skips_default_wrapper"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmoderr.FT_NEED_EXTERN_C.cplusplus_default_wrapper",
+      "subject": "ftmoderr.FT_NEED_EXTERN_C",
+      "case": "cplusplus_default_wrapper",
+      "operation": "cxx_preprocessor.expand_ftmoderr",
+      "schema": "api_macro",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "translation_unit": {
+            "kind": "ref",
+            "role": "cxx_source",
+            "id": "generated/c-preprocess/ftmoderr-cplusplus-default.cpp",
+            "requirements": "C++ source includes ftmoderr.h without predefining FT_MODERRDEF and records extern-C wrapper presence."
+          }
+        },
+        "params": {
+          "include": "<freetype/ftmoderr.h>",
+          "language": "c++",
+          "predefined_ft_moderrdef": false,
+          "expected_wrapper": "extern \"C\" block surrounds default enum expansion",
+          "pinned_sources": [
+            "freetype/include/freetype/ftmoderr.h:118-134",
+            "freetype/include/freetype/ftmoderr.h:191-198"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftmoderr",
+        "area:module-error-list",
+        "requires:c-preprocess"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro": "FT_NEED_EXTERN_C",
+          "tokens": "preprocessed_token_stream_or_compile_probe",
+          "post_include_macro_defined": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "extern_c_open_seen",
+            "extern_c_close_seen",
+            "enum_visible"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmoderr.h:118-134",
+          "freetype/include/freetype/ftmoderr.h:191-198"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmoderr.FT_NEED_EXTERN_C.cleanup_undefines_macro",
+      "subject": "ftmoderr.FT_NEED_EXTERN_C",
+      "case": "cleanup_undefines_macro",
+      "operation": "c_preprocessor.macro_defined_after_include",
+      "schema": "api_macro",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftmoderr.h>",
+          "macro": "FT_NEED_EXTERN_C",
+          "expected_post_include_defined": false,
+          "expected_cleanup_macro": "#undef FT_NEED_EXTERN_C",
+          "pinned_sources": [
+            "freetype/include/freetype/ftmoderr.h:116",
+            "freetype/include/freetype/ftmoderr.h:195-198"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftmoderr",
+        "area:module-error-list",
+        "requires:c-preprocess"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro": "FT_NEED_EXTERN_C",
+          "tokens": "preprocessed_token_stream_or_compile_probe",
+          "post_include_macro_defined": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "post_include_defined",
+            "cleanup_seen"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmoderr.h:116",
+          "freetype/include/freetype/ftmoderr.h:195-198"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmoderr.FT_NEED_EXTERN_C.custom_moderrdef_skips_default_wrapper",
+      "subject": "ftmoderr.FT_NEED_EXTERN_C",
+      "case": "custom_moderrdef_skips_default_wrapper",
+      "operation": "cxx_preprocessor.expand_ftmoderr",
+      "schema": "api_macro",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "translation_unit": {
+            "kind": "ref",
+            "role": "cxx_source",
+            "id": "generated/c-preprocess/ftmoderr-cplusplus-custom-moderrdef.cpp",
+            "requirements": "C++ source predefines FT_MODERRDEF before including ftmoderr.h and probes whether ftmoderr.h creates FT_NEED_EXTERN_C."
+          }
+        },
+        "params": {
+          "include": "<freetype/ftmoderr.h>",
+          "language": "c++",
+          "predefined_ft_moderrdef": true,
+          "expected_default_wrapper_created": false,
+          "expected_custom_list_still_invoked_if_hooks_defined": true,
+          "pinned_sources": [
+            "freetype/include/freetype/ftmoderr.h:116-134",
+            "freetype/include/freetype/ftmoderr.h:146-179"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftmoderr",
+        "area:module-error-list",
+        "requires:c-preprocess"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro": "FT_NEED_EXTERN_C",
+          "tokens": "preprocessed_token_stream_or_compile_probe",
+          "post_include_macro_defined": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "extern_c_open_seen",
+            "extern_c_close_seen",
+            "custom_entries"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmoderr.h:116-134",
+          "freetype/include/freetype/ftmoderr.h:146-179"
+        ]
+      }
+    }
+  ]
+}

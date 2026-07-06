@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_FACE_FLAG_MULTIPLE_MASTERS",
+  "manifest_cases": [
+    "value_matches_header",
+    "face_property_variable_font"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_FACE_FLAG_MULTIPLE_MASTERS.value_matches_header",
+      "subject": "freetype.FT_FACE_FLAG_MULTIPLE_MASTERS",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_FACE_FLAG_MULTIPLE_MASTERS",
+          "include": "freetype/freetype.h"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "FT_Long macro bit flag",
+          "source": "1L << 8"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_FACE_FLAG_MULTIPLE_MASTERS.face_property_variable_font",
+      "subject": "freetype.FT_FACE_FLAG_MULTIPLE_MASTERS",
+      "case": "face_property_variable_font",
+      "operation": "freetype.face_flags",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts_autohint/Ubuntu.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS",
+          "variation_probe": "FT_Get_MM_Var"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "runtime:face_flags",
+        "runtime:variations",
+        "asset:existing"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "face_flags": "FT_Long",
+          "bit_set": "bool",
+          "mm_var_status": "FT_Error",
+          "num_axis": "FT_UInt",
+          "num_namedstyles": "FT_UInt"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "face_flags",
+            "bit_set",
+            "mm_var_status",
+            "num_axis",
+            "num_namedstyles"
+          ]
+        }
+      }
+    }
+  ]
+}

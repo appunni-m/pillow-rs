@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT",
+  "manifest_cases": [
+    "value_matches_header",
+    "paint_radial_gradient_payload"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.value_matches_header",
+      "subject": "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT",
+      "case": "value_matches_header",
+      "operation": "abi.enum_value_and_import",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_COLR_PAINTFORMAT_RADIAL_GRADIENT",
+          "include": "<freetype/ftcolor.h>",
+          "header": "freetype/ftcolor.h",
+          "probe": "compile_and_eval_enum_value",
+          "expected_header_value": 6
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftcolor",
+        "surface:public-c-api",
+        "coverage:value-import"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "sources_checked": [
+          "freetype/include/freetype/ftcolor.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload",
+      "subject": "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT",
+      "case": "paint_radial_gradient_payload",
+      "operation": "ftcolor.get_gradient_paint_and_stops",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-radial-gradient-cpal.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "symbol_under_test": "FT_COLR_PAINTFORMAT_RADIAL_GRADIENT",
+          "base_glyph": "glyph_with_radial_gradient",
+          "palette_index": 0,
+          "follow_calls": [
+            "FT_Get_Color_Glyph_Paint",
+            "FT_Get_Paint",
+            "FT_Get_Colorline_Stops"
+          ],
+          "variation_coords": "default_and_optional_nondefault"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftcolor",
+        "operation:color",
+        "coverage:runtime-observable"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "paint": {
+            "format": "FT_PaintFormat",
+            "c0": "FT_Vector 16.16",
+            "r0": "FT_Fixed",
+            "c1": "FT_Vector 16.16",
+            "r1": "FT_Fixed",
+            "colorline": {
+              "extend": "FT_PaintExtend",
+              "iterator": "FT_ColorStopIterator"
+            }
+          },
+          "stops": "ordered FT_ColorStop list",
+          "terminal_return": "FT_Bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "paint.format",
+            "paint.c0",
+            "paint.r0",
+            "paint.c1",
+            "paint.r1",
+            "paint.colorline.extend",
+            "stops",
+            "terminal_return"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "sources_checked": [
+          "freetype/include/freetype/ftcolor.h",
+          "freetype/src/base/ftobjs.c",
+          "freetype/src/sfnt/ttcolr.c",
+          "freetype/src/sfnt/ttcpal.c",
+          "freetype/src/base/ftcolor.c"
+        ],
+        "fixture_requirements": [
+          "Needs COLR v1 PaintRadialGradient with CPAL-backed stops."
+        ]
+      }
+    }
+  ]
+}

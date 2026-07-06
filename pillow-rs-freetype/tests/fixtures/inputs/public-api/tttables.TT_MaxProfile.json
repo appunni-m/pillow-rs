@@ -1,0 +1,298 @@
+{
+  "version": 1,
+  "subject": "tttables.TT_MaxProfile",
+  "manifest_cases": [
+    "public_import_contract",
+    "abi_layout_matches_header",
+    "get_sfnt_table_maxp_fields",
+    "malformed_table_error_source"
+  ],
+  "cases": [
+    {
+      "case_id": "tttables.TT_MaxProfile.public_import_contract",
+      "subject": "tttables.TT_MaxProfile",
+      "case": "public_import_contract",
+      "operation": "abi.header_import",
+      "schema": "api_import",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/tttables.h>",
+          "symbol": "TT_MaxProfile",
+          "usage": "TT_MaxProfile* maxp = (TT_MaxProfile*)FT_Get_Sfnt_Table(face, FT_SFNT_MAXP); FT_UShort n = maxp->numGlyphs;"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "area:public-import",
+        "public-api-slice:1520-1539"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile_status": "ok",
+          "type_visible": "bool",
+          "fields_accessible": [
+            "version",
+            "numGlyphs",
+            "maxPoints",
+            "maxContours",
+            "maxCompositePoints",
+            "maxCompositeContours",
+            "maxZones",
+            "maxTwilightPoints",
+            "maxStorage",
+            "maxFunctionDefs",
+            "maxInstructionDefs",
+            "maxStackElements",
+            "maxSizeOfInstructions",
+            "maxComponentElements",
+            "maxComponentDepth"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "compile_status",
+            "type_visible",
+            "fields_accessible"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/tttables.h:510-585",
+          "freetype/src/sfnt/ttload.c:747-835"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_MaxProfile.abi_layout_matches_header",
+      "subject": "tttables.TT_MaxProfile",
+      "case": "abi_layout_matches_header",
+      "operation": "abi.record_layout",
+      "schema": "record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/tttables.h>",
+          "record": "TT_MaxProfile",
+          "fields": [
+            "version",
+            "numGlyphs",
+            "maxPoints",
+            "maxContours",
+            "maxCompositePoints",
+            "maxCompositeContours",
+            "maxZones",
+            "maxTwilightPoints",
+            "maxStorage",
+            "maxFunctionDefs",
+            "maxInstructionDefs",
+            "maxStackElements",
+            "maxSizeOfInstructions",
+            "maxComponentElements",
+            "maxComponentDepth"
+          ],
+          "probe": [
+            "sizeof",
+            "alignof",
+            "offsetof"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "area:abi-layout",
+        "public-api-slice:1520-1539"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "size_t",
+          "alignof": "size_t",
+          "field_offsets": "object<string,size_t>",
+          "field_order": [
+            "version",
+            "numGlyphs",
+            "maxPoints",
+            "maxContours",
+            "maxCompositePoints",
+            "maxCompositeContours",
+            "maxZones",
+            "maxTwilightPoints",
+            "maxStorage",
+            "maxFunctionDefs",
+            "maxInstructionDefs",
+            "maxStackElements",
+            "maxSizeOfInstructions",
+            "maxComponentElements",
+            "maxComponentDepth"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "field_offsets",
+            "field_order"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/tttables.h:510-585",
+          "freetype/src/sfnt/ttload.c:747-835"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_MaxProfile.get_sfnt_table_maxp_fields",
+      "subject": "tttables.TT_MaxProfile",
+      "case": "get_sfnt_table_maxp_fields",
+      "operation": "sfnt.get_sfnt_table.maxp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "basic_ttf": {
+            "kind": "ref",
+            "id": "input/fonts/sfnt/basic-ttf.ttf"
+          },
+          "cff_0500": {
+            "kind": "ref",
+            "id": "input/fonts/sfnt/cff-maxp-0500.otf"
+          },
+          "small_functiondefs": {
+            "kind": "ref",
+            "id": "input/fonts/sfnt/tt-maxp-small-functiondefs.ttf",
+            "requirements": "TrueType maxp 1.0 font whose raw maxFunctionDefs is below FreeType minimum adjustment."
+          }
+        },
+        "params": {
+          "function": "FT_Get_Sfnt_Table",
+          "sfnt_table": "FT_SFNT_MAXP",
+          "face_index": 0,
+          "fields": [
+            "version",
+            "numGlyphs",
+            "maxPoints",
+            "maxContours",
+            "maxCompositePoints",
+            "maxCompositeContours",
+            "maxZones",
+            "maxTwilightPoints",
+            "maxStorage",
+            "maxFunctionDefs",
+            "maxInstructionDefs",
+            "maxStackElements",
+            "maxSizeOfInstructions",
+            "maxComponentElements",
+            "maxComponentDepth"
+          ],
+          "model_cases": [
+            "version_0_5_extra_fields_zeroed",
+            "version_1_0_maxFunctionDefs_min_64_adjustment"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "runtime:FT_Get_Sfnt_Table",
+        "requires:future-font",
+        "public-api-slice:1520-1539"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "face_load_error": "FT_Error",
+          "pointer_null": "bool",
+          "fields": "object",
+          "abi_size": "size_t",
+          "abi_align": "size_t",
+          "field_offsets": "object"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "face_load_error",
+            "pointer_null",
+            "fields",
+            "abi_size",
+            "abi_align",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "Missing assets: input/fonts/sfnt/basic-ttf.ttf, input/fonts/sfnt/cff-maxp-0500.otf, and input/fonts/sfnt/tt-maxp-small-functiondefs.ttf."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/tttables.h:510-585",
+          "freetype/src/sfnt/ttload.c:747-835",
+          "freetype/include/freetype/tttables.h:620-632",
+          "freetype/src/base/ftobjs.c:4357-4372",
+          "freetype/src/sfnt/sfdriver.c:100-143"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_MaxProfile.malformed_table_error_source",
+      "subject": "tttables.TT_MaxProfile",
+      "case": "malformed_table_error_source",
+      "operation": "face.load_then_get_sfnt_table.maxp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "truncated_maxp": {
+            "kind": "ref",
+            "id": "input/fonts/sfnt/truncated-maxp.ttf"
+          },
+          "invalid_maxp": {
+            "kind": "ref",
+            "id": "input/fonts/sfnt/invalid-maxp.ttf"
+          }
+        },
+        "params": {
+          "function_sequence": [
+            "FT_New_Face",
+            "FT_Get_Sfnt_Table(FT_SFNT_MAXP)"
+          ],
+          "malformed_policy": "compare C face-load FT_Error or adjusted parsed state; never synthesize partial records"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "runtime:error-path",
+        "requires:future-font",
+        "public-api-slice:1520-1539"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "face_load_error": "FT_Error",
+          "pointer_null": "bool",
+          "fields_if_loaded": "nullable<object>"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "face_load_error",
+            "pointer_null",
+            "fields_if_loaded"
+          ]
+        },
+        "error": "Exact C face load error or C adjusted maxp state",
+        "fixture_requirements": [
+          "Missing assets: input/fonts/sfnt/truncated-maxp.ttf and input/fonts/sfnt/invalid-maxp.ttf must exercise C maxp load failures."
+        ],
+        "source_refs": [
+          "freetype/src/sfnt/ttload.c:785-835"
+        ]
+      }
+    }
+  ]
+}

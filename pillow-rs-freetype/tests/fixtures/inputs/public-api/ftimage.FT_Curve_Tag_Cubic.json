@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_Curve_Tag_Cubic",
+  "manifest_cases": [
+    "value_matches_header",
+    "curve_tag_classifies_cubic_points"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_Curve_Tag_Cubic.value_matches_header",
+      "subject": "ftimage.FT_Curve_Tag_Cubic",
+      "case": "value_matches_header",
+      "operation": "constant_eval",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ftimage.h",
+          "symbol": "FT_Curve_Tag_Cubic",
+          "alias_of": "FT_CURVE_TAG_CUBIC",
+          "expected_value": 2,
+          "type": "char tag low-bit constant"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftimage"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "integer macro value",
+          "alias_target": "FT_CURVE_TAG_CUBIC"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "value",
+            "alias_target"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:474-495"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Curve_Tag_Cubic.curve_tag_classifies_cubic_points",
+      "subject": "ftimage.FT_Curve_Tag_Cubic",
+      "case": "curve_tag_classifies_cubic_points",
+      "operation": "ftimage.outline_decompose",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_fixture": {
+            "kind": "ref",
+            "id": "outlines/cubic-valid-and-malformed.json"
+          }
+        },
+        "params": {
+          "tag_values": [
+            "FT_Curve_Tag_Cubic",
+            "FT_Curve_Tag_Cubic | FT_Curve_Tag_Touch_X"
+          ],
+          "include_malformed_single_cubic_start": true,
+          "shift_delta_matrix": [
+            {
+              "shift": 0,
+              "delta": 0
+            },
+            {
+              "shift": 1,
+              "delta": 32
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftimage"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error or Invalid_Outline for malformed rows",
+          "events": "ordered move_to/cubic_to callback records"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].events[*].kind",
+            "rows[*].events[*].control1",
+            "rows[*].events[*].control2",
+            "rows[*].events[*].to"
+          ]
+        },
+        "fixture_requirements": [
+          "outlines/cubic-valid-and-malformed.json must include valid cubic contours and malformed cubic-start/control sequences"
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:474-495",
+          "freetype/src/base/ftoutln.c:224-292"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,154 @@
+{
+  "version": 1,
+  "subject": "ftmodapi.FT_Set_Default_Properties",
+  "manifest_cases": [
+    "no_environment_noop",
+    "parses_supported_environment_property",
+    "ignores_malformed_or_failed_properties"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmodapi.FT_Set_Default_Properties.no_environment_noop",
+      "subject": "ftmodapi.FT_Set_Default_Properties",
+      "case": "no_environment_noop",
+      "operation": "ftmodapi.set_default_properties",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "new_from_FT_Init_FreeType",
+          "environment": {
+            "FREETYPE_PROPERTIES": "unset"
+          },
+          "snapshot_property": "truetype:interpreter-version"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:property",
+        "area:environment"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "property_before": "FT_UInt",
+          "property_after": "FT_UInt"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "property_before",
+            "property_after"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Set_Default_Properties",
+          "freetype/include/freetype/ftmodapi.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmodapi.FT_Set_Default_Properties.parses_supported_environment_property",
+      "subject": "ftmodapi.FT_Set_Default_Properties",
+      "case": "parses_supported_environment_property",
+      "operation": "ftmodapi.set_default_properties",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "new_from_FT_Init_FreeType",
+          "environment": {
+            "FREETYPE_PROPERTIES": "truetype:interpreter-version=35"
+          },
+          "verify_with": "FT_Property_Get(truetype, interpreter-version)",
+          "requires_compile_option": "FT_CONFIG_OPTION_ENVIRONMENT_PROPERTIES"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:property",
+        "area:environment",
+        "area:truetype"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "return": "void",
+          "environment_properties_enabled": "bool",
+          "property_after": "FT_UInt"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "environment_properties_enabled",
+            "property_after"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Set_Default_Properties",
+          "freetype/src/base/ftobjs.c:ft_property_string_set"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmodapi.FT_Set_Default_Properties.ignores_malformed_or_failed_properties",
+      "subject": "ftmodapi.FT_Set_Default_Properties",
+      "case": "ignores_malformed_or_failed_properties",
+      "operation": "ftmodapi.set_default_properties",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "scenarios": [
+            {
+              "library": "new_from_FT_Init_FreeType",
+              "FREETYPE_PROPERTIES": "malformed"
+            },
+            {
+              "library": "new_from_FT_Init_FreeType",
+              "FREETYPE_PROPERTIES": "missing:property=1"
+            },
+            {
+              "library": "null",
+              "FREETYPE_PROPERTIES": "truetype:interpreter-version=35"
+            }
+          ],
+          "snapshot_property": "truetype:interpreter-version"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:property",
+        "area:environment",
+        "area:error"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "crashed": "bool",
+          "property_after": "unchanged_or_build_dependent_noop"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return",
+            "crashed",
+            "property_after"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Set_Default_Properties",
+          "freetype/src/base/ftobjs.c:ft_property_string_set"
+        ]
+      }
+    }
+  ]
+}

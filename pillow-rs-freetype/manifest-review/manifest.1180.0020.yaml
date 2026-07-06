@@ -1,0 +1,279 @@
+- id: ttnameid.TT_APPLE_ID_ISO_10646
+  kind: constant
+  symbol: TT_APPLE_ID_ISO_10646
+  header: freetype/ttnameid.h
+  description: Deprecated Apple Unicode platform encoding id 2 for ISO 10646 cmap/name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 2 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_APPLE_ID_ISO_10646 as a public constant expression.
+    - id: deprecated_apple_unicode_encoding_runtime
+      description: C oracle preserves encoding_id 2 for an Apple Unicode ISO 10646 cmap/name fixture instead of normalizing it to another Apple encoding id.
+  # needs-input: operation=FT_Get_Charmap_Index plus FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/apple-unicode-iso10646.ttf; params={platform_id=TT_PLATFORM_APPLE_UNICODE, encoding_id=TT_APPLE_ID_ISO_10646}; expected output shape={FT_Error, charmap_index, platform_id, encoding_id, name_record_fields, name_bytes}; comparison=exact C oracle fields and bytes.
+
+- id: ttnameid.TT_APPLE_ID_UNICODE_1_1
+  kind: constant
+  symbol: TT_APPLE_ID_UNICODE_1_1
+  header: freetype/ttnameid.h
+  description: Apple Unicode platform encoding id 1 for Unicode 1.1, including the historical Hangul range.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 1 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_APPLE_ID_UNICODE_1_1 as a public constant expression.
+    - id: unicode_1_1_charmap_runtime
+      description: C oracle exposes encoding_id 1 for an Apple Unicode 1.1 cmap fixture and returns matching char index lookups.
+  # needs-input: operation=FT_Get_Char_Index; fixture_asset=input/fonts/name-cmap/apple-unicode-1-1.ttf; params={platform_id=TT_PLATFORM_APPLE_UNICODE, encoding_id=TT_APPLE_ID_UNICODE_1_1, codepoints=[U+0041, U+3400]}; expected output shape={FT_Error, charmap_index, platform_id, encoding_id, glyph_indices}; comparison=exact C oracle metadata and glyph indices.
+
+- id: ttnameid.TT_APPLE_ID_UNICODE_2_0
+  kind: constant
+  symbol: TT_APPLE_ID_UNICODE_2_0
+  header: freetype/ttnameid.h
+  description: Apple Unicode platform encoding id 3 for Unicode 2.0 or later BMP repertoire.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 3 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_APPLE_ID_UNICODE_2_0 as a public constant expression.
+    - id: unicode_2_0_charmap_runtime
+      description: C oracle exposes encoding_id 3 for an Apple Unicode 2.0 cmap fixture and preserves selected BMP character mappings.
+  # needs-input: operation=FT_Get_Char_Index; fixture_asset=input/fonts/name-cmap/apple-unicode-2-0.ttf; params={platform_id=TT_PLATFORM_APPLE_UNICODE, encoding_id=TT_APPLE_ID_UNICODE_2_0, codepoints=[U+0041, U+20AC]}; expected output shape={FT_Error, charmap_index, platform_id, encoding_id, glyph_indices}; comparison=exact C oracle metadata and glyph indices.
+
+- id: ttnameid.TT_APPLE_ID_UNICODE_32
+  kind: constant
+  symbol: TT_APPLE_ID_UNICODE_32
+  header: freetype/ttnameid.h
+  description: Apple Unicode platform encoding id 4 for Unicode 2.0 or later full repertoire cmaps.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 4 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_APPLE_ID_UNICODE_32 as a public constant expression.
+    - id: unicode_32_charmap_runtime
+      description: C oracle exposes encoding_id 4 for a full-repertoire Apple Unicode cmap and returns non-BMP glyph lookups exactly.
+  # needs-input: operation=FT_Get_Char_Index; fixture_asset=input/fonts/name-cmap/apple-unicode-32.ttf; params={platform_id=TT_PLATFORM_APPLE_UNICODE, encoding_id=TT_APPLE_ID_UNICODE_32, codepoints=[U+0041, U+1F600]}; expected output shape={FT_Error, charmap_index, platform_id, encoding_id, glyph_indices}; comparison=exact C oracle metadata and glyph indices.
+
+- id: ttnameid.TT_APPLE_ID_VARIANT_SELECTOR
+  kind: constant
+  symbol: TT_APPLE_ID_VARIANT_SELECTOR
+  header: freetype/ttnameid.h
+  description: Apple Unicode platform encoding id 5 for variation selector data rather than a normal cmap.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 5 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_APPLE_ID_VARIANT_SELECTOR as a public constant expression.
+    - id: variation_selector_cmap_runtime
+      description: C oracle reports variation selector records through the variation-selector API surface without treating encoding id 5 as a normal character map.
+  # needs-input: operation=FT_Face_GetCharVariantIndex and FT_Face_GetVariantSelectors; fixture_asset=input/fonts/name-cmap/apple-variation-selector.ttf; params={platform_id=TT_PLATFORM_APPLE_UNICODE, encoding_id=TT_APPLE_ID_VARIANT_SELECTOR, base=U+4E00, selector=U+FE00}; expected output shape={FT_Error, charmap_metadata, variant_selectors, variant_glyph_index}; comparison=exact C oracle status, metadata, selector list, and glyph index.
+
+- id: ttnameid.TT_ISO_ID_10646
+  kind: constant
+  symbol: TT_ISO_ID_10646
+  header: freetype/ttnameid.h
+  description: Deprecated ISO platform encoding id 1 for ISO 10646 cmap/name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 1 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_ISO_ID_10646 as a public constant expression.
+    - id: deprecated_iso_10646_runtime
+      description: C oracle preserves ISO platform encoding_id 1 for a deprecated ISO 10646 cmap/name fixture.
+  # needs-input: operation=FT_Get_Charmap_Index plus FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/iso-10646.ttf; params={platform_id=TT_PLATFORM_ISO, encoding_id=TT_ISO_ID_10646}; expected output shape={FT_Error, charmap_index, platform_id, encoding_id, name_record_fields, name_bytes}; comparison=exact C oracle fields and bytes.
+
+- id: ttnameid.TT_ISO_ID_7BIT_ASCII
+  kind: constant
+  symbol: TT_ISO_ID_7BIT_ASCII
+  header: freetype/ttnameid.h
+  description: Deprecated ISO platform encoding id 0 for 7-bit ASCII cmap/name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_ISO_ID_7BIT_ASCII as a public constant expression.
+    - id: deprecated_iso_ascii_runtime
+      description: C oracle preserves ISO platform encoding_id 0 and ASCII-only lookup behavior for a deprecated ISO ASCII cmap fixture.
+  # needs-input: operation=FT_Get_Char_Index; fixture_asset=input/fonts/name-cmap/iso-7bit-ascii.ttf; params={platform_id=TT_PLATFORM_ISO, encoding_id=TT_ISO_ID_7BIT_ASCII, codepoints=[U+0041, U+007F, U+0080]}; expected output shape={FT_Error, charmap_index, platform_id, encoding_id, glyph_indices}; comparison=exact C oracle metadata and glyph indices, including out-of-range ASCII behavior.
+
+- id: ttnameid.TT_ISO_ID_8859_1
+  kind: constant
+  symbol: TT_ISO_ID_8859_1
+  header: freetype/ttnameid.h
+  description: Deprecated ISO platform encoding id 2 for ISO 8859-1 Latin-1 cmap/name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 2 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_ISO_ID_8859_1 as a public constant expression.
+    - id: deprecated_iso_latin1_runtime
+      description: C oracle preserves ISO platform encoding_id 2 and Latin-1 character lookups for a deprecated ISO 8859-1 cmap fixture.
+  # needs-input: operation=FT_Get_Char_Index; fixture_asset=input/fonts/name-cmap/iso-8859-1.ttf; params={platform_id=TT_PLATFORM_ISO, encoding_id=TT_ISO_ID_8859_1, codepoints=[U+0041, U+00E9, U+0100]}; expected output shape={FT_Error, charmap_index, platform_id, encoding_id, glyph_indices}; comparison=exact C oracle metadata and glyph indices, including non-Latin-1 miss behavior.
+
+- id: ttnameid.TT_MAC_ID_ARABIC
+  kind: constant
+  symbol: TT_MAC_ID_ARABIC
+  header: freetype/ttnameid.h
+  description: Macintosh platform encoding id 4 for Arabic script records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 4 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_ID_ARABIC as a public constant expression.
+    - id: mac_arabic_name_runtime
+      description: C oracle exposes Macintosh name records with encoding_id 4 and preserves raw Mac Arabic string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/mac-arabic-name.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, encoding_id=TT_MAC_ID_ARABIC, language_id=TT_MAC_LANGID_ARABIC}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MAC_ID_ARMENIAN
+  kind: constant
+  symbol: TT_MAC_ID_ARMENIAN
+  header: freetype/ttnameid.h
+  description: Macintosh platform encoding id 24 for Armenian script records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 24 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_ID_ARMENIAN as a public constant expression.
+    - id: mac_armenian_name_runtime
+      description: C oracle exposes Macintosh name records with encoding_id 24 and preserves raw Armenian string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/mac-armenian-name.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, encoding_id=TT_MAC_ID_ARMENIAN, language_id=TT_MAC_LANGID_ARMENIAN}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MAC_ID_BENGALI
+  kind: constant
+  symbol: TT_MAC_ID_BENGALI
+  header: freetype/ttnameid.h
+  description: Macintosh platform encoding id 13 for Bengali script records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 13 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_ID_BENGALI as a public constant expression.
+    - id: mac_bengali_name_runtime
+      description: C oracle exposes Macintosh name records with encoding_id 13 and preserves raw Bengali string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/mac-bengali-name.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, encoding_id=TT_MAC_ID_BENGALI, language_id=TT_MAC_LANGID_BENGALI}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MAC_ID_BURMESE
+  kind: constant
+  symbol: TT_MAC_ID_BURMESE
+  header: freetype/ttnameid.h
+  description: Macintosh platform encoding id 19 for Burmese script records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 19 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_ID_BURMESE as a public constant expression.
+    - id: mac_burmese_name_runtime
+      description: C oracle exposes Macintosh name records with encoding_id 19 and preserves raw Burmese string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/mac-burmese-name.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, encoding_id=TT_MAC_ID_BURMESE, language_id=TT_MAC_LANGID_BURMESE}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MAC_ID_DEVANAGARI
+  kind: constant
+  symbol: TT_MAC_ID_DEVANAGARI
+  header: freetype/ttnameid.h
+  description: Macintosh platform encoding id 9 for Devanagari script records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 9 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_ID_DEVANAGARI as a public constant expression.
+    - id: mac_devanagari_name_runtime
+      description: C oracle exposes Macintosh name records with encoding_id 9 and preserves raw Devanagari string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/mac-devanagari-name.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, encoding_id=TT_MAC_ID_DEVANAGARI, language_id=TT_MAC_LANGID_HINDI}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MAC_ID_GEEZ
+  kind: constant
+  symbol: TT_MAC_ID_GEEZ
+  header: freetype/ttnameid.h
+  description: Macintosh platform encoding id 28 for Geez script records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 28 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_ID_GEEZ as a public constant expression.
+    - id: mac_geez_name_runtime
+      description: C oracle exposes Macintosh name records with encoding_id 28 and preserves raw Geez string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/mac-geez-name.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, encoding_id=TT_MAC_ID_GEEZ, language_id=TT_MAC_LANGID_AMHARIC}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MAC_ID_GEORGIAN
+  kind: constant
+  symbol: TT_MAC_ID_GEORGIAN
+  header: freetype/ttnameid.h
+  description: Macintosh platform encoding id 23 for Georgian script records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 23 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_ID_GEORGIAN as a public constant expression.
+    - id: mac_georgian_name_runtime
+      description: C oracle exposes Macintosh name records with encoding_id 23 and preserves raw Georgian string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/mac-georgian-name.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, encoding_id=TT_MAC_ID_GEORGIAN, language_id=TT_MAC_LANGID_GEORGIAN}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MAC_ID_GREEK
+  kind: constant
+  symbol: TT_MAC_ID_GREEK
+  header: freetype/ttnameid.h
+  description: Macintosh platform encoding id 6 for Greek script records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 6 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_ID_GREEK as a public constant expression.
+    - id: mac_greek_name_runtime
+      description: C oracle exposes Macintosh name records with encoding_id 6 and preserves raw Greek string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/mac-greek-name.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, encoding_id=TT_MAC_ID_GREEK, language_id=TT_MAC_LANGID_GREEK}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MAC_ID_GUJARATI
+  kind: constant
+  symbol: TT_MAC_ID_GUJARATI
+  header: freetype/ttnameid.h
+  description: Macintosh platform encoding id 11 for Gujarati script records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 11 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_ID_GUJARATI as a public constant expression.
+    - id: mac_gujarati_name_runtime
+      description: C oracle exposes Macintosh name records with encoding_id 11 and preserves raw Gujarati string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/mac-gujarati-name.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, encoding_id=TT_MAC_ID_GUJARATI, language_id=TT_MAC_LANGID_GUJARATI}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MAC_ID_GURMUKHI
+  kind: constant
+  symbol: TT_MAC_ID_GURMUKHI
+  header: freetype/ttnameid.h
+  description: Macintosh platform encoding id 10 for Gurmukhi script records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 10 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_ID_GURMUKHI as a public constant expression.
+    - id: mac_gurmukhi_name_runtime
+      description: C oracle exposes Macintosh name records with encoding_id 10 and preserves raw Gurmukhi string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/mac-gurmukhi-name.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, encoding_id=TT_MAC_ID_GURMUKHI, language_id=TT_MAC_LANGID_PUNJABI}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MAC_ID_HEBREW
+  kind: constant
+  symbol: TT_MAC_ID_HEBREW
+  header: freetype/ttnameid.h
+  description: Macintosh platform encoding id 5 for Hebrew script records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 5 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_ID_HEBREW as a public constant expression.
+    - id: mac_hebrew_name_runtime
+      description: C oracle exposes Macintosh name records with encoding_id 5 and preserves raw Hebrew string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/mac-hebrew-name.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, encoding_id=TT_MAC_ID_HEBREW, language_id=TT_MAC_LANGID_HEBREW}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MAC_ID_JAPANESE
+  kind: constant
+  symbol: TT_MAC_ID_JAPANESE
+  header: freetype/ttnameid.h
+  description: Macintosh platform encoding id 1 for Japanese script records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 1 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_ID_JAPANESE as a public constant expression.
+    - id: mac_japanese_charmap_runtime
+      description: C oracle exposes Macintosh Japanese cmap/name records with encoding_id 1 and returns exact representative character lookups.
+  # needs-input: operation=FT_Get_Char_Index plus FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/mac-japanese.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, encoding_id=TT_MAC_ID_JAPANESE, language_id=TT_MAC_LANGID_JAPANESE, codepoints=[U+3042, U+30A2, U+4E00]}; expected output shape={FT_Error, charmap_index, platform_id, encoding_id, language_id, glyph_indices, name_record_fields, name_bytes}; comparison=exact C oracle metadata, glyph indices, and name bytes.

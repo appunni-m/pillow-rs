@@ -1,0 +1,144 @@
+{
+  "version": 1,
+  "subject": "ftgxval.FT_VALIDATE_GX",
+  "manifest_cases": [
+    "value_matches_header",
+    "validates_all_requested_tables"
+  ],
+  "cases": [
+    {
+      "case_id": "ftgxval.FT_VALIDATE_GX.value_matches_header",
+      "subject": "ftgxval.FT_VALIDATE_GX",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftgxval.h>",
+          "symbol": "FT_VALIDATE_GX",
+          "expected_value_from_pinned_header": 16760832,
+          "expected_value_hex": "0x00FFC000",
+          "expression": "FT_VALIDATE_feat | FT_VALIDATE_mort | FT_VALIDATE_morx | FT_VALIDATE_bsln | FT_VALIDATE_just | FT_VALIDATE_kern | FT_VALIDATE_opbd | FT_VALIDATE_trak | FT_VALIDATE_prop | FT_VALIDATE_lcar",
+          "bitfield_group": "gx_validation_flags",
+          "pinned_sources": [
+            "freetype/include/freetype/ftgxval.h:160-180"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftgxval",
+        "area:gx-validation",
+        "coverage:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_UInt",
+          "symbol": "FT_VALIDATE_GX",
+          "member_values": "integer_by_symbol"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "member_values"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ftgxval.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgxval.FT_VALIDATE_GX.validates_all_requested_tables",
+      "subject": "ftgxval.FT_VALIDATE_GX",
+      "case": "validates_all_requested_tables",
+      "operation": "FT_TrueTypeGX_Validate",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "all_tables_font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/fonts/aat-gx/all-validation-tables.ttf",
+            "status": "required_future_asset",
+            "requires": "sfnt with valid feat, mort, morx, bsln, just, kern, opbd, trak, prop, and lcar tables"
+          },
+          "missing_table_fonts": {
+            "kind": "ref",
+            "role": "font_set",
+            "id": "generated/fonts/aat-gx/missing-each-validation-table/",
+            "status": "required_future_asset",
+            "requires": "paired sfnt fixtures with one GX/AAT table absent per case"
+          },
+          "malformed_table_fonts": {
+            "kind": "ref",
+            "role": "font_set",
+            "id": "generated/fonts/aat-gx/malformed-validation-tables/",
+            "status": "required_future_asset",
+            "requires": "truncated headers, invalid offsets, invalid glyph indices, overlapping ranges, and malformed state tables across all GX/AAT validators"
+          }
+        },
+        "params": {
+          "validation_flags": "FT_VALIDATE_GX",
+          "table_length": "FT_VALIDATE_GX_LENGTH",
+          "output_slots": [
+            "feat",
+            "mort",
+            "morx",
+            "bsln",
+            "just",
+            "kern",
+            "opbd",
+            "trak",
+            "prop",
+            "lcar"
+          ],
+          "future_operation_group": "gx_validate_all_tables",
+          "free_with": "FT_TrueTypeGX_Free",
+          "pinned_sources": [
+            "freetype/src/base/ftgxval.c:36-69",
+            "freetype/src/gxvalid/gxvmod.c:50-172"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftgxval",
+        "area:gx-validation",
+        "coverage:future-runtime",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Needs future AAT/GX sfnt assets for all valid, missing, and malformed table combinations.",
+        "output_shape": {
+          "error": "FT_Error",
+          "tables": "array[FT_VALIDATE_GX_LENGTH] of null_or_table_bytes",
+          "table_lengths": "integer_by_slot",
+          "cleanup": "FT_TrueTypeGX_Free completion"
+        },
+        "compare": {
+          "mode": "unsupported_until_runner_added",
+          "paths": [
+            "error",
+            "tables[].nullness",
+            "tables[].byte_length",
+            "tables[].bytes_or_hash",
+            "cleanup"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ftgxval.h",
+          "freetype/src/base/ftgxval.c",
+          "freetype/src/gxvalid/gxvmod.c"
+        ]
+      }
+    }
+  ]
+}

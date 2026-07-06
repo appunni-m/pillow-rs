@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_FACE_FLAG_GLYPH_NAMES",
+  "manifest_cases": [
+    "value_matches_header",
+    "face_property_glyph_names_font"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_FACE_FLAG_GLYPH_NAMES.value_matches_header",
+      "subject": "freetype.FT_FACE_FLAG_GLYPH_NAMES",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_FACE_FLAG_GLYPH_NAMES",
+          "include": "freetype/freetype.h"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "FT_Long macro bit flag",
+          "source": "1L << 9"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_FACE_FLAG_GLYPH_NAMES.face_property_glyph_names_font",
+      "subject": "freetype.FT_FACE_FLAG_GLYPH_NAMES",
+      "case": "face_property_glyph_names_font",
+      "operation": "freetype.face_flags",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts_autohint/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag": "FT_FACE_FLAG_GLYPH_NAMES",
+          "glyph_name_probe": {
+            "glyph_index": 36
+          }
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "runtime:face_flags",
+        "runtime:glyph_names",
+        "asset:existing"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "face_flags": "FT_Long",
+          "bit_set": "bool",
+          "FT_Get_Glyph_Name": {
+            "status": "FT_Error",
+            "name": "string"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "face_flags",
+            "bit_set",
+            "glyph_name.status",
+            "glyph_name.name"
+          ]
+        }
+      }
+    }
+  ]
+}

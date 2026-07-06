@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Get_SubGlyph_Info",
+  "manifest_cases": [
+    "composite_subglyph_components",
+    "error_non_composite_or_out_of_range",
+    "error_null_slot_or_outputs"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Get_SubGlyph_Info.composite_subglyph_components",
+      "subject": "freetype.FT_Get_SubGlyph_Info",
+      "case": "composite_subglyph_components",
+      "operation": "freetype.get_subglyph_info",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/composite/tt-composite-transforms.ttf",
+            "status": "required_future_asset",
+            "requires": "TrueType font with composite glyphs covering XY args, uniform scale, xy-scale, 2x2 transform, and USE_MY_METRICS"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "size": 20,
+          "load": {
+            "glyph_name_or_index": "composite_all_transform_modes",
+            "flags": [
+              "FT_LOAD_NO_RECURSE"
+            ]
+          },
+          "sub_index": "0..num_subglyphs-1"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:composite"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "writes": {
+            "p_index": "FT_Int",
+            "p_flags": "FT_UInt",
+            "p_arg1": "FT_Int",
+            "p_arg2": "FT_Int",
+            "p_transform": "FT_Matrix"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "writes"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_SubGlyph_Info.error_non_composite_or_out_of_range",
+      "subject": "freetype.FT_Get_SubGlyph_Info",
+      "case": "error_non_composite_or_out_of_range",
+      "operation": "freetype.get_subglyph_info",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "composite_font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/composite/tt-composite-transforms.ttf",
+            "status": "required_future_asset",
+            "requires": "TrueType font with composite glyphs covering XY args, uniform scale, xy-scale, 2x2 transform, and USE_MY_METRICS"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "glyph": "A",
+              "load_flags": [
+                "FT_LOAD_NO_RECURSE"
+              ],
+              "sub_index": 0
+            },
+            {
+              "glyph": "composite_all_transform_modes",
+              "sub_index": "num_subglyphs"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:composite"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "output_write": "unchanged_or_c_oracle"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error",
+            "output_snapshot"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_SubGlyph_Info.error_null_slot_or_outputs",
+      "subject": "freetype.FT_Get_SubGlyph_Info",
+      "case": "error_null_slot_or_outputs",
+      "operation": "freetype.get_subglyph_info",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/composite/tt-composite-transforms.ttf",
+            "status": "required_future_asset",
+            "requires": "TrueType font with composite glyphs covering XY args, uniform scale, xy-scale, 2x2 transform, and USE_MY_METRICS"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "glyph_slot": "null",
+              "outputs": "all_non_null"
+            },
+            {
+              "glyph": "composite_all_transform_modes",
+              "sub_index": 0,
+              "outputs_null_matrix": [
+                "p_index",
+                "p_flags",
+                "p_arg1",
+                "p_arg2",
+                "p_transform"
+              ]
+            }
+          ],
+          "runner_note": "null output pointer cases may require crash-safe C harness because pinned C writes outputs without null checks after validation"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:composite",
+        "safety:crash-harness"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error_or_crash_class",
+          "output_write": "c_oracle"
+        },
+        "compare": {
+          "mode": "unsupported_until_runner_added",
+          "paths": [
+            "status",
+            "crash_class",
+            "outputs"
+          ]
+        },
+        "error": "c_oracle"
+      }
+    }
+  ]
+}

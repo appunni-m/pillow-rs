@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_CURVE_TAG_HAS_SCANMODE",
+  "manifest_cases": [
+    "value_matches_header",
+    "monochrome_scanmode_affects_dropout"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_CURVE_TAG_HAS_SCANMODE.value_matches_header",
+      "subject": "ftimage.FT_CURVE_TAG_HAS_SCANMODE",
+      "case": "value_matches_header",
+      "operation": "constant_eval",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_CURVE_TAG_HAS_SCANMODE",
+          "include": "<freetype/ftimage.h>",
+          "import": "#include <freetype/ftimage.h>",
+          "expected_value": 4,
+          "expected_value_hex": "0x04",
+          "scanmode_bits": "bits 5 through 7 when bit 2 is set"
+        }
+      },
+      "classifiers": [
+        "kind:tag",
+        "header:ftimage",
+        "area:outline-tags",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:328-332",
+          "freetype/include/freetype/ftimage.h:481"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_CURVE_TAG_HAS_SCANMODE.monochrome_scanmode_affects_dropout",
+      "subject": "ftimage.FT_CURVE_TAG_HAS_SCANMODE",
+      "case": "monochrome_scanmode_affects_dropout",
+      "operation": "ftoutln.outline_render",
+      "schema": "outline_raster",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline": {
+            "kind": "ref",
+            "id": "outlines/synthetic/dropout-thin-stems-scantype.json",
+            "asset_kind": "outline"
+          }
+        },
+        "params": {
+          "renderer": "monochrome",
+          "raster_flags": [
+            "FT_RASTER_FLAG_DEFAULT"
+          ],
+          "first_point_tag_cases": [
+            "FT_CURVE_TAG_ON",
+            "FT_CURVE_TAG_ON|FT_CURVE_TAG_HAS_SCANMODE|(1<<5)",
+            "FT_CURVE_TAG_ON|FT_CURVE_TAG_HAS_SCANMODE|(4<<5)"
+          ],
+          "outline_flags": [
+            "FT_OUTLINE_NONE",
+            "FT_OUTLINE_IGNORE_DROPOUTS",
+            "FT_OUTLINE_SMART_DROPOUTS"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:tag",
+        "header:ftimage",
+        "area:mono-raster",
+        "area:dropout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "bitmap": "FT_Bitmap",
+          "dropout_control": "integer"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "dropout_control",
+            "bitmap.pixel_mode",
+            "bitmap.rows",
+            "bitmap.width",
+            "bitmap.pitch",
+            "bitmap.buffer"
+          ]
+        },
+        "fixture_requirements": [
+          "Future dropout-sensitive mono outline with SCANTYPE-tagged contour starts."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:345-349",
+          "freetype/src/raster/ftraster.c:1579-1623"
+        ]
+      }
+    }
+  ]
+}

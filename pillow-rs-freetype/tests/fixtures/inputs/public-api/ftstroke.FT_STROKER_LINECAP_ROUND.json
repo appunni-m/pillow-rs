@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "subject": "ftstroke.FT_STROKER_LINECAP_ROUND",
+  "manifest_cases": [
+    "value_matches_header",
+    "round_cap_open_line_geometry"
+  ],
+  "metadata": {
+    "abi": {
+      "kind": "enum_variant",
+      "header": "freetype/ftstroke.h",
+      "enum": "FT_Stroker_LineCap",
+      "symbol": "FT_STROKER_LINECAP_ROUND",
+      "value": 1,
+      "source_behavior": "ftstroke.c ft_stroker_cap creates a half-circle arc with ft_stroker_arcto"
+    }
+  },
+  "cases": [
+    {
+      "case_id": "ftstroke.FT_STROKER_LINECAP_ROUND.value_matches_header",
+      "subject": "ftstroke.FT_STROKER_LINECAP_ROUND",
+      "case": "value_matches_header",
+      "operation": "abi.enum_variant_value",
+      "schema": "abi_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftstroke.h",
+          "symbol": "FT_STROKER_LINECAP_ROUND",
+          "expected_value": 1
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftstroke",
+        "area:abi_enum"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "int"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "value"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_STROKER_LINECAP_ROUND.round_cap_open_line_geometry",
+      "subject": "ftstroke.FT_STROKER_LINECAP_ROUND",
+      "case": "round_cap_open_line_geometry",
+      "operation": "ftstroke.open_path_geometry",
+      "schema": "outline_geometry_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "path": [[0, 0], [640, 0]],
+          "radius": 64,
+          "line_cap": "FT_STROKER_LINECAP_ROUND",
+          "line_join": "FT_STROKER_LINEJOIN_BEVEL",
+          "miter_limit": 65536
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftstroke",
+        "area:stroker_geometry"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "outline": "FT_Outline",
+          "cap_arc": "half_circle"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outline.points",
+            "outline.tags",
+            "outline.contours",
+            "cap_arc"
+          ]
+        }
+      }
+    }
+  ]
+}

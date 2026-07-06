@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_HAS_FIXED_SIZES",
+  "manifest_cases": [
+    "face_flags_bit_probe",
+    "bitmap_strike_font_true",
+    "scalable_outline_control_false"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_HAS_FIXED_SIZES.face_flags_bit_probe",
+      "subject": "freetype.FT_HAS_FIXED_SIZES",
+      "case": "face_flags_bit_probe",
+      "operation": "freetype.face_macro",
+      "schema": "macro_probe",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "flags": [
+            0,
+            "FT_FACE_FLAG_FIXED_SIZES",
+            "FT_FACE_FLAG_FIXED_SIZES|FT_FACE_FLAG_SCALABLE"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face-flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "int-like boolean",
+          "macro": "evaluated by C/Rust ABI probe"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "outputs[*].macro_result",
+            "outputs[*].face_flags"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_HAS_FIXED_SIZES.bitmap_strike_font_true",
+      "subject": "freetype.FT_HAS_FIXED_SIZES",
+      "case": "bitmap_strike_font_true",
+      "operation": "freetype.face_macro",
+      "schema": "macro_probe",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/bitmap/embedded-strike.ttf",
+            "status": "required_future_asset",
+            "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "probe": [
+            "num_fixed_sizes",
+            "available_sizes"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face-flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "int-like boolean",
+          "macro": "evaluated by C/Rust ABI probe"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "num_fixed_sizes",
+            "available_sizes"
+          ]
+        },
+        "fixture_requirements": [
+          "Bitmap strike fixture"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_HAS_FIXED_SIZES.scalable_outline_control_false",
+      "subject": "freetype.FT_HAS_FIXED_SIZES",
+      "case": "scalable_outline_control_false",
+      "operation": "freetype.face_macro",
+      "schema": "macro_probe",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face-flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "int-like boolean",
+          "macro": "evaluated by C/Rust ABI probe"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "macro_result"
+          ]
+        }
+      }
+    }
+  ]
+}

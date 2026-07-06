@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "subject": "ftcache.FTC_Node",
+  "manifest_cases": [
+    "alias_defined",
+    "reference_counted_cache_handle"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcache.FTC_Node.alias_defined",
+      "subject": "ftcache.FTC_Node",
+      "case": "alias_defined",
+      "operation": "abi.type_alias",
+      "schema": "abi_type",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftcache.h>",
+          "typedef": "FTC_Node",
+          "expected_alias": "struct FTC_NodeRec_*"
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftcache",
+        "area:cache-node"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "opaque_pointer_alias",
+          "sizeof": "pointer_size"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignment",
+            "is_pointer",
+            "compile_probe"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_Node.reference_counted_cache_handle",
+      "subject": "ftcache.FTC_Node",
+      "case": "reference_counted_cache_handle",
+      "operation": "ftcache.node_lifecycle",
+      "schema": "cache_node_lifecycle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "scalable_control_font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "lookup": "FTC_SBitCache_Lookup",
+          "anode_output": "nonnull",
+          "then_pressure_before_and_after_unref": true,
+          "glyph_index": 36,
+          "manager_limits": {
+            "max_bytes": 1024
+          }
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftcache",
+        "area:cache-node"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "node": "opaque_reference_counted_handle",
+          "locked_survival": "held_until_unref",
+          "flush_after_unref": "eligible"
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "anode.nullness",
+            "locked_survival_class",
+            "after_unref_survival_class"
+          ]
+        }
+      }
+    }
+  ]
+}

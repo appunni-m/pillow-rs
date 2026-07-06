@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Table_Missing",
+  "manifest_cases": [
+    "value_matches_header",
+    "sfnt_required_table_missing"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Table_Missing.value_matches_header",
+      "subject": "fterrdef.FT_Err_Table_Missing",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Table_Missing",
+          "include": "<freetype/fterrors.h>",
+          "public_import": "#include <freetype/freetype.h>",
+          "header": "freetype/fterrdef.h",
+          "expected_value_from_pinned_header": 142,
+          "expected_value_hex": "0x8E",
+          "expected_error_string_from_pinned_header": "SFNT font table missing",
+          "pinned_source": "freetype/include/freetype/fterrdef.h:207-208"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Table_Missing",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Table_Missing.sfnt_required_table_missing",
+      "subject": "fterrdef.FT_Err_Table_Missing",
+      "case": "sfnt_required_table_missing",
+      "operation": "FT_Load_Sfnt_Table",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/sfnt/missing-requested-table.ttf",
+            "requirements": "Synthetic SFNT that opens, then lacks a requested optional table or a required table path that C reports as Table_Missing before specialized translation."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Table_Missing",
+          "face_index": 0,
+          "table_tag": "kern",
+          "offset": 0,
+          "length_probe": true,
+          "pinned_sources": [
+            "freetype/src/sfnt/ttload.c:150",
+            "freetype/src/sfnt/ttload.c:264",
+            "freetype/src/sfnt/ttkern.c:62",
+            "freetype/src/sfnt/sfdriver.c:165",
+            "freetype/src/base/ftobjs.c:1862"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:sfnt",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Table_Missing",
+        "fixture_requirements": "SFNT fixture that opens successfully but lacks the queried table; face-open required-table variants may translate to specialized errors.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "table_buffer": "length_and_mutation_class",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "table_buffer.length",
+            "table_buffer.mutation_class"
+          ]
+        }
+      }
+    }
+  ]
+}

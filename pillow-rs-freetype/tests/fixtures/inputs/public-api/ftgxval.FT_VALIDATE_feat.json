@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "subject": "ftgxval.FT_VALIDATE_feat",
+  "manifest_cases": [
+    "value_matches_header",
+    "validates_feat_table_slot"
+  ],
+  "cases": [
+    {
+      "case_id": "ftgxval.FT_VALIDATE_feat.value_matches_header",
+      "subject": "ftgxval.FT_VALIDATE_feat",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftgxval.h>",
+          "symbol": "FT_VALIDATE_feat",
+          "expected_value_from_pinned_header": 16384,
+          "expected_value_hex": "0x00004000",
+          "expression": "FT_VALIDATE_GX_BITFIELD(feat)",
+          "bitfield_group": "gx_validation_flags",
+          "table_tag": "feat",
+          "table_index": 0,
+          "pinned_sources": [
+            "freetype/include/freetype/ftgxval.h:81-111",
+            "freetype/include/freetype/ftgxval.h:160-180"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftgxval",
+        "area:gx-validation",
+        "coverage:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_UInt",
+          "symbol": "FT_VALIDATE_feat",
+          "index": "FT_UInt"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "index"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgxval.FT_VALIDATE_feat.validates_feat_table_slot",
+      "subject": "ftgxval.FT_VALIDATE_feat",
+      "case": "validates_feat_table_slot",
+      "operation": "FT_TrueTypeGX_Validate",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "valid_feat_font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/fonts/aat-gx/valid-feat.ttf",
+            "status": "required_future_asset",
+            "requires": "AAT sfnt with valid feat records, settings, flags, and name references"
+          },
+          "malformed_feat_fonts": {
+            "kind": "ref",
+            "role": "font_set",
+            "id": "generated/fonts/aat-gx/malformed-feat/",
+            "status": "required_future_asset",
+            "requires": "feat record count, setting offset, exclusive/default flag, and name table reference failures"
+          },
+          "missing_feat_font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/fonts/aat-gx/no-feat.ttf",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "validation_flags": "FT_VALIDATE_feat",
+          "table_length": "FT_VALIDATE_GX_LENGTH",
+          "expected_slot": 0,
+          "table_tag": "TTAG_feat",
+          "validator": "gxv_feat_validate",
+          "future_operation_group": "gx_validate_single_table",
+          "pinned_sources": [
+            "freetype/src/gxvalid/gxvmod.c:79-172",
+            "freetype/src/gxvalid/gxvfeat.c"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftgxval",
+        "area:gx-validation",
+        "coverage:future-runtime",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Needs future feat valid, missing-table, and malformed AAT/GX sfnt fixtures.",
+        "output_shape": {
+          "error": "FT_Error",
+          "tables[0]": "null_or_table_bytes",
+          "unrequested_slots": "nullness_by_slot"
+        },
+        "compare": {
+          "mode": "unsupported_until_runner_added",
+          "paths": [
+            "error",
+            "tables[0].nullness",
+            "tables[0].byte_length",
+            "tables[0].bytes_or_hash",
+            "unrequested_slots"
+          ]
+        }
+      }
+    }
+  ]
+}

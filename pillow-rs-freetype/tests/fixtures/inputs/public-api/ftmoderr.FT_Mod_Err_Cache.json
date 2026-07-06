@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "subject": "ftmoderr.FT_Mod_Err_Cache",
+  "manifest_cases": [
+    "value_matches_header",
+    "module_error_prefix_used"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmoderr.FT_Mod_Err_Cache.value_matches_header",
+      "subject": "ftmoderr.FT_Mod_Err_Cache",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Mod_Err_Cache",
+          "include": "<freetype/ftmoderr.h>",
+          "ftmoderrdef_entry": {
+            "name": "Cache",
+            "enabled_value_expr": "0x400",
+            "module_label": "cache module"
+          },
+          "expected_values": {
+            "with_FT_CONFIG_OPTION_USE_MODULE_ERRORS": "0x400",
+            "without_FT_CONFIG_OPTION_USE_MODULE_ERRORS": "0"
+          },
+          "expected_cleanup": [
+            "FT_MODERR_START_LIST undefined",
+            "FT_MODERR_END_LIST undefined",
+            "FT_MODERRDEF undefined"
+          ],
+          "pinned_sources": [
+            "freetype/include/freetype/ftmoderr.h:118-128",
+            "freetype/include/freetype/ftmoderr.h:151-175",
+            "freetype/include/freetype/ftmoderr.h:195-198"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "kind:constant",
+        "header:ftmoderr",
+        "area:module-error-base",
+        "build-dependent"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "symbol": "string",
+          "active_build_value": "integer",
+          "enabled_value": "integer",
+          "disabled_value": "integer",
+          "module_label": "string",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "active_build_value",
+            "enabled_value",
+            "disabled_value",
+            "module_label",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmoderr.h:118-128",
+          "freetype/include/freetype/ftmoderr.h:151-175"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmoderr.FT_Mod_Err_Cache.module_error_prefix_used",
+      "subject": "ftmoderr.FT_Mod_Err_Cache",
+      "case": "module_error_prefix_used",
+      "operation": "freetype.module_error_base_runtime",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "input/fonts/DejaVuSans.ttf"
+          },
+          "requester": {
+            "kind": "ref",
+            "role": "c_callback_model",
+            "id": "generated/c-abi/ftc-requester.c",
+            "requirements": "Future cache requester facade with valid and invalid face_id cases."
+          }
+        },
+        "params": {
+          "module_error_symbol": "FT_Mod_Err_Cache",
+          "module_error_base_enabled": "0x400",
+          "module_error_base_disabled": "0",
+          "error_prefix": "FTC_Err_",
+          "public_route": "FTC_Manager_New, FTC_Manager_LookupFace, and cache registration error paths",
+          "model_cases": [
+            {
+              "name": "module_errors_enabled",
+              "expected_base": "0x400",
+              "expected_module": "Cache",
+              "compare_low_byte_to_public_FT_Err": true
+            },
+            {
+              "name": "module_errors_disabled",
+              "expected_base": "0",
+              "expected_module": "Base/none",
+              "compare_low_byte_to_public_FT_Err": true
+            }
+          ],
+          "probe": [
+            "FT_Error",
+            "FT_ERROR_BASE",
+            "FT_ERROR_MODULE",
+            "low_byte_error",
+            "output_side_effects"
+          ],
+          "pinned_sources": [
+            "freetype/src/cache/ftcerror.h:33-37",
+            "freetype/include/freetype/ftmoderr.h:23-34",
+            "freetype/include/freetype/ftmoderr.h:151-175"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:ftmoderr",
+        "area:module-error-base",
+        "runtime:public-error-path",
+        "build-dependent"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "status": "FT_Error",
+          "error_base": "integer",
+          "error_module": "integer_or_module_name",
+          "low_byte_error": "integer_or_public_error_name",
+          "output_side_effects": "operation_specific_snapshot"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error_base",
+            "error_module",
+            "low_byte_error",
+            "output_side_effects"
+          ]
+        },
+        "fixture_requirements": [
+          "Any asset ids under fonts/* or streams/* not already present are future shared fixtures; runner must generate C oracle output at execution time rather than storing it."
+        ],
+        "source_refs": [
+          "freetype/src/cache/ftcerror.h:33-37",
+          "freetype/include/freetype/ftmoderr.h:23-34"
+        ]
+      }
+    }
+  ]
+}

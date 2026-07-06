@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_ENCODING_SJIS",
+  "manifest_cases": [
+    "value_matches_header",
+    "select_charmap_encoding"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_ENCODING_SJIS.value_matches_header",
+      "subject": "freetype.FT_ENCODING_SJIS",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_ENCODING_SJIS",
+          "include": "<freetype/freetype.h>"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:freetype",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Encoding",
+          "symbol": "FT_ENCODING_SJIS",
+          "header": "freetype/freetype.h"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "type",
+            "header_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_ENCODING_SJIS.select_charmap_encoding",
+      "subject": "freetype.FT_ENCODING_SJIS",
+      "case": "select_charmap_encoding",
+      "operation": "freetype.select_charmap",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/charmap/sjis-japanese.ttf",
+            "requirements": "SFNT font with Microsoft Shift-JIS charmap tagged FT_ENCODING_SJIS and at least one mapped Shift-JIS code plus one unmapped probe."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "encoding": "FT_ENCODING_SJIS",
+          "probe_char_codes": [
+            33440,
+            33088,
+            65535
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:freetype",
+        "area:charmap",
+        "requires:font"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "SFNT font with Microsoft Shift-JIS charmap tagged FT_ENCODING_SJIS and at least one mapped Shift-JIS code plus one unmapped probe.",
+        "output_shape": {
+          "status": "FT_Error",
+          "active_charmap": {
+            "encoding": "FT_Encoding",
+            "platform_id": "FT_UShort",
+            "encoding_id": "FT_UShort",
+            "index": "FT_Int"
+          },
+          "glyph_indices": "map<charcode, FT_UInt>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "active_charmap.encoding",
+            "active_charmap.platform_id",
+            "active_charmap.encoding_id",
+            "active_charmap.index",
+            "glyph_indices"
+          ]
+        }
+      }
+    }
+  ]
+}

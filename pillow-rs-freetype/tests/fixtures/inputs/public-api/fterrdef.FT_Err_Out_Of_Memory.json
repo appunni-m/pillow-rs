@@ -1,0 +1,172 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Out_Of_Memory",
+  "manifest_cases": [
+    "value_matches_header",
+    "allocator_failure_injection",
+    "cache_flush_then_oom"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Out_Of_Memory.value_matches_header",
+      "subject": "fterrdef.FT_Err_Out_Of_Memory",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Out_Of_Memory",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 64,
+          "expected_value_hex": "0x40",
+          "expected_error_string_from_pinned_header": "out of memory",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested",
+          "symbol": "FT_Err_Out_Of_Memory"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Out_Of_Memory.allocator_failure_injection",
+      "subject": "fterrdef.FT_Err_Out_Of_Memory",
+      "case": "allocator_failure_injection",
+      "operation": "allocation_failure_harness.fail_after_n",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font_or_public_input",
+            "id": "fixtures/assets/fonts/DejaVuSans.ttf",
+            "requirements": "Runner allocator fail-after-N sweep over operations that allocate through FT_Memory, comparing the first failing allocation point and public state."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Out_Of_Memory",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/base/ftutil.c:77,147,158; freetype/src/sfnt/pngshim.c:204,304,311,430",
+          "operations": [
+            "FT_New_Memory_Face",
+            "FT_Load_Glyph",
+            "FT_Bitmap_Copy",
+            "FT_Bitmap_Convert"
+          ],
+          "fail_after": "sweep_deterministically"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "status": "FT_Error",
+          "observed_state": "public fields and pointer/nullness classifications described by the operation",
+          "diagnostic_source": "pinned FreeType source location",
+          "error": "FT_Error when this source path is reachable",
+          "error_symbol": "C-classified FT_Err_*"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class",
+            "slot_state.mutation_class"
+          ]
+        },
+        "error": "FT_Err_Out_Of_Memory",
+        "fixture_requirements": "Runner allocator fail-after-N sweep over operations that allocate through FT_Memory, comparing the first failing allocation point and public state."
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Out_Of_Memory.cache_flush_then_oom",
+      "subject": "fterrdef.FT_Err_Out_Of_Memory",
+      "case": "cache_flush_then_oom",
+      "operation": "FTC_cache_lookup",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font_or_public_input",
+            "id": "fixtures/assets/fonts/DejaVuSans.ttf",
+            "requirements": "FTC lookup under allocator failure after cache population; C cache docs require flushing before returning Out_Of_Memory."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Out_Of_Memory",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/include/freetype/ftcache.h:395,499; freetype/src/cache/ftccache.h:331",
+          "cache_state": "populated_then_fail_lookup",
+          "expected_cache_flush": true
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "status": "FT_Error",
+          "observed_state": "public fields and pointer/nullness classifications described by the operation",
+          "diagnostic_source": "pinned FreeType source location",
+          "error": "FT_Error when this source path is reachable",
+          "error_symbol": "C-classified FT_Err_*"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class",
+            "slot_state.mutation_class"
+          ]
+        },
+        "error": "FT_Err_Out_Of_Memory",
+        "fixture_requirements": "FTC lookup under allocator failure after cache population; C cache docs require flushing before returning Out_Of_Memory."
+      }
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "subject": "t1tables.FT_Get_PS_Font_Private",
+  "manifest_cases": ["signature_matches_header", "type1_success_copies_private_dict", "unsupported_postscript_formats_invalid_argument", "non_postscript_or_missing_service_invalid_argument", "null_face_and_null_output_errors"],
+  "cases": [
+    {
+      "case_id": "t1tables.FT_Get_PS_Font_Private.signature_and_behavior_matrix",
+      "subject": "t1tables.FT_Get_PS_Font_Private",
+      "case": "signature_matches_header",
+      "covers_manifest_cases": ["signature_matches_header", "type1_success_copies_private_dict", "unsupported_postscript_formats_invalid_argument", "non_postscript_or_missing_service_invalid_argument", "null_face_and_null_output_errors"],
+      "operation": "t1tables.get_ps_font_private",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "type1_font": {"kind": "ref", "role": "type1_font", "id": "input/fonts/type1/private-dict-populated.pfb", "requirements": "Type 1 face with populated Private dictionary values."},
+          "cff_font": {"kind": "ref", "role": "cff_font", "id": "input/fonts/cff/fontinfo-populated.otf", "requirements": "CFF face without ps_get_font_private service."},
+          "cid_font": {"kind": "ref", "role": "cid_type1_font", "id": "input/fonts/cid/fontinfo-populated.cid", "requirements": "CID Type 1 face without ps_get_font_private service."},
+          "type42_font": {"kind": "ref", "role": "type42_font", "id": "input/fonts/type42/fontinfo-populated.t42", "requirements": "Type 42 face without Private dictionary service."},
+          "truetype_font": {"kind": "ref", "role": "truetype_font", "id": "input/fonts/DejaVuSans.ttf", "requirements": "Non-PostScript control face without POSTSCRIPT_INFO private service."}
+        },
+        "params": {
+          "include": "<freetype/t1tables.h>",
+          "signature": "FT_Error FT_Get_PS_Font_Private(FT_Face face, PS_Private afont_private)",
+          "output_record": "PS_PrivateRec",
+          "source_behavior": ["base/fttype1.c returns Invalid_Face_Handle for null face and Invalid_Argument for null output.", "Type 1 t1_ps_get_font_private copies type1.private_dict.", "CFF, CID Type 1, Type 42, TrueType, and missing services return Invalid_Argument."],
+          "scenarios": [
+            {"id": "type1_success_copies_private_dict", "asset": "type1_font", "face_index": 0, "output_pointer_mode": "valid"},
+            {"id": "cff_invalid_argument", "asset": "cff_font", "face_index": 0, "output_pointer_mode": "valid", "expected_error": "FT_Err_Invalid_Argument"},
+            {"id": "cid_invalid_argument", "asset": "cid_font", "face_index": 0, "output_pointer_mode": "valid", "expected_error": "FT_Err_Invalid_Argument"},
+            {"id": "type42_invalid_argument", "asset": "type42_font", "face_index": 0, "output_pointer_mode": "valid", "expected_error": "FT_Err_Invalid_Argument"},
+            {"id": "non_postscript_invalid_argument", "asset": "truetype_font", "face_index": 0, "output_pointer_mode": "valid", "expected_error": "FT_Err_Invalid_Argument"},
+            {"id": "null_face", "face_pointer_mode": "null", "output_pointer_mode": "valid", "expected_error": "FT_Err_Invalid_Face_Handle"},
+            {"id": "null_output", "asset": "type1_font", "face_index": 0, "output_pointer_mode": "null", "expected_error": "FT_Err_Invalid_Argument"}
+          ]
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_private", "requires:future_asset"],
+      "expectation": {
+        "status": "build_dependent",
+        "fixture_requirements": "Needs Type 1 private dictionary fixture plus CFF/CID/Type42/TrueType controls.",
+        "output_shape": {"status": "FT_Error", "private": {"unique_id": "FT_Int", "lenIV": "FT_Int", "blue_values": "FT_Short[14]", "other_blues": "FT_Short[10]", "family_blues": "FT_Short[14]", "family_other_blues": "FT_Short[10]", "blue_scale": "FT_Fixed", "blue_shift": "FT_Int", "blue_fuzz": "FT_Int", "standard_width": "FT_UShort[1]", "standard_height": "FT_UShort[1]", "snap_widths": "FT_Short[13]", "snap_heights": "FT_Short[13]", "force_bold": "FT_Bool", "round_stem_up": "FT_Bool", "language_group": "FT_Long", "password": "FT_Long", "min_feature": "FT_Short[2]"}},
+        "compare": {"mode": "exact", "paths": ["status", "private"]}
+      }
+    }
+  ]
+}

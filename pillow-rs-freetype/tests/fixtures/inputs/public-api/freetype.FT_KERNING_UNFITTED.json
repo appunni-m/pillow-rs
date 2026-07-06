@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_KERNING_UNFITTED",
+  "manifest_cases": [
+    "value_matches_header",
+    "get_kerning_mode_units"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_KERNING_UNFITTED.value_matches_header",
+      "subject": "freetype.FT_KERNING_UNFITTED",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_KERNING_UNFITTED",
+          "include": "<freetype/freetype.h>"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:freetype",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Kerning_Mode",
+          "symbol": "FT_KERNING_UNFITTED",
+          "header": "freetype/freetype.h"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "type",
+            "header_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_KERNING_UNFITTED.get_kerning_mode_units",
+      "subject": "freetype.FT_KERNING_UNFITTED",
+      "case": "get_kerning_mode_units",
+      "operation": "freetype.get_kerning",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/kerning/kern-pair-av.ttf",
+            "requirements": "Font with non-zero A/V kerning where unfitted 26.6 values can differ from grid-fitted values."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "left_char": "A",
+          "right_char": "V",
+          "kerning_mode": "FT_KERNING_UNFITTED"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:freetype",
+        "area:kerning",
+        "requires:font"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Font with non-zero A/V kerning where unfitted 26.6 values can differ from grid-fitted values.",
+        "output_shape": {
+          "status": "FT_Error",
+          "kerning": {
+            "x": "FT_Pos",
+            "y": "FT_Pos"
+          },
+          "units": "unfitted_26_6_pixels"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "kerning.x",
+            "kerning.y",
+            "units"
+          ]
+        }
+      }
+    }
+  ]
+}

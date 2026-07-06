@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_Color",
+  "manifest_cases": [
+    "layout_matches_c",
+    "field_order_matches_c",
+    "palette_entries_preserve_bgra_order"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_Color.layout_matches_c",
+      "subject": "ftcolor.FT_Color",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "record": "FT_Color",
+          "fields": [
+            "blue",
+            "green",
+            "red",
+            "alpha"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_Color",
+          "layout": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "C ABI probe for FT_Color sizeof/alignment/offsetof",
+          "Runner support for C FreeType, Rust FFI, C FFI, and Wasm FFI record layout comparison"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Color.field_order_matches_c",
+      "subject": "ftcolor.FT_Color",
+      "case": "field_order_matches_c",
+      "operation": "abi.record_import",
+      "schema": "abi_record_fields",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "record": "FT_Color",
+          "fields": [
+            "blue",
+            "green",
+            "red",
+            "alpha"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_Color",
+          "fields": [
+            "blue",
+            "green",
+            "red",
+            "alpha"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "field_order",
+            "field_types",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "Compile/import probe for FT_Color with exact ftcolor.h field names"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Color.palette_entries_preserve_bgra_order",
+      "subject": "ftcolor.FT_Color",
+      "case": "palette_entries_preserve_bgra_order",
+      "operation": "ftcolor.palette_select",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/cpal-palettes-names-flags.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "CPAL table with multiple palettes",
+              "distinct BGRA entries per palette",
+              "palette flags for light and dark backgrounds",
+              "palette and entry name IDs including empty 0xFFFF values"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "palette_indices": [
+            0,
+            1
+          ],
+          "entries": [
+            0,
+            1,
+            "last"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "record": "FT_Color",
+          "array": "palette entries in BGRA byte order"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "runs[*].error",
+            "runs[*].entries[*].blue",
+            "runs[*].entries[*].green",
+            "runs[*].entries[*].red",
+            "runs[*].entries[*].alpha"
+          ]
+        },
+        "fixture_requirements": [
+          "Runtime C oracle generation; do not store generated outputs"
+        ]
+      }
+    }
+  ]
+}

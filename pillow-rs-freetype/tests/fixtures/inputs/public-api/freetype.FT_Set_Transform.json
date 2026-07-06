@@ -1,0 +1,234 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Set_Transform",
+  "manifest_cases": [
+    "success_identity_and_null_transform",
+    "success_matrix_and_delta_transform",
+    "success_null_face_noop",
+    "load_ignore_transform_behavior"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Set_Transform.success_identity_and_null_transform",
+      "subject": "freetype.FT_Set_Transform",
+      "case": "success_identity_and_null_transform",
+      "operation": "freetype.set_transform",
+      "schema": "transform_state",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "sequence": [
+            {
+              "matrix": "non_identity",
+              "delta": [
+                64,
+                128
+              ]
+            },
+            {
+              "matrix": "null",
+              "delta": "null"
+            }
+          ],
+          "post_load_glyph": 36
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "transform_state": "identity matrix and zero delta",
+          "post_load_outline_or_bitmap": "C oracle"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "transform_state",
+            "post_load_output"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Set_Transform.success_matrix_and_delta_transform",
+      "subject": "freetype.FT_Set_Transform",
+      "case": "success_matrix_and_delta_transform",
+      "operation": "freetype.set_transform",
+      "schema": "transform_state",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "transforms": [
+            {
+              "name": "rotate_90",
+              "matrix": {
+                "xx": 0,
+                "xy": -65536,
+                "yx": 65536,
+                "yy": 0
+              },
+              "delta": [
+                0,
+                0
+              ]
+            },
+            {
+              "name": "scale_shear_translate",
+              "matrix": {
+                "xx": 32768,
+                "xy": 16384,
+                "yx": -8192,
+                "yy": 98304
+              },
+              "delta": [
+                64,
+                -128
+              ]
+            }
+          ],
+          "glyph_index": 36,
+          "size_ppem": 20
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "glyph_after_load": [
+            "advance",
+            "outline_cbox",
+            "bitmap_left_top_when_rendered"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].glyph_after_load"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Set_Transform.success_null_face_noop",
+      "subject": "freetype.FT_Set_Transform",
+      "case": "success_null_face_noop",
+      "operation": "freetype.set_transform",
+      "schema": "api_void",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "face": "null",
+          "matrix": {
+            "xx": 65536,
+            "xy": 0,
+            "yx": 0,
+            "yy": 65536
+          },
+          "delta": [
+            1,
+            2
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "side_effects": "none"
+        },
+        "compare": {
+          "mode": "unsupported_until_runner_added",
+          "paths": [
+            "no_crash"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Set_Transform.load_ignore_transform_behavior",
+      "subject": "freetype.FT_Set_Transform",
+      "case": "load_ignore_transform_behavior",
+      "operation": "freetype.set_transform",
+      "schema": "glyph_load",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "transform": {
+            "matrix": {
+              "xx": 0,
+              "xy": -65536,
+              "yx": 65536,
+              "yy": 0
+            },
+            "delta": [
+              320,
+              0
+            ]
+          },
+          "glyph_index": 36,
+          "load_flags_matrix": [
+            "FT_LOAD_DEFAULT",
+            "FT_LOAD_IGNORE_TRANSFORM"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void_then_FT_Load_Glyph",
+          "comparison": "transformed vs ignored public glyph state"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].load_flags",
+            "outputs[*].advance",
+            "outputs[*].outline_cbox",
+            "outputs[*].bitmap_placement"
+          ]
+        }
+      }
+    }
+  ]
+}

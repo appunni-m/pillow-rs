@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "subject": "ftcache.FTC_Scaler",
+  "manifest_cases": [
+    "alias_defined",
+    "points_to_call_owned_scaler"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcache.FTC_Scaler.alias_defined",
+      "subject": "ftcache.FTC_Scaler",
+      "case": "alias_defined",
+      "operation": "abi.type_alias",
+      "schema": "abi_type",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftcache.h>",
+          "typedef": "FTC_Scaler",
+          "expected_alias": "FTC_ScalerRec*"
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftcache",
+        "area:cache-manager"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "record_pointer_alias",
+          "sizeof": "pointer_size",
+          "pointee": "FTC_ScalerRec"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignment",
+            "is_pointer",
+            "pointee_record"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_Scaler.points_to_call_owned_scaler",
+      "subject": "ftcache.FTC_Scaler",
+      "case": "points_to_call_owned_scaler",
+      "operation": "ftcache.scaler_descriptor_lifetime",
+      "schema": "cache_lookup",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "scalable_control_font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "operation": "FTC_SBitCache_LookupScaler",
+          "scaler_storage": "caller_stack_or_heap",
+          "scaler": {
+            "face_id": "stable_pointer:dejavu",
+            "width": 16,
+            "height": 16,
+            "pixel": 1,
+            "x_res": 0,
+            "y_res": 0
+          },
+          "load_flags": "FT_LOAD_DEFAULT",
+          "glyph_index": 36,
+          "mutate_after_lookup": true
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftcache",
+        "area:cache-manager"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "ownership": "caller_owned_scaler",
+          "cache_query": "scaler fields copied before lookup"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "effective_scaler",
+            "result_fields",
+            "post_lookup_scaler_mutation_effect_on_existing_result"
+          ]
+        }
+      }
+    }
+  ]
+}

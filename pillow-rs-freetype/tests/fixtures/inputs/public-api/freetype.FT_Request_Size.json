@@ -1,0 +1,299 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Request_Size",
+  "manifest_cases": [
+    "success_nominal_request",
+    "success_request_type_matrix",
+    "success_bitmap_request_match",
+    "error_null_face_or_request",
+    "error_invalid_request_or_unavailable_strike"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Request_Size.success_nominal_request",
+      "subject": "freetype.FT_Request_Size",
+      "case": "success_nominal_request",
+      "operation": "freetype.request_size",
+      "schema": "size_metrics",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "requests": [
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_NOMINAL",
+              "width": 0,
+              "height": 768,
+              "horiResolution": 72,
+              "vertResolution": 72
+            },
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_NOMINAL",
+              "width": 640,
+              "height": 768,
+              "horiResolution": 96,
+              "vertResolution": 72
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "size_metrics": [
+            "x_ppem",
+            "y_ppem",
+            "x_scale",
+            "y_scale",
+            "ascender",
+            "descender",
+            "height",
+            "max_advance"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].size_metrics"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Request_Size.success_request_type_matrix",
+      "subject": "freetype.FT_Request_Size",
+      "case": "success_request_type_matrix",
+      "operation": "freetype.request_size",
+      "schema": "size_metrics",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "requests": [
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_REAL_DIM",
+              "width": 0,
+              "height": 1024
+            },
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_BBOX",
+              "width": 900,
+              "height": 900
+            },
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_CELL",
+              "width": 1024,
+              "height": 1024
+            },
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_SCALES",
+              "width": 65536,
+              "height": 32768
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "size_metrics": "all public FT_Size_Metrics fields"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].size_metrics"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Request_Size.success_bitmap_request_match",
+      "subject": "freetype.FT_Request_Size",
+      "case": "success_bitmap_request_match",
+      "operation": "freetype.request_size",
+      "schema": "size_metrics",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/bitmap/embedded-strike.ttf",
+            "status": "required_future_asset",
+            "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "request": {
+            "type": "FT_SIZE_REQUEST_TYPE_NOMINAL",
+            "width": 0,
+            "height": "first_available_size.y_ppem"
+          },
+          "post_load_probe": "embedded_bitmap_glyph"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "selected_strike": "index and metrics",
+          "post_load_bitmap": "bitmap metrics"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "selected_strike",
+            "post_load_bitmap"
+          ]
+        },
+        "fixture_requirements": [
+          "Bitmap-only or embedded-bitmap fixture with multiple strikes"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Request_Size.error_null_face_or_request",
+      "subject": "freetype.FT_Request_Size",
+      "case": "error_null_face_or_request",
+      "operation": "freetype.request_size",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "face": "null",
+              "request": "valid"
+            },
+            {
+              "face": "valid",
+              "request": "null"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].error"
+          ]
+        },
+        "error": "c_oracle"
+      }
+    },
+    {
+      "case_id": "freetype.FT_Request_Size.error_invalid_request_or_unavailable_strike",
+      "subject": "freetype.FT_Request_Size",
+      "case": "error_invalid_request_or_unavailable_strike",
+      "operation": "freetype.request_size",
+      "schema": "size_metrics",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "bitmap_font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/bitmap/embedded-strike.ttf",
+            "status": "required_future_asset",
+            "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_MAX"
+            },
+            {
+              "width": -64
+            },
+            {
+              "height": -64
+            },
+            {
+              "font": "bitmap_font",
+              "height": "missing_strike_ppem"
+            },
+            {
+              "width": 4294967296,
+              "height": 4294967296
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "active_size_after_error": "c_oracle"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].error",
+            "outputs[*].size_snapshot_before_after"
+          ]
+        },
+        "error": "c_oracle"
+      }
+    }
+  ]
+}

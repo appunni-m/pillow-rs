@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "subject": "ftoutln.FT_Outline_Copy",
+  "manifest_cases": ["copies_arrays_and_flags", "self_copy_noop", "invalid_pointer_or_size_mismatch"],
+  "cases": [
+    {
+      "case_id": "ftoutln.FT_Outline_Copy.copies_arrays_and_flags",
+      "subject": "ftoutln.FT_Outline_Copy",
+      "case": "copies_arrays_and_flags",
+      "operation": "ftoutln.outline_copy",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"source": {"kind": "ref", "id": "outlines/basic/mixed-tags-two-contours.json", "asset_kind": "outline_model"}, "target": {"kind": "ref", "id": "outlines/basic/blank-same-shape-owner.json", "asset_kind": "outline_model"}}, "params": {"preserve_target_owner_bit": true}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Copy", "kind": "function", "c_signature": "FT_Error FT_Outline_Copy(const FT_Outline* source, FT_Outline* target)"}, "source_behavior": "The point, tag, contour, and flag values are copied, but the target's FT_OUTLINE_OWNER bit is preserved."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "target_points": ["FT_Vector"], "target_tags": ["FT_Byte"], "target_contours": ["FT_Short"], "target_flags": "FT_Int"}, "compare": {"mode": "exact", "paths": ["return", "target_points", "target_tags", "target_contours", "target_flags"]}, "source_refs": ["freetype/src/base/ftoutln.c:399-430"], "fixture_requirements": ["Source outline with nonzero points, tags, contours, and flags.", "Target outline with equal counts and a distinct owner bit."]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_Copy.self_copy_noop",
+      "subject": "ftoutln.FT_Outline_Copy",
+      "case": "self_copy_noop",
+      "operation": "ftoutln.outline_copy",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/basic/mixed-tags-two-contours.json", "asset_kind": "outline_model"}}, "params": {"source_and_target_same_pointer": true, "snapshot_before_after": true}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "behavior:self-copy"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Copy", "kind": "function", "c_signature": "FT_Error FT_Outline_Copy(const FT_Outline* source, FT_Outline* target)"}, "source_behavior": "If source and target are the same pointer, return success without copying."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "before": "FT_Outline", "after": "FT_Outline"}, "compare": {"mode": "exact", "paths": ["return", "before", "after"]}, "source_refs": ["freetype/src/base/ftoutln.c:410-414"]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch",
+      "subject": "ftoutln.FT_Outline_Copy",
+      "case": "invalid_pointer_or_size_mismatch",
+      "operation": "ftoutln.outline_copy",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {"assets": {"source": {"kind": "ref", "id": "outlines/basic/triangle.json", "asset_kind": "outline_model"}, "wrong_size_target": {"kind": "ref", "id": "outlines/basic/blank-different-shape.json", "asset_kind": "outline_model"}}, "params": {"scenarios": [{"source_pointer": null}, {"target_pointer": null}, {"source_ref": "source", "target_ref": "wrong_size_target"}]}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "error:invalid-input"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Copy", "kind": "function", "c_signature": "FT_Error FT_Outline_Copy(const FT_Outline* source, FT_Outline* target)"}, "source_behavior": "Null source or target returns Invalid_Outline; count mismatch returns Invalid_Argument."},
+      "expectation": {"status": "error", "output_shape": {"results": [{"return": "FT_Error"}]}, "compare": {"mode": "exact_error", "paths": ["results[*].return"]}, "error": ["FT_Err_Invalid_Outline", "FT_Err_Invalid_Argument"], "source_refs": ["freetype/src/base/ftoutln.c:406-412"], "fixture_requirements": ["Target outline with different n_points or n_contours from source."]}
+    }
+  ]
+}

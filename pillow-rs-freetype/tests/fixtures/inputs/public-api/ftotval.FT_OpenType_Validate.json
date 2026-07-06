@@ -1,0 +1,342 @@
+{
+  "version": 1,
+  "subject": "ftotval.FT_OpenType_Validate",
+  "manifest_cases": [
+    "declaration_matches_header",
+    "null_face_error",
+    "null_output_pointer_error",
+    "service_missing_error",
+    "selected_tables_success",
+    "malformed_table_error"
+  ],
+  "cases": [
+    {
+      "case_id": "ftotval.FT_OpenType_Validate.declaration_matches_header",
+      "subject": "ftotval.FT_OpenType_Validate",
+      "case": "declaration_matches_header",
+      "operation": "abi.function_signature",
+      "schema": "abi_signature",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ftotval.h",
+          "symbol": "FT_OpenType_Validate",
+          "return_type": "FT_Error",
+          "parameters": [
+            [
+              "FT_Face",
+              "face"
+            ],
+            [
+              "FT_UInt",
+              "validation_flags"
+            ],
+            [
+              "FT_Bytes*",
+              "BASE_table"
+            ],
+            [
+              "FT_Bytes*",
+              "GDEF_table"
+            ],
+            [
+              "FT_Bytes*",
+              "GPOS_table"
+            ],
+            [
+              "FT_Bytes*",
+              "GSUB_table"
+            ],
+            [
+              "FT_Bytes*",
+              "JSTF_table"
+            ]
+          ],
+          "export_macro": "FT_EXPORT"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftotval",
+        "area:abi_signature"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "signature": "c_function",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "signature",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftotval.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftotval.FT_OpenType_Validate.null_face_error",
+      "subject": "ftotval.FT_OpenType_Validate",
+      "case": "null_face_error",
+      "operation": "ftotval.open_type_validate",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "face": null,
+          "validation_flags": [
+            "FT_VALIDATE_BASE"
+          ],
+          "output_pointers": "all_valid_non_null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "runtime:opentype_validation",
+        "error_path"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error",
+          "outputs_touched": "bool"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "outputs_touched"
+          ]
+        },
+        "error": "FT_Err_Invalid_Face_Handle",
+        "source_refs": [
+          "freetype/src/base/ftotval.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftotval.FT_OpenType_Validate.null_output_pointer_error",
+      "subject": "ftotval.FT_OpenType_Validate",
+      "case": "null_output_pointer_error",
+      "operation": "ftotval.open_type_validate",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face": "valid",
+          "validation_flags": [
+            "FT_VALIDATE_BASE"
+          ],
+          "null_output_indices": [
+            "BASE",
+            "GDEF",
+            "GPOS",
+            "GSUB",
+            "JSTF"
+          ],
+          "one_null_at_a_time": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "runtime:opentype_validation",
+        "error_path"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error",
+          "null_output_index": "string"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].error",
+            "rows[*].null_output_index"
+          ]
+        },
+        "error": "FT_Err_Invalid_Argument",
+        "source_refs": [
+          "freetype/src/base/ftotval.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftotval.FT_OpenType_Validate.service_missing_error",
+      "subject": "ftotval.FT_OpenType_Validate",
+      "case": "service_missing_error",
+      "operation": "ftotval.open_type_validate",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/non-opentype/bitmap-or-pcf-without-otvalid.pcf"
+          }
+        },
+        "params": {
+          "face": "valid_without_OPENTYPE_VALIDATE_service",
+          "validation_flags": [
+            "FT_VALIDATE_OT"
+          ],
+          "output_pointers": "all_valid_non_null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "runtime:opentype_validation",
+        "error_path"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error",
+          "service_available": "bool",
+          "outputs": "object<table,pointer_class>"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "service_available",
+            "outputs"
+          ]
+        },
+        "error": "FT_Err_Unimplemented_Feature",
+        "fixture_requirements": [
+          "fonts/non-opentype/bitmap-or-pcf-without-otvalid.pcf must load as a face that has no OPENTYPE_VALIDATE service."
+        ],
+        "source_refs": [
+          "freetype/src/base/ftotval.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftotval.FT_OpenType_Validate.selected_tables_success",
+      "subject": "ftotval.FT_OpenType_Validate",
+      "case": "selected_tables_success",
+      "operation": "ftotval.open_type_validate",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/opentype/valid-all-layout.otf"
+          }
+        },
+        "params": {
+          "validation_flags_matrix": [
+            [
+              "FT_VALIDATE_BASE"
+            ],
+            [
+              "FT_VALIDATE_GDEF",
+              "FT_VALIDATE_GPOS"
+            ],
+            [
+              "FT_VALIDATE_OT"
+            ]
+          ],
+          "output_pointers": "all_valid_non_null",
+          "free_non_null_outputs": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "runtime:opentype_validation"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "error": "FT_Error",
+          "tables": "object<table,nullable<FT_Bytes>>",
+          "table_bytes_hash": "object<table,sha256>",
+          "free_event_count": "usize"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "rows[*].error",
+            "rows[*].tables.*.pointer_class",
+            "rows[*].tables.*.bytes_hash",
+            "rows[*].free_event_count"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/opentype/valid-all-layout.otf must contain stable valid OpenType layout tables."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftotval.h",
+          "freetype/src/base/ftotval.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftotval.FT_OpenType_Validate.malformed_table_error",
+      "subject": "ftotval.FT_OpenType_Validate",
+      "case": "malformed_table_error",
+      "operation": "ftotval.open_type_validate",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/opentype/malformed-selected-layout.otf"
+          }
+        },
+        "params": {
+          "validation_flags": [
+            "FT_VALIDATE_OT"
+          ],
+          "malformed_table_kind": "one_of_BASE_GDEF_GPOS_GSUB_JSTF_MATH",
+          "output_pointers": "all_valid_non_null",
+          "free_non_null_outputs_after_error": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "runtime:opentype_validation",
+        "error_path"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error",
+          "tables": "object<table,pointer_class>",
+          "cleanup_obligation": "array<table>"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "tables.*.pointer_class",
+            "cleanup_obligation"
+          ]
+        },
+        "error": "OpenType validation service error for the malformed selected table.",
+        "fixture_requirements": [
+          "fonts/opentype/malformed-selected-layout.otf must contain a selected malformed validation table."
+        ],
+        "source_refs": [
+          "freetype/src/base/ftotval.c",
+          "freetype/src/otvalid"
+        ]
+      }
+    }
+  ]
+}

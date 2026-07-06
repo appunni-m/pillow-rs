@@ -1,0 +1,178 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_GlyphSlotRec",
+  "manifest_cases": [
+    "layout_matches_c",
+    "loaded_and_rendered_slot_fields_match_c"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_GlyphSlotRec.layout_matches_c",
+      "subject": "freetype.FT_GlyphSlotRec",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/freetype.h",
+          "symbol": "FT_GlyphSlotRec",
+          "fields_in_order": [
+            "library",
+            "face",
+            "next",
+            "glyph_index",
+            "generic",
+            "metrics",
+            "linearHoriAdvance",
+            "linearVertAdvance",
+            "advance",
+            "format",
+            "bitmap",
+            "bitmap_left",
+            "bitmap_top",
+            "outline",
+            "num_subglyphs",
+            "subglyphs",
+            "control_data",
+            "control_len",
+            "lsb_delta",
+            "rsb_delta",
+            "other",
+            "internal"
+          ],
+          "nested_public_records": [
+            "FT_Glyph_Metrics",
+            "FT_Bitmap",
+            "FT_Outline",
+            "FT_Vector"
+          ],
+          "probe": [
+            "sizeof",
+            "alignof",
+            "offsetof",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "area:abi_layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "offsets": "object<field,usize>",
+          "field_types": "object<field,c_type>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "offsets",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_GlyphSlotRec.loaded_and_rendered_slot_fields_match_c",
+      "subject": "freetype.FT_GlyphSlotRec",
+      "case": "loaded_and_rendered_slot_fields_match_c",
+      "operation": "freetype.inspect_glyph_slot",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          },
+          "composite_font": {
+            "kind": "ref",
+            "id": "fonts/composite/composite-glyph.ttf"
+          },
+          "bitmap_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap/embedded-strikes.ttf"
+          },
+          "hinted_font": {
+            "kind": "ref",
+            "id": "fonts/truetype/native-hinting.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "glyph_indices": [
+            "A",
+            "composite",
+            "bitmap_strike_glyph"
+          ],
+          "load_flags": [
+            "FT_LOAD_DEFAULT",
+            "FT_LOAD_NO_SCALE",
+            "FT_LOAD_NO_RECURSE",
+            "FT_LOAD_RENDER",
+            "FT_LOAD_VERTICAL_LAYOUT"
+          ],
+          "render_modes": [
+            "FT_RENDER_MODE_NORMAL",
+            "FT_RENDER_MODE_MONO",
+            "FT_RENDER_MODE_LCD"
+          ],
+          "probe": [
+            "face.glyph public fields after load/render"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "slot": "FT_GlyphSlotRec public field snapshot",
+          "metrics": "FT_Glyph_Metrics",
+          "bitmap": "FT_Bitmap plus bytes if rendered",
+          "outline": "FT_Outline geometry if outline",
+          "subglyphs": "count_and_public_info"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "glyph_index",
+            "metrics",
+            "linearHoriAdvance",
+            "linearVertAdvance",
+            "advance",
+            "format",
+            "bitmap",
+            "bitmap_left",
+            "bitmap_top",
+            "outline",
+            "num_subglyphs",
+            "control_len",
+            "lsb_delta",
+            "rsb_delta",
+            "face_identity",
+            "library_identity",
+            "pointer_nullness"
+          ]
+        },
+        "fixture_requirements": [
+          "Composite glyph fixture, embedded bitmap fixture, and native hinted TrueType fixture"
+        ]
+      }
+    }
+  ]
+}

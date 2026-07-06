@@ -1,0 +1,315 @@
+- id: ftcolor.FT_Get_Colorline_Stops
+  kind: function
+  symbol: FT_Get_Colorline_Stops
+  header: freetype/ftcolor.h
+  description: FreeType C API function that iterates COLR v1 gradient color stops from an FT_ColorLine iterator.
+  coverage:
+    font_variability: required
+  cases:
+    - id: success_iterates_static_colorline_stops
+      description: Valid COLR v1 gradient color lines return 1 for each stop, write stop_offset as 16.16 converted from F2Dot14, write palette_index and alpha in ftcolor.h field order, advance iterator->p, and increment current_color_stop like ttcolr.c.
+    - id: success_iterates_variable_colorline_stops
+      description: Variable COLR v1 color lines advance over VarIdxBase entries and, when GX variation support is active, apply C-compatible deltas to stop_offset and alpha while preserving the public output shape.
+    - id: end_of_iteration
+      description: When current_color_stop is greater than or equal to num_color_stops, returns 0 and preserves color_stop and iterator state according to the pinned C source behavior.
+    - id: error_null_or_invalid_iterator
+      description: Null iterator, missing COLR table, out-of-range iterator->p, or truncated color stop data return 0 without fabricating output.
+    - id: error_null_color_stop_policy
+      description: Null color_stop behavior is classified against the pinned C oracle or, if unsafe in C, the project ABI safety policy is documented explicitly.
+  # needs-input: operation=FT_Get_Color_Glyph_Paint, FT_Get_Paint, then FT_Get_Colorline_Stops; fixture_asset=COLR v1 font with static linear/radial/sweep gradients containing PAD, REPEAT, REFLECT color lines and at least 0, 1, 2, and 3 stops; params iterate each returned FT_ColorLine until FT_Get_Colorline_Stops returns 0, plus null face, null iterator, null color_stop, exhausted iterator, and corrupted/truncated COLR controls; expected output shape=per-call FT_Bool, FT_ColorStop { stop_offset, color { palette_index, alpha } }, and FT_ColorStopIterator { num_color_stops, current_color_stop, p/null-class, read_variable }; comparison=exact C oracle scalar equality, iterator progression/end equality, and output preservation/null-safety classification.
+  # needs-input: operation=FT_Get_Colorline_Stops; fixture_asset=variable COLR v1 gradient font with VarColorLine and VarColorStop records; params at default coordinates and at non-default FT_Set_Var_Design_Coordinates values; expected output shape=interpolated FT_ColorStop sequence plus iterator state; comparison=exact C oracle 16.16 stop_offset and F2Dot14 alpha equality, including VarIdxBase cursor advancement.
+
+- id: ftcolor.FT_Get_Paint
+  kind: function
+  symbol: FT_Get_Paint
+  header: freetype/ftcolor.h
+  description: FreeType C API function that resolves an FT_OpaquePaint into a public FT_COLR_Paint record for COLR v1 paint tables.
+  coverage:
+    font_variability: required
+  cases:
+    - id: success_resolves_each_supported_paint_format
+      description: Valid opaque paint objects resolve to the same FT_COLR_Paint format and union member fields as C for COLR layers, solid, glyph, COLR glyph, linear gradient, radial gradient, sweep gradient, transform, translate, scale, rotate, skew, and composite paints.
+    - id: success_inserts_root_transform
+      description: Opaque paints with insert_root_transform set return a TRANSFORM paint that wraps the original opaque paint and reports the active size scale and FT_Set_Transform matrix/delta converted to FT_Affine23 16.16 fields like ttcolr.c.
+    - id: error_null_or_missing_colr
+      description: Null or non-COLR v1 face state, missing base glyph list, null COLR table, invalid opaque pointer, unsupported paint format, and truncated child tables return 0 and preserve the destination paint according to the C oracle.
+    - id: error_null_output_policy
+      description: Null FT_COLR_Paint output behavior is classified against pinned C behavior or the project ABI safety policy if the C path dereferences it.
+  # needs-input: operation=FT_Get_Color_Glyph_Paint and FT_Get_Paint; fixture_asset=COLR v1 font with one glyph per paint format, including nested paints and transforms; params root_transform values NO_ROOT_TRANSFORM, ROOT_TRANSFORM, and varying FT_Set_Char_Size/FT_Set_Transform before FT_Get_Paint; expected output shape=FT_Bool plus FT_COLR_Paint { format, active union member fields, opaque child paint p/null-class and insert_root_transform }; comparison=exact C oracle enum/scalar/field equality and output preservation on 0 return.
+  # needs-input: operation=FT_Get_Paint; fixture_asset=malformed COLR v1 font variants with bad paint offsets, unsupported formats, invalid color line offsets, invalid child paint offsets, and truncated records; params opaque paints obtained from root and layer paths where possible; expected output shape=FT_Bool plus destination FT_COLR_Paint sentinel preservation/mutation; comparison=exact C oracle return and write behavior.
+
+- id: ftcolor.FT_Get_Paint_Layers
+  kind: function
+  symbol: FT_Get_Paint_Layers
+  header: freetype/ftcolor.h
+  description: FreeType C API function that iterates FT_OpaquePaint layer references from an FT_PaintColrLayers iterator.
+  coverage:
+    font_variability: required
+  cases:
+    - id: success_iterates_colr_v1_layers
+      description: Valid FT_PaintColrLayers iterators return 1 for each layer, write FT_OpaquePaint.p and insert_root_transform, advance iterator->p, and increment iterator->layer like ttcolr.c.
+    - id: end_of_iteration
+      description: When iterator->layer equals iterator->num_layers, returns 0 and preserves output paint and iterator state according to the C oracle.
+    - id: error_invalid_iterator_or_paint_offset
+      description: Invalid iterator cursors, missing COLR data, out-of-range layer offsets, and paint offsets outside the v1 paint table return 0 without creating a usable opaque paint.
+    - id: error_null_arguments_policy
+      description: Null face, iterator, and output paint behavior is classified against pinned C behavior or the project ABI safety policy if the C path dereferences them.
+  # needs-input: operation=FT_Get_Color_Glyph_Paint, FT_Get_Paint for FT_COLR_PAINTFORMAT_COLR_LAYERS, then FT_Get_Paint_Layers; fixture_asset=COLR v1 font with PaintColrLayers containing 0, 1, 2, and many layer offsets, including nested layer paints; params iterate until 0 return, then call once more, plus malformed layer-list offsets and null argument controls; expected output shape=per-call FT_Bool, FT_LayerIterator { num_layers, layer, p/null-class }, and FT_OpaquePaint { p/null-class, insert_root_transform }; comparison=exact C oracle scalar equality, iterator progression/end equality, and output preservation/null-safety classification.
+
+- id: ftcolor.FT_Palette_Data_Get
+  kind: function
+  symbol: FT_Palette_Data_Get
+  header: freetype/ftcolor.h
+  description: FreeType C API function that retrieves read-only CPAL palette metadata into FT_Palette_Data.
+  coverage:
+    font_variability: required
+  cases:
+    - id: success_sfnt_cpal_palette_data
+      description: SFNT faces with CPAL data return FT_Err_Ok and write num_palettes, palette_name_ids, palette_flags, num_palette_entries, and palette_entry_name_ids exactly as C exposes them.
+    - id: success_sfnt_without_cpal
+      description: SFNT faces without CPAL return FT_Err_Ok and write C-compatible zero/null FT_Palette_Data values.
+    - id: success_non_sfnt_null_palette_data
+      description: Non-SFNT faces return FT_Err_Ok and write the ftcolor.c null_palette_data record when color layers are compiled in.
+    - id: error_null_face_or_output
+      description: Null face returns Invalid_Face_Handle and null apalette returns Invalid_Argument, with destination preservation verified against C.
+    - id: error_color_layers_disabled
+      description: Builds without TT_CONFIG_OPTION_COLOR_LAYERS return Unimplemented_Feature and preserve outputs like the pinned C fallback.
+  # needs-input: operation=FT_Palette_Data_Get; fixture_asset=CPAL/COLR font with palette labels, palette flags, entry labels, multiple palettes and entries, plus SFNT without CPAL and non-SFNT control if supported; params valid face, null face, null apalette, and sentinel-initialized FT_Palette_Data; expected output shape=FT_Error plus FT_Palette_Data { num_palettes, palette_name_ids array/null, palette_flags array/null, num_palette_entries, palette_entry_name_ids array/null }; comparison=exact C oracle error, scalar values, array contents/name-id 0xFFFF mapping, pointer-null classification, and output preservation on errors.
+
+- id: ftcolor.FT_Palette_Select
+  kind: function
+  symbol: FT_Palette_Select
+  header: freetype/ftcolor.h
+  description: FreeType C API function that activates a CPAL palette and optionally returns the mutable FT_Color entry array managed by FreeType.
+  coverage:
+    font_variability: required
+  cases:
+    - id: success_selects_palette_and_returns_entries
+      description: Valid palette indexes return FT_Err_Ok, set the active palette, and write an FT_Color array whose BGRA entries exactly match the selected CPAL palette.
+    - id: success_null_output_selects_without_return
+      description: A null apalette still selects the palette and returns FT_Err_Ok when the palette index is valid, matching ftcolor.h.
+    - id: success_reselect_resets_user_modifications
+      description: Reselecting the same palette after modifying returned entries resets colors to original CPAL values like C FreeType.
+    - id: success_non_sfnt_returns_null_palette
+      description: Non-SFNT faces return FT_Err_Ok and write NULL through apalette when the output pointer is provided.
+    - id: error_null_face_or_invalid_palette_index
+      description: Null face and out-of-range palette indexes return the pinned C error and preserve or write apalette exactly as C does.
+    - id: error_color_layers_disabled
+      description: Builds without TT_CONFIG_OPTION_COLOR_LAYERS return Unimplemented_Feature and preserve outputs like the pinned C fallback.
+  # needs-input: operation=FT_Palette_Data_Get and FT_Palette_Select; fixture_asset=CPAL/COLR font with at least two palettes and distinct BGRA values; params palette indexes 0, last valid, out-of-range, null apalette, non-null apalette, modify returned palette entry then reselect; expected output shape=FT_Error plus active palette index side effect and FT_Color array { blue, green, red, alpha } or null; comparison=exact C oracle error, BGRA byte equality, pointer-null classification, reset behavior, and output preservation on errors.
+
+- id: ftcolor.FT_Palette_Set_Foreground_Color
+  kind: function
+  symbol: FT_Palette_Set_Foreground_Color
+  header: freetype/ftcolor.h
+  description: FreeType C API function that sets the COLR foreground color used for palette index 0xFFFF.
+  coverage:
+    font_variability: required
+  cases:
+    - id: success_sets_sfnt_foreground_color
+      description: Valid SFNT faces return FT_Err_Ok and later COLR rendering or blending observes the exact supplied FT_Color BGRA foreground color for palette index 0xFFFF.
+    - id: success_non_sfnt_noop
+      description: Non-SFNT faces return FT_Err_Ok without storing a foreground color, matching ftcolor.c.
+    - id: default_foreground_color_policy
+      description: Without an explicit foreground color, C-compatible default foreground is opaque white for dark-background palettes and opaque black otherwise.
+    - id: error_null_face
+      description: Null face returns Invalid_Face_Handle and no foreground state is changed.
+    - id: error_color_layers_disabled
+      description: Builds without TT_CONFIG_OPTION_COLOR_LAYERS return Unimplemented_Feature.
+  # needs-input: operation=FT_Palette_Select, FT_Palette_Set_Foreground_Color, and render/blend path for COLR palette index 0xFFFF; fixture_asset=COLR/CPAL font with a layer or COLR v1 solid paint using palette_index 0xFFFF and palette flags for dark and non-dark backgrounds; params foreground colors including transparent, semi-transparent, opaque black, and opaque white; expected output shape=FT_Error plus rendered/blended BGRA or public layer color record for foreground index; comparison=exact C oracle error, BGRA byte equality, default foreground selection, and no-op behavior for non-SFNT.
+
+- id: ftcolor.FT_Affine23
+  kind: record
+  symbol: FT_Affine23
+  header: freetype/ftcolor.h
+  description: FreeType public 2x3 affine transform record from freetype/ftcolor.h with 16.16 fixed-point coefficients.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for xx, xy, dx, yx, yy, and dy match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is xx, xy, dx, yx, yy, dy exactly, preserving the C row layout used by root transforms and PaintTransform.
+    - id: root_transform_values
+      description: FT_Get_Paint root-transform output writes FT_Affine23 scale, matrix, and translation fields in C-compatible 16.16 units.
+  # needs-input: operation=FT_Get_Color_Glyph_Paint and FT_Get_Paint with root transform; fixture_asset=COLR v1 font with a root paint; params multiple sizes plus FT_Set_Transform matrix and delta; expected output shape=FT_COLR_Paint TRANSFORM with FT_Affine23 { xx, xy, dx, yx, yy, dy }; comparison=exact C oracle field equality and layout metadata equality.
+
+- id: ftcolor.FT_ClipBox
+  kind: record
+  symbol: FT_ClipBox
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 clip box record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for bottom_left, top_left, top_right, and bottom_right match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is bottom_left, top_left, top_right, bottom_right exactly, with each FT_Vector coordinate in 26.6 format.
+    - id: color_glyph_clipbox_values
+      description: FT_Get_Color_Glyph_ClipBox returns the same transformed or untransformed corner vectors as C for COLR v1 clip boxes.
+  # needs-input: operation=FT_Get_Color_Glyph_ClipBox; fixture_asset=COLR v1 font with clip boxes, including transformed roots and negative coordinates; params glyphs with and without clip boxes, root transform modes, active size/transform variations; expected output shape=FT_Bool plus FT_ClipBox { bottom_left, top_left, top_right, bottom_right } FT_Vector 26.6 values; comparison=exact C oracle return, field order, vector equality, and output preservation on 0 return.
+
+- id: ftcolor.FT_Color
+  kind: record
+  symbol: FT_Color
+  header: freetype/ftcolor.h
+  description: FreeType public BGRA sRGB color record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for blue, green, red, and alpha match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is blue, green, red, alpha exactly; values are not pre-multiplied and alpha must be explicit.
+    - id: palette_entries_preserve_bgra_order
+      description: FT_Palette_Select and foreground-color paths expose CPAL colors in BGRA byte order matching C.
+
+- id: ftcolor.FT_ColorIndex
+  kind: record
+  symbol: FT_ColorIndex
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 ColorIndex record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for palette_index and alpha match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is palette_index then alpha exactly, with palette_index as FT_UInt16 and alpha as FT_F2Dot14.
+    - id: solid_and_color_stop_values
+      description: FT_Get_Paint solid paints and FT_Get_Colorline_Stops return palette_index and alpha values equal to the C oracle, including palette index 0xFFFF foreground color references.
+  # needs-input: operation=FT_Get_Paint and FT_Get_Colorline_Stops; fixture_asset=COLR v1 font with PaintSolid and gradient stops using normal palette indexes and 0xFFFF foreground index, with varied alpha values; params retrieve solid paints and all gradient stops; expected output shape=FT_ColorIndex { palette_index, alpha } embedded in FT_PaintSolid and FT_ColorStop; comparison=exact C oracle field equality and field-order/layout metadata equality.
+
+- id: ftcolor.FT_ColorLine
+  kind: record
+  symbol: FT_ColorLine
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 ColorLine record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for extend and color_stop_iterator match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is extend then color_stop_iterator exactly, with extend as FT_PaintExtend.
+    - id: gradient_colorline_values
+      description: FT_Get_Paint gradient records expose ColorLine extend mode and initialized iterator state exactly as C.
+  # needs-input: operation=FT_Get_Paint for linear, radial, and sweep gradients; fixture_asset=COLR v1 font with PAD, REPEAT, and REFLECT color lines plus invalid extend malformed controls; params retrieve each gradient paint and inspect embedded FT_ColorLine before stop iteration; expected output shape=FT_ColorLine { extend, color_stop_iterator { num_color_stops, current_color_stop, p/null-class, read_variable } }; comparison=exact C oracle enum, iterator scalar equality, pointer-null classification, and malformed-paint 0 return/output preservation.
+
+- id: ftcolor.FT_ColorStop
+  kind: record
+  symbol: FT_ColorStop
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 ColorStop record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for stop_offset and color match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is stop_offset then color exactly, with stop_offset as 16.16 FT_Fixed and color as FT_ColorIndex.
+    - id: iterator_output_values
+      description: FT_Get_Colorline_Stops writes stop_offset, palette_index, and alpha exactly as C for static and variable color stops.
+  # needs-input: operation=FT_Get_Colorline_Stops; fixture_asset=COLR v1 static and variable gradient font with duplicate stops, boundary offsets, and varied alpha; params iterate all stops under default and non-default variation coordinates; expected output shape=FT_ColorStop { stop_offset, color { palette_index, alpha } }; comparison=exact C oracle field equality, 16.16/F2Dot14 conversion equality, and field-order/layout metadata equality.
+
+- id: ftcolor.FT_ColorStopIterator
+  kind: record
+  symbol: FT_ColorStopIterator
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 color stop iterator record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for num_color_stops, current_color_stop, p, and read_variable match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is num_color_stops, current_color_stop, p, read_variable exactly, preserving the opaque COLR cursor ABI.
+    - id: initialized_by_get_paint
+      description: FT_Get_Paint initializes iterator count, current stop, opaque pointer, and read_variable flag like C for ColorLine-bearing paints.
+    - id: advanced_by_get_colorline_stops
+      description: FT_Get_Colorline_Stops advances p and current_color_stop exactly as C and leaves read_variable and num_color_stops unchanged.
+
+- id: ftcolor.FT_LayerIterator
+  kind: record
+  symbol: FT_LayerIterator
+  header: freetype/ftcolor.h
+  description: FreeType public layer iterator record from freetype/ftcolor.h for COLR layer traversal.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for num_layers, layer, and p match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is num_layers, layer, p exactly, preserving the opaque COLR cursor ABI.
+    - id: initialized_and_advanced_by_layer_apis
+      description: FT_Get_Color_Glyph_Layer, FT_Get_Paint, and FT_Get_Paint_Layers initialize and advance iterator state exactly like C.
+  # needs-input: operation=FT_Get_Color_Glyph_Layer and FT_Get_Paint_Layers; fixture_asset=COLR v0 and COLR v1 fonts with multiple layers; params first-call p=NULL, repeated iteration, exhausted iterator, and malformed cursor controls; expected output shape=FT_LayerIterator { num_layers, layer, p/null-class } plus per-layer outputs; comparison=exact C oracle scalar equality, pointer-null classification, iteration progression, and output preservation on 0 return.
+
+- id: ftcolor.FT_OpaquePaint
+  kind: record
+  symbol: FT_OpaquePaint
+  header: freetype/ftcolor.h
+  description: FreeType public opaque COLR v1 paint reference record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for p and insert_root_transform match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is p then insert_root_transform exactly, with p treated only as an opaque COLR table cursor.
+    - id: produced_and_consumed_by_paint_apis
+      description: FT_Get_Color_Glyph_Paint, FT_Get_Paint_Layers, and FT_Get_Paint preserve C-compatible opaque pointer/null classification and insert_root_transform semantics.
+  # needs-input: operation=FT_Get_Color_Glyph_Paint, FT_Get_Paint_Layers, and FT_Get_Paint; fixture_asset=COLR v1 font with root paints, nested paints, layer paints, and root transform enabled/disabled; params inspect opaque paints before and after resolution; expected output shape=FT_OpaquePaint { p/null-class, insert_root_transform }; comparison=exact C oracle boolean equality and pointer-null/identity classification without depending on raw pointer addresses across processes.
+
+- id: ftcolor.FT_PaintColrGlyph
+  kind: record
+  symbol: FT_PaintColrGlyph
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 PaintColrGlyph record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offset for glyphID match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is glyphID exactly, with glyphID referring to the BaseGlyphV1List entry.
+    - id: get_paint_colr_glyph_values
+      description: FT_Get_Paint returns PaintColrGlyph glyphID values exactly as C for nested COLR glyph paints.
+  # needs-input: operation=FT_Get_Paint; fixture_asset=COLR v1 font containing PaintColrGlyph references to valid and invalid base glyph IDs; params resolve nested paints; expected output shape=FT_COLR_Paint { format=FT_COLR_PAINTFORMAT_COLR_GLYPH, u.colr_glyph.glyphID }; comparison=exact C oracle return, format, glyphID, and output preservation on invalid data.
+
+- id: ftcolor.FT_PaintColrLayers
+  kind: record
+  symbol: FT_PaintColrLayers
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 PaintColrLayers record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offset for layer_iterator match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is layer_iterator exactly.
+    - id: get_paint_initializes_layer_iterator
+      description: FT_Get_Paint returns a layer iterator whose num_layers, layer, and p state match C for PaintColrLayers.
+  # needs-input: operation=FT_Get_Paint and FT_Get_Paint_Layers; fixture_asset=COLR v1 font with PaintColrLayers using first-layer indexes at beginning, middle, and end of LayerV1List; params resolve paint then iterate all layers; expected output shape=FT_PaintColrLayers { layer_iterator { num_layers, layer, p/null-class } } plus FT_OpaquePaint sequence; comparison=exact C oracle field equality, iterator sequence equality, and malformed offset output preservation.
+
+- id: ftcolor.FT_PaintComposite
+  kind: record
+  symbol: FT_PaintComposite
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 PaintComposite record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for source_paint, composite_mode, and backdrop_paint match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is source_paint, composite_mode, backdrop_paint exactly.
+    - id: get_paint_composite_values
+      description: FT_Get_Paint returns source and backdrop opaque paints plus FT_Composite_Mode values exactly as C for PaintComposite tables.
+  # needs-input: operation=FT_Get_Paint; fixture_asset=COLR v1 font containing PaintComposite for each FT_Composite_Mode value and nested source/backdrop paints; params resolve composite paints and then resolve child opaque paints; expected output shape=FT_COLR_Paint { format=FT_COLR_PAINTFORMAT_COMPOSITE, u.composite { source_paint, composite_mode, backdrop_paint } }; comparison=exact C oracle enum/field equality, child opaque paint pointer-null classification, and output preservation for malformed child offsets.
+
+- id: ftcolor.FT_PaintGlyph
+  kind: record
+  symbol: FT_PaintGlyph
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 PaintGlyph record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for paint and glyphID match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is paint then glyphID exactly.
+    - id: get_paint_glyph_values
+      description: FT_Get_Paint returns PaintGlyph child opaque paint and glyphID values exactly as C, including invalid glyph failure behavior.
+  # needs-input: operation=FT_Get_Paint; fixture_asset=COLR v1 font containing PaintGlyph with valid glyph IDs, .notdef, maximum valid glyph, and malformed out-of-range glyph controls; params resolve paint and child paint; expected output shape=FT_COLR_Paint { format=FT_COLR_PAINTFORMAT_GLYPH, u.glyph { paint, glyphID } }; comparison=exact C oracle return, glyphID, child opaque paint classification, and output preservation on invalid data.
+
+- id: ftcolor.FT_PaintLinearGradient
+  kind: record
+  symbol: FT_PaintLinearGradient
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 PaintLinearGradient record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for colorline, p0, p1, and p2 match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is colorline, p0, p1, p2 exactly, with p0/p1/p2 FT_Vector coordinates exposed as 16.16 fixed-point font units.
+    - id: get_paint_linear_gradient_values
+      description: FT_Get_Paint returns ColorLine and p0/p1/p2 values exactly as C, including variable COLR v1 interpolation when available.
+  # needs-input: operation=FT_Get_Color_Glyph_Paint, FT_Get_Paint, and FT_Get_Colorline_Stops; fixture_asset=COLR v1 font with static and variable PaintLinearGradient records covering horizontal, vertical, diagonal, p2 equal to p0, p2 distinct from p0, negative coordinates, and nested transforms; params resolve gradients under default and varied design coordinates, then iterate color stops; expected output shape=FT_COLR_Paint { format=FT_COLR_PAINTFORMAT_LINEAR_GRADIENT, u.linear_gradient { colorline { extend, color_stop_iterator }, p0, p1, p2 } } plus FT_ColorStop sequence; comparison=exact C oracle format, 16.16 vector fields, colorline iterator fields, color stop sequence, variable interpolation, and output preservation on malformed/truncated gradient data.

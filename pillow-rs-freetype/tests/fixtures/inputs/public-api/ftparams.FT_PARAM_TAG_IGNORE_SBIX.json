@@ -1,0 +1,196 @@
+{
+  "version": 1,
+  "subject": "ftparams.FT_PARAM_TAG_IGNORE_SBIX",
+  "manifest_cases": [
+    "value_matches_header",
+    "open_face_ignores_sbix",
+    "unsupported_or_non_sbix_no_spurious_failure"
+  ],
+  "cases": [
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_IGNORE_SBIX.value_matches_header",
+      "subject": "ftparams.FT_PARAM_TAG_IGNORE_SBIX",
+      "case": "value_matches_header",
+      "operation": "abi.constant_value",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_PARAM_TAG_IGNORE_SBIX",
+          "include": "<freetype/ftparams.h>",
+          "ctype": "FT_ULong",
+          "macro": "FT_MAKE_TAG('i','s','b','x')",
+          "value_hex": "0x69736278",
+          "value_decimal": 1769169528,
+          "use_site": "FT_Open_Face FT_Parameter.tag",
+          "source_refs": [
+            "freetype/include/freetype/ftparams.h",
+            "freetype/src/sfnt/sfobjs.c"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftparams",
+        "area:open-params"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "ctype": "FT_ULong",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "ctype",
+            "value",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_IGNORE_SBIX.open_face_ignores_sbix",
+      "subject": "ftparams.FT_PARAM_TAG_IGNORE_SBIX",
+      "case": "open_face_ignores_sbix",
+      "operation": "freetype.open_face_with_params",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/sbix/sbix-with-outlines.ttf",
+            "status": "required_future_asset",
+            "requires": "SFNT with 'sbix' table and outline glyphs for the same glyph ids"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "open_flags": [
+            "FT_OPEN_MEMORY",
+            "FT_OPEN_PARAMS"
+          ],
+          "parameters": [
+            {
+              "tag": "FT_PARAM_TAG_IGNORE_SBIX",
+              "data": "NULL"
+            }
+          ],
+          "probe": {
+            "glyph_index": 1,
+            "size_ppem": 24,
+            "load_flags": [
+              "FT_LOAD_DEFAULT"
+            ],
+            "observe": [
+              "FT_Error",
+              "face_flags",
+              "glyph_slot.format",
+              "outline.cbox",
+              "bitmap.descriptor"
+            ]
+          }
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftparams",
+        "area:sfnt-params"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "open_error": "FT_Error",
+          "face_flags": "FT_Long",
+          "glyph_slot": "format plus public metrics",
+          "outline_cbox": "FT_BBox when outline is loaded",
+          "bitmap": "FT_Bitmap descriptor when bitmap path is selected"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "open_error",
+            "face_flags",
+            "glyph_slot.format",
+            "glyph_slot.metrics",
+            "outline_cbox",
+            "bitmap"
+          ]
+        },
+        "fixture_requirements": [
+          "Add sbix-with-outlines.ttf; do not embed font bytes in this JSON."
+        ]
+      }
+    },
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_IGNORE_SBIX.unsupported_or_non_sbix_no_spurious_failure",
+      "subject": "ftparams.FT_PARAM_TAG_IGNORE_SBIX",
+      "case": "unsupported_or_non_sbix_no_spurious_failure",
+      "operation": "freetype.open_face_with_params",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "non_sbix_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "sbix_bitmap_only_font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/sbix/sbix-bitmap-only.ttf",
+            "status": "required_future_asset",
+            "requires": "SFNT with sbix strikes and no outline table to preserve C's no-fabricated-outline behavior"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "parameters": [
+            {
+              "tag": "FT_PARAM_TAG_IGNORE_SBIX",
+              "data": "NULL"
+            }
+          ],
+          "probe_glyph_index": 1,
+          "probe_load_flags": [
+            "FT_LOAD_DEFAULT"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftparams",
+        "area:sfnt-params"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "open_error": "FT_Error",
+          "load_error": "FT_Error",
+          "face_flags": "FT_Long",
+          "glyph_slot": "public fields or null on load error"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "open_error",
+            "load_error",
+            "face_flags",
+            "glyph_slot"
+          ]
+        },
+        "fixture_requirements": [
+          "Add bitmap-only sbix font to exercise the no-spurious-outline branch."
+        ]
+      }
+    }
+  ]
+}

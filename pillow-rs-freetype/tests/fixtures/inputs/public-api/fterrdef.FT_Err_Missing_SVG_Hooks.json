@@ -1,0 +1,164 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Missing_SVG_Hooks",
+  "manifest_cases": [
+    "value_matches_header",
+    "svg_render_without_hooks",
+    "svg_hooks_installed_success"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Missing_SVG_Hooks.value_matches_header",
+      "subject": "fterrdef.FT_Err_Missing_SVG_Hooks",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Missing_SVG_Hooks",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 158,
+          "expected_value_hex": "0x9E",
+          "expected_error_string_from_pinned_header": "SVG hooks have not been set",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested",
+          "symbol": "FT_Err_Missing_SVG_Hooks"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Missing_SVG_Hooks.svg_render_without_hooks",
+      "subject": "fterrdef.FT_Err_Missing_SVG_Hooks",
+      "case": "svg_render_without_hooks",
+      "operation": "FT_Render_Glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font_or_public_input",
+            "id": "fixtures/assets/fonts/otsvg_minimal.ttf",
+            "requirements": "OT-SVG font with one SVG glyph, loaded without installing renderer hooks before preset/render."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Missing_SVG_Hooks",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/svg/ftsvg.c:83,123",
+          "face_index": 0,
+          "glyph_index": 1,
+          "render_mode": "FT_RENDER_MODE_NORMAL",
+          "hooks": "unset"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "output_face": "pointer_nullness_or_preservation",
+          "slot_state": "mutation_class_if_slot_is_involved",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class",
+            "slot_state.mutation_class"
+          ]
+        },
+        "error": "FT_Err_Missing_SVG_Hooks",
+        "fixture_requirements": "OT-SVG font with one SVG glyph, loaded without installing renderer hooks before preset/render."
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Missing_SVG_Hooks.svg_hooks_installed_success",
+      "subject": "fterrdef.FT_Err_Missing_SVG_Hooks",
+      "case": "svg_hooks_installed_success",
+      "operation": "FT_Render_Glyph",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font_or_public_input",
+            "id": "fixtures/assets/fonts/otsvg_minimal.ttf",
+            "requirements": "Same OT-SVG glyph with runner-provided SVG hooks installed before preset/render, proving the failing case is hook state."
+          }
+        },
+        "params": {
+          "pinned_source": "freetype/src/svg/ftsvg.c:83-134",
+          "face_index": 0,
+          "glyph_index": 1,
+          "render_mode": "FT_RENDER_MODE_NORMAL",
+          "hooks": "installed_runner_stub"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "success-control",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "observed_state": "public fields and pointer/nullness classifications described by the operation",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "public_fields",
+            "output_bytes_or_values"
+          ]
+        },
+        "fixture_requirements": "Same OT-SVG glyph with runner-provided SVG hooks installed before preset/render, proving the failing case is hook state."
+      }
+    }
+  ]
+}

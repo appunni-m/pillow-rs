@@ -1,0 +1,304 @@
+{
+  "version": 1,
+  "subject": "ftrender.FT_Renderer_Class",
+  "manifest_cases": [
+    "layout_matches_header",
+    "standard_renderer_classes_match",
+    "render_mode_acceptance_matches_callbacks"
+  ],
+  "cases": [
+    {
+      "case_id": "ftrender.FT_Renderer_Class.layout_matches_header",
+      "subject": "ftrender.FT_Renderer_Class",
+      "case": "layout_matches_header",
+      "operation": "abi.record_layout",
+      "schema": "c_abi_record",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Renderer_Class",
+          "include": "<freetype/ftrender.h>",
+          "fields": [
+            {
+              "name": "root",
+              "type": "FT_Module_Class"
+            },
+            {
+              "name": "glyph_format",
+              "type": "FT_Glyph_Format"
+            },
+            {
+              "name": "render_glyph",
+              "type": "FT_Renderer_RenderFunc"
+            },
+            {
+              "name": "transform_glyph",
+              "type": "FT_Renderer_TransformFunc"
+            },
+            {
+              "name": "get_glyph_cbox",
+              "type": "FT_Renderer_GetCBoxFunc"
+            },
+            {
+              "name": "set_mode",
+              "type": "FT_Renderer_SetModeFunc"
+            },
+            {
+              "name": "raster_class",
+              "type": "const FT_Raster_Funcs*"
+            }
+          ],
+          "source_refs": [
+            "freetype/include/freetype/ftrender.h"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftrender",
+        "area:renderer-class"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "integer",
+          "alignof": "integer",
+          "field_offsets": "map",
+          "field_types": "map",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "field_offsets",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftrender.FT_Renderer_Class.standard_renderer_classes_match",
+      "subject": "ftrender.FT_Renderer_Class",
+      "case": "standard_renderer_classes_match",
+      "operation": "abi.renderer_class_metadata",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "classes": [
+            {
+              "symbol": "ft_smooth_renderer_class",
+              "module_name": "smooth",
+              "glyph_format": "FT_GLYPH_FORMAT_OUTLINE",
+              "render_glyph": "present",
+              "transform_glyph": "present",
+              "get_glyph_cbox": "present",
+              "set_mode": "present",
+              "raster_class": "ft_grays_raster"
+            },
+            {
+              "symbol": "ft_raster1_renderer_class",
+              "module_name": "raster1",
+              "glyph_format": "FT_GLYPH_FORMAT_OUTLINE",
+              "render_glyph": "present",
+              "transform_glyph": "present",
+              "get_glyph_cbox": "present",
+              "set_mode": "present",
+              "raster_class": "ft_standard_raster"
+            },
+            {
+              "symbol": "ft_sdf_renderer_class",
+              "module_name": "sdf",
+              "glyph_format": "FT_GLYPH_FORMAT_OUTLINE",
+              "render_glyph": "present",
+              "transform_glyph": "present",
+              "get_glyph_cbox": "present",
+              "set_mode": "present",
+              "raster_class": "ft_sdf_raster",
+              "build_dependent": true
+            },
+            {
+              "symbol": "ft_bitmap_sdf_renderer_class",
+              "module_name": "bsdf",
+              "glyph_format": "FT_GLYPH_FORMAT_BITMAP",
+              "render_glyph": "present",
+              "transform_glyph": "absent",
+              "get_glyph_cbox": "absent",
+              "set_mode": "present",
+              "raster_class": "ft_bitmap_sdf_raster",
+              "build_dependent": true
+            },
+            {
+              "symbol": "ft_svg_renderer_class",
+              "module_name": "svg",
+              "glyph_format": "FT_GLYPH_FORMAT_SVG",
+              "render_glyph": "present",
+              "transform_glyph": "absent",
+              "get_glyph_cbox": "absent",
+              "set_mode": "absent",
+              "raster_class": "NULL",
+              "build_dependent": true
+            }
+          ],
+          "source_refs": [
+            "freetype/src/smooth/ftsmooth.c",
+            "freetype/src/raster/ftrend1.c",
+            "freetype/src/sdf/ftsdfrend.c",
+            "freetype/src/svg/ftsvg.c"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftrender",
+        "area:renderer-class",
+        "build-dependent:renderer-modules"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "class_records": [
+            {
+              "symbol": "string",
+              "module_name": "string",
+              "glyph_format": "FT_Glyph_Format",
+              "callback_presence": "map",
+              "raster_class_presence": "bool"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "class_records.symbol",
+            "class_records.module_name",
+            "class_records.glyph_format",
+            "class_records.callback_presence",
+            "class_records.raster_class_presence"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftrender.FT_Renderer_Class.render_mode_acceptance_matches_callbacks",
+      "subject": "ftrender.FT_Renderer_Class",
+      "case": "render_mode_acceptance_matches_callbacks",
+      "operation": "ftrender.render_mode_acceptance",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "svg_font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/svg/color-svg.otf",
+            "status": "required_future_asset",
+            "requires": "SVG glyph font if FT_CONFIG_OPTION_SVG is enabled"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_index": 36,
+          "size_ppem": 24,
+          "mode_matrix": [
+            {
+              "class": "smooth",
+              "accepts": [
+                "FT_RENDER_MODE_NORMAL",
+                "FT_RENDER_MODE_LIGHT",
+                "FT_RENDER_MODE_LCD",
+                "FT_RENDER_MODE_LCD_V"
+              ],
+              "rejects": [
+                "FT_RENDER_MODE_MONO",
+                "FT_RENDER_MODE_SDF",
+                "FT_RENDER_MODE_SVG"
+              ],
+              "reject_error": "Cannot_Render_Glyph"
+            },
+            {
+              "class": "raster1",
+              "accepts": [
+                "FT_RENDER_MODE_MONO"
+              ],
+              "rejects": [
+                "FT_RENDER_MODE_NORMAL",
+                "FT_RENDER_MODE_LIGHT",
+                "FT_RENDER_MODE_LCD",
+                "FT_RENDER_MODE_LCD_V"
+              ]
+            },
+            {
+              "class": "sdf",
+              "accepts": [
+                "FT_RENDER_MODE_SDF"
+              ],
+              "rejects": [
+                "FT_RENDER_MODE_NORMAL",
+                "FT_RENDER_MODE_LIGHT",
+                "FT_RENDER_MODE_MONO",
+                "FT_RENDER_MODE_LCD",
+                "FT_RENDER_MODE_LCD_V"
+              ],
+              "build_dependent": true
+            },
+            {
+              "class": "svg",
+              "accepts": [
+                "FT_RENDER_MODE_SVG"
+              ],
+              "build_dependent": true
+            }
+          ],
+          "source_refs": [
+            "freetype/src/smooth/ftsmooth.c",
+            "freetype/src/raster/ftrend1.c",
+            "freetype/src/sdf/ftsdfrend.c",
+            "freetype/src/svg/ftsvg.c"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftrender",
+        "area:renderer-class",
+        "build-dependent:renderer-modules"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "render_results": [
+            {
+              "class": "string",
+              "render_mode": "FT_Render_Mode",
+              "return": "FT_Error",
+              "bitmap": "descriptor and bytes/hash when successful"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "render_results.class",
+            "render_results.render_mode",
+            "render_results.return",
+            "render_results.bitmap"
+          ]
+        },
+        "fixture_requirements": [
+          "Add SVG font if SVG mode is included in a configured build."
+        ]
+      }
+    }
+  ]
+}

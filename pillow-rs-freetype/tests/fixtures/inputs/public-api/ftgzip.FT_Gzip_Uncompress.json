@@ -1,0 +1,271 @@
+{
+  "version": 1,
+  "subject": "ftgzip.FT_Gzip_Uncompress",
+  "manifest_cases": [
+    "uncompresses_valid_gzip_buffer",
+    "rejects_invalid_arguments",
+    "reports_buffer_too_small",
+    "reports_invalid_compressed_data",
+    "reports_unimplemented_without_zlib"
+  ],
+  "cases": [
+    {
+      "case_id": "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer",
+      "subject": "ftgzip.FT_Gzip_Uncompress",
+      "case": "uncompresses_valid_gzip_buffer",
+      "operation": "ftgzip.gzip_uncompress",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "gzip_payloads": {
+            "kind": "ref",
+            "id": "compressed/gzip/small-text-and-empty-payloads.json"
+          }
+        },
+        "params": {
+          "memory": "library_memory",
+          "output_buffer_sizes": [
+            "exact_uncompressed_size",
+            "larger_than_uncompressed_size"
+          ],
+          "input_kinds": [
+            "gzip",
+            "zlib_wrapped"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgzip"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "output_len_after_call": "FT_ULong",
+          "output_bytes": "prefix of caller output buffer"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "rows[*].status",
+            "rows[*].output_len",
+            "rows[*].output_bytes"
+          ]
+        },
+        "fixture_requirements": [
+          "compressed/gzip/small-text-and-empty-payloads.json must reference gzip and zlib-wrapped byte fixtures, not embed generated oracle outputs"
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftgzip.h:98-137",
+          "freetype/src/gzip/ftgzip.c:711-771"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments",
+      "subject": "ftgzip.FT_Gzip_Uncompress",
+      "case": "rejects_invalid_arguments",
+      "operation": "ftgzip.gzip_uncompress",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "gzip_payload": {
+            "kind": "ref",
+            "id": "compressed/gzip/small-valid.gz"
+          }
+        },
+        "params": {
+          "argument_matrix": [
+            {
+              "memory": null,
+              "output": "valid",
+              "output_len": "valid"
+            },
+            {
+              "memory": "library_memory",
+              "output": null,
+              "output_len": "valid"
+            },
+            {
+              "memory": "library_memory",
+              "output": "valid",
+              "output_len": null
+            }
+          ],
+          "input_pointer_null_is_delayed_to_inflate": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgzip"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "output_len": "preserved sentinel"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].output_len_preserved",
+            "rows[*].output_preserved"
+          ]
+        },
+        "error": "FT_Err_Invalid_Argument",
+        "source_refs": [
+          "freetype/src/gzip/ftgzip.c:723-735"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgzip.FT_Gzip_Uncompress.reports_buffer_too_small",
+      "subject": "ftgzip.FT_Gzip_Uncompress",
+      "case": "reports_buffer_too_small",
+      "operation": "ftgzip.gzip_uncompress",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "gzip_payload": {
+            "kind": "ref",
+            "id": "compressed/gzip/small-valid.gz"
+          }
+        },
+        "params": {
+          "memory": "library_memory",
+          "output_buffer_sizes": [
+            0,
+            "uncompressed_size_minus_one"
+          ],
+          "initial_output_len_sentinel": "buffer_capacity"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgzip"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "output_len": "not success total_out",
+          "output_bytes": "partial write classification"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].output_len",
+            "rows[*].output_prefix_class"
+          ]
+        },
+        "error": "FT_Err_Array_Too_Large",
+        "source_refs": [
+          "freetype/src/gzip/ftgzip.c:748-761"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgzip.FT_Gzip_Uncompress.reports_invalid_compressed_data",
+      "subject": "ftgzip.FT_Gzip_Uncompress",
+      "case": "reports_invalid_compressed_data",
+      "operation": "ftgzip.gzip_uncompress",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "invalid_payloads": {
+            "kind": "ref",
+            "id": "compressed/gzip/invalid-and-truncated-payloads.json"
+          }
+        },
+        "params": {
+          "memory": "library_memory",
+          "output_buffer_size": "larger_than_expected_payload",
+          "input_kinds": [
+            "truncated_gzip",
+            "corrupt_crc_gzip",
+            "plain_uncompressed_bytes",
+            "dictionary_required_zlib"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgzip"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "output_len": "failure mutation class",
+          "output_bytes": "failure preservation or partial write class"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].output_len",
+            "rows[*].output_prefix_class"
+          ]
+        },
+        "error": "FT_Err_Invalid_Table",
+        "fixture_requirements": [
+          "compressed/gzip/invalid-and-truncated-payloads.json must contain deterministic invalid byte fixture references"
+        ],
+        "source_refs": [
+          "freetype/src/gzip/ftgzip.c:764-767"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgzip.FT_Gzip_Uncompress.reports_unimplemented_without_zlib",
+      "subject": "ftgzip.FT_Gzip_Uncompress",
+      "case": "reports_unimplemented_without_zlib",
+      "operation": "ftgzip.gzip_uncompress",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "gzip_payload": {
+            "kind": "ref",
+            "id": "compressed/gzip/small-valid.gz"
+          }
+        },
+        "params": {
+          "build_feature": "without FT_CONFIG_OPTION_USE_ZLIB",
+          "memory": "library_memory",
+          "output": "valid",
+          "output_len": "valid"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgzip"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "status": "FT_Error",
+          "zlib_enabled": "bool"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "zlib_enabled"
+          ]
+        },
+        "error": "FT_Err_Unimplemented_Feature",
+        "source_refs": [
+          "freetype/src/gzip/ftgzip.c:773-802"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Invalid_Stream_Skip",
+  "manifest_cases": [
+    "value_matches_header",
+    "pcf_table_skip_failure"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Stream_Skip.value_matches_header",
+      "subject": "fterrdef.FT_Err_Invalid_Stream_Skip",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Invalid_Stream_Skip",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 83,
+          "expected_value_hex": "0x53",
+          "expected_error_string_from_pinned_header": "invalid stream skip",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Invalid_Stream_Skip",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Stream_Skip.pcf_table_skip_failure",
+      "subject": "fterrdef.FT_Err_Invalid_Stream_Skip",
+      "case": "pcf_table_skip_failure",
+      "operation": "FT_New_Memory_Face_or_FT_New_Open_Face",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/pcf/invalid-stream-skip.pcf",
+            "requirements": "PCF font or custom stream whose compressed or padded table skip target extends beyond available bytes while earlier PCF structure is valid."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Invalid_Stream_Skip",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/pcf/pcfread.c:388,394,565,579",
+          "face_index": 0,
+          "skip_target": "fixture_defined_pcf_table_padding_or_compressed_region"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Stream_Skip",
+        "fixture_requirements": "PCF data or stream control that reaches pcfread.c skip failure rather than earlier Invalid_Table parsing.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "output_face": "pointer_nullness_or_preservation",
+          "stream_position": "cursor_or_preservation_class",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class",
+            "stream_position"
+          ]
+        }
+      }
+    }
+  ]
+}

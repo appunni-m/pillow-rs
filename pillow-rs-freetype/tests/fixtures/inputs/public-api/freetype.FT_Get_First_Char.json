@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Get_First_Char",
+  "manifest_cases": [
+    "first_mapped_char_and_glyph",
+    "empty_or_no_active_charmap",
+    "charcode_zero_disambiguated_by_glyph_index"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Get_First_Char.first_mapped_char_and_glyph",
+      "subject": "freetype.FT_Get_First_Char",
+      "case": "first_mapped_char_and_glyph",
+      "operation": "freetype.get_first_char",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "select_charmap": "FT_ENCODING_UNICODE",
+          "agindex_pointer": "non_null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:charmap-iteration"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_ULong charcode",
+          "writes": {
+            "agindex": "FT_UInt glyph_index"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return",
+            "writes.agindex"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_First_Char.empty_or_no_active_charmap",
+      "subject": "freetype.FT_Get_First_Char",
+      "case": "empty_or_no_active_charmap",
+      "operation": "freetype.get_first_char",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "empty_charmap_font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/charmap/empty-or-no-active-charmap.ttf",
+            "status": "required_future_asset",
+            "requires": "accepted font or harness scenario with no active mappings"
+          }
+        },
+        "params": {
+          "face_variants": [
+            "null",
+            "no_active_charmap",
+            "empty_charmap"
+          ],
+          "agindex_initial": 3735928559
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:charmap-iteration"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_ULong zero sentinel",
+          "writes": {
+            "agindex": "FT_UInt zero sentinel"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return",
+            "writes.agindex"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_First_Char.charcode_zero_disambiguated_by_glyph_index",
+      "subject": "freetype.FT_Get_First_Char",
+      "case": "charcode_zero_disambiguated_by_glyph_index",
+      "operation": "freetype.get_first_char",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/charmap/charcode-zero-mapped.ttf",
+            "status": "required_future_asset",
+            "requires": "font whose active charmap maps codepoint 0 to a nonzero glyph"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "agindex_pointer": "non_null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:charmap-iteration"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_ULong possibly_zero",
+          "writes": {
+            "agindex": "FT_UInt distinguishes mapped zero"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return",
+            "writes.agindex"
+          ]
+        }
+      }
+    }
+  ]
+}

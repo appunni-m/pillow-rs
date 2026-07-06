@@ -1,0 +1,191 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Face",
+  "manifest_cases": [
+    "valid_font_bytes",
+    "owns_slot_size_and_charmaps",
+    "null_and_done_handle_errors"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Face.valid_font_bytes",
+      "subject": "freetype.FT_Face",
+      "case": "valid_font_bytes",
+      "operation": "freetype.new_memory_face",
+      "schema": "face_handle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "probe_fields": [
+            "num_faces",
+            "face_index",
+            "face_flags",
+            "style_flags",
+            "num_glyphs",
+            "family_name",
+            "style_name",
+            "num_charmaps",
+            "units_per_EM",
+            "glyph",
+            "size",
+            "charmap"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "face": "FT_FaceRec public view",
+          "strings": "nullable_c_strings",
+          "owned_handles": "glyph,size,charmap"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "face.num_faces",
+            "face.face_index",
+            "face.face_flags",
+            "face.style_flags",
+            "face.num_glyphs",
+            "face.family_name",
+            "face.style_name",
+            "face.num_charmaps",
+            "face.units_per_EM",
+            "face.glyph_nullness",
+            "face.size_nullness",
+            "face.charmap_nullness"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h",
+          "freetype/src/base/ftobjs.c"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Face.owns_slot_size_and_charmaps",
+      "subject": "freetype.FT_Face",
+      "case": "owns_slot_size_and_charmaps",
+      "operation": "freetype.face_owned_handles",
+      "schema": "face_handle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "operations": [
+            "FT_Set_Pixel_Sizes",
+            "FT_Select_Charmap",
+            "FT_Load_Glyph",
+            "FT_Done_Face"
+          ],
+          "identity_policy": "compare stable owner/index identity, not raw addresses"
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "glyph_owner": "same_face",
+          "size_owner": "same_face",
+          "charmap_owner": "same_face",
+          "lifetime": "valid_until_done_face"
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "status",
+            "glyph.owner",
+            "size.owner",
+            "charmaps[*].owner",
+            "handles_after_done.policy"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h",
+          "freetype/src/base/ftobjs.c"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Face.null_and_done_handle_errors",
+      "subject": "freetype.FT_Face",
+      "case": "null_and_done_handle_errors",
+      "operation": "freetype.face_handle_error_policy",
+      "schema": "error_matrix",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "operations": [
+            "FT_Load_Glyph",
+            "FT_Get_Char_Index",
+            "FT_Get_Advance",
+            "FT_Done_Face"
+          ],
+          "handles": [
+            "null_face",
+            "destroyed_face_policy_probe"
+          ],
+          "output_preservation_sentinels": true
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "output_preserved": "bool",
+          "destroyed_handle_policy": "abi_safety_policy_or_c_crash_class"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].operation",
+            "rows[*].status",
+            "rows[*].error",
+            "rows[*].outputs_preserved"
+          ]
+        },
+        "error": "Invalid_Face_Handle_or_project_destroyed_handle_policy",
+        "source_refs": [
+          "freetype/src/base/ftobjs.c",
+          "freetype/src/base/ftadvanc.c"
+        ]
+      }
+    }
+  ]
+}

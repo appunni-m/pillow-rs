@@ -1,0 +1,254 @@
+{
+  "version": 1,
+  "subject": "ftincrem.FT_Incremental_MetricsRec",
+  "manifest_cases": [
+    "layout_matches_c",
+    "input_metrics_seed_matches_c",
+    "horizontal_override_applied",
+    "vertical_override_applied_where_c_calls_it"
+  ],
+  "cases": [
+    {
+      "case_id": "ftincrem.FT_Incremental_MetricsRec.layout_matches_c",
+      "subject": "ftincrem.FT_Incremental_MetricsRec",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftincrem.h",
+          "symbol": "FT_Incremental_MetricsRec",
+          "fields_in_order": [
+            "bearing_x",
+            "bearing_y",
+            "advance",
+            "advance_v"
+          ],
+          "field_types": {
+            "bearing_x": "FT_Long",
+            "bearing_y": "FT_Long",
+            "advance": "FT_Long",
+            "advance_v": "FT_Long"
+          },
+          "probe": [
+            "sizeof",
+            "alignof",
+            "offsetof",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftincrem",
+        "area:incremental_metrics"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "offsets": "object<field,usize>",
+          "field_types": "object<field,c_type>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "offsets",
+            "field_types",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftincrem.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftincrem.FT_Incremental_MetricsRec.input_metrics_seed_matches_c",
+      "subject": "ftincrem.FT_Incremental_MetricsRec",
+      "case": "input_metrics_seed_matches_c",
+      "operation": "ftincrem.inspect_metrics_callback_seed",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/incremental/minimal-glyf-incremental.ttf"
+          }
+        },
+        "params": {
+          "glyph_index": 1,
+          "vertical": false,
+          "source_seed_fields": {
+            "truetype": [
+              "loader->left_bearing",
+              "loader->advance",
+              "bearing_y=0",
+              "advance_v=0"
+            ],
+            "cff_type1_cid": [
+              "builder.left_bearing.x",
+              "builder.advance.x",
+              "builder.advance.y"
+            ]
+          }
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "runtime:incremental_metrics",
+        "source:ttgload"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "seed_metrics": "FT_Incremental_MetricsRec",
+          "vertical_arg": "FT_Bool",
+          "glyph_index": "FT_UInt"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "seed_metrics",
+            "vertical_arg",
+            "glyph_index"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/truetype/ttgload.c",
+          "freetype/src/type1/t1gload.c",
+          "freetype/src/cff/cffgload.c",
+          "freetype/src/cid/cidgload.c"
+        ],
+        "fixture_requirements": [
+          "Requires an incremental font and callback logger that records the ametrics contents before mutating them."
+        ]
+      }
+    },
+    {
+      "case_id": "ftincrem.FT_Incremental_MetricsRec.horizontal_override_applied",
+      "subject": "ftincrem.FT_Incremental_MetricsRec",
+      "case": "horizontal_override_applied",
+      "operation": "ftincrem.override_glyph_metrics",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/incremental/minimal-glyf-incremental.ttf"
+          }
+        },
+        "params": {
+          "glyph_index": 1,
+          "vertical": false,
+          "callback_sets": {
+            "bearing_x": 123,
+            "bearing_y": 0,
+            "advance": 700,
+            "advance_v": 0
+          },
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "runtime:incremental_metrics",
+        "horizontal_metrics"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "load_error": "FT_Error",
+          "slot_metrics": "FT_Glyph_Metrics",
+          "callback_metrics": "FT_Incremental_MetricsRec"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "load_error",
+            "callback_metrics",
+            "slot_metrics.horiBearingX",
+            "slot_metrics.horiAdvance"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/truetype/ttgload.c"
+        ],
+        "fixture_requirements": [
+          "Requires an incremental TrueType row where the metrics callback succeeds and mutates bearing_x and advance."
+        ]
+      }
+    },
+    {
+      "case_id": "ftincrem.FT_Incremental_MetricsRec.vertical_override_applied_where_c_calls_it",
+      "subject": "ftincrem.FT_Incremental_MetricsRec",
+      "case": "vertical_override_applied_where_c_calls_it",
+      "operation": "ftincrem.override_vertical_glyph_metrics",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "vertical_font": {
+            "kind": "ref",
+            "id": "fonts/incremental/vertical-metrics-incremental.ttf"
+          }
+        },
+        "params": {
+          "glyph_index": 1,
+          "vertical": true,
+          "load_flags": [
+            "FT_LOAD_VERTICAL_LAYOUT"
+          ],
+          "callback_sets": {
+            "bearing_x": 0,
+            "bearing_y": 800,
+            "advance": 1000,
+            "advance_v": 1000
+          },
+          "only_assert_when_c_calls_metrics_with_vertical_true": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "runtime:incremental_metrics",
+        "vertical_metrics"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "load_error": "FT_Error",
+          "vertical_callback_seen": "bool",
+          "slot_metrics": "FT_Glyph_Metrics",
+          "advance": "FT_Vector"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "load_error",
+            "vertical_callback_seen",
+            "slot_metrics.vertBearingY",
+            "slot_metrics.vertAdvance",
+            "advance"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/truetype/ttgload.c"
+        ],
+        "fixture_requirements": [
+          "Requires an incremental font with vertical metrics path reachable; rows where FreeType does not call get_glyph_metrics with vertical=true must be reported as not applicable, not forced to pass."
+        ]
+      }
+    }
+  ]
+}

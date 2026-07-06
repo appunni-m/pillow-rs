@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "subject": "fttrigon.FT_ANGLE_2PI",
+  "manifest_cases": ["value_matches_header", "periodic_equivalence"],
+  "metadata": {
+    "abi": {
+      "kind": "constant",
+      "header": "freetype/fttrigon.h",
+      "symbol": "FT_ANGLE_2PI",
+      "ctype": "FT_Angle",
+      "macro": "FT_ANGLE_PI * 2",
+      "value_decimal": 23592960,
+      "value_hex": "0x01680000"
+    },
+    "source_refs": ["freetype/include/freetype/fttrigon.h", "freetype/src/base/fttrigon.c"]
+  },
+  "cases": [
+    {
+      "case_id": "fttrigon.FT_ANGLE_2PI.value_matches_header",
+      "subject": "fttrigon.FT_ANGLE_2PI",
+      "case": "value_matches_header",
+      "operation": "abi.constant_value",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/fttrigon.h",
+          "symbol": "FT_ANGLE_2PI",
+          "ctype": "FT_Angle",
+          "macro": "FT_ANGLE_PI * 2",
+          "value_decimal": 23592960,
+          "value_hex": "0x01680000"
+        }
+      },
+      "classifiers": ["kind:constant", "header:fttrigon", "area:trigonometry"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"symbol": "string", "ctype": "FT_Angle", "value": "integer", "import_compiles": "bool"},
+        "compare": {"mode": "value", "paths": ["symbol", "value", "import_compiles"]}
+      }
+    },
+    {
+      "case_id": "fttrigon.FT_ANGLE_2PI.periodic_equivalence",
+      "subject": "fttrigon.FT_ANGLE_2PI",
+      "case": "periodic_equivalence",
+      "operation": "fttrigon.periodic_equivalence",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "angle_pairs": [
+            {"base": 0, "periodic": 23592960},
+            {"base": 5898240, "periodic": 29491200},
+            {"base": -2949120, "periodic": 20643840},
+            {"base": 1234567, "periodic": 24827527}
+          ],
+          "operations": ["FT_Sin", "FT_Cos", "FT_Tan", "FT_Vector_Unit", "FT_Vector_Rotate"],
+          "rotate_vectors": [{"x": 65536, "y": 0}, {"x": -32768, "y": 8192}]
+        }
+      },
+      "classifiers": ["kind:constant", "header:fttrigon", "area:trigonometry", "behavior:periodic"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"results": [{"operation": "string", "base_output": "integer_or_FT_Vector", "periodic_output": "integer_or_FT_Vector"}]},
+        "compare": {"mode": "exact", "paths": ["results[*].base_output", "results[*].periodic_output"]}
+      }
+    }
+  ]
+}

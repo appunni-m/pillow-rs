@@ -1,0 +1,165 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Ok",
+  "manifest_cases": [
+    "value_matches_header",
+    "successful_face_lifecycle",
+    "successful_constant_status_does_not_mask_output"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Ok.value_matches_header",
+      "subject": "fterrdef.FT_Err_Ok",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Ok",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 0,
+          "expected_value_hex": "0x00",
+          "expected_error_string_from_pinned_header": "no error",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested",
+          "symbol": "FT_Err_Ok"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Ok.successful_face_lifecycle",
+      "subject": "fterrdef.FT_Err_Ok",
+      "case": "successful_face_lifecycle",
+      "operation": "face_lifecycle.load_render_done",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font_or_public_input",
+            "id": "fixtures/assets/fonts/DejaVuSans.ttf",
+            "requirements": "Valid scalable TrueType font used for FT_Init_FreeType, FT_New_Memory_Face, FT_Set_Pixel_Sizes, FT_Load_Glyph, optional render, and FT_Done_* success statuses."
+          }
+        },
+        "params": {
+          "pinned_source": "freetype/include/freetype/fterrdef.h:56; public lifecycle functions",
+          "face_index": 0,
+          "pixel_size": 20,
+          "glyph_index": 36,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "render_mode": "FT_RENDER_MODE_NORMAL"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "success-control",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "observed_state": "public fields and pointer/nullness classifications described by the operation",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "public_fields",
+            "output_bytes_or_values"
+          ]
+        },
+        "fixture_requirements": "Valid scalable TrueType font used for FT_Init_FreeType, FT_New_Memory_Face, FT_Set_Pixel_Sizes, FT_Load_Glyph, optional render, and FT_Done_* success statuses."
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Ok.successful_constant_status_does_not_mask_output",
+      "subject": "fterrdef.FT_Err_Ok",
+      "case": "successful_constant_status_does_not_mask_output",
+      "operation": "representative_success_outputs",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font_or_public_input",
+            "id": "fixtures/assets/fonts/DejaVuSans.ttf",
+            "requirements": "Success fixture also compares output fields such as face flags, size metrics, glyph metrics, and bitmap bytes instead of status alone."
+          }
+        },
+        "params": {
+          "pinned_source": "freetype/include/freetype/fterrdef.h:56; FT_Load_Glyph/FT_Render_Glyph public outputs",
+          "face_index": 0,
+          "pixel_size": 20,
+          "glyph_index": 36,
+          "compare_outputs": [
+            "face_flags",
+            "size_metrics",
+            "glyph_metrics",
+            "bitmap_bytes"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "success-control",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "observed_state": "public fields and pointer/nullness classifications described by the operation",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "public_fields",
+            "output_bytes_or_values"
+          ]
+        },
+        "fixture_requirements": "Success fixture also compares output fields such as face flags, size metrics, glyph metrics, and bitmap bytes instead of status alone."
+      }
+    }
+  ]
+}

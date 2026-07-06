@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "subject": "ftcache.FTC_ScalerRec",
+  "manifest_cases": [
+    "layout_matches_c",
+    "pixel_scaler_uses_integer_pixels",
+    "point_scaler_uses_26_6_points_and_resolution"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcache.FTC_ScalerRec.layout_matches_c",
+      "subject": "ftcache.FTC_ScalerRec",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftcache.h>",
+          "record": "FTC_ScalerRec",
+          "fields": [
+            "face_id",
+            "width",
+            "height",
+            "pixel",
+            "x_res",
+            "y_res"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcache",
+        "area:cache-manager"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FTC_ScalerRec",
+          "size": "sizeof",
+          "alignment": "alignof",
+          "field_offsets": [
+            "face_id",
+            "width",
+            "height",
+            "pixel",
+            "x_res",
+            "y_res"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_ScalerRec.pixel_scaler_uses_integer_pixels",
+      "subject": "ftcache.FTC_ScalerRec",
+      "case": "pixel_scaler_uses_integer_pixels",
+      "operation": "ftcache.manager_lookup_size",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "scalable_control_font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "scaler": {
+            "face_id": "stable_pointer:dejavu",
+            "width": 16,
+            "height": 20,
+            "pixel": 1,
+            "x_res": 300,
+            "y_res": 600
+          },
+          "probe": [
+            "FTC_Manager_LookupSize",
+            "FT_Load_Glyph metrics"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcache",
+        "area:cache-manager"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "size_metrics": "integer_pixel_size",
+          "resolutions": "ignored"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "size_metrics",
+            "glyph_metrics"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_ScalerRec.point_scaler_uses_26_6_points_and_resolution",
+      "subject": "ftcache.FTC_ScalerRec",
+      "case": "point_scaler_uses_26_6_points_and_resolution",
+      "operation": "ftcache.manager_lookup_size",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "scalable_control_font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "scalers": [
+            {
+              "face_id": "stable_pointer:dejavu",
+              "width": 1024,
+              "height": 1024,
+              "pixel": 0,
+              "x_res": 72,
+              "y_res": 72
+            },
+            {
+              "face_id": "stable_pointer:dejavu",
+              "width": 1024,
+              "height": 1024,
+              "pixel": 0,
+              "x_res": 144,
+              "y_res": 72
+            }
+          ],
+          "probe": [
+            "FTC_Manager_LookupSize",
+            "FT_Load_Glyph metrics"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcache",
+        "area:cache-manager"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "size_metrics": "26_6_point_size_scaled_by_resolution"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].size_metrics",
+            "outputs[*].glyph_metrics"
+          ]
+        }
+      }
+    }
+  ]
+}

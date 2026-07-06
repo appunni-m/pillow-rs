@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "subject": "ftsnames.FT_SfntLangTag",
+  "manifest_cases": [
+    "layout_matches_c",
+    "populated_from_langtag_lookup"
+  ],
+  "metadata": {
+    "abi": {
+      "kind": "record",
+      "header": "freetype/ftsnames.h",
+      "symbol": "FT_SfntLangTag",
+      "fields": [
+        "FT_Byte* string",
+        "FT_UInt string_len"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "case_id": "ftsnames.FT_SfntLangTag.layout_matches_c",
+      "subject": "ftsnames.FT_SfntLangTag",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftsnames.h",
+          "symbol": "FT_SfntLangTag",
+          "fields_in_order": [
+            "string",
+            "string_len"
+          ],
+          "probe": [
+            "sizeof",
+            "alignof",
+            "offsetof",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftsnames",
+        "area:abi_layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "offsets": "object<field,usize>",
+          "field_types": "object<field,c_type>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "offsets",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftsnames.FT_SfntLangTag.populated_from_langtag_lookup",
+      "subject": "ftsnames.FT_SfntLangTag",
+      "case": "populated_from_langtag_lookup",
+      "operation": "ftsnames.get_sfnt_lang_tag",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/sfnt/name-format1-langtag.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "langID": "first_name_language_id_greater_than_0x8000",
+          "preserve_raw_bytes": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftsnames",
+        "area:runtime_record"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "record": {
+            "string": "borrowed_byte_pointer",
+            "string_len": "FT_UInt",
+            "string_bytes": "bytes"
+          }
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "record.string_nullness",
+            "record.string_len",
+            "record.string_bytes"
+          ]
+        },
+        "fixture_requirements": [
+          "SFNT name-format-1 font with deterministic language tag payload"
+        ]
+      }
+    }
+  ]
+}

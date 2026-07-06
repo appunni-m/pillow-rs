@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "subject": "ttnameid.TT_NAME_ID_TRADEMARK",
+  "manifest_cases": ["value_matches_header", "public_import_contract"],
+  "cases": [
+    {
+      "case_id": "ttnameid.TT_NAME_ID_TRADEMARK.value_matches_header",
+      "subject": "ttnameid.TT_NAME_ID_TRADEMARK",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"header": "freetype/ttnameid.h", "include": "<freetype/ttnameid.h>", "symbol": "TT_NAME_ID_TRADEMARK", "declared_as": "preprocessor integer constant", "expected_value_from_pinned_header": 7, "expected_value_hex": "0x0007", "name_table_field": "FT_SfntName.name_id", "source_ref": "freetype/include/freetype/ttnameid.h:785-833"}},
+      "classifiers": ["kind:constant", "header:ttnameid", "area:sfnt-name", "public-api-slice:1020-1039"],
+      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "value": "uint16", "value_hex": "string", "header": "string"}, "compare": {"mode": "value", "paths": ["symbol", "value", "value_hex", "header"]}, "sources_checked": ["freetype/include/freetype/ttnameid.h:785-833"]}
+    },
+    {
+      "case_id": "ttnameid.TT_NAME_ID_TRADEMARK.public_import_contract",
+      "subject": "ttnameid.TT_NAME_ID_TRADEMARK",
+      "case": "public_import_contract",
+      "operation": "constant.import",
+      "schema": "api_import",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"include": "<freetype/ttnameid.h>", "symbol": "TT_NAME_ID_TRADEMARK", "usage": "FT_UShort name_id = TT_NAME_ID_TRADEMARK", "expected_value_from_pinned_header": 7}},
+      "classifiers": ["kind:constant", "header:ttnameid", "area:public-import", "public-api-slice:1020-1039"],
+      "expectation": {"status": "ok", "output_shape": {"compile_status": "ok", "symbol": "TT_NAME_ID_TRADEMARK", "ctype": "FT_UShort-compatible integer", "value": "uint16"}, "compare": {"mode": "exact", "paths": ["compile_status", "symbol", "ctype", "value"]}, "sources_checked": ["freetype/include/freetype/ttnameid.h:785-833"]}
+    }
+  ]
+}

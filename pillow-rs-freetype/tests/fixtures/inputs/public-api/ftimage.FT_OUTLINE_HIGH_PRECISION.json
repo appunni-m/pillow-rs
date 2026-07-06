@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_OUTLINE_HIGH_PRECISION",
+  "manifest_cases": [
+    "value_matches_header",
+    "raster_hint_behavior"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_OUTLINE_HIGH_PRECISION.value_matches_header",
+      "subject": "ftimage.FT_OUTLINE_HIGH_PRECISION",
+      "case": "value_matches_header",
+      "operation": "ftimage.outline_flag_value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_OUTLINE_HIGH_PRECISION",
+          "include": "<freetype/ftimage.h>",
+          "import": "#include <freetype/ftimage.h>",
+          "expected_value": 256,
+          "expected_value_hex": "0x100",
+          "flag_field": "FT_Outline.flags"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftimage",
+        "area:outline",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:425-459"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_OUTLINE_HIGH_PRECISION.raster_hint_behavior",
+      "subject": "ftimage.FT_OUTLINE_HIGH_PRECISION",
+      "case": "raster_hint_behavior",
+      "operation": "ftoutln.outline_render",
+      "schema": "outline_raster",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline": {
+            "kind": "ref",
+            "id": "outlines/synthetic/thin-diagonal-stems.json",
+            "asset_kind": "outline"
+          },
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "outline_flags_matrix": [
+            "FT_OUTLINE_NONE",
+            "FT_OUTLINE_HIGH_PRECISION"
+          ],
+          "render_modes": [
+            "FT_RENDER_MODE_NORMAL",
+            "FT_RENDER_MODE_MONO",
+            "FT_RENDER_MODE_LCD"
+          ],
+          "glyph_indices": [
+            36,
+            92
+          ],
+          "expected_behavior": "flag is a renderer hint; compare exact C output, including no-op equivalence where ignored"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftimage",
+        "area:outline",
+        "area:raster-hint",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "bitmap": "FT_Bitmap",
+          "spans": "array",
+          "flag_effect": "changed|unchanged"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "bitmap",
+            "spans",
+            "flag_effect"
+          ]
+        },
+        "fixture_requirements": [
+          "Future synthetic diagonal/thin-stem outlines that make precision-hint behavior observable if the C renderer observes it."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:425-443",
+          "freetype/src/smooth/ftgrays.c:1964-2025",
+          "freetype/src/raster/ftraster.c:2677-2708"
+        ]
+      }
+    }
+  ]
+}

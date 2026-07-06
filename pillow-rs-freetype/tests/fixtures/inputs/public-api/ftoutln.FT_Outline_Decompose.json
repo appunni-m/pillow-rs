@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "subject": "ftoutln.FT_Outline_Decompose",
+  "manifest_cases": ["line_conic_cubic_event_order", "shift_delta_applied_to_callbacks", "callback_error_propagates", "invalid_outline_or_interface_errors"],
+  "cases": [
+    {
+      "case_id": "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order",
+      "subject": "ftoutln.FT_Outline_Decompose",
+      "case": "line_conic_cubic_event_order",
+      "operation": "ftoutln.outline_decompose",
+      "schema": "callback_trace",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/decompose/line-conic-cubic.json", "asset_kind": "outline_model"}}, "params": {"funcs": {"shift": 0, "delta": 0}, "trace_callbacks": ["move_to", "line_to", "conic_to", "cubic_to"]}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "behavior:callbacks"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Decompose", "kind": "function", "c_signature": "FT_Error FT_Outline_Decompose(FT_Outline* outline, const FT_Outline_Funcs* func_interface, void* user)"}, "source_behavior": "The walker emits move, line, conic, and cubic callbacks in contour order and closes contours to the start point."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "events": [{"kind": "string", "points": ["FT_Vector"]}]}, "compare": {"mode": "exact", "paths": ["return", "events"]}, "source_refs": ["freetype/include/freetype/ftoutln.h:87-125", "freetype/src/base/ftoutln.c:43-288"], "fixture_requirements": ["Outline containing line, consecutive conic controls, and valid cubic pairs."]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks",
+      "subject": "ftoutln.FT_Outline_Decompose",
+      "case": "shift_delta_applied_to_callbacks",
+      "operation": "ftoutln.outline_decompose",
+      "schema": "callback_trace",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/decompose/scaled-delta-square.json", "asset_kind": "outline_model"}}, "params": {"funcs": {"shift": 2, "delta": 7}, "coordinate_rule": "SCALED(x)=(x<<shift)-delta"}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "behavior:callback-scaling"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Decompose", "kind": "function", "c_signature": "FT_Error FT_Outline_Decompose(FT_Outline* outline, const FT_Outline_Funcs* func_interface, void* user)"}, "source_behavior": "Callback coordinates apply the function table shift and delta before emission."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "events": [{"kind": "string", "points": ["FT_Vector"]}]}, "compare": {"mode": "exact", "paths": ["return", "events"]}, "source_refs": ["freetype/src/base/ftoutln.c:45-46", "freetype/src/base/ftoutln.c:74-207"], "fixture_requirements": ["Outline with nonzero coordinates so shift and delta are observable."]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_Decompose.callback_error_propagates",
+      "subject": "ftoutln.FT_Outline_Decompose",
+      "case": "callback_error_propagates",
+      "operation": "ftoutln.outline_decompose",
+      "schema": "callback_trace",
+      "expect_error": true,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/decompose/line-conic-cubic.json", "asset_kind": "outline_model"}}, "params": {"callback_fail_at": {"event_index": 2, "error": "FT_Err_Invalid_Argument"}, "trace_events_before_failure": true}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "error:callback-propagation"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Decompose", "kind": "function", "c_signature": "FT_Error FT_Outline_Decompose(FT_Outline* outline, const FT_Outline_Funcs* func_interface, void* user)"}, "source_behavior": "A nonzero callback return exits immediately with the same error."},
+      "expectation": {"status": "error", "output_shape": {"return": "FT_Error", "events_before_error": "array"}, "compare": {"mode": "exact_error", "paths": ["return", "events_before_error"]}, "error": "callback_supplied_error", "source_refs": ["freetype/src/base/ftoutln.c:99-102", "freetype/src/base/ftoutln.c:137-140", "freetype/src/base/ftoutln.c:179-182"]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_Decompose.invalid_outline_or_interface_errors",
+      "subject": "ftoutln.FT_Outline_Decompose",
+      "case": "invalid_outline_or_interface_errors",
+      "operation": "ftoutln.outline_decompose",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {"assets": {"bad_cubic": {"kind": "ref", "id": "outlines/invalid/cubic-start.json", "asset_kind": "outline_model"}, "bad_contour": {"kind": "ref", "id": "outlines/invalid/decreasing-contour-end.json", "asset_kind": "outline_model"}}, "params": {"scenarios": [{"outline_pointer": null}, {"func_interface_pointer": null}, {"outline_ref": "bad_cubic"}, {"outline_ref": "bad_contour"}]}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "error:invalid-outline"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Decompose", "kind": "function", "c_signature": "FT_Error FT_Outline_Decompose(FT_Outline* outline, const FT_Outline_Funcs* func_interface, void* user)"}, "source_behavior": "Null outline returns Invalid_Outline, null function interface returns Invalid_Argument, and malformed contours return Invalid_Outline."},
+      "expectation": {"status": "error", "output_shape": {"results": [{"return": "FT_Error"}]}, "compare": {"mode": "exact_error", "paths": ["results[*].return"]}, "error": ["FT_Err_Invalid_Outline", "FT_Err_Invalid_Argument"], "source_refs": ["freetype/src/base/ftoutln.c:69-73", "freetype/src/base/ftoutln.c:83-90", "freetype/src/base/ftoutln.c:215-225"], "fixture_requirements": ["Malformed outline whose first tag is cubic.", "Malformed outline with decreasing contour endpoint."]}
+    }
+  ]
+}

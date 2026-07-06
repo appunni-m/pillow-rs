@@ -1,0 +1,320 @@
+{
+  "version": 1,
+  "subject": "tttables.TT_HoriHeader",
+  "manifest_cases": [
+    "public_import_contract",
+    "abi_layout_matches_header",
+    "get_sfnt_table_hhea_fields",
+    "variation_metrics_runtime"
+  ],
+  "cases": [
+    {
+      "case_id": "tttables.TT_HoriHeader.public_import_contract",
+      "subject": "tttables.TT_HoriHeader",
+      "case": "public_import_contract",
+      "operation": "abi.header_import",
+      "schema": "api_import",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/tttables.h>",
+          "symbol": "TT_HoriHeader",
+          "usage": "TT_HoriHeader* hhea = (TT_HoriHeader*)FT_Get_Sfnt_Table(face, FT_SFNT_HHEA); FT_Short asc = hhea->Ascender;"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "area:public-import",
+        "public-api-slice:1520-1539"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile_status": "ok",
+          "type_visible": "bool",
+          "fields_accessible": [
+            "Version",
+            "Ascender",
+            "Descender",
+            "Line_Gap",
+            "advance_Width_Max",
+            "min_Left_Side_Bearing",
+            "min_Right_Side_Bearing",
+            "xMax_Extent",
+            "caret_Slope_Rise",
+            "caret_Slope_Run",
+            "caret_Offset",
+            "Reserved[0]",
+            "Reserved[1]",
+            "Reserved[2]",
+            "Reserved[3]",
+            "metric_Data_Format",
+            "number_Of_HMetrics",
+            "long_metrics",
+            "short_metrics"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "compile_status",
+            "type_visible",
+            "fields_accessible"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/tttables.h:113-228",
+          "freetype/src/sfnt/ttmtx.c:128-194"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_HoriHeader.abi_layout_matches_header",
+      "subject": "tttables.TT_HoriHeader",
+      "case": "abi_layout_matches_header",
+      "operation": "abi.record_layout",
+      "schema": "record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/tttables.h>",
+          "record": "TT_HoriHeader",
+          "fields": [
+            "Version",
+            "Ascender",
+            "Descender",
+            "Line_Gap",
+            "advance_Width_Max",
+            "min_Left_Side_Bearing",
+            "min_Right_Side_Bearing",
+            "xMax_Extent",
+            "caret_Slope_Rise",
+            "caret_Slope_Run",
+            "caret_Offset",
+            "Reserved[0]",
+            "Reserved[1]",
+            "Reserved[2]",
+            "Reserved[3]",
+            "metric_Data_Format",
+            "number_Of_HMetrics",
+            "long_metrics",
+            "short_metrics"
+          ],
+          "array_fields": {
+            "Reserved": 4
+          },
+          "pointer_fields": [
+            "long_metrics",
+            "short_metrics"
+          ],
+          "probe": [
+            "sizeof",
+            "alignof",
+            "offsetof"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "area:abi-layout",
+        "public-api-slice:1520-1539"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "size_t",
+          "alignof": "size_t",
+          "field_offsets": "object<string,size_t>",
+          "field_order": [
+            "Version",
+            "Ascender",
+            "Descender",
+            "Line_Gap",
+            "advance_Width_Max",
+            "min_Left_Side_Bearing",
+            "min_Right_Side_Bearing",
+            "xMax_Extent",
+            "caret_Slope_Rise",
+            "caret_Slope_Run",
+            "caret_Offset",
+            "Reserved[0]",
+            "Reserved[1]",
+            "Reserved[2]",
+            "Reserved[3]",
+            "metric_Data_Format",
+            "number_Of_HMetrics",
+            "long_metrics",
+            "short_metrics"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "field_offsets",
+            "field_order"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/tttables.h:113-228",
+          "freetype/src/sfnt/ttmtx.c:128-194"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_HoriHeader.get_sfnt_table_hhea_fields",
+      "subject": "tttables.TT_HoriHeader",
+      "case": "get_sfnt_table_hhea_fields",
+      "operation": "sfnt.get_sfnt_table.hhea",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sfnt/basic-ttf.ttf",
+            "requirements": "Valid SFNT font with hhea/hmtx tables."
+          }
+        },
+        "params": {
+          "function": "FT_Get_Sfnt_Table",
+          "sfnt_table": "FT_SFNT_HHEA",
+          "face_index": 0,
+          "fields": [
+            "Version",
+            "Ascender",
+            "Descender",
+            "Line_Gap",
+            "advance_Width_Max",
+            "min_Left_Side_Bearing",
+            "min_Right_Side_Bearing",
+            "xMax_Extent",
+            "caret_Slope_Rise",
+            "caret_Slope_Run",
+            "caret_Offset",
+            "Reserved[0]",
+            "Reserved[1]",
+            "Reserved[2]",
+            "Reserved[3]",
+            "metric_Data_Format",
+            "number_Of_HMetrics",
+            "long_metrics",
+            "short_metrics"
+          ],
+          "pointer_compare": "nullness_or_identity_class_only"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "runtime:FT_Get_Sfnt_Table",
+        "requires:future-font",
+        "public-api-slice:1520-1539"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "pointer_null": false,
+          "fields": "object",
+          "long_metrics_nullness": "bool",
+          "short_metrics_nullness": "bool",
+          "abi_size": "size_t",
+          "abi_align": "size_t",
+          "field_offsets": "object"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "pointer_null",
+            "fields",
+            "long_metrics_nullness",
+            "short_metrics_nullness",
+            "abi_size",
+            "abi_align",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "Missing asset: input/fonts/sfnt/basic-ttf.ttf must contain hhea/hmtx tables."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/tttables.h:113-228",
+          "freetype/src/sfnt/ttmtx.c:128-194",
+          "freetype/include/freetype/tttables.h:620-632",
+          "freetype/src/base/ftobjs.c:4357-4372",
+          "freetype/src/sfnt/sfdriver.c:100-143"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_HoriHeader.variation_metrics_runtime",
+      "subject": "tttables.TT_HoriHeader",
+      "case": "variation_metrics_runtime",
+      "operation": "sfnt.get_sfnt_table.hhea.after_variation",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variation/mvar-horizontal-metrics.ttf",
+            "requirements": "Variable SFNT font with MVAR data affecting horizontal caret slope/run/offset fields."
+          }
+        },
+        "params": {
+          "function_sequence": [
+            "FT_New_Face",
+            "FT_Set_Var_Design_Coordinates",
+            "FT_Get_Sfnt_Table(FT_SFNT_HHEA)"
+          ],
+          "variation_coords": [
+            "default",
+            "changed"
+          ],
+          "fields": [
+            "caret_Slope_Rise",
+            "caret_Slope_Run",
+            "caret_Offset"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "runtime:variation",
+        "requires:future-font",
+        "public-api-slice:1520-1539"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "error": "FT_Error",
+          "coords_label": "string",
+          "fields": "object"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "coords_label",
+            "fields.caret_Slope_Rise",
+            "fields.caret_Slope_Run",
+            "fields.caret_Offset"
+          ]
+        },
+        "fixture_requirements": [
+          "Missing asset: input/fonts/variation/mvar-horizontal-metrics.ttf must include MVAR horizontal metric deltas."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/tttables.h:194-198",
+          "freetype/src/sfnt/ttmtx.c:128-194"
+        ]
+      }
+    }
+  ]
+}

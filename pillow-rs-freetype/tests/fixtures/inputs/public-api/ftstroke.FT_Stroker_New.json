@@ -1,0 +1,204 @@
+{
+  "version": 1,
+  "subject": "ftstroke.FT_Stroker_New",
+  "manifest_cases": [
+    "valid_library_allocates_stroker",
+    "invalid_library",
+    "invalid_output_pointer",
+    "allocation_failure"
+  ],
+  "cases": [
+    {
+      "case_id": "ftstroke.FT_Stroker_New.valid_library_allocates_stroker",
+      "subject": "ftstroke.FT_Stroker_New",
+      "case": "valid_library_allocates_stroker",
+      "operation": "ftstroke.stroker_new",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_New",
+        "signature": "FT_Error FT_Stroker_New(FT_Library library, FT_Stroker* astroker)",
+        "return": "FT_Error"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "valid FT_Library from FT_Init_FreeType",
+          "astroker_initial": "sentinel_non_null",
+          "post_checks": [
+            "FT_Stroker_Set",
+            "FT_Stroker_Done"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:allocator"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "stroker_pointer": "non-null FT_Stroker",
+          "library_pointer_identity": "same_as_input",
+          "border_buffers": "initialized empty"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "stroker_pointer.nullness",
+            "library_pointer_identity",
+            "border_counts_after_new"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftstroke.h:252-270",
+          "freetype/src/base/ftstroke.c:791-819"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_New.invalid_library",
+      "subject": "ftstroke.FT_Stroker_New",
+      "case": "invalid_library",
+      "operation": "ftstroke.stroker_new",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_New",
+        "signature": "FT_Error FT_Stroker_New(FT_Library library, FT_Stroker* astroker)"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "null",
+          "astroker_initial": "sentinel_non_null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Library_Handle",
+        "output_shape": {
+          "status": "FT_Error",
+          "astroker_after": "unchanged sentinel"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "astroker_after"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:801-802"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_New.invalid_output_pointer",
+      "subject": "ftstroke.FT_Stroker_New",
+      "case": "invalid_output_pointer",
+      "operation": "ftstroke.stroker_new",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_New",
+        "signature": "FT_Error FT_Stroker_New(FT_Library library, FT_Stroker* astroker)"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "valid FT_Library",
+          "astroker": "null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Argument",
+        "output_shape": {
+          "status": "FT_Error",
+          "allocator_calls": "none"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "allocator_calls"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:804-805"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_New.allocation_failure",
+      "subject": "ftstroke.FT_Stroker_New",
+      "case": "allocation_failure",
+      "operation": "ftstroke.stroker_new",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_New",
+        "signature": "FT_Error FT_Stroker_New(FT_Library library, FT_Stroker* astroker)"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "valid FT_Library with failing FT_MemoryRec",
+          "astroker_initial": "sentinel_non_null",
+          "allocation_failure_at": "FT_NEW(stroker)"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:allocator",
+        "area:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "allocator_error",
+        "output_shape": {
+          "status": "FT_Error",
+          "stroker_pointer": "null",
+          "allocation_event_log": "failed allocation"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "stroker_pointer.nullness",
+            "allocation_event_log"
+          ]
+        },
+        "fixture_requirements": [
+          "future ABI runner must provide a failing FT_MemoryRec allocator."
+        ],
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:807-819"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "subject": "fttypes.FT_UInt",
+  "manifest_cases": ["alias_defined_as_unsigned_int", "size_alignment_and_unsigned_range", "numeric_parameter_domain"],
+  "cases": [
+    {
+      "case_id": "fttypes.FT_UInt.alias_defined_as_unsigned_int",
+      "subject": "fttypes.FT_UInt",
+      "case": "alias_defined_as_unsigned_int",
+      "operation": "abi.typedef_import",
+      "schema": "abi_type",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_UInt", "c_definition": "typedef unsigned int FT_UInt", "underlying_type": "unsigned int", "signedness": "unsigned", "probes": ["include_compiles", "assignment_compiles"]}},
+      "classifiers": ["kind:type-alias", "header:fttypes", "area:integer"],
+      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_UInt", "kind": "typedef", "underlying": "unsigned int"}},
+      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "underlying_type": "c_type", "signedness": "unsigned", "import_compiles": "bool"}, "compare": {"mode": "value", "paths": ["symbol", "underlying_type", "signedness", "import_compiles"]}, "source_refs": ["freetype/include/freetype/fttypes.h:226-234"]}
+    },
+    {
+      "case_id": "fttypes.FT_UInt.size_alignment_and_unsigned_range",
+      "subject": "fttypes.FT_UInt",
+      "case": "size_alignment_and_unsigned_range",
+      "operation": "abi.scalar_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_UInt", "underlying_type": "unsigned int", "boundary_selectors": [0, 1, 65535, "UINT_MAX"], "probes": ["sizeof", "alignof", "unsigned_min", "unsigned_max", "roundtrip_cast"]}},
+      "classifiers": ["kind:type-alias", "header:fttypes", "area:scalar"],
+      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_UInt", "kind": "scalar", "underlying": "unsigned int"}},
+      "expectation": {"status": "ok", "output_shape": {"sizeof": "usize", "alignof": "usize", "signedness": "unsigned", "range": {"min": "integer", "max": "integer"}, "roundtrip_values": ["FT_UInt"]}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "signedness", "range", "roundtrip_values"]}, "source_refs": ["freetype/include/freetype/fttypes.h:226-234", "freetype/include/freetype/config/ftstdlib.h:60-69"]}
+    },
+    {
+      "case_id": "fttypes.FT_UInt.numeric_parameter_domain",
+      "subject": "fttypes.FT_UInt",
+      "case": "numeric_parameter_domain",
+      "operation": "fttypes.uint_parameter_domain",
+      "schema": "api_model",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"model_values": [0, 1, 2, 16, 64, 65535], "public_uses": ["glyph indices", "counts", "flags"], "negative_values_allowed": false}},
+      "classifiers": ["kind:type-alias", "header:fttypes", "area:numeric-parameter"],
+      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_UInt", "kind": "integer-parameter", "underlying": "unsigned int"}},
+      "expectation": {"status": "ok", "output_shape": {"values": ["FT_UInt"], "negative_values_allowed": false, "zero": "preserved", "positive_values": "preserved"}, "compare": {"mode": "exact", "paths": ["values", "negative_values_allowed", "zero", "positive_values"]}, "source_refs": ["freetype/include/freetype/fttypes.h:226-234"]}
+    }
+  ]
+}

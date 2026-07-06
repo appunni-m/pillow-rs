@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "subject": "ftsizes.FT_New_Size",
+  "manifest_cases": [
+    "import_contract",
+    "create_secondary_size_success",
+    "null_face_error",
+    "null_output_pointer_error"
+  ],
+  "metadata": {
+    "abi": {
+      "kind": "function",
+      "header": "freetype/ftsizes.h",
+      "symbol": "FT_New_Size",
+      "declaration": "FT_Error FT_New_Size(FT_Face face, FT_Size* size)",
+      "source": "freetype/src/base/ftobjs.c",
+      "c_behavior": "NULL face returns Invalid_Face_Handle; NULL output pointer returns Invalid_Argument; success writes a non-null inactive size and appends it to face->sizes_list"
+    }
+  },
+  "cases": [
+    {
+      "case_id": "ftsizes.FT_New_Size.import_contract",
+      "subject": "ftsizes.FT_New_Size",
+      "case": "import_contract",
+      "operation": "abi.function_import",
+      "schema": "abi_import",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftsizes.h",
+          "symbol": "FT_New_Size",
+          "return_type": "FT_Error",
+          "arguments": [
+            "FT_Face face",
+            "FT_Size* size"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsizes",
+        "area:abi_import"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "import_compiles": "bool",
+          "symbol_resolves": "bool",
+          "signature": "FT_Error(FT_Face,FT_Size*)"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "import_compiles",
+            "symbol_resolves",
+            "signature"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftsizes.FT_New_Size.create_secondary_size_success",
+      "subject": "ftsizes.FT_New_Size",
+      "case": "create_secondary_size_success",
+      "operation": "ftsizes.new_size_sequence",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "sequence": [
+            "snapshot initial face->size",
+            "FT_New_Size secondary_size",
+            "snapshot face->size before activation",
+            "FT_Activate_Size secondary_size",
+            "FT_Request_Size nominal height=20 width=0 dpi=72",
+            "FT_Activate_Size initial_size",
+            "FT_Request_Size nominal height=10 width=0 dpi=72"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsizes",
+        "area:size_lifecycle"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return_sequence": "array<FT_Error>",
+          "new_size_nullness": "non_null",
+          "new_size_parent_face": "handle_identity",
+          "active_size_unchanged_until_activation": "bool",
+          "metrics_by_size": "object<size_handle,FT_Size_Metrics>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return_sequence",
+            "new_size_nullness",
+            "new_size_parent_face",
+            "active_size_unchanged_until_activation",
+            "metrics_by_size"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftsizes.FT_New_Size.null_face_error",
+      "subject": "ftsizes.FT_New_Size",
+      "case": "null_face_error",
+      "operation": "ftsizes.new_size",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "face": "null",
+          "output": "valid_pointer"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsizes",
+        "area:error_path"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "output_size": "unchanged_or_null"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error",
+            "output_size_nullness"
+          ]
+        },
+        "error": "Invalid_Face_Handle"
+      }
+    },
+    {
+      "case_id": "ftsizes.FT_New_Size.null_output_pointer_error",
+      "subject": "ftsizes.FT_New_Size",
+      "case": "null_output_pointer_error",
+      "operation": "ftsizes.new_size",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "output": "null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsizes",
+        "area:error_path"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    }
+  ]
+}

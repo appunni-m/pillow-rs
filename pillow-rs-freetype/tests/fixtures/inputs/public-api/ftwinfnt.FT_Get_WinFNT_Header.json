@@ -1,0 +1,309 @@
+{
+  "version": 1,
+  "subject": "ftwinfnt.FT_Get_WinFNT_Header",
+  "manifest_cases": [
+    "signature_and_dispatch_contract",
+    "winfnt_face_copies_header_success",
+    "null_face_returns_invalid_face_handle",
+    "null_output_returns_invalid_argument",
+    "non_winfnt_face_returns_invalid_argument"
+  ],
+  "cases": [
+    {
+      "case_id": "ftwinfnt.FT_Get_WinFNT_Header.signature_and_dispatch_contract",
+      "subject": "ftwinfnt.FT_Get_WinFNT_Header",
+      "case": "signature_and_dispatch_contract",
+      "operation": "ftwinfnt.get_winfnt_header_abi",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftwinfnt.h",
+        "symbol": "FT_Get_WinFNT_Header",
+        "signature": "FT_Error FT_Get_WinFNT_Header(FT_Face face, FT_WinFNT_HeaderRec* aheader)",
+        "return": "FT_Error",
+        "params": [
+          "FT_Face face",
+          "FT_WinFNT_HeaderRec* aheader"
+        ],
+        "dispatch": "FT_FACE_LOOKUP_SERVICE(face, service, WINFNT)"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include_header": "freetype/ftwinfnt.h",
+          "import_symbol": "FT_Get_WinFNT_Header",
+          "check_order": [
+            "null_face",
+            "null_header",
+            "WINFNT service dispatch"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftwinfnt",
+        "area:public-api"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile": "symbol import succeeds",
+          "return": "FT_Error",
+          "params": [
+            "FT_Face",
+            "FT_WinFNT_HeaderRec*"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "signature",
+            "return",
+            "params",
+            "dispatch"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftwinfnt.h:224-257",
+          "freetype/src/base/ftwinfnt.c:27-48"
+        ]
+      }
+    },
+    {
+      "case_id": "ftwinfnt.FT_Get_WinFNT_Header.winfnt_face_copies_header_success",
+      "subject": "ftwinfnt.FT_Get_WinFNT_Header",
+      "case": "winfnt_face_copies_header_success",
+      "operation": "ftwinfnt.get_winfnt_header",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftwinfnt.h",
+        "symbol": "FT_Get_WinFNT_Header",
+        "signature": "FT_Error FT_Get_WinFNT_Header(FT_Face face, FT_WinFNT_HeaderRec* aheader)"
+      },
+      "inputs": {
+        "assets": {
+          "winfnt_font": {
+            "kind": "ref",
+            "id": "fonts/winfnt/bitmap-header.fnt",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "face_source": "winfnt_font",
+          "face_index": 0,
+          "header_pointer_mode": "caller_owned_record",
+          "initial_header_sentinel": "0xA5"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftwinfnt",
+        "format:winfnt"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Err_Ok",
+          "header": "FT_WinFNT_HeaderRec copied from driver-owned parsed header",
+          "sentinel_unchanged": false
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "header.version",
+            "header.file_size",
+            "header.copyright",
+            "header.file_type",
+            "header.nominal_point_size",
+            "header.vertical_resolution",
+            "header.horizontal_resolution",
+            "header.ascent",
+            "header.internal_leading",
+            "header.external_leading",
+            "header.italic",
+            "header.underline",
+            "header.strike_out",
+            "header.weight",
+            "header.charset",
+            "header.pixel_width",
+            "header.pixel_height",
+            "header.pitch_and_family",
+            "header.avg_width",
+            "header.max_width",
+            "header.first_char",
+            "header.last_char",
+            "header.default_char",
+            "header.break_char",
+            "header.bytes_per_row",
+            "header.device_offset",
+            "header.face_name_offset",
+            "header.bits_pointer",
+            "header.bits_offset",
+            "header.reserved",
+            "header.flags",
+            "header.A_space",
+            "header.B_space",
+            "header.C_space",
+            "header.color_table_offset",
+            "header.reserved1"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftwinfnt.h:182-221",
+          "freetype/src/base/ftwinfnt.c:41-45"
+        ],
+        "fixture_requirements": [
+          "fonts/winfnt/bitmap-header.fnt must be a valid Windows FNT or FON face whose parsed header exercises nonzero offsets, charset, dimensions, ABC spacing, flags, and reserved1 fields."
+        ]
+      }
+    },
+    {
+      "case_id": "ftwinfnt.FT_Get_WinFNT_Header.null_face_returns_invalid_face_handle",
+      "subject": "ftwinfnt.FT_Get_WinFNT_Header",
+      "case": "null_face_returns_invalid_face_handle",
+      "operation": "ftwinfnt.get_winfnt_header",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftwinfnt.h",
+        "symbol": "FT_Get_WinFNT_Header"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "face_source": "null",
+          "header_pointer_mode": "caller_owned_record",
+          "initial_header_sentinel": "0xA5"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftwinfnt",
+        "error:null-face"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Face_Handle",
+        "output_shape": {
+          "status": "FT_Err_Invalid_Face_Handle",
+          "header": "sentinel preserved",
+          "sentinel_unchanged": true
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "sentinel_unchanged"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftwinfnt.c:35-36"
+        ]
+      }
+    },
+    {
+      "case_id": "ftwinfnt.FT_Get_WinFNT_Header.null_output_returns_invalid_argument",
+      "subject": "ftwinfnt.FT_Get_WinFNT_Header",
+      "case": "null_output_returns_invalid_argument",
+      "operation": "ftwinfnt.get_winfnt_header",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftwinfnt.h",
+        "symbol": "FT_Get_WinFNT_Header"
+      },
+      "inputs": {
+        "assets": {
+          "winfnt_font": {
+            "kind": "ref",
+            "id": "fonts/winfnt/bitmap-header.fnt",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "face_source": "winfnt_font",
+          "face_index": 0,
+          "header_pointer_mode": "null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftwinfnt",
+        "error:null-output"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Argument",
+        "output_shape": {
+          "status": "FT_Err_Invalid_Argument",
+          "header": "null output pointer"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftwinfnt.c:38-39"
+        ]
+      }
+    },
+    {
+      "case_id": "ftwinfnt.FT_Get_WinFNT_Header.non_winfnt_face_returns_invalid_argument",
+      "subject": "ftwinfnt.FT_Get_WinFNT_Header",
+      "case": "non_winfnt_face_returns_invalid_argument",
+      "operation": "ftwinfnt.get_winfnt_header",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftwinfnt.h",
+        "symbol": "FT_Get_WinFNT_Header"
+      },
+      "inputs": {
+        "assets": {
+          "non_winfnt_font": {
+            "kind": "ref",
+            "id": "fonts/DejaVuSans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "face_source": "non_winfnt_font",
+          "face_index": 0,
+          "header_pointer_mode": "caller_owned_record",
+          "initial_header_sentinel": "0xA5"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftwinfnt",
+        "format:non-winfnt",
+        "error:no-service"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Argument",
+        "output_shape": {
+          "status": "FT_Err_Invalid_Argument",
+          "header": "sentinel preserved when WINFNT service is absent",
+          "sentinel_unchanged": true
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "sentinel_unchanged"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftwinfnt.c:41-47"
+        ]
+      }
+    }
+  ]
+}

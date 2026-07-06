@@ -1,0 +1,221 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Get_Glyph_Name",
+  "manifest_cases": [
+    "named_glyph_success",
+    "truncates_and_terminates_to_buffer_size",
+    "error_no_names_or_invalid_glyph",
+    "error_null_face_or_buffer"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Get_Glyph_Name.named_glyph_success",
+      "subject": "freetype.FT_Get_Glyph_Name",
+      "case": "named_glyph_success",
+      "operation": "freetype.get_glyph_name",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/names/post-glyph-names.ttf",
+            "status": "required_future_asset",
+            "requires": "font with stable post/CFF glyph names for .notdef and A"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_indices": [
+            ".notdef",
+            "A"
+          ],
+          "buffer_max": 64
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-names"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "buffer": "nul_terminated_bytes"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "buffer_bytes"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Glyph_Name.truncates_and_terminates_to_buffer_size",
+      "subject": "freetype.FT_Get_Glyph_Name",
+      "case": "truncates_and_terminates_to_buffer_size",
+      "operation": "freetype.get_glyph_name",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/names/post-glyph-names.ttf",
+            "status": "required_future_asset",
+            "requires": "font with stable post/CFF glyph names for .notdef and A"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_index": "A",
+          "buffer_max_values": [
+            1,
+            2,
+            3,
+            4,
+            8
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-names"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "buffer": "truncated_nul_terminated_bytes"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "buffer_bytes"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Glyph_Name.error_no_names_or_invalid_glyph",
+      "subject": "freetype.FT_Get_Glyph_Name",
+      "case": "error_no_names_or_invalid_glyph",
+      "operation": "freetype.get_glyph_name",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font_no_names": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/names/no-glyph-names.ttf",
+            "status": "required_future_asset",
+            "requires": "font accepted by C FreeType whose face flags do not include FT_FACE_FLAG_GLYPH_NAMES"
+          },
+          "font_names": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/names/post-glyph-names.ttf",
+            "status": "required_future_asset",
+            "requires": "font with stable post/CFF glyph names for .notdef and A"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_indices": [
+            "valid_on_no_names",
+            "num_glyphs",
+            "num_glyphs_plus_1"
+          ],
+          "buffer_initial": "0xAA",
+          "buffer_max": 64
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-names"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "buffer_first_byte": "zeroed_before_service_errors"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error",
+            "buffer_bytes"
+          ]
+        },
+        "error": "c_oracle"
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Glyph_Name.error_null_face_or_buffer",
+      "subject": "freetype.FT_Get_Glyph_Name",
+      "case": "error_null_face_or_buffer",
+      "operation": "freetype.get_glyph_name",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/names/post-glyph-names.ttf",
+            "status": "required_future_asset",
+            "requires": "font with stable post/CFF glyph names for .notdef and A"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "face": "null",
+              "buffer_max": 64
+            },
+            {
+              "face_index": 0,
+              "buffer": "null",
+              "buffer_max": 64
+            },
+            {
+              "face_index": 0,
+              "buffer_max": 0
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-names"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "buffer_write": "none_or_c_oracle"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error",
+            "buffer_snapshot"
+          ]
+        },
+        "error": "c_oracle"
+      }
+    }
+  ]
+}

@@ -1,0 +1,190 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_FaceRec",
+  "manifest_cases": [
+    "layout_matches_c",
+    "populated_public_fields_match_c"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_FaceRec.layout_matches_c",
+      "subject": "freetype.FT_FaceRec",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/freetype.h",
+          "symbol": "FT_FaceRec",
+          "fields_in_order": [
+            "num_faces",
+            "face_index",
+            "face_flags",
+            "style_flags",
+            "num_glyphs",
+            "family_name",
+            "style_name",
+            "num_fixed_sizes",
+            "available_sizes",
+            "num_charmaps",
+            "charmaps",
+            "generic",
+            "bbox",
+            "units_per_EM",
+            "ascender",
+            "descender",
+            "height",
+            "max_advance_width",
+            "max_advance_height",
+            "underline_position",
+            "underline_thickness",
+            "glyph",
+            "size",
+            "charmap",
+            "driver",
+            "memory",
+            "stream",
+            "sizes_list",
+            "autohint",
+            "extensions",
+            "internal"
+          ],
+          "nested_public_records": [
+            "FT_Generic",
+            "FT_BBox",
+            "FT_ListRec"
+          ],
+          "probe": [
+            "sizeof",
+            "alignof",
+            "offsetof",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "area:abi_layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "offsets": "object<field,usize>",
+          "field_types": "object<field,c_type>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "offsets",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_FaceRec.populated_public_fields_match_c",
+      "subject": "freetype.FT_FaceRec",
+      "case": "populated_public_fields_match_c",
+      "operation": "freetype.inspect_face_rec",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          },
+          "bitmap_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap/embedded-strikes.ttf"
+          },
+          "variable_font": {
+            "kind": "ref",
+            "id": "fonts/variable/inter-var.ttf"
+          },
+          "attachment": {
+            "kind": "ref",
+            "id": "input/aux/type1/attach-afm-base.afm"
+          }
+        },
+        "params": {
+          "open": "FT_Open_Face",
+          "face_index": 0,
+          "operations": [
+            "initial_snapshot",
+            "FT_Set_Char_Size",
+            "FT_Load_Glyph",
+            "FT_Select_Charmap",
+            "FT_Attach_Stream",
+            "FT_Set_Var_Design_Coordinates"
+          ],
+          "probe": [
+            "public_scalar_fields",
+            "string_contents_and_nullness",
+            "child_handle_identity",
+            "bbox",
+            "metrics",
+            "available_sizes",
+            "charmaps"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "face": "FT_FaceRec public field snapshot",
+          "strings": "nullness_and_bytes",
+          "child_handles": "identity_class",
+          "private_handles": "nullness_only"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "num_faces",
+            "face_index",
+            "face_flags",
+            "style_flags",
+            "num_glyphs",
+            "family_name",
+            "style_name",
+            "num_fixed_sizes",
+            "available_sizes",
+            "num_charmaps",
+            "charmaps",
+            "bbox",
+            "units_per_EM",
+            "ascender",
+            "descender",
+            "height",
+            "max_advance_width",
+            "max_advance_height",
+            "underline_position",
+            "underline_thickness",
+            "glyph_identity",
+            "size_identity",
+            "charmap_identity",
+            "private_handle_nullness"
+          ]
+        },
+        "fixture_requirements": [
+          "Scalable SFNT, bitmap-strike font, variable font, and optional Type1 attachment fixture for mutation coverage"
+        ]
+      }
+    }
+  ]
+}

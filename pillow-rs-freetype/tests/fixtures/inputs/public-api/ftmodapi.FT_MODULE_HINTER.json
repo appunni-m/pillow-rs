@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "subject": "ftmodapi.FT_MODULE_HINTER",
+  "manifest_cases": ["value_matches_header", "autofitter_module_sets_hinter_bit"],
+  "cases": [
+    {
+      "case_id": "ftmodapi.FT_MODULE_HINTER.value_matches_header",
+      "subject": "ftmodapi.FT_MODULE_HINTER",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"symbol": "FT_MODULE_HINTER", "include": "<freetype/ftmodapi.h>", "expected_value": 4, "expected_value_expr": "4"}},
+      "classifiers": ["kind:constant", "header:ftmodapi", "surface:public-c-api", "coverage:value"],
+      "metadata": {"abi": {"header": "freetype/ftmodapi.h", "symbol": "FT_MODULE_HINTER", "kind": "macro_constant"}, "constant_type": "FT_Module_Class module_flags bit"},
+      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "value": "integer", "import_compiles": "bool"}, "compare": {"mode": "value", "paths": ["symbol", "value", "import_compiles"]}, "source_refs": ["freetype/include/freetype/ftmodapi.h:112-123"]}
+    },
+    {
+      "case_id": "ftmodapi.FT_MODULE_HINTER.autofitter_module_sets_hinter_bit",
+      "subject": "ftmodapi.FT_MODULE_HINTER",
+      "case": "autofitter_module_sets_hinter_bit",
+      "operation": "ftmodapi.inspect_module_flags",
+      "schema": "glyph_result",
+      "expect_error": false,
+      "inputs": {"assets": {"font": {"kind": "ref", "id": "fonts/truetype/bytecode-hinted.ttf", "asset_kind": "font"}}, "params": {"module_names": ["autofitter", "truetype", "type1", "cff"], "flag": "FT_MODULE_HINTER", "distinguish_from": "FT_MODULE_DRIVER_HAS_HINTER", "glyph_index": 36, "pixel_size": 24, "load_flags": ["FT_LOAD_FORCE_AUTOHINT"]}},
+      "classifiers": ["kind:constant", "header:ftmodapi", "surface:public-c-api", "operation:module-flags"],
+      "metadata": {"abi": {"header": "freetype/ftmodapi.h", "symbol": "FT_MODULE_HINTER", "kind": "macro_constant"}, "source_behavior": "The autofitter module class sets FT_MODULE_HINTER; native-hinting font drivers set FT_MODULE_DRIVER_HAS_HINTER instead."},
+      "expectation": {"status": "ok", "output_shape": {"macro_value": "integer", "modules": [{"module_name": "string", "module_flags": "integer", "has_hinter_bit": "bool", "has_driver_has_hinter_bit": "bool"}], "glyph_metrics": "FT_Glyph_Metrics", "outline_cbox": "FT_BBox"}, "compare": {"mode": "exact", "paths": ["macro_value", "modules.module_name", "modules.module_flags", "modules.has_hinter_bit", "modules.has_driver_has_hinter_bit", "glyph_metrics", "outline_cbox"]}, "source_refs": ["freetype/src/autofit/afmodule.c:522", "freetype/src/truetype/ttdriver.c:652-668", "freetype/src/type1/t1driver.c:763-765", "freetype/src/cff/cffdrivr.c:1185-1188"], "fixture_requirements": ["Default modules with autofitter and native-hinting font drivers."]}
+    }
+  ]
+}

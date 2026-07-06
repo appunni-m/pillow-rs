@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_FACE_FLAG_SFNT",
+  "manifest_cases": [
+    "value_matches_header",
+    "face_property_sfnt_font"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_FACE_FLAG_SFNT.value_matches_header",
+      "subject": "freetype.FT_FACE_FLAG_SFNT",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_FACE_FLAG_SFNT",
+          "include": "freetype/freetype.h"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "FT_Long macro bit flag",
+          "source": "1L << 3"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_FACE_FLAG_SFNT.face_property_sfnt_font",
+      "subject": "freetype.FT_FACE_FLAG_SFNT",
+      "case": "face_property_sfnt_font",
+      "operation": "freetype.face_flags",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts_autohint/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag": "FT_FACE_FLAG_SFNT",
+          "sfnt_table_probes": [
+            "head",
+            "hhea",
+            "maxp"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "runtime:face_flags",
+        "runtime:sfnt",
+        "asset:existing"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "face_flags": "FT_Long",
+          "bit_set": "bool",
+          "sfnt_table_status": "map<string,FT_Error>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "face_flags",
+            "bit_set",
+            "sfnt_table_status"
+          ]
+        }
+      }
+    }
+  ]
+}

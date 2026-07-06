@@ -1,0 +1,237 @@
+- id: ttnameid.TT_UCR_CUNEIFORM
+  kind: constant
+  symbol: TT_UCR_CUNEIFORM
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange4 bit-mask constant for Cuneiform; pinned FreeType defines it as 1UL << 14, numeric value 16384, global Unicode-range bit 110.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 16384 as defined by pinned freetype/ttnameid.h for ulUnicodeRange4 bit 14.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_CUNEIFORM as a preprocessor-visible public constant.
+    - id: representative_os2_unicode_range4_bit
+      description: A representative OS/2 table with global Unicode-range bit 110 set reports the same ulUnicodeRange4 mask as the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2); fixture_asset=input/fonts/os2/ucr-cuneiform-range4.ttf; params={table=ft_sfnt_os2}; expected output shape={FT_Error, present, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4}; comparison=exact C oracle status and OS/2 Unicode-range scalar fields.
+
+- id: ttnameid.TT_UCR_CURRENCY_SYMBOLS
+  kind: constant
+  symbol: TT_UCR_CURRENCY_SYMBOLS
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange2 bit-mask constant for Currency Symbols; pinned FreeType defines it as 1UL << 1, numeric value 2, global Unicode-range bit 33.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 2 as defined by pinned freetype/ttnameid.h for ulUnicodeRange2 bit 1.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_CURRENCY_SYMBOLS as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_CYPRIOT_SYLLABARY
+  kind: constant
+  symbol: TT_UCR_CYPRIOT_SYLLABARY
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange4 bit-mask constant for Cypriot Syllabary; pinned FreeType defines it as 1UL << 11, numeric value 2048, global Unicode-range bit 107.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 2048 as defined by pinned freetype/ttnameid.h for ulUnicodeRange4 bit 11.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_CYPRIOT_SYLLABARY as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_CYRILLIC
+  kind: constant
+  symbol: TT_UCR_CYRILLIC
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange1 bit-mask constant for Cyrillic ranges; pinned FreeType defines it as 1UL << 9, numeric value 512, global Unicode-range bit 9.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 512 as defined by pinned freetype/ttnameid.h for ulUnicodeRange1 bit 9.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_CYRILLIC as a preprocessor-visible public constant.
+    - id: representative_os2_unicode_range1_bit
+      description: A representative OS/2 table with Cyrillic coverage reports the same ulUnicodeRange1 bit 9 mask as the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2); fixture_asset=input/fonts/os2/ucr-cyrillic-range1.ttf; params={table=ft_sfnt_os2}; expected output shape={FT_Error, present, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4}; comparison=exact C oracle status and OS/2 Unicode-range scalar fields.
+
+- id: ttnameid.TT_UCR_DESERET
+  kind: constant
+  symbol: TT_UCR_DESERET
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange3 bit-mask constant for Deseret; pinned FreeType defines it as 1UL << 23, numeric value 8388608, global Unicode-range bit 87.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 8388608 as defined by pinned freetype/ttnameid.h for ulUnicodeRange3 bit 23.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_DESERET as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_DEVANAGARI
+  kind: constant
+  symbol: TT_UCR_DEVANAGARI
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange1 bit-mask constant for Devanagari; pinned FreeType defines it as 1UL << 15, numeric value 32768, global Unicode-range bit 15.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 32768 as defined by pinned freetype/ttnameid.h for ulUnicodeRange1 bit 15.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_DEVANAGARI as a preprocessor-visible public constant.
+    - id: representative_os2_unicode_range1_indic_bit
+      description: A representative OS/2 table with Devanagari coverage reports the same ulUnicodeRange1 bit 15 mask as the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2); fixture_asset=input/fonts/os2/ucr-devanagari-range1.ttf; params={table=ft_sfnt_os2}; expected output shape={FT_Error, present, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4}; comparison=exact C oracle status and OS/2 Unicode-range scalar fields.
+
+- id: ttnameid.TT_UCR_DINGBATS
+  kind: constant
+  symbol: TT_UCR_DINGBATS
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange2 bit-mask constant for Dingbats; pinned FreeType defines it as 1UL << 15, numeric value 32768, global Unicode-range bit 47.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 32768 as defined by pinned freetype/ttnameid.h for ulUnicodeRange2 bit 15.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_DINGBATS as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_ENCLOSED_ALPHANUMERICS
+  kind: constant
+  symbol: TT_UCR_ENCLOSED_ALPHANUMERICS
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange2 bit-mask constant for Enclosed Alphanumerics; pinned FreeType defines it as 1UL << 10, numeric value 1024, global Unicode-range bit 42.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 1024 as defined by pinned freetype/ttnameid.h for ulUnicodeRange2 bit 10.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_ENCLOSED_ALPHANUMERICS as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_ENCLOSED_CJK_LETTERS_MONTHS
+  kind: constant
+  symbol: TT_UCR_ENCLOSED_CJK_LETTERS_MONTHS
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange2 bit-mask constant for Enclosed CJK Letters and Months; pinned FreeType defines it as 1UL << 22, numeric value 4194304, global Unicode-range bit 54.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 4194304 as defined by pinned freetype/ttnameid.h for ulUnicodeRange2 bit 22.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_ENCLOSED_CJK_LETTERS_MONTHS as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_ETHIOPIC
+  kind: constant
+  symbol: TT_UCR_ETHIOPIC
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange3 bit-mask constant for Ethiopic ranges; pinned FreeType defines it as 1UL << 11, numeric value 2048, global Unicode-range bit 75.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 2048 as defined by pinned freetype/ttnameid.h for ulUnicodeRange3 bit 11.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_ETHIOPIC as a preprocessor-visible public constant.
+    - id: representative_os2_unicode_range3_bit
+      description: A representative OS/2 table with Ethiopic coverage reports the same ulUnicodeRange3 bit 11 mask as the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2); fixture_asset=input/fonts/os2/ucr-ethiopic-range3.ttf; params={table=ft_sfnt_os2}; expected output shape={FT_Error, present, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4}; comparison=exact C oracle status and OS/2 Unicode-range scalar fields.
+
+- id: ttnameid.TT_UCR_GAME_TILES
+  kind: constant
+  symbol: TT_UCR_GAME_TILES
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange4 bit-mask constant for Domino and Mahjong Tiles; pinned FreeType defines it as 1UL << 26, numeric value 67108864, global Unicode-range bit 122.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 67108864 as defined by pinned freetype/ttnameid.h for ulUnicodeRange4 bit 26.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_GAME_TILES as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_GENERAL_PUNCTUATION
+  kind: constant
+  symbol: TT_UCR_GENERAL_PUNCTUATION
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange1 bit-mask constant for General and Supplemental Punctuation; pinned FreeType defines it as 1UL << 31, numeric value 2147483648, global Unicode-range bit 31.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 2147483648 as defined by pinned freetype/ttnameid.h for ulUnicodeRange1 bit 31.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_GENERAL_PUNCTUATION as a preprocessor-visible public constant.
+    - id: representative_os2_unicode_range1_high_bit
+      description: A representative OS/2 table with punctuation coverage reports the same unsigned high-bit ulUnicodeRange1 mask as the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2); fixture_asset=input/fonts/os2/ucr-general-punctuation-range1.ttf; params={table=ft_sfnt_os2}; expected output shape={FT_Error, present, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4}; comparison=exact C oracle status and unsigned OS/2 Unicode-range scalar fields.
+
+- id: ttnameid.TT_UCR_GEOMETRIC_SHAPES
+  kind: constant
+  symbol: TT_UCR_GEOMETRIC_SHAPES
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange2 bit-mask constant for Geometric Shapes; pinned FreeType defines it as 1UL << 13, numeric value 8192, global Unicode-range bit 45.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 8192 as defined by pinned freetype/ttnameid.h for ulUnicodeRange2 bit 13.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_GEOMETRIC_SHAPES as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_GEORGIAN
+  kind: constant
+  symbol: TT_UCR_GEORGIAN
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange1 bit-mask constant for Georgian ranges; pinned FreeType defines it as 1UL << 26, numeric value 67108864, global Unicode-range bit 26.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 67108864 as defined by pinned freetype/ttnameid.h for ulUnicodeRange1 bit 26.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_GEORGIAN as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_GLAGOLITIC
+  kind: constant
+  symbol: TT_UCR_GLAGOLITIC
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange4 bit-mask constant for Glagolitic; pinned FreeType defines it as 1UL << 1, numeric value 2, global Unicode-range bit 97.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 2 as defined by pinned freetype/ttnameid.h for ulUnicodeRange4 bit 1.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_GLAGOLITIC as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_GOTHIC
+  kind: constant
+  symbol: TT_UCR_GOTHIC
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange3 bit-mask constant for Gothic; pinned FreeType defines it as 1UL << 22, numeric value 4194304, global Unicode-range bit 86.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 4194304 as defined by pinned freetype/ttnameid.h for ulUnicodeRange3 bit 22.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_GOTHIC as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_GREEK
+  kind: constant
+  symbol: TT_UCR_GREEK
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange1 bit-mask constant for Greek and Coptic; pinned FreeType defines it as 1UL << 7, numeric value 128, global Unicode-range bit 7.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 128 as defined by pinned freetype/ttnameid.h for ulUnicodeRange1 bit 7.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_GREEK as a preprocessor-visible public constant.
+    - id: representative_os2_unicode_range1_greek_bit
+      description: A representative OS/2 table with Greek coverage reports the same ulUnicodeRange1 bit 7 mask as the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2); fixture_asset=input/fonts/os2/ucr-greek-range1.ttf; params={table=ft_sfnt_os2}; expected output shape={FT_Error, present, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4}; comparison=exact C oracle status and OS/2 Unicode-range scalar fields.
+
+- id: ttnameid.TT_UCR_GREEK_EXTENDED
+  kind: constant
+  symbol: TT_UCR_GREEK_EXTENDED
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange1 bit-mask constant for Greek Extended; pinned FreeType defines it as 1UL << 30, numeric value 1073741824, global Unicode-range bit 30.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 1073741824 as defined by pinned freetype/ttnameid.h for ulUnicodeRange1 bit 30.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_GREEK_EXTENDED as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_GUJARATI
+  kind: constant
+  symbol: TT_UCR_GUJARATI
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange1 bit-mask constant for Gujarati; pinned FreeType defines it as 1UL << 18, numeric value 262144, global Unicode-range bit 18.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 262144 as defined by pinned freetype/ttnameid.h for ulUnicodeRange1 bit 18.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_GUJARATI as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_GURMUKHI
+  kind: constant
+  symbol: TT_UCR_GURMUKHI
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange1 bit-mask constant for Gurmukhi; pinned FreeType defines it as 1UL << 17, numeric value 131072, global Unicode-range bit 17.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 131072 as defined by pinned freetype/ttnameid.h for ulUnicodeRange1 bit 17.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_GURMUKHI as a preprocessor-visible public constant.

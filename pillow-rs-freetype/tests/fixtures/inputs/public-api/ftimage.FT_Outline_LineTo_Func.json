@@ -1,0 +1,162 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_Outline_LineTo_Func",
+  "manifest_cases": [
+    "macro_alias_matches_typedef",
+    "callback_abi_matches_c",
+    "decompose_propagates_callback_error"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_Outline_LineTo_Func.macro_alias_matches_typedef",
+      "subject": "ftimage.FT_Outline_LineTo_Func",
+      "case": "macro_alias_matches_typedef",
+      "operation": "abi.compile_alias_probe",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "probe_source": {
+            "kind": "ref",
+            "id": "abi-probes/ftimage/outline-line-to-alias.c"
+          }
+        },
+        "params": {
+          "header": "freetype/ftimage.h",
+          "macro": "FT_Outline_LineTo_Func",
+          "typedef": "FT_Outline_LineToFunc",
+          "signature": "int (*)(const FT_Vector* to, void* user)"
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftimage"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile_result": "success",
+          "alias_identity": "same function pointer type"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "compile_result",
+            "alias_identity"
+          ]
+        },
+        "fixture_requirements": [
+          "abi-probes/ftimage/outline-line-to-alias.c must compile with the pinned FreeType headers"
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:537-555"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Outline_LineTo_Func.callback_abi_matches_c",
+      "subject": "ftimage.FT_Outline_LineTo_Func",
+      "case": "callback_abi_matches_c",
+      "operation": "ftimage.outline_decompose",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_fixture": {
+            "kind": "ref",
+            "id": "outlines/on-curve-lines-and-mixed.json"
+          }
+        },
+        "params": {
+          "callbacks": {
+            "line_to": "instrumented FT_Outline_LineTo_Func",
+            "move_to": "instrumented"
+          },
+          "user_pointer": "stable sentinel",
+          "include_close_line": true,
+          "shift_delta_matrix": [
+            {
+              "shift": 0,
+              "delta": 0
+            },
+            {
+              "shift": 1,
+              "delta": 32
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftimage"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "line_events": "to FT_Vector pointer values plus user identity"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "line_events[*].to",
+            "line_events[*].user_identity"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:537-555",
+          "freetype/src/base/ftoutln.c:147-163",
+          "freetype/src/base/ftoutln.c:281-288"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Outline_LineTo_Func.decompose_propagates_callback_error",
+      "subject": "ftimage.FT_Outline_LineTo_Func",
+      "case": "decompose_propagates_callback_error",
+      "operation": "ftimage.outline_decompose",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "outline_fixture": {
+            "kind": "ref",
+            "id": "outlines/on-curve-lines-and-mixed.json"
+          }
+        },
+        "params": {
+          "callback": "line_to",
+          "callback_return_values": [
+            7,
+            1234
+          ],
+          "abort_after_first_nonzero": true
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftimage"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "callback return value propagated as FT_Error-compatible int",
+          "events": "prefix through failing line callback"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].events_before_abort",
+            "rows[*].failing_callback"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftoutln.c:157-160",
+          "freetype/src/base/ftoutln.c:281-296"
+        ]
+      }
+    }
+  ]
+}

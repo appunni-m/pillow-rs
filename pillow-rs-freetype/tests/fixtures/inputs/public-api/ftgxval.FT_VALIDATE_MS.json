@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "subject": "ftgxval.FT_VALIDATE_MS",
+  "manifest_cases": [
+    "value_matches_header",
+    "validates_ms_classic_kern"
+  ],
+  "cases": [
+    {
+      "case_id": "ftgxval.FT_VALIDATE_MS.value_matches_header",
+      "subject": "ftgxval.FT_VALIDATE_MS",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftgxval.h>",
+          "symbol": "FT_VALIDATE_MS",
+          "expected_value_from_pinned_header": 16384,
+          "expected_value_hex": "0x4000",
+          "expression": "FT_VALIDATE_GX_START << 0",
+          "bitfield_group": "classic_kern_validation_flags",
+          "pinned_sources": [
+            "freetype/include/freetype/ftgxval.h"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftgxval",
+        "area:classic-kern-validation",
+        "coverage:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_UInt",
+          "symbol": "FT_VALIDATE_MS"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgxval.FT_VALIDATE_MS.validates_ms_classic_kern",
+      "subject": "ftgxval.FT_VALIDATE_MS",
+      "case": "validates_ms_classic_kern",
+      "operation": "FT_ClassicKern_Validate",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "ms_kern_font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/fonts/kern/classic-ms-kern.ttf",
+            "status": "required_future_asset",
+            "requires": "sfnt with valid Microsoft-style classic kern table"
+          },
+          "malformed_ms_kern_fonts": {
+            "kind": "ref",
+            "role": "font_set",
+            "id": "generated/fonts/kern/malformed-classic-ms-kern/",
+            "status": "required_future_asset",
+            "requires": "classic kern fixtures with malformed Microsoft subtable length and coverage data"
+          }
+        },
+        "params": {
+          "validation_flags": [
+            "FT_VALIDATE_MS",
+            "FT_VALIDATE_MS | FT_VALIDATE_APPLE"
+          ],
+          "free_with": "FT_ClassicKern_Free",
+          "pinned_sources": [
+            "freetype/src/base/ftgxval.c:89-123",
+            "freetype/src/gxvalid/gxvmod.c:194-234"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftgxval",
+        "area:classic-kern-validation",
+        "coverage:future-runtime",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Needs future classic kern sfnt assets and runner support for FT_ClassicKern_Validate.",
+        "output_shape": {
+          "error": "FT_Error",
+          "ckern_table": "null_or_table_bytes",
+          "cleanup": "FT_ClassicKern_Free completion"
+        },
+        "compare": {
+          "mode": "unsupported_until_runner_added",
+          "paths": [
+            "error",
+            "ckern_table.nullness",
+            "ckern_table.byte_length",
+            "ckern_table.bytes_or_hash",
+            "cleanup"
+          ]
+        }
+      }
+    }
+  ]
+}

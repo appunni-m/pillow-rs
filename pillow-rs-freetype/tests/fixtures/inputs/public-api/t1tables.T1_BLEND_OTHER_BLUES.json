@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "subject": "t1tables.T1_BLEND_OTHER_BLUES",
+  "manifest_cases": ["value_matches_header", "private_other_blues_runtime_array"],
+  "cases": [
+    {
+      "case_id": "t1tables.T1_BLEND_OTHER_BLUES.value_matches_header",
+      "subject": "t1tables.T1_BLEND_OTHER_BLUES",
+      "case": "value_matches_header",
+      "operation": "t1tables.t1_blend_flag_constant",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {"header": "freetype/t1tables.h", "symbol": "T1_BLEND_OTHER_BLUES", "kind": "enum_variant", "enum": "T1_Blend_Flags", "value": 4},
+      "inputs": {"assets": {}, "params": {"include_header": "freetype/t1tables.h", "constant": "T1_BLEND_OTHER_BLUES", "expected_value": 4, "import_symbol": "T1_BLEND_OTHER_BLUES"}},
+      "classifiers": ["kind:enum_variant", "header:t1tables", "area:type1"],
+      "expectation": {"status": "ok", "output_shape": {"constant_value": "int"}, "compare": {"mode": "value", "paths": ["constant_value"]}, "source_refs": ["freetype/include/freetype/t1tables.h:226-245"]}
+    },
+    {
+      "case_id": "t1tables.T1_BLEND_OTHER_BLUES.private_other_blues_runtime_array",
+      "subject": "t1tables.T1_BLEND_OTHER_BLUES",
+      "case": "private_other_blues_runtime_array",
+      "operation": "t1tables.get_ps_font_private_mm_blend",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {"header": "freetype/t1tables.h", "symbol": "T1_BLEND_OTHER_BLUES", "record_fields": ["PS_PrivateRec.num_other_blues", "PS_PrivateRec.other_blues[10]"], "field_type": "FT_Short[10]"},
+      "inputs": {"assets": {"type1_mm_font": {"kind": "ref", "id": "fonts/type1/mm-blend-fontinfo-private.pfb", "asset_kind": "font", "status": "required_future_asset"}}, "params": {"face_source": "type1_mm_font", "design_coordinates": ["default", "non_default"], "constant": "T1_BLEND_OTHER_BLUES", "private_fields": ["num_other_blues", "other_blues"]}},
+      "classifiers": ["kind:enum_variant", "header:t1tables", "area:type1-mm"],
+      "expectation": {"status": "ok", "output_shape": {"constant_value": 4, "num_other_blues": "FT_Byte", "other_blues": "FT_Short[10]"}, "compare": {"mode": "exact", "paths": ["constant_value", "num_other_blues", "other_blues"]}, "source_refs": ["freetype/include/freetype/t1tables.h:125-132", "freetype/include/freetype/t1tables.h:226-245"], "fixture_requirements": ["fonts/type1/mm-blend-fontinfo-private.pfb must contain non-empty OtherBlues data across masters."]}
+    }
+  ]
+}

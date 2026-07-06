@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "subject": "ftmodapi.FT_Remove_Module",
+  "manifest_cases": [
+    "removes_installed_module",
+    "rejects_null_library",
+    "rejects_missing_or_foreign_module"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmodapi.FT_Remove_Module.removes_installed_module",
+      "subject": "ftmodapi.FT_Remove_Module",
+      "case": "removes_installed_module",
+      "operation": "ftmodapi.add_get_remove_module",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "new_from_FT_New_Library_without_modules",
+          "module_class": "fixture_minimal_with_destructor",
+          "module_handle_source": "FT_Get_Module(fixture_minimal)",
+          "post_remove_lookup": "FT_Get_Module(fixture_minimal)",
+          "table_shape": "add_two_modules_then_remove_first_to_observe_compaction"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:module"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "module_count": "integer",
+          "table_compacted": "bool",
+          "last_slot_null": "bool",
+          "destructor_calls": "array",
+          "lookup_after_remove": "FT_Module"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "module_count",
+            "table_compacted",
+            "last_slot_null",
+            "destructor_calls",
+            "lookup_after_remove.nullness"
+          ]
+        },
+        "fixture_requirements": [
+          "future ABI runner must expose a synthetic removable module and callback log"
+        ],
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Remove_Module",
+          "freetype/src/base/ftobjs.c:Destroy_Module"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmodapi.FT_Remove_Module.rejects_null_library",
+      "subject": "ftmodapi.FT_Remove_Module",
+      "case": "rejects_null_library",
+      "operation": "ftmodapi.remove_module",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "null",
+          "module": "any_sentinel_module_handle"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Library_Handle",
+        "output_shape": {
+          "status": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Remove_Module"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmodapi.FT_Remove_Module.rejects_missing_or_foreign_module",
+      "subject": "ftmodapi.FT_Remove_Module",
+      "case": "rejects_missing_or_foreign_module",
+      "operation": "ftmodapi.remove_module",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "new_from_FT_New_Library_without_modules",
+          "scenarios": [
+            {
+              "module": "null"
+            },
+            {
+              "module": "module_handle_from_different_library"
+            }
+          ],
+          "table_initial": "contains fixture_minimal"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:module",
+        "area:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Driver_Handle",
+        "output_shape": {
+          "status": "FT_Error",
+          "module_table_after": "unchanged"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "module_table_after"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Remove_Module"
+        ]
+      }
+    }
+  ]
+}

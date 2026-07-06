@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "subject": "ftmodapi.FT_Reference_Library",
+  "manifest_cases": [
+    "increments_refcount",
+    "rejects_null_library"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmodapi.FT_Reference_Library.increments_refcount",
+      "subject": "ftmodapi.FT_Reference_Library",
+      "case": "increments_refcount",
+      "operation": "ftmodapi.reference_library",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "new_from_FT_New_Library_then_FT_Add_Default_Modules",
+          "sequence": [
+            "FT_Reference_Library",
+            "FT_Done_Library",
+            "FT_Get_Module(truetype)",
+            "FT_Done_Library"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:library",
+        "area:reference"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "reference_status": "FT_Error",
+          "first_done_status": "FT_Error",
+          "library_still_usable_after_first_done": "bool",
+          "final_done_status": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "reference_status",
+            "first_done_status",
+            "library_still_usable_after_first_done",
+            "final_done_status"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Reference_Library",
+          "freetype/src/base/ftobjs.c:FT_Done_Library"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmodapi.FT_Reference_Library.rejects_null_library",
+      "subject": "ftmodapi.FT_Reference_Library",
+      "case": "rejects_null_library",
+      "operation": "ftmodapi.reference_library",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:library",
+        "area:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Library_Handle",
+        "output_shape": {
+          "status": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Reference_Library"
+        ]
+      }
+    }
+  ]
+}

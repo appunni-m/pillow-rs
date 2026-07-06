@@ -1,0 +1,303 @@
+{
+  "version": 1,
+  "subject": "ftdriver.FT_Prop_GlyphToScriptMap",
+  "manifest_cases": [
+    "layout_matches_c",
+    "property_get_returns_face_map",
+    "map_mutation_affects_autohint_script",
+    "invalid_face_error_matches_c"
+  ],
+  "cases": [
+    {
+      "case_id": "ftdriver.FT_Prop_GlyphToScriptMap.layout_matches_c",
+      "subject": "ftdriver.FT_Prop_GlyphToScriptMap",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "api_record",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "type": "FT_Prop_GlyphToScriptMap",
+          "include": "<freetype/ftdriver.h>",
+          "header": "freetype/ftdriver.h",
+          "fields": [
+            {
+              "name": "face",
+              "ctype": "FT_Face"
+            },
+            {
+              "name": "map",
+              "ctype": "FT_UShort*"
+            }
+          ],
+          "pinned_source": "freetype/include/freetype/ftdriver.h:1128-1133"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftdriver",
+        "area:autofitter-property",
+        "layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "record_layout",
+          "sizeof": "usize",
+          "alignof": "usize",
+          "fields": [
+            {
+              "name": "face",
+              "offset": "usize",
+              "ctype": "FT_Face",
+              "pointer": true
+            },
+            {
+              "name": "map",
+              "offset": "usize",
+              "ctype": "FT_UShort*",
+              "pointer": true
+            }
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "fields[].name",
+            "fields[].offset",
+            "fields[].ctype"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map",
+      "subject": "ftdriver.FT_Prop_GlyphToScriptMap",
+      "case": "property_get_returns_face_map",
+      "operation": "FT_Property_Get",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/autohint/mixed-script-map.ttf",
+            "requirements": "Future shared TrueType/OpenType font with Latin, CJK, Indic, unmapped, and ligature glyphs, a valid Unicode charmap, and stable glyph indices before any auto-hinted glyph load."
+          }
+        },
+        "params": {
+          "module_name": "autofitter",
+          "property_name": "glyph-to-script-map",
+          "face_index": 0,
+          "size_ppem": 12,
+          "initial_prop": {
+            "face": "valid_face",
+            "map": "sentinel_non_null"
+          },
+          "probe_glyphs": [
+            {
+              "char": "A",
+              "expected_script_family": "LATIN"
+            },
+            {
+              "char": "\u4e2d",
+              "expected_script_family": "CJK"
+            },
+            {
+              "char": "\u0905",
+              "expected_script_family": "INDIC"
+            },
+            {
+              "char": "ffi_ligature",
+              "expected_script_family": "fallback_or_default"
+            }
+          ],
+          "pinned_source": "freetype/src/autofit/afmodule.c:296-304"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftdriver",
+        "area:autofitter-property",
+        "requires:font",
+        "property:get"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Font must be opened fresh and FT_Property_Get must happen before any FT_LOAD_FORCE_AUTOHINT load so C creates face globals through af_property_get_face_globals and returns globals->glyph_styles.",
+        "output_shape": {
+          "error": "FT_Error",
+          "prop": {
+            "face": "pointer_identity",
+            "map": "pointer_nullness_and_identity"
+          },
+          "num_glyphs": "FT_Long",
+          "map_sample": [
+            {
+              "glyph_index": "FT_UInt",
+              "script": "FT_UShort"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "prop.face.identity_class",
+            "prop.map.nullness",
+            "prop.map.identity_class",
+            "num_glyphs",
+            "map_sample[].glyph_index",
+            "map_sample[].script"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftdriver.FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script",
+      "subject": "ftdriver.FT_Prop_GlyphToScriptMap",
+      "case": "map_mutation_affects_autohint_script",
+      "operation": "FT_Property_Get_then_FT_Load_Glyph",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/autohint/mixed-script-map.ttf",
+            "requirements": "Same mixed-script font as property_get_returns_face_map with lowercase Latin, CJK, Indic, unmapped, and ligature glyphs."
+          }
+        },
+        "params": {
+          "module_name": "autofitter",
+          "property_name": "glyph-to-script-map",
+          "face_index": 0,
+          "size_ppems": [
+            9,
+            12,
+            18
+          ],
+          "load_flags": [
+            "FT_LOAD_FORCE_AUTOHINT"
+          ],
+          "mutations": [
+            {
+              "glyph": "A",
+              "script": "FT_AUTOHINTER_SCRIPT_NONE"
+            },
+            {
+              "glyph": "A",
+              "script": "FT_AUTOHINTER_SCRIPT_LATIN"
+            },
+            {
+              "glyph": "\u4e2d",
+              "script": "FT_AUTOHINTER_SCRIPT_CJK"
+            },
+            {
+              "glyph": "\u0905",
+              "script": "FT_AUTOHINTER_SCRIPT_INDIC"
+            }
+          ],
+          "render_modes": [
+            "FT_RENDER_MODE_NORMAL"
+          ],
+          "pinned_source": "freetype/include/freetype/ftdriver.h:1117-1133 and freetype/src/autofit/afmodule.c:296-304"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftdriver",
+        "area:autofitter-property",
+        "requires:font",
+        "glyph-output",
+        "font_variability"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "The runner must mutate the returned FT_UShort map entries before the first auto-hinted load for the face, then compare C/Rust/C-FFI/Wasm glyph metrics, outline cbox, and bitmap bytes for each script override.",
+        "output_shape": {
+          "error": "FT_Error",
+          "mutated_map_value": "FT_UShort",
+          "load_error": "FT_Error",
+          "glyph_metrics": "FT_Glyph_Metrics",
+          "outline_cbox": "FT_BBox",
+          "bitmap": {
+            "width": "int",
+            "rows": "int",
+            "pitch": "int",
+            "buffer": "bytes"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "mutated_map_value",
+            "load_error",
+            "glyph_metrics",
+            "outline_cbox",
+            "bitmap.width",
+            "bitmap.rows",
+            "bitmap.pitch",
+            "bitmap.buffer"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
+      "subject": "ftdriver.FT_Prop_GlyphToScriptMap",
+      "case": "invalid_face_error_matches_c",
+      "operation": "FT_Property_Get",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "module_name": "autofitter",
+          "property_name": "glyph-to-script-map",
+          "invalid_faces": [
+            "null_face"
+          ],
+          "initial_prop": {
+            "face": "null_face",
+            "map": "sentinel_non_null"
+          },
+          "pinned_source": "freetype/src/autofit/afmodule.c:296-304 via af_property_get_face_globals"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftdriver",
+        "area:autofitter-property",
+        "error-path",
+        "property:get"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "C oracle error from af_property_get_face_globals, expected to classify invalid/null face without fabricating map pointer",
+        "output_shape": {
+          "error": "FT_Error",
+          "prop_after": {
+            "face": "pointer_identity_or_null",
+            "map": "sentinel_preservation_or_nullness"
+          }
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "prop_after.face.nullness",
+            "prop_after.map.nullness",
+            "prop_after.map.identity_class"
+          ]
+        }
+      }
+    }
+  ]
+}

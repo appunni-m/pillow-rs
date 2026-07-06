@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "subject": "t1tables.FT_Has_PS_Glyph_Names",
+  "manifest_cases": ["signature_matches_header", "type1_and_type42_return_true", "cff_follows_face_flag", "cid_true_type_and_null_return_false"],
+  "cases": [
+    {
+      "case_id": "t1tables.FT_Has_PS_Glyph_Names.signature_and_behavior_matrix",
+      "subject": "t1tables.FT_Has_PS_Glyph_Names",
+      "case": "signature_matches_header",
+      "covers_manifest_cases": ["signature_matches_header", "type1_and_type42_return_true", "cff_follows_face_flag", "cid_true_type_and_null_return_false"],
+      "operation": "t1tables.has_ps_glyph_names",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "type1_font": {"kind": "ref", "role": "type1_font", "id": "input/fonts/type1/glyph-names.pfb", "requirements": "Type 1 face exposing t1_ps_has_glyph_names."},
+          "type42_font": {"kind": "ref", "role": "type42_font", "id": "input/fonts/type42/glyph-names.t42", "requirements": "Type 42 face exposing t42_ps_has_glyph_names."},
+          "cff_with_names": {"kind": "ref", "role": "cff_font", "id": "input/fonts/cff/glyph-names.otf", "requirements": "CFF face with FT_FACE_FLAG_GLYPH_NAMES set."},
+          "cff_without_names": {"kind": "ref", "role": "cff_font", "id": "input/fonts/cff/no-glyph-names.otf", "requirements": "CFF face without FT_FACE_FLAG_GLYPH_NAMES."},
+          "cid_font": {"kind": "ref", "role": "cid_type1_font", "id": "input/fonts/cid/fontinfo-populated.cid", "requirements": "CID Type 1 face whose service has no ps_has_glyph_names callback."},
+          "truetype_font": {"kind": "ref", "role": "truetype_font", "id": "input/fonts/DejaVuSans.ttf", "requirements": "TrueType control face without reliable PostScript glyph-name service."}
+        },
+        "params": {
+          "include": "<freetype/t1tables.h>",
+          "signature": "FT_Int FT_Has_PS_Glyph_Names(FT_Face face)",
+          "source_behavior": ["base/fttype1.c initializes result to 0 and only calls ps_has_glyph_names when face and callback exist.", "Type 1 and Type 42 callbacks return 1.", "CFF callback returns whether FT_FACE_FLAG_GLYPH_NAMES is set.", "CID, TrueType, and null face return 0."],
+          "scenarios": [
+            {"id": "type1_true", "asset": "type1_font", "face_index": 0},
+            {"id": "type42_true", "asset": "type42_font", "face_index": 0},
+            {"id": "cff_with_names_flag", "asset": "cff_with_names", "face_index": 0},
+            {"id": "cff_without_names_flag", "asset": "cff_without_names", "face_index": 0},
+            {"id": "cid_false", "asset": "cid_font", "face_index": 0},
+            {"id": "truetype_false", "asset": "truetype_font", "face_index": 0},
+            {"id": "null_face_false", "face_pointer_mode": "null"}
+          ]
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_glyph_names", "requires:future_asset"],
+      "expectation": {
+        "status": "build_dependent",
+        "fixture_requirements": "Needs Type 1, Type 42, CFF-with/without-name-flag, CID, and TrueType controls.",
+        "output_shape": {"result": "FT_Int"},
+        "compare": {"mode": "exact", "paths": ["result"]}
+      }
+    }
+  ]
+}

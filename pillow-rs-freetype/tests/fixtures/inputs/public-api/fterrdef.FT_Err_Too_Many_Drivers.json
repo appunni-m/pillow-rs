@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Too_Many_Drivers",
+  "manifest_cases": [
+    "value_matches_header",
+    "module_registry_limit"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Too_Many_Drivers.value_matches_header",
+      "subject": "fterrdef.FT_Err_Too_Many_Drivers",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Too_Many_Drivers",
+          "include": "<freetype/fterrors.h>",
+          "public_import": "#include <freetype/freetype.h>",
+          "header": "freetype/fterrdef.h",
+          "expected_value_from_pinned_header": 48,
+          "expected_value_hex": "0x30",
+          "expected_error_string_from_pinned_header": "too many modules",
+          "pinned_source": "freetype/include/freetype/fterrdef.h:130-131"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Too_Many_Drivers",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Too_Many_Drivers.module_registry_limit",
+      "subject": "fterrdef.FT_Err_Too_Many_Drivers",
+      "case": "module_registry_limit",
+      "operation": "FT_Add_Module",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "expected_error_symbol": "FT_Err_Too_Many_Drivers",
+          "library": "fresh_library_instance",
+          "module_classes": "synthetic_distinct_module_classes_until_FT_MAX_MODULES_plus_one",
+          "pinned_source": "freetype/src/base/ftobjs.c:5102"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:module-registry",
+        "error-trigger",
+        "requires:c-module-fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Too_Many_Drivers",
+        "fixture_requirements": "C ABI/module runner support for repeatedly adding synthetic module classes beyond FT_MAX_MODULES.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "library": "module_count_and_preservation_class",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "library.module_count",
+            "library.mutation_class"
+          ]
+        }
+      }
+    }
+  ]
+}

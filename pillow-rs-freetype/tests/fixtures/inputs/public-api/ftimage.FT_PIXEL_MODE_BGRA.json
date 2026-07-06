@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_PIXEL_MODE_BGRA",
+  "manifest_cases": ["value_matches_header", "produced_by_color_bitmap_load"],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_PIXEL_MODE_BGRA.value_matches_header",
+      "subject": "ftimage.FT_PIXEL_MODE_BGRA",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"include": "<freetype/ftimage.h>", "symbol": "FT_PIXEL_MODE_BGRA", "enum": "FT_Pixel_Mode", "expected_value": 7}},
+      "classifiers": ["kind:enum_variant", "header:ftimage", "abi:value"],
+      "expectation": {"status": "ok", "output_shape": {"symbol": "FT_PIXEL_MODE_BGRA", "value_type": "FT_Pixel_Mode"}, "compare": {"mode": "value", "paths": ["symbol", "numeric_value"]}}
+    },
+    {
+      "case_id": "ftimage.FT_PIXEL_MODE_BGRA.produced_by_color_bitmap_load",
+      "subject": "ftimage.FT_PIXEL_MODE_BGRA",
+      "case": "produced_by_color_bitmap_load",
+      "operation": "freetype.load_render_color_bitmap",
+      "schema": "bitmap_result",
+      "expect_error": false,
+      "inputs": {"assets": {"color_bitmap_font": {"kind": "ref", "id": "fonts/color/cbdt-bgra.ttf"}}, "params": {"load_flags": ["FT_LOAD_COLOR", "FT_LOAD_RENDER"], "strike_selection": "color_bitmap_strike", "premultiplied_bgra": true}},
+      "classifiers": ["kind:enum_variant", "header:ftimage", "path:runtime"],
+      "expectation": {"status": "build_dependent", "output_shape": {"status": "FT_Error", "bitmap.pixel_mode": "FT_PIXEL_MODE_BGRA", "bitmap": "rows,width,pitch,num_grays,buffer"}, "compare": {"mode": "bytes", "paths": ["status", "bitmap.pixel_mode", "bitmap.rows", "bitmap.width", "bitmap.pitch", "bitmap.buffer"]}, "fixture_requirements": ["Requires color bitmap font where C produces BGRA; classify unsupported color path explicitly."]}
+    }
+  ]
+}

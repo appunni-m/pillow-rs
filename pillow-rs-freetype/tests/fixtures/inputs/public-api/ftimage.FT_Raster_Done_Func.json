@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_Raster_Done_Func",
+  "manifest_cases": [
+    "macro_alias_matches_typedef",
+    "callback_abi_matches_c",
+    "renderer_lifecycle_calls_done"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_Raster_Done_Func.macro_alias_matches_typedef",
+      "subject": "ftimage.FT_Raster_Done_Func",
+      "case": "macro_alias_matches_typedef",
+      "operation": "ftimage.macro_alias",
+      "schema": "api_abi_type",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftimage.h>",
+          "macro": "FT_Raster_Done_Func",
+          "expands_to": "FT_Raster_DoneFunc"
+        }
+      },
+      "classifiers": ["kind:macro", "header:ftimage", "area:raster"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"macro": "FT_Raster_Done_Func", "typedef": "FT_Raster_DoneFunc"},
+        "compare": {"mode": "exact", "paths": ["macro", "expands_to", "include"]},
+        "source_refs": ["freetype/include/freetype/ftimage.h:1119-1131"]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Raster_Done_Func.callback_abi_matches_c",
+      "subject": "ftimage.FT_Raster_Done_Func",
+      "case": "callback_abi_matches_c",
+      "operation": "ftimage.callback_abi",
+      "schema": "api_abi_type",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "typedef": "FT_Raster_DoneFunc",
+          "return_type": "void",
+          "arguments": [{"name": "raster", "type": "FT_Raster"}]
+        }
+      },
+      "classifiers": ["kind:callback", "header:ftimage", "abi:function-pointer"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"return_type": "void", "argument_count": 1, "arguments": "FT_Raster handle"},
+        "compare": {"mode": "layout", "paths": ["return_type", "arguments[*].type", "arguments[*].position"]},
+        "source_refs": ["freetype/include/freetype/ftimage.h:1119-1130"]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Raster_Done_Func.renderer_lifecycle_calls_done",
+      "subject": "ftimage.FT_Raster_Done_Func",
+      "case": "renderer_lifecycle_calls_done",
+      "operation": "ftimage.custom_renderer_lifecycle",
+      "schema": "callback_event_stream",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "renderer_module": {
+            "kind": "ref",
+            "id": "modules/raster/callback-logging-renderer.json"
+          }
+        },
+        "params": {
+          "glyph_format": "FT_GLYPH_FORMAT_OUTLINE",
+          "events": ["raster_new", "raster_reset", "raster_done"],
+          "remove_module": true
+        }
+      },
+      "classifiers": ["kind:callback", "header:ftimage", "path:lifecycle"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "events": "callback event log",
+          "raster_handle_identity": "same handle from new to done",
+          "done_return": "void"
+        },
+        "compare": {"mode": "identity_class", "paths": ["events[*].kind", "events[*].raster_identity", "events[*].order"]},
+        "fixture_requirements": ["modules/raster/callback-logging-renderer.json must model a renderer module whose FT_Raster_Funcs callbacks are instrumented."],
+        "source_refs": ["freetype/include/freetype/ftimage.h:1247-1268"]
+      }
+    }
+  ]
+}

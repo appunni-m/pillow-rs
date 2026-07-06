@@ -1,0 +1,207 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_Affine23",
+  "manifest_cases": [
+    "layout_matches_c",
+    "field_order_matches_c",
+    "root_transform_values"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_Affine23.layout_matches_c",
+      "subject": "ftcolor.FT_Affine23",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "record": "FT_Affine23",
+          "fields": [
+            "xx",
+            "xy",
+            "dx",
+            "yx",
+            "yy",
+            "dy"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_Affine23",
+          "layout": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "C ABI probe for FT_Affine23 sizeof/alignment/offsetof",
+          "Runner support for C FreeType, Rust FFI, C FFI, and Wasm FFI record layout comparison"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Affine23.field_order_matches_c",
+      "subject": "ftcolor.FT_Affine23",
+      "case": "field_order_matches_c",
+      "operation": "abi.record_import",
+      "schema": "abi_record_fields",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "record": "FT_Affine23",
+          "fields": [
+            "xx",
+            "xy",
+            "dx",
+            "yx",
+            "yy",
+            "dy"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_Affine23",
+          "fields": [
+            "xx",
+            "xy",
+            "dx",
+            "yx",
+            "yy",
+            "dy"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "field_order",
+            "field_types",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "Compile/import probe for FT_Affine23 with exact ftcolor.h field names"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Affine23.root_transform_values",
+      "subject": "ftcolor.FT_Affine23",
+      "case": "root_transform_values",
+      "operation": "ftcolor.get_paint",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 1 base glyph list",
+              "CPAL table with at least two palettes and named entries",
+              "paint graph containing solid, colr_layers, glyph, colr_glyph, linear, radial, sweep, transform, translate, scale, rotate, skew, and composite paints",
+              "static ColorLine records using PAD, REPEAT, and REFLECT extend modes",
+              "foreground palette index 0xFFFF references"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_role": "root_transform_target",
+          "root_transform": "FT_COLOR_INCLUDE_ROOT_TRANSFORM",
+          "sizes_ppem": [
+            16,
+            37
+          ],
+          "transforms": [
+            {
+              "matrix": [
+                65536,
+                0,
+                0,
+                65536
+              ],
+              "delta": [
+                0,
+                0
+              ]
+            },
+            {
+              "matrix": [
+                65536,
+                16384,
+                -8192,
+                65536
+              ],
+              "delta": [
+                3,
+                -5
+              ]
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_Affine23",
+          "embedded_in": "FT_COLR_Paint.u.transform.affine",
+          "fields": [
+            "xx",
+            "xy",
+            "dx",
+            "yx",
+            "yy",
+            "dy"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "runs[*].paint.u.transform.affine.xx",
+            "runs[*].paint.u.transform.affine.xy",
+            "runs[*].paint.u.transform.affine.dx",
+            "runs[*].paint.u.transform.affine.yx",
+            "runs[*].paint.u.transform.affine.yy",
+            "runs[*].paint.u.transform.affine.dy"
+          ]
+        },
+        "fixture_requirements": [
+          "Runtime C oracle generation; do not store generated outputs"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_CURVE_TAG_CUBIC",
+  "manifest_cases": [
+    "value_matches_header",
+    "cubic_decomposition_matches_c"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_CURVE_TAG_CUBIC.value_matches_header",
+      "subject": "ftimage.FT_CURVE_TAG_CUBIC",
+      "case": "value_matches_header",
+      "operation": "constant_eval",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_CURVE_TAG_CUBIC",
+          "include": "<freetype/ftimage.h>",
+          "import": "#include <freetype/ftimage.h>",
+          "expected_value": 2,
+          "expected_value_hex": "0x02"
+        }
+      },
+      "classifiers": [
+        "kind:tag",
+        "header:ftimage",
+        "area:outline-tags",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:476-479"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c",
+      "subject": "ftimage.FT_CURVE_TAG_CUBIC",
+      "case": "cubic_decomposition_matches_c",
+      "operation": "ftoutln.outline_decompose",
+      "schema": "callback_trace",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "cff_outline": {
+            "kind": "ref",
+            "id": "outlines/synthetic/cubic-paired-controls.json",
+            "asset_kind": "outline"
+          },
+          "malformed_outline": {
+            "kind": "ref",
+            "id": "outlines/synthetic/cubic-malformed.json",
+            "asset_kind": "outline"
+          }
+        },
+        "params": {
+          "shift_delta_cases": [
+            {
+              "shift": 0,
+              "delta": 0
+            },
+            {
+              "shift": 1,
+              "delta": -16
+            }
+          ],
+          "malformed_cases": [
+            "contour_starts_with_cubic",
+            "unpaired_cubic_control"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:tag",
+        "header:ftimage",
+        "area:outline-tags",
+        "area:cubic"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "events": "array<object>",
+          "malformed_status": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "events",
+            "malformed_status"
+          ]
+        },
+        "fixture_requirements": [
+          "Future cubic outline and malformed cubic outline assets."
+        ],
+        "source_refs": [
+          "freetype/src/base/ftoutln.c:102-110",
+          "freetype/src/base/ftoutln.c:224-230"
+        ]
+      }
+    }
+  ]
+}

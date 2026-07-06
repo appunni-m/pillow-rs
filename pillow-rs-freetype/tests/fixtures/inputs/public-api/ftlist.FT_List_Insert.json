@@ -1,0 +1,243 @@
+{
+  "version": 1,
+  "subject": "ftlist.FT_List_Insert",
+  "manifest_cases": [
+    "import_contract",
+    "insert_empty_list",
+    "insert_non_empty_list",
+    "null_list_or_node_noop"
+  ],
+  "cases": [
+    {
+      "case_id": "ftlist.FT_List_Insert.import_contract",
+      "subject": "ftlist.FT_List_Insert",
+      "case": "import_contract",
+      "operation": "ftlist.list_insert_abi",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftlist.h",
+        "symbol": "FT_List_Insert",
+        "signature": "void FT_List_Insert(FT_List list, FT_ListNode node)",
+        "return": "void",
+        "params": [
+          "FT_List list",
+          "FT_ListNode node"
+        ]
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include_header": "freetype/ftlist.h",
+          "import_symbol": "FT_List_Insert"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftlist",
+        "area:list"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile": "symbol import succeeds",
+          "return": "void"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "signature",
+            "calling_convention"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftlist.h:105-119"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlist.FT_List_Insert.insert_empty_list",
+      "subject": "ftlist.FT_List_Insert",
+      "case": "insert_empty_list",
+      "operation": "ftlist.list_insert",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftlist.h",
+        "symbol": "FT_List_Insert",
+        "signature": "void FT_List_Insert(FT_List list, FT_ListNode node)"
+      },
+      "inputs": {
+        "assets": {
+          "list_facade": {
+            "kind": "ref",
+            "id": "facades/list/ft-list-topologies.json",
+            "asset_kind": "fixture"
+          }
+        },
+        "params": {
+          "initial_order": [],
+          "insert_node": "N0",
+          "node_data_token": "D0",
+          "preexisting_node_links": {
+            "prev": "sentinel",
+            "next": "sentinel"
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftlist",
+        "area:list"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "head": "N0",
+          "tail": "N0",
+          "nodes": "prev/next/data-token topology"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "head",
+            "tail",
+            "nodes[*].prev",
+            "nodes[*].next",
+            "nodes[*].data_token"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftutil.c:282-303"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlist.FT_List_Insert.insert_non_empty_list",
+      "subject": "ftlist.FT_List_Insert",
+      "case": "insert_non_empty_list",
+      "operation": "ftlist.list_insert",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftlist.h",
+        "symbol": "FT_List_Insert",
+        "signature": "void FT_List_Insert(FT_List list, FT_ListNode node)"
+      },
+      "inputs": {
+        "assets": {
+          "list_facade": {
+            "kind": "ref",
+            "id": "facades/list/ft-list-topologies.json",
+            "asset_kind": "fixture"
+          }
+        },
+        "params": {
+          "initial_orders": [
+            [
+              "N1"
+            ],
+            [
+              "N1",
+              "N2",
+              "N3"
+            ]
+          ],
+          "insert_node": "N0",
+          "assert_tail_preserved": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftlist",
+        "area:list"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "head": "inserted node",
+          "tail": "original tail",
+          "old_head_prev": "inserted node"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].head",
+            "rows[*].tail",
+            "rows[*].order",
+            "rows[*].nodes[*].prev",
+            "rows[*].nodes[*].next"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftutil.c:282-303"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlist.FT_List_Insert.null_list_or_node_noop",
+      "subject": "ftlist.FT_List_Insert",
+      "case": "null_list_or_node_noop",
+      "operation": "ftlist.list_insert",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftlist.h",
+        "symbol": "FT_List_Insert",
+        "signature": "void FT_List_Insert(FT_List list, FT_ListNode node)"
+      },
+      "inputs": {
+        "assets": {
+          "list_facade": {
+            "kind": "ref",
+            "id": "facades/list/ft-list-topologies.json",
+            "asset_kind": "fixture"
+          }
+        },
+        "params": {
+          "initial_order": [
+            "N1",
+            "N2"
+          ],
+          "argument_matrix": [
+            {
+              "list": null,
+              "node": "N0"
+            },
+            {
+              "list": "valid_list",
+              "node": null
+            }
+          ],
+          "sentinel_node": "N0"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftlist",
+        "area:list"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "list_mutation": "none",
+          "node_mutation": "none"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].initial_topology",
+            "rows[*].final_topology",
+            "rows[*].sentinel_node_links"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftutil.c:289-290"
+        ]
+      }
+    }
+  ]
+}

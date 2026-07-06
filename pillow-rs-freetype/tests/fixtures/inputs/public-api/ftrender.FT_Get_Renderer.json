@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "subject": "ftrender.FT_Get_Renderer",
+  "manifest_cases": [
+    "outline_renderer_lookup_success",
+    "bitmap_svg_and_unknown_formats",
+    "null_library_returns_null"
+  ],
+  "cases": [
+    {
+      "case_id": "ftrender.FT_Get_Renderer.outline_renderer_lookup_success",
+      "subject": "ftrender.FT_Get_Renderer",
+      "case": "outline_renderer_lookup_success",
+      "operation": "ftrender.get_renderer",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "initialized",
+          "format": "FT_GLYPH_FORMAT_OUTLINE",
+          "abi": {
+            "include": "<freetype/ftrender.h>",
+            "signature": "FT_Renderer FT_Get_Renderer(FT_Library library, FT_Glyph_Format format)",
+            "return_type": "FT_Renderer opaque handle"
+          },
+          "source_refs": [
+            "freetype/include/freetype/ftrender.h",
+            "freetype/src/base/ftobjs.c",
+            "freetype/src/smooth/ftsmooth.c",
+            "freetype/src/raster/ftrend1.c"
+          ],
+          "c_behavior": "FT_Get_Renderer delegates to FT_Lookup_Renderer and returns the first renderer in library->renderers with matching glyph_format"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftrender",
+        "area:renderer-management"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "renderer_present": "bool",
+          "renderer_identity": "opaque pointer identity token",
+          "renderer_class": {
+            "module_name": "string",
+            "glyph_format": "FT_Glyph_Format",
+            "has_render_glyph": "bool",
+            "has_raster_class": "bool"
+          }
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "renderer_present",
+            "renderer_identity",
+            "renderer_class.module_name",
+            "renderer_class.glyph_format",
+            "renderer_class.has_render_glyph",
+            "renderer_class.has_raster_class"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftrender.FT_Get_Renderer.bitmap_svg_and_unknown_formats",
+      "subject": "ftrender.FT_Get_Renderer",
+      "case": "bitmap_svg_and_unknown_formats",
+      "operation": "ftrender.get_renderer",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "initialized",
+          "formats": [
+            "FT_GLYPH_FORMAT_BITMAP",
+            "FT_GLYPH_FORMAT_SVG",
+            "FT_GLYPH_FORMAT_OUTLINE",
+            "FT_MAKE_TAG('?', '?', '?', '?')"
+          ],
+          "build_options": [
+            "FT_CONFIG_OPTION_SVG",
+            "FT_WITH_SDF"
+          ],
+          "observe": [
+            "nullness",
+            "module_name",
+            "glyph_format",
+            "pointer_identity_relative_to_renderer_list"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftrender",
+        "area:renderer-management",
+        "build-dependent:renderer-modules"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "format_results": [
+            {
+              "format": "FT_Glyph_Format",
+              "renderer_present": "bool",
+              "renderer_class": "optional class metadata"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "format_results.format",
+            "format_results.renderer_present",
+            "format_results.renderer_class",
+            "format_results.pointer_identity"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftrender.FT_Get_Renderer.null_library_returns_null",
+      "subject": "ftrender.FT_Get_Renderer",
+      "case": "null_library_returns_null",
+      "operation": "ftrender.get_renderer",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "NULL",
+          "formats": [
+            "FT_GLYPH_FORMAT_OUTLINE",
+            "FT_GLYPH_FORMAT_BITMAP"
+          ],
+          "c_behavior": "FT_Lookup_Renderer returns NULL without an FT_Error when library is NULL"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftrender",
+        "area:renderer-management"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "renderer": "NULL"
+        },
+        "compare": {
+          "mode": "nullness",
+          "paths": [
+            "renderer"
+          ]
+        }
+      }
+    }
+  ]
+}

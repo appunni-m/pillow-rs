@@ -1,0 +1,243 @@
+{
+  "version": 1,
+  "subject": "ftstroke.FT_Stroker_LineTo",
+  "manifest_cases": [
+    "line_segment_success",
+    "first_segment_starts_subpath",
+    "zero_length_line_noop",
+    "invalid_arguments"
+  ],
+  "cases": [
+    {
+      "case_id": "ftstroke.FT_Stroker_LineTo.line_segment_success",
+      "subject": "ftstroke.FT_Stroker_LineTo",
+      "case": "line_segment_success",
+      "operation": "ftstroke.line_to",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_LineTo",
+        "signature": "FT_Error FT_Stroker_LineTo(FT_Stroker stroker, FT_Vector* to)",
+        "return": "FT_Error"
+      },
+      "inputs": {
+        "assets": {
+          "paths": {
+            "kind": "ref",
+            "id": "outlines/stroker/manual-paths.json",
+            "asset_kind": "outline_path_records",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "start": {
+            "x": 0,
+            "y": 0
+          },
+          "to": {
+            "x": 640,
+            "y": 0
+          },
+          "open": false,
+          "radius": 96,
+          "line_join": "FT_STROKER_LINEJOIN_ROUND"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:line"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "point_count": "FT_UInt",
+          "contour_count": "FT_UInt",
+          "exported_outline": "points/tags/contours",
+          "cbox": "FT_BBox"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "point_count",
+            "contour_count",
+            "exported_outline.points",
+            "exported_outline.tags",
+            "exported_outline.contours",
+            "cbox"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftstroke.h:432-455",
+          "freetype/src/base/ftstroke.c:1266-1337"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_LineTo.first_segment_starts_subpath",
+      "subject": "ftstroke.FT_Stroker_LineTo",
+      "case": "first_segment_starts_subpath",
+      "operation": "ftstroke.line_to",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_LineTo",
+        "signature": "FT_Error FT_Stroker_LineTo(FT_Stroker stroker, FT_Vector* to)"
+      },
+      "inputs": {
+        "assets": {
+          "paths": {
+            "kind": "ref",
+            "id": "outlines/stroker/manual-paths.json",
+            "asset_kind": "outline_path_records",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "sequence": [
+            "BeginSubPath",
+            "LineTo",
+            "EndSubPath",
+            "Export"
+          ],
+          "assert_first_segment_initializes_border_start": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:state"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status_sequence": "FT_Error[]",
+          "border_start_points": "derived from line angle and length",
+          "exported_outline": "points/tags/contours"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status_sequence",
+            "exported_outline.points",
+            "exported_outline.tags",
+            "exported_outline.contours"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:1289-1300"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_LineTo.zero_length_line_noop",
+      "subject": "ftstroke.FT_Stroker_LineTo",
+      "case": "zero_length_line_noop",
+      "operation": "ftstroke.line_to",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_LineTo",
+        "signature": "FT_Error FT_Stroker_LineTo(FT_Stroker stroker, FT_Vector* to)"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "start": {
+            "x": 256,
+            "y": 256
+          },
+          "to": {
+            "x": 256,
+            "y": 256
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:degenerate"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "counts_after": {
+            "points": 0,
+            "contours": 0
+          },
+          "center_after": "unchanged"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "counts_after",
+            "center_after"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:1279-1284"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_LineTo.invalid_arguments",
+      "subject": "ftstroke.FT_Stroker_LineTo",
+      "case": "invalid_arguments",
+      "operation": "ftstroke.line_to",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_LineTo",
+        "signature": "FT_Error FT_Stroker_LineTo(FT_Stroker stroker, FT_Vector* to)"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "scenarios": [
+            {
+              "stroker": "null"
+            },
+            {
+              "to": "null"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Argument",
+        "output_shape": {
+          "status": "FT_Error",
+          "border_counts_after": "unchanged"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].border_counts_after"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:1274-1275"
+        ]
+      }
+    }
+  ]
+}

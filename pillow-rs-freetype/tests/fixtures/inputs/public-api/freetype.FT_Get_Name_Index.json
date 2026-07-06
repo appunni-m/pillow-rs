@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Get_Name_Index",
+  "manifest_cases": [
+    "known_glyph_name_success",
+    "unknown_or_unavailable_name_returns_zero",
+    "null_face_or_name_returns_zero"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Get_Name_Index.known_glyph_name_success",
+      "subject": "freetype.FT_Get_Name_Index",
+      "case": "known_glyph_name_success",
+      "operation": "freetype.get_name_index",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/names/post-glyph-names.ttf",
+            "status": "required_future_asset",
+            "requires": "font with stable post/CFF glyph names for .notdef and A"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_names": [
+            ".notdef",
+            "A"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-names"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_UInt glyph_index"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Name_Index.unknown_or_unavailable_name_returns_zero",
+      "subject": "freetype.FT_Get_Name_Index",
+      "case": "unknown_or_unavailable_name_returns_zero",
+      "operation": "freetype.get_name_index",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font_names": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/names/post-glyph-names.ttf",
+            "status": "required_future_asset",
+            "requires": "font with stable post/CFF glyph names for .notdef and A"
+          },
+          "font_no_names": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/names/no-glyph-names.ttf",
+            "status": "required_future_asset",
+            "requires": "font accepted by C FreeType whose face flags do not include FT_FACE_FLAG_GLYPH_NAMES"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_names": [
+            "DefinitelyMissingGlyphName",
+            "A_on_no_names"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-names"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_UInt zero sentinel"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "return"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Name_Index.null_face_or_name_returns_zero",
+      "subject": "freetype.FT_Get_Name_Index",
+      "case": "null_face_or_name_returns_zero",
+      "operation": "freetype.get_name_index",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/names/post-glyph-names.ttf",
+            "status": "required_future_asset",
+            "requires": "font with stable post/CFF glyph names for .notdef and A"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "face": "null",
+              "glyph_name": "A"
+            },
+            {
+              "face_index": 0,
+              "glyph_name": "null"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-names"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_UInt zero sentinel"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "return"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Invalid_Reference",
+  "manifest_cases": [
+    "value_matches_header",
+    "tt_bytecode_invalid_point_reference"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Reference.value_matches_header",
+      "subject": "fterrdef.FT_Err_Invalid_Reference",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Invalid_Reference",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 134,
+          "expected_value_hex": "0x86",
+          "expected_error_string_from_pinned_header": "invalid reference",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Invalid_Reference",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Reference.tt_bytecode_invalid_point_reference",
+      "subject": "fterrdef.FT_Err_Invalid_Reference",
+      "case": "tt_bytecode_invalid_point_reference",
+      "operation": "FT_Load_Glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/truetype/invalid-reference.ttf",
+            "requirements": "Synthetic TrueType bytecode that references an out-of-range point, contour, CVT, storage, or twilight-zone entry after valid setup."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Invalid_Reference",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/truetype/ttinterp.c:2362,2977-3008,3463-3545,3815,4331-6032,6358-6448,7361",
+          "face_index": 0,
+          "glyph_index": "fixture_defined_error_glyph",
+          "size_ppem": 12,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Reference",
+        "fixture_requirements": "Synthetic TrueType bytecode with deterministic out-of-range reference and valid control glyph.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "output_face": "pointer_nullness_or_preservation",
+          "slot_state": "mutation_class_if_slot_is_involved",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class",
+            "slot_state.mutation_class"
+          ]
+        }
+      }
+    }
+  ]
+}

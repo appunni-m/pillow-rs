@@ -1,0 +1,278 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Get_Kerning",
+  "manifest_cases": [
+    "legacy_pair_default_mode",
+    "legacy_pair_unfitted_and_unscaled_modes",
+    "missing_pair_or_no_kerning_success_zero",
+    "gpos_only_pair_build_option_behavior",
+    "error_invalid_mode_or_null_output"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Get_Kerning.legacy_pair_default_mode",
+      "subject": "freetype.FT_Get_Kerning",
+      "case": "legacy_pair_default_mode",
+      "operation": "freetype.get_kerning",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/kerning/legacy-av-kern.ttf",
+            "status": "required_future_asset",
+            "requires": "SFNT with legacy kern table containing A/V pair and no GPOS-only ambiguity"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "size_ppem_values": [
+            9,
+            20,
+            32
+          ],
+          "left_glyph_name": "A",
+          "right_glyph_name": "V",
+          "kern_mode": "FT_KERNING_DEFAULT"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:kerning"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "akerning": "FT_Vector 26.6 grid-fitted"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "akerning.x",
+            "akerning.y"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Kerning.legacy_pair_unfitted_and_unscaled_modes",
+      "subject": "freetype.FT_Get_Kerning",
+      "case": "legacy_pair_unfitted_and_unscaled_modes",
+      "operation": "freetype.get_kerning",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/kerning/legacy-av-kern.ttf",
+            "status": "required_future_asset",
+            "requires": "SFNT with legacy kern table containing A/V pair and no GPOS-only ambiguity"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "size_ppem": 20,
+          "left_glyph_name": "A",
+          "right_glyph_name": "V",
+          "kern_modes": [
+            "FT_KERNING_UNFITTED",
+            "FT_KERNING_UNSCALED"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:kerning"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "akerning": "FT_Vector scaled_or_font_units"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "akerning.x",
+            "akerning.y"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Kerning.missing_pair_or_no_kerning_success_zero",
+      "subject": "freetype.FT_Get_Kerning",
+      "case": "missing_pair_or_no_kerning_success_zero",
+      "operation": "freetype.get_kerning",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "no_kern_font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/kerning/no-kern-table.ttf",
+            "status": "required_future_asset",
+            "requires": "font with no legacy kern and no GPOS kerning"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pairs": [
+            "A/A",
+            "glyph0/glyph0"
+          ],
+          "kern_modes": [
+            "DEFAULT",
+            "UNFITTED",
+            "UNSCALED"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:kerning"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "akerning": "FT_Vector zero_or_c_oracle"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "akerning"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Kerning.gpos_only_pair_build_option_behavior",
+      "subject": "freetype.FT_Get_Kerning",
+      "case": "gpos_only_pair_build_option_behavior",
+      "operation": "freetype.get_kerning",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/kerning/gpos-only-av.ttf",
+            "status": "required_future_asset",
+            "requires": "OpenType font with GPOS pair adjustment and no legacy kern table"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "size_ppem": 20,
+          "pairs": [
+            "representative_ltr_pair",
+            "representative_rtl_pair"
+          ],
+          "kern_modes": [
+            "DEFAULT",
+            "UNFITTED",
+            "UNSCALED"
+          ],
+          "build_option": "TT_CONFIG_OPTION_GPOS_KERNING"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:kerning",
+        "build-dependent:gpos"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "return": "FT_Error",
+          "akerning": "FT_Vector"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "akerning"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Kerning.error_invalid_mode_or_null_output",
+      "subject": "freetype.FT_Get_Kerning",
+      "case": "error_invalid_mode_or_null_output",
+      "operation": "freetype.get_kerning",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/kerning/legacy-av-kern.ttf",
+            "status": "required_future_asset",
+            "requires": "SFNT with legacy kern table containing A/V pair and no GPOS-only ambiguity"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "face": "null",
+              "akerning": "non_null"
+            },
+            {
+              "face_index": 0,
+              "akerning": "null"
+            },
+            {
+              "face_index": 0,
+              "kern_mode": 9999,
+              "akerning": "non_null"
+            }
+          ],
+          "pair": "A/V"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:kerning"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "akerning_write": "none_or_c_oracle"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error",
+            "akerning_snapshot"
+          ]
+        },
+        "error": "c_oracle"
+      }
+    }
+  ]
+}

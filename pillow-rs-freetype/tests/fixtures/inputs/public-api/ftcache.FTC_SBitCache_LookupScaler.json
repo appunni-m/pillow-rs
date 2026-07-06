@@ -1,0 +1,254 @@
+{
+  "version": 1,
+  "subject": "ftcache.FTC_SBitCache_LookupScaler",
+  "manifest_cases": [
+    "rejects_null_sbit_or_scaler",
+    "clears_outputs_before_lookup",
+    "scaler_size_semantics_match_c",
+    "load_flags_truncate_to_int32"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcache.FTC_SBitCache_LookupScaler.rejects_null_sbit_or_scaler",
+      "subject": "ftcache.FTC_SBitCache_LookupScaler",
+      "case": "rejects_null_sbit_or_scaler",
+      "operation": "ftcache.sbit_cache_lookup_scaler",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "scalable_control_font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "cache": "live_sbit_cache",
+          "variants": [
+            {
+              "scaler": "null",
+              "sbit_output": "nonnull"
+            },
+            {
+              "scaler": "valid_pixel_scaler",
+              "sbit_output": "null"
+            }
+          ],
+          "load_flags": "FT_LOAD_DEFAULT",
+          "glyph_index": 36
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:sbit-cache"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "outputs": "unchanged_or_null_per_c"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "variants[*].status",
+            "variants[*].error",
+            "variants[*].outputs"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_SBitCache_LookupScaler.clears_outputs_before_lookup",
+      "subject": "ftcache.FTC_SBitCache_LookupScaler",
+      "case": "clears_outputs_before_lookup",
+      "operation": "ftcache.sbit_cache_lookup_scaler",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "scalable_control_font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "cache": "live_sbit_cache",
+          "scaler": {
+            "face_id": "stable_pointer:dejavu",
+            "width": 16,
+            "height": 16,
+            "pixel": 1,
+            "x_res": 0,
+            "y_res": 0
+          },
+          "glyph_index": "out_of_range",
+          "load_flags": "FT_LOAD_DEFAULT",
+          "initial_outputs": {
+            "sbit": "sentinel_nonnull",
+            "anode": "sentinel_nonnull"
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:sbit-cache"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "sbit": "null",
+          "anode": "null"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error",
+            "outputs.sbit_null",
+            "outputs.anode_null"
+          ]
+        },
+        "error": "c_oracle"
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_SBitCache_LookupScaler.scaler_size_semantics_match_c",
+      "subject": "ftcache.FTC_SBitCache_LookupScaler",
+      "case": "scaler_size_semantics_match_c",
+      "operation": "ftcache.sbit_cache_lookup_scaler",
+      "schema": "cache_sbit_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "scalable_control_font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "cache": "live_sbit_cache",
+          "scalers": [
+            {
+              "face_id": "stable_pointer:dejavu",
+              "width": 16,
+              "height": 16,
+              "pixel": 1,
+              "x_res": 0,
+              "y_res": 0
+            },
+            {
+              "face_id": "stable_pointer:dejavu",
+              "width": 1024,
+              "height": 1024,
+              "pixel": 0,
+              "x_res": 72,
+              "y_res": 72
+            },
+            {
+              "face_id": "stable_pointer:dejavu",
+              "width": 1024,
+              "height": 2048,
+              "pixel": 0,
+              "x_res": 96,
+              "y_res": 72
+            }
+          ],
+          "load_flags": [
+            "FT_LOAD_DEFAULT",
+            "FT_LOAD_NO_HINTING",
+            "FT_LOAD_TARGET_MONO"
+          ],
+          "glyph_index": 36
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:sbit-cache"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "sbit_fields": "per_scaler_bitmap_metrics_and_bytes",
+          "size_selection": "pixel_vs_point_semantics"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].sbit_fields",
+            "outputs[*].buffer_bytes",
+            "outputs[*].size_metrics"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_SBitCache_LookupScaler.load_flags_truncate_to_int32",
+      "subject": "ftcache.FTC_SBitCache_LookupScaler",
+      "case": "load_flags_truncate_to_int32",
+      "operation": "ftcache.sbit_cache_lookup_scaler",
+      "schema": "cache_sbit_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "scalable_control_font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "cache": "live_sbit_cache",
+          "scaler": {
+            "face_id": "stable_pointer:dejavu",
+            "width": 16,
+            "height": 16,
+            "pixel": 1,
+            "x_res": 0,
+            "y_res": 0
+          },
+          "load_flags": [
+            "0x0000000000000004",
+            "0x0000000100000004"
+          ],
+          "glyph_index": 36,
+          "host_condition": "FT_ULong wider than FT_Int32"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:sbit-cache"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "return": "FT_Error",
+          "truncation": "high FT_ULong bits dropped before FT_Int32 cache query"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "effective_load_flags",
+            "sbit_fields",
+            "buffer_bytes"
+          ]
+        },
+        "fixture_requirements": [
+          "64-bit C oracle build or runner field recording effective load_flags after cast"
+        ]
+      }
+    }
+  ]
+}

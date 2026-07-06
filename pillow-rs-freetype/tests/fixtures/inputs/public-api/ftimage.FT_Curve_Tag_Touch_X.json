@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_Curve_Tag_Touch_X",
+  "manifest_cases": [
+    "value_matches_header",
+    "ignored_by_curve_tag_mask"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_Curve_Tag_Touch_X.value_matches_header",
+      "subject": "ftimage.FT_Curve_Tag_Touch_X",
+      "case": "value_matches_header",
+      "operation": "constant_eval",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ftimage.h",
+          "symbol": "FT_Curve_Tag_Touch_X",
+          "alias_of": "FT_CURVE_TAG_TOUCH_X",
+          "expected_value": 8,
+          "type": "char tag high-bit marker"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftimage"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "integer macro value",
+          "alias_target": "FT_CURVE_TAG_TOUCH_X"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "value",
+            "alias_target"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:474-497"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Curve_Tag_Touch_X.ignored_by_curve_tag_mask",
+      "subject": "ftimage.FT_Curve_Tag_Touch_X",
+      "case": "ignored_by_curve_tag_mask",
+      "operation": "ftimage.outline_decompose",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_fixture": {
+            "kind": "ref",
+            "id": "outlines/touch-bit-tag-mask.json"
+          }
+        },
+        "params": {
+          "tag_pairs": [
+            [
+              "FT_Curve_Tag_On",
+              "FT_Curve_Tag_On | FT_Curve_Tag_Touch_X"
+            ],
+            [
+              "FT_Curve_Tag_Conic",
+              "FT_Curve_Tag_Conic | FT_Curve_Tag_Touch_X"
+            ],
+            [
+              "FT_Curve_Tag_Cubic",
+              "FT_Curve_Tag_Cubic | FT_Curve_Tag_Touch_X"
+            ]
+          ],
+          "mask_expression": "tag & 0x03"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftimage"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "classification": "same low two-bit curve class with or without touch-x"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].masked_tag",
+            "rows[*].events"
+          ]
+        },
+        "fixture_requirements": [
+          "outlines/touch-bit-tag-mask.json must provide equivalent contours with and without touch bits"
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:474-497",
+          "freetype/src/base/ftoutln.c:103-176"
+        ]
+      }
+    }
+  ]
+}

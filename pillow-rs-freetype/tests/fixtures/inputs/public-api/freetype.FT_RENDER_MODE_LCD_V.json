@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_RENDER_MODE_LCD_V",
+  "manifest_cases": [
+    "value_matches_header",
+    "render_glyph_mode_dispatch"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_RENDER_MODE_LCD_V.value_matches_header",
+      "subject": "freetype.FT_RENDER_MODE_LCD_V",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_RENDER_MODE_LCD_V",
+          "include": "<freetype/freetype.h>"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:freetype",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Render_Mode",
+          "symbol": "FT_RENDER_MODE_LCD_V",
+          "header": "freetype/freetype.h"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "type",
+            "header_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_RENDER_MODE_LCD_V.render_glyph_mode_dispatch",
+      "subject": "freetype.FT_RENDER_MODE_LCD_V",
+      "case": "render_glyph_mode_dispatch",
+      "operation": "freetype.render_glyph",
+      "schema": "glyph_slot",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "input/fonts/DejaVuSans.ttf",
+            "requirements": "Scalable outline font with glyph U+0041; existing legacy fixture asset is suitable."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "char_code": 65,
+          "load_flags": 0,
+          "render_mode": "FT_RENDER_MODE_LCD_V",
+          "representative_load_target": "FT_LOAD_TARGET_LCD_V"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:freetype",
+        "area:glyph",
+        "area:render",
+        "requires:font"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "slot_format": "FT_Glyph_Format",
+          "bitmap": {
+            "pixel_mode": "FT_Pixel_Mode",
+            "width": "FT_UInt",
+            "rows": "FT_UInt",
+            "pitch": "FT_Int",
+            "left": "FT_Int",
+            "top": "FT_Int",
+            "buffer": "bytes"
+          },
+          "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "slot_format",
+            "bitmap.pixel_mode",
+            "bitmap.width",
+            "bitmap.rows",
+            "bitmap.pitch",
+            "bitmap.left",
+            "bitmap.top",
+            "bitmap.buffer"
+          ]
+        }
+      }
+    }
+  ]
+}

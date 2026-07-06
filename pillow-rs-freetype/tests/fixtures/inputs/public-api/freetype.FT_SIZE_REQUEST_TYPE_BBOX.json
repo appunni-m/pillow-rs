@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_SIZE_REQUEST_TYPE_BBOX",
+  "manifest_cases": [
+    "value_matches_header",
+    "request_size_metrics"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_SIZE_REQUEST_TYPE_BBOX.value_matches_header",
+      "subject": "freetype.FT_SIZE_REQUEST_TYPE_BBOX",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_SIZE_REQUEST_TYPE_BBOX",
+          "include": "<freetype/freetype.h>"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:freetype",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Size_Request_Type",
+          "symbol": "FT_SIZE_REQUEST_TYPE_BBOX",
+          "header": "freetype/freetype.h"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "type",
+            "header_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_SIZE_REQUEST_TYPE_BBOX.request_size_metrics",
+      "subject": "freetype.FT_SIZE_REQUEST_TYPE_BBOX",
+      "case": "request_size_metrics",
+      "operation": "freetype.request_size",
+      "schema": "size_metrics",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "input/fonts/DejaVuSans.ttf",
+            "requirements": "Scalable outline font with non-empty bbox; existing DejaVuSans asset is suitable."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "request": {
+            "type": "FT_SIZE_REQUEST_TYPE_BBOX",
+            "width": 1280,
+            "height": 1152,
+            "horiResolution": 0,
+            "vertResolution": 0
+          }
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:freetype",
+        "area:size",
+        "requires:font"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Scalable outline font with non-empty bbox; existing DejaVuSans asset is suitable.",
+        "output_shape": {
+          "status": "FT_Error",
+          "request": {
+            "type": "FT_Size_Request_Type",
+            "width": "FT_Long",
+            "height": "FT_Long",
+            "horiResolution": "FT_UInt",
+            "vertResolution": "FT_UInt"
+          },
+          "metrics": {
+            "x_ppem": "FT_UShort",
+            "y_ppem": "FT_UShort",
+            "x_scale": "FT_Fixed",
+            "y_scale": "FT_Fixed",
+            "ascender": "FT_Pos",
+            "descender": "FT_Pos",
+            "height": "FT_Pos",
+            "max_advance": "FT_Pos"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "metrics.x_ppem",
+            "metrics.y_ppem",
+            "metrics.x_scale",
+            "metrics.y_scale",
+            "metrics.ascender",
+            "metrics.descender",
+            "metrics.height",
+            "metrics.max_advance"
+          ]
+        }
+      }
+    }
+  ]
+}

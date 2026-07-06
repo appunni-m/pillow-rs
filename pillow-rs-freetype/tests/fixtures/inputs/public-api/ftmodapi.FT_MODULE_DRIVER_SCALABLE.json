@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "subject": "ftmodapi.FT_MODULE_DRIVER_SCALABLE",
+  "manifest_cases": ["value_matches_header", "scalable_driver_flags_match_c"],
+  "cases": [
+    {
+      "case_id": "ftmodapi.FT_MODULE_DRIVER_SCALABLE.value_matches_header",
+      "subject": "ftmodapi.FT_MODULE_DRIVER_SCALABLE",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"symbol": "FT_MODULE_DRIVER_SCALABLE", "include": "<freetype/ftmodapi.h>", "expected_value": 256, "expected_value_expr": "0x100"}},
+      "classifiers": ["kind:constant", "header:ftmodapi", "surface:public-c-api", "coverage:value"],
+      "metadata": {"abi": {"header": "freetype/ftmodapi.h", "symbol": "FT_MODULE_DRIVER_SCALABLE", "kind": "macro_constant"}, "constant_type": "FT_Module_Class module_flags bit"},
+      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "value": "integer", "import_compiles": "bool"}, "compare": {"mode": "value", "paths": ["symbol", "value", "import_compiles"]}, "source_refs": ["freetype/include/freetype/ftmodapi.h:112-123"]}
+    },
+    {
+      "case_id": "ftmodapi.FT_MODULE_DRIVER_SCALABLE.scalable_driver_flags_match_c",
+      "subject": "ftmodapi.FT_MODULE_DRIVER_SCALABLE",
+      "case": "scalable_driver_flags_match_c",
+      "operation": "ftmodapi.inspect_module_flags",
+      "schema": "glyph_result",
+      "expect_error": false,
+      "inputs": {"assets": {"truetype_font": {"kind": "ref", "id": "fonts/truetype/basic.ttf", "asset_kind": "font"}, "cff_font": {"kind": "ref", "id": "fonts/cff/basic.otf", "asset_kind": "font"}, "type1_font": {"kind": "ref", "id": "fonts/type1/basic.pfb", "asset_kind": "font"}, "cid_font": {"kind": "ref", "id": "fonts/cid/basic.cid", "asset_kind": "font"}, "type42_font": {"kind": "ref", "id": "fonts/type42/basic.t42", "asset_kind": "font"}}, "params": {"module_names": ["truetype", "cff", "type1", "cid", "type42"], "flag": "FT_MODULE_DRIVER_SCALABLE", "glyph_index": 36, "pixel_size": 24}},
+      "classifiers": ["kind:constant", "header:ftmodapi", "surface:public-c-api", "operation:module-flags"],
+      "metadata": {"abi": {"header": "freetype/ftmodapi.h", "symbol": "FT_MODULE_DRIVER_SCALABLE", "kind": "macro_constant"}, "source_behavior": "Scalable font drivers set FONT_DRIVER | DRIVER_SCALABLE, with optional native-hinter bits."},
+      "expectation": {"status": "ok", "output_shape": {"macro_value": "integer", "modules": [{"module_name": "string", "module_flags": "integer", "has_flag": "bool"}], "glyph_metrics": "FT_Glyph_Metrics", "outline_cbox": "FT_BBox"}, "compare": {"mode": "exact", "paths": ["macro_value", "modules.module_name", "modules.module_flags", "modules.has_flag", "glyph_metrics", "outline_cbox"]}, "source_refs": ["freetype/src/truetype/ttdriver.c:666-668", "freetype/src/cff/cffdrivr.c:1185-1188", "freetype/src/type1/t1driver.c:763-765", "freetype/src/cid/cidriver.c:236-238", "freetype/src/type42/t42drivr.c:205-208"], "fixture_requirements": ["Representative scalable TrueType, CFF, Type1, CID, and Type42 fonts."]}
+    }
+  ]
+}

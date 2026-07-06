@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Open_Args",
+  "manifest_cases": [
+    "layout_matches_c",
+    "open_face_consumes_args_like_c"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Open_Args.layout_matches_c",
+      "subject": "freetype.FT_Open_Args",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/freetype.h",
+          "symbol": "FT_Open_Args",
+          "fields_in_order": [
+            "flags",
+            "memory_base",
+            "memory_size",
+            "pathname",
+            "stream",
+            "driver",
+            "num_params",
+            "params"
+          ],
+          "nested_public_records": [],
+          "probe": [
+            "sizeof",
+            "alignof",
+            "offsetof",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "area:abi_layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "offsets": "object<field,usize>",
+          "field_types": "object<field,c_type>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "offsets",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Open_Args.open_face_consumes_args_like_c",
+      "subject": "freetype.FT_Open_Args",
+      "case": "open_face_consumes_args_like_c",
+      "operation": "freetype.open_face_args",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "memory_font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          },
+          "path_font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          },
+          "sbix_font": {
+            "kind": "ref",
+            "id": "fonts/color/sbix-outline.ttf"
+          },
+          "missing_font": {
+            "kind": "ref",
+            "id": "input/fonts/missing/no-such.ttf"
+          }
+        },
+        "params": {
+          "arg_variants": [
+            "FT_OPEN_MEMORY",
+            "FT_OPEN_PATHNAME",
+            "FT_OPEN_STREAM",
+            "FT_OPEN_DRIVER",
+            "FT_OPEN_PARAMS",
+            "no_source_flag",
+            "multiple_source_flags"
+          ],
+          "params": [
+            "FT_PARAM_TAG_IGNORE_SBIX"
+          ],
+          "face_index": 0,
+          "probe": [
+            "FT_Error",
+            "face pointer nullness",
+            "face_flags",
+            "source ownership"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "face": "pointer_nullness_and_public_snapshot",
+          "source_selection": "enum",
+          "ownership": "caller_buffer_unchanged"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error",
+            "face_nullness",
+            "face_flags",
+            "source_selection",
+            "memory_buffer_unchanged",
+            "params_effect"
+          ]
+        },
+        "fixture_requirements": [
+          "Custom stream fixture and sbix font for FT_OPEN_PARAMS ignore-sbix behavior"
+        ]
+      }
+    }
+  ]
+}

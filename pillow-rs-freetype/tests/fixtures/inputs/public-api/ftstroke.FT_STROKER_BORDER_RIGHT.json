@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "subject": "ftstroke.FT_STROKER_BORDER_RIGHT",
+  "manifest_cases": [
+    "value_matches_header",
+    "right_border_export_geometry"
+  ],
+  "metadata": {
+    "abi": {
+      "kind": "enum_variant",
+      "header": "freetype/ftstroke.h",
+      "enum": "FT_StrokerBorder",
+      "symbol": "FT_STROKER_BORDER_RIGHT",
+      "value": 1
+    }
+  },
+  "cases": [
+    {
+      "case_id": "ftstroke.FT_STROKER_BORDER_RIGHT.value_matches_header",
+      "subject": "ftstroke.FT_STROKER_BORDER_RIGHT",
+      "case": "value_matches_header",
+      "operation": "abi.enum_variant_value",
+      "schema": "abi_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftstroke.h",
+          "symbol": "FT_STROKER_BORDER_RIGHT",
+          "expected_value": 1
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftstroke",
+        "area:abi_enum"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "int"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "value"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_STROKER_BORDER_RIGHT.right_border_export_geometry",
+      "subject": "ftstroke.FT_STROKER_BORDER_RIGHT",
+      "case": "right_border_export_geometry",
+      "operation": "ftstroke.export_border",
+      "schema": "outline_geometry_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "outline": "synthetic_clockwise_rectangle",
+          "border": "FT_STROKER_BORDER_RIGHT",
+          "also_probe_open_path_empty_border": true,
+          "radius": 64,
+          "line_cap": "FT_STROKER_LINECAP_BUTT",
+          "line_join": "FT_STROKER_LINEJOIN_BEVEL",
+          "miter_limit": 65536
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftstroke",
+        "area:stroker_geometry"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "border_counts": "{points,contours}",
+          "outline": "FT_Outline",
+          "open_path_empty_border": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "border_counts",
+            "outline.points",
+            "outline.tags",
+            "outline.contours",
+            "open_path_empty_border"
+          ]
+        }
+      }
+    }
+  ]
+}

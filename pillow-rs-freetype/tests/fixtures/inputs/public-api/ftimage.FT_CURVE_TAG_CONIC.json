@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_CURVE_TAG_CONIC",
+  "manifest_cases": [
+    "value_matches_header",
+    "conic_decomposition_matches_c"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_CURVE_TAG_CONIC.value_matches_header",
+      "subject": "ftimage.FT_CURVE_TAG_CONIC",
+      "case": "value_matches_header",
+      "operation": "constant_eval",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_CURVE_TAG_CONIC",
+          "include": "<freetype/ftimage.h>",
+          "import": "#include <freetype/ftimage.h>",
+          "expected_value": 0,
+          "expected_value_hex": "0x00"
+        }
+      },
+      "classifiers": [
+        "kind:tag",
+        "header:ftimage",
+        "area:outline-tags",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:476-479"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c",
+      "subject": "ftimage.FT_CURVE_TAG_CONIC",
+      "case": "conic_decomposition_matches_c",
+      "operation": "ftoutln.outline_decompose",
+      "schema": "callback_trace",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline": {
+            "kind": "ref",
+            "id": "outlines/synthetic/conic-single-and-consecutive.json",
+            "asset_kind": "outline"
+          }
+        },
+        "params": {
+          "shift_delta_cases": [
+            {
+              "shift": 0,
+              "delta": 0
+            },
+            {
+              "shift": 1,
+              "delta": 16
+            }
+          ],
+          "expected_behavior": "Consecutive conic off-curve points create implied on-curve midpoint callbacks exactly as C."
+        }
+      },
+      "classifiers": [
+        "kind:tag",
+        "header:ftimage",
+        "area:outline-tags",
+        "area:conic"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "events": "array<object>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "events"
+          ]
+        },
+        "fixture_requirements": [
+          "Future synthetic conic outline with single and consecutive off-curve controls."
+        ],
+        "source_refs": [
+          "freetype/src/base/ftoutln.c:163-223"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_HAS_FAST_GLYPHS",
+  "manifest_cases": [
+    "constant_false",
+    "ignores_face_flags"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_HAS_FAST_GLYPHS.constant_false",
+      "subject": "freetype.FT_HAS_FAST_GLYPHS",
+      "case": "constant_false",
+      "operation": "freetype.face_macro",
+      "schema": "macro_probe",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "faces": [
+            "null_not_evaluated",
+            "normal_face",
+            "synthetic_flags"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face-flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "int-like boolean",
+          "macro": "evaluated by C/Rust ABI probe"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "outputs[*].macro_result"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_HAS_FAST_GLYPHS.ignores_face_flags",
+      "subject": "freetype.FT_HAS_FAST_GLYPHS",
+      "case": "ignores_face_flags",
+      "operation": "freetype.face_macro",
+      "schema": "macro_probe",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "face_flags_values": [
+            0,
+            "FT_FACE_FLAG_FAST_GLYPHS",
+            "0xFFFFFFFF"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face-flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "int-like boolean",
+          "macro": "evaluated by C/Rust ABI probe"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "outputs[*].macro_result",
+            "outputs[*].face_flags"
+          ]
+        }
+      }
+    }
+  ]
+}

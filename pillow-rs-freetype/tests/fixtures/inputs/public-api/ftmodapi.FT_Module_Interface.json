@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "subject": "ftmodapi.FT_Module_Interface",
+  "manifest_cases": [
+    "alias_defined",
+    "requester_return_type"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmodapi.FT_Module_Interface.alias_defined",
+      "subject": "ftmodapi.FT_Module_Interface",
+      "case": "alias_defined",
+      "operation": "abi.typedef_alias",
+      "schema": "abi_type",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftmodapi.h>",
+          "symbol": "FT_Module_Interface",
+          "expected_alias": "FT_Pointer",
+          "expected_c_shape": "void* typeless pointer",
+          "related_callback_typedefs": {
+            "FT_Module_Constructor": "FT_Error (*)(FT_Module)",
+            "FT_Module_Destructor": "void (*)(FT_Module)",
+            "FT_Module_Requester": "FT_Module_Interface (*)(FT_Module,const char*)"
+          },
+          "probe": [
+            "import_compiles",
+            "sizeof",
+            "alignof",
+            "assignable_from_FT_Pointer",
+            "assignable_to_FT_Pointer"
+          ],
+          "pinned_sources": [
+            "freetype/include/freetype/ftmodapi.h:139",
+            "freetype/include/freetype/ftmodapi.h:154-191"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftmodapi",
+        "area:module-interface",
+        "coverage:abi"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "alias_of": "c_type",
+          "sizeof": "usize",
+          "alignof": "usize",
+          "pointer_assignability": "object<direction,bool>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "alias_of",
+            "sizeof",
+            "alignof",
+            "pointer_assignability",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmodapi.h:139",
+          "freetype/include/freetype/ftmodapi.h:154-191"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmodapi.FT_Module_Interface.requester_return_type",
+      "subject": "ftmodapi.FT_Module_Interface",
+      "case": "requester_return_type",
+      "operation": "freetype.module_interface_probe",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "module_probe_translation_unit": {
+            "kind": "ref",
+            "role": "c_source",
+            "id": "generated/c-abi/ft-module-interface-requester.c",
+            "requirements": "C ABI facade that initializes a library, queries built-in modules, and records FT_Get_Module_Interface nullness plus requester-return nullness without dereferencing service pointers."
+          }
+        },
+        "params": {
+          "library_setup": "FT_Init_FreeType followed by default module availability probe",
+          "module_names": [
+            "sfnt",
+            "psnames",
+            "psaux",
+            "truetype",
+            "missing-module"
+          ],
+          "service_names": [
+            "glyph-dict",
+            "postscript-cmaps",
+            "sfnt-table",
+            "missing-service"
+          ],
+          "lifecycle_callback_models": [
+            {
+              "typedef": "FT_Module_Constructor",
+              "signature": "FT_Error (*)(FT_Module)",
+              "observable": "return FT_Error from FT_Add_Module facade"
+            },
+            {
+              "typedef": "FT_Module_Destructor",
+              "signature": "void (*)(FT_Module)",
+              "observable": "invoked by FT_Remove_Module/Destroy_Module facade"
+            },
+            {
+              "typedef": "FT_Module_Requester",
+              "signature": "FT_Module_Interface (*)(FT_Module,const char*)",
+              "observable": "service pointer or NULL"
+            }
+          ],
+          "expected_c_behavior": {
+            "FT_Get_Module_Interface": "returns module->clazz->module_interface for found modules and NULL for missing modules",
+            "ft_module_get_service": "calls clazz->get_interface(module, service_id), then optionally scans global modules if requested"
+          },
+          "pinned_sources": [
+            "freetype/include/freetype/ftmodapi.h:189-191",
+            "freetype/src/base/ftobjs.c:5198-5209",
+            "freetype/src/base/ftobjs.c:5213-5254"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "kind:function-pointer",
+        "header:ftmodapi",
+        "area:module-interface",
+        "runtime:service-lookup"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "module_name": "string",
+          "module_found": "bool",
+          "module_interface_nullness": "null_or_non_null",
+          "requester_result_class": "service_pointer_or_null",
+          "callback_invocations": "array<{typedef,name,status_or_nullness}>"
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "module_found",
+            "module_interface_nullness",
+            "requester_result_class",
+            "callback_invocations"
+          ]
+        },
+        "fixture_requirements": [
+          "Runner support for a C ABI module facade; service pointers are classified by nullness/availability only and must not be dereferenced as stable structs."
+        ],
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:5198-5209",
+          "freetype/src/base/ftobjs.c:5213-5254"
+        ]
+      }
+    }
+  ]
+}

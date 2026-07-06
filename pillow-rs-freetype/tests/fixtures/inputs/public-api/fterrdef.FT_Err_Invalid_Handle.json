@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Invalid_Handle",
+  "manifest_cases": [
+    "value_matches_header",
+    "generic_object_handle_validation"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Handle.value_matches_header",
+      "subject": "fterrdef.FT_Err_Invalid_Handle",
+      "case": "value_matches_header",
+      "operation": "abi.error_code_value_and_import",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Invalid_Handle",
+          "include": "<freetype/fterrors.h>",
+          "definition_header": "freetype/fterrdef.h",
+          "value_type": "FT_Error",
+          "expected_value_from_pinned_header": 32,
+          "expected_hex_value": "0x20",
+          "expected_error_string": "invalid object handle",
+          "module_errors": "FT_CONFIG_OPTION_USE_MODULE_ERRORS disabled in pinned public ABI so FT_ERR_BASE is 0"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "surface:public-c-api",
+        "coverage:value-import"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "FT_Err_Invalid_Handle",
+          "value": "FT_Error integer",
+          "expected_value": 32,
+          "expected_hex_value": "0x20",
+          "error_string": "invalid object handle",
+          "import": "<freetype/fterrors.h> expands freetype/fterrdef.h"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "numeric_value",
+            "error_string",
+            "import_compiles"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "sources_checked": [
+          "freetype/include/freetype/fterrdef.h",
+          "freetype/include/freetype/fterrors.h"
+        ]
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Handle.generic_object_handle_validation",
+      "subject": "fterrdef.FT_Err_Invalid_Handle",
+      "case": "generic_object_handle_validation",
+      "operation": "ftglyph.done_glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "glyph_source_font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/DejaVuSans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "call_sequence": [
+            "FT_New_Memory_Face",
+            "FT_Load_Glyph",
+            "FT_Get_Glyph",
+            "FT_Done_Glyph with null or stale generic handle"
+          ],
+          "face_index": 0,
+          "glyph_index": 1,
+          "invalid_handle": "NULL or stale FT_Glyph handle",
+          "expected_error_symbol": "FT_Err_Invalid_Handle",
+          "expected_error_value": 32,
+          "c_behavior": "Generic object APIs that cannot classify the object as library, face, size, slot, charmap, cache, or stream use Invalid_Handle"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "surface:public-c-api",
+        "coverage:modeled-error-trigger"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error",
+          "expected_error_symbol": "FT_Err_Invalid_Handle",
+          "expected_error_value": 32,
+          "side_effects": "public output pointer, stream, slot, or face state as described by the source path"
+        },
+        "compare": {
+          "mode": "unsupported_until_runner_added",
+          "paths": [
+            "error.symbol",
+            "error.value",
+            "object_lifetime_state"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "sources_checked": [
+          "freetype/include/freetype/fterrdef.h",
+          "freetype/include/freetype/fterrors.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "fixture_requirements": [
+          "FFI object-lifetime harness that can call a generic-object API with NULL and stale handles and capture side effects."
+        ]
+      }
+    }
+  ]
+}

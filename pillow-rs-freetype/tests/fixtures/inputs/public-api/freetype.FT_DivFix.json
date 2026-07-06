@@ -1,0 +1,182 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_DivFix",
+  "manifest_cases": [
+    "signed_quotient_matches_c",
+    "zero_denominator_sentinel",
+    "overflow_wraparound_matches_c"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_DivFix.signed_quotient_matches_c",
+      "subject": "freetype.FT_DivFix",
+      "case": "signed_quotient_matches_c",
+      "operation": "freetype.div_fix",
+      "schema": "fixed_math",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "pairs": [
+            [
+              65536,
+              65536
+            ],
+            [
+              -65536,
+              65536
+            ],
+            [
+              65536,
+              -65536
+            ],
+            [
+              -65536,
+              -65536
+            ],
+            [
+              3,
+              2
+            ],
+            [
+              -3,
+              2
+            ],
+            [
+              7,
+              3
+            ]
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:fixed-math"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Long",
+          "vectorized": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].a",
+            "outputs[*].b",
+            "outputs[*].result"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_DivFix.zero_denominator_sentinel",
+      "subject": "freetype.FT_DivFix",
+      "case": "zero_denominator_sentinel",
+      "operation": "freetype.div_fix",
+      "schema": "fixed_math",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "pairs": [
+            [
+              1,
+              0
+            ],
+            [
+              -1,
+              0
+            ],
+            [
+              2147483647,
+              0
+            ],
+            [
+              -2147483648,
+              0
+            ]
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:fixed-math"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Long",
+          "sentinel": "C oracle value for b == 0"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].result"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_DivFix.overflow_wraparound_matches_c",
+      "subject": "freetype.FT_DivFix",
+      "case": "overflow_wraparound_matches_c",
+      "operation": "freetype.div_fix",
+      "schema": "fixed_math",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "pairs": [
+            [
+              2147483647,
+              1
+            ],
+            [
+              -2147483648,
+              1
+            ],
+            [
+              2147483647,
+              -1
+            ],
+            [
+              -2147483648,
+              -1
+            ],
+            [
+              1073741824,
+              1
+            ],
+            [
+              1073741824,
+              3
+            ]
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:fixed-math"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Long",
+          "arithmetic": "pinned C 64-bit or fallback path result"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].a",
+            "outputs[*].b",
+            "outputs[*].result"
+          ]
+        }
+      }
+    }
+  ]
+}

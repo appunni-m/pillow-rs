@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "subject": "ftfntfmt.FT_Get_Font_Format",
+  "manifest_cases": [
+    "truetype_face_returns_truetype",
+    "type1_or_other_supported_face_returns_driver_format",
+    "null_face_returns_null"
+  ],
+  "cases": [
+    {
+      "case_id": "ftfntfmt.FT_Get_Font_Format.truetype_face_returns_truetype",
+      "subject": "ftfntfmt.FT_Get_Font_Format",
+      "case": "truetype_face_returns_truetype",
+      "operation": "ftfntfmt.get_font_format",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf",
+            "format_requirement": "TrueType SFNT face with FONT_FORMAT service"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "symbol": "FT_Get_Font_Format",
+          "service": "FONT_FORMAT",
+          "expected_public_string_class": "driver_service_string",
+          "pinned_source": "freetype/src/base/ftfntfmt.c:26-35"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftfntfmt",
+        "area:font-format",
+        "surface:public-c-api"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "nullable_c_string",
+          "face_format": "driver_service_string"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return.nullness",
+            "return.bytes"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ftfntfmt.h",
+          "freetype/src/base/ftfntfmt.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftfntfmt.FT_Get_Font_Format.type1_or_other_supported_face_returns_driver_format",
+      "subject": "ftfntfmt.FT_Get_Font_Format",
+      "case": "type1_or_other_supported_face_returns_driver_format",
+      "operation": "ftfntfmt.get_font_format",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/non-sfnt/type1-or-bdf-format-control.pfb",
+            "status": "required_future_asset",
+            "requires": "At least one C FreeType-supported non-TrueType face such as Type 1, BDF, PCF, CFF, CID Type 1, PFR, Type 42, or Windows FNT."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "accepted_format_strings_from_header": [
+            "Type 1",
+            "BDF",
+            "PCF",
+            "Type 42",
+            "CID Type 1",
+            "CFF",
+            "PFR",
+            "Windows FNT"
+          ],
+          "pinned_source": "freetype/include/freetype/ftfntfmt.h:45-66"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftfntfmt",
+        "area:font-format",
+        "surface:public-c-api",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Needs a checked-in supported non-TrueType font asset.",
+        "output_shape": {
+          "return": "nullable_c_string",
+          "face_format": "driver_service_string"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return.nullness",
+            "return.bytes"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ftfntfmt.h",
+          "freetype/src/base/ftfntfmt.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftfntfmt.FT_Get_Font_Format.null_face_returns_null",
+      "subject": "ftfntfmt.FT_Get_Font_Format",
+      "case": "null_face_returns_null",
+      "operation": "ftfntfmt.get_font_format",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "face": null,
+          "symbol": "FT_Get_Font_Format",
+          "pinned_source": "freetype/src/base/ftfntfmt.c:30-34"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftfntfmt",
+        "area:font-format",
+        "surface:public-c-api"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "nullable_c_string"
+        },
+        "compare": {
+          "mode": "nullness",
+          "paths": [
+            "return.nullness"
+          ]
+        },
+        "sources_checked": [
+          "freetype/src/base/ftfntfmt.c"
+        ]
+      }
+    }
+  ]
+}

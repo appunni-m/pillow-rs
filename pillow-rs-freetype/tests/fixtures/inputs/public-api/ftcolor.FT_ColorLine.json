@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_ColorLine",
+  "manifest_cases": [
+    "layout_matches_c",
+    "field_order_matches_c",
+    "gradient_colorline_values"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_ColorLine.layout_matches_c",
+      "subject": "ftcolor.FT_ColorLine",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "record": "FT_ColorLine",
+          "fields": [
+            "extend",
+            "color_stop_iterator"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_ColorLine",
+          "layout": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "C ABI probe for FT_ColorLine sizeof/alignment/offsetof",
+          "Runner support for C FreeType, Rust FFI, C FFI, and Wasm FFI record layout comparison"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_ColorLine.field_order_matches_c",
+      "subject": "ftcolor.FT_ColorLine",
+      "case": "field_order_matches_c",
+      "operation": "abi.record_import",
+      "schema": "abi_record_fields",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "record": "FT_ColorLine",
+          "fields": [
+            "extend",
+            "color_stop_iterator"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_ColorLine",
+          "fields": [
+            "extend",
+            "color_stop_iterator"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "field_order",
+            "field_types",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "Compile/import probe for FT_ColorLine with exact ftcolor.h field names"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_ColorLine.gradient_colorline_values",
+      "subject": "ftcolor.FT_ColorLine",
+      "case": "gradient_colorline_values",
+      "operation": "ftcolor.get_paint",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 1 base glyph list",
+              "CPAL table with at least two palettes and named entries",
+              "paint graph containing solid, colr_layers, glyph, colr_glyph, linear, radial, sweep, transform, translate, scale, rotate, skew, and composite paints",
+              "static ColorLine records using PAD, REPEAT, and REFLECT extend modes",
+              "foreground palette index 0xFFFF references"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_roles": [
+            "linear_pad",
+            "radial_repeat",
+            "sweep_reflect"
+          ],
+          "inspect_before_stop_iteration": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_ColorLine",
+          "fields": [
+            "extend",
+            "color_stop_iterator.num_color_stops",
+            "current_color_stop",
+            "p_identity_class",
+            "read_variable"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "paints[*].colorline.extend",
+            "paints[*].colorline.color_stop_iterator.num_color_stops",
+            "paints[*].colorline.color_stop_iterator.current_color_stop",
+            "paints[*].colorline.color_stop_iterator.p_identity_class",
+            "paints[*].colorline.color_stop_iterator.read_variable"
+          ]
+        },
+        "fixture_requirements": [
+          "Runtime C oracle generation; do not store generated outputs"
+        ]
+      }
+    }
+  ]
+}

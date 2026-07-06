@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "subject": "ftmm.T1_MAX_MM_AXIS",
+  "manifest_cases": [
+    "value_matches_header",
+    "record_array_capacity"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmm.T1_MAX_MM_AXIS.value_matches_header",
+      "subject": "ftmm.T1_MAX_MM_AXIS",
+      "case": "value_matches_header",
+      "operation": "ftmm.constant_value",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "T1_MAX_MM_AXIS",
+        "kind": "macro_constant",
+        "c_type": "integer constant expression",
+        "value": 4
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "constant": "T1_MAX_MM_AXIS"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftmm"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "integer"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "value"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmm.h:105"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmm.T1_MAX_MM_AXIS.record_array_capacity",
+      "subject": "ftmm.T1_MAX_MM_AXIS",
+      "case": "record_array_capacity",
+      "operation": "ftmm.multi_master_layout",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Multi_Master",
+        "field": "axis",
+        "declaration": "FT_MM_Axis axis[T1_MAX_MM_AXIS]"
+      },
+      "inputs": {
+        "assets": {
+          "abi_probe": {
+            "kind": "ref",
+            "id": "probes/abi/ftmm-layout.c",
+            "asset_kind": "source"
+          }
+        },
+        "params": {
+          "record": "FT_Multi_Master",
+          "field": "axis",
+          "capacity_constant": "T1_MAX_MM_AXIS"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "kind:record-layout",
+        "header:ftmm"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "axis_capacity": "array length",
+          "record_size": "sizeof FT_Multi_Master",
+          "field_offsets": "offsetof snapshot"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "axis_capacity",
+            "sizeof",
+            "offsets.axis"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmm.h:105",
+          "freetype/include/freetype/ftmm.h:142-149"
+        ],
+        "fixture_requirements": [
+          "probes/abi/ftmm-layout.c must compute C sizeof/offsetof values at runtime rather than storing generated oracle output."
+        ]
+      }
+    }
+  ]
+}

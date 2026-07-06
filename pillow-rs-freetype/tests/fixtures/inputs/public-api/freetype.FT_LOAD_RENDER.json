@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_LOAD_RENDER",
+  "manifest_cases": [
+    "value_matches_header",
+    "render_during_load"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_LOAD_RENDER.value_matches_header",
+      "subject": "freetype.FT_LOAD_RENDER",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_LOAD_RENDER",
+          "include": "<freetype/freetype.h>",
+          "import": "#include <freetype/freetype.h>",
+          "expected_value_expr": "1L << 2"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:public-api",
+        "coverage:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "signed_or_unsigned_integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_LOAD_RENDER.render_during_load",
+      "subject": "freetype.FT_LOAD_RENDER",
+      "case": "render_during_load",
+      "operation": "freetype.load_glyph",
+      "schema": "glyph_slot",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "glyph_index": 36,
+          "load_flags": [
+            "FT_LOAD_RENDER",
+            "FT_LOAD_TARGET_NORMAL"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:public-api",
+        "coverage:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "slot_format": "glyph_format",
+          "bitmap": {
+            "pixel_mode": "FT_Pixel_Mode",
+            "rows": "integer",
+            "width": "integer",
+            "pitch": "integer",
+            "buffer_hash": "sha256"
+          },
+          "bitmap_left": "integer",
+          "bitmap_top": "integer",
+          "advance": "FT_Vector"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "slot_format",
+            "bitmap.pixel_mode",
+            "bitmap.rows",
+            "bitmap.width",
+            "bitmap.pitch",
+            "bitmap.buffer",
+            "bitmap_left",
+            "bitmap_top",
+            "advance"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h:3501-3636",
+          "freetype/src/base/ftobjs.c:943-1177",
+          "freetype/src/base/ftobjs.c:1164-1177"
+        ]
+      }
+    }
+  ]
+}

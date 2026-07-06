@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Invalid_Post_Table",
+  "manifest_cases": [
+    "value_matches_header",
+    "source_emitter_inventory"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Post_Table.value_matches_header",
+      "subject": "fterrdef.FT_Err_Invalid_Post_Table",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Invalid_Post_Table",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 155,
+          "expected_value_hex": "0x9B",
+          "expected_error_string_from_pinned_header": "invalid PostScript (post) table",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Invalid_Post_Table",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Post_Table.source_emitter_inventory",
+      "subject": "fterrdef.FT_Err_Invalid_Post_Table",
+      "case": "source_emitter_inventory",
+      "operation": "source_emitter_audit",
+      "schema": "api_audit",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Invalid_Post_Table",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/include/freetype/fterrdef.h",
+          "source_scan": "No direct FT_THROW(Invalid_Post_Table) or FT_ERR(Invalid_Post_Table) emitter found under freetype/src in the pinned source tree.",
+          "future_fixture_focus": "Malformed SFNT post table variants should be checked to distinguish Invalid_Post_Table from Invalid_Post_Table_Format and Invalid_Table."
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "source-emitter-inventory"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "symbol": "FT_Err_Invalid_Post_Table",
+          "source_emitters_found": "array",
+          "runtime_reachability": "header_only_or_future_emitter"
+        },
+        "compare": {
+          "mode": "unsupported_until_runner_added",
+          "paths": []
+        }
+      }
+    }
+  ]
+}

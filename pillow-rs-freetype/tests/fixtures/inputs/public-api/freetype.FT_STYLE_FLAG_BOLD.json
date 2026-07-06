@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_STYLE_FLAG_BOLD",
+  "manifest_cases": [
+    "value_matches_header",
+    "face_style_flag_behavior"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_STYLE_FLAG_BOLD.value_matches_header",
+      "subject": "freetype.FT_STYLE_FLAG_BOLD",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_STYLE_FLAG_BOLD",
+          "include": "<freetype/freetype.h>",
+          "import": "#include <freetype/freetype.h>",
+          "expected_value_expr": "1 << 1"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:public-api",
+        "coverage:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "signed_or_unsigned_integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h:1825-1841"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_STYLE_FLAG_BOLD.face_style_flag_behavior",
+      "subject": "freetype.FT_STYLE_FLAG_BOLD",
+      "case": "face_style_flag_behavior",
+      "operation": "freetype.open_face_pair",
+      "schema": "face_style_flags",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "bold_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts_autohint/DejaVuSans-Bold.ttf"
+          },
+          "regular_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "open_flags": [
+            "FT_OPEN_MEMORY"
+          ],
+          "style_flag": "FT_STYLE_FLAG_BOLD"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:public-api",
+        "coverage:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "bold_face": {
+            "status": "FT_Error",
+            "family_name": "string",
+            "style_name": "string",
+            "style_flags": "integer",
+            "has_bold_flag": "bool"
+          },
+          "regular_face": {
+            "status": "FT_Error",
+            "family_name": "string",
+            "style_name": "string",
+            "style_flags": "integer",
+            "has_bold_flag": "bool"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "bold_face.status",
+            "bold_face.family_name",
+            "bold_face.style_name",
+            "bold_face.style_flags",
+            "bold_face.has_bold_flag",
+            "regular_face.status",
+            "regular_face.family_name",
+            "regular_face.style_name",
+            "regular_face.style_flags",
+            "regular_face.has_bold_flag"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h:1825-1841",
+          "freetype/src/sfnt/sfobjs.c:1151-1180"
+        ]
+      }
+    }
+  ]
+}

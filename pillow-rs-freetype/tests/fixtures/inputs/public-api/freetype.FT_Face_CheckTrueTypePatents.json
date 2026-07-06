@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Face_CheckTrueTypePatents",
+  "manifest_cases": [
+    "truetype_face_result",
+    "non_truetype_face_result",
+    "null_face_result"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Face_CheckTrueTypePatents.truetype_face_result",
+      "subject": "freetype.FT_Face_CheckTrueTypePatents",
+      "case": "truetype_face_result",
+      "operation": "freetype.face_check_truetype_patents",
+      "schema": "api_bool",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:patent"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "result"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Face_CheckTrueTypePatents.non_truetype_face_result",
+      "subject": "freetype.FT_Face_CheckTrueTypePatents",
+      "case": "non_truetype_face_result",
+      "operation": "freetype.face_check_truetype_patents",
+      "schema": "api_bool",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/type1/attach-afm-base.pfb",
+            "status": "required_future_asset",
+            "requires": "A loadable non-TrueType face such as Type1/PFB"
+          }
+        },
+        "params": {
+          "face_index": 0
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:patent"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "result"
+          ]
+        },
+        "fixture_requirements": [
+          "Non-TrueType loadable face asset"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Face_CheckTrueTypePatents.null_face_result",
+      "subject": "freetype.FT_Face_CheckTrueTypePatents",
+      "case": "null_face_result",
+      "operation": "freetype.face_check_truetype_patents",
+      "schema": "api_bool",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "face": "null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:patent"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "result"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,311 @@
+{
+  "version": 1,
+  "subject": "ftbzip2.FT_Stream_OpenBzip2",
+  "manifest_cases": [
+    "success_open_valid_bzip2_stream",
+    "success_read_decompressed_bytes",
+    "lifecycle_close_does_not_close_source",
+    "error_null_stream_or_source",
+    "error_invalid_or_truncated_bzip2_header",
+    "out_of_scope_uncompiled_bzip2_policy"
+  ],
+  "cases": [
+    {
+      "case_id": "ftbzip2.FT_Stream_OpenBzip2.success_open_valid_bzip2_stream",
+      "subject": "ftbzip2.FT_Stream_OpenBzip2",
+      "case": "success_open_valid_bzip2_stream",
+      "operation": "ftbzip2.stream_open_bzip2",
+      "schema": "stream_wrapper",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "compressed": {
+            "kind": "ref",
+            "id": "streams/bzip2/valid-pcf-header.pcf.bz2",
+            "asset_kind": "binary"
+          }
+        },
+        "params": {
+          "target_stream": "empty",
+          "source_stream": "memory_stream"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbzip2",
+        "area:bzip2-stream"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "stream_fields": [
+            "memory",
+            "base",
+            "size",
+            "pos",
+            "read",
+            "close",
+            "descriptor"
+          ],
+          "source_ownership": "not_closed"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "stream.field_classes",
+            "source.close_count"
+          ]
+        },
+        "fixture_requirements": [
+          "Valid bzip2-compressed byte fixture with known decompressed bytes"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbzip2.FT_Stream_OpenBzip2.success_read_decompressed_bytes",
+      "subject": "ftbzip2.FT_Stream_OpenBzip2",
+      "case": "success_read_decompressed_bytes",
+      "operation": "ftbzip2.stream_read",
+      "schema": "stream_wrapper",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "compressed": {
+            "kind": "ref",
+            "id": "streams/bzip2/valid-pcf-header.pcf.bz2",
+            "asset_kind": "binary"
+          },
+          "raw": {
+            "kind": "ref",
+            "id": "streams/bzip2/valid-pcf-header.raw",
+            "asset_kind": "binary"
+          }
+        },
+        "params": {
+          "read_plan": [
+            [
+              0,
+              16
+            ],
+            [
+              3,
+              11
+            ],
+            [
+              0,
+              64
+            ]
+          ],
+          "seek_backwards": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbzip2",
+        "area:bzip2-stream"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "read_chunks": "bytes",
+          "seek_policy": "reset on backwards seek"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "error",
+            "reads[*].offset",
+            "reads[*].bytes",
+            "stream.pos"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftbzip2.FT_Stream_OpenBzip2.lifecycle_close_does_not_close_source",
+      "subject": "ftbzip2.FT_Stream_OpenBzip2",
+      "case": "lifecycle_close_does_not_close_source",
+      "operation": "ftbzip2.stream_close",
+      "schema": "stream_wrapper",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "compressed": {
+            "kind": "ref",
+            "id": "streams/bzip2/valid-pcf-header.pcf.bz2",
+            "asset_kind": "binary"
+          }
+        },
+        "params": {
+          "close_target_stream": true,
+          "then_probe_source_stream": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbzip2",
+        "area:lifecycle"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void close callback",
+          "source_stream_alive": true,
+          "wrapper_allocator_events": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "target.close_count",
+            "source.close_count",
+            "source.read_after_target_close",
+            "allocator.events"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source",
+      "subject": "ftbzip2.FT_Stream_OpenBzip2",
+      "case": "error_null_stream_or_source",
+      "operation": "ftbzip2.stream_open_bzip2",
+      "schema": "stream_wrapper",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "compressed": {
+            "kind": "ref",
+            "id": "streams/bzip2/valid-pcf-header.pcf.bz2",
+            "asset_kind": "binary"
+          }
+        },
+        "params": {
+          "null_cases": [
+            "target_stream",
+            "source_stream"
+          ],
+          "sentinel_target": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbzip2",
+        "area:null-arguments"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "stream_write_state": true
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "variant",
+            "error",
+            "target_after",
+            "source_after"
+          ]
+        },
+        "error": "Invalid_Stream_Handle"
+      }
+    },
+    {
+      "case_id": "ftbzip2.FT_Stream_OpenBzip2.error_invalid_or_truncated_bzip2_header",
+      "subject": "ftbzip2.FT_Stream_OpenBzip2",
+      "case": "error_invalid_or_truncated_bzip2_header",
+      "operation": "ftbzip2.stream_open_bzip2",
+      "schema": "stream_wrapper",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "invalid": {
+            "kind": "ref",
+            "id": "streams/bzip2/not-bzip2.bin",
+            "asset_kind": "binary"
+          },
+          "truncated": {
+            "kind": "ref",
+            "id": "streams/bzip2/truncated.bz2",
+            "asset_kind": "binary"
+          }
+        },
+        "params": {
+          "inputs": [
+            "invalid",
+            "truncated",
+            "empty"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbzip2",
+        "area:corrupt-stream"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "wrapper_allocated": false
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "variant",
+            "error",
+            "target_after",
+            "allocator.events"
+          ]
+        },
+        "error": "Invalid_File_Format",
+        "fixture_requirements": [
+          "Invalid and truncated bzip2 byte fixtures"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy",
+      "subject": "ftbzip2.FT_Stream_OpenBzip2",
+      "case": "out_of_scope_uncompiled_bzip2_policy",
+      "operation": "ftbzip2.stream_open_bzip2",
+      "schema": "stream_wrapper",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "compressed": {
+            "kind": "ref",
+            "id": "streams/bzip2/valid-pcf-header.pcf.bz2",
+            "asset_kind": "binary"
+          }
+        },
+        "params": {
+          "build_feature": "bzip2-disabled"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbzip2",
+        "area:build-dependent"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "return": "FT_Error",
+          "policy": "Unimplemented_Feature when FT_CONFIG_OPTION_USE_BZIP2 is absent"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "build_features.bzip2",
+            "error"
+          ]
+        },
+        "error": "Unimplemented_Feature"
+      }
+    }
+  ]
+}

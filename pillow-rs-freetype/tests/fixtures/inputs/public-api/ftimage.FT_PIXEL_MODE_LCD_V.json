@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_PIXEL_MODE_LCD_V",
+  "manifest_cases": [
+    "value_matches_header",
+    "render_mode_lcd_v_sets_bitmap_shape"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_PIXEL_MODE_LCD_V.value_matches_header",
+      "subject": "ftimage.FT_PIXEL_MODE_LCD_V",
+      "case": "value_matches_header",
+      "operation": "ftimage.pixel_mode_value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_PIXEL_MODE_LCD_V",
+          "include": "<freetype/ftimage.h>",
+          "import": "#include <freetype/ftimage.h>",
+          "enum": "FT_Pixel_Mode",
+          "expected_value": 6,
+          "previous_symbol": "FT_PIXEL_MODE_LCD",
+          "next_symbol": "FT_PIXEL_MODE_BGRA"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftimage",
+        "area:pixel-mode",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "integer",
+          "enum": "FT_Pixel_Mode",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "enum",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:180-196"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_PIXEL_MODE_LCD_V.render_mode_lcd_v_sets_bitmap_shape",
+      "subject": "ftimage.FT_PIXEL_MODE_LCD_V",
+      "case": "render_mode_lcd_v_sets_bitmap_shape",
+      "operation": "freetype.render_glyph",
+      "schema": "glyph_slot_bitmap",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_sizes": [
+            {
+              "x": 0,
+              "y": 18
+            },
+            {
+              "x": 0,
+              "y": 32
+            }
+          ],
+          "glyph_indices": [
+            36,
+            43,
+            82
+          ],
+          "load_flags": [
+            "FT_LOAD_DEFAULT",
+            "FT_LOAD_NO_HINTING"
+          ],
+          "render_mode": "FT_RENDER_MODE_LCD_V",
+          "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
+          "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftimage",
+        "area:pixel-mode",
+        "area:lcd-v",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "bitmap": {
+            "pixel_mode": "FT_Pixel_Mode",
+            "rows": "integer",
+            "width": "integer",
+            "pitch": "integer",
+            "num_grays": "integer",
+            "buffer_hash": "sha256"
+          },
+          "bitmap_left": "integer",
+          "bitmap_top": "integer"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "bitmap.pixel_mode",
+            "bitmap.rows",
+            "bitmap.width",
+            "bitmap.pitch",
+            "bitmap.num_grays",
+            "bitmap.buffer",
+            "bitmap_left",
+            "bitmap_top"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:477-537",
+          "freetype/src/smooth/ftsmooth.c:574-643"
+        ]
+      }
+    }
+  ]
+}

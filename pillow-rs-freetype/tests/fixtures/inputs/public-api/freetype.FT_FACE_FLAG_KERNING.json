@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_FACE_FLAG_KERNING",
+  "manifest_cases": [
+    "value_matches_header",
+    "face_property_kerning_font"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_FACE_FLAG_KERNING.value_matches_header",
+      "subject": "freetype.FT_FACE_FLAG_KERNING",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_FACE_FLAG_KERNING",
+          "include": "freetype/freetype.h"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "FT_Long macro bit flag",
+          "source": "1L << 6"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_FACE_FLAG_KERNING.face_property_kerning_font",
+      "subject": "freetype.FT_FACE_FLAG_KERNING",
+      "case": "face_property_kerning_font",
+      "operation": "freetype.face_flags",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts_autohint/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag": "FT_FACE_FLAG_KERNING",
+          "kerning_pairs": [
+            {
+              "left_char": "A",
+              "right_char": "V",
+              "mode": "FT_KERNING_DEFAULT"
+            },
+            {
+              "left_char": "T",
+              "right_char": "o",
+              "mode": "FT_KERNING_UNFITTED"
+            }
+          ],
+          "sizes": [
+            12,
+            20
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "runtime:face_flags",
+        "runtime:kerning",
+        "asset:existing"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "face_flags": "FT_Long",
+          "bit_set": "bool",
+          "kerning": "array<{status:FT_Error,vector:FT_Vector}>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "face_flags",
+            "bit_set",
+            "kerning[].status",
+            "kerning[].x",
+            "kerning[].y"
+          ]
+        }
+      }
+    }
+  ]
+}

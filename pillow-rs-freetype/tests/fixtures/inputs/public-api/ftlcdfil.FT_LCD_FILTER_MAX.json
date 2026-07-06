@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "subject": "ftlcdfil.FT_LCD_FILTER_MAX",
+  "manifest_cases": [
+    "value_matches_header",
+    "rejected_by_set_lcd_filter"
+  ],
+  "cases": [
+    {
+      "case_id": "ftlcdfil.FT_LCD_FILTER_MAX.value_matches_header",
+      "subject": "ftlcdfil.FT_LCD_FILTER_MAX",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftlcdfil.h",
+          "symbol": "FT_LCD_FILTER_MAX",
+          "enum": "FT_LcdFilter",
+          "header_value": 17
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftlcdfil"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": 17,
+          "type": "FT_LcdFilter"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftlcdfil.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlcdfil.FT_LCD_FILTER_MAX.rejected_by_set_lcd_filter",
+      "subject": "ftlcdfil.FT_LCD_FILTER_MAX",
+      "case": "rejected_by_set_lcd_filter",
+      "operation": "ftlcdfil.set_lcd_filter",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "filter": "FT_LCD_FILTER_MAX",
+          "subpixel_rendering_branch": "defined",
+          "source_behavior": "default switch arm returns FT_Err_Invalid_Argument"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "runtime:lcd_filter",
+        "error_path"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error",
+          "library_weights_unchanged": "bool"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "library_weights_unchanged"
+          ]
+        },
+        "error": "FT_Err_Invalid_Argument when subpixel rendering is enabled; FT_Err_Unimplemented_Feature when disabled",
+        "source_refs": [
+          "freetype/src/base/ftlcdfil.c"
+        ]
+      }
+    }
+  ]
+}

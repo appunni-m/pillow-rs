@@ -1,0 +1,307 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_New_Memory_Face",
+  "manifest_cases": [
+    "valid_font_bytes",
+    "success_negative_face_index_probe",
+    "success_named_instance_index",
+    "error_null_file_base",
+    "error_null_library_or_aface",
+    "error_bad_size_or_unknown_format"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_New_Memory_Face.valid_font_bytes",
+      "subject": "freetype.FT_New_Memory_Face",
+      "case": "valid_font_bytes",
+      "operation": "freetype.new_memory_face",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font_bytes": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "memory_source": "whole_file",
+          "post_open_probes": [
+            "face_fields",
+            "glyph_slot",
+            "active_size",
+            "selected_charmap"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "face": "created_from_memory",
+          "face_state": [
+            "num_faces",
+            "family_name",
+            "style_name",
+            "face_flags",
+            "num_glyphs",
+            "charmap_encoding"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "face_state"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_New_Memory_Face.success_negative_face_index_probe",
+      "subject": "freetype.FT_New_Memory_Face",
+      "case": "success_negative_face_index_probe",
+      "operation": "freetype.new_memory_face",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font_bytes": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": -1,
+          "memory_source": "whole_file"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "probe_fields": [
+            "num_faces",
+            "style_flags_named_instance_count"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "probe_fields"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_New_Memory_Face.success_named_instance_index",
+      "subject": "freetype.FT_New_Memory_Face",
+      "case": "success_named_instance_index",
+      "operation": "freetype.new_memory_face",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font_bytes": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/variable/named-instances.ttf",
+            "status": "required_future_asset",
+            "requires": "Variable font with at least one named instance"
+          }
+        },
+        "params": {
+          "face_index": "0 | (1 << 16)",
+          "memory_source": "whole_file"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "variation_state": [
+            "face_index",
+            "style_flags",
+            "face_flags",
+            "named_instance_coords"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "variation_state"
+          ]
+        },
+        "fixture_requirements": [
+          "Variable font with named instance bits observable in style flags and coordinates"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_New_Memory_Face.error_null_file_base",
+      "subject": "freetype.FT_New_Memory_Face",
+      "case": "error_null_file_base",
+      "operation": "freetype.new_memory_face",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "valid",
+          "file_base": "null",
+          "file_size": 1024,
+          "face_index": 0
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "aface": "unchanged"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error",
+            "aface_nullness"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    },
+    {
+      "case_id": "freetype.FT_New_Memory_Face.error_null_library_or_aface",
+      "subject": "freetype.FT_New_Memory_Face",
+      "case": "error_null_library_or_aface",
+      "operation": "freetype.new_memory_face",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font_bytes": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "library": "null",
+              "aface": "valid"
+            },
+            {
+              "library": "valid",
+              "aface": "null"
+            }
+          ],
+          "face_index": 0
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "resource_cleanup": "no_leak"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].error"
+          ]
+        },
+        "error": "c_oracle"
+      }
+    },
+    {
+      "case_id": "freetype.FT_New_Memory_Face.error_bad_size_or_unknown_format",
+      "subject": "freetype.FT_New_Memory_Face",
+      "case": "error_bad_size_or_unknown_format",
+      "operation": "freetype.new_memory_face",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "malformed": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/malformed/not-a-font.bin",
+            "status": "required_future_asset",
+            "requires": "Small deterministic malformed byte blob rejected by C FreeType"
+          },
+          "font_bytes": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "file_size": -1
+            },
+            {
+              "file_size": 0
+            },
+            {
+              "file_size": 12
+            },
+            {
+              "source": "malformed"
+            },
+            {
+              "face_index": 9999
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "face": "not_created"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].error",
+            "outputs[*].face_nullness"
+          ]
+        },
+        "error": "c_oracle"
+      }
+    }
+  ]
+}

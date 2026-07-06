@@ -1,0 +1,162 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_Outline_ConicTo_Func",
+  "manifest_cases": [
+    "macro_alias_matches_typedef",
+    "callback_abi_matches_c",
+    "decompose_propagates_callback_error"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_Outline_ConicTo_Func.macro_alias_matches_typedef",
+      "subject": "ftimage.FT_Outline_ConicTo_Func",
+      "case": "macro_alias_matches_typedef",
+      "operation": "abi.compile_alias_probe",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "probe_source": {
+            "kind": "ref",
+            "id": "abi-probes/ftimage/outline-conic-to-alias.c"
+          }
+        },
+        "params": {
+          "header": "freetype/ftimage.h",
+          "macro": "FT_Outline_ConicTo_Func",
+          "typedef": "FT_Outline_ConicToFunc",
+          "signature": "int (*)(const FT_Vector* control, const FT_Vector* to, void* user)"
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftimage"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile_result": "success",
+          "alias_identity": "same function pointer type"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "compile_result",
+            "alias_identity"
+          ]
+        },
+        "fixture_requirements": [
+          "abi-probes/ftimage/outline-conic-to-alias.c must compile with the pinned FreeType headers"
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:567-590"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Outline_ConicTo_Func.callback_abi_matches_c",
+      "subject": "ftimage.FT_Outline_ConicTo_Func",
+      "case": "callback_abi_matches_c",
+      "operation": "ftimage.outline_decompose",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_fixture": {
+            "kind": "ref",
+            "id": "outlines/conic-consecutive-and-closing.json"
+          }
+        },
+        "params": {
+          "callbacks": {
+            "conic_to": "instrumented FT_Outline_ConicTo_Func",
+            "move_to": "instrumented",
+            "line_to": "instrumented"
+          },
+          "user_pointer": "stable sentinel",
+          "shift_delta_matrix": [
+            {
+              "shift": 0,
+              "delta": 0
+            },
+            {
+              "shift": 1,
+              "delta": 32
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftimage"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "conic_events": "control/to FT_Vector pointer values plus user identity"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "conic_events[*].control",
+            "conic_events[*].to",
+            "conic_events[*].user_identity"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:567-590",
+          "freetype/src/base/ftoutln.c:163-221"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Outline_ConicTo_Func.decompose_propagates_callback_error",
+      "subject": "ftimage.FT_Outline_ConicTo_Func",
+      "case": "decompose_propagates_callback_error",
+      "operation": "ftimage.outline_decompose",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "outline_fixture": {
+            "kind": "ref",
+            "id": "outlines/conic-consecutive-and-closing.json"
+          }
+        },
+        "params": {
+          "callback": "conic_to",
+          "callback_return_values": [
+            7,
+            1234
+          ],
+          "abort_after_first_nonzero": true
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftimage"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "callback return value propagated as FT_Error-compatible int",
+          "events": "prefix through failing conic callback"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].events_before_abort",
+            "rows[*].failing_callback"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftoutln.c:189-221",
+          "freetype/src/base/ftoutln.c:288-296"
+        ]
+      }
+    }
+  ]
+}

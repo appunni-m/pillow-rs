@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_LOAD_PEDANTIC",
+  "manifest_cases": [
+    "value_matches_header",
+    "pedantic_error_behavior"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_LOAD_PEDANTIC.value_matches_header",
+      "subject": "freetype.FT_LOAD_PEDANTIC",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_LOAD_PEDANTIC",
+          "include": "<freetype/freetype.h>",
+          "import": "#include <freetype/freetype.h>",
+          "expected_value_expr": "1L << 7"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:public-api",
+        "coverage:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "signed_or_unsigned_integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_LOAD_PEDANTIC.pedantic_error_behavior",
+      "subject": "freetype.FT_LOAD_PEDANTIC",
+      "case": "pedantic_error_behavior",
+      "operation": "freetype.load_glyph_pair",
+      "schema": "glyph_slot_error_delta",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/malformed/pedantic-bytecode-error.ttf",
+            "missing": true
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "glyph_selector": {
+            "kind": "bytecode_error_glyph"
+          },
+          "baseline_load_flags": [],
+          "pedantic_load_flags": [
+            "FT_LOAD_PEDANTIC"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:public-api",
+        "coverage:runtime"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "baseline": {
+            "status": "FT_Error",
+            "slot_format": "glyph_format"
+          },
+          "pedantic": {
+            "status": "FT_Error",
+            "slot_format": "glyph_format"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "baseline.status",
+            "pedantic.status",
+            "baseline.slot_format",
+            "pedantic.slot_format"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h:3501-3636",
+          "freetype/src/base/ftobjs.c:943-1177",
+          "freetype/src/truetype/ttgload.c:2203-2220"
+        ],
+        "fixture_requirements": [
+          "Malformed or edge-case TrueType fixture where pedantic bytecode/load errors differ from non-pedantic loading"
+        ]
+      }
+    }
+  ]
+}

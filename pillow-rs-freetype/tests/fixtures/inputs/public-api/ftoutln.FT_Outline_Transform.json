@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "subject": "ftoutln.FT_Outline_Transform",
+  "manifest_cases": ["matrix_transform_matches_c", "null_inputs_noop", "orientation_and_cbox_after_transform"],
+  "cases": [
+    {
+      "case_id": "ftoutln.FT_Outline_Transform.matrix_transform_matches_c",
+      "subject": "ftoutln.FT_Outline_Transform",
+      "case": "matrix_transform_matches_c",
+      "operation": "ftoutln.outline_transform",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/transform/slant-rotate-points.json", "asset_kind": "outline_model"}}, "params": {"matrix_16_16": {"xx": 65536, "xy": 16384, "yx": -32768, "yy": 65536}, "uses": "FT_Vector_Transform/FT_MulFix"}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "operation:outline-mutation"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Transform", "kind": "function", "c_signature": "void FT_Outline_Transform(const FT_Outline* outline, const FT_Matrix* matrix)"}, "source_behavior": "Every point is transformed with FT_Vector_Transform, using FT_MulFix fixed-point multiplication."},
+      "expectation": {"status": "ok", "output_shape": {"return": "void", "points_before": ["FT_Vector"], "points_after": ["FT_Vector"]}, "compare": {"mode": "exact", "paths": ["points_after"]}, "source_refs": ["freetype/include/freetype/ftoutln.h:307-326", "freetype/src/base/ftoutln.c:719-737"], "fixture_requirements": ["Outline with positive and negative coordinates to exercise FT_MulFix rounding."]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_Transform.null_inputs_noop",
+      "subject": "ftoutln.FT_Outline_Transform",
+      "case": "null_inputs_noop",
+      "operation": "ftoutln.outline_transform",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/transform/slant-rotate-points.json", "asset_kind": "outline_model"}, "no_points": {"kind": "ref", "id": "outlines/invalid/nonzero-count-null-points.json", "asset_kind": "outline_model"}}, "params": {"scenarios": [{"outline_pointer": null}, {"matrix_pointer": null, "outline_ref": "outline"}, {"outline_ref": "no_points", "matrix_16_16": {"xx": 65536, "xy": 0, "yx": 0, "yy": 65536}}]}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "behavior:null-noop"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Transform", "kind": "function", "c_signature": "void FT_Outline_Transform(const FT_Outline* outline, const FT_Matrix* matrix)"}, "source_behavior": "Null outline, null matrix, or null outline->points returns immediately."},
+      "expectation": {"status": "ok", "output_shape": {"return": "void", "sentinel_memory_changed": false, "points_after": ["FT_Vector"]}, "compare": {"mode": "exact", "paths": ["sentinel_memory_changed", "points_after"]}, "source_refs": ["freetype/src/base/ftoutln.c:728-730"], "fixture_requirements": ["Synthetic descriptor with nonzero count and null points pointer for ABI-level no-op coverage."]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_Transform.orientation_and_cbox_after_transform",
+      "subject": "ftoutln.FT_Outline_Transform",
+      "case": "orientation_and_cbox_after_transform",
+      "operation": "ftoutln.outline_transform",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/orientation/negative-area-square.json", "asset_kind": "outline_model"}}, "params": {"matrix_16_16": {"xx": -65536, "xy": 0, "yx": 0, "yy": 65536}, "follow_calls": ["FT_Outline_Get_CBox", "FT_Outline_Get_Orientation"]}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "behavior:geometry-after-transform"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Transform", "kind": "function", "c_signature": "void FT_Outline_Transform(const FT_Outline* outline, const FT_Matrix* matrix)"}, "source_behavior": "Transform mutates the points only; later cbox and orientation calls observe the transformed coordinates."},
+      "expectation": {"status": "ok", "output_shape": {"return": "void", "cbox_after": "FT_BBox", "orientation_after": "FT_Orientation"}, "compare": {"mode": "exact", "paths": ["cbox_after", "orientation_after"]}, "source_refs": ["freetype/src/base/ftoutln.c:719-737", "freetype/src/base/ftoutln.c:470-512", "freetype/src/base/ftoutln.c:1050-1116"], "fixture_requirements": ["Mirror transform must flip the signed area for the chosen outline."]}
+    }
+  ]
+}

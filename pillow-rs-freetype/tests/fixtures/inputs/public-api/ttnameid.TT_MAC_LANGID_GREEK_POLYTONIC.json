@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "subject": "ttnameid.TT_MAC_LANGID_GREEK_POLYTONIC",
+  "manifest_cases": ["value_matches_header", "public_import_contract", "representative_name_record_language_match"],
+  "cases": [
+    {
+      "case_id": "ttnameid.TT_MAC_LANGID_GREEK_POLYTONIC.value_matches_header",
+      "subject": "ttnameid.TT_MAC_LANGID_GREEK_POLYTONIC",
+      "case": "value_matches_header",
+      "operation": "abi.constant_eval",
+      "schema": "constant_value",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"header": "freetype/ttnameid.h", "symbol": "TT_MAC_LANGID_GREEK_POLYTONIC", "value": 148, "value_type": "preprocessor integer constant", "name_table_platform": "TT_PLATFORM_MACINTOSH"}},
+      "classifiers": ["kind:constant", "header:ttnameid", "area:mac_name_language"],
+      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "constant_value": "int"}, "compare": {"mode": "exact", "paths": ["symbol", "constant_value"]}, "source_refs": ["freetype/include/freetype/ttnameid.h:303-423"]}
+    },
+    {
+      "case_id": "ttnameid.TT_MAC_LANGID_GREEK_POLYTONIC.public_import_contract",
+      "subject": "ttnameid.TT_MAC_LANGID_GREEK_POLYTONIC",
+      "case": "public_import_contract",
+      "operation": "abi.public_import",
+      "schema": "compile_contract",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"include": "freetype/ttnameid.h", "symbol": "TT_MAC_LANGID_GREEK_POLYTONIC", "usage": "enum_or_static_assert", "expected_value": 148}},
+      "classifiers": ["kind:constant", "header:ttnameid", "area:public_import"],
+      "expectation": {"status": "ok", "output_shape": {"include_accepted": "bool", "symbol_visible": "bool", "constant_value": "int"}, "compare": {"mode": "exact", "paths": ["include_accepted", "symbol_visible", "constant_value"]}, "source_refs": ["freetype/include/freetype/ttnameid.h:303-423"]}
+    },
+    {
+      "case_id": "ttnameid.TT_MAC_LANGID_GREEK_POLYTONIC.representative_name_record_language_match",
+      "subject": "ttnameid.TT_MAC_LANGID_GREEK_POLYTONIC",
+      "case": "representative_name_record_language_match",
+      "operation": "sfnt.get_name_record",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {"font": {"kind": "ref", "id": "fonts/names/mac-greek-polytonic.ttf"}},
+        "params": {
+          "function": "FT_Get_Sfnt_Name",
+          "face_index": 0,
+          "platform_id": "TT_PLATFORM_MACINTOSH",
+          "platform_value": 1,
+          "encoding_id": "TT_MAC_ID_GREEK",
+          "encoding_value": 6,
+          "language_id": "TT_MAC_LANGID_GREEK_POLYTONIC",
+          "language_value": 148,
+          "name_id": "TT_NAME_ID_FULL_NAME"
+        }
+      },
+      "classifiers": ["kind:constant", "header:ttnameid", "runtime:sfnt_names", "area:mac_name_language"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"error": "FT_Error", "name_index": "uint", "name_record": {"platform_id": "FT_UShort", "encoding_id": "FT_UShort", "language_id": "FT_UShort", "name_id": "FT_UShort", "string_len": "FT_UInt", "string_bytes": "bytes"}},
+        "compare": {"mode": "exact", "paths": ["error", "name_index", "name_record.platform_id", "name_record.encoding_id", "name_record.language_id", "name_record.name_id", "name_record.string_len", "name_record.string_bytes"]},
+        "fixture_requirements": ["Missing asset: fonts/names/mac-greek-polytonic.ttf must contain an SFNT name record with platform 1, encoding 6, language 148, and TT_NAME_ID_FULL_NAME bytes."],
+        "source_refs": ["freetype/include/freetype/ttnameid.h:85-91", "freetype/include/freetype/ttnameid.h:144-153", "freetype/include/freetype/ttnameid.h:303-423", "freetype/include/freetype/ftsnames.h:146-187", "freetype/src/base/ftsnames.c:35-78"]
+      }
+    }
+  ]
+}

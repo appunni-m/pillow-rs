@@ -1,0 +1,237 @@
+{
+  "version": 1,
+  "subject": "ftwinfnt.FT_WinFNT_HeaderRec",
+  "manifest_cases": [
+    "layout_matches_c",
+    "field_order_matches_header",
+    "copied_header_values_match_file"
+  ],
+  "cases": [
+    {
+      "case_id": "ftwinfnt.FT_WinFNT_HeaderRec.layout_matches_c",
+      "subject": "ftwinfnt.FT_WinFNT_HeaderRec",
+      "case": "layout_matches_c",
+      "operation": "ftwinfnt.winfnt_header_rec_abi",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftwinfnt.h",
+        "symbol": "FT_WinFNT_HeaderRec",
+        "kind": "record",
+        "record": "struct FT_WinFNT_HeaderRec_"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include_header": "freetype/ftwinfnt.h",
+          "probe": [
+            "sizeof",
+            "alignof",
+            "field_offsets"
+          ],
+          "fields": [
+            "version",
+            "file_size",
+            "copyright[60]",
+            "file_type",
+            "nominal_point_size",
+            "vertical_resolution",
+            "horizontal_resolution",
+            "ascent",
+            "internal_leading",
+            "external_leading",
+            "italic",
+            "underline",
+            "strike_out",
+            "weight",
+            "charset",
+            "pixel_width",
+            "pixel_height",
+            "pitch_and_family",
+            "avg_width",
+            "max_width",
+            "first_char",
+            "last_char",
+            "default_char",
+            "break_char",
+            "bytes_per_row",
+            "device_offset",
+            "face_name_offset",
+            "bits_pointer",
+            "bits_offset",
+            "reserved",
+            "flags",
+            "A_space",
+            "B_space",
+            "C_space",
+            "color_table_offset",
+            "reserved1[4]"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftwinfnt",
+        "area:abi"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "size_t",
+          "alignof": "size_t",
+          "field_offsets": "map<string,size_t>",
+          "array_lengths": {
+            "copyright": 60,
+            "reserved1": 4
+          }
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "field_offsets",
+            "array_lengths"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftwinfnt.h:182-221"
+        ]
+      }
+    },
+    {
+      "case_id": "ftwinfnt.FT_WinFNT_HeaderRec.field_order_matches_header",
+      "subject": "ftwinfnt.FT_WinFNT_HeaderRec",
+      "case": "field_order_matches_header",
+      "operation": "ftwinfnt.winfnt_header_rec_field_order",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftwinfnt.h",
+        "symbol": "FT_WinFNT_HeaderRec",
+        "kind": "record"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include_header": "freetype/ftwinfnt.h",
+          "field_order_source": "public_header"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftwinfnt",
+        "area:abi"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "field_order": [
+            "version",
+            "file_size",
+            "copyright",
+            "file_type",
+            "nominal_point_size",
+            "vertical_resolution",
+            "horizontal_resolution",
+            "ascent",
+            "internal_leading",
+            "external_leading",
+            "italic",
+            "underline",
+            "strike_out",
+            "weight",
+            "charset",
+            "pixel_width",
+            "pixel_height",
+            "pitch_and_family",
+            "avg_width",
+            "max_width",
+            "first_char",
+            "last_char",
+            "default_char",
+            "break_char",
+            "bytes_per_row",
+            "device_offset",
+            "face_name_offset",
+            "bits_pointer",
+            "bits_offset",
+            "reserved",
+            "flags",
+            "A_space",
+            "B_space",
+            "C_space",
+            "color_table_offset",
+            "reserved1"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "field_order"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftwinfnt.h:182-221"
+        ]
+      }
+    },
+    {
+      "case_id": "ftwinfnt.FT_WinFNT_HeaderRec.copied_header_values_match_file",
+      "subject": "ftwinfnt.FT_WinFNT_HeaderRec",
+      "case": "copied_header_values_match_file",
+      "operation": "ftwinfnt.get_winfnt_header",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftwinfnt.h",
+        "symbol": "FT_WinFNT_HeaderRec",
+        "producer": "FT_Get_WinFNT_Header"
+      },
+      "inputs": {
+        "assets": {
+          "winfnt_font": {
+            "kind": "ref",
+            "id": "fonts/winfnt/bitmap-header.fnt",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "face_source": "winfnt_font",
+          "face_index": 0,
+          "decode_on_disk_header": true,
+          "header_pointer_mode": "caller_owned_record"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftwinfnt",
+        "format:winfnt"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Err_Ok",
+          "copied_header": "FT_WinFNT_HeaderRec",
+          "file_header": "decoded Windows FNT header bytes"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "copied_header",
+            "file_header"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftwinfnt.h:182-221",
+          "freetype/src/base/ftwinfnt.c:43-45"
+        ],
+        "fixture_requirements": [
+          "fonts/winfnt/bitmap-header.fnt must preserve original header bytes so the C-copied record can be compared to decoded file fields."
+        ]
+      }
+    }
+  ]
+}

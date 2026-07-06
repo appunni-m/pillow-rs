@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_LOAD_SBITS_ONLY",
+  "manifest_cases": [
+    "value_matches_header",
+    "embedded_bitmap_only_behavior"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_LOAD_SBITS_ONLY.value_matches_header",
+      "subject": "freetype.FT_LOAD_SBITS_ONLY",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_LOAD_SBITS_ONLY",
+          "include": "<freetype/freetype.h>",
+          "import": "#include <freetype/freetype.h>",
+          "expected_value_expr": "1L << 14"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:public-api",
+        "coverage:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "signed_or_unsigned_integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_LOAD_SBITS_ONLY.embedded_bitmap_only_behavior",
+      "subject": "freetype.FT_LOAD_SBITS_ONLY",
+      "case": "embedded_bitmap_only_behavior",
+      "operation": "freetype.load_glyph_pair",
+      "schema": "glyph_slot_error_delta",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font_with_sbit": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/bitmap/embedded-strike.ttf",
+            "missing": true
+          },
+          "font_without_sbit": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "strike_selector": {
+            "kind": "embedded_bitmap_strike"
+          },
+          "glyph_selector": {
+            "kind": "bitmap_available_and_missing"
+          },
+          "load_flags": [
+            "FT_LOAD_SBITS_ONLY"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:public-api",
+        "coverage:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "with_sbit": {
+            "status": "FT_Error",
+            "slot_format": "glyph_format",
+            "bitmap": "FT_Bitmap"
+          },
+          "without_sbit": {
+            "status": "FT_Error",
+            "error": "public_error"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "with_sbit.status",
+            "with_sbit.slot_format",
+            "with_sbit.bitmap",
+            "without_sbit.status",
+            "without_sbit.error"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h:3501-3636",
+          "freetype/src/base/ftobjs.c:943-1177",
+          "freetype/src/base/ftobjs.c:1042-1048",
+          "freetype/src/truetype/ttgload.c:2467-2474"
+        ],
+        "fixture_requirements": [
+          "Deterministic bitmap-strike font with one glyph available in embedded bitmap and one unavailable at the selected strike"
+        ]
+      }
+    }
+  ]
+}

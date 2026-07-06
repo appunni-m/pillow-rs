@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "subject": "ftsnames.FT_SfntName",
+  "manifest_cases": [
+    "layout_matches_c",
+    "populated_from_name_lookup"
+  ],
+  "metadata": {
+    "abi": {
+      "kind": "record",
+      "header": "freetype/ftsnames.h",
+      "symbol": "FT_SfntName",
+      "fields": [
+        "FT_UShort platform_id",
+        "FT_UShort encoding_id",
+        "FT_UShort language_id",
+        "FT_UShort name_id",
+        "FT_Byte* string",
+        "FT_UInt string_len"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "case_id": "ftsnames.FT_SfntName.layout_matches_c",
+      "subject": "ftsnames.FT_SfntName",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftsnames.h",
+          "symbol": "FT_SfntName",
+          "fields_in_order": [
+            "platform_id",
+            "encoding_id",
+            "language_id",
+            "name_id",
+            "string",
+            "string_len"
+          ],
+          "probe": [
+            "sizeof",
+            "alignof",
+            "offsetof",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftsnames",
+        "area:abi_layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "offsets": "object<field,usize>",
+          "field_types": "object<field,c_type>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "offsets",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftsnames.FT_SfntName.populated_from_name_lookup",
+      "subject": "ftsnames.FT_SfntName",
+      "case": "populated_from_name_lookup",
+      "operation": "ftsnames.get_sfnt_name",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "idx": 0,
+          "preserve_raw_bytes": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftsnames",
+        "area:runtime_record"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": {
+            "platform_id": "FT_UShort",
+            "encoding_id": "FT_UShort",
+            "language_id": "FT_UShort",
+            "name_id": "FT_UShort",
+            "string": "borrowed_byte_pointer",
+            "string_len": "FT_UInt",
+            "string_bytes": "bytes"
+          }
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "record.platform_id",
+            "record.encoding_id",
+            "record.language_id",
+            "record.name_id",
+            "record.string_nullness",
+            "record.string_len",
+            "record.string_bytes"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,360 @@
+{
+  "version": 1,
+  "subject": "ftglyph.FT_Get_Glyph",
+  "manifest_cases": [
+    "success_outline_slot_deep_copy",
+    "success_bitmap_slot_deep_copy",
+    "success_svg_slot_deep_copy",
+    "error_null_slot_or_output",
+    "error_unsupported_format_or_bad_slot_payload",
+    "error_advance_out_of_16_16_range"
+  ],
+  "cases": [
+    {
+      "case_id": "ftglyph.FT_Get_Glyph.success_outline_slot_deep_copy",
+      "subject": "ftglyph.FT_Get_Glyph",
+      "case": "success_outline_slot_deep_copy",
+      "operation": "ftglyph.get_glyph",
+      "schema": "glyph_get",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 24,
+          "glyph_indices": [
+            36,
+            43,
+            74
+          ],
+          "load_flags": [
+            "FT_LOAD_NO_HINTING"
+          ],
+          "advance_conversion": "slot 26.6 * 1024"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "glyph_kind": "FT_OutlineGlyph",
+          "root": [
+            "library_identity",
+            "clazz_identity",
+            "format",
+            "advance_16_16"
+          ],
+          "outline": [
+            "n_points",
+            "n_contours",
+            "points",
+            "tags",
+            "contours",
+            "flags"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "glyph.root",
+            "glyph.outline",
+            "copy_independence"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Get_Glyph.success_bitmap_slot_deep_copy",
+      "subject": "ftglyph.FT_Get_Glyph",
+      "case": "success_bitmap_slot_deep_copy",
+      "operation": "ftglyph.get_glyph",
+      "schema": "glyph_get",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "bitmap_strike_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "strike": "first_bitmap_strike",
+          "glyph_indices": [
+            "bitmap_glyph"
+          ],
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "glyph_kind": "FT_BitmapGlyph",
+          "bitmap_fields": [
+            "left",
+            "top",
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer_bytes"
+          ],
+          "advance": "16.16"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "glyph.root",
+            "glyph.bitmap",
+            "buffer_identity_class"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "fixture_requirements": [
+          "fonts/bitmap-strikes/public-bitmap-strike.ttf must contain at least one loadable embedded bitmap strike whose FT_GlyphSlot format becomes FT_GLYPH_FORMAT_BITMAP."
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Get_Glyph.success_svg_slot_deep_copy",
+      "subject": "ftglyph.FT_Get_Glyph",
+      "case": "success_svg_slot_deep_copy",
+      "operation": "ftglyph.get_glyph",
+      "schema": "glyph_get",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "svg_font": {
+            "kind": "ref",
+            "id": "fonts/svg/ot-svg-glyphs.ttf",
+            "asset_kind": "font",
+            "optional": true
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_indices": [
+            "svg_glyph"
+          ],
+          "load_flags": [
+            "FT_LOAD_COLOR"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "return": "FT_Error or unsupported",
+          "glyph_kind": "FT_SvgGlyph",
+          "svg_fields": [
+            "document_length",
+            "document_hash",
+            "glyph_index",
+            "metrics",
+            "units_per_EM",
+            "glyph_range",
+            "transform",
+            "delta"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "feature_available",
+            "error",
+            "glyph.svg"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "fixture_requirements": [
+          "fonts/svg/ot-svg-glyphs.ttf is optional and must contain a valid OT-SVG document for SVG rows; builds without FT_CONFIG_OPTION_SVG classify these rows as unsupported."
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Get_Glyph.error_null_slot_or_output",
+      "subject": "ftglyph.FT_Get_Glyph",
+      "case": "error_null_slot_or_output",
+      "operation": "ftglyph.get_glyph",
+      "schema": "glyph_get",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "malformed_facade": {
+            "kind": "ref",
+            "id": "facades/glyph/malformed-slot-and-class-cases.json",
+            "asset_kind": "fixture"
+          }
+        },
+        "params": {
+          "null_slot": true,
+          "null_aglyph": true,
+          "sentinel_output": "non_null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "output_pointer": "null or preserved according to C path"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "output_pointer_class"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "error": {
+          "null_slot": "FT_Err_Invalid_Slot_Handle",
+          "null_aglyph": "FT_Err_Invalid_Argument"
+        }
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Get_Glyph.error_unsupported_format_or_bad_slot_payload",
+      "subject": "ftglyph.FT_Get_Glyph",
+      "case": "error_unsupported_format_or_bad_slot_payload",
+      "operation": "ftglyph.get_glyph",
+      "schema": "glyph_get",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "malformed_facade": {
+            "kind": "ref",
+            "id": "facades/glyph/malformed-slot-and-class-cases.json",
+            "asset_kind": "fixture"
+          }
+        },
+        "params": {
+          "slot_formats": [
+            "unsupported_tag",
+            "bitmap_format_with_outline_payload",
+            "svg_null_document",
+            "svg_zero_length_document"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "output_pointer": "null"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "output_pointer_class",
+            "cleanup_events"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "error": {
+          "unsupported_format": "FT_Err_Invalid_Glyph_Format",
+          "bad_svg_payload": "FT_Err_Invalid_Slot_Handle"
+        }
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Get_Glyph.error_advance_out_of_16_16_range",
+      "subject": "ftglyph.FT_Get_Glyph",
+      "case": "error_advance_out_of_16_16_range",
+      "operation": "ftglyph.get_glyph",
+      "schema": "glyph_get",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "malformed_facade": {
+            "kind": "ref",
+            "id": "facades/glyph/malformed-slot-and-class-cases.json",
+            "asset_kind": "fixture"
+          }
+        },
+        "params": {
+          "advance_26_6_values": [
+            2097152,
+            -2097152,
+            2097088,
+            -2097088
+          ],
+          "exclusive_bound": "]-32768,32768[ pixels"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "output_pointer": "null after allocated glyph cleanup"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "output_pointer_class",
+            "cleanup_events"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "error": "FT_Err_Invalid_Argument"
+      }
+    }
+  ]
+}

@@ -1,0 +1,291 @@
+- id: ftmodapi.FT_MODULE_RENDERER
+  kind: constant
+  symbol: FT_MODULE_RENDERER
+  header: freetype/ftmodapi.h
+  description: Public FT_Module_Class flag bit marking a module as a glyph renderer.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly 2 as defined by the pinned public C header.
+    # needs-input: operation=FT_Add_Module; fixture asset=none; params={module_class: synthetic renderer class with module_flags containing FT_MODULE_RENDERER}; output shape={FT_Error, renderer list membership, FT_Get_Module lookup}; comparison=exact C status, installed module name, and renderer registration side effect.
+    - id: renderer_module_registration
+      description: Adding a renderer module follows C ft_add_renderer behavior before module_init and removes renderer state on initialization failure.
+
+- id: ftmodapi.FT_MODULE_STYLER
+  kind: constant
+  symbol: FT_MODULE_STYLER
+  header: freetype/ftmodapi.h
+  description: Public FT_Module_Class flag bit marking a module as a styler.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly 8 as defined by the pinned public C header.
+    # needs-input: operation=FT_Add_Module; fixture asset=none; params={module_class: synthetic class with module_flags containing FT_MODULE_STYLER}; output shape={FT_Error, FT_Get_Module result, internal styler flag predicate}; comparison=exact C status and module table state.
+    - id: styler_module_registration
+      description: Adding a styler module preserves the flag in the installed class and does not route through renderer or driver setup.
+
+- id: ftmodapi.FT_TrueTypeEngineType
+  kind: enum
+  symbol: FT_TrueTypeEngineType
+  header: freetype/ftmodapi.h
+  description: Public enum returned by FT_Get_TrueType_Engine_Type for the active TrueType interpreter.
+  cases:
+    - id: enum_variants_match_header
+      description: "Enum variants and ordering match the pinned C header: NONE=0, UNPATENTED=1, PATENTED=2."
+    # needs-input: operation=FT_Get_TrueType_Engine_Type; fixture asset=none; params={library: initialized with default modules}; output shape={engine_type}; comparison=exact C enum value for the pinned build configuration.
+    - id: default_library_engine_type
+      description: Initialized libraries report the same TrueType engine enum as C, including build-dependent bytecode interpreter configuration.
+
+- id: ftmodapi.FT_TRUETYPE_ENGINE_TYPE_NONE
+  kind: enum_variant
+  symbol: FT_TRUETYPE_ENGINE_TYPE_NONE
+  header: freetype/ftmodapi.h
+  description: Public FT_TrueTypeEngineType value used when no TrueType engine is available.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly 0 as defined by the pinned public C header.
+    # needs-input: operation=FT_Get_TrueType_Engine_Type; fixture asset=none; params={library: null or library without truetype module}; output shape={engine_type}; comparison=exact C enum value FT_TRUETYPE_ENGINE_TYPE_NONE.
+    - id: returned_for_missing_engine
+      description: C returns NONE for null libraries and for libraries where the truetype module or service is absent.
+
+- id: ftmodapi.FT_TRUETYPE_ENGINE_TYPE_PATENTED
+  kind: enum_variant
+  symbol: FT_TRUETYPE_ENGINE_TYPE_PATENTED
+  header: freetype/ftmodapi.h
+  description: Public FT_TrueTypeEngineType value for a bytecode interpreter build.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly 2 as defined by the pinned public C header.
+    # needs-input: operation=FT_Get_TrueType_Engine_Type; fixture asset=none; params={library: initialized with truetype module}; output shape={engine_type}; comparison=exact C enum value when TT_USE_BYTECODE_INTERPRETER is enabled.
+    - id: bytecode_interpreter_build_value
+      description: C ttdriver.c exposes PATENTED through the TrueType engine service when the pinned build enables TT_USE_BYTECODE_INTERPRETER.
+
+- id: ftmodapi.FT_TRUETYPE_ENGINE_TYPE_UNPATENTED
+  kind: enum_variant
+  symbol: FT_TRUETYPE_ENGINE_TYPE_UNPATENTED
+  header: freetype/ftmodapi.h
+  description: Public legacy FT_TrueTypeEngineType value retained for ABI compatibility.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly 1 as defined by the pinned public C header.
+    # needs-input: operation=constant; fixture asset=none; params={symbol: FT_TRUETYPE_ENGINE_TYPE_UNPATENTED}; output shape={enum numeric value}; comparison=exact C header value with no runtime emitter expected in current C source.
+    - id: legacy_value_not_runtime_emitted
+      description: The pinned C source keeps this ABI value but current ttdriver.c emits NONE or PATENTED, so coverage is a header/value contract.
+
+- id: ftmodapi.FT_Add_Default_Modules
+  kind: function
+  symbol: FT_Add_Default_Modules
+  header: freetype/ftmodapi.h
+  description: Public C API that installs every module listed by FT_CONFIG_MODULES_H into a library.
+  cases:
+    # needs-input: operation=FT_Add_Default_Modules; fixture asset=none; params={library: FT_New_Library result without modules}; output shape={module names in library table, per-module statuses}; comparison=exact installed default module set/order and C behavior that logs but does not return errors.
+    - id: installs_default_module_table
+      description: Empty libraries receive the pinned ft_default_modules list in C order, with FT_Add_Module failures ignored after tracing.
+    # needs-input: operation=FT_Add_Default_Modules; fixture asset=none; params={library: null}; output shape={no return value, no crash}; comparison=exact C no-return behavior under FT_Add_Module invalid-library handling for each default class.
+    - id: null_library_no_return_error
+      description: Null library input is delegated to FT_Add_Module for every default module and produces no public return value.
+
+- id: ftmodapi.FT_Add_Module
+  kind: function
+  symbol: FT_Add_Module
+  header: freetype/ftmodapi.h
+  description: Public C API that adds or upgrades a module class in a library.
+  cases:
+    # needs-input: operation=FT_Add_Module; fixture asset=none; params={library: valid empty library, module_class: synthetic minimal class}; output shape={FT_Error, module count, FT_Get_Module lookup, stored class fields}; comparison=exact C status and module table state.
+    - id: add_minimal_module_success
+      description: Valid module classes are allocated, initialized, stored in the module table, and retrievable by name.
+    # needs-input: operation=FT_Add_Module; fixture asset=none; params={library: null, class: valid}; output shape={FT_Error}; comparison=exact C FT_Err_Invalid_Library_Handle.
+    - id: rejects_null_library
+      description: Null library returns Invalid_Library_Handle before class validation.
+    # needs-input: operation=FT_Add_Module; fixture asset=none; params={library: valid, class: null}; output shape={FT_Error}; comparison=exact C FT_Err_Invalid_Argument.
+    - id: rejects_null_class
+      description: Null module class returns Invalid_Argument.
+    # needs-input: operation=FT_Add_Module; fixture asset=none; params={module_class: requires FreeType version newer than pinned FREETYPE_VER_FIXED}; output shape={FT_Error, module count unchanged}; comparison=exact C FT_Err_Invalid_Version and no table mutation.
+    - id: rejects_future_required_version
+      description: Classes whose module_requires exceeds the pinned FreeType fixed version return Invalid_Version.
+    # needs-input: operation=FT_Add_Module; fixture asset=none; params={same module_name, lower_or_equal version then higher version}; output shape={FT_Error sequence, module count, destructor calls}; comparison=exact C Lower_Module_Version for non-upgrade and remove-then-install behavior for upgrade.
+    - id: duplicate_name_version_rules
+      description: Same-name modules reject lower/equal versions and replace older versions by calling FT_Remove_Module before installation.
+
+- id: ftmodapi.FT_Done_Library
+  kind: function
+  symbol: FT_Done_Library
+  header: freetype/ftmodapi.h
+  description: Public C API that decrements a library reference count and destroys the library when it reaches zero.
+  cases:
+    # needs-input: operation=FT_Done_Library; fixture asset=none; params={library: null}; output shape={FT_Error}; comparison=exact C FT_Err_Invalid_Library_Handle.
+    - id: rejects_null_library
+      description: Null library returns Invalid_Library_Handle.
+    # needs-input: operation=FT_Reference_Library then FT_Done_Library; fixture asset=none; params={library: valid, refcount incremented}; output shape={FT_Error, library remains usable, refcount effect}; comparison=exact C status and delayed destruction.
+    - id: decrements_reference_without_destroying
+      description: Referenced libraries return FT_Err_Ok and remain alive until the final FT_Done_Library call.
+    # needs-input: operation=FT_Done_Library; fixture asset=font with opened face and default modules; params={library: initialized}; output shape={FT_Error, module destructor order, face closure status}; comparison=exact C success and reverse module removal behavior.
+    - id: final_destroy_closes_faces_and_modules
+      description: Final destruction closes driver faces, removes modules in reverse table order, frees the library, and returns FT_Err_Ok.
+
+- id: ftmodapi.FT_Get_Module
+  kind: function
+  symbol: FT_Get_Module
+  header: freetype/ftmodapi.h
+  description: Public C API that looks up an installed module by ASCII module_name.
+  cases:
+    # needs-input: operation=FT_Get_Module; fixture asset=none; params={library: initialized, module_name: truetype and missing-name}; output shape={module pointer presence, module class name}; comparison=exact C null/non-null and class name.
+    - id: lookup_existing_and_missing_module
+      description: Existing module names return the stored module handle; absent names return null.
+    # needs-input: operation=FT_Get_Module; fixture asset=none; params={library: null or module_name: null}; output shape={module pointer presence}; comparison=exact C null return.
+    - id: null_inputs_return_null
+      description: Null library or null module_name returns null without error reporting.
+
+- id: ftmodapi.FT_Get_TrueType_Engine_Type
+  kind: function
+  symbol: FT_Get_TrueType_Engine_Type
+  header: freetype/ftmodapi.h
+  description: Public C API that reports the TrueType interpreter engine type for a library.
+  cases:
+    # needs-input: operation=FT_Get_TrueType_Engine_Type; fixture asset=none; params={library: null}; output shape={engine_type}; comparison=exact C FT_TRUETYPE_ENGINE_TYPE_NONE.
+    - id: null_library_returns_none
+      description: Null library returns FT_TRUETYPE_ENGINE_TYPE_NONE.
+    # needs-input: operation=FT_Get_TrueType_Engine_Type; fixture asset=none; params={library: initialized with default modules}; output shape={engine_type}; comparison=exact C enum value from the truetype module service.
+    - id: truetype_service_value
+      description: C looks up the truetype module and reads FT_SERVICE_ID_TRUETYPE_ENGINE when present.
+    # needs-input: operation=FT_Remove_Module then FT_Get_TrueType_Engine_Type; fixture asset=none; params={library: initialized, remove truetype module}; output shape={engine_type}; comparison=exact C FT_TRUETYPE_ENGINE_TYPE_NONE.
+    - id: missing_truetype_module_returns_none
+      description: Libraries without the truetype module report NONE.
+
+- id: ftmodapi.FT_New_Library
+  kind: function
+  symbol: FT_New_Library
+  header: freetype/ftmodapi.h
+  description: Public C API that creates a library from a caller-provided FT_Memory.
+  cases:
+    # needs-input: operation=FT_New_Library; fixture asset=none; params={memory: valid FT_Memory, alibrary: pointer initialized to sentinel}; output shape={FT_Error, library version fields, refcount, memory pointer, alibrary value}; comparison=exact C success state.
+    - id: creates_library_with_version_and_refcount
+      description: Valid inputs allocate a library, set memory/version fields, initialize refcount to 1, and store the handle in *alibrary.
+    # needs-input: operation=FT_New_Library; fixture asset=none; params={memory: null or alibrary: null}; output shape={FT_Error, alibrary sentinel preservation where applicable}; comparison=exact C FT_Err_Invalid_Argument and output pointer unchanged.
+    - id: rejects_null_inputs_preserving_output
+      description: Null memory or null output pointer returns Invalid_Argument before writing *alibrary.
+    # needs-input: operation=FT_New_Library; fixture asset=none; params={memory: allocator that fails library allocation, alibrary: sentinel}; output shape={FT_Error, alibrary sentinel preservation}; comparison=exact C allocation error and no output write.
+    - id: allocation_failure_preserves_output
+      description: If allocating the library object fails, C returns the allocator error and does not modify *alibrary.
+
+- id: ftmodapi.FT_Property_Get
+  kind: function
+  symbol: FT_Property_Get
+  header: freetype/ftmodapi.h
+  description: Public C API that gets a property through a module's FT_Service_Properties interface.
+  cases:
+    # needs-input: operation=FT_Property_Get; fixture asset=none; params={module: truetype, property: interpreter-version, value pointer}; output shape={FT_Error, returned property value}; comparison=exact C status and output bytes.
+    - id: gets_supported_property
+      description: Supported properties dispatch to the module get_property callback and write exactly the C value.
+    # needs-input: operation=FT_Property_Get; fixture asset=none; params={library/module_name/property_name/value: each null in turn}; output shape={FT_Error, output sentinel}; comparison=exact C error and output preservation.
+    - id: rejects_null_arguments
+      description: Null library, module_name, property_name, or value returns the same C error path without writing output.
+    # needs-input: operation=FT_Property_Get; fixture asset=none; params={module_name: absent and module without property service}; output shape={FT_Error, output sentinel}; comparison=exact C Missing_Module or Unimplemented_Feature.
+    - id: missing_or_unsupported_property_service
+      description: Missing modules return Missing_Module, while modules without a property service return Unimplemented_Feature.
+    # needs-input: operation=FT_Property_Get; fixture asset=none; params={module: truetype, property_name: invalid}; output shape={FT_Error, output sentinel}; comparison=exact C module callback error and output preservation.
+    - id: invalid_property_name
+      description: Unknown property names propagate the module callback's C error classification.
+
+- id: ftmodapi.FT_Property_Set
+  kind: function
+  symbol: FT_Property_Set
+  header: freetype/ftmodapi.h
+  description: Public C API that sets a property through a module's FT_Service_Properties interface.
+  cases:
+    # needs-input: operation=FT_Property_Set then FT_Property_Get; fixture asset=none; params={module: truetype, property: interpreter-version, value: supported version}; output shape={FT_Error sequence, resulting property value}; comparison=exact C status and post-set property value.
+    - id: sets_supported_property
+      description: Supported properties dispatch to set_property and are observable through the matching C getter.
+    # needs-input: operation=FT_Property_Set; fixture asset=none; params={library/module_name/property_name/value: each null in turn}; output shape={FT_Error}; comparison=exact C error classification.
+    - id: rejects_null_arguments
+      description: Null library, module_name, property_name, or value returns the C Invalid_Library_Handle or Invalid_Argument path.
+    # needs-input: operation=FT_Property_Set; fixture asset=none; params={module_name: absent and module without property service}; output shape={FT_Error}; comparison=exact C Missing_Module or Unimplemented_Feature.
+    - id: missing_or_unsupported_property_service
+      description: Missing modules return Missing_Module, while modules without a property service return Unimplemented_Feature.
+    # needs-input: operation=FT_Property_Set; fixture asset=none; params={module: truetype, property_name: invalid or value: out of range}; output shape={FT_Error, previous property value}; comparison=exact C callback error and preservation of prior value where C preserves it.
+    - id: invalid_property_or_value
+      description: Invalid property names or values propagate the module callback's C error and must not invent a success status.
+
+- id: ftmodapi.FT_Reference_Library
+  kind: function
+  symbol: FT_Reference_Library
+  header: freetype/ftmodapi.h
+  description: Public C API that increments a library reference count.
+  cases:
+    # needs-input: operation=FT_Reference_Library; fixture asset=none; params={library: valid}; output shape={FT_Error, refcount effect via two FT_Done_Library calls}; comparison=exact C status and delayed destruction behavior.
+    - id: increments_refcount
+      description: Valid libraries return FT_Err_Ok and require an additional FT_Done_Library before destruction.
+    # needs-input: operation=FT_Reference_Library; fixture asset=none; params={library: null}; output shape={FT_Error}; comparison=exact C FT_Err_Invalid_Library_Handle.
+    - id: rejects_null_library
+      description: Null library returns Invalid_Library_Handle.
+
+- id: ftmodapi.FT_Remove_Module
+  kind: function
+  symbol: FT_Remove_Module
+  header: freetype/ftmodapi.h
+  description: Public C API that removes an installed module from a library.
+  cases:
+    # needs-input: operation=FT_Remove_Module; fixture asset=none; params={library: valid, module: installed synthetic module}; output shape={FT_Error, module count, table compaction, destructor calls, FT_Get_Module lookup}; comparison=exact C status and table state.
+    - id: removes_installed_module
+      description: Installed modules are removed from the table, later entries shift left, the last slot is nulled, and Destroy_Module is called.
+    # needs-input: operation=FT_Remove_Module; fixture asset=none; params={library: null, module: any}; output shape={FT_Error}; comparison=exact C FT_Err_Invalid_Library_Handle.
+    - id: rejects_null_library
+      description: Null library returns Invalid_Library_Handle.
+    # needs-input: operation=FT_Remove_Module; fixture asset=none; params={library: valid, module: null or foreign module handle}; output shape={FT_Error, module table unchanged}; comparison=exact C FT_Err_Invalid_Driver_Handle.
+    - id: rejects_missing_or_foreign_module
+      description: Null or non-installed module handles return Invalid_Driver_Handle and leave the module table unchanged.
+
+- id: ftmodapi.FT_Set_Debug_Hook
+  kind: function
+  symbol: FT_Set_Debug_Hook
+  header: freetype/ftmodapi.h
+  description: Public C API that installs a debug hook into a library slot when arguments are valid.
+  cases:
+    # needs-input: operation=FT_Set_Debug_Hook; fixture asset=none; params={library: valid, hook_index: in range, debug_hook: non-null function pointer}; output shape={stored hook pointer}; comparison=exact C slot update.
+    - id: stores_valid_hook
+      description: Valid hook pointers with in-range indexes are stored in the library debug_hooks array.
+    # needs-input: operation=FT_Set_Debug_Hook; fixture asset=none; params={library: null, hook_index: in range, debug_hook: non-null}; output shape={no return value, no write}; comparison=exact C no-op behavior.
+    - id: null_library_noop
+      description: Null library input is a no-op.
+    # needs-input: operation=FT_Set_Debug_Hook; fixture asset=none; params={library: valid, hook_index: out of range or debug_hook: null}; output shape={debug_hooks snapshot}; comparison=exact C preservation of all slots.
+    - id: invalid_index_or_null_hook_noop
+      description: Out-of-range indexes and null hook pointers do not modify existing hooks.
+
+- id: ftmodapi.FT_Set_Default_Properties
+  kind: function
+  symbol: FT_Set_Default_Properties
+  header: freetype/ftmodapi.h
+  description: Public C API that applies FREETYPE_PROPERTIES when environment property support is compiled in.
+  cases:
+    # needs-input: operation=FT_Set_Default_Properties; fixture asset=none; params={env: unset, library: valid}; output shape={module property snapshot}; comparison=exact C no-op state.
+    - id: no_environment_noop
+      description: With no FREETYPE_PROPERTIES environment variable, C leaves module properties unchanged.
+    # needs-input: operation=FT_Set_Default_Properties; fixture asset=none; params={env: 'truetype:interpreter-version=35', library: initialized}; output shape={property value after call}; comparison=exact C parsed property value when FT_CONFIG_OPTION_ENVIRONMENT_PROPERTIES is enabled.
+    - id: parses_supported_environment_property
+      description: "Environment property strings are parsed as module:property=value tokens and applied through ft_property_string_set when compiled in."
+    # needs-input: operation=FT_Set_Default_Properties; fixture asset=none; params={env: malformed/unknown property, library: valid or null}; output shape={no return value, property snapshot}; comparison=exact C ignored-error/no-op behavior.
+    - id: ignores_malformed_or_failed_properties
+      description: C ignores parse failures and property set errors, and the non-environment build compiles this function as a no-op.
+
+- id: ftmodapi.FT_FACE_DRIVER_NAME
+  kind: macro
+  symbol: FT_FACE_DRIVER_NAME
+  header: freetype/ftmodapi.h
+  description: Public function-like macro that reads a face's driver module class name.
+  cases:
+    # needs-input: operation=FT_FACE_DRIVER_NAME; fixture asset=font file; params={face: opened face from each default driver family represented in assets}; output shape={driver_name string}; comparison=exact C string bytes and null terminator behavior.
+    - id: returns_driver_module_name
+      description: For a valid face, the macro returns (*((FT_Module_Class**)face->driver))->module_name exactly as C expands it.
+    # needs-input: operation=FT_FACE_DRIVER_NAME plus FT_Get_Font_Format; fixture asset=TrueType/CFF/bitmap fonts; params={face}; output shape={driver_name, font_format}; comparison=exact C driver_name and confirmation that it is not inferred from font format.
+    - id: driver_name_not_font_format
+      description: Driver module names used for FT_Property_Get/Set are compared directly and are not substituted with FT_Get_Font_Format output.
+
+- id: ftmodapi.FT_Module_Class
+  kind: record
+  symbol: FT_Module_Class
+  header: freetype/ftmodapi.h
+  description: Public module class descriptor used by FT_Add_Module and module property dispatch.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, field order, and offsets match the pinned C header for module_flags, module_size, module_name, module_version, module_requires, module_interface, module_init, module_done, and get_interface.
+    # needs-input: operation=FT_Add_Module; fixture asset=none; params={module_class: synthetic descriptors varying flags, size, version, callbacks, interface}; output shape={FT_Error, callback invocation order, stored class fields}; comparison=exact C ABI layout and behavioral interpretation of each field.
+    - id: fields_drive_module_lifecycle
+      description: C consumes the record fields directly for allocation size, version checks, callback order, property interfaces, and module lookup names.

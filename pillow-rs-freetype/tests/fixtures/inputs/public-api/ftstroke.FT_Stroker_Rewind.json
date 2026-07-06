@@ -1,0 +1,229 @@
+{
+  "version": 1,
+  "subject": "ftstroke.FT_Stroker_Rewind",
+  "manifest_cases": [
+    "clears_previous_path",
+    "attributes_preserved",
+    "null_stroker_noop",
+    "set_calls_rewind"
+  ],
+  "cases": [
+    {
+      "case_id": "ftstroke.FT_Stroker_Rewind.clears_previous_path",
+      "subject": "ftstroke.FT_Stroker_Rewind",
+      "case": "clears_previous_path",
+      "operation": "ftstroke.rewind",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_Rewind",
+        "signature": "void FT_Stroker_Rewind(FT_Stroker stroker)",
+        "return": "void"
+      },
+      "inputs": {
+        "assets": {
+          "paths": {
+            "kind": "ref",
+            "id": "outlines/stroker/two-manual-paths.json",
+            "asset_kind": "outline_path_records",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "first_path": "closed_triangle",
+          "sequence": [
+            "build first_path",
+            "GetCounts",
+            "FT_Stroker_Rewind",
+            "GetCounts"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:state"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "counts_before_rewind": "non-zero",
+          "counts_after_rewind": {
+            "points": 0,
+            "contours": 0
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "counts_before_rewind",
+            "counts_after_rewind"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftstroke.h:320-332",
+          "freetype/src/base/ftstroke.c:853-862"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_Rewind.attributes_preserved",
+      "subject": "ftstroke.FT_Stroker_Rewind",
+      "case": "attributes_preserved",
+      "operation": "ftstroke.rewind",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_Rewind",
+        "signature": "void FT_Stroker_Rewind(FT_Stroker stroker)"
+      },
+      "inputs": {
+        "assets": {
+          "paths": {
+            "kind": "ref",
+            "id": "outlines/stroker/two-manual-paths.json",
+            "asset_kind": "outline_path_records",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "attributes": {
+            "radius": 224,
+            "line_cap": "FT_STROKER_LINECAP_SQUARE",
+            "line_join": "FT_STROKER_LINEJOIN_MITER_FIXED",
+            "miter_limit": 131072
+          },
+          "second_path": "acute_corner"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:state"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "second_export_outline": "uses attributes set before rewind",
+          "counts_after_second_path": "FT_UInt counts"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "second_export_outline.points",
+            "second_export_outline.tags",
+            "second_export_outline.contours",
+            "counts_after_second_path"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:824-862"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_Rewind.null_stroker_noop",
+      "subject": "ftstroke.FT_Stroker_Rewind",
+      "case": "null_stroker_noop",
+      "operation": "ftstroke.rewind",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_Rewind",
+        "signature": "void FT_Stroker_Rewind(FT_Stroker stroker)"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "stroker": "null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:null"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "crash": false,
+          "allocator_calls": "none"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "crash",
+            "allocator_calls"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:853-862"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_Rewind.set_calls_rewind",
+      "subject": "ftstroke.FT_Stroker_Rewind",
+      "case": "set_calls_rewind",
+      "operation": "ftstroke.set_then_rewind_observed",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_Rewind",
+        "signature": "void FT_Stroker_Rewind(FT_Stroker stroker)"
+      },
+      "inputs": {
+        "assets": {
+          "paths": {
+            "kind": "ref",
+            "id": "outlines/stroker/two-manual-paths.json",
+            "asset_kind": "outline_path_records",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "sequence": [
+            "build first_path",
+            "GetCounts",
+            "FT_Stroker_Set with different attributes",
+            "GetCounts"
+          ],
+          "first_path": "closed_triangle"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:state"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "counts_before_set": "non-zero",
+          "counts_after_set": {
+            "points": 0,
+            "contours": 0
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "counts_before_set",
+            "counts_after_set"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:824-846"
+        ]
+      }
+    }
+  ]
+}

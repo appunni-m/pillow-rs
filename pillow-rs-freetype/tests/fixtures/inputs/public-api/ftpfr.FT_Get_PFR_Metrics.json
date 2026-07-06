@@ -1,0 +1,231 @@
+{
+  "version": 1,
+  "subject": "ftpfr.FT_Get_PFR_Metrics",
+  "manifest_cases": [
+    "pfr_metrics_success",
+    "non_pfr_outputs_valid_values_and_unknown_format",
+    "optional_outputs_and_null_face"
+  ],
+  "cases": [
+    {
+      "case_id": "ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success",
+      "subject": "ftpfr.FT_Get_PFR_Metrics",
+      "case": "pfr_metrics_success",
+      "operation": "ftpfr.get_pfr_metrics",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/pfr/basic-metrics.pfr",
+            "status": "required_future_asset",
+            "requires": "PFR face with PFR_METRICS service"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "sizes": [
+            {
+              "label": "before_size",
+              "size_set": false
+            },
+            {
+              "label": "after_size",
+              "size_ppem": 20
+            }
+          ],
+          "output_pointer_mask": [
+            "aoutline_resolution",
+            "ametrics_resolution",
+            "ametrics_x_scale",
+            "ametrics_y_scale"
+          ],
+          "abi": {
+            "include": "<freetype/ftpfr.h>",
+            "signature": "FT_Error FT_Get_PFR_Metrics(FT_Face face, FT_UInt*, FT_UInt*, FT_Fixed*, FT_Fixed*)"
+          },
+          "source_refs": [
+            "freetype/include/freetype/ftpfr.h",
+            "freetype/src/base/ftpfr.c"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftpfr",
+        "area:pfr-metrics"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "outline_resolution": "FT_UInt",
+          "metrics_resolution": "FT_UInt",
+          "metrics_x_scale": "FT_Fixed 16.16",
+          "metrics_y_scale": "FT_Fixed 16.16"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return",
+            "outline_resolution",
+            "metrics_resolution",
+            "metrics_x_scale",
+            "metrics_y_scale"
+          ]
+        },
+        "fixture_requirements": [
+          "Add a PFR metrics fixture; oracle output must be generated at runtime."
+        ]
+      }
+    },
+    {
+      "case_id": "ftpfr.FT_Get_PFR_Metrics.non_pfr_outputs_valid_values_and_unknown_format",
+      "subject": "ftpfr.FT_Get_PFR_Metrics",
+      "case": "non_pfr_outputs_valid_values_and_unknown_format",
+      "operation": "ftpfr.get_pfr_metrics",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "sizes": [
+            {
+              "label": "no_active_size",
+              "size_set": false
+            },
+            {
+              "label": "active_size",
+              "size_ppem": 20
+            }
+          ],
+          "output_pointer_mask": [
+            "aoutline_resolution",
+            "ametrics_resolution",
+            "ametrics_x_scale",
+            "ametrics_y_scale"
+          ],
+          "c_behavior": "Non-PFR writes units_per_EM to both resolutions, writes face->size metrics scales when size exists or 0x10000 otherwise, then returns Unknown_File_Format"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftpfr",
+        "area:pfr-metrics"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "outline_resolution": "face.units_per_EM",
+          "metrics_resolution": "face.units_per_EM",
+          "metrics_x_scale": "FT_Fixed",
+          "metrics_y_scale": "FT_Fixed"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "return",
+            "outline_resolution",
+            "metrics_resolution",
+            "metrics_x_scale",
+            "metrics_y_scale"
+          ]
+        },
+        "error": "Unknown_File_Format"
+      }
+    },
+    {
+      "case_id": "ftpfr.FT_Get_PFR_Metrics.optional_outputs_and_null_face",
+      "subject": "ftpfr.FT_Get_PFR_Metrics",
+      "case": "optional_outputs_and_null_face",
+      "operation": "ftpfr.get_pfr_metrics",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "label": "all_outputs_null_non_pfr",
+              "face": "non_null",
+              "output_pointer_mask": [],
+              "expected_error": "Unknown_File_Format"
+            },
+            {
+              "label": "single_output_each",
+              "face": "non_null",
+              "output_pointer_masks": [
+                [
+                  "aoutline_resolution"
+                ],
+                [
+                  "ametrics_resolution"
+                ],
+                [
+                  "ametrics_x_scale"
+                ],
+                [
+                  "ametrics_y_scale"
+                ]
+              ],
+              "expected_error": "Unknown_File_Format"
+            },
+            {
+              "label": "null_face",
+              "face": "NULL",
+              "output_pointer_mask": [
+                "aoutline_resolution",
+                "ametrics_resolution",
+                "ametrics_x_scale",
+                "ametrics_y_scale"
+              ],
+              "expected_error": "Invalid_Face_Handle"
+            }
+          ],
+          "sentinel": -777777,
+          "source_refs": [
+            "freetype/src/base/ftpfr.c"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftpfr",
+        "area:pfr-metrics"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "written_outputs": "only non-null output pointers",
+          "sentinels": "preserved for null pointers and null face"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "return",
+            "written_outputs",
+            "sentinels"
+          ]
+        },
+        "error": "variant_expected_error"
+      }
+    }
+  ]
+}

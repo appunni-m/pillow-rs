@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Invalid_Post_Table_Format",
+  "manifest_cases": [
+    "value_matches_header",
+    "sfnt_post_format_rejected"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Post_Table_Format.value_matches_header",
+      "subject": "fterrdef.FT_Err_Invalid_Post_Table_Format",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Invalid_Post_Table_Format",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 154,
+          "expected_value_hex": "0x9A",
+          "expected_error_string_from_pinned_header": "invalid PostScript (post) table format",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Invalid_Post_Table_Format",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected",
+      "subject": "fterrdef.FT_Err_Invalid_Post_Table_Format",
+      "case": "sfnt_post_format_rejected",
+      "operation": "FT_New_Memory_Face",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/sfnt/invalid-post-format.ttf",
+            "requirements": "Synthetic SFNT with a present post table whose FormatType is not 1.0, 2.0, 2.5, or 3.0, such as 0x00040000."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Invalid_Post_Table_Format",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/sfnt/ttload.c:1361",
+          "face_index": 0,
+          "output_face": "sentinel_non_null_before_call"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Post_Table_Format",
+        "fixture_requirements": "Synthetic SFNT with invalid post FormatType that reaches ttload.c post parsing.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "output_face": "pointer_nullness_or_preservation",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class"
+          ]
+        }
+      }
+    }
+  ]
+}

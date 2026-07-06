@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_CharMapRec",
+  "manifest_cases": [
+    "layout_matches_c",
+    "face_charmap_records_match_c"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_CharMapRec.layout_matches_c",
+      "subject": "freetype.FT_CharMapRec",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/freetype.h",
+          "symbol": "FT_CharMapRec",
+          "fields_in_order": [
+            "face",
+            "encoding",
+            "platform_id",
+            "encoding_id"
+          ],
+          "nested_public_records": [],
+          "probe": [
+            "sizeof",
+            "alignof",
+            "offsetof",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "area:abi_layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "offsets": "object<field,usize>",
+          "field_types": "object<field,c_type>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "offsets",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_CharMapRec.face_charmap_records_match_c",
+      "subject": "freetype.FT_CharMapRec",
+      "case": "face_charmap_records_match_c",
+      "operation": "freetype.inspect_charmaps",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/charmap/multiple-charmaps.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "operations": [
+            "FT_Select_Charmap(FT_ENCODING_UNICODE)",
+            "FT_Set_Charmap(index:non_unicode_if_available)"
+          ],
+          "probe": [
+            "face.num_charmaps",
+            "face.charmaps[]",
+            "face.charmap"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "num_charmaps": "FT_Int",
+          "charmaps": "array<{encoding,platform_id,encoding_id,face_identity}>",
+          "active_charmap_index": "int_or_null"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "num_charmaps",
+            "charmaps[].encoding",
+            "charmaps[].platform_id",
+            "charmaps[].encoding_id",
+            "charmaps[].face_identity",
+            "active_charmap_index"
+          ]
+        },
+        "fixture_requirements": [
+          "SFNT font with Unicode plus at least one non-Unicode or symbol charmap"
+        ]
+      }
+    }
+  ]
+}

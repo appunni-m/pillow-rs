@@ -1,0 +1,286 @@
+- id: fterrors.FT_ERR_PREFIX
+  kind: macro
+  symbol: FT_ERR_PREFIX
+  header: freetype/fterrors.h
+  description: Public fterrors preprocessor hook that defaults error-code identifiers to the FT_Err_ prefix when the includer has not provided a custom prefix.
+  cases:
+    - id: default_prefix_expands_error_identifiers
+      description: Include <freetype/fterrors.h> normally and verify generated error identifiers use the default FT_Err_ prefix, including FT_Err_Ok and FT_Err_Max.
+      # needs-input: c-preprocess fixture that includes <freetype/fterrors.h>; output shape is the resolved public enum symbol set and exact numeric values compared across C FreeType, Rust FFI, C FFI, and wasm.
+    - id: custom_prefix_expands_error_identifiers
+      description: Undefine the header guard as documented, define FT_ERR_PREFIX to a custom token prefix, include <freetype/fterrors.h>, and verify generated identifiers use that prefix.
+      # needs-input: c-preprocess fixture with custom FT_ERR_PREFIX and FT_ERROR_START_LIST/FT_ERRORDEF/FT_ERROR_END_LIST; output shape is generated token/value pairs from the C preprocessor.
+
+- id: fterrors.FT_ERR_PROTOS_DEFINED
+  kind: macro
+  symbol: FT_ERR_PROTOS_DEFINED
+  header: freetype/fterrors.h
+  description: Public-header include guard macro that prevents duplicate FT_Error_String prototype emission after normal <freetype/fterrors.h> inclusion.
+  cases:
+    - id: prototype_guard_defined_after_normal_include
+      description: Include <freetype/fterrors.h> normally and verify FT_ERR_PROTOS_DEFINED is defined after the FT_Error_String prototype section is emitted once.
+      # needs-input: c-preprocess fixture that includes <freetype/fterrors.h> twice; output shape is macro-defined state plus a successful compile with one visible FT_Error_String declaration.
+    - id: custom_error_table_include_does_not_emit_prototype
+      description: Include with FT_ERRORDEF already defined and verify the prototype guard path is not used while the error-list macros expand.
+      # needs-input: c-preprocess fixture for documented custom error table generation; output shape is expanded table rows and macro-defined state.
+
+- id: fterrors.FT_INCLUDE_ERR_PROTOS
+  kind: macro
+  symbol: FT_INCLUDE_ERR_PROTOS
+  header: freetype/fterrors.h
+  description: Public-header control macro used internally by fterrors.h to decide whether the FT_Error_String prototype block is emitted during normal inclusion.
+  cases:
+    - id: normal_include_emits_error_string_prototype
+      description: Include <freetype/fterrors.h> without a caller-defined FT_ERRORDEF and verify the FT_Error_String prototype is available through the documented header import.
+      # needs-input: c-compile fixture using #include <freetype/fterrors.h> and taking the address of FT_Error_String; output shape is compile success plus runtime pointer availability across FFI surfaces.
+    - id: custom_errordef_include_suppresses_prototype_path
+      description: Define FT_ERRORDEF before inclusion and verify fterrors.h expands the caller's error-list machinery instead of declaring FT_Error_String through FT_INCLUDE_ERR_PROTOS.
+      # needs-input: c-preprocess fixture with FT_ERRORDEF/FT_ERROR_START_LIST/FT_ERROR_END_LIST; output shape is generated rows and no dependency on the prototype path.
+
+- id: fterrors.FT_Error_String
+  kind: function
+  symbol: FT_Error_String
+  header: freetype/fterrors.h
+  description: Public function returning the configured description string for a valid FreeType error code, or NULL for invalid or unsupported string-table cases.
+  cases:
+    - id: valid_error_code_string_or_null
+      description: Query representative valid error codes, including FT_Err_Ok and a nonzero public FT_Err_* value, and compare the returned nullable string exactly to C FreeType for the build configuration.
+      # needs-input: scalar API fixture with error_code values; output shape is nullable string, preserving NULL distinctly from an empty string.
+    - id: invalid_negative_error_returns_null
+      description: Pass a negative FT_Error value and verify C returns NULL without reading the error table.
+      # needs-input: scalar API fixture with error_code -1; output shape is nullable string and status-less success because the API reports NULL rather than FT_Error.
+    - id: invalid_too_large_error_returns_null
+      description: Pass FT_Err_Max or a larger value and verify C returns NULL.
+      # needs-input: scalar API fixture using FT_Err_Max and FT_Err_Max + 1; output shape is nullable string.
+    - id: module_bits_ignored_when_strings_enabled
+      description: When error strings are compiled in, compare a base error and the same base error with module bits and verify the returned string follows FT_ERROR_BASE behavior.
+      # needs-input: build-aware scalar fixture; output shape is nullable string pair. If the pinned C build lacks error strings, both outputs are expected NULL and must still compare exactly.
+
+- id: fterrors.FT_ERRORDEF
+  kind: macro
+  symbol: FT_ERRORDEF
+  header: freetype/fterrors.h
+  description: Documented function-like macro hook used by clients to generate custom error-code tables or switches from fterrors.h.
+  cases:
+    - id: default_enum_generation
+      description: Include <freetype/fterrors.h> without defining FT_ERRORDEF and verify it expands each error definition into the public error enum.
+      # needs-input: c-compile fixture referencing FT_Err_Ok, FT_Err_Invalid_Argument, and FT_Err_Max; output shape is exact integer values.
+    - id: custom_table_generation
+      description: Define FT_ERRORDEF(e,v,s) to emit table rows and verify fterrors.h produces the same error values and strings as C preprocessing.
+      # needs-input: c-preprocess fixture using the documented table-generation pattern; output shape is ordered rows of code/value/string.
+
+- id: fterrors.FT_ERRORDEF_
+  kind: macro
+  symbol: FT_ERRORDEF_
+  header: freetype/fterrors.h
+  description: Public fterrors helper macro that concatenates FT_ERR_PREFIX with each error identifier and adds FT_ERR_BASE for module-specific builds.
+  cases:
+    - id: prefixed_error_value_generation
+      description: Verify FT_ERRORDEF_ expands a representative error into the prefixed public identifier and value expression used by fterrdef.h.
+      # needs-input: c-preprocess fixture with FT_ERRORDEF redirected to rows and normal FT_ERR_PREFIX; output shape is prefixed identifier plus integer value.
+    - id: module_error_base_adjustment
+      description: In a module-errors build, verify FT_ERRORDEF_ adds FT_ERR_BASE while FT_NOERRORDEF_ leaves Ok at zero.
+      # needs-input: build-aware c-preprocess fixture toggling FT_CONFIG_OPTION_USE_MODULE_ERRORS if supported by the harness; output shape is generated value expressions or evaluated constants.
+
+- id: ftfntfmt.FT_Get_Font_Format
+  kind: function
+  symbol: FT_Get_Font_Format
+  header: freetype/ftfntfmt.h
+  description: Public function returning the driver font-format string for a face, or NULL for a null face or a face without the FONT_FORMAT service.
+  cases:
+    - id: truetype_face_returns_truetype
+      description: Load a TrueType fixture face and verify the returned string exactly matches C FreeType.
+      # needs-input: font fixture tests/fixtures/input/fonts/DejaVuSans.ttf; output shape is nullable string, expected non-null TrueType for C comparison.
+    - id: type1_or_other_supported_face_returns_driver_format
+      description: Load at least one non-TrueType supported fixture when available and compare the driver-provided format string exactly to C.
+      # needs-input: fixture asset for a non-TrueType format such as BDF, PCF, Type 1, CFF, or Windows FNT; output shape is nullable string.
+    - id: null_face_returns_null
+      description: Pass a null FT_Face and verify the function returns NULL rather than an error status.
+      # needs-input: handle API fixture with null face; output shape is nullable string.
+
+- id: ftfntfmt.FT_Get_X11_Font_Format
+  kind: function
+  symbol: FT_Get_X11_Font_Format
+  header: freetype/ftfntfmt.h
+  description: Deprecated public ABI alias of FT_Get_Font_Format with identical nullable string behavior.
+  cases:
+    - id: alias_matches_font_format_for_face
+      description: Load the same face and verify FT_Get_X11_Font_Format returns the same nullable string as FT_Get_Font_Format and C FreeType.
+      # needs-input: font fixture tests/fixtures/input/fonts/DejaVuSans.ttf; output shape is pair of nullable strings from both API names.
+    - id: null_face_returns_null
+      description: Pass a null FT_Face and verify the deprecated alias returns NULL.
+      # needs-input: handle API fixture with null face; output shape is nullable string.
+
+- id: ftgasp.FT_GASP_DO_GRAY
+  kind: flag
+  symbol: FT_GASP_DO_GRAY
+  header: freetype/ftgasp.h
+  description: Public FT_Get_Gasp bit flag 0x02 indicating grayscale rendering should be used at the queried ppem.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly 0x02 when imported with #include <freetype/ftgasp.h>.
+      # needs-input: constant fixture for <freetype/ftgasp.h>; output shape is signed integer value.
+
+- id: ftgasp.FT_GASP_DO_GRIDFIT
+  kind: flag
+  symbol: FT_GASP_DO_GRIDFIT
+  header: freetype/ftgasp.h
+  description: Public FT_Get_Gasp bit flag 0x01 indicating grid-fitting and TrueType bytecode hinting should be used at the queried ppem.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly 0x01 when imported with #include <freetype/ftgasp.h>.
+      # needs-input: constant fixture for <freetype/ftgasp.h>; output shape is signed integer value.
+
+- id: ftgasp.FT_GASP_NO_TABLE
+  kind: constant
+  symbol: FT_GASP_NO_TABLE
+  header: freetype/ftgasp.h
+  description: Public FT_Get_Gasp sentinel value returned when the face has no usable gasp table for the query.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly -1 when imported with #include <freetype/ftgasp.h>.
+      # needs-input: constant fixture for <freetype/ftgasp.h>; output shape is signed integer value.
+    - id: returned_for_null_or_non_sfnt_face
+      description: Verify FT_Get_Gasp returns this sentinel for a null face, and for a non-SFNT fixture face when available.
+      # needs-input: handle API fixture with null face plus optional non-SFNT font asset; output shape is signed integer return value.
+
+- id: ftgasp.FT_GASP_SYMMETRIC_GRIDFIT
+  kind: flag
+  symbol: FT_GASP_SYMMETRIC_GRIDFIT
+  header: freetype/ftgasp.h
+  description: Public FT_Get_Gasp bit flag 0x04 indicating ClearType symmetric smoothing should use grid-fitting.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly 0x04 when imported with #include <freetype/ftgasp.h>.
+      # needs-input: constant fixture for <freetype/ftgasp.h>; output shape is signed integer value.
+
+- id: ftgasp.FT_GASP_SYMMETRIC_SMOOTHING
+  kind: flag
+  symbol: FT_GASP_SYMMETRIC_SMOOTHING
+  header: freetype/ftgasp.h
+  description: Public FT_Get_Gasp bit flag 0x08 indicating ClearType symmetric smoothing should be used.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly 0x08 when imported with #include <freetype/ftgasp.h>.
+      # needs-input: constant fixture for <freetype/ftgasp.h>; output shape is signed integer value.
+
+- id: ftgasp.FT_Get_Gasp
+  kind: function
+  symbol: FT_Get_Gasp
+  header: freetype/ftgasp.h
+  description: Public function returning TrueType/OpenType gasp table flags for a ppem, or FT_GASP_NO_TABLE when no matching table is available.
+  cases:
+    - id: null_face_returns_no_table
+      description: Pass a null FT_Face and verify the return value is FT_GASP_NO_TABLE.
+      # needs-input: handle API fixture with null face and ppem values 0, 8, 16; output shape is signed integer return.
+    - id: sfnt_face_ppem_ranges_match_c
+      description: Load a TrueType/OpenType fixture and compare returned flags across ppem values below, inside, and above gasp ranges.
+      # needs-input: font fixture with a gasp table; ppem set should include 0, 8, 16, 32, and a value above the last maxPPEM. Output shape is signed integer flags from C FreeType, Rust FFI, C FFI, and wasm.
+      coverage:
+        font_variability:
+          folders: ["fonts", "fonts_autohint"]
+          sizes: [8, 12, 16, 24, 32]
+    - id: sfnt_without_gasp_returns_no_table
+      description: Load an SFNT fixture without a gasp table and verify FT_GASP_NO_TABLE.
+      # needs-input: font fixture known to have no gasp ranges; output shape is signed integer return.
+    - id: version_zero_masks_spurious_bits
+      description: For a version 0 gasp table, verify C masks the result to the low two bits.
+      # needs-input: crafted or selected TrueType fixture with version 0 gasp table containing high bits; output shape is signed integer flags.
+
+- id: ftglyph.FT_Glyph_BBox_Mode
+  kind: enum
+  symbol: FT_Glyph_BBox_Mode
+  header: freetype/ftglyph.h
+  description: Public enum selecting how FT_Glyph_Get_CBox reports glyph control boxes.
+  cases:
+    - id: enum_variants_match_header
+      description: Variants match the pinned header, including FT_GLYPH_BBOX_UNSCALED and FT_GLYPH_BBOX_SUBPIXELS both equaling 0.
+      # needs-input: enum fixture importing <freetype/ftglyph.h>; output shape is ordered variant/value map.
+    - id: deprecated_lowercase_aliases_match
+      description: Deprecated ft_glyph_bbox_* macro aliases expand to the corresponding FT_GLYPH_BBOX_* values.
+      # needs-input: macro constant fixture importing <freetype/ftglyph.h>; output shape is alias/value map.
+
+- id: ftglyph.FT_GLYPH_BBOX_GRIDFIT
+  kind: enum_variant
+  symbol: FT_GLYPH_BBOX_GRIDFIT
+  header: freetype/ftglyph.h
+  description: Public bbox mode value 1; FT_Glyph_Get_CBox floors minima and ceils maxima in 26.6 coordinates.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly 1 when imported with #include <freetype/ftglyph.h>.
+      # needs-input: enum fixture for FT_Glyph_BBox_Mode; output shape is integer value.
+    - id: cbox_gridfit_rounding_matches_c
+      description: Extract an outline glyph and verify grid-fit control box rounding matches C exactly.
+      # needs-input: glyph API fixture loading outline glyphs with fractional 26.6 bounds across fonts/sizes; output shape is FT_BBox {xMin,yMin,xMax,yMax}.
+      coverage:
+        font_variability:
+          folders: ["fonts", "fonts_autohint"]
+          sizes: [10, 20, 32]
+
+- id: ftglyph.FT_GLYPH_BBOX_PIXELS
+  kind: enum_variant
+  symbol: FT_GLYPH_BBOX_PIXELS
+  header: freetype/ftglyph.h
+  description: Public bbox mode value 3; FT_Glyph_Get_CBox grid-fits then shifts 26.6 coordinates to integer pixels.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly 3 when imported with #include <freetype/ftglyph.h>.
+      # needs-input: enum fixture for FT_Glyph_BBox_Mode; output shape is integer value.
+    - id: cbox_pixels_rounding_matches_c
+      description: Extract outline and bitmap glyphs and verify pixel-mode control boxes match C exactly.
+      # needs-input: glyph API fixture covering outline and bitmap glyph formats; output shape is FT_BBox integer pixel coordinates.
+      coverage:
+        font_variability:
+          folders: ["fonts", "fonts_autohint"]
+          sizes: [10, 20, 32]
+
+- id: ftglyph.FT_GLYPH_BBOX_SUBPIXELS
+  kind: enum_variant
+  symbol: FT_GLYPH_BBOX_SUBPIXELS
+  header: freetype/ftglyph.h
+  description: Public bbox mode alias value 0; FT_Glyph_Get_CBox returns unfitted 26.6 coordinates, equivalent to FT_GLYPH_BBOX_UNSCALED.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly 0 and equal to FT_GLYPH_BBOX_UNSCALED when imported with #include <freetype/ftglyph.h>.
+      # needs-input: enum fixture for FT_Glyph_BBox_Mode; output shape is integer value and equality relation.
+    - id: cbox_subpixels_matches_c
+      description: Extract outline glyphs and verify unfitted 26.6 control boxes match C exactly.
+      # needs-input: glyph API fixture loading normal scaled outline glyphs; output shape is FT_BBox in 26.6 coordinates.
+      coverage:
+        font_variability:
+          folders: ["fonts", "fonts_autohint"]
+          sizes: [10, 20, 32]
+
+- id: ftglyph.FT_GLYPH_BBOX_TRUNCATE
+  kind: enum_variant
+  symbol: FT_GLYPH_BBOX_TRUNCATE
+  header: freetype/ftglyph.h
+  description: Public bbox mode value 2; FT_Glyph_Get_CBox shifts unfitted 26.6 coordinates to integer pixels without grid-fitting first.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly 2 when imported with #include <freetype/ftglyph.h>.
+      # needs-input: enum fixture for FT_Glyph_BBox_Mode; output shape is integer value.
+    - id: cbox_truncate_matches_c
+      description: Extract outline glyphs and verify truncation-mode control boxes match C exactly, especially for negative minima.
+      # needs-input: glyph API fixture with glyphs that have negative bearings and fractional 26.6 bounds; output shape is FT_BBox integer pixel coordinates.
+      coverage:
+        font_variability:
+          folders: ["fonts", "fonts_autohint"]
+          sizes: [10, 20, 32]
+
+- id: ftglyph.FT_GLYPH_BBOX_UNSCALED
+  kind: enum_variant
+  symbol: FT_GLYPH_BBOX_UNSCALED
+  header: freetype/ftglyph.h
+  description: Public bbox mode value 0; FT_Glyph_Get_CBox returns unscaled font units for glyphs loaded with FT_LOAD_NO_SCALE and is an alias of FT_GLYPH_BBOX_SUBPIXELS.
+  cases:
+    - id: value_matches_header
+      description: Value is exactly 0 and equal to FT_GLYPH_BBOX_SUBPIXELS when imported with #include <freetype/ftglyph.h>.
+      # needs-input: enum fixture for FT_Glyph_BBox_Mode; output shape is integer value and equality relation.
+    - id: cbox_unscaled_matches_c
+      description: Load glyphs with FT_LOAD_NO_SCALE and verify unscaled control boxes match C exactly.
+      # needs-input: glyph API fixture using FT_LOAD_NO_SCALE on outline glyphs across fonts; output shape is FT_BBox in font units.
+      coverage:
+        font_variability:
+          folders: ["fonts", "fonts_autohint"]
+          sizes: [0]

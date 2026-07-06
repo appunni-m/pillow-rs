@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Invalid_Frame_Operation",
+  "manifest_cases": [
+    "value_matches_header",
+    "stream_frame_access_rejects_invalid_sequence"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Frame_Operation.value_matches_header",
+      "subject": "fterrdef.FT_Err_Invalid_Frame_Operation",
+      "case": "value_matches_header",
+      "operation": "abi.error_code_value_and_import",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Invalid_Frame_Operation",
+          "include": "<freetype/fterrors.h>",
+          "definition_header": "freetype/fterrdef.h",
+          "value_type": "FT_Error",
+          "expected_value_from_pinned_header": 86,
+          "expected_hex_value": "0x56",
+          "expected_error_string": "invalid frame operation",
+          "module_errors": "FT_CONFIG_OPTION_USE_MODULE_ERRORS disabled in pinned public ABI so FT_ERR_BASE is 0"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "surface:public-c-api",
+        "coverage:value-import"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "FT_Err_Invalid_Frame_Operation",
+          "value": "FT_Error integer",
+          "expected_value": 86,
+          "expected_hex_value": "0x56",
+          "error_string": "invalid frame operation",
+          "import": "<freetype/fterrors.h> expands freetype/fterrdef.h"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "numeric_value",
+            "error_string",
+            "import_compiles"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "sources_checked": [
+          "freetype/include/freetype/fterrdef.h",
+          "freetype/include/freetype/fterrors.h"
+        ]
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Frame_Operation.stream_frame_access_rejects_invalid_sequence",
+      "subject": "fterrdef.FT_Err_Invalid_Frame_Operation",
+      "case": "stream_frame_access_rejects_invalid_sequence",
+      "operation": "ftstream.frame_lifecycle",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "stream": {
+            "kind": "ref",
+            "role": "stream",
+            "id": "streams/synthetic/frame-lifecycle-invalid.bin",
+            "asset_kind": "binary"
+          }
+        },
+        "params": {
+          "call_sequence": [
+            "FT_Stream_EnterFrame",
+            "FT_Stream_ExtractFrame or FT_Stream_ReleaseFrame in invalid sequence"
+          ],
+          "stream_initial_position": 0,
+          "invalid_sequence": "extract or release a frame when no frame is active",
+          "expected_error_symbol": "FT_Err_Invalid_Frame_Operation",
+          "expected_error_value": 86,
+          "c_behavior": "base/ftstream.c returns Invalid_Frame_Operation for invalid frame helper sequencing and preserves stream lifecycle invariants"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "surface:public-c-api",
+        "coverage:modeled-error-trigger"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error",
+          "expected_error_symbol": "FT_Err_Invalid_Frame_Operation",
+          "expected_error_value": 86,
+          "side_effects": "public output pointer, stream, slot, or face state as described by the source path"
+        },
+        "compare": {
+          "mode": "unsupported_until_runner_added",
+          "paths": [
+            "error.symbol",
+            "error.value",
+            "stream.pos",
+            "frame_state"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "sources_checked": [
+          "freetype/include/freetype/fterrdef.h",
+          "freetype/include/freetype/fterrors.h",
+          "freetype/src/base/ftstream.c"
+        ],
+        "fixture_requirements": [
+          "FFI stream harness that can exercise FT_Stream frame helper lifecycle operations directly or through a public parser path."
+        ]
+      }
+    }
+  ]
+}

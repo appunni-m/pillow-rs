@@ -1,0 +1,261 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Render_Glyph",
+  "manifest_cases": [
+    "supported_render_modes",
+    "invalid_render_mode",
+    "matrix_render",
+    "error_null_or_unowned_slot",
+    "error_unloaded_or_unsupported_slot_format"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Render_Glyph.supported_render_modes",
+      "subject": "freetype.FT_Render_Glyph",
+      "case": "supported_render_modes",
+      "operation": "freetype.render_glyph",
+      "schema": "glyph_render",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "size_ppem": 20,
+          "glyph_indices": [
+            36,
+            68,
+            82
+          ],
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "render_modes": [
+            "FT_RENDER_MODE_NORMAL",
+            "FT_RENDER_MODE_LIGHT",
+            "FT_RENDER_MODE_MONO",
+            "FT_RENDER_MODE_LCD",
+            "FT_RENDER_MODE_LCD_V"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "slot_bitmap": [
+            "format",
+            "bitmap.width",
+            "bitmap.rows",
+            "bitmap.pitch",
+            "bitmap.pixel_mode",
+            "bitmap_left",
+            "bitmap_top",
+            "buffer_bytes"
+          ]
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].slot_bitmap"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Render_Glyph.invalid_render_mode",
+      "subject": "freetype.FT_Render_Glyph",
+      "case": "invalid_render_mode",
+      "operation": "freetype.render_glyph",
+      "schema": "glyph_render",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "size_ppem": 20,
+          "glyph_index": 36,
+          "render_mode": 255
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "slot_format_after_error": "unchanged_or_c_oracle"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error",
+            "slot_snapshot_before_after"
+          ]
+        },
+        "error": "c_oracle"
+      }
+    },
+    {
+      "case_id": "freetype.FT_Render_Glyph.matrix_render",
+      "subject": "freetype.FT_Render_Glyph",
+      "case": "matrix_render",
+      "operation": "freetype.render_glyph",
+      "schema": "glyph_render_matrix",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "matrix": {
+            "kind": "ref",
+            "role": "fixture_matrix",
+            "path": "render_mode_matrix.json"
+          }
+        },
+        "params": {
+          "use_existing_render_mode_matrix": true,
+          "compare_targets": [
+            "C FreeType",
+            "Rust FFI",
+            "C FFI",
+            "Wasm FFI"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "matrix_outputs": "bitmap metrics and bytes per matrix row"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "rows[*].status",
+            "rows[*].bitmap",
+            "rows[*].metrics"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Render_Glyph.error_null_or_unowned_slot",
+      "subject": "freetype.FT_Render_Glyph",
+      "case": "error_null_or_unowned_slot",
+      "operation": "freetype.render_glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "variants": [
+            {
+              "slot": "null"
+            },
+            {
+              "slot": "synthetic_without_face"
+            },
+            {
+              "slot": "foreign_or_freed_handle"
+            }
+          ],
+          "render_mode": "FT_RENDER_MODE_NORMAL"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].error"
+          ]
+        },
+        "error": "Invalid_Argument",
+        "fixture_requirements": [
+          "Runner support for invalid/foreign handle probes without dereferencing freed memory unsafely"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format",
+      "subject": "freetype.FT_Render_Glyph",
+      "case": "error_unloaded_or_unsupported_slot_format",
+      "operation": "freetype.render_glyph",
+      "schema": "glyph_render",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "slot_state": "new_unloaded_slot"
+            },
+            {
+              "slot_format": "unsupported_synthetic_format"
+            }
+          ],
+          "render_mode": "FT_RENDER_MODE_NORMAL"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "slot_mutation": "c_oracle"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].error",
+            "outputs[*].slot_snapshot_before_after"
+          ]
+        },
+        "error": "c_oracle",
+        "fixture_requirements": [
+          "Runner support for new slot before load and synthetic unsupported glyph format"
+        ]
+      }
+    }
+  ]
+}

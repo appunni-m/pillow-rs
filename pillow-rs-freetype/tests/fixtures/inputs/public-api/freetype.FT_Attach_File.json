@@ -1,0 +1,199 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Attach_File",
+  "manifest_cases": [
+    "success_attach_auxiliary_file",
+    "error_null_face",
+    "error_null_pathname",
+    "error_missing_or_unsupported_file"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Attach_File.success_attach_auxiliary_file",
+      "subject": "freetype.FT_Attach_File",
+      "case": "success_attach_auxiliary_file",
+      "operation": "freetype.attach_file",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/type1/attach-afm-base.pfb"
+          },
+          "attachment": {
+            "kind": "ref",
+            "role": "auxiliary_metrics",
+            "path": "input/aux/type1/attach-afm-base.afm",
+            "status": "required_future_asset",
+            "requires": "AFM or PFM metrics file accepted by the Type1 driver and known to mutate kerning/metrics observably"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pathname_encoding": "native",
+          "post_attach_probe": [
+            "FT_Get_Kerning",
+            "face.available_sizes",
+            "glyph_metrics"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:attachment"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "post_attach_probe": "face_state_delta"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "post_attach_probe"
+          ]
+        },
+        "fixture_requirements": [
+          "Type1 PFB plus matching AFM/PFM auxiliary metrics fixture"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Attach_File.error_null_face",
+      "subject": "freetype.FT_Attach_File",
+      "case": "error_null_face",
+      "operation": "freetype.attach_file",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "attachment": {
+            "kind": "ref",
+            "role": "auxiliary_metrics",
+            "path": "input/aux/type1/attach-afm-base.afm",
+            "status": "required_future_asset",
+            "requires": "Any readable auxiliary file; face handle is null"
+          }
+        },
+        "params": {
+          "face": "null",
+          "pathname_encoding": "native"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error"
+          ]
+        },
+        "error": "Invalid_Face_Handle"
+      }
+    },
+    {
+      "case_id": "freetype.FT_Attach_File.error_null_pathname",
+      "subject": "freetype.FT_Attach_File",
+      "case": "error_null_pathname",
+      "operation": "freetype.attach_file",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pathname": "null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "face_mutation": "none"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error",
+            "face_snapshot_before_after"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    },
+    {
+      "case_id": "freetype.FT_Attach_File.error_missing_or_unsupported_file",
+      "subject": "freetype.FT_Attach_File",
+      "case": "error_missing_or_unsupported_file",
+      "operation": "freetype.attach_file",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/LiberationSerif-Regular.ttf"
+          },
+          "attachment": {
+            "kind": "ref",
+            "role": "missing_path",
+            "path": "input/aux/missing/no-such.afm"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pathname_encoding": "native",
+          "post_attach_probe": [
+            "glyph_metrics",
+            "kerning"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "face_mutation": "none"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error",
+            "face_snapshot_before_after"
+          ]
+        },
+        "error": "c_oracle"
+      }
+    }
+  ]
+}

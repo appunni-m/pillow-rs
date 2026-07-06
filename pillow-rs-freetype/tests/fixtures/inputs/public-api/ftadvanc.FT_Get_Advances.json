@@ -1,0 +1,421 @@
+{
+  "version": 1,
+  "subject": "ftadvanc.FT_Get_Advances",
+  "manifest_cases": [
+    "success_horizontal_scaled_range",
+    "success_unscaled_range",
+    "success_vertical_range",
+    "fast_only_range_success_or_error",
+    "zero_count_behavior",
+    "error_null_face_or_output",
+    "error_invalid_range_or_flags"
+  ],
+  "cases": [
+    {
+      "case_id": "ftadvanc.FT_Get_Advances.success_horizontal_scaled_range",
+      "subject": "ftadvanc.FT_Get_Advances",
+      "case": "success_horizontal_scaled_range",
+      "operation": "ftadvanc.get_advances",
+      "schema": "advance_range",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 20,
+          "ranges": [
+            {
+              "start": 0,
+              "count": 4
+            },
+            {
+              "start": 36,
+              "count": 3
+            }
+          ],
+          "load_flags_matrix": [
+            [
+              "FT_LOAD_DEFAULT"
+            ],
+            [
+              "FT_LOAD_NO_HINTING"
+            ],
+            [
+              "FT_LOAD_TARGET_LIGHT"
+            ]
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftadvanc"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "advances": "array FT_Fixed 16.16"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].advances"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftadvanc.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftadvanc.FT_Get_Advances.success_unscaled_range",
+      "subject": "ftadvanc.FT_Get_Advances",
+      "case": "success_unscaled_range",
+      "operation": "ftadvanc.get_advances",
+      "schema": "advance_range",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "ranges": [
+            {
+              "start": 36,
+              "count": 3
+            }
+          ],
+          "load_flags": [
+            "FT_LOAD_NO_SCALE"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftadvanc"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "advances": "font_units"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].advances"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftadvanc.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftadvanc.FT_Get_Advances.success_vertical_range",
+      "subject": "ftadvanc.FT_Get_Advances",
+      "case": "success_vertical_range",
+      "operation": "ftadvanc.get_advances",
+      "schema": "advance_range",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "fonts": [
+            {
+              "kind": "file",
+              "role": "font",
+              "path": "input/fonts/vertical/cjk-vertical-metrics.ttf"
+            },
+            {
+              "kind": "file",
+              "role": "font",
+              "path": "input/fonts/DejaVuSans.ttf"
+            }
+          ]
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 20,
+          "ranges": [
+            {
+              "start": 36,
+              "count": 3
+            }
+          ],
+          "load_flags": [
+            "FT_LOAD_VERTICAL_LAYOUT"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftadvanc"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "advances": "vertical FT_Fixed 16.16"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].advances",
+            "rows[*].vertical_metrics_source"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/vertical/cjk-vertical-metrics.ttf must expose real vertical metrics"
+        ],
+        "source_refs": [
+          "freetype/src/base/ftadvanc.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftadvanc.FT_Get_Advances.fast_only_range_success_or_error",
+      "subject": "ftadvanc.FT_Get_Advances",
+      "case": "fast_only_range_success_or_error",
+      "operation": "ftadvanc.get_advances",
+      "schema": "advance_range",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 20,
+          "ranges": [
+            {
+              "start": 36,
+              "count": 3
+            }
+          ],
+          "flag_sets": [
+            [
+              "FT_LOAD_NO_SCALE",
+              "FT_ADVANCE_FLAG_FAST_ONLY"
+            ],
+            [
+              "FT_LOAD_NO_HINTING",
+              "FT_ADVANCE_FLAG_FAST_ONLY"
+            ],
+            [
+              "FT_LOAD_DEFAULT",
+              "FT_ADVANCE_FLAG_FAST_ONLY"
+            ]
+          ],
+          "sentinel_array": "0x13572468"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftadvanc"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "status": "FT_Error",
+          "advances": "array_or_preserved_sentinel"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].error",
+            "rows[*].advances"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftadvanc.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftadvanc.FT_Get_Advances.zero_count_behavior",
+      "subject": "ftadvanc.FT_Get_Advances",
+      "case": "zero_count_behavior",
+      "operation": "ftadvanc.get_advances",
+      "schema": "advance_range",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "start": 0,
+          "count": 0,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "sentinel_array": "0x13572468"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftadvanc"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "advances_written": "none"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "advances"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftadvanc.c:148-194"
+        ]
+      }
+    },
+    {
+      "case_id": "ftadvanc.FT_Get_Advances.error_null_face_or_output",
+      "subject": "ftadvanc.FT_Get_Advances",
+      "case": "error_null_face_or_output",
+      "operation": "ftadvanc.get_advances",
+      "schema": "error_matrix",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "probes": [
+            "null_face",
+            "null_padvances"
+          ],
+          "start": 0,
+          "count": 1,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "sentinel_array": "0x24681357"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftadvanc"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "padvances_preserved": "bool"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].probe",
+            "rows[*].status",
+            "rows[*].error",
+            "rows[*].padvances"
+          ]
+        },
+        "error": "Invalid_Face_Handle_or_Invalid_Argument",
+        "source_refs": [
+          "freetype/src/base/ftadvanc.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftadvanc.FT_Get_Advances.error_invalid_range_or_flags",
+      "subject": "ftadvanc.FT_Get_Advances",
+      "case": "error_invalid_range_or_flags",
+      "operation": "ftadvanc.get_advances",
+      "schema": "error_matrix",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 20,
+          "ranges": [
+            {
+              "start": "num_glyphs",
+              "count": 1
+            },
+            {
+              "start": "num_glyphs-1",
+              "count": 2
+            },
+            {
+              "start": "uint_max-1",
+              "count": 4
+            }
+          ],
+          "flag_sets": [
+            [
+              "FT_LOAD_DEFAULT"
+            ],
+            [
+              "unsupported_high_bits"
+            ]
+          ],
+          "sentinel_array": "0x24681357"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftadvanc"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "padvances": "preserved_or_partial_c_writes"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].error",
+            "rows[*].padvances"
+          ]
+        },
+        "error": "Invalid_Glyph_Index_or_C_oracle_flag_behavior",
+        "source_refs": [
+          "freetype/src/base/ftadvanc.c"
+        ]
+      }
+    }
+  ]
+}

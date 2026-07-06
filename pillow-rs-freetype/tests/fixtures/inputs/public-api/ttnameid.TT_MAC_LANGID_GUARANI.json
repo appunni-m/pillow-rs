@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "subject": "ttnameid.TT_MAC_LANGID_GUARANI",
+  "manifest_cases": ["value_matches_header", "public_import_contract"],
+  "cases": [
+    {
+      "case_id": "ttnameid.TT_MAC_LANGID_GUARANI.value_matches_header",
+      "subject": "ttnameid.TT_MAC_LANGID_GUARANI",
+      "case": "value_matches_header",
+      "operation": "abi.constant_eval",
+      "schema": "constant_value",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"header": "freetype/ttnameid.h", "symbol": "TT_MAC_LANGID_GUARANI", "value": 133, "value_type": "preprocessor integer constant", "name_table_platform": "TT_PLATFORM_MACINTOSH"}},
+      "classifiers": ["kind:constant", "header:ttnameid", "area:mac_name_language"],
+      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "constant_value": "int"}, "compare": {"mode": "exact", "paths": ["symbol", "constant_value"]}, "source_refs": ["freetype/include/freetype/ttnameid.h:303-423"]}
+    },
+    {
+      "case_id": "ttnameid.TT_MAC_LANGID_GUARANI.public_import_contract",
+      "subject": "ttnameid.TT_MAC_LANGID_GUARANI",
+      "case": "public_import_contract",
+      "operation": "abi.public_import",
+      "schema": "compile_contract",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"include": "freetype/ttnameid.h", "symbol": "TT_MAC_LANGID_GUARANI", "usage": "enum_or_static_assert", "expected_value": 133}},
+      "classifiers": ["kind:constant", "header:ttnameid", "area:public_import"],
+      "expectation": {"status": "ok", "output_shape": {"include_accepted": "bool", "symbol_visible": "bool", "constant_value": "int"}, "compare": {"mode": "exact", "paths": ["include_accepted", "symbol_visible", "constant_value"]}, "source_refs": ["freetype/include/freetype/ttnameid.h:303-423"]}
+    }
+  ]
+}

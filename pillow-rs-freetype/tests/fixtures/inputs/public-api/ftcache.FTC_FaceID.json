@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "subject": "ftcache.FTC_FaceID",
+  "manifest_cases": [
+    "alias_defined",
+    "pointer_identity_key"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcache.FTC_FaceID.alias_defined",
+      "subject": "ftcache.FTC_FaceID",
+      "case": "alias_defined",
+      "operation": "abi.type_alias",
+      "schema": "abi_type",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftcache.h>",
+          "typedef": "FTC_FaceID",
+          "expected_alias": "FT_Pointer"
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftcache",
+        "area:cache-manager"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "generic_pointer_alias",
+          "sizeof": "pointer_size"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignment",
+            "is_pointer",
+            "assignability"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_FaceID.pointer_identity_key",
+      "subject": "ftcache.FTC_FaceID",
+      "case": "pointer_identity_key",
+      "operation": "ftcache.face_id_identity",
+      "schema": "cache_lifecycle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font_a": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "font_b": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "face_ids": [
+            "stable_pointer:dejavu",
+            "stable_pointer:liberation",
+            "stable_pointer:dejavu_alias_same_address"
+          ],
+          "requester": "records_face_id_raw_identity",
+          "lookups": [
+            "FTC_Manager_LookupFace",
+            "FTC_SBitCache_Lookup"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftcache",
+        "area:cache-manager"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "requester_face_id": "same_pointer_identity",
+          "cache_key": "raw pointer identity class"
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "requester_calls[*].face_id_identity",
+            "cache_hit_class",
+            "face_identity_class"
+          ]
+        }
+      }
+    }
+  ]
+}

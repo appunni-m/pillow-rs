@@ -1,0 +1,164 @@
+{
+  "version": 1,
+  "subject": "ftpfr.FT_Get_PFR_Advance",
+  "manifest_cases": [
+    "pfr_glyph_advance_success",
+    "non_pfr_returns_invalid_argument",
+    "null_face_or_output_errors"
+  ],
+  "cases": [
+    {
+      "case_id": "ftpfr.FT_Get_PFR_Advance.pfr_glyph_advance_success",
+      "subject": "ftpfr.FT_Get_PFR_Advance",
+      "case": "pfr_glyph_advance_success",
+      "operation": "ftpfr.get_pfr_advance",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/pfr/basic-metrics.pfr",
+            "status": "required_future_asset",
+            "requires": "PFR face with PFR_METRICS service and at least two valid glyph advances"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_indices": [
+            0,
+            1,
+            "last_valid_glyph"
+          ],
+          "aadvance_pointer_class": "valid",
+          "abi": {
+            "include": "<freetype/ftpfr.h>",
+            "signature": "FT_Error FT_Get_PFR_Advance(FT_Face face, FT_UInt gindex, FT_Pos* aadvance)"
+          },
+          "source_refs": [
+            "freetype/include/freetype/ftpfr.h",
+            "freetype/src/base/ftpfr.c"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftpfr",
+        "area:pfr-metrics"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "aadvance": "FT_Pos metrics units"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return",
+            "aadvance"
+          ]
+        },
+        "fixture_requirements": [
+          "Add a PFR fixture; oracle output must be generated at runtime."
+        ]
+      }
+    },
+    {
+      "case_id": "ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument",
+      "subject": "ftpfr.FT_Get_PFR_Advance",
+      "case": "non_pfr_returns_invalid_argument",
+      "operation": "ftpfr.get_pfr_advance",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_index": 1,
+          "aadvance_pointer_class": "valid_with_sentinel",
+          "sentinel": -777777,
+          "c_behavior": "ftpfr.c returns Invalid_Argument when ft_pfr_check finds no PFR_METRICS service"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftpfr",
+        "area:pfr-metrics"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "aadvance": "sentinel_preserved"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "return",
+            "aadvance"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    },
+    {
+      "case_id": "ftpfr.FT_Get_PFR_Advance.null_face_or_output_errors",
+      "subject": "ftpfr.FT_Get_PFR_Advance",
+      "case": "null_face_or_output_errors",
+      "operation": "ftpfr.get_pfr_advance",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "variants": [
+            {
+              "face": "NULL",
+              "glyph_index": 1,
+              "aadvance_pointer_class": "valid_with_sentinel",
+              "expected_error": "Invalid_Face_Handle"
+            },
+            {
+              "face": "non_null",
+              "font_ref": "input/fonts/DejaVuSans.ttf",
+              "glyph_index": 1,
+              "aadvance_pointer_class": "NULL",
+              "expected_error": "Invalid_Argument"
+            }
+          ],
+          "source_refs": [
+            "freetype/src/base/ftpfr.c"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftpfr",
+        "area:pfr-metrics"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "aadvance": "sentinel_or_absent"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "return",
+            "aadvance"
+          ]
+        },
+        "error": "variant_expected_error"
+      }
+    }
+  ]
+}

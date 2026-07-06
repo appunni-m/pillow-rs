@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "subject": "ftgasp.FT_GASP_NO_TABLE",
+  "manifest_cases": [
+    "value_matches_header",
+    "returned_for_null_or_non_sfnt_face"
+  ],
+  "cases": [
+    {
+      "case_id": "ftgasp.FT_GASP_NO_TABLE.value_matches_header",
+      "subject": "ftgasp.FT_GASP_NO_TABLE",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftgasp.h>",
+          "symbol": "FT_GASP_NO_TABLE",
+          "expected_value_from_pinned_header": -1,
+          "runtime_observable_via": "FT_Get_Gasp initializes result to FT_GASP_NO_TABLE and returns it for null/non-SFNT/no-range cases",
+          "pinned_sources": [
+            "freetype/include/freetype/ftgasp.h:85",
+            "freetype/src/base/ftgasp.c:28-51"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftgasp",
+        "area:gasp",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_Int",
+          "symbol": "FT_GASP_NO_TABLE"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ftgasp.h",
+          "freetype/src/base/ftgasp.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgasp.FT_GASP_NO_TABLE.returned_for_null_or_non_sfnt_face",
+      "subject": "ftgasp.FT_GASP_NO_TABLE",
+      "case": "returned_for_null_or_non_sfnt_face",
+      "operation": "ftgasp.get_gasp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "non_sfnt_font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/non-sfnt/gasp-control.bdf",
+            "status": "required_future_asset",
+            "requires": "Supported non-SFNT face so FT_IS_SFNT(face) is false."
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "face": null,
+              "ppem_values": [
+                0,
+                8,
+                16
+              ]
+            },
+            {
+              "face": "non_sfnt_font",
+              "face_index": 0,
+              "ppem_values": [
+                8,
+                16
+              ]
+            }
+          ],
+          "expected_return_symbol": "FT_GASP_NO_TABLE",
+          "pinned_source": "freetype/src/base/ftgasp.c:28-51"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftgasp",
+        "area:gasp",
+        "surface:public-c-api",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Needs a supported non-SFNT font asset; null-face coverage needs no asset.",
+        "output_shape": {
+          "return": "FT_Int",
+          "return_symbol": "FT_GASP_NO_TABLE",
+          "face_class": "null_or_non_sfnt"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "return",
+            "return_symbol",
+            "face_class"
+          ]
+        },
+        "sources_checked": [
+          "freetype/src/base/ftgasp.c"
+        ]
+      }
+    }
+  ]
+}

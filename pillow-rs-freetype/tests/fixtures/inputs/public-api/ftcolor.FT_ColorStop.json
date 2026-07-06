@@ -1,0 +1,178 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_ColorStop",
+  "manifest_cases": [
+    "layout_matches_c",
+    "field_order_matches_c",
+    "iterator_output_values"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_ColorStop.layout_matches_c",
+      "subject": "ftcolor.FT_ColorStop",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "record": "FT_ColorStop",
+          "fields": [
+            "stop_offset",
+            "color"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_ColorStop",
+          "layout": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "C ABI probe for FT_ColorStop sizeof/alignment/offsetof",
+          "Runner support for C FreeType, Rust FFI, C FFI, and Wasm FFI record layout comparison"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_ColorStop.field_order_matches_c",
+      "subject": "ftcolor.FT_ColorStop",
+      "case": "field_order_matches_c",
+      "operation": "abi.record_import",
+      "schema": "abi_record_fields",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "record": "FT_ColorStop",
+          "fields": [
+            "stop_offset",
+            "color"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_ColorStop",
+          "fields": [
+            "stop_offset",
+            "color"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "field_order",
+            "field_types",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "Compile/import probe for FT_ColorStop with exact ftcolor.h field names"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_ColorStop.iterator_output_values",
+      "subject": "ftcolor.FT_ColorStop",
+      "case": "iterator_output_values",
+      "operation": "ftcolor.get_colorline_stops",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "static_font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 1 base glyph list",
+              "CPAL table with at least two palettes and named entries",
+              "paint graph containing solid, colr_layers, glyph, colr_glyph, linear, radial, sweep, transform, translate, scale, rotate, skew, and composite paints",
+              "static ColorLine records using PAD, REPEAT, and REFLECT extend modes",
+              "foreground palette index 0xFFFF references"
+            ]
+          },
+          "variable_font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-variable-gradients.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR v1 VarColorLine and variable paint records",
+              "fvar/gvar-compatible variation axes with non-zero COLR item variation deltas",
+              "gradient stops and linear gradient points that change at non-default design coordinates"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_roles": [
+            "linear_gradient_duplicate_boundary_stops",
+            "variable_linear_gradient"
+          ],
+          "design_coordinates": [
+            "default",
+            {
+              "wght": 900,
+              "GRAD": 1
+            }
+          ],
+          "iterate_until_zero": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_ColorStop",
+          "fields": [
+            "stop_offset",
+            "color.palette_index",
+            "color.alpha"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "runs[*].stops[*].stop_offset",
+            "runs[*].stops[*].color.palette_index",
+            "runs[*].stops[*].color.alpha"
+          ]
+        },
+        "fixture_requirements": [
+          "Runtime C oracle generation; do not store generated outputs"
+        ]
+      }
+    }
+  ]
+}

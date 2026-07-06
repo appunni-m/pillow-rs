@@ -1,0 +1,266 @@
+- id: ttnameid.TT_UCR_LIMBU
+  kind: constant
+  symbol: TT_UCR_LIMBU
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Limbu; pinned FreeType defines it as (1UL << 29) for U+1900-U+194F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 29) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_LIMBU as a public preprocessor constant.
+
+- id: ttnameid.TT_UCR_LINEAR_B
+  kind: constant
+  symbol: TT_UCR_LINEAR_B
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Linear B syllabary, Linear B ideograms, and Aegean Numbers; pinned FreeType defines it as (1UL << 5).
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 5) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_LINEAR_B as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative non-BMP Linear B font reports the OS/2 ulUnicodeRange4 bit and glyph coverage exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/linear-b.ttf; params={codepoints=[U+10000, U+10080, U+10100]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, and char-index results.
+
+- id: ttnameid.TT_UCR_MALAYALAM
+  kind: constant
+  symbol: TT_UCR_MALAYALAM
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Malayalam; pinned FreeType defines it as (1UL << 23) for U+0D00-U+0D7F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 23) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_MALAYALAM as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative Malayalam font reports the expected OS/2 unicode-range bit and character lookup behavior exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/malayalam.ttf; params={codepoints=[U+0D05, U+0D15]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, and char-index results.
+
+- id: ttnameid.TT_UCR_MATHEMATICAL_OPERATORS
+  kind: constant
+  symbol: TT_UCR_MATHEMATICAL_OPERATORS
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Mathematical Operators; pinned FreeType defines it as (1UL << 6) for U+2200-U+22FF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 6) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_MATHEMATICAL_OPERATORS as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative math font reports the Mathematical Operators unicode-range bit exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/mathematical-operators.ttf; params={codepoints=[U+2200, U+221E]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, and char-index results.
+
+- id: ttnameid.TT_UCR_MATH_ALPHANUMERIC_SYMBOLS
+  kind: constant
+  symbol: TT_UCR_MATH_ALPHANUMERIC_SYMBOLS
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Mathematical Alphanumeric Symbols; pinned FreeType defines it as (1UL << 25) for U+1D400-U+1D7FF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 25) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_MATH_ALPHANUMERIC_SYMBOLS as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative non-BMP math font reports this OS/2 unicode-range bit and selected cmap lookups exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/math-alphanumeric-symbols.ttf; params={codepoints=[U+1D400, U+1D7CE]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, and char-index results.
+
+- id: ttnameid.TT_UCR_MISCELLANEOUS_SYMBOLS
+  kind: constant
+  symbol: TT_UCR_MISCELLANEOUS_SYMBOLS
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Miscellaneous Symbols; pinned FreeType defines it as (1UL << 14) for U+2600-U+26FF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 14) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_MISCELLANEOUS_SYMBOLS as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative symbols font reports the Miscellaneous Symbols unicode-range bit exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/miscellaneous-symbols.ttf; params={codepoints=[U+2605, U+263A]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, and char-index results.
+
+- id: ttnameid.TT_UCR_MISCELLANEOUS_TECHNICAL
+  kind: constant
+  symbol: TT_UCR_MISCELLANEOUS_TECHNICAL
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Miscellaneous Technical; pinned FreeType defines it as (1UL << 7) for U+2300-U+23FF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 7) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_MISCELLANEOUS_TECHNICAL as a public preprocessor constant.
+
+- id: ttnameid.TT_UCR_MONGOLIAN
+  kind: constant
+  symbol: TT_UCR_MONGOLIAN
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Mongolian; pinned FreeType defines it as (1UL << 17) for U+1800-U+18AF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 17) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_MONGOLIAN as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative Mongolian font reports the expected OS/2 unicode-range fields and selected cmap lookups exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/mongolian.ttf; params={codepoints=[U+1820, U+180B]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, and char-index results.
+
+- id: ttnameid.TT_UCR_MUSICAL_SYMBOLS
+  kind: constant
+  symbol: TT_UCR_MUSICAL_SYMBOLS
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Musical Symbols; pinned FreeType defines it as (1UL << 24) for U+1D000-U+1D0FF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 24) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_MUSICAL_SYMBOLS as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative non-BMP music font reports this OS/2 unicode-range bit and selected cmap lookups exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/musical-symbols.ttf; params={codepoints=[U+1D11E, U+1D15F]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, and char-index results.
+
+- id: ttnameid.TT_UCR_MYANMAR
+  kind: constant
+  symbol: TT_UCR_MYANMAR
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Myanmar; pinned FreeType defines it as (1UL << 10) for U+1000-U+109F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 10) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_MYANMAR as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative Myanmar font reports the expected OS/2 unicode-range fields and selected cmap lookups exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/myanmar.ttf; params={codepoints=[U+1000, U+1031]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, and char-index results.
+
+- id: ttnameid.TT_UCR_NEW_TAI_LUE
+  kind: constant
+  symbol: TT_UCR_NEW_TAI_LUE
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for New Tai Lue; pinned FreeType defines it as (1UL << 31) for U+1980-U+19DF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 31) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_NEW_TAI_LUE as a public preprocessor constant.
+
+- id: ttnameid.TT_UCR_NKO
+  kind: constant
+  symbol: TT_UCR_NKO
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for NKo; pinned FreeType defines it as (1UL << 14) for U+07C0-U+07FF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 14) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_NKO as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative NKo font reports the expected OS/2 unicode-range fields and selected cmap lookups exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/nko.ttf; params={codepoints=[U+07CA, U+07F4]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, and char-index results.
+
+- id: ttnameid.TT_UCR_NON_PLANE_0
+  kind: constant
+  symbol: TT_UCR_NON_PLANE_0
+  header: freetype/ttnameid.h
+  description: Deprecated public OS/2 Unicode-range alias for TT_UCR_SURROGATES; pinned FreeType defines TT_UCR_NON_PLANE_0 as TT_UCR_SURROGATES.
+  cases:
+    - id: alias_matches_header
+      description: Macro expands to TT_UCR_SURROGATES exactly as defined by pinned freetype/ttnameid.h.
+    - id: value_matches_target_alias
+      description: Effective value equals TT_UCR_SURROGATES, (1UL << 25), in a C compile-time value probe.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_NON_PLANE_0 as a deprecated public preprocessor alias.
+    - id: representative_os2_unicode_range_match
+      description: A representative non-plane-0 font exposes the surrogate/non-plane OS/2 bit exactly like the C oracle through TT_OS2 fields.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/non-plane-0.ttf; params={codepoints=[U+10000, U+1F600]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, alias value, and char-index results.
+
+- id: ttnameid.TT_UCR_NUMBER_FORMS
+  kind: constant
+  symbol: TT_UCR_NUMBER_FORMS
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Number Forms; pinned FreeType defines it as (1UL << 4) for U+2150-U+218F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 4) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_NUMBER_FORMS as a public preprocessor constant.
+
+- id: ttnameid.TT_UCR_OCR
+  kind: constant
+  symbol: TT_UCR_OCR
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Optical Character Recognition; pinned FreeType defines it as (1UL << 9) for U+2440-U+245F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 9) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_OCR as a public preprocessor constant.
+
+- id: ttnameid.TT_UCR_OGHAM
+  kind: constant
+  symbol: TT_UCR_OGHAM
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Ogham; pinned FreeType defines it as (1UL << 14) for U+1680-U+169F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 14) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_OGHAM as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative Ogham font reports the expected OS/2 unicode-range fields and selected cmap lookups exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/ogham.ttf; params={codepoints=[U+1681, U+169B]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, and char-index results.
+
+- id: ttnameid.TT_UCR_OLD_ANATOLIAN
+  kind: constant
+  symbol: TT_UCR_OLD_ANATOLIAN
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Old Anatolian; pinned FreeType defines it as (1UL << 25) for U+102A0-U+102DF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 25) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_OLD_ANATOLIAN as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative non-BMP Old Anatolian font reports the expected OS/2 unicode-range fields and selected cmap lookups exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/old-anatolian.ttf; params={codepoints=[U+102A0, U+102D0]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, and char-index results.
+
+- id: ttnameid.TT_UCR_OLD_ITALIC
+  kind: constant
+  symbol: TT_UCR_OLD_ITALIC
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Old Italic; pinned FreeType defines it as (1UL << 21) for U+10300-U+1032F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 21) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_OLD_ITALIC as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative non-BMP Old Italic font reports the expected OS/2 unicode-range fields and selected cmap lookups exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/old-italic.ttf; params={codepoints=[U+10300, U+1032F]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, and char-index results.
+
+- id: ttnameid.TT_UCR_OLD_PERSIAN
+  kind: constant
+  symbol: TT_UCR_OLD_PERSIAN
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Old Persian; pinned FreeType defines it as (1UL << 8) for U+103A0-U+103DF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 8) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_OLD_PERSIAN as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative non-BMP Old Persian font reports the expected OS/2 unicode-range fields and selected cmap lookups exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/old-persian.ttf; params={codepoints=[U+103A0, U+103D0]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, and char-index results.
+
+- id: ttnameid.TT_UCR_OL_CHIKI
+  kind: constant
+  symbol: TT_UCR_OL_CHIKI
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Ol Chiki; pinned FreeType defines it as (1UL << 18) for U+1C50-U+1C7F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 18) as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_OL_CHIKI as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative Ol Chiki font reports the expected OS/2 unicode-range fields and selected cmap lookups exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2) plus FT_Get_Char_Index; fixture_asset=input/fonts/os2-ranges/ol-chiki.ttf; params={codepoints=[U+1C50, U+1C5A]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4, char_indices}; comparison=exact C oracle status, OS/2 unicode-range fields, and char-index results.

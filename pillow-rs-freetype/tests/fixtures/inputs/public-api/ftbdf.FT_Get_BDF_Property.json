@@ -1,0 +1,310 @@
+{
+  "version": 1,
+  "subject": "ftbdf.FT_Get_BDF_Property",
+  "manifest_cases": [
+    "success_bdf_string_integer_cardinal_properties",
+    "success_pcf_properties_signed_only",
+    "success_sfnt_bdf_table_selected_strike",
+    "error_missing_property_sets_none",
+    "error_unsupported_face_or_unselected_strike",
+    "error_null_face_or_output"
+  ],
+  "cases": [
+    {
+      "case_id": "ftbdf.FT_Get_BDF_Property.success_bdf_string_integer_cardinal_properties",
+      "subject": "ftbdf.FT_Get_BDF_Property",
+      "case": "success_bdf_string_integer_cardinal_properties",
+      "operation": "ftbdf.get_bdf_property",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "bdf_font": {
+            "kind": "ref",
+            "id": "fonts/bdf/properties-atoms-integers-cardinals.bdf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "properties": [
+            "FAMILY_NAME",
+            "POINT_SIZE",
+            "PIXEL_SIZE"
+          ],
+          "face_index": 0
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbdf",
+        "area:bdf-properties"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "record": "BDF_PropertyRec",
+          "union_fields": [
+            "atom",
+            "integer",
+            "cardinal"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "property.type",
+            "property.u.atom_string",
+            "property.u.integer",
+            "property.u.cardinal"
+          ]
+        },
+        "fixture_requirements": [
+          "BDF font with STARTPROPERTIES atom, signed integer, and cardinal entries"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbdf.FT_Get_BDF_Property.success_pcf_properties_signed_only",
+      "subject": "ftbdf.FT_Get_BDF_Property",
+      "case": "success_pcf_properties_signed_only",
+      "operation": "ftbdf.get_bdf_property",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "pcf_font": {
+            "kind": "ref",
+            "id": "fonts/pcf/properties-signed-only.pcf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "properties": [
+            "FAMILY_NAME",
+            "POINT_SIZE"
+          ],
+          "face_index": 0
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbdf",
+        "area:pcf-properties"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "record": "BDF_PropertyRec",
+          "pcf_integer_policy": "signed"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "property.type",
+            "property.u.atom_string",
+            "property.u.integer"
+          ]
+        },
+        "fixture_requirements": [
+          "PCF font with signed integer properties"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbdf.FT_Get_BDF_Property.success_sfnt_bdf_table_selected_strike",
+      "subject": "ftbdf.FT_Get_BDF_Property",
+      "case": "success_sfnt_bdf_table_selected_strike",
+      "operation": "ftbdf.get_bdf_property",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "sfnt_bdf_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap/sfnt-bdf-table.otb",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "select_strike": {
+            "width": 12,
+            "height": 12
+          },
+          "properties": [
+            "FAMILY_NAME",
+            "PIXEL_SIZE"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbdf",
+        "area:sfnt-bdf-table"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "record": "BDF_PropertyRec",
+          "requires_selected_strike": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "property.type",
+            "property.u.atom_string",
+            "property.u.integer",
+            "selected_strike"
+          ]
+        },
+        "fixture_requirements": [
+          "SFNT bitmap font with BDF table and selectable strike"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none",
+      "subject": "ftbdf.FT_Get_BDF_Property",
+      "case": "error_missing_property_sets_none",
+      "operation": "ftbdf.get_bdf_property",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "bdf_font": {
+            "kind": "ref",
+            "id": "fonts/bdf/properties-atoms-integers-cardinals.bdf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "property": "NO_SUCH_PROPERTY",
+          "sentinel_property": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbdf",
+        "area:bdf-properties",
+        "path:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "record": "BDF_PropertyRec",
+          "none_type_on_error": true
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "property.type",
+            "sentinel_write_state"
+          ]
+        },
+        "error": "Missing_Property"
+      }
+    },
+    {
+      "case_id": "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike",
+      "subject": "ftbdf.FT_Get_BDF_Property",
+      "case": "error_unsupported_face_or_unselected_strike",
+      "operation": "ftbdf.get_bdf_property",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "property": "FAMILY_NAME",
+          "sfnt_bdf_without_selected_strike": {
+            "kind": "ref",
+            "id": "fonts/bitmap/sfnt-bdf-table.otb",
+            "asset_kind": "font"
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbdf",
+        "area:unsupported-face",
+        "path:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "record": "BDF_PropertyRec"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "property.type",
+            "sentinel_write_state"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    },
+    {
+      "case_id": "ftbdf.FT_Get_BDF_Property.error_null_face_or_output",
+      "subject": "ftbdf.FT_Get_BDF_Property",
+      "case": "error_null_face_or_output",
+      "operation": "ftbdf.get_bdf_property",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "bdf_font": {
+            "kind": "ref",
+            "id": "fonts/bdf/properties-atoms-integers-cardinals.bdf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "null_cases": [
+            "face",
+            "aproperty"
+          ],
+          "property": "FAMILY_NAME",
+          "sentinel_property": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbdf",
+        "area:null-arguments",
+        "path:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "record": "BDF_PropertyRec",
+          "null_argument_matrix": true
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "variant",
+            "error",
+            "property_after"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    }
+  ]
+}

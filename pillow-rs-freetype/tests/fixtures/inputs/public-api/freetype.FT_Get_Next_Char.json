@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Get_Next_Char",
+  "manifest_cases": [
+    "iterates_mapped_chars_in_c_order",
+    "strict_after_and_gap_behavior",
+    "exhausted_or_no_active_charmap"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Get_Next_Char.iterates_mapped_chars_in_c_order",
+      "subject": "freetype.FT_Get_Next_Char",
+      "case": "iterates_mapped_chars_in_c_order",
+      "operation": "freetype.get_next_char",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "select_charmap": "FT_ENCODING_UNICODE",
+          "start": "FT_Get_First_Char",
+          "max_steps": 64
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:charmap-iteration"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sequence": [
+            {
+              "return": "FT_ULong charcode",
+              "agindex": "FT_UInt"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "sequence"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Next_Char.strict_after_and_gap_behavior",
+      "subject": "freetype.FT_Get_Next_Char",
+      "case": "strict_after_and_gap_behavior",
+      "operation": "freetype.get_next_char",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "start_charcodes": [
+            0,
+            31,
+            32,
+            64,
+            65,
+            66,
+            8363,
+            8364,
+            1114111
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:charmap-iteration"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_ULong next_charcode",
+          "writes": {
+            "agindex": "FT_UInt"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return",
+            "writes.agindex"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Next_Char.exhausted_or_no_active_charmap",
+      "subject": "freetype.FT_Get_Next_Char",
+      "case": "exhausted_or_no_active_charmap",
+      "operation": "freetype.get_next_char",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "empty_charmap_font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/charmap/empty-or-no-active-charmap.ttf",
+            "status": "required_future_asset",
+            "requires": "accepted font or harness scenario with no active mappings"
+          }
+        },
+        "params": {
+          "face_variants": [
+            "null",
+            "no_active_charmap",
+            "empty_charmap"
+          ],
+          "start_charcodes": [
+            0,
+            4294967295
+          ],
+          "agindex_initial": 3735928559
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:charmap-iteration"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_ULong zero sentinel",
+          "writes": {
+            "agindex": "FT_UInt zero sentinel"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return",
+            "writes.agindex"
+          ]
+        }
+      }
+    }
+  ]
+}

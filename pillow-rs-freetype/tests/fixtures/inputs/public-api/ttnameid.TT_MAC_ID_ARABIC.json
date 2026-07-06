@@ -1,0 +1,207 @@
+{
+  "version": 1,
+  "subject": "ttnameid.TT_MAC_ID_ARABIC",
+  "manifest_cases": [
+    "value_matches_header",
+    "public_import_contract",
+    "mac_arabic_name_runtime"
+  ],
+  "cases": [
+    {
+      "case_id": "ttnameid.TT_MAC_ID_ARABIC.value_matches_header",
+      "subject": "ttnameid.TT_MAC_ID_ARABIC",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ttnameid.h",
+          "include": "<freetype/ttnameid.h>",
+          "symbol": "TT_MAC_ID_ARABIC",
+          "declared_as": "preprocessor integer constant",
+          "expected_value_from_pinned_header": 4,
+          "expected_value_hex": "0x0004",
+          "public_field": "FT_SfntName.encoding_id",
+          "source_ref": "freetype/include/freetype/ttnameid.h:151"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "area:mac-encoding-id",
+        "public-api-slice:1180-1199"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/ttnameid.h",
+          "symbol": "TT_MAC_ID_ARABIC",
+          "kind": "object_like_macro",
+          "result_type": "integer constant expression",
+          "assignable_to": "FT_UShort-compatible encoding_id"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "uint16",
+          "value_hex": "string",
+          "header": "string"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "value_hex",
+            "header"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ttnameid.h:137-180",
+          "freetype/include/freetype/ttnameid.h:151"
+        ]
+      }
+    },
+    {
+      "case_id": "ttnameid.TT_MAC_ID_ARABIC.public_import_contract",
+      "subject": "ttnameid.TT_MAC_ID_ARABIC",
+      "case": "public_import_contract",
+      "operation": "constant.import",
+      "schema": "api_import",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ttnameid.h>",
+          "symbol": "TT_MAC_ID_ARABIC",
+          "usage": "FT_UShort encoding_id = TT_MAC_ID_ARABIC;",
+          "expected_value_from_pinned_header": 4,
+          "source_ref": "freetype/include/freetype/ttnameid.h:151"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "area:public-import",
+        "public-api-slice:1180-1199"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/ttnameid.h",
+          "symbol": "TT_MAC_ID_ARABIC",
+          "visibility": "public C macro",
+          "assignable_to": "FT_UShort"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile_status": "ok",
+          "symbol": "TT_MAC_ID_ARABIC",
+          "ctype": "FT_UShort-compatible integer",
+          "value": "uint16"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "compile_status",
+            "symbol",
+            "ctype",
+            "value"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ttnameid.h:151"
+        ]
+      }
+    },
+    {
+      "case_id": "ttnameid.TT_MAC_ID_ARABIC.mac_arabic_name_runtime",
+      "subject": "ttnameid.TT_MAC_ID_ARABIC",
+      "case": "mac_arabic_name_runtime",
+      "operation": "ftsnames.get_sfnt_name_by_record",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/name-cmap/mac-arabic-name.ttf",
+            "role": "font",
+            "requirements": "SFNT font with a Macintosh Arabic full-name record whose platformID is 1, encodingID is 4, languageID is 12, and nameID is TT_NAME_ID_FULL_NAME."
+          }
+        },
+        "params": {
+          "function_group": "ftsnames.get_sfnt_name_by_record",
+          "face_index": 0,
+          "platform_id": "TT_PLATFORM_MACINTOSH",
+          "platform_id_value": 1,
+          "encoding_id": "TT_MAC_ID_ARABIC",
+          "encoding_id_value": 4,
+          "language_id": "TT_MAC_LANGID_ARABIC",
+          "language_id_value": 12,
+          "name_id": "TT_NAME_ID_FULL_NAME",
+          "name_id_value": 4
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "area:mac-encoding-id",
+        "runtime:sfnt",
+        "requires:future-font",
+        "public-api-slice:1180-1199"
+      ],
+      "metadata": {
+        "source_behavior": "C returns raw SFNT name record fields for Macintosh Arabic records, preserving encodingID 4 and non-null-terminated string bytes."
+      },
+      "expectation": {
+        "status": "build_dependent",
+        "fixture_requirements": [
+          "Missing asset: input/fonts/name-cmap/mac-arabic-name.ttf must be provided. SFNT font with a Macintosh Arabic full-name record whose platformID is 1, encodingID is 4, languageID is 12, and nameID is TT_NAME_ID_FULL_NAME."
+        ],
+        "output_shape": {
+          "status": "FT_Error",
+          "platform_id": "FT_UShort",
+          "encoding_id": "FT_UShort",
+          "name_count": "FT_UInt",
+          "matched_name": {
+            "name_index": "FT_UInt",
+            "platform_id": "FT_UShort",
+            "encoding_id": "FT_UShort",
+            "language_id": "FT_UShort",
+            "name_id": "FT_UShort",
+            "string_len": "FT_UInt",
+            "string_bytes": "bytes"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "platform_id",
+            "encoding_id",
+            "name_count",
+            "matched_name.platform_id",
+            "matched_name.encoding_id",
+            "matched_name.language_id",
+            "matched_name.name_id",
+            "matched_name.string_len",
+            "matched_name.string_bytes"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ttnameid.h:86-88",
+          "freetype/include/freetype/ttnameid.h:137-180",
+          "freetype/include/freetype/ttnameid.h:151",
+          "freetype/include/freetype/ftsnames.h:63-117",
+          "freetype/include/freetype/ftsnames.h:143-183",
+          "freetype/src/base/ftsnames.c:43-89"
+        ]
+      }
+    }
+  ]
+}

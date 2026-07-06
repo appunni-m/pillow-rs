@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Invalid_Stream_Operation",
+  "manifest_cases": [
+    "value_matches_header",
+    "stream_operation_failure"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Stream_Operation.value_matches_header",
+      "subject": "fterrdef.FT_Err_Invalid_Stream_Operation",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Invalid_Stream_Operation",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 85,
+          "expected_value_hex": "0x55",
+          "expected_error_string_from_pinned_header": "invalid stream operation",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Invalid_Stream_Operation",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Stream_Operation.stream_operation_failure",
+      "subject": "fterrdef.FT_Err_Invalid_Stream_Operation",
+      "case": "stream_operation_failure",
+      "operation": "FT_New_Open_Face",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "stream": {
+            "kind": "ref",
+            "role": "stream_control",
+            "id": "generated/streams/operation-failure.json",
+            "requirements": "Custom stream backed by valid font bytes but configured to fail read, seek, frame, gzip, bzip2, or lzw operations at deterministic offsets."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Invalid_Stream_Operation",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/base/ftstream.c:70-157,263-305,491-716,771; freetype/src/base/ftobjs.c:2328; freetype/src/gzip/ftgzip.c:378-439; freetype/src/bzip2/ftbzip2.c:263-328; freetype/src/lzw/ftlzw.c:179-221",
+          "face_index": 0,
+          "failure_modes": [
+            "read_callback_error",
+            "seek_callback_error",
+            "frame_callback_error",
+            "compressed_stream_error"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:abi-stream-facade"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Stream_Operation",
+        "fixture_requirements": "Custom stream facade that can fail individual operations while preserving valid font data for controls.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "output_face": "pointer_nullness_or_preservation",
+          "stream_position": "cursor_or_preservation_class",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class",
+            "stream_position"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,165 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_LayerIterator",
+  "manifest_cases": [
+    "layout_matches_c",
+    "field_order_matches_c",
+    "initialized_and_advanced_by_layer_apis"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_LayerIterator.layout_matches_c",
+      "subject": "ftcolor.FT_LayerIterator",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "record": "FT_LayerIterator",
+          "fields": [
+            "num_layers",
+            "layer",
+            "p"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_LayerIterator",
+          "layout": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "C ABI probe for FT_LayerIterator sizeof/alignment/offsetof",
+          "Runner support for C FreeType, Rust FFI, C FFI, and Wasm FFI record layout comparison"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_LayerIterator.field_order_matches_c",
+      "subject": "ftcolor.FT_LayerIterator",
+      "case": "field_order_matches_c",
+      "operation": "abi.record_import",
+      "schema": "abi_record_fields",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "record": "FT_LayerIterator",
+          "fields": [
+            "num_layers",
+            "layer",
+            "p"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_LayerIterator",
+          "fields": [
+            "num_layers",
+            "layer",
+            "p"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "field_order",
+            "field_types",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "Compile/import probe for FT_LayerIterator with exact ftcolor.h field names"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis",
+      "subject": "ftcolor.FT_LayerIterator",
+      "case": "initialized_and_advanced_by_layer_apis",
+      "operation": "ftcolor.get_paint_layers",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 1 base glyph list",
+              "CPAL table with at least two palettes and named entries",
+              "paint graph containing solid, colr_layers, glyph, colr_glyph, linear, radial, sweep, transform, translate, scale, rotate, skew, and composite paints",
+              "static ColorLine records using PAD, REPEAT, and REFLECT extend modes",
+              "foreground palette index 0xFFFF references"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_roles": [
+            "colr_v0_layers",
+            "colr_v1_layers_many"
+          ],
+          "iterate_until_zero": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_LayerIterator",
+          "fields": [
+            "num_layers",
+            "layer",
+            "p_identity_class"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "calls[*].iterator.num_layers",
+            "calls[*].iterator.layer",
+            "calls[*].iterator.p_identity_class",
+            "calls[*].return"
+          ]
+        },
+        "fixture_requirements": [
+          "Runtime C oracle generation; do not store generated outputs"
+        ]
+      }
+    }
+  ]
+}

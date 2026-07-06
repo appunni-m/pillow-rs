@@ -1,0 +1,295 @@
+{
+  "version": 1,
+  "subject": "ftdriver.FT_Prop_IncreaseXHeight",
+  "manifest_cases": [
+    "layout_matches_c",
+    "property_set_get_round_trips_limit",
+    "limit_changes_autohint_x_height",
+    "invalid_face_error_matches_c"
+  ],
+  "cases": [
+    {
+      "case_id": "ftdriver.FT_Prop_IncreaseXHeight.layout_matches_c",
+      "subject": "ftdriver.FT_Prop_IncreaseXHeight",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "api_record",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "type": "FT_Prop_IncreaseXHeight",
+          "include": "<freetype/ftdriver.h>",
+          "header": "freetype/ftdriver.h",
+          "fields": [
+            {
+              "name": "face",
+              "ctype": "FT_Face"
+            },
+            {
+              "name": "limit",
+              "ctype": "FT_UInt"
+            }
+          ],
+          "pinned_source": "freetype/include/freetype/ftdriver.h:1278-1283"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftdriver",
+        "area:autofitter-property",
+        "layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "record_layout",
+          "sizeof": "usize",
+          "alignof": "usize",
+          "fields": [
+            {
+              "name": "face",
+              "offset": "usize",
+              "ctype": "FT_Face",
+              "pointer": true
+            },
+            {
+              "name": "limit",
+              "offset": "usize",
+              "ctype": "FT_UInt"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "fields[].name",
+            "fields[].offset",
+            "fields[].ctype"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit",
+      "subject": "ftdriver.FT_Prop_IncreaseXHeight",
+      "case": "property_set_get_round_trips_limit",
+      "operation": "FT_Property_Set_then_Get",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/DejaVuSans.ttf",
+            "requirements": "Existing scalable Latin control font with lowercase x-height glyphs."
+          }
+        },
+        "params": {
+          "module_name": "autofitter",
+          "property_name": "increase-x-height",
+          "face_index": 0,
+          "set_char_size": {
+            "char_width": 0,
+            "char_height": "10*64",
+            "hres": 72,
+            "vres": 72
+          },
+          "limits": [
+            0,
+            6,
+            10,
+            14,
+            32
+          ],
+          "initial_get_limit": "sentinel 0xA5A5",
+          "pinned_source": "freetype/src/autofit/afmodule.c:174-187 and 328-336"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftdriver",
+        "area:autofitter-property",
+        "requires:font",
+        "property:set",
+        "property:get"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "set_error": "FT_Error",
+          "get_error": "FT_Error",
+          "set_prop": {
+            "face": "pointer_identity",
+            "limit": "FT_UInt"
+          },
+          "get_prop": {
+            "face": "pointer_identity",
+            "limit": "FT_UInt"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "set_error",
+            "get_error",
+            "set_prop.face.identity_class",
+            "set_prop.limit",
+            "get_prop.face.identity_class",
+            "get_prop.limit"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftdriver.FT_Prop_IncreaseXHeight.limit_changes_autohint_x_height",
+      "subject": "ftdriver.FT_Prop_IncreaseXHeight",
+      "case": "limit_changes_autohint_x_height",
+      "operation": "FT_Property_Set_then_FT_Load_Glyph",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/DejaVuSans.ttf",
+            "requirements": "Existing scalable Latin font with stable lowercase x-height glyphs such as x, e, n."
+          },
+          "control_font": {
+            "kind": "ref",
+            "role": "control_font",
+            "id": "fonts/autohint/LiberationSans-Regular.ttf",
+            "requirements": "Existing Latin control font for font variability of x-height behavior."
+          }
+        },
+        "params": {
+          "module_name": "autofitter",
+          "property_name": "increase-x-height",
+          "face_index": 0,
+          "limits": [
+            0,
+            6,
+            10,
+            14
+          ],
+          "ppems": [
+            5,
+            6,
+            9,
+            10,
+            11,
+            14,
+            15
+          ],
+          "glyph_chars": [
+            "x",
+            "e",
+            "n"
+          ],
+          "load_flags": [
+            "FT_LOAD_FORCE_AUTOHINT"
+          ],
+          "render_modes": [
+            "FT_RENDER_MODE_NORMAL"
+          ],
+          "pinned_source": "freetype/include/freetype/ftdriver.h:1215-1283 and freetype/src/autofit/afmodule.c:174-187"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftdriver",
+        "area:autofitter-property",
+        "requires:font",
+        "glyph-output",
+        "font_variability"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Run property set after FT_Set_Char_Size and before first auto-hinted glyph load for each fresh face/size; compare the C-generated behavior at ppem below, inside, and above the documented 6 <= ppem <= limit range.",
+        "output_shape": {
+          "set_error": "FT_Error",
+          "load_error": "FT_Error",
+          "glyph_metrics": "FT_Glyph_Metrics",
+          "outline_cbox": "FT_BBox",
+          "bitmap": {
+            "width": "int",
+            "rows": "int",
+            "pitch": "int",
+            "buffer": "bytes"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "set_error",
+            "load_error",
+            "glyph_metrics",
+            "outline_cbox",
+            "bitmap.width",
+            "bitmap.rows",
+            "bitmap.pitch",
+            "bitmap.buffer"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c",
+      "subject": "ftdriver.FT_Prop_IncreaseXHeight",
+      "case": "invalid_face_error_matches_c",
+      "operation": "FT_Property_Set_or_Get",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "module_name": "autofitter",
+          "property_name": "increase-x-height",
+          "operations": [
+            "FT_Property_Set",
+            "FT_Property_Get"
+          ],
+          "invalid_faces": [
+            "null_face"
+          ],
+          "initial_prop": {
+            "face": "null_face",
+            "limit": "sentinel 0xA5A5"
+          },
+          "pinned_source": "freetype/src/autofit/afmodule.c:174-187 and 328-336 via af_property_get_face_globals"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftdriver",
+        "area:autofitter-property",
+        "error-path",
+        "property:set",
+        "property:get"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "C oracle error from af_property_get_face_globals for invalid/null face",
+        "output_shape": {
+          "error": "FT_Error",
+          "prop_after": {
+            "face": "pointer_identity_or_null",
+            "limit": "FT_UInt"
+          }
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "prop_after.face.nullness",
+            "prop_after.limit"
+          ]
+        }
+      }
+    }
+  ]
+}

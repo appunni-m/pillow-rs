@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Unknown_File_Format",
+  "manifest_cases": [
+    "value_matches_header",
+    "face_open_unknown_format",
+    "malformed_container_probe_unknown"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Unknown_File_Format.value_matches_header",
+      "subject": "fterrdef.FT_Err_Unknown_File_Format",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Unknown_File_Format",
+          "include": "<freetype/fterrors.h>",
+          "public_import": "#include <freetype/freetype.h>",
+          "header": "freetype/fterrdef.h",
+          "expected_value_from_pinned_header": 2,
+          "expected_value_hex": "0x02",
+          "expected_error_string_from_pinned_header": "unknown file format",
+          "pinned_source": "freetype/include/freetype/fterrdef.h:63-64"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Unknown_File_Format",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Unknown_File_Format.face_open_unknown_format",
+      "subject": "fterrdef.FT_Err_Unknown_File_Format",
+      "case": "face_open_unknown_format",
+      "operation": "FT_New_Memory_Face",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "blob": {
+            "kind": "ref",
+            "role": "font_bytes",
+            "id": "generated/fonts/not-a-font.bin",
+            "requirements": "Small non-empty byte sequence with no recognized font signature."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Unknown_File_Format",
+          "face_index": 0,
+          "output_face": "sentinel_non_null_before_call",
+          "pinned_sources": [
+            "freetype/src/base/ftobjs.c:2379",
+            "freetype/src/base/ftobjs.c:2711",
+            "freetype/src/base/ftobjs.c:1824"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:face-open",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Unknown_File_Format",
+        "fixture_requirements": "Non-empty unrecognized byte stream that all registered drivers reject as unknown format.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "output_face": "pointer_nullness_or_preservation",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Unknown_File_Format.malformed_container_probe_unknown",
+      "subject": "fterrdef.FT_Err_Unknown_File_Format",
+      "case": "malformed_container_probe_unknown",
+      "operation": "FT_Open_Face",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "blob": {
+            "kind": "ref",
+            "role": "font_bytes",
+            "id": "generated/fonts/malformed-probe-unknown-format.bin",
+            "requirements": "Malformed probe samples for SFNT, CFF, Type1, CID, PCF, PFR, Type42, WinFNT, BDF, or resource fork loaders that should classify as Unknown_File_Format."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Unknown_File_Format",
+          "face_index": 0,
+          "open_args": "memory_or_stream",
+          "pinned_sources": [
+            "freetype/src/sfnt/ttload.c:290",
+            "freetype/src/cff/cffload.c:2225",
+            "freetype/src/type42/t42parse.c:173",
+            "freetype/src/pcf/pcfdrivr.c:392",
+            "freetype/src/bdf/bdfdrivr.c:731",
+            "freetype/src/base/ftrfork.c:78"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:driver-probe",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Unknown_File_Format",
+        "fixture_requirements": "Per-driver malformed probe fixtures that are not valid enough to become Invalid_File_Format or table-specific errors.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "output_face": "pointer_nullness_or_preservation",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class"
+          ]
+        }
+      }
+    }
+  ]
+}

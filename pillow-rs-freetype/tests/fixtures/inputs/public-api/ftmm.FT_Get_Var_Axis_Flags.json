@@ -1,0 +1,301 @@
+{
+  "version": 1,
+  "subject": "ftmm.FT_Get_Var_Axis_Flags",
+  "manifest_cases": [
+    "import_contract",
+    "valid_axis_flags",
+    "hidden_axis_flag",
+    "out_of_range_axis_error",
+    "null_master_or_flags_error"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmm.FT_Get_Var_Axis_Flags.import_contract",
+      "subject": "ftmm.FT_Get_Var_Axis_Flags",
+      "case": "import_contract",
+      "operation": "ftmm.get_var_axis_flags_abi",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Get_Var_Axis_Flags",
+        "signature": "FT_Error FT_Get_Var_Axis_Flags(FT_MM_Var* master, FT_UInt axis_index, FT_UInt* flags)",
+        "return": "FT_Error",
+        "params": [
+          "FT_MM_Var* master",
+          "FT_UInt axis_index",
+          "FT_UInt* flags"
+        ]
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include_header": "freetype/ftmm.h",
+          "import_symbol": "FT_Get_Var_Axis_Flags"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmm",
+        "area:variations"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile": "symbol import succeeds",
+          "return": "FT_Error"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "signature"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmm.h:798-825"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmm.FT_Get_Var_Axis_Flags.valid_axis_flags",
+      "subject": "ftmm.FT_Get_Var_Axis_Flags",
+      "case": "valid_axis_flags",
+      "operation": "ftmm.get_mm_var_then_axis_flags",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Get_Var_Axis_Flags",
+        "signature": "FT_Error FT_Get_Var_Axis_Flags(FT_MM_Var* master, FT_UInt axis_index, FT_UInt* flags)"
+      },
+      "inputs": {
+        "assets": {
+          "variable_font": {
+            "kind": "ref",
+            "id": "fonts/variable/multi-axis-visible.ttf",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          },
+          "adobe_mm_font": {
+            "kind": "ref",
+            "id": "fonts/mm/adobe-multiple-master.pfb",
+            "asset_kind": "font",
+            "status": "required_future_asset",
+            "optional": true
+          }
+        },
+        "params": {
+          "master": "from_FT_Get_MM_Var",
+          "axis_indexes": [
+            0,
+            "last"
+          ],
+          "flags_initial": 3735928559,
+          "adobe_mm_flags_expected_zero": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmm",
+        "area:variations"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "flags": "FT_UInt copied from FT_UShort axis-flags storage",
+          "axis": "FT_Var_Axis metadata for same index"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].flags",
+            "rows[*].axis.tag",
+            "rows[*].axis.name"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftmm.c:594-613",
+          "freetype/include/freetype/ftmm.h:806-814"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmm.FT_Get_Var_Axis_Flags.hidden_axis_flag",
+      "subject": "ftmm.FT_Get_Var_Axis_Flags",
+      "case": "hidden_axis_flag",
+      "operation": "ftmm.get_mm_var_then_axis_flags",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Get_Var_Axis_Flags",
+        "signature": "FT_Error FT_Get_Var_Axis_Flags(FT_MM_Var* master, FT_UInt axis_index, FT_UInt* flags)",
+        "related_flag": "FT_VAR_AXIS_FLAG_HIDDEN"
+      },
+      "inputs": {
+        "assets": {
+          "hidden_axis_variable_font": {
+            "kind": "ref",
+            "id": "fonts/variable/hidden-axis.ttf",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "master": "from_FT_Get_MM_Var",
+          "axis_index": "axis_with_fvar_flags_hidden",
+          "assert_hidden_bit": "flags & FT_VAR_AXIS_FLAG_HIDDEN"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmm",
+        "area:variations"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "flags": "FT_UInt",
+          "hidden_bit": true,
+          "axis": "hidden axis metadata"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "flags",
+            "hidden_bit",
+            "axis.tag",
+            "axis.name"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmm.h:782-825",
+          "freetype/src/base/ftmm.c:604-613"
+        ],
+        "fixture_requirements": [
+          "fonts/variable/hidden-axis.ttf must contain an OpenType fvar axis record with flag bit 0 set."
+        ]
+      }
+    },
+    {
+      "case_id": "ftmm.FT_Get_Var_Axis_Flags.out_of_range_axis_error",
+      "subject": "ftmm.FT_Get_Var_Axis_Flags",
+      "case": "out_of_range_axis_error",
+      "operation": "ftmm.get_mm_var_then_axis_flags",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Get_Var_Axis_Flags",
+        "signature": "FT_Error FT_Get_Var_Axis_Flags(FT_MM_Var* master, FT_UInt axis_index, FT_UInt* flags)"
+      },
+      "inputs": {
+        "assets": {
+          "variable_font": {
+            "kind": "ref",
+            "id": "fonts/variable/multi-axis-visible.ttf",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "master": "from_FT_Get_MM_Var",
+          "axis_indexes": [
+            "num_axis",
+            "num_axis_plus_1",
+            4294967295
+          ],
+          "flags_initial": 3735928559
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmm",
+        "area:variations"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "flags": "preserved sentinel"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].flags_after"
+          ]
+        },
+        "error": "FT_Err_Invalid_Argument",
+        "source_refs": [
+          "freetype/src/base/ftmm.c:602-603"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmm.FT_Get_Var_Axis_Flags.null_master_or_flags_error",
+      "subject": "ftmm.FT_Get_Var_Axis_Flags",
+      "case": "null_master_or_flags_error",
+      "operation": "ftmm.get_var_axis_flags",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Get_Var_Axis_Flags",
+        "signature": "FT_Error FT_Get_Var_Axis_Flags(FT_MM_Var* master, FT_UInt axis_index, FT_UInt* flags)"
+      },
+      "inputs": {
+        "assets": {
+          "variable_font": {
+            "kind": "ref",
+            "id": "fonts/variable/multi-axis-visible.ttf",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "argument_matrix": [
+            {
+              "master": null,
+              "axis_index": 0,
+              "flags": "valid_sentinel_pointer"
+            },
+            {
+              "master": "from_FT_Get_MM_Var",
+              "axis_index": 0,
+              "flags": null
+            }
+          ],
+          "flags_initial": 3735928559
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmm",
+        "area:variations"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "flags": "preserved sentinel or no output"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].flags_after"
+          ]
+        },
+        "error": "FT_Err_Invalid_Argument",
+        "source_refs": [
+          "freetype/src/base/ftmm.c:599-600"
+        ]
+      }
+    }
+  ]
+}

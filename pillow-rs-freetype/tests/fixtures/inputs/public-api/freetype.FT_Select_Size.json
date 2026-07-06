@@ -1,0 +1,210 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Select_Size",
+  "manifest_cases": [
+    "success_select_bitmap_strike",
+    "success_embedded_bitmap_outline_fallback",
+    "error_no_fixed_sizes_or_null_face",
+    "error_strike_index_out_of_range"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Select_Size.success_select_bitmap_strike",
+      "subject": "freetype.FT_Select_Size",
+      "case": "success_select_bitmap_strike",
+      "operation": "freetype.select_size",
+      "schema": "size_metrics",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/bitmap/embedded-strike.ttf",
+            "status": "required_future_asset",
+            "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "strike_indices": [
+            0,
+            1
+          ],
+          "post_load_probe": "bitmap glyph present in strike"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "selected_size_metrics": "FT_Size_Metrics",
+          "post_load_bitmap": "bitmap metrics and bytes"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].selected_size_metrics",
+            "outputs[*].post_load_bitmap"
+          ]
+        },
+        "fixture_requirements": [
+          "Bitmap strike fixture with at least two fixed sizes"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Select_Size.success_embedded_bitmap_outline_fallback",
+      "subject": "freetype.FT_Select_Size",
+      "case": "success_embedded_bitmap_outline_fallback",
+      "operation": "freetype.select_size",
+      "schema": "glyph_load",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/bitmap/embedded-strike.ttf",
+            "status": "required_future_asset",
+            "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "strike_index": 0,
+          "glyphs": [
+            "strike_present_glyph",
+            "strike_missing_outline_glyph"
+          ],
+          "load_flags_matrix": [
+            "FT_LOAD_DEFAULT",
+            "FT_LOAD_SBITS_ONLY",
+            "FT_LOAD_NO_BITMAP"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "glyph_outputs": "C oracle status, format, metrics, bitmap when present"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].glyph_format",
+            "outputs[*].metrics",
+            "outputs[*].bitmap"
+          ]
+        },
+        "fixture_requirements": [
+          "Embedded bitmap plus outline fallback fixture"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Select_Size.error_no_fixed_sizes_or_null_face",
+      "subject": "freetype.FT_Select_Size",
+      "case": "error_no_fixed_sizes_or_null_face",
+      "operation": "freetype.select_size",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "face": "null",
+              "strike_index": 0
+            },
+            {
+              "font": "DejaVuSans.ttf",
+              "strike_index": 0
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].error"
+          ]
+        },
+        "error": "Invalid_Face_Handle"
+      }
+    },
+    {
+      "case_id": "freetype.FT_Select_Size.error_strike_index_out_of_range",
+      "subject": "freetype.FT_Select_Size",
+      "case": "error_strike_index_out_of_range",
+      "operation": "freetype.select_size",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/bitmap/embedded-strike.ttf",
+            "status": "required_future_asset",
+            "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "strike_indices": [
+            -1,
+            "num_fixed_sizes"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "active_size_after_error": "unchanged"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].error",
+            "outputs[*].size_snapshot_before_after"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    }
+  ]
+}

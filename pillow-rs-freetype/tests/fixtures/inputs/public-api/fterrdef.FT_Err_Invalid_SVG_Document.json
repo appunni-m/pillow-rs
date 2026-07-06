@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Invalid_SVG_Document",
+  "manifest_cases": [
+    "value_matches_header",
+    "svg_document_failure_policy"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_SVG_Document.value_matches_header",
+      "subject": "fterrdef.FT_Err_Invalid_SVG_Document",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Invalid_SVG_Document",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 24,
+          "expected_value_hex": "0x18",
+          "expected_error_string_from_pinned_header": "invalid SVG document",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Invalid_SVG_Document",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_SVG_Document.svg_document_failure_policy",
+      "subject": "fterrdef.FT_Err_Invalid_SVG_Document",
+      "case": "svg_document_failure_policy",
+      "operation": "FT_Load_Glyph_or_FT_Render_Glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/otsvg/invalid-svg-document.otf",
+            "requirements": "OpenType-SVG font containing malformed SVG document data and renderer hooks configured to report FT_Err_Invalid_SVG_Document when SVG support is enabled."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Invalid_SVG_Document",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/include/freetype/fterrdef.h:104; freetype/src/svg/ftsvg.c returns Missing_SVG_Hooks when hooks are absent",
+          "face_index": 0,
+          "glyph_index": "fixture_defined_svg_glyph",
+          "size_ppem": 24,
+          "load_flags": [
+            "FT_LOAD_SVG_ONLY"
+          ],
+          "build_policy": "SVG-enabled builds with hooks compare Invalid_SVG_Document; builds without hooks compare documented build-disabled error separately."
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:fixture",
+        "build-dependent:svg"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "error": "FT_Err_Invalid_SVG_Document",
+        "fixture_requirements": "OpenType-SVG fixture plus SVG renderer hooks able to reject malformed document data with this public error.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "svg_hook_state": "enabled_disabled_or_missing",
+          "slot_state": "mutation_class_if_slot_is_involved",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "svg_hook_state",
+            "slot_state.mutation_class"
+          ]
+        }
+      }
+    }
+  ]
+}

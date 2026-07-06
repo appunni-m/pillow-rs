@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_RENDER_MODE_MAX",
+  "manifest_cases": [
+    "value_matches_header",
+    "render_glyph_rejects_sentinel"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_RENDER_MODE_MAX.value_matches_header",
+      "subject": "freetype.FT_RENDER_MODE_MAX",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_RENDER_MODE_MAX",
+          "include": "<freetype/freetype.h>"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:freetype",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Render_Mode",
+          "symbol": "FT_RENDER_MODE_MAX",
+          "header": "freetype/freetype.h"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "type",
+            "header_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel",
+      "subject": "freetype.FT_RENDER_MODE_MAX",
+      "case": "render_glyph_rejects_sentinel",
+      "operation": "freetype.render_glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "input/fonts/DejaVuSans.ttf",
+            "requirements": "Scalable outline font with glyph U+0041; existing legacy fixture asset is suitable."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "char_code": 65,
+          "load_flags": 0,
+          "render_mode": "FT_RENDER_MODE_MAX"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:freetype",
+        "area:glyph",
+        "area:render",
+        "requires:font"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "slot_format": "FT_Glyph_Format",
+          "bitmap": {
+            "pixel_mode": "FT_Pixel_Mode",
+            "width": "FT_UInt",
+            "rows": "FT_UInt",
+            "pitch": "FT_Int",
+            "left": "FT_Int",
+            "top": "FT_Int",
+            "buffer": "bytes"
+          }
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error"
+          ]
+        },
+        "error": "Cannot_Render_Glyph"
+      }
+    }
+  ]
+}

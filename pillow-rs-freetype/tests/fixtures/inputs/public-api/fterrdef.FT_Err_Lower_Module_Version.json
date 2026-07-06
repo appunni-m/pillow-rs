@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Lower_Module_Version",
+  "manifest_cases": [
+    "value_matches_header",
+    "duplicate_module_not_newer"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Lower_Module_Version.value_matches_header",
+      "subject": "fterrdef.FT_Err_Lower_Module_Version",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Lower_Module_Version",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 5,
+          "expected_value_hex": "0x05",
+          "expected_error_string_from_pinned_header": "module version is too low",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Lower_Module_Version",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Lower_Module_Version.duplicate_module_not_newer",
+      "subject": "fterrdef.FT_Err_Lower_Module_Version",
+      "case": "duplicate_module_not_newer",
+      "operation": "FT_Add_Module",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "module": {
+            "kind": "ref",
+            "role": "module_class",
+            "id": "generated/modules/duplicate-lower-version.json",
+            "requirements": "Test FT_Module_Class sharing module_name with an installed module and module_version less than or equal to the installed version."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Lower_Module_Version",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/base/ftobjs.c:5088",
+          "library_state": "library_with_existing_module_same_name",
+          "module_version_relation": "candidate_less_than_or_equal_to_installed"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:abi-module-facade"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Lower_Module_Version",
+        "fixture_requirements": "ABI module facade that safely installs a control module and retries with the same name at a lower or equal module_version.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "module_table": "preserved_or_mutation_class",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "module_table.mutation_class"
+          ]
+        }
+      }
+    }
+  ]
+}

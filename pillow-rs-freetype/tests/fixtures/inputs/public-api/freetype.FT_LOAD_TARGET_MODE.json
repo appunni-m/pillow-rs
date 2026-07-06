@@ -1,0 +1,143 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_LOAD_TARGET_MODE",
+  "manifest_cases": [
+    "target_mode_value",
+    "load_target_dispatch_behavior"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_LOAD_TARGET_MODE.target_mode_value",
+      "subject": "freetype.FT_LOAD_TARGET_MODE",
+      "case": "target_mode_value",
+      "operation": "macro.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_LOAD_TARGET_MODE",
+          "include": "<freetype/freetype.h>",
+          "import": "#include <freetype/freetype.h>",
+          "expected_value_expr": "((x >> 16) & 15)"
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:public-api",
+        "coverage:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_results": [
+            {
+              "input_load_flags": "integer",
+              "mode": "FT_Render_Mode"
+            }
+          ],
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "macro_results",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h"
+        ],
+        "macro_probe_inputs": [
+          "FT_LOAD_TARGET_NORMAL",
+          "FT_LOAD_TARGET_LIGHT",
+          "FT_LOAD_TARGET_MONO",
+          "FT_LOAD_TARGET_LCD",
+          "FT_LOAD_TARGET_LCD_V",
+          "FT_LOAD_TARGET_(31)"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_LOAD_TARGET_MODE.load_target_dispatch_behavior",
+      "subject": "freetype.FT_LOAD_TARGET_MODE",
+      "case": "load_target_dispatch_behavior",
+      "operation": "freetype.load_glyph_matrix",
+      "schema": "glyph_slot_matrix",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "glyph_index": 36,
+          "load_flags_matrix": [
+            [
+              "FT_LOAD_RENDER",
+              "FT_LOAD_TARGET_NORMAL"
+            ],
+            [
+              "FT_LOAD_RENDER",
+              "FT_LOAD_TARGET_MONO"
+            ],
+            [
+              "FT_LOAD_RENDER",
+              "FT_LOAD_TARGET_LCD"
+            ],
+            [
+              "FT_LOAD_RENDER",
+              "FT_LOAD_TARGET_LCD_V"
+            ]
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:public-api",
+        "coverage:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "rows": [
+            {
+              "target_mode": "FT_Render_Mode",
+              "status": "FT_Error",
+              "bitmap": "FT_Bitmap",
+              "slot_format": "glyph_format"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "rows[].target_mode",
+            "rows[].status",
+            "rows[].bitmap.pixel_mode",
+            "rows[].bitmap.rows",
+            "rows[].bitmap.width",
+            "rows[].bitmap.pitch",
+            "rows[].bitmap.buffer",
+            "rows[].slot_format"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h:3501-3636",
+          "freetype/src/base/ftobjs.c:943-1177",
+          "freetype/src/base/ftobjs.c:1168-1177"
+        ]
+      }
+    }
+  ]
+}

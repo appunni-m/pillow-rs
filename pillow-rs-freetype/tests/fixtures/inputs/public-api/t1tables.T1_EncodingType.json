@@ -1,0 +1,201 @@
+{
+  "version": 1,
+  "subject": "t1tables.T1_EncodingType",
+  "manifest_cases": [
+    "enum_variants_match_header",
+    "array_encoding_runtime_case",
+    "standard_or_expert_runtime_cases"
+  ],
+  "cases": [
+    {
+      "case_id": "t1tables.T1_EncodingType.enum_variants_match_header",
+      "subject": "t1tables.T1_EncodingType",
+      "case": "enum_variants_match_header",
+      "operation": "t1tables.t1_encoding_type_enum",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/t1tables.h",
+        "symbol": "T1_EncodingType",
+        "kind": "enum",
+        "underlying_c_type": "int"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include_header": "freetype/t1tables.h",
+          "enum_values": {
+            "T1_ENCODING_TYPE_NONE": 0,
+            "T1_ENCODING_TYPE_ARRAY": 1,
+            "T1_ENCODING_TYPE_STANDARD": 2,
+            "T1_ENCODING_TYPE_ISOLATIN1": 3,
+            "T1_ENCODING_TYPE_EXPERT": 4
+          }
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:t1tables",
+        "area:type1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "enum_values": "map<string,int>"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "enum_values"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/t1tables.h:525-533"
+        ]
+      }
+    },
+    {
+      "case_id": "t1tables.T1_EncodingType.array_encoding_runtime_case",
+      "subject": "t1tables.T1_EncodingType",
+      "case": "array_encoding_runtime_case",
+      "operation": "t1tables.get_ps_font_value_encoding",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/t1tables.h",
+        "symbol": "T1_EncodingType",
+        "observed_by": "FT_Get_PS_Font_Value(PS_DICT_ENCODING_TYPE, PS_DICT_ENCODING_ENTRY)"
+      },
+      "inputs": {
+        "assets": {
+          "type1_custom_encoding_font": {
+            "kind": "ref",
+            "id": "fonts/type1/custom-encoding-array.pfb",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "face_source": "type1_custom_encoding_font",
+          "dict_keys": [
+            "PS_DICT_ENCODING_TYPE",
+            "PS_DICT_ENCODING_ENTRY"
+          ],
+          "encoding_entry_indexes": [
+            0,
+            32,
+            65,
+            255
+          ],
+          "expected_encoding_type": "T1_ENCODING_TYPE_ARRAY"
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:t1tables",
+        "area:type1-runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "encoding_type": "T1_EncodingType",
+          "entry_return_lengths": "FT_Long",
+          "entry_strings": "nul-terminated FT_String bytes for populated custom entries"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "encoding_type",
+            "entry_return_lengths",
+            "entry_strings"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/t1tables.h:525-533",
+          "freetype/src/type1/t1driver.c:332-346"
+        ],
+        "fixture_requirements": [
+          "fonts/type1/custom-encoding-array.pfb must use an explicit Encoding array with known glyph names."
+        ]
+      }
+    },
+    {
+      "case_id": "t1tables.T1_EncodingType.standard_or_expert_runtime_cases",
+      "subject": "t1tables.T1_EncodingType",
+      "case": "standard_or_expert_runtime_cases",
+      "operation": "t1tables.get_ps_font_value_encoding",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/t1tables.h",
+        "symbol": "T1_EncodingType",
+        "observed_by": "FT_Get_PS_Font_Value(PS_DICT_ENCODING_TYPE)"
+      },
+      "inputs": {
+        "assets": {
+          "type1_standard_encoding_font": {
+            "kind": "ref",
+            "id": "fonts/type1/standard-encoding.pfb",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          },
+          "type1_isolatin1_encoding_font": {
+            "kind": "ref",
+            "id": "fonts/type1/isolatin1-encoding.pfb",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          },
+          "type1_expert_encoding_font": {
+            "kind": "ref",
+            "id": "fonts/type1/expert-encoding.pfb",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "rows": [
+            {
+              "face_source": "type1_standard_encoding_font",
+              "expected_encoding_type": "T1_ENCODING_TYPE_STANDARD"
+            },
+            {
+              "face_source": "type1_isolatin1_encoding_font",
+              "expected_encoding_type": "T1_ENCODING_TYPE_ISOLATIN1"
+            },
+            {
+              "face_source": "type1_expert_encoding_font",
+              "expected_encoding_type": "T1_ENCODING_TYPE_EXPERT"
+            }
+          ],
+          "dict_key": "PS_DICT_ENCODING_TYPE"
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:t1tables",
+        "area:type1-runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "rows": "face, FT_Error, T1_EncodingType"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].encoding_type"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/t1tables.h:525-533",
+          "freetype/src/type1/t1load.c:1682-1707",
+          "freetype/src/type1/t1driver.c:332-335"
+        ],
+        "fixture_requirements": [
+          "Need Type1 fonts that exercise StandardEncoding, ISOLatin1Encoding, and ExpertEncoding parse branches."
+        ]
+      }
+    }
+  ]
+}

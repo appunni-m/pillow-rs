@@ -1,0 +1,514 @@
+{
+  "version": 1,
+  "subject": "ftbitmap.FT_Bitmap_Convert",
+  "manifest_cases": [
+    "success_supported_depths_to_gray",
+    "success_alignment_and_flow",
+    "success_repeated_conversion_reallocates",
+    "success_empty_or_null_source_buffer",
+    "error_invalid_arguments_or_alignment",
+    "error_unsupported_pixel_mode"
+  ],
+  "cases": [
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Convert.success_supported_depths_to_gray",
+      "subject": "ftbitmap.FT_Bitmap_Convert",
+      "case": "success_supported_depths_to_gray",
+      "operation": "ftbitmap.bitmap_convert",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "success_supported_depths_to_gray",
+          "pixel_modes": [
+            "MONO",
+            "GRAY2",
+            "GRAY4",
+            "GRAY",
+            "LCD",
+            "LCD_V",
+            "BGRA",
+            "NONE"
+          ],
+          "alignments": [
+            1,
+            2,
+            4,
+            0,
+            3
+          ],
+          "target_initial_pitch": [
+            0,
+            -1,
+            1
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "target_pixel_mode": "GRAY",
+          "alignment_policy": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "target.rows",
+            "target.width",
+            "target.pitch",
+            "target.num_grays",
+            "target.pixel_mode",
+            "target.buffer_bytes",
+            "allocator.events"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Convert.success_alignment_and_flow",
+      "subject": "ftbitmap.FT_Bitmap_Convert",
+      "case": "success_alignment_and_flow",
+      "operation": "ftbitmap.bitmap_convert",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "success_alignment_and_flow",
+          "pixel_modes": [
+            "MONO",
+            "GRAY2",
+            "GRAY4",
+            "GRAY",
+            "LCD",
+            "LCD_V",
+            "BGRA",
+            "NONE"
+          ],
+          "alignments": [
+            1,
+            2,
+            4,
+            0,
+            3
+          ],
+          "target_initial_pitch": [
+            0,
+            -1,
+            1
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "target_pixel_mode": "GRAY",
+          "alignment_policy": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "target.rows",
+            "target.width",
+            "target.pitch",
+            "target.num_grays",
+            "target.pixel_mode",
+            "target.buffer_bytes",
+            "allocator.events"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Convert.success_repeated_conversion_reallocates",
+      "subject": "ftbitmap.FT_Bitmap_Convert",
+      "case": "success_repeated_conversion_reallocates",
+      "operation": "ftbitmap.bitmap_convert",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "success_repeated_conversion_reallocates",
+          "pixel_modes": [
+            "MONO",
+            "GRAY2",
+            "GRAY4",
+            "GRAY",
+            "LCD",
+            "LCD_V",
+            "BGRA",
+            "NONE"
+          ],
+          "alignments": [
+            1,
+            2,
+            4,
+            0,
+            3
+          ],
+          "target_initial_pitch": [
+            0,
+            -1,
+            1
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "target_pixel_mode": "GRAY",
+          "alignment_policy": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "target.rows",
+            "target.width",
+            "target.pitch",
+            "target.num_grays",
+            "target.pixel_mode",
+            "target.buffer_bytes",
+            "allocator.events"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Convert.success_empty_or_null_source_buffer",
+      "subject": "ftbitmap.FT_Bitmap_Convert",
+      "case": "success_empty_or_null_source_buffer",
+      "operation": "ftbitmap.bitmap_convert",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "success_empty_or_null_source_buffer",
+          "pixel_modes": [
+            "MONO",
+            "GRAY2",
+            "GRAY4",
+            "GRAY",
+            "LCD",
+            "LCD_V",
+            "BGRA",
+            "NONE"
+          ],
+          "alignments": [
+            1,
+            2,
+            4,
+            0,
+            3
+          ],
+          "target_initial_pitch": [
+            0,
+            -1,
+            1
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "target_pixel_mode": "GRAY",
+          "alignment_policy": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "target.rows",
+            "target.width",
+            "target.pitch",
+            "target.num_grays",
+            "target.pixel_mode",
+            "target.buffer_bytes",
+            "allocator.events"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Convert.error_invalid_arguments_or_alignment",
+      "subject": "ftbitmap.FT_Bitmap_Convert",
+      "case": "error_invalid_arguments_or_alignment",
+      "operation": "ftbitmap.bitmap_convert",
+      "schema": "bitmap_operation",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "error_invalid_arguments_or_alignment",
+          "pixel_modes": [
+            "MONO",
+            "GRAY2",
+            "GRAY4",
+            "GRAY",
+            "LCD",
+            "LCD_V",
+            "BGRA",
+            "NONE"
+          ],
+          "alignments": [
+            1,
+            2,
+            4,
+            0,
+            3
+          ],
+          "target_initial_pitch": [
+            0,
+            -1,
+            1
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "target_pixel_mode": "GRAY",
+          "alignment_policy": true
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "target.rows",
+            "target.width",
+            "target.pitch",
+            "target.num_grays",
+            "target.pixel_mode",
+            "target.buffer_bytes",
+            "allocator.events"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Convert.error_unsupported_pixel_mode",
+      "subject": "ftbitmap.FT_Bitmap_Convert",
+      "case": "error_unsupported_pixel_mode",
+      "operation": "ftbitmap.bitmap_convert",
+      "schema": "bitmap_operation",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "error_unsupported_pixel_mode",
+          "pixel_modes": [
+            "MONO",
+            "GRAY2",
+            "GRAY4",
+            "GRAY",
+            "LCD",
+            "LCD_V",
+            "BGRA",
+            "NONE"
+          ],
+          "alignments": [
+            1,
+            2,
+            4,
+            0,
+            3
+          ],
+          "target_initial_pitch": [
+            0,
+            -1,
+            1
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "target_pixel_mode": "GRAY",
+          "alignment_policy": true
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "target.rows",
+            "target.width",
+            "target.pitch",
+            "target.num_grays",
+            "target.pixel_mode",
+            "target.buffer_bytes",
+            "allocator.events"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    }
+  ]
+}

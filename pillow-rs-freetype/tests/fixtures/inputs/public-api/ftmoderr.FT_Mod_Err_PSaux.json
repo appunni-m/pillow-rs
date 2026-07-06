@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "subject": "ftmoderr.FT_Mod_Err_PSaux",
+  "manifest_cases": [
+    "value_matches_header",
+    "module_error_prefix_used"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmoderr.FT_Mod_Err_PSaux.value_matches_header",
+      "subject": "ftmoderr.FT_Mod_Err_PSaux",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Mod_Err_PSaux",
+          "include": "<freetype/ftmoderr.h>",
+          "ftmoderrdef_entry": {
+            "name": "PSaux",
+            "enabled_value_expr": "0xC00",
+            "module_label": "PS auxiliary module"
+          },
+          "expected_values": {
+            "with_FT_CONFIG_OPTION_USE_MODULE_ERRORS": "0xC00",
+            "without_FT_CONFIG_OPTION_USE_MODULE_ERRORS": "0"
+          },
+          "expected_cleanup": [
+            "FT_MODERR_START_LIST undefined",
+            "FT_MODERR_END_LIST undefined",
+            "FT_MODERRDEF undefined"
+          ],
+          "pinned_sources": [
+            "freetype/include/freetype/ftmoderr.h:118-128",
+            "freetype/include/freetype/ftmoderr.h:151-175",
+            "freetype/include/freetype/ftmoderr.h:195-198"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "kind:constant",
+        "header:ftmoderr",
+        "area:module-error-base",
+        "build-dependent"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "symbol": "string",
+          "active_build_value": "integer",
+          "enabled_value": "integer",
+          "disabled_value": "integer",
+          "module_label": "string",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "active_build_value",
+            "enabled_value",
+            "disabled_value",
+            "module_label",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmoderr.h:118-128",
+          "freetype/include/freetype/ftmoderr.h:151-175"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmoderr.FT_Mod_Err_PSaux.module_error_prefix_used",
+      "subject": "ftmoderr.FT_Mod_Err_PSaux",
+      "case": "module_error_prefix_used",
+      "operation": "freetype.module_error_base_runtime",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "type1_font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/type1/valid.pfa",
+            "requirements": "Future Type 1 fixture."
+          },
+          "malformed_psaux_input": {
+            "kind": "ref",
+            "role": "font_or_afm",
+            "id": "fonts/type1/malformed-charstring-or-afm.pfa",
+            "requirements": "Future malformed Type1/CFF/CID charstring or AFM sample that reaches psaux helpers."
+          }
+        },
+        "params": {
+          "module_error_symbol": "FT_Mod_Err_PSaux",
+          "module_error_base_enabled": "0xC00",
+          "module_error_base_disabled": "0",
+          "error_prefix": "PSaux_Err_",
+          "public_route": "Type1/CFF/CID glyph load or AFM/parser paths that emit PSaux_Err_*",
+          "model_cases": [
+            {
+              "name": "module_errors_enabled",
+              "expected_base": "0xC00",
+              "expected_module": "PSaux",
+              "compare_low_byte_to_public_FT_Err": true
+            },
+            {
+              "name": "module_errors_disabled",
+              "expected_base": "0",
+              "expected_module": "Base/none",
+              "compare_low_byte_to_public_FT_Err": true
+            }
+          ],
+          "probe": [
+            "FT_Error",
+            "FT_ERROR_BASE",
+            "FT_ERROR_MODULE",
+            "low_byte_error",
+            "output_side_effects"
+          ],
+          "pinned_sources": [
+            "freetype/src/psaux/psauxerr.h:33-37",
+            "freetype/include/freetype/ftmoderr.h:23-34",
+            "freetype/include/freetype/ftmoderr.h:151-175"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:ftmoderr",
+        "area:module-error-base",
+        "runtime:public-error-path",
+        "build-dependent"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "status": "FT_Error",
+          "error_base": "integer",
+          "error_module": "integer_or_module_name",
+          "low_byte_error": "integer_or_public_error_name",
+          "output_side_effects": "operation_specific_snapshot"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error_base",
+            "error_module",
+            "low_byte_error",
+            "output_side_effects"
+          ]
+        },
+        "fixture_requirements": [
+          "Any asset ids under fonts/* or streams/* not already present are future shared fixtures; runner must generate C oracle output at execution time rather than storing it."
+        ],
+        "source_refs": [
+          "freetype/src/psaux/psauxerr.h:33-37",
+          "freetype/include/freetype/ftmoderr.h:23-34"
+        ]
+      }
+    }
+  ]
+}

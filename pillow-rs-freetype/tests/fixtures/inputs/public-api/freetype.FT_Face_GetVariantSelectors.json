@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Face_GetVariantSelectors",
+  "manifest_cases": [
+    "face_with_variants_returns_selector_list",
+    "no_variants_returns_null",
+    "result_buffer_lifetime"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Face_GetVariantSelectors.face_with_variants_returns_selector_list",
+      "subject": "freetype.FT_Face_GetVariantSelectors",
+      "case": "face_with_variants_returns_selector_list",
+      "operation": "freetype.face_get_variant_selectors",
+      "schema": "api_array",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/variation-selectors/cmap-format14.otf",
+            "status": "required_future_asset",
+            "requires": "OpenType/CFF or TrueType font with Unicode charmap plus cmap format 14 default and non-default UVS records"
+          }
+        },
+        "params": {
+          "face_index": 0
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:variation-selector"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_UInt32*",
+          "array": "zero_terminated_variant_selectors"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "result.nullness",
+            "result.values",
+            "result.terminator"
+          ]
+        },
+        "fixture_requirements": [
+          "Format-14 fixture with at least two selectors"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Face_GetVariantSelectors.no_variants_returns_null",
+      "subject": "freetype.FT_Face_GetVariantSelectors",
+      "case": "no_variants_returns_null",
+      "operation": "freetype.face_get_variant_selectors",
+      "schema": "api_array",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "extra_probes": [
+            "null_face"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:variation-selector"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_UInt32*"
+        },
+        "compare": {
+          "mode": "nullness",
+          "paths": [
+            "outputs[*].result"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Face_GetVariantSelectors.result_buffer_lifetime",
+      "subject": "freetype.FT_Face_GetVariantSelectors",
+      "case": "result_buffer_lifetime",
+      "operation": "freetype.face_get_variant_selectors",
+      "schema": "api_lifetime",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/variation-selectors/cmap-format14.otf",
+            "status": "required_future_asset",
+            "requires": "OpenType/CFF or TrueType font with Unicode charmap plus cmap format 14 default and non-default UVS records"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "sequence": [
+            "call_function",
+            "copy_array",
+            "make_next_freetype_call",
+            "do_not_dereference_old_pointer_after_invalidation"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:variation-selector"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_UInt32*",
+          "lifetime": "face-owned until next FreeType call"
+        },
+        "compare": {
+          "mode": "unsupported_until_runner_added",
+          "paths": [
+            "copied_values_before_invalidation",
+            "pointer_identity_class"
+          ]
+        },
+        "fixture_requirements": [
+          "Runner support for lifetime-safe pointer copy before invalidating call"
+        ]
+      }
+    }
+  ]
+}

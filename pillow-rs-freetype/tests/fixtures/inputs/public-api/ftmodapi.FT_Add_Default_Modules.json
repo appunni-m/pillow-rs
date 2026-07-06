@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "subject": "ftmodapi.FT_Add_Default_Modules",
+  "manifest_cases": [
+    "installs_default_module_table",
+    "null_library_no_return_error"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmodapi.FT_Add_Default_Modules.installs_default_module_table",
+      "subject": "ftmodapi.FT_Add_Default_Modules",
+      "case": "installs_default_module_table",
+      "operation": "ftmodapi.add_default_modules",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "new_from_FT_New_Library_without_modules",
+          "default_modules_header": "<freetype/config/ftmodule.h>",
+          "probe_names": [
+            "truetype",
+            "sfnt",
+            "smooth",
+            "raster1",
+            "autofitter"
+          ],
+          "post_probe": "FT_Get_Module for each probe name"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:module",
+        "area:library"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "module_names_in_order": "array",
+          "per_module_statuses": "array",
+          "lookup_results": "object"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "module_names_in_order",
+            "lookup_results"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftinit.c:FT_Add_Default_Modules",
+          "freetype/include/freetype/config/ftmodule.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmodapi.FT_Add_Default_Modules.null_library_no_return_error",
+      "subject": "ftmodapi.FT_Add_Default_Modules",
+      "case": "null_library_no_return_error",
+      "operation": "ftmodapi.add_default_modules",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "null",
+          "default_modules_header": "<freetype/config/ftmodule.h>",
+          "behavior": "void API delegates attempted additions and exposes no FT_Error"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:module",
+        "area:library",
+        "area:error"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "crashed": "bool",
+          "observable_writes": "none"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return",
+            "crashed",
+            "observable_writes"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftinit.c:FT_Add_Default_Modules",
+          "freetype/src/base/ftobjs.c:FT_Add_Module"
+        ]
+      }
+    }
+  ]
+}

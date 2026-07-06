@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_GLYPH_FORMAT_BITMAP",
+  "manifest_cases": ["value_matches_header", "produced_by_rendered_or_embedded_bitmap"],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_GLYPH_FORMAT_BITMAP.value_matches_header",
+      "subject": "ftimage.FT_GLYPH_FORMAT_BITMAP",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"include": "<freetype/ftimage.h>", "symbol": "FT_GLYPH_FORMAT_BITMAP", "enum": "FT_Glyph_Format", "expected_value": 1651078259, "tag": "bits"}},
+      "classifiers": ["kind:enum_variant", "header:ftimage", "abi:value"],
+      "expectation": {"status": "ok", "output_shape": {"symbol": "FT_GLYPH_FORMAT_BITMAP", "value_type": "FT_Glyph_Format", "tag": "FT_IMAGE_TAG('b','i','t','s')"}, "compare": {"mode": "value", "paths": ["symbol", "numeric_value", "tag"]}}
+    },
+    {
+      "case_id": "ftimage.FT_GLYPH_FORMAT_BITMAP.produced_by_rendered_or_embedded_bitmap",
+      "subject": "ftimage.FT_GLYPH_FORMAT_BITMAP",
+      "case": "produced_by_rendered_or_embedded_bitmap",
+      "operation": "freetype.load_render_glyph",
+      "schema": "glyph_slot",
+      "expect_error": false,
+      "inputs": {"assets": {"outline_font": {"kind": "file", "role": "font", "path": "input/fonts/DejaVuSans.ttf"}, "bitmap_strike_font": {"kind": "ref", "id": "fonts/bitmap/embedded-strike.ttf"}}, "params": {"rows": [{"source": "rendered_outline", "glyph_index": 36, "render_mode": "FT_RENDER_MODE_NORMAL"}, {"source": "embedded_bitmap", "glyph_index": "strike_glyph", "load_flags": ["FT_LOAD_RENDER"]}]}},
+      "classifiers": ["kind:enum_variant", "header:ftimage", "path:runtime"],
+      "expectation": {"status": "ok", "output_shape": {"status": "FT_Error", "slot_format": "FT_GLYPH_FORMAT_BITMAP", "bitmap": "FT_Bitmap metadata and bytes"}, "compare": {"mode": "bytes", "paths": ["rows[*].status", "rows[*].slot_format", "rows[*].bitmap"]}, "fixture_requirements": ["embedded bitmap row requires a future bitmap strike font."]}
+    }
+  ]
+}

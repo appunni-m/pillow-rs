@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Too_Many_Hints",
+  "manifest_cases": [
+    "value_matches_header",
+    "tt_glyph_hint_limit"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Too_Many_Hints.value_matches_header",
+      "subject": "fterrdef.FT_Err_Too_Many_Hints",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Too_Many_Hints",
+          "include": "<freetype/fterrors.h>",
+          "public_import": "#include <freetype/freetype.h>",
+          "header": "freetype/fterrdef.h",
+          "expected_value_from_pinned_header": 22,
+          "expected_value_hex": "0x16",
+          "expected_error_string_from_pinned_header": "too many hints",
+          "pinned_source": "freetype/include/freetype/fterrdef.h:100-101"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Too_Many_Hints",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Too_Many_Hints.tt_glyph_hint_limit",
+      "subject": "fterrdef.FT_Err_Too_Many_Hints",
+      "case": "tt_glyph_hint_limit",
+      "operation": "FT_Load_Glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/truetype/too-many-hints-glyph.ttf",
+            "requirements": "TrueType glyph or composite fixture whose instruction or point hint bookkeeping exceeds ttgload.c bounds."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Too_Many_Hints",
+          "face_index": 0,
+          "glyph_index": "fixture_defined_error_glyph",
+          "size_ppem": 12,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "pinned_sources": [
+            "freetype/src/truetype/ttgload.c:402",
+            "freetype/src/truetype/ttgload.c:1228"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:truetype-loader",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Too_Many_Hints",
+        "fixture_requirements": "Synthetic TrueType glyph/composite fixture exceeding loader hint capacity without failing earlier as malformed glyph data.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "slot_state": "mutation_class_if_slot_is_involved",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "slot_state.mutation_class"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,227 @@
+{
+  "version": 1,
+  "subject": "ftgasp.FT_Get_Gasp",
+  "manifest_cases": [
+    "null_face_returns_no_table",
+    "sfnt_face_ppem_ranges_match_c",
+    "sfnt_without_gasp_returns_no_table",
+    "version_zero_masks_spurious_bits"
+  ],
+  "cases": [
+    {
+      "case_id": "ftgasp.FT_Get_Gasp.null_face_returns_no_table",
+      "subject": "ftgasp.FT_Get_Gasp",
+      "case": "null_face_returns_no_table",
+      "operation": "ftgasp.get_gasp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "face": null,
+          "ppem_values": [
+            0,
+            8,
+            16
+          ],
+          "expected_return_symbol": "FT_GASP_NO_TABLE",
+          "expected_return_value_from_pinned_header": -1,
+          "pinned_source": "freetype/src/base/ftgasp.c:28-51"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgasp",
+        "area:gasp",
+        "surface:public-c-api"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Int",
+          "ppem": "FT_UInt"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "return",
+            "ppem"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ftgasp.h",
+          "freetype/src/base/ftgasp.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgasp.FT_Get_Gasp.sfnt_face_ppem_ranges_match_c",
+      "subject": "ftgasp.FT_Get_Gasp",
+      "case": "sfnt_face_ppem_ranges_match_c",
+      "operation": "ftgasp.get_gasp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/gasp/gasp-ranges-v1.ttf",
+            "status": "required_future_asset",
+            "requires": "TrueType/OpenType SFNT font with a gasp table containing multiple maxPPEM ranges and version 1 flags."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "ppem_values": [
+            0,
+            8,
+            16,
+            32,
+            "above_last_maxPPEM"
+          ],
+          "range_selection_rule": "first range whose maxPPEM is >= ppem; return FT_GASP_NO_TABLE after last range",
+          "pinned_source": "freetype/src/base/ftgasp.c:32-47"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgasp",
+        "area:gasp",
+        "surface:public-c-api",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Needs SFNT font with deterministic gasp ranges; existing DejaVuSans.ttf may be used only if its gasp table satisfies the required range coverage.",
+        "output_shape": {
+          "return": "FT_Int",
+          "ppem": "FT_UInt",
+          "selected_range_index": "integer_or_none",
+          "gasp_flags": "bitmask"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "return",
+            "selected_range_index",
+            "gasp_flags"
+          ]
+        },
+        "sources_checked": [
+          "freetype/src/base/ftgasp.c",
+          "freetype/include/freetype/ftgasp.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgasp.FT_Get_Gasp.sfnt_without_gasp_returns_no_table",
+      "subject": "ftgasp.FT_Get_Gasp",
+      "case": "sfnt_without_gasp_returns_no_table",
+      "operation": "ftgasp.get_gasp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/gasp/no-gasp-table.ttf",
+            "status": "required_future_asset",
+            "requires": "SFNT font accepted by C FreeType with ttface->gasp.numRanges == 0."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "ppem_values": [
+            8,
+            16,
+            32
+          ],
+          "expected_return_symbol": "FT_GASP_NO_TABLE",
+          "pinned_source": "freetype/src/base/ftgasp.c:32-36"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgasp",
+        "area:gasp",
+        "surface:public-c-api",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Needs SFNT font without a usable gasp table.",
+        "output_shape": {
+          "return": "FT_Int",
+          "ppem": "FT_UInt",
+          "gasp_num_ranges": "integer"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "return",
+            "gasp_num_ranges"
+          ]
+        },
+        "sources_checked": [
+          "freetype/src/base/ftgasp.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgasp.FT_Get_Gasp.version_zero_masks_spurious_bits",
+      "subject": "ftgasp.FT_Get_Gasp",
+      "case": "version_zero_masks_spurious_bits",
+      "operation": "ftgasp.get_gasp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/gasp/version0-high-bits.ttf",
+            "status": "required_future_asset",
+            "requires": "Crafted SFNT font with gasp version 0 and a range flag containing bits above 0x03."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "ppem_values": [
+            "range_with_high_bits"
+          ],
+          "mask_rule": "if ttface->gasp.version == 0 then result &= 3",
+          "pinned_source": "freetype/src/base/ftgasp.c:45-47"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgasp",
+        "area:gasp",
+        "surface:public-c-api",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Needs crafted version 0 gasp table with spurious high bits.",
+        "output_shape": {
+          "raw_gasp_flag": "FT_UShort",
+          "return": "FT_Int",
+          "masked_return": "FT_Int"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "raw_gasp_flag",
+            "return",
+            "masked_return"
+          ]
+        },
+        "sources_checked": [
+          "freetype/src/base/ftgasp.c"
+        ]
+      }
+    }
+  ]
+}

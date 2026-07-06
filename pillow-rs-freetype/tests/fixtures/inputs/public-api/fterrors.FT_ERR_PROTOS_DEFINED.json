@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "subject": "fterrors.FT_ERR_PROTOS_DEFINED",
+  "manifest_cases": [
+    "prototype_guard_defined_after_normal_include",
+    "custom_error_table_include_does_not_emit_prototype"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrors.FT_ERR_PROTOS_DEFINED.prototype_guard_defined_after_normal_include",
+      "subject": "fterrors.FT_ERR_PROTOS_DEFINED",
+      "case": "prototype_guard_defined_after_normal_include",
+      "operation": "c_compile.fterrors_prototype_guard",
+      "schema": "api_macro",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include_sequence": [
+            "<freetype/fterrors.h>",
+            "<freetype/fterrors.h>"
+          ],
+          "symbol": "FT_ERR_PROTOS_DEFINED",
+          "prototype_symbol": "FT_Error_String",
+          "expected_guard_state_after_include": "defined",
+          "pinned_source": "freetype/include/freetype/fterrors.h:247-289"
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:fterrors",
+        "area:error-string-prototype",
+        "surface:c-preprocessor"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "guard_defined": "bool",
+          "prototype_declaration_count": "integer",
+          "function_pointer_typecheck": "compile_status"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "guard_defined",
+            "prototype_declaration_count",
+            "function_pointer_typecheck"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/fterrors.h"
+        ]
+      }
+    },
+    {
+      "case_id": "fterrors.FT_ERR_PROTOS_DEFINED.custom_error_table_include_does_not_emit_prototype",
+      "subject": "fterrors.FT_ERR_PROTOS_DEFINED",
+      "case": "custom_error_table_include_does_not_emit_prototype",
+      "operation": "c_preprocessor.fterrors_custom_table",
+      "schema": "api_macro",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "translation_unit": {
+            "kind": "ref",
+            "id": "generated/c/preprocess/fterrors-custom-table-no-prototype.c",
+            "requirements": "Small translation unit that defines FT_ERRORDEF before including freetype/fterrors.h and records whether FT_ERR_PROTOS_DEFINED is introduced."
+          }
+        },
+        "params": {
+          "include": "<freetype/fterrors.h>",
+          "predefine_macros": [
+            "FT_ERRORDEF(e,v,s)",
+            "FT_ERROR_START_LIST",
+            "FT_ERROR_END_LIST"
+          ],
+          "expected_include_protos_path": "not_taken",
+          "pinned_source": "freetype/include/freetype/fterrors.h:154-174,247-289"
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:fterrors",
+        "area:error-list",
+        "surface:c-preprocessor",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Needs preprocessor capture of generated error rows and post-include macro state.",
+        "output_shape": {
+          "generated_rows": "ordered_error_rows",
+          "guard_defined": "bool",
+          "prototype_emitted": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "generated_rows",
+            "guard_defined",
+            "prototype_emitted"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/fterrors.h",
+          "freetype/include/freetype/fterrdef.h"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,240 @@
+- id: ftgxval.FT_VALIDATE_GX
+  kind: flag
+  symbol: FT_VALIDATE_GX
+  header: freetype/ftgxval.h
+  description: Public TrueTypeGX/AAT validation mask that requests all GX table validators in FT_TrueTypeGX_Validate.
+  cases:
+    - id: value_matches_header
+      description: Value is the bitwise OR of FT_VALIDATE_feat, FT_VALIDATE_mort, FT_VALIDATE_morx, FT_VALIDATE_bsln, FT_VALIDATE_just, FT_VALIDATE_kern, FT_VALIDATE_opbd, FT_VALIDATE_trak, FT_VALIDATE_prop, and FT_VALIDATE_lcar, producing 0x00FFC000.
+    - id: validates_all_requested_tables
+      description: Passing FT_VALIDATE_GX to FT_TrueTypeGX_Validate requests every public GX table slot and returns C-equivalent copied table buffers or NULL for missing tables.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT/GX sfnt fonts with valid feat, mort, morx, bsln, just, kern, opbd, trak, prop, and lcar tables plus paired fonts missing each table; params validation_flags=FT_VALIDATE_GX, table_length=FT_VALIDATE_GX_LENGTH; expected output shape=FT_Error plus tables[10] null/non-null, byte_length, and table bytes/hash per slot; comparison=exact C oracle error, copied table bytes for present valid tables, NULL for missing tables, and cleanup through FT_TrueTypeGX_Free.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=malformed AAT/GX fonts with truncated table headers, invalid offsets, invalid glyph indices, overlapping ranges, and unsupported malformed state tables across feat/mort/morx/bsln/just/kern/opbd/trak/prop/lcar; params validation_flags=FT_VALIDATE_GX, table_length=FT_VALIDATE_GX_LENGTH; expected output shape=FT_Error and all output slots after failure; comparison=exact C oracle error code and C-equivalent nulling/free behavior, with no committed oracle output.
+
+- id: ftgxval.FT_VALIDATE_GX_BITFIELD
+  kind: macro
+  symbol: FT_VALIDATE_GX_BITFIELD
+  header: freetype/ftgxval.h
+  description: Public function-like macro that maps a GX table tag token to its validation bit by shifting FT_VALIDATE_GX_START by the table index macro.
+  cases:
+    - id: expansion_matches_header
+      description: Macro expansion is exactly FT_VALIDATE_GX_START << FT_VALIDATE_<tag>_INDEX for supported tokens feat, mort, morx, bsln, just, kern, opbd, trak, prop, and lcar.
+    - id: table_tokens_generate_distinct_bits
+      description: All supported table tokens generate unique non-overlapping validation bits matching the public FT_VALIDATE_<tag> constants.
+  # needs-input: operation=constant_eval; fixture_asset=small C compile-time probe including freetype/ftgxval.h; params tokens=[feat,mort,morx,bsln,just,kern,opbd,trak,prop,lcar]; expected output shape=integer values for FT_VALIDATE_GX_BITFIELD(token) and FT_VALIDATE_token; comparison=exact integer equality to C for every token, with compile failure treated as expected-error mismatch.
+
+- id: ftgxval.FT_VALIDATE_GX_LAST_INDEX
+  kind: flag
+  symbol: FT_VALIDATE_GX_LAST_INDEX
+  header: freetype/ftgxval.h
+  description: Public developer index macro naming the last GX validation table slot.
+  cases:
+    - id: value_matches_header
+      description: Value aliases FT_VALIDATE_lcar_INDEX and is 9 in the pinned C header.
+    - id: length_derives_from_last_index
+      description: FT_VALIDATE_GX_LENGTH derives from this value plus one, so public table arrays cover indexes 0 through 9.
+  # needs-input: operation=constant_eval; fixture_asset=small C compile-time probe including freetype/ftgxval.h; params symbols=[FT_VALIDATE_GX_LAST_INDEX,FT_VALIDATE_lcar_INDEX,FT_VALIDATE_GX_LENGTH]; expected output shape=integer values; comparison=exact C oracle equality and relation FT_VALIDATE_GX_LENGTH == FT_VALIDATE_GX_LAST_INDEX + 1.
+
+- id: ftgxval.FT_VALIDATE_GX_LENGTH
+  kind: flag
+  symbol: FT_VALIDATE_GX_LENGTH
+  header: freetype/ftgxval.h
+  description: Public table count macro for the FT_TrueTypeGX_Validate tables array.
+  cases:
+    - id: value_matches_header
+      description: Value is FT_VALIDATE_GX_LAST_INDEX + 1, producing 10.
+    - id: controls_output_slot_initialization
+      description: FT_TrueTypeGX_Validate zeroes and may fill exactly table_length slots, with normal callers passing FT_VALIDATE_GX_LENGTH.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=valid AAT/GX sfnt with at least feat, morx, kern, and lcar tables; params table_length values [0,1,2,3,FT_VALIDATE_GX_LENGTH] with validation_flags=FT_VALIDATE_GX; expected output shape=FT_Error plus observed slots within caller-provided length; comparison=exact C oracle slot nulling/filling behavior and error code, including short table_length cases where later requested table bits are ignored for output.
+
+- id: ftgxval.FT_VALIDATE_GX_START
+  kind: flag
+  symbol: FT_VALIDATE_GX_START
+  header: freetype/ftgxval.h
+  description: Public base bit used to build GX and classic kern validation flags.
+  cases:
+    - id: value_matches_header
+      description: Value is 0x4000 in the pinned C header.
+    - id: separates_gx_from_ot_validation_bits
+      description: Derived GX flags occupy bits starting at 0x4000 and do not overlap the lower OpenType validator flag range.
+  # needs-input: operation=constant_eval; fixture_asset=small C compile-time probe including freetype/ftgxval.h; params symbols=[FT_VALIDATE_GX_START,FT_VALIDATE_feat,FT_VALIDATE_MS,FT_VALIDATE_APPLE]; expected output shape=integer values; comparison=exact C oracle equality and expected shift relations.
+
+- id: ftgxval.FT_VALIDATE_MS
+  kind: flag
+  symbol: FT_VALIDATE_MS
+  header: freetype/ftgxval.h
+  description: Public classic kern validation flag selecting Microsoft-style 16-bit kern table validation for FT_ClassicKern_Validate.
+  cases:
+    - id: value_matches_header
+      description: Value is FT_VALIDATE_GX_START << 0, producing 0x4000.
+    - id: validates_ms_classic_kern
+      description: FT_ClassicKern_Validate accepts this flag for Microsoft-style classic kern tables and returns a copied kern table buffer or the C-equivalent validation error.
+  # needs-input: operation=FT_ClassicKern_Validate; fixture_asset=sfnt fonts with valid Microsoft classic kern table, valid Apple classic kern table, malformed Microsoft subtable length/coverage, and missing kern table; params validation_flags=[FT_VALIDATE_MS,FT_VALIDATE_MS|FT_VALIDATE_APPLE]; expected output shape=FT_Error plus ckern_table null/non-null, byte_length, and table bytes/hash; comparison=exact C oracle error, copied bytes for accepted tables, NULL for missing table, and cleanup through FT_ClassicKern_Free.
+
+- id: ftgxval.FT_VALIDATE_bsln
+  kind: flag
+  symbol: FT_VALIDATE_bsln
+  header: freetype/ftgxval.h
+  description: Public FT_TrueTypeGX_Validate flag selecting validation of the AAT bsln baseline table.
+  cases:
+    - id: value_matches_header
+      description: Value is FT_VALIDATE_GX_BITFIELD(bsln), or 0x00020000.
+    - id: validates_bsln_table_slot
+      description: With table_length greater than FT_VALIDATE_bsln_INDEX, C loads TTAG_bsln, validates it with gxv_bsln_validate, and stores the copied table in slot 3 on success.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT fonts with valid bsln formats and malformed bsln default baseline, offset, lookup, and glyph-index data plus a font without bsln; params validation_flags=FT_VALIDATE_bsln, table_length=FT_VALIDATE_GX_LENGTH; expected output shape=FT_Error and tables[FT_VALIDATE_bsln_INDEX] null/non-null, byte_length, bytes/hash; comparison=exact C oracle success/error, output slot 3 behavior, and NULL for missing/unrequested tables.
+
+- id: ftgxval.FT_VALIDATE_bsln_INDEX
+  kind: flag
+  symbol: FT_VALIDATE_bsln_INDEX
+  header: freetype/ftgxval.h
+  description: Public developer index macro for the bsln output slot in FT_TrueTypeGX_Validate.
+  cases:
+    - id: value_matches_header
+      description: Value is 3 in the pinned C header.
+    - id: indexes_bsln_output_slot
+      description: FT_TrueTypeGX_Validate writes a valid bsln table pointer only to tables[3] when FT_VALIDATE_bsln is requested and table_length exceeds 3.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT font with a valid bsln table; params validation_flags=FT_VALIDATE_bsln, table_length values [3,4,FT_VALIDATE_GX_LENGTH]; expected output shape=FT_Error plus slot initialization/fill state; comparison=exact C oracle for short table_length=3 not setting slot 3 and table_length>=4 setting slot 3 when valid.
+
+- id: ftgxval.FT_VALIDATE_feat
+  kind: flag
+  symbol: FT_VALIDATE_feat
+  header: freetype/ftgxval.h
+  description: Public FT_TrueTypeGX_Validate flag selecting validation of the AAT feat feature-name table.
+  cases:
+    - id: value_matches_header
+      description: Value is FT_VALIDATE_GX_BITFIELD(feat), or 0x00004000.
+    - id: validates_feat_table_slot
+      description: With table_length greater than FT_VALIDATE_feat_INDEX, C loads TTAG_feat, validates it with gxv_feat_validate, and stores the copied table in slot 0 on success.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT fonts with valid feat records/settings/name IDs plus malformed feat record count, setting offsets, exclusive/default flags, and name table references; params validation_flags=FT_VALIDATE_feat, table_length=FT_VALIDATE_GX_LENGTH; expected output shape=FT_Error and tables[0] null/non-null, byte_length, bytes/hash; comparison=exact C oracle success/error, slot 0 bytes for valid table, and NULL for missing/unrequested tables.
+
+- id: ftgxval.FT_VALIDATE_feat_INDEX
+  kind: flag
+  symbol: FT_VALIDATE_feat_INDEX
+  header: freetype/ftgxval.h
+  description: Public developer index macro for the feat output slot in FT_TrueTypeGX_Validate.
+  cases:
+    - id: value_matches_header
+      description: Value is 0 in the pinned C header.
+    - id: indexes_feat_output_slot
+      description: FT_TrueTypeGX_Validate writes a valid feat table pointer to tables[0] when FT_VALIDATE_feat is requested and at least one output slot is provided.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT font with a valid feat table; params validation_flags=FT_VALIDATE_feat, table_length values [0,1,FT_VALIDATE_GX_LENGTH]; expected output shape=FT_Error plus slot initialization/fill state; comparison=exact C oracle for table_length=0 not touching slots and table_length>=1 setting slot 0 when valid.
+
+- id: ftgxval.FT_VALIDATE_just
+  kind: flag
+  symbol: FT_VALIDATE_just
+  header: freetype/ftgxval.h
+  description: Public FT_TrueTypeGX_Validate flag selecting validation of the AAT just justification table.
+  cases:
+    - id: value_matches_header
+      description: Value is FT_VALIDATE_GX_BITFIELD(just), or 0x00040000.
+    - id: validates_just_table_slot
+      description: With table_length greater than FT_VALIDATE_just_INDEX, C loads TTAG_just, validates it with gxv_just_validate, and stores the copied table in slot 4 on success.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT fonts with valid just horizontal/vertical data, class tables, width delta clusters, postcomp actions, and malformed offsets/ranges/glyph indices/action classes; params validation_flags=FT_VALIDATE_just, table_length=FT_VALIDATE_GX_LENGTH; expected output shape=FT_Error and tables[4] null/non-null, byte_length, bytes/hash; comparison=exact C oracle success/error, slot 4 bytes for valid table, and NULL for missing/unrequested tables.
+
+- id: ftgxval.FT_VALIDATE_just_INDEX
+  kind: flag
+  symbol: FT_VALIDATE_just_INDEX
+  header: freetype/ftgxval.h
+  description: Public developer index macro for the just output slot in FT_TrueTypeGX_Validate.
+  cases:
+    - id: value_matches_header
+      description: Value is 4 in the pinned C header.
+    - id: indexes_just_output_slot
+      description: FT_TrueTypeGX_Validate writes a valid just table pointer only to tables[4] when FT_VALIDATE_just is requested and table_length exceeds 4.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT font with a valid just table; params validation_flags=FT_VALIDATE_just, table_length values [4,5,FT_VALIDATE_GX_LENGTH]; expected output shape=FT_Error plus slot initialization/fill state; comparison=exact C oracle for short table_length=4 not setting slot 4 and table_length>=5 setting slot 4 when valid.
+
+- id: ftgxval.FT_VALIDATE_kern
+  kind: flag
+  symbol: FT_VALIDATE_kern
+  header: freetype/ftgxval.h
+  description: Public FT_TrueTypeGX_Validate flag selecting validation of the GX/AAT kern table through the GX validator.
+  cases:
+    - id: value_matches_header
+      description: Value is FT_VALIDATE_GX_BITFIELD(kern), or 0x00080000.
+    - id: validates_gx_kern_table_slot
+      description: With table_length greater than FT_VALIDATE_kern_INDEX, C loads TTAG_kern, validates it with gxv_kern_validate, and stores the copied table in slot 5 on success.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT fonts with valid GX kern subtables and malformed kern version, subtable length, coverage, class/state data, and glyph-pair ranges; params validation_flags=FT_VALIDATE_kern, table_length=FT_VALIDATE_GX_LENGTH; expected output shape=FT_Error and tables[5] null/non-null, byte_length, bytes/hash; comparison=exact C oracle success/error, slot 5 bytes for valid table, and NULL for missing/unrequested tables.
+
+- id: ftgxval.FT_VALIDATE_kern_INDEX
+  kind: flag
+  symbol: FT_VALIDATE_kern_INDEX
+  header: freetype/ftgxval.h
+  description: Public developer index macro for the GX kern output slot in FT_TrueTypeGX_Validate.
+  cases:
+    - id: value_matches_header
+      description: Value is 5 in the pinned C header.
+    - id: indexes_kern_output_slot
+      description: FT_TrueTypeGX_Validate writes a valid kern table pointer only to tables[5] when FT_VALIDATE_kern is requested and table_length exceeds 5.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT font with a valid GX kern table; params validation_flags=FT_VALIDATE_kern, table_length values [5,6,FT_VALIDATE_GX_LENGTH]; expected output shape=FT_Error plus slot initialization/fill state; comparison=exact C oracle for short table_length=5 not setting slot 5 and table_length>=6 setting slot 5 when valid.
+
+- id: ftgxval.FT_VALIDATE_lcar
+  kind: flag
+  symbol: FT_VALIDATE_lcar
+  header: freetype/ftgxval.h
+  description: Public FT_TrueTypeGX_Validate flag selecting validation of the AAT lcar ligature-caret table.
+  cases:
+    - id: value_matches_header
+      description: Value is FT_VALIDATE_GX_BITFIELD(lcar), or 0x00800000.
+    - id: validates_lcar_table_slot
+      description: With table_length greater than FT_VALIDATE_lcar_INDEX, C loads TTAG_lcar, validates it with gxv_lcar_validate, and stores the copied table in slot 9 on success.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT fonts with valid lcar format 0 and 1 caret data plus malformed lookup, caret count, offset, glyph id, and point-index cases; params validation_flags=FT_VALIDATE_lcar, table_length=FT_VALIDATE_GX_LENGTH; expected output shape=FT_Error and tables[9] null/non-null, byte_length, bytes/hash; comparison=exact C oracle success/error, slot 9 bytes for valid table, and NULL for missing/unrequested tables.
+
+- id: ftgxval.FT_VALIDATE_lcar_INDEX
+  kind: flag
+  symbol: FT_VALIDATE_lcar_INDEX
+  header: freetype/ftgxval.h
+  description: Public developer index macro for the lcar output slot and FT_VALIDATE_GX_LAST_INDEX alias.
+  cases:
+    - id: value_matches_header
+      description: Value is 9 in the pinned C header and equals FT_VALIDATE_GX_LAST_INDEX.
+    - id: indexes_lcar_output_slot
+      description: FT_TrueTypeGX_Validate writes a valid lcar table pointer only to tables[9] when FT_VALIDATE_lcar is requested and table_length exceeds 9.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT font with a valid lcar table; params validation_flags=FT_VALIDATE_lcar, table_length values [9,10,FT_VALIDATE_GX_LENGTH]; expected output shape=FT_Error plus slot initialization/fill state; comparison=exact C oracle for short table_length=9 not setting slot 9 and table_length>=10 setting slot 9 when valid.
+
+- id: ftgxval.FT_VALIDATE_mort
+  kind: flag
+  symbol: FT_VALIDATE_mort
+  header: freetype/ftgxval.h
+  description: Public FT_TrueTypeGX_Validate flag selecting validation of the AAT mort metamorphosis table.
+  cases:
+    - id: value_matches_header
+      description: Value is FT_VALIDATE_GX_BITFIELD(mort), or 0x00008000.
+    - id: validates_mort_table_slot
+      description: With table_length greater than FT_VALIDATE_mort_INDEX, C loads TTAG_mort, validates it with gxv_mort_validate, and stores the copied table in slot 1 on success.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT fonts with valid mort chains/subtables for supported types 0,1,2,4,5 plus malformed chain length, feature flags, state table offsets, glyph IDs, insertion lists, and ligature actions; params validation_flags=FT_VALIDATE_mort, table_length=FT_VALIDATE_GX_LENGTH; expected output shape=FT_Error and tables[1] null/non-null, byte_length, bytes/hash; comparison=exact C oracle success/error, slot 1 bytes for valid table, and NULL for missing/unrequested tables.
+
+- id: ftgxval.FT_VALIDATE_mort_INDEX
+  kind: flag
+  symbol: FT_VALIDATE_mort_INDEX
+  header: freetype/ftgxval.h
+  description: Public developer index macro for the mort output slot in FT_TrueTypeGX_Validate.
+  cases:
+    - id: value_matches_header
+      description: Value is 1 in the pinned C header.
+    - id: indexes_mort_output_slot
+      description: FT_TrueTypeGX_Validate writes a valid mort table pointer only to tables[1] when FT_VALIDATE_mort is requested and table_length exceeds 1.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT font with a valid mort table; params validation_flags=FT_VALIDATE_mort, table_length values [1,2,FT_VALIDATE_GX_LENGTH]; expected output shape=FT_Error plus slot initialization/fill state; comparison=exact C oracle for short table_length=1 not setting slot 1 and table_length>=2 setting slot 1 when valid.
+
+- id: ftgxval.FT_VALIDATE_morx
+  kind: flag
+  symbol: FT_VALIDATE_morx
+  header: freetype/ftgxval.h
+  description: Public FT_TrueTypeGX_Validate flag selecting validation of the AAT morx extended metamorphosis table.
+  cases:
+    - id: value_matches_header
+      description: Value is FT_VALIDATE_GX_BITFIELD(morx), or 0x00010000.
+    - id: validates_morx_table_slot
+      description: With table_length greater than FT_VALIDATE_morx_INDEX, C loads TTAG_morx, validates it with gxv_morx_validate, and stores the copied table in slot 2 on success.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT fonts with valid morx chains/subtables for supported types 0,1,2,4,5 plus malformed 32-bit chain length, feature flags, xstate table offsets, glyph IDs, insertion lists, and ligature actions; params validation_flags=FT_VALIDATE_morx, table_length=FT_VALIDATE_GX_LENGTH; expected output shape=FT_Error and tables[2] null/non-null, byte_length, bytes/hash; comparison=exact C oracle success/error, slot 2 bytes for valid table, and NULL for missing/unrequested tables.
+
+- id: ftgxval.FT_VALIDATE_morx_INDEX
+  kind: flag
+  symbol: FT_VALIDATE_morx_INDEX
+  header: freetype/ftgxval.h
+  description: Public developer index macro for the morx output slot in FT_TrueTypeGX_Validate.
+  cases:
+    - id: value_matches_header
+      description: Value is 2 in the pinned C header.
+    - id: indexes_morx_output_slot
+      description: FT_TrueTypeGX_Validate writes a valid morx table pointer only to tables[2] when FT_VALIDATE_morx is requested and table_length exceeds 2.
+  # needs-input: operation=FT_TrueTypeGX_Validate; fixture_asset=AAT font with a valid morx table; params validation_flags=FT_VALIDATE_morx, table_length values [2,3,FT_VALIDATE_GX_LENGTH]; expected output shape=FT_Error plus slot initialization/fill state; comparison=exact C oracle for short table_length=2 not setting slot 2 and table_length>=3 setting slot 2 when valid.

@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Face_GetCharVariantIsDefault",
+  "manifest_cases": [
+    "default_variant_returns_one",
+    "non_default_variant_returns_zero",
+    "missing_variant_returns_negative_one"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Face_GetCharVariantIsDefault.default_variant_returns_one",
+      "subject": "freetype.FT_Face_GetCharVariantIsDefault",
+      "case": "default_variant_returns_one",
+      "operation": "freetype.face_get_char_variant_is_default",
+      "schema": "api_scalar",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/variation-selectors/cmap-format14.otf",
+            "status": "required_future_asset",
+            "requires": "OpenType/CFF or TrueType font with Unicode charmap plus cmap format 14 default and non-default UVS records"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "charcode": "U+4E00",
+          "variant_selector": "U+FE00"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:variation-selector"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Int",
+          "meaning": "1 means default UVS"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "result"
+          ]
+        },
+        "fixture_requirements": [
+          "cmap format 14 fixture with default UVS entry"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Face_GetCharVariantIsDefault.non_default_variant_returns_zero",
+      "subject": "freetype.FT_Face_GetCharVariantIsDefault",
+      "case": "non_default_variant_returns_zero",
+      "operation": "freetype.face_get_char_variant_is_default",
+      "schema": "api_scalar",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/variation-selectors/cmap-format14.otf",
+            "status": "required_future_asset",
+            "requires": "OpenType/CFF or TrueType font with Unicode charmap plus cmap format 14 default and non-default UVS records"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "charcode": "U+4E00",
+          "variant_selector": "U+E0101"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:variation-selector"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Int",
+          "meaning": "0 means non-default UVS"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "result"
+          ]
+        },
+        "fixture_requirements": [
+          "cmap format 14 fixture with non-default UVS entry"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Face_GetCharVariantIsDefault.missing_variant_returns_negative_one",
+      "subject": "freetype.FT_Face_GetCharVariantIsDefault",
+      "case": "missing_variant_returns_negative_one",
+      "operation": "freetype.face_get_char_variant_is_default",
+      "schema": "api_scalar",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/variation-selectors/cmap-format14.otf",
+            "status": "required_future_asset",
+            "requires": "OpenType/CFF or TrueType font with Unicode charmap plus cmap format 14 default and non-default UVS records"
+          },
+          "fallback_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "probes": [
+            {
+              "charcode": "U+0041",
+              "variant_selector": "U+FE00",
+              "kind": "missing_uvs"
+            },
+            {
+              "font": "fallback_font",
+              "charcode": "U+0041",
+              "variant_selector": "U+FE00",
+              "kind": "no_format14"
+            },
+            {
+              "face": "null",
+              "charcode": "U+0041",
+              "variant_selector": "U+FE00"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:variation-selector"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Int",
+          "vectorized": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].result"
+          ]
+        },
+        "fixture_requirements": [
+          "Format-14 and non-format-14 fixture fonts"
+        ]
+      }
+    }
+  ]
+}

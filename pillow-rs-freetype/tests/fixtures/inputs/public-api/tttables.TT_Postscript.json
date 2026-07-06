@@ -1,0 +1,418 @@
+{
+  "version": 1,
+  "subject": "tttables.TT_Postscript",
+  "manifest_cases": [
+    "layout_matches_c",
+    "field_order_matches_header",
+    "public_import_contract",
+    "sfnt_table_runtime",
+    "invalid_post_format_error_runtime"
+  ],
+  "cases": [
+    {
+      "case_id": "tttables.TT_Postscript.layout_matches_c",
+      "subject": "tttables.TT_Postscript",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_record",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/tttables.h>",
+          "record": "TT_Postscript",
+          "layout_probe": {
+            "sizeof": true,
+            "alignof": true,
+            "offsetof": [
+              "FormatType",
+              "italicAngle",
+              "underlinePosition",
+              "underlineThickness",
+              "isFixedPitch",
+              "minMemType42",
+              "maxMemType42",
+              "minMemType1",
+              "maxMemType1"
+            ]
+          }
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "area:abi-layout",
+        "public-api-slice:1540-1543"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/tttables.h",
+          "symbol": "TT_Postscript",
+          "kind": "public C typedef struct",
+          "pointer_type": "TT_Postscript*",
+          "sfnt_tag": "FT_SFNT_POST",
+          "owner": "FT_Face",
+          "excluded_payload": "post glyph-name data is not part of TT_Postscript"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "string",
+          "sizeof": "size_t",
+          "alignof": "size_t",
+          "field_offsets": {
+            "*": "size_t"
+          }
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "field_offsets"
+          ]
+        },
+        "source_refs": [
+          "pillow-rs-freetype/freetype/include/freetype/tttables.h:429-456"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_Postscript.field_order_matches_header",
+      "subject": "tttables.TT_Postscript",
+      "case": "field_order_matches_header",
+      "operation": "abi.record_field_order",
+      "schema": "abi_record",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/tttables.h>",
+          "record": "TT_Postscript",
+          "loader": "tt_face_load_post",
+          "loader_frame_bytes": 32,
+          "declared_field_order": [
+            "FormatType",
+            "italicAngle",
+            "underlinePosition",
+            "underlineThickness",
+            "isFixedPitch",
+            "minMemType42",
+            "maxMemType42",
+            "minMemType1",
+            "maxMemType1"
+          ],
+          "accepted_format_types": [
+            "0x00010000",
+            "0x00020000",
+            "0x00025000",
+            "0x00030000"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "area:field-order",
+        "public-api-slice:1540-1543"
+      ],
+      "metadata": {
+        "source_behavior": "tt_face_load_post reads the 32-byte scalar header in public field order and rejects unsupported FormatType values before glyph-name loading."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "string",
+          "declared_field_order": [
+            "string"
+          ],
+          "loader_frame_bytes": "uint",
+          "accepted_format_types": [
+            "string"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "declared_field_order",
+            "loader_frame_bytes",
+            "accepted_format_types"
+          ]
+        },
+        "source_refs": [
+          "pillow-rs-freetype/freetype/include/freetype/tttables.h:429-456",
+          "pillow-rs-freetype/freetype/src/sfnt/ttload.c:1316-1350"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_Postscript.public_import_contract",
+      "subject": "tttables.TT_Postscript",
+      "case": "public_import_contract",
+      "operation": "abi.public_import",
+      "schema": "compile_probe",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "language": "c",
+          "include": "<freetype/tttables.h>",
+          "symbol": "TT_Postscript",
+          "usage": "TT_Postscript* post = (TT_Postscript*)FT_Get_Sfnt_Table(face, FT_SFNT_POST);",
+          "requires_face_parameter": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "area:public-import",
+        "public-api-slice:1540-1543"
+      ],
+      "metadata": {
+        "abi": {
+          "visible_from": "freetype/tttables.h",
+          "result_type": "TT_Postscript* cast from void*",
+          "function": "FT_Get_Sfnt_Table",
+          "sfnt_tag": "FT_SFNT_POST"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile_status": "ok",
+          "symbol_visible": "bool",
+          "cast_type": "string",
+          "sfnt_tag_visible": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "compile_status",
+            "symbol_visible",
+            "cast_type",
+            "sfnt_tag_visible"
+          ]
+        },
+        "source_refs": [
+          "pillow-rs-freetype/freetype/include/freetype/tttables.h:429-456",
+          "pillow-rs-freetype/freetype/include/freetype/tttables.h:627",
+          "pillow-rs-freetype/freetype/include/freetype/tttables.h:686-687"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_Postscript.sfnt_table_runtime.format_2",
+      "subject": "tttables.TT_Postscript",
+      "case": "sfnt_table_runtime",
+      "operation": "sfnt.get_sfnt_table.record",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sfnt/post-format-2.ttf",
+            "role": "font",
+            "requirements": "SFNT font with a valid post table FormatType 0x00020000 and stable scalar post header fields."
+          }
+        },
+        "params": {
+          "function": "FT_Get_Sfnt_Table",
+          "face_index": 0,
+          "sfnt_tag": "FT_SFNT_POST",
+          "record": "TT_Postscript",
+          "format_type": "0x00020000",
+          "glyph_names_excluded": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "runtime:sfnt-table",
+        "record:TT_Postscript",
+        "asset:missing",
+        "public-api-slice:1540-1543"
+      ],
+      "metadata": {
+        "source_behavior": "FT_SFNT_POST returns &ttface->postscript for loaded SFNT faces; TT_Postscript contains only the 32-byte scalar post header, not glyph-name payloads."
+      },
+      "expectation": {
+        "status": "build_dependent",
+        "fixture_requirements": [
+          "Missing asset: input/fonts/sfnt/post-format-2.ttf must load as SFNT and include a valid FormatType 2.0 post table."
+        ],
+        "output_shape": {
+          "face_load_status": "FT_Error",
+          "pointer_null": "bool",
+          "record": {
+            "FormatType": "FT_Fixed",
+            "italicAngle": "FT_Fixed",
+            "underlinePosition": "FT_Short",
+            "underlineThickness": "FT_Short",
+            "isFixedPitch": "FT_ULong",
+            "minMemType42": "FT_ULong",
+            "maxMemType42": "FT_ULong",
+            "minMemType1": "FT_ULong",
+            "maxMemType1": "FT_ULong"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "face_load_status",
+            "pointer_null",
+            "record.FormatType",
+            "record.italicAngle",
+            "record.underlinePosition",
+            "record.underlineThickness",
+            "record.isFixedPitch",
+            "record.minMemType42",
+            "record.maxMemType42",
+            "record.minMemType1",
+            "record.maxMemType1"
+          ]
+        },
+        "source_refs": [
+          "pillow-rs-freetype/freetype/src/base/ftobjs.c:4358-4371",
+          "pillow-rs-freetype/freetype/src/sfnt/sfdriver.c:127-129",
+          "pillow-rs-freetype/freetype/src/sfnt/ttload.c:1316-1350"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_Postscript.sfnt_table_runtime.format_3_fixed_pitch",
+      "subject": "tttables.TT_Postscript",
+      "case": "sfnt_table_runtime",
+      "operation": "sfnt.get_sfnt_table.record",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sfnt/post-format-3-fixed-pitch.ttf",
+            "role": "font",
+            "requirements": "SFNT font with a valid post table FormatType 0x00030000 and a non-zero isFixedPitch field."
+          }
+        },
+        "params": {
+          "function": "FT_Get_Sfnt_Table",
+          "face_index": 0,
+          "sfnt_tag": "FT_SFNT_POST",
+          "record": "TT_Postscript",
+          "format_type": "0x00030000",
+          "field_variation": "isFixedPitch != 0"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "runtime:sfnt-table",
+        "record:TT_Postscript",
+        "asset:missing",
+        "public-api-slice:1540-1543"
+      ],
+      "metadata": {
+        "source_behavior": "FormatType 3.0 is accepted by tt_face_load_post and still exposes the same TT_Postscript scalar record."
+      },
+      "expectation": {
+        "status": "build_dependent",
+        "fixture_requirements": [
+          "Missing asset: input/fonts/sfnt/post-format-3-fixed-pitch.ttf must load as SFNT and include a valid FormatType 3.0 post table with isFixedPitch non-zero."
+        ],
+        "output_shape": {
+          "face_load_status": "FT_Error",
+          "pointer_null": "bool",
+          "record": {
+            "FormatType": "FT_Fixed",
+            "italicAngle": "FT_Fixed",
+            "underlinePosition": "FT_Short",
+            "underlineThickness": "FT_Short",
+            "isFixedPitch": "FT_ULong",
+            "memory_bounds": {
+              "minMemType42": "FT_ULong",
+              "maxMemType42": "FT_ULong",
+              "minMemType1": "FT_ULong",
+              "maxMemType1": "FT_ULong"
+            }
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "face_load_status",
+            "pointer_null",
+            "record.FormatType",
+            "record.italicAngle",
+            "record.underlinePosition",
+            "record.underlineThickness",
+            "record.isFixedPitch",
+            "record.memory_bounds"
+          ]
+        },
+        "source_refs": [
+          "pillow-rs-freetype/freetype/src/sfnt/ttload.c:1316-1350",
+          "pillow-rs-freetype/freetype/src/sfnt/sfdriver.c:127-129"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_Postscript.invalid_post_format_error_runtime",
+      "subject": "tttables.TT_Postscript",
+      "case": "invalid_post_format_error_runtime",
+      "operation": "face.new",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sfnt/post-invalid-format.ttf",
+            "role": "font",
+            "requirements": "SFNT font whose post table has a FormatType other than 1.0, 2.0, 2.5, or 3.0."
+          }
+        },
+        "params": {
+          "function": "FT_New_Face",
+          "face_index": 0,
+          "invalid_format_type": "0x00040000",
+          "record_unavailable_after_error": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "runtime:face-load-error",
+        "record:TT_Postscript",
+        "asset:missing",
+        "public-api-slice:1540-1543"
+      ],
+      "metadata": {
+        "source_behavior": "tt_face_load_post returns Invalid_Post_Table_Format when FormatType is not 0x00010000, 0x00020000, 0x00025000, or 0x00030000."
+      },
+      "expectation": {
+        "status": "build_dependent",
+        "fixture_requirements": [
+          "Missing asset: input/fonts/sfnt/post-invalid-format.ttf must reach tt_face_load_post with an unsupported post FormatType."
+        ],
+        "output_shape": {
+          "face_load_status": "FT_Error",
+          "error": "Invalid_Post_Table_Format",
+          "record_available": "bool"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "face_load_status",
+            "error",
+            "record_available"
+          ]
+        },
+        "source_refs": [
+          "pillow-rs-freetype/freetype/src/sfnt/ttload.c:1338-1344"
+        ]
+      }
+    }
+  ]
+}

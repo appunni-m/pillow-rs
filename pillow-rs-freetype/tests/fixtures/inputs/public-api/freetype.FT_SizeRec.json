@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_SizeRec",
+  "manifest_cases": [
+    "layout_matches_c",
+    "active_size_record_runtime"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_SizeRec.layout_matches_c",
+      "subject": "freetype.FT_SizeRec",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "c_abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_SizeRec",
+          "include": "<freetype/freetype.h>",
+          "import": "#include <freetype/freetype.h>",
+          "fields": [
+            "face",
+            "generic",
+            "metrics",
+            "internal"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "sizeof": "integer",
+          "alignof": "integer",
+          "field_offsets": "object",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "symbol",
+            "sizeof",
+            "alignof",
+            "field_offsets",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_SizeRec.active_size_record_runtime",
+      "subject": "freetype.FT_SizeRec",
+      "case": "active_size_record_runtime",
+      "operation": "freetype.size_record_state",
+      "schema": "size_record",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "sizes": [
+            {
+              "pixels": 12
+            },
+            {
+              "pixels": 20
+            },
+            {
+              "char_size_26_6": 1024,
+              "dpi": 72
+            }
+          ],
+          "generic_probe": "set_and_read_client_pointer_identity"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "size": "FT_SizeRec view",
+          "face_identity": "same_as_parent_face",
+          "generic_identity": "client_pointer_or_null",
+          "metrics": "FT_Size_Metrics",
+          "internal": "opaque_pointer_nullness"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "size.face_identity",
+            "size.generic_identity",
+            "size.metrics.x_ppem",
+            "size.metrics.y_ppem",
+            "size.metrics.x_scale",
+            "size.metrics.y_scale",
+            "size.metrics.ascender",
+            "size.metrics.descender",
+            "size.metrics.height",
+            "size.metrics.max_advance",
+            "size.internal_nullness"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h",
+          "freetype/src/base/ftobjs.c"
+        ]
+      }
+    }
+  ]
+}

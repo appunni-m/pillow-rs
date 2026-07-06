@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_Outline_MoveTo_Func",
+  "manifest_cases": [
+    "macro_alias_matches_typedef",
+    "callback_abi_matches_c",
+    "decompose_starts_each_contour",
+    "decompose_propagates_callback_error"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_Outline_MoveTo_Func.macro_alias_matches_typedef",
+      "subject": "ftimage.FT_Outline_MoveTo_Func",
+      "case": "macro_alias_matches_typedef",
+      "operation": "ftimage.macro_alias",
+      "schema": "api_abi_type",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftimage.h>",
+          "macro": "FT_Outline_MoveTo_Func",
+          "expands_to": "FT_Outline_MoveToFunc"
+        }
+      },
+      "classifiers": ["kind:macro", "header:ftimage", "area:outline-decompose"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro": "FT_Outline_MoveTo_Func",
+          "typedef": "FT_Outline_MoveToFunc"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": ["macro", "expands_to", "include"]
+        },
+        "source_refs": ["freetype/include/freetype/ftimage.h:505-517"]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Outline_MoveTo_Func.callback_abi_matches_c",
+      "subject": "ftimage.FT_Outline_MoveTo_Func",
+      "case": "callback_abi_matches_c",
+      "operation": "ftimage.callback_abi",
+      "schema": "api_abi_type",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "typedef": "FT_Outline_MoveToFunc",
+          "return_type": "int",
+          "arguments": [
+            {"name": "to", "type": "const FT_Vector*"},
+            {"name": "user", "type": "void*"}
+          ]
+        }
+      },
+      "classifiers": ["kind:callback", "header:ftimage", "abi:function-pointer"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return_type": "int",
+          "argument_count": 2,
+          "arguments": "C function pointer argument types and order"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": ["return_type", "arguments[*].type", "arguments[*].position"]
+        },
+        "source_refs": ["freetype/include/freetype/ftimage.h:505-516"]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Outline_MoveTo_Func.decompose_starts_each_contour",
+      "subject": "ftimage.FT_Outline_MoveTo_Func",
+      "case": "decompose_starts_each_contour",
+      "operation": "ftoutln.outline_decompose",
+      "schema": "callback_event_stream",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "synthetic_outline": {
+            "kind": "ref",
+            "id": "outlines/multi-contour-negative-coordinates.json"
+          }
+        },
+        "params": {
+          "glyph_indices": [36, 37],
+          "load_flags": ["FT_LOAD_NO_HINTING"],
+          "decompose_funcs": {"move_to": "instrumented", "line_to": "instrumented", "conic_to": "instrumented", "cubic_to": "instrumented"},
+          "shift_delta_matrix": [
+            {"shift": 0, "delta": 0},
+            {"shift": 1, "delta": 32}
+          ]
+        }
+      },
+      "classifiers": ["kind:macro", "header:ftimage", "path:runtime"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "events": "ordered callbacks, beginning each contour with move_to",
+          "coordinates": "FT_Vector after x/y = (value << shift) - delta"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": ["status", "events[*].kind", "events[*].to.x", "events[*].to.y", "events[*].contour_index"]
+        },
+        "fixture_requirements": [
+          "outlines/multi-contour-negative-coordinates.json must include at least two contours and negative coordinates to verify move_to ordering and coordinate transform."
+        ],
+        "source_refs": ["freetype/include/freetype/ftimage.h:652-665"]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Outline_MoveTo_Func.decompose_propagates_callback_error",
+      "subject": "ftimage.FT_Outline_MoveTo_Func",
+      "case": "decompose_propagates_callback_error",
+      "operation": "ftoutln.outline_decompose",
+      "schema": "callback_event_stream",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "glyph_index": 36,
+          "move_to_return": 123,
+          "abort_on_callback": "move_to"
+        }
+      },
+      "classifiers": ["kind:macro", "header:ftimage", "path:error"],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "events_before_abort": "callback event prefix"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": ["status", "events[*].kind", "first_error_callback"]
+        },
+        "error": "callback_return_value"
+      }
+    }
+  ]
+}

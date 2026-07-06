@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "subject": "fttypes.FT_Bytes",
+  "manifest_cases": ["alias_defined_as_const_byte_pointer", "pointer_size_alignment_and_nullability", "binary_input_domain_preserves_bytes"],
+  "cases": [
+    {
+      "case_id": "fttypes.FT_Bytes.alias_defined_as_const_byte_pointer",
+      "subject": "fttypes.FT_Bytes",
+      "case": "alias_defined_as_const_byte_pointer",
+      "operation": "abi.typedef_import",
+      "schema": "abi_type",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Bytes", "c_definition": "typedef const FT_Byte* FT_Bytes", "underlying_type": "const FT_Byte*", "pointer_depth": 1, "pointee_const": true, "probes": ["include_compiles", "assignment_from_const_ft_byte_pointer", "no_write_through_alias"]}},
+      "classifiers": ["kind:type-alias", "header:fttypes", "surface:public-c-api", "area:abi"],
+      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Bytes", "kind": "typedef", "underlying": "const FT_Byte*"}},
+      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "underlying_type": "c_type", "pointer_depth": "usize", "pointee_const": "bool", "import_compiles": "bool"}, "compare": {"mode": "value", "paths": ["symbol", "underlying_type", "pointer_depth", "pointee_const", "import_compiles"]}, "source_refs": ["freetype/include/freetype/fttypes.h:152-168"]}
+    },
+    {
+      "case_id": "fttypes.FT_Bytes.pointer_size_alignment_and_nullability",
+      "subject": "fttypes.FT_Bytes",
+      "case": "pointer_size_alignment_and_nullability",
+      "operation": "abi.pointer_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Bytes", "null_allowed": true, "model_pointers": ["NULL", "buffer_start", "buffer_start_plus_1"], "probes": ["sizeof", "alignof", "null_assignment", "pointer_roundtrip"]}},
+      "classifiers": ["kind:type-alias", "header:fttypes", "area:pointer"],
+      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Bytes", "kind": "pointer-alias", "underlying": "const FT_Byte*"}},
+      "expectation": {"status": "ok", "output_shape": {"sizeof": "usize", "alignof": "usize", "nullness": "nullable", "roundtrip": "identity_class"}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "nullness", "roundtrip"]}, "source_refs": ["freetype/include/freetype/fttypes.h:160-168"]}
+    },
+    {
+      "case_id": "fttypes.FT_Bytes.binary_input_domain_preserves_bytes",
+      "subject": "fttypes.FT_Bytes",
+      "case": "binary_input_domain_preserves_bytes",
+      "operation": "fttypes.bytes_roundtrip",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"bytes": {"kind": "ref", "id": "bytes/fttypes/sentinel-00-7f-80-ff.bin", "asset_kind": "binary"}}, "params": {"length_type": "FT_UInt", "expected_byte_count": 4, "probe_offsets": [0, 1, 2, 3], "preserve_values": [0, 127, 128, 255]}},
+      "classifiers": ["kind:type-alias", "header:fttypes", "area:bytes", "runtime:binary-input"],
+      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Bytes", "kind": "pointer-alias", "underlying": "const FT_Byte*"}},
+      "expectation": {"status": "ok", "output_shape": {"length": "FT_UInt", "bytes": "byte_array", "pointer_identity": "identity_class"}, "compare": {"mode": "bytes", "paths": ["length", "bytes", "pointer_identity"]}, "source_refs": ["freetype/include/freetype/fttypes.h:152-168"], "fixture_requirements": ["Binary fixture with bytes 00 7F 80 FF stored as a shared asset."]}
+    }
+  ]
+}

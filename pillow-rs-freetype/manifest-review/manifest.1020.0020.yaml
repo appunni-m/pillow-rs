@@ -1,0 +1,271 @@
+- id: ttnameid.TT_NAME_ID_FULL_NAME
+  kind: constant
+  symbol: TT_NAME_ID_FULL_NAME
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for the full font name; pinned FreeType defines it as 4.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 4 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_FULL_NAME as a preprocessor-visible public constant.
+    - id: representative_name_record_match
+      description: A representative SFNT name record with name ID 4 is returned with the same scalar fields and string bytes as the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/ot-name-basic.ttf; params={name_id=TT_NAME_ID_FULL_NAME, platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes.
+
+- id: ttnameid.TT_NAME_ID_LICENSE
+  kind: constant
+  symbol: TT_NAME_ID_LICENSE
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for license description text; pinned FreeType defines it as 13.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 13 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_LICENSE as a preprocessor-visible public constant.
+    - id: representative_name_record_match
+      description: A representative SFNT name record with name ID 13 is returned with the same scalar fields and string bytes as the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/ot-license-records.ttf; params={name_id=TT_NAME_ID_LICENSE}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes.
+
+- id: ttnameid.TT_NAME_ID_LICENSE_URL
+  kind: constant
+  symbol: TT_NAME_ID_LICENSE_URL
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for a license URL; pinned FreeType defines it as 14.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 14 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_LICENSE_URL as a preprocessor-visible public constant.
+    - id: representative_name_record_match
+      description: A representative SFNT name record with name ID 14 is returned with the same scalar fields and URL bytes as the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/ot-license-records.ttf; params={name_id=TT_NAME_ID_LICENSE_URL}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes.
+
+- id: ttnameid.TT_NAME_ID_LIGHT_BACKGROUND
+  kind: constant
+  symbol: TT_NAME_ID_LIGHT_BACKGROUND
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for light-background palette text; pinned FreeType defines it as 23.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 23 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_LIGHT_BACKGROUND as a preprocessor-visible public constant.
+    - id: representative_name_record_match
+      description: A color-font name table carrying name ID 23 is reported with exact C oracle scalar fields and bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/color-palette-background-names.ttf; params={name_id=TT_NAME_ID_LIGHT_BACKGROUND}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes.
+
+- id: ttnameid.TT_NAME_ID_MAC_FULL_NAME
+  kind: constant
+  symbol: TT_NAME_ID_MAC_FULL_NAME
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for the Macintosh-compatible full name; pinned FreeType defines it as 18.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 18 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_MAC_FULL_NAME as a preprocessor-visible public constant.
+    - id: representative_mac_name_record_match
+      description: A representative Macintosh platform name record with name ID 18 is returned with exact scalar fields and encoded bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/mac-full-name.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, name_id=TT_NAME_ID_MAC_FULL_NAME}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and Mac-encoded string bytes.
+
+- id: ttnameid.TT_NAME_ID_MANUFACTURER
+  kind: constant
+  symbol: TT_NAME_ID_MANUFACTURER
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for manufacturer text; pinned FreeType defines it as 8.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 8 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_MANUFACTURER as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_NAME_ID_PREFERRED_FAMILY
+  kind: constant
+  symbol: TT_NAME_ID_PREFERRED_FAMILY
+  header: freetype/ttnameid.h
+  description: Deprecated public alias for TT_NAME_ID_TYPOGRAPHIC_FAMILY; pinned FreeType defines it as that macro, numerically 16.
+  cases:
+    - id: value_matches_header
+      description: Macro value resolves exactly to TT_NAME_ID_TYPOGRAPHIC_FAMILY, numerically 16, as defined by pinned freetype/ttnameid.h.
+    - id: alias_matches_typographic_family
+      description: A C compile-time expression observes TT_NAME_ID_PREFERRED_FAMILY == TT_NAME_ID_TYPOGRAPHIC_FAMILY.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_PREFERRED_FAMILY as a preprocessor-visible public alias.
+    - id: preferred_name_record_match
+      description: A representative font with typographic family record name ID 16 is observable through the preferred-family alias with exact C oracle bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/ot14-preferred-family.ttf; params={name_id=TT_NAME_ID_PREFERRED_FAMILY}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and record scalar/string bytes, including returned name_id=16.
+
+- id: ttnameid.TT_NAME_ID_PREFERRED_SUBFAMILY
+  kind: constant
+  symbol: TT_NAME_ID_PREFERRED_SUBFAMILY
+  header: freetype/ttnameid.h
+  description: Deprecated public alias for TT_NAME_ID_TYPOGRAPHIC_SUBFAMILY; pinned FreeType defines it as that macro, numerically 17.
+  cases:
+    - id: value_matches_header
+      description: Macro value resolves exactly to TT_NAME_ID_TYPOGRAPHIC_SUBFAMILY, numerically 17, as defined by pinned freetype/ttnameid.h.
+    - id: alias_matches_typographic_subfamily
+      description: A C compile-time expression observes TT_NAME_ID_PREFERRED_SUBFAMILY == TT_NAME_ID_TYPOGRAPHIC_SUBFAMILY.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_PREFERRED_SUBFAMILY as a preprocessor-visible public alias.
+    - id: preferred_name_record_match
+      description: A representative font with typographic subfamily record name ID 17 is observable through the preferred-subfamily alias with exact C oracle bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/ot14-preferred-family.ttf; params={name_id=TT_NAME_ID_PREFERRED_SUBFAMILY}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and record scalar/string bytes, including returned name_id=17.
+
+- id: ttnameid.TT_NAME_ID_PS_NAME
+  kind: constant
+  symbol: TT_NAME_ID_PS_NAME
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for the PostScript name; pinned FreeType defines it as 6.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 6 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_PS_NAME as a preprocessor-visible public constant.
+    - id: representative_name_record_match
+      description: A representative SFNT name record with name ID 6 is returned with the same scalar fields and PostScript-name bytes as the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/ot-name-basic.ttf; params={name_id=TT_NAME_ID_PS_NAME}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes.
+
+- id: ttnameid.TT_NAME_ID_SAMPLE_TEXT
+  kind: constant
+  symbol: TT_NAME_ID_SAMPLE_TEXT
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for sample text; pinned FreeType defines it as 19.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 19 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_SAMPLE_TEXT as a preprocessor-visible public constant.
+    - id: representative_name_record_match
+      description: A representative SFNT name record with name ID 19 is returned with the same scalar fields and sample-text bytes as the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/ot-sample-text.ttf; params={name_id=TT_NAME_ID_SAMPLE_TEXT}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes.
+
+- id: ttnameid.TT_NAME_ID_TRADEMARK
+  kind: constant
+  symbol: TT_NAME_ID_TRADEMARK
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for trademark text; pinned FreeType defines it as 7.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 7 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_TRADEMARK as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_NAME_ID_TYPOGRAPHIC_FAMILY
+  kind: constant
+  symbol: TT_NAME_ID_TYPOGRAPHIC_FAMILY
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for typographic family; pinned FreeType defines it as 16.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 16 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_TYPOGRAPHIC_FAMILY as a preprocessor-visible public constant.
+    - id: representative_name_record_match
+      description: A representative name record with name ID 16 is returned with exact scalar fields and bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/ot14-preferred-family.ttf; params={name_id=TT_NAME_ID_TYPOGRAPHIC_FAMILY}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes.
+
+- id: ttnameid.TT_NAME_ID_TYPOGRAPHIC_SUBFAMILY
+  kind: constant
+  symbol: TT_NAME_ID_TYPOGRAPHIC_SUBFAMILY
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for typographic subfamily; pinned FreeType defines it as 17.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 17 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_TYPOGRAPHIC_SUBFAMILY as a preprocessor-visible public constant.
+    - id: representative_name_record_match
+      description: A representative name record with name ID 17 is returned with exact scalar fields and bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/ot14-preferred-family.ttf; params={name_id=TT_NAME_ID_TYPOGRAPHIC_SUBFAMILY}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes.
+
+- id: ttnameid.TT_NAME_ID_UNIQUE_ID
+  kind: constant
+  symbol: TT_NAME_ID_UNIQUE_ID
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for the unique font identifier; pinned FreeType defines it as 3.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 3 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_UNIQUE_ID as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_NAME_ID_VARIATIONS_PREFIX
+  kind: constant
+  symbol: TT_NAME_ID_VARIATIONS_PREFIX
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for OpenType variation named-instance prefix text; pinned FreeType defines it as 25.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 25 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_VARIATIONS_PREFIX as a preprocessor-visible public constant.
+    - id: representative_variable_name_record_match
+      description: A representative variable-font name table carrying name ID 25 is returned with exact C oracle scalar fields and bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/variable-variations-prefix.ttf; params={name_id=TT_NAME_ID_VARIATIONS_PREFIX}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes.
+
+- id: ttnameid.TT_NAME_ID_VENDOR_URL
+  kind: constant
+  symbol: TT_NAME_ID_VENDOR_URL
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for vendor URL text; pinned FreeType defines it as 11.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 11 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_VENDOR_URL as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_NAME_ID_VERSION_STRING
+  kind: constant
+  symbol: TT_NAME_ID_VERSION_STRING
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for version string text; pinned FreeType defines it as 5.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 5 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_VERSION_STRING as a preprocessor-visible public constant.
+    - id: representative_name_record_match
+      description: A representative SFNT name record with name ID 5 is returned with the same scalar fields and version bytes as the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/ot-name-basic.ttf; params={name_id=TT_NAME_ID_VERSION_STRING}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes.
+
+- id: ttnameid.TT_NAME_ID_WWS_FAMILY
+  kind: constant
+  symbol: TT_NAME_ID_WWS_FAMILY
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for WWS family text; pinned FreeType defines it as 21.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 21 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_WWS_FAMILY as a preprocessor-visible public constant.
+    - id: representative_name_record_match
+      description: A representative WWS family name record is returned with exact C oracle scalar fields and bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/ot-wws-family.ttf; params={name_id=TT_NAME_ID_WWS_FAMILY}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes.
+
+- id: ttnameid.TT_NAME_ID_WWS_SUBFAMILY
+  kind: constant
+  symbol: TT_NAME_ID_WWS_SUBFAMILY
+  header: freetype/ttnameid.h
+  description: Public SFNT name-table name ID for WWS subfamily text; pinned FreeType defines it as 22.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 22 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_NAME_ID_WWS_SUBFAMILY as a preprocessor-visible public constant.
+    - id: representative_name_record_match
+      description: A representative WWS subfamily name record is returned with exact C oracle scalar fields and bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/ot-wws-family.ttf; params={name_id=TT_NAME_ID_WWS_SUBFAMILY}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes.
+
+- id: ttnameid.TT_PLATFORM_ADOBE
+  kind: constant
+  symbol: TT_PLATFORM_ADOBE
+  header: freetype/ttnameid.h
+  description: Public platform ID used by FreeType to report Adobe-specific charmaps; pinned FreeType defines it as artificial value 7.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 7 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_PLATFORM_ADOBE as a preprocessor-visible public constant.
+    - id: representative_adobe_charmap_match
+      description: A representative Adobe-specific charmap is reported with platform_id 7 and the same encoding_id and charmap metadata as the C oracle.
+  # needs-input: operation=FT_Get_Charmap_Index + face charmaps enumeration; fixture_asset=input/fonts/charmaps/adobe-specific-cff.otf; params={platform_id=TT_PLATFORM_ADOBE}; expected output shape={FT_Error, charmap_index, platform_id, encoding_id, encoding_tag}; comparison=exact C oracle status and charmap scalar fields.

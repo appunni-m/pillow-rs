@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "subject": "ftmm.FT_MM_Axis",
+  "manifest_cases": ["layout_matches_c", "field_types_match_c", "populated_by_get_multi_master"],
+  "cases": [
+    {
+      "case_id": "ftmm.FT_MM_Axis.layout_matches_c",
+      "subject": "ftmm.FT_MM_Axis",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "api_record",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"header": "freetype/ftmm.h", "type": "FT_MM_Axis", "fields": ["name", "minimum", "maximum"], "repr": "C"}},
+      "classifiers": ["kind:record", "header:ftmm", "surface:public-c-api", "coverage:abi-layout"],
+      "metadata": {"abi": {"header": "freetype/ftmm.h", "symbol": "FT_MM_Axis", "kind": "record"}, "c_definition": "struct { FT_String* name; FT_Long minimum; FT_Long maximum; }"},
+      "expectation": {"status": "ok", "output_shape": {"sizeof": "size_t", "alignof": "size_t", "field_offsets": {"name": "size_t", "minimum": "size_t", "maximum": "size_t"}}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "field_offsets.name", "field_offsets.minimum", "field_offsets.maximum"]}, "source_refs": ["freetype/include/freetype/ftmm.h:144-169"]}
+    },
+    {
+      "case_id": "ftmm.FT_MM_Axis.field_types_match_c",
+      "subject": "ftmm.FT_MM_Axis",
+      "case": "field_types_match_c",
+      "operation": "abi.record_fields",
+      "schema": "api_record",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"type": "FT_MM_Axis", "field_types": {"name": "FT_String*", "minimum": "FT_Long", "maximum": "FT_Long"}, "nullability": {"name": "nullable_borrowed_c_string"}}},
+      "classifiers": ["kind:record", "header:ftmm", "surface:public-c-api", "coverage:abi-fields"],
+      "metadata": {"abi": {"header": "freetype/ftmm.h", "symbol": "FT_MM_Axis", "kind": "record"}, "ownership": "fields are populated by FreeType service and borrowed by caller-owned output record"},
+      "expectation": {"status": "ok", "output_shape": {"field_types": "map", "field_order": ["name", "minimum", "maximum"], "pointer_nullability": "map"}, "compare": {"mode": "layout", "paths": ["field_types", "field_order", "pointer_nullability"]}, "source_refs": ["freetype/include/freetype/ftmm.h:144-169"]}
+    },
+    {
+      "case_id": "ftmm.FT_MM_Axis.populated_by_get_multi_master",
+      "subject": "ftmm.FT_MM_Axis",
+      "case": "populated_by_get_multi_master",
+      "operation": "ftmm.get_multi_master",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"font": {"kind": "ref", "id": "fonts/type1-mm/adobe-mm-two-axis.pfb", "asset_kind": "font"}}, "params": {"face_index": 0, "inspect": ["axis.name", "axis.minimum", "axis.maximum"]}},
+      "classifiers": ["kind:record", "header:ftmm", "surface:public-c-api", "operation:adobe-mm"],
+      "metadata": {"abi": {"header": "freetype/ftmm.h", "symbol": "FT_MM_Axis", "kind": "record"}, "source_behavior": "FT_Get_Multi_Master fills an inline array of FT_MM_Axis records for Adobe MM fonts only."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "num_axis": "FT_UInt", "axis": [{"name": "c_string_or_null", "minimum": "FT_Long", "maximum": "FT_Long"}]}, "compare": {"mode": "exact", "paths": ["return", "num_axis", "axis.name", "axis.minimum", "axis.maximum"]}, "source_refs": ["freetype/src/base/ftmm.c:91-121", "freetype/src/type1/t1load.c"], "fixture_requirements": ["Adobe MM fixture with named axes and min/max design coordinates."]}
+    }
+  ]
+}

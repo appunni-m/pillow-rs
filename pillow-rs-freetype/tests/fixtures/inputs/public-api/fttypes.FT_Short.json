@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "subject": "fttypes.FT_Short",
+  "manifest_cases": ["alias_defined_as_signed_short", "size_alignment_and_signed_range", "signed_parameter_domain"],
+  "cases": [
+    {
+      "case_id": "fttypes.FT_Short.alias_defined_as_signed_short",
+      "subject": "fttypes.FT_Short",
+      "case": "alias_defined_as_signed_short",
+      "operation": "abi.typedef_import",
+      "schema": "abi_type",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Short", "c_definition": "typedef signed short FT_Short", "underlying_type": "signed short", "signedness": "signed", "probes": ["include_compiles", "assignment_compiles"]}},
+      "classifiers": ["kind:type-alias", "header:fttypes", "area:integer"],
+      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Short", "kind": "typedef", "underlying": "signed short"}},
+      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "underlying_type": "c_type", "signedness": "signed", "import_compiles": "bool"}, "compare": {"mode": "value", "paths": ["symbol", "underlying_type", "signedness", "import_compiles"]}, "source_refs": ["freetype/include/freetype/fttypes.h:193-201"]}
+    },
+    {
+      "case_id": "fttypes.FT_Short.size_alignment_and_signed_range",
+      "subject": "fttypes.FT_Short",
+      "case": "size_alignment_and_signed_range",
+      "operation": "abi.scalar_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Short", "underlying_type": "signed short", "model_values": [-32768, -1, 0, 1, 32767], "probes": ["sizeof", "alignof", "signed_min", "signed_max", "roundtrip_cast"]}},
+      "classifiers": ["kind:type-alias", "header:fttypes", "area:scalar"],
+      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Short", "kind": "scalar", "underlying": "signed short"}},
+      "expectation": {"status": "ok", "output_shape": {"sizeof": "usize", "alignof": "usize", "signedness": "signed", "range": {"min": "integer", "max": "integer"}, "roundtrip_values": ["FT_Short"]}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "signedness", "range", "roundtrip_values"]}, "source_refs": ["freetype/include/freetype/fttypes.h:193-201"]}
+    },
+    {
+      "case_id": "fttypes.FT_Short.signed_parameter_domain",
+      "subject": "fttypes.FT_Short",
+      "case": "signed_parameter_domain",
+      "operation": "fttypes.short_parameter_domain",
+      "schema": "api_model",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"model_values": [-1024, -1, 0, 1, 1024], "public_uses": ["small counts", "record fields", "signed dimensions"], "preserve_signedness": true}},
+      "classifiers": ["kind:type-alias", "header:fttypes", "area:signed-domain"],
+      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Short", "kind": "integer-parameter", "underlying": "signed short"}},
+      "expectation": {"status": "ok", "output_shape": {"values": ["FT_Short"], "negative_values": "preserved", "positive_values": "preserved"}, "compare": {"mode": "exact", "paths": ["values", "negative_values", "positive_values"]}, "source_refs": ["freetype/include/freetype/fttypes.h:193-201"]}
+    }
+  ]
+}

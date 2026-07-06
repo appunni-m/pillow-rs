@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "subject": "ftcache.FTC_ImageTypeRec",
+  "manifest_cases": [
+    "layout_matches_c",
+    "drives_image_and_sbit_lookup"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcache.FTC_ImageTypeRec.layout_matches_c",
+      "subject": "ftcache.FTC_ImageTypeRec",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftcache.h>",
+          "record": "FTC_ImageTypeRec",
+          "fields": [
+            "face_id",
+            "width",
+            "height",
+            "flags"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcache",
+        "area:image-cache"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FTC_ImageTypeRec",
+          "size": "sizeof",
+          "alignment": "alignof",
+          "field_offsets": [
+            "face_id",
+            "width",
+            "height",
+            "flags"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "size",
+            "alignment",
+            "field_offsets"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_ImageTypeRec.drives_image_and_sbit_lookup",
+      "subject": "ftcache.FTC_ImageTypeRec",
+      "case": "drives_image_and_sbit_lookup",
+      "operation": "ftcache.image_type_lookup_probe",
+      "schema": "cache_lookup",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "scalable_control_font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "image_type": {
+            "face_id": "stable_pointer:dejavu",
+            "width": 16,
+            "height": 24,
+            "flags": [
+              "FT_LOAD_DEFAULT",
+              "FT_LOAD_RENDER"
+            ]
+          },
+          "operations": [
+            "FTC_ImageCache_Lookup",
+            "FTC_SBitCache_Lookup"
+          ],
+          "glyph_index": 36
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcache",
+        "area:image-cache"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "query_fields": "copied_into_cache_family",
+          "outputs": [
+            "glyph_or_sbit_metrics",
+            "bytes_or_outline_identity"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "effective_query.face_id_identity",
+            "effective_query.width",
+            "effective_query.height",
+            "effective_query.flags",
+            "result_metrics"
+          ]
+        }
+      }
+    }
+  ]
+}

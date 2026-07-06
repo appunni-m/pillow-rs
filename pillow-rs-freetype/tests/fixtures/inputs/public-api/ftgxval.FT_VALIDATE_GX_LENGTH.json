@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "subject": "ftgxval.FT_VALIDATE_GX_LENGTH",
+  "manifest_cases": [
+    "value_matches_header",
+    "controls_output_slot_initialization"
+  ],
+  "cases": [
+    {
+      "case_id": "ftgxval.FT_VALIDATE_GX_LENGTH.value_matches_header",
+      "subject": "ftgxval.FT_VALIDATE_GX_LENGTH",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftgxval.h>",
+          "symbol": "FT_VALIDATE_GX_LENGTH",
+          "expected_value_from_pinned_header": 10,
+          "expression": "FT_VALIDATE_GX_LAST_INDEX + 1",
+          "pinned_sources": [
+            "freetype/include/freetype/ftgxval.h:96-103"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftgxval",
+        "area:gx-validation",
+        "coverage:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_UInt",
+          "symbol": "FT_VALIDATE_GX_LENGTH"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgxval.FT_VALIDATE_GX_LENGTH.controls_output_slot_initialization",
+      "subject": "ftgxval.FT_VALIDATE_GX_LENGTH",
+      "case": "controls_output_slot_initialization",
+      "operation": "FT_TrueTypeGX_Validate",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "partial_gx_font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/fonts/aat-gx/valid-feat-morx-kern-lcar.ttf",
+            "status": "required_future_asset",
+            "requires": "sfnt with valid feat, morx, kern, and lcar tables"
+          }
+        },
+        "params": {
+          "validation_flags": "FT_VALIDATE_GX",
+          "table_length_values": [
+            0,
+            1,
+            2,
+            3,
+            "FT_VALIDATE_GX_LENGTH"
+          ],
+          "future_operation_group": "gx_validate_table_length",
+          "c_behavior": "gxv_validate zeroes exactly table_count slots and only loads a table when its index is less than table_count",
+          "pinned_sources": [
+            "freetype/src/gxvalid/gxvmod.c:79-89",
+            "freetype/src/gxvalid/gxvmod.c:135-172"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftgxval",
+        "area:gx-validation",
+        "coverage:future-runtime",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": "Needs future AAT/GX sfnt with selected valid tables and runner support for short table_length probes.",
+        "output_shape": {
+          "error": "FT_Error",
+          "table_count": "FT_UInt",
+          "observed_slots": "array[table_count] of null_or_table_bytes"
+        },
+        "compare": {
+          "mode": "unsupported_until_runner_added",
+          "paths": [
+            "error",
+            "table_count",
+            "observed_slots[].nullness",
+            "observed_slots[].byte_length",
+            "observed_slots[].bytes_or_hash"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ftgxval.h",
+          "freetype/src/gxvalid/gxvmod.c"
+        ]
+      }
+    }
+  ]
+}

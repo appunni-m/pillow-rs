@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "subject": "ttnameid.TT_MAC_LANGID_AYMARA",
+  "manifest_cases": ["value_matches_header", "import_contract", "mac_name_record_lookup"],
+  "cases": [
+    {
+      "case_id": "ttnameid.TT_MAC_LANGID_AYMARA.value_matches_header",
+      "subject": "ttnameid.TT_MAC_LANGID_AYMARA",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"symbol": "TT_MAC_LANGID_AYMARA", "include": "<freetype/ttnameid.h>", "declared_type": "macro integer", "expected_value": 134, "header_source": "freetype/include/freetype/ttnameid.h:405"}},
+      "classifiers": ["kind:constant", "header:ttnameid", "area:mac_language_id"],
+      "expectation": {"status": "ok", "output_shape": {"value_type": "integer macro", "value": "integer", "symbol": "TT_MAC_LANGID_AYMARA"}, "compare": {"mode": "value", "paths": ["value", "header_symbol"]}}
+    },
+    {
+      "case_id": "ttnameid.TT_MAC_LANGID_AYMARA.import_contract",
+      "subject": "ttnameid.TT_MAC_LANGID_AYMARA",
+      "case": "import_contract",
+      "operation": "c_abi.import",
+      "schema": "api_import",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"include": "<freetype/ttnameid.h>", "declaration": "FT_UShort language_id = TT_MAC_LANGID_AYMARA;", "must_compile_as_constant_expression": true}},
+      "classifiers": ["kind:constant", "header:ttnameid", "area:import"],
+      "expectation": {"status": "ok", "output_shape": {"compile": "success", "assignable_to": "FT_UShort"}, "compare": {"mode": "layout", "paths": ["compile", "assignable_to"]}}
+    },
+    {
+      "case_id": "ttnameid.TT_MAC_LANGID_AYMARA.mac_name_record_lookup",
+      "subject": "ttnameid.TT_MAC_LANGID_AYMARA",
+      "case": "mac_name_record_lookup",
+      "operation": "sfnt.get_name",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"font": {"kind": "ref", "role": "sfnt_font", "id": "input/fonts/names/mac-roman-aymara.ttf", "requirements": "SFNT with a Macintosh Roman name record tagged languageID 134."}}, "params": {"platform_id": "TT_PLATFORM_MACINTOSH", "encoding_id": "TT_MAC_ID_ROMAN", "language_id": "TT_MAC_LANGID_AYMARA", "language_id_value": 134, "name_id": "TT_NAME_ID_FULL_NAME"}},
+      "classifiers": ["kind:constant", "header:ttnameid", "area:sfnt_name", "requires:future_asset"],
+      "expectation": {"status": "build_dependent", "fixture_requirements": "Needs SFNT name-table fixture with Macintosh Roman Aymara name record.", "output_shape": {"constant_value": "FT_UShort", "name_record": {"platform_id": "FT_UShort", "encoding_id": "FT_UShort", "language_id": "FT_UShort", "name_id": "FT_UShort", "string_bytes": "bytes"}}, "compare": {"mode": "exact", "paths": ["constant_value", "name_record.platform_id", "name_record.encoding_id", "name_record.language_id", "name_record.name_id", "name_record.string_bytes"]}}
+    }
+  ]
+}

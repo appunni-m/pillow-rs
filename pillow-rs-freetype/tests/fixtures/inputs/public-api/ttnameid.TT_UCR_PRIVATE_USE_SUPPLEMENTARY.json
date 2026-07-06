@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "subject": "ttnameid.TT_UCR_PRIVATE_USE_SUPPLEMENTARY",
+  "manifest_cases": [
+    "value_matches_header",
+    "import_contract",
+    "os2_private_use_supplementary_runtime"
+  ],
+  "cases": [
+    {
+      "case_id": "ttnameid.TT_UCR_PRIVATE_USE_SUPPLEMENTARY.value_matches_header",
+      "subject": "ttnameid.TT_UCR_PRIVATE_USE_SUPPLEMENTARY",
+      "case": "value_matches_header",
+      "operation": "abi.constant_eval",
+      "schema": "constant_value",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ttnameid.h",
+          "symbol": "TT_UCR_PRIVATE_USE_SUPPLEMENTARY",
+          "expression": "1UL << 26",
+          "expected_value_from_pinned_header": 67108864,
+          "expected_value_hex": "0x04000000",
+          "os2_field": "ulUnicodeRange3",
+          "os2_absolute_bit": 90,
+          "os2_field_bit": 26,
+          "unicode_blocks": [
+            "U+F0000-U+FFFFD",
+            "U+100000-U+10FFFD"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "area:os2_unicode_range"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/ttnameid.h",
+          "symbol": "TT_UCR_PRIVATE_USE_SUPPLEMENTARY",
+          "kind": "object_like_macro",
+          "result_type": "unsigned long constant expression"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "constant_value": "ulong"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "symbol",
+            "constant_value"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ttnameid.h:1130"
+        ]
+      }
+    },
+    {
+      "case_id": "ttnameid.TT_UCR_PRIVATE_USE_SUPPLEMENTARY.import_contract",
+      "subject": "ttnameid.TT_UCR_PRIVATE_USE_SUPPLEMENTARY",
+      "case": "import_contract",
+      "operation": "abi.header_import",
+      "schema": "api_import",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ttnameid.h>",
+          "symbol": "TT_UCR_PRIVATE_USE_SUPPLEMENTARY",
+          "use_expression": "FT_ULong mask = TT_UCR_PRIVATE_USE_SUPPLEMENTARY;",
+          "expected_value": 67108864
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "area:public_import"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/ttnameid.h",
+          "symbol": "TT_UCR_PRIVATE_USE_SUPPLEMENTARY",
+          "visibility": "public C macro"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "include_compiles": "bool",
+          "symbol_visible": "bool",
+          "constant_value": "ulong"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "include_compiles",
+            "symbol_visible",
+            "constant_value"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ttnameid.h:1128-1131"
+        ]
+      }
+    },
+    {
+      "case_id": "ttnameid.TT_UCR_PRIVATE_USE_SUPPLEMENTARY.os2_private_use_supplementary_runtime",
+      "subject": "ttnameid.TT_UCR_PRIVATE_USE_SUPPLEMENTARY",
+      "case": "os2_private_use_supplementary_runtime",
+      "operation": "sfnt.get_os2_unicode_ranges",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/os2/unicode-range-private-use-supplementary.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "sfnt_tag": "FT_SFNT_OS2",
+          "expected_set_bit": {
+            "field": "ulUnicodeRange3",
+            "mask_symbol": "TT_UCR_PRIVATE_USE_SUPPLEMENTARY",
+            "mask_value": 67108864
+          },
+          "representative_codepoints": [
+            "U+F0000",
+            "U+100000"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "runtime:os2_unicode_range"
+      ],
+      "metadata": {
+        "source_behavior": "FT_Get_Sfnt_Table(face, FT_SFNT_OS2) returns the TT_OS2 table loaded from the font; ulUnicodeRange fields are compared as stored OS/2 table values, not inferred from glyph coverage."
+      },
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": [
+          "input/fonts/os2/unicode-range-private-use-supplementary.ttf must contain an OS/2 table with ulUnicodeRange3 bit 26 set and supplementary private-use cmap coverage in plane 15 or 16."
+        ],
+        "output_shape": {
+          "table_present": "bool",
+          "ulUnicodeRange1": "FT_ULong",
+          "ulUnicodeRange2": "FT_ULong",
+          "ulUnicodeRange3": "FT_ULong",
+          "ulUnicodeRange4": "FT_ULong",
+          "glyph_indices": [
+            "FT_UInt"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "table_present",
+            "ulUnicodeRange1",
+            "ulUnicodeRange2",
+            "ulUnicodeRange3",
+            "ulUnicodeRange4",
+            "glyph_indices"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/tttables.h:396-399",
+          "freetype/src/base/ftobjs.c:4358-4371",
+          "freetype/src/sfnt/sfdriver.c:102-141",
+          "freetype/src/sfnt/ttload.c:1172-1204"
+        ]
+      }
+    }
+  ]
+}

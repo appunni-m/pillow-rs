@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "subject": "ftoutln.FT_Outline_Get_CBox",
+  "manifest_cases": ["extrema_match_points", "empty_outline_zero_box", "null_inputs_noop"],
+  "cases": [
+    {
+      "case_id": "ftoutln.FT_Outline_Get_CBox.extrema_match_points",
+      "subject": "ftoutln.FT_Outline_Get_CBox",
+      "case": "extrema_match_points",
+      "operation": "ftoutln.outline_get_cbox",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/cbox/mixed-extrema.json", "asset_kind": "outline_model"}}, "params": {"sentinel_cbox_before": [123, 456, 789, 1011]}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "operation:geometry"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Get_CBox", "kind": "function", "c_signature": "void FT_Outline_Get_CBox(const FT_Outline* outline, FT_BBox* acbox)"}, "source_behavior": "The control box is the min and max of all control points, including off-curve points."},
+      "expectation": {"status": "ok", "output_shape": {"return": "void", "cbox": "FT_BBox"}, "compare": {"mode": "exact", "paths": ["cbox.xMin", "cbox.yMin", "cbox.xMax", "cbox.yMax"]}, "source_refs": ["freetype/include/freetype/ftoutln.h:223-249", "freetype/src/base/ftoutln.c:470-512"], "fixture_requirements": ["Outline where extrema occur on different control points, including an off-curve point."]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_Get_CBox.empty_outline_zero_box",
+      "subject": "ftoutln.FT_Outline_Get_CBox",
+      "case": "empty_outline_zero_box",
+      "operation": "ftoutln.outline_get_cbox",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/basic/empty.json", "asset_kind": "outline_model"}}, "params": {"sentinel_cbox_before": [1, 2, 3, 4]}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "behavior:empty-outline"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Get_CBox", "kind": "function", "c_signature": "void FT_Outline_Get_CBox(const FT_Outline* outline, FT_BBox* acbox)"}, "source_behavior": "If n_points is zero, all cbox fields are written as zero."},
+      "expectation": {"status": "ok", "output_shape": {"return": "void", "cbox": "FT_BBox"}, "compare": {"mode": "exact", "paths": ["cbox.xMin", "cbox.yMin", "cbox.xMax", "cbox.yMax"]}, "source_refs": ["freetype/src/base/ftoutln.c:477-485"]}
+    },
+    {
+      "case_id": "ftoutln.FT_Outline_Get_CBox.null_inputs_noop",
+      "subject": "ftoutln.FT_Outline_Get_CBox",
+      "case": "null_inputs_noop",
+      "operation": "ftoutln.outline_get_cbox",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/cbox/mixed-extrema.json", "asset_kind": "outline_model"}}, "params": {"scenarios": [{"outline_pointer": null, "sentinel_cbox_before": [1, 2, 3, 4]}, {"outline_ref": "outline", "acbox_pointer": null}]}},
+      "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "behavior:null-noop"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Get_CBox", "kind": "function", "c_signature": "void FT_Outline_Get_CBox(const FT_Outline* outline, FT_BBox* acbox)"}, "source_behavior": "The function does nothing if either outline or acbox is null."},
+      "expectation": {"status": "ok", "output_shape": {"return": "void", "cbox_after": "FT_BBox", "null_acbox_write": false}, "compare": {"mode": "exact", "paths": ["cbox_after", "null_acbox_write"]}, "source_refs": ["freetype/src/base/ftoutln.c:477-512"]}
+    }
+  ]
+}

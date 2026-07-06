@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "subject": "ftmodapi.FT_Done_Library",
+  "manifest_cases": [
+    "rejects_null_library",
+    "decrements_reference_without_destroying",
+    "final_destroy_closes_faces_and_modules"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmodapi.FT_Done_Library.rejects_null_library",
+      "subject": "ftmodapi.FT_Done_Library",
+      "case": "rejects_null_library",
+      "operation": "ftmodapi.done_library",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:library",
+        "area:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Library_Handle",
+        "output_shape": {
+          "status": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Done_Library"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmodapi.FT_Done_Library.decrements_reference_without_destroying",
+      "subject": "ftmodapi.FT_Done_Library",
+      "case": "decrements_reference_without_destroying",
+      "operation": "ftmodapi.reference_then_done_library",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "new_from_FT_New_Library_then_FT_Add_Default_Modules",
+          "sequence": [
+            "FT_Reference_Library",
+            "FT_Done_Library",
+            "FT_Get_Module(truetype)"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:library",
+        "area:reference"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status_sequence": "array",
+          "library_still_usable": "bool",
+          "module_lookup_after_done": "FT_Module"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status_sequence",
+            "library_still_usable",
+            "module_lookup_after_done.nullness"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Reference_Library",
+          "freetype/src/base/ftobjs.c:FT_Done_Library"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmodapi.FT_Done_Library.final_destroy_closes_faces_and_modules",
+      "subject": "ftmodapi.FT_Done_Library",
+      "case": "final_destroy_closes_faces_and_modules",
+      "operation": "ftmodapi.done_library",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "input/fonts/DejaVuSans.ttf",
+            "requirements": "Existing TrueType font used to open a face owned by the library before teardown."
+          }
+        },
+        "params": {
+          "library": "new_from_FT_New_Library_then_FT_Add_Default_Modules",
+          "open_face": {
+            "face_index": 0
+          },
+          "synthetic_module": "fixture_minimal_with_destructor",
+          "destroy_order": "reverse_module_table_order"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:library",
+        "area:lifetime",
+        "requires:font"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "face_closed": "bool",
+          "module_destructor_order": "array",
+          "allocator_balance": "object"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "face_closed",
+            "module_destructor_order",
+            "allocator_balance"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Done_Library",
+          "freetype/src/base/ftobjs.c:Destroy_Module"
+        ]
+      }
+    }
+  ]
+}

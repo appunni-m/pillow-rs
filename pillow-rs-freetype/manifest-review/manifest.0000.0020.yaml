@@ -1,0 +1,195 @@
+  - id: freetype.FT_Encoding
+    kind: enum
+    symbol: FT_Encoding
+    header: freetype/freetype.h
+    description: Public FreeType charmap encoding enum from freetype/freetype.h.
+    cases:
+      - id: enum_variants_match_header
+        description: Variants and backward-compatible aliases match the pinned public C header.
+
+  - id: freetype.FT_Kerning_Mode
+    kind: enum
+    symbol: FT_Kerning_Mode
+    header: freetype/freetype.h
+    description: Public FreeType kerning mode enum used by FT_Get_Kerning.
+    cases:
+      - id: enum_variants_match_header
+        description: "Variants match the pinned public C header: DEFAULT, UNFITTED, and UNSCALED."
+
+  - id: freetype.FT_Render_Mode
+    kind: enum
+    symbol: FT_Render_Mode
+    header: freetype/freetype.h
+    description: Public FreeType render mode enum used by FT_Render_Glyph and FT_LOAD_TARGET_*.
+    cases:
+      - id: enum_variants_match_header
+        description: Variants match the pinned public C header from NORMAL through MAX, including SDF.
+
+  - id: freetype.FT_Size_Request_Type
+    kind: enum
+    symbol: FT_Size_Request_Type
+    header: freetype/freetype.h
+    description: Public FreeType size request enum used by FT_Request_Size.
+    cases:
+      - id: enum_variants_match_header
+        description: Variants match the pinned public C header from NOMINAL through MAX.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_ADOBE_CUSTOM}; output shape=unsigned 32-bit FT_Encoding tag value 0x41444243; comparison=exact equality with pinned C header value.
+  - id: freetype.FT_ENCODING_ADOBE_CUSTOM
+    kind: enum_variant
+    symbol: FT_ENCODING_ADOBE_CUSTOM
+    header: freetype/freetype.h
+    description: Public FT_Encoding variant for Adobe custom Type 1/CFF encodings.
+    cases:
+      - id: value_matches_header
+        description: Value matches FT_ENC_TAG('A','D','B','C') from the pinned public C header.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_ADOBE_EXPERT}; output shape=unsigned 32-bit FT_Encoding tag value 0x41444245; comparison=exact equality with pinned C header value.
+  - id: freetype.FT_ENCODING_ADOBE_EXPERT
+    kind: enum_variant
+    symbol: FT_ENCODING_ADOBE_EXPERT
+    header: freetype/freetype.h
+    description: Public FT_Encoding variant for Adobe Expert Type 1/CFF encodings.
+    cases:
+      - id: value_matches_header
+        description: Value matches FT_ENC_TAG('A','D','B','E') from the pinned public C header.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_ADOBE_LATIN_1}; output shape=unsigned 32-bit FT_Encoding tag value 0x6c617431; comparison=exact equality with pinned C header value.
+  - id: freetype.FT_ENCODING_ADOBE_LATIN_1
+    kind: enum_variant
+    symbol: FT_ENCODING_ADOBE_LATIN_1
+    header: freetype/freetype.h
+    description: Public FT_Encoding variant for Adobe Latin-1 Type 1 encodings.
+    cases:
+      - id: value_matches_header
+        description: Value matches FT_ENC_TAG('l','a','t','1') from the pinned public C header.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_ADOBE_STANDARD}; output shape=unsigned 32-bit FT_Encoding tag value 0x41444f42; comparison=exact equality with pinned C header value.
+  - id: freetype.FT_ENCODING_ADOBE_STANDARD
+    kind: enum_variant
+    symbol: FT_ENCODING_ADOBE_STANDARD
+    header: freetype/freetype.h
+    description: Public FT_Encoding variant for Adobe Standard Type 1/CFF encodings.
+    cases:
+      - id: value_matches_header
+        description: Value matches FT_ENC_TAG('A','D','O','B') from the pinned public C header.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_APPLE_ROMAN}; output shape=unsigned 32-bit FT_Encoding tag value 0x61726d6e; comparison=exact equality with pinned C header value.
+  - id: freetype.FT_ENCODING_APPLE_ROMAN
+    kind: enum_variant
+    symbol: FT_ENCODING_APPLE_ROMAN
+    header: freetype/freetype.h
+    description: Public FT_Encoding variant for Apple Roman charmaps.
+    cases:
+      - id: value_matches_header
+        description: Value matches FT_ENC_TAG('a','r','m','n') from the pinned public C header.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_BIG5}; output shape=unsigned 32-bit FT_Encoding tag value 0x62696735; comparison=exact equality with pinned C header value.
+  - id: freetype.FT_ENCODING_BIG5
+    kind: enum_variant
+    symbol: FT_ENCODING_BIG5
+    header: freetype/freetype.h
+    description: Public FT_Encoding variant for Traditional Chinese Big5 charmaps.
+    cases:
+      - id: value_matches_header
+        description: Value matches FT_ENC_TAG('b','i','g','5') from the pinned public C header.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_GB2312}; output shape=unsigned 32-bit FT_Encoding tag value 0x67622020; comparison=exact equality with FT_ENCODING_PRC alias value from the pinned C header.
+  - id: freetype.FT_ENCODING_GB2312
+    kind: enum_variant
+    symbol: FT_ENCODING_GB2312
+    header: freetype/freetype.h
+    description: Public backward-compatible FT_Encoding alias for FT_ENCODING_PRC.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned public C header alias FT_ENCODING_PRC.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_JOHAB}; output shape=unsigned 32-bit FT_Encoding tag value 0x6a6f6861; comparison=exact equality with pinned C header value.
+  - id: freetype.FT_ENCODING_JOHAB
+    kind: enum_variant
+    symbol: FT_ENCODING_JOHAB
+    header: freetype/freetype.h
+    description: Public FT_Encoding variant for Korean Johab charmaps.
+    cases:
+      - id: value_matches_header
+        description: Value matches FT_ENC_TAG('j','o','h','a') from the pinned public C header.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_MS_BIG5}; output shape=unsigned 32-bit FT_Encoding tag value 0x62696735; comparison=exact equality with FT_ENCODING_BIG5 alias value from the pinned C header.
+  - id: freetype.FT_ENCODING_MS_BIG5
+    kind: enum_variant
+    symbol: FT_ENCODING_MS_BIG5
+    header: freetype/freetype.h
+    description: Deprecated public FT_Encoding alias for FT_ENCODING_BIG5.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned public C header alias FT_ENCODING_BIG5.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_MS_GB2312}; output shape=unsigned 32-bit FT_Encoding tag value 0x67622020; comparison=exact equality with FT_ENCODING_PRC alias value from the pinned C header.
+  - id: freetype.FT_ENCODING_MS_GB2312
+    kind: enum_variant
+    symbol: FT_ENCODING_MS_GB2312
+    header: freetype/freetype.h
+    description: Deprecated public FT_Encoding alias for FT_ENCODING_PRC.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned public C header alias FT_ENCODING_PRC.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_MS_JOHAB}; output shape=unsigned 32-bit FT_Encoding tag value 0x6a6f6861; comparison=exact equality with FT_ENCODING_JOHAB alias value from the pinned C header.
+  - id: freetype.FT_ENCODING_MS_JOHAB
+    kind: enum_variant
+    symbol: FT_ENCODING_MS_JOHAB
+    header: freetype/freetype.h
+    description: Deprecated public FT_Encoding alias for FT_ENCODING_JOHAB.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned public C header alias FT_ENCODING_JOHAB.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_MS_SJIS}; output shape=unsigned 32-bit FT_Encoding tag value 0x736a6973; comparison=exact equality with FT_ENCODING_SJIS alias value from the pinned C header.
+  - id: freetype.FT_ENCODING_MS_SJIS
+    kind: enum_variant
+    symbol: FT_ENCODING_MS_SJIS
+    header: freetype/freetype.h
+    description: Deprecated public FT_Encoding alias for FT_ENCODING_SJIS.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned public C header alias FT_ENCODING_SJIS.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_MS_SYMBOL}; output shape=unsigned 32-bit FT_Encoding tag value 0x73796d62; comparison=exact equality with pinned C header value.
+  - id: freetype.FT_ENCODING_MS_SYMBOL
+    kind: enum_variant
+    symbol: FT_ENCODING_MS_SYMBOL
+    header: freetype/freetype.h
+    description: Public FT_Encoding variant for Microsoft Symbol charmaps.
+    cases:
+      - id: value_matches_header
+        description: Value matches FT_ENC_TAG('s','y','m','b') from the pinned public C header.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_MS_WANSUNG}; output shape=unsigned 32-bit FT_Encoding tag value 0x77616e73; comparison=exact equality with FT_ENCODING_WANSUNG alias value from the pinned C header.
+  - id: freetype.FT_ENCODING_MS_WANSUNG
+    kind: enum_variant
+    symbol: FT_ENCODING_MS_WANSUNG
+    header: freetype/freetype.h
+    description: Deprecated public FT_Encoding alias for FT_ENCODING_WANSUNG.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned public C header alias FT_ENCODING_WANSUNG.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_NONE}; output shape=unsigned 32-bit FT_Encoding value 0x00000000; comparison=exact equality with pinned C header value.
+  - id: freetype.FT_ENCODING_NONE
+    kind: enum_variant
+    symbol: FT_ENCODING_NONE
+    header: freetype/freetype.h
+    description: Public FT_Encoding variant for no classified charmap encoding.
+    cases:
+      - id: value_matches_header
+        description: Value matches FT_ENC_TAG(0,0,0,0) from the pinned public C header.
+
+  # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_OLD_LATIN_2}; output shape=unsigned 32-bit FT_Encoding tag value 0x6c617432; comparison=exact equality with pinned C header value.
+  - id: freetype.FT_ENCODING_OLD_LATIN_2
+    kind: enum_variant
+    symbol: FT_ENCODING_OLD_LATIN_2
+    header: freetype/freetype.h
+    description: Deprecated public FT_Encoding value for old Latin-2; FreeType documents it as unused and not reported.
+    cases:
+      - id: value_matches_header
+        description: Value matches FT_ENC_TAG('l','a','t','2') from the pinned public C header.

@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "subject": "ftgxval.FT_ClassicKern_Free",
+  "manifest_cases": [
+    "null_face_noop",
+    "frees_classic_kern_validation_buffer"
+  ],
+  "cases": [
+    {
+      "case_id": "ftgxval.FT_ClassicKern_Free.null_face_noop",
+      "subject": "ftgxval.FT_ClassicKern_Free",
+      "case": "null_face_noop",
+      "operation": "ftgxval.classic_kern_free",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "face": null,
+          "table_pointer_class": "sentinel_non_owned_pointer",
+          "public_signature": "void FT_ClassicKern_Free(FT_Face face, FT_Bytes table)"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgxval"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "mutation": "none",
+          "crash": false
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "return_class",
+            "table_pointer_class",
+            "mutation"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftgxval.c:125-140"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgxval.FT_ClassicKern_Free.frees_classic_kern_validation_buffer",
+      "subject": "ftgxval.FT_ClassicKern_Free",
+      "case": "frees_classic_kern_validation_buffer",
+      "operation": "ftgxval.classic_kern_validate_then_free",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "classic_kern_font": {
+            "kind": "ref",
+            "id": "fonts/kern/classic-ms-kern.ttf"
+          }
+        },
+        "params": {
+          "validate_flags": [
+            "FT_VALIDATE_MS"
+          ],
+          "free_each_non_null_table": true,
+          "allocator": "face memory"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgxval"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "validate_status": "FT_Error",
+          "ckern_table": "nullable FT_Bytes",
+          "free_status": "void completion"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "validate_status",
+            "ckern_table.presence",
+            "ckern_table.bytes_before_free",
+            "free_completion"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/kern/classic-ms-kern.ttf must contain a valid classic 16-bit kern table"
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftgxval.h:284-343",
+          "freetype/src/base/ftgxval.c:90-140"
+        ]
+      }
+    }
+  ]
+}

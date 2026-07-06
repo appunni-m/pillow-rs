@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Invalid_CharMap_Format",
+  "manifest_cases": [
+    "value_matches_header",
+    "sfnt_cmap_format_rejected"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_CharMap_Format.value_matches_header",
+      "subject": "fterrdef.FT_Err_Invalid_CharMap_Format",
+      "case": "value_matches_header",
+      "operation": "abi.error_code_value_and_import",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Invalid_CharMap_Format",
+          "include": "<freetype/fterrors.h>",
+          "definition_header": "freetype/fterrdef.h",
+          "value_type": "FT_Error",
+          "expected_value_from_pinned_header": 150,
+          "expected_hex_value": "0x96",
+          "expected_error_string": "invalid character map (cmap) format",
+          "module_errors": "FT_CONFIG_OPTION_USE_MODULE_ERRORS disabled in pinned public ABI so FT_ERR_BASE is 0"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "surface:public-c-api",
+        "coverage:value-import"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "FT_Err_Invalid_CharMap_Format",
+          "value": "FT_Error integer",
+          "expected_value": 150,
+          "expected_hex_value": "0x96",
+          "error_string": "invalid character map (cmap) format",
+          "import": "<freetype/fterrors.h> expands freetype/fterrdef.h"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "numeric_value",
+            "error_string",
+            "import_compiles"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "sources_checked": [
+          "freetype/include/freetype/fterrdef.h",
+          "freetype/include/freetype/fterrors.h"
+        ]
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_CharMap_Format.sfnt_cmap_format_rejected",
+      "subject": "fterrdef.FT_Err_Invalid_CharMap_Format",
+      "case": "sfnt_cmap_format_rejected",
+      "operation": "sfnt.new_memory_face_then_charmap_lookup",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/synthetic/sfnt/malformed-cmap-format.ttf",
+            "asset_kind": "font"
+          },
+          "control_font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/synthetic/sfnt/valid-cmap-format.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "call_sequence": [
+            "FT_New_Memory_Face",
+            "FT_Set_Charmap",
+            "FT_Get_Char_Index"
+          ],
+          "face_index": 0,
+          "char_code": 65,
+          "malformation": "cmap subtable format or length fails sfnt/ttcmap.c validation while neighboring directory records are valid",
+          "expected_error_symbol": "FT_Err_Invalid_CharMap_Format",
+          "expected_error_value": 150,
+          "c_behavior": "ttcmap validators classify malformed cmap formats as Invalid_CharMap_Format, distinct from missing cmap table and invalid charmap handle"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "surface:public-c-api",
+        "coverage:modeled-error-trigger"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error",
+          "expected_error_symbol": "FT_Err_Invalid_CharMap_Format",
+          "expected_error_value": 150,
+          "side_effects": "public output pointer, stream, slot, or face state as described by the source path"
+        },
+        "compare": {
+          "mode": "unsupported_until_runner_added",
+          "paths": [
+            "error.symbol",
+            "error.value",
+            "active_charmap_state",
+            "glyph_index"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "sources_checked": [
+          "freetype/include/freetype/fterrdef.h",
+          "freetype/include/freetype/fterrors.h",
+          "freetype/src/sfnt/ttcmap.c",
+          "freetype/src/sfnt/sfobjs.c"
+        ],
+        "fixture_requirements": [
+          "Synthetic SFNT with a malformed cmap subtable and a control font with a valid Unicode cmap."
+        ]
+      }
+    }
+  ]
+}

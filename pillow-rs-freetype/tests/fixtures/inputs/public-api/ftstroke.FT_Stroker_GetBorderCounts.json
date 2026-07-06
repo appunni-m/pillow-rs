@@ -1,0 +1,240 @@
+{
+  "version": 1,
+  "subject": "ftstroke.FT_Stroker_GetBorderCounts",
+  "manifest_cases": [
+    "closed_path_border_counts",
+    "open_path_single_border_counts",
+    "invalid_stroker_or_border",
+    "optional_output_pointers"
+  ],
+  "cases": [
+    {
+      "case_id": "ftstroke.FT_Stroker_GetBorderCounts.closed_path_border_counts",
+      "subject": "ftstroke.FT_Stroker_GetBorderCounts",
+      "case": "closed_path_border_counts",
+      "operation": "ftstroke.get_border_counts",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_GetBorderCounts",
+        "signature": "FT_Error FT_Stroker_GetBorderCounts(FT_Stroker stroker, FT_StrokerBorder border, FT_UInt* anum_points, FT_UInt* anum_contours)",
+        "return": "FT_Error"
+      },
+      "inputs": {
+        "assets": {
+          "paths": {
+            "kind": "ref",
+            "id": "outlines/stroker/closed-triangle.json",
+            "asset_kind": "outline_path_records",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "path": "closed_triangle",
+          "border_rows": [
+            "FT_STROKER_BORDER_LEFT",
+            "FT_STROKER_BORDER_RIGHT"
+          ],
+          "output_pointer_mask": "points_and_contours"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:counts"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "num_points": "FT_UInt",
+          "num_contours": "FT_UInt"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].num_points",
+            "rows[*].num_contours"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftstroke.h:528-566",
+          "freetype/src/base/ftstroke.c:1938-1964"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts",
+      "subject": "ftstroke.FT_Stroker_GetBorderCounts",
+      "case": "open_path_single_border_counts",
+      "operation": "ftstroke.get_border_counts",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_GetBorderCounts",
+        "signature": "FT_Error FT_Stroker_GetBorderCounts(FT_Stroker stroker, FT_StrokerBorder border, FT_UInt* anum_points, FT_UInt* anum_contours)"
+      },
+      "inputs": {
+        "assets": {
+          "paths": {
+            "kind": "ref",
+            "id": "outlines/stroker/open-line-caps.json",
+            "asset_kind": "outline_path_records",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "path": "single_open_line",
+          "border_rows": [
+            "FT_STROKER_BORDER_LEFT",
+            "FT_STROKER_BORDER_RIGHT"
+          ],
+          "output_pointer_mask": "points_and_contours"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:counts"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "left_counts": "all open-stroke points/contours",
+          "right_counts": {
+            "points": 0,
+            "contours": 0
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "left_counts",
+            "right_counts"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftstroke.h:552-559",
+          "freetype/src/base/ftstroke.c:1938-1964"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_GetBorderCounts.invalid_stroker_or_border",
+      "subject": "ftstroke.FT_Stroker_GetBorderCounts",
+      "case": "invalid_stroker_or_border",
+      "operation": "ftstroke.get_border_counts",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_GetBorderCounts",
+        "signature": "FT_Error FT_Stroker_GetBorderCounts(FT_Stroker stroker, FT_StrokerBorder border, FT_UInt* anum_points, FT_UInt* anum_contours)"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "scenarios": [
+            {
+              "stroker": "null",
+              "border": "FT_STROKER_BORDER_LEFT"
+            },
+            {
+              "stroker": "valid",
+              "border": 2
+            }
+          ],
+          "output_initial": {
+            "points": 1234,
+            "contours": 5678
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Argument",
+        "output_shape": {
+          "status": "FT_Error",
+          "num_points": 0,
+          "num_contours": 0
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].num_points",
+            "rows[*].num_contours"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:1947-1964"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_GetBorderCounts.optional_output_pointers",
+      "subject": "ftstroke.FT_Stroker_GetBorderCounts",
+      "case": "optional_output_pointers",
+      "operation": "ftstroke.get_border_counts",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_GetBorderCounts",
+        "signature": "FT_Error FT_Stroker_GetBorderCounts(FT_Stroker stroker, FT_StrokerBorder border, FT_UInt* anum_points, FT_UInt* anum_contours)"
+      },
+      "inputs": {
+        "assets": {
+          "paths": {
+            "kind": "ref",
+            "id": "outlines/stroker/closed-triangle.json",
+            "asset_kind": "outline_path_records",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "output_pointer_masks": [
+            "points_only",
+            "contours_only",
+            "neither"
+          ],
+          "border": "FT_STROKER_BORDER_LEFT"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:counts"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "written_outputs": "only non-null output pointers are written"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].written_outputs"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:1957-1964"
+        ]
+      }
+    }
+  ]
+}

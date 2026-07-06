@@ -1,0 +1,208 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Size_Metrics",
+  "manifest_cases": [
+    "layout_matches_c",
+    "returns_active_size_metrics",
+    "matrix_active_size_metrics"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Size_Metrics.layout_matches_c",
+      "subject": "freetype.FT_Size_Metrics",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "c_abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Size_Metrics",
+          "include": "<freetype/freetype.h>",
+          "import": "#include <freetype/freetype.h>",
+          "fields": [
+            "x_ppem",
+            "y_ppem",
+            "x_scale",
+            "y_scale",
+            "ascender",
+            "descender",
+            "height",
+            "max_advance"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "sizeof": "integer",
+          "alignof": "integer",
+          "field_offsets": "object",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "symbol",
+            "sizeof",
+            "alignof",
+            "field_offsets",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Size_Metrics.returns_active_size_metrics",
+      "subject": "freetype.FT_Size_Metrics",
+      "case": "returns_active_size_metrics",
+      "operation": "freetype.size_metrics",
+      "schema": "size_metrics",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "requests": [
+            {
+              "pixel_size": 12
+            },
+            {
+              "pixel_size": 20
+            },
+            {
+              "char_size_26_6": 1536,
+              "hres": 72,
+              "vres": 96
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "metrics": "FT_Size_Metrics",
+          "units": {
+            "x_scale": "16.16",
+            "y_scale": "16.16",
+            "distance_fields": "26.6"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "metrics.x_ppem",
+            "metrics.y_ppem",
+            "metrics.x_scale",
+            "metrics.y_scale",
+            "metrics.ascender",
+            "metrics.descender",
+            "metrics.height",
+            "metrics.max_advance"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h",
+          "freetype/src/base/ftobjs.c"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Size_Metrics.matrix_active_size_metrics",
+      "subject": "freetype.FT_Size_Metrics",
+      "case": "matrix_active_size_metrics",
+      "operation": "freetype.size_metrics_matrix",
+      "schema": "size_metrics_matrix",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "fonts": [
+            {
+              "kind": "file",
+              "role": "font",
+              "path": "input/fonts/DejaVuSans.ttf"
+            },
+            {
+              "kind": "file",
+              "role": "font",
+              "path": "input/fonts/variable/inter-var.ttf"
+            },
+            {
+              "kind": "file",
+              "role": "font",
+              "path": "input/fonts/vertical/cjk-vertical-metrics.ttf"
+            }
+          ]
+        },
+        "params": {
+          "face_index": 0,
+          "sizes": [
+            8,
+            9,
+            12,
+            16,
+            20,
+            32
+          ],
+          "load_after_size_change": {
+            "glyph_indices": [
+              36,
+              57
+            ],
+            "load_flags": [
+              "FT_LOAD_DEFAULT",
+              "FT_LOAD_NO_HINTING"
+            ]
+          }
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "rows": "array",
+          "row": "font,size,glyph,status,metrics,slot_metrics"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].metrics",
+            "rows[*].slot_metrics"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/variable/inter-var.ttf must expose sane scalable metrics",
+          "fonts/vertical/cjk-vertical-metrics.ttf must carry vertical metrics"
+        ],
+        "source_refs": [
+          "freetype/include/freetype/freetype.h",
+          "freetype/src/base/ftobjs.c"
+        ]
+      }
+    }
+  ]
+}

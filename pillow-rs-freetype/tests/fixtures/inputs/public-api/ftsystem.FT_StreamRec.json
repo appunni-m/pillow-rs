@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "subject": "ftsystem.FT_StreamRec",
+  "manifest_cases": [
+    "layout_matches_c",
+    "memory_stream_field_contract",
+    "callback_stream_field_contract"
+  ],
+  "metadata": {
+    "abi": {
+      "kind": "record",
+      "header": "freetype/ftsystem.h",
+      "symbol": "FT_StreamRec",
+      "c_decl": "typedef struct FT_StreamRec_ { ... } FT_StreamRec",
+      "fields": [
+        "unsigned char* base",
+        "unsigned long size",
+        "unsigned long pos",
+        "FT_StreamDesc descriptor",
+        "FT_StreamDesc pathname",
+        "FT_Stream_IoFunc read",
+        "FT_Stream_CloseFunc close",
+        "FT_Memory memory",
+        "unsigned char* cursor",
+        "unsigned char* limit"
+      ],
+      "related_types": {
+        "FT_Stream": "struct FT_StreamRec_*",
+        "FT_StreamDesc": "union { long value; void* pointer; }",
+        "FT_Stream_IoFunc": "unsigned long (*)(FT_Stream, unsigned long, unsigned char*, unsigned long)",
+        "FT_Stream_CloseFunc": "void (*)(FT_Stream)"
+      }
+    },
+    "source_refs": [
+      "freetype/include/freetype/ftsystem.h",
+      "freetype/src/base/ftstream.c",
+      "freetype/src/base/ftobjs.c:FT_Open_Face"
+    ],
+    "source_behavior": "Memory streams expose base/size/pos and internal cursor/limit frame pointers; callback streams use descriptor/pathname plus read/close callbacks, with read(count==0) acting as seek/status."
+  },
+  "cases": [
+    {
+      "case_id": "ftsystem.FT_StreamRec.layout_matches_c",
+      "subject": "ftsystem.FT_StreamRec",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftsystem.h",
+          "symbol": "FT_StreamRec",
+          "fields_in_order": ["base", "size", "pos", "descriptor", "pathname", "read", "close", "memory", "cursor", "limit"],
+          "probe": ["sizeof", "alignof", "offsetof", "field_types", "import_compiles"]
+        }
+      },
+      "classifiers": ["kind:record", "header:ftsystem", "area:abi_layout", "surface:public-c-api"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "offsets": "object<field,usize>",
+          "field_types": "object<field,c_type>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": ["sizeof", "alignof", "offsets", "field_types", "import_compiles"]
+        }
+      }
+    },
+    {
+      "case_id": "ftsystem.FT_StreamRec.memory_stream_field_contract",
+      "subject": "ftsystem.FT_StreamRec",
+      "case": "memory_stream_field_contract",
+      "operation": "ftsystem.memory_stream_probe",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font_bytes": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf",
+            "role": "font"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "stream_probe": {
+            "observe_fields": ["base", "size", "pos", "cursor", "limit"],
+            "frame_reads": [
+              {"offset": 0, "count": 4},
+              {"offset": 12, "count": 4}
+            ]
+          }
+        }
+      },
+      "classifiers": ["kind:record", "header:ftsystem", "area:stream", "stream:memory"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "face_load_status": "FT_Error",
+          "stream_fields": {
+            "base_nullness": "bool",
+            "size": "unsigned long",
+            "pos": "unsigned long",
+            "cursor_nullness": "bool",
+            "limit_nullness": "bool"
+          },
+          "frame_read_events": ["object"]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": ["face_load_status", "stream_fields", "frame_read_events"]
+        }
+      }
+    },
+    {
+      "case_id": "ftsystem.FT_StreamRec.callback_stream_field_contract",
+      "subject": "ftsystem.FT_StreamRec",
+      "case": "callback_stream_field_contract",
+      "operation": "ftsystem.open_face_with_external_stream",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font_bytes": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf",
+            "role": "font"
+          },
+          "callback_harness": {
+            "kind": "ref",
+            "id": "streams/harnesses/external-stream-callbacks.json",
+            "role": "stream_model",
+            "status": "required_future_asset",
+            "requires": "C and Rust ABI harness support for caller-owned FT_StreamRec read/close callbacks"
+          }
+        },
+        "params": {
+          "open": "FT_Open_Face",
+          "open_flags": ["FT_OPEN_STREAM"],
+          "face_index": 0,
+          "initial_stream": {
+            "base": null,
+            "size": "font_bytes.length",
+            "pos": 0,
+            "descriptor.pointer": "callback_harness",
+            "pathname.pointer": null,
+            "read": "callback_harness.read",
+            "close": "callback_harness.close"
+          },
+          "read_callback_cases": [
+            {"offset": 0, "count": 0, "meaning": "seek_status"},
+            {"offset": 0, "count": 4, "meaning": "read_bytes"},
+            {"offset": "past_end", "count": 8, "meaning": "short_read_or_error"}
+          ]
+        }
+      },
+      "classifiers": ["kind:record", "header:ftsystem", "area:stream", "stream:callback"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "face_load_status": "FT_Error",
+          "stream_after": "FT_StreamRec public fields",
+          "callback_events": ["read_or_close_event"],
+          "close_called_by_face_done": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": ["face_load_status", "stream_after", "callback_events", "close_called_by_face_done"]
+        },
+        "fixture_requirements": ["Add a reusable external stream callback harness that records read(count==0), read(count>0), and close events without embedding font bytes in JSON."]
+      }
+    }
+  ]
+}

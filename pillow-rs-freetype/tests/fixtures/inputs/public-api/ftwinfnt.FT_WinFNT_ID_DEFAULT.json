@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "subject": "ftwinfnt.FT_WinFNT_ID_DEFAULT",
+  "manifest_cases": [
+    "value_matches_header",
+    "invalid_as_real_font_charset"
+  ],
+  "cases": [
+    {
+      "case_id": "ftwinfnt.FT_WinFNT_ID_DEFAULT.value_matches_header",
+      "subject": "ftwinfnt.FT_WinFNT_ID_DEFAULT",
+      "case": "value_matches_header",
+      "operation": "abi.constant_eval",
+      "schema": "constant_value",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ftwinfnt.h",
+          "symbol": "FT_WinFNT_ID_DEFAULT",
+          "value": 1,
+          "value_type": "charset byte macro",
+          "encoding_family": "Windows DEFAULT charset sentinel"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftwinfnt",
+        "area:winfnt_charset"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "constant_value": "int",
+          "symbol": "string"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "symbol",
+            "constant_value"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftwinfnt.h:65-71",
+          "freetype/include/freetype/ftwinfnt.h:153-171"
+        ]
+      }
+    },
+    {
+      "case_id": "ftwinfnt.FT_WinFNT_ID_DEFAULT.invalid_as_real_font_charset",
+      "subject": "ftwinfnt.FT_WinFNT_ID_DEFAULT",
+      "case": "invalid_as_real_font_charset",
+      "operation": "winfnt.charset_validity_contract",
+      "schema": "constant_metadata",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ftwinfnt.h",
+          "symbol": "FT_WinFNT_ID_DEFAULT",
+          "value": 1,
+          "valid_font_file_charset": false,
+          "runtime_success_fixture_allowed": false,
+          "header_contract": "used for enumeration and creation as a don't-care value; valid font files don't contain this value"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftwinfnt",
+        "area:winfnt_charset"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "constant_value": "int",
+          "valid_font_file_charset": "bool",
+          "runtime_success_fixture_allowed": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "constant_value",
+            "valid_font_file_charset",
+            "runtime_success_fixture_allowed"
+          ]
+        },
+        "fixture_requirements": [
+          "Do not add a valid WinFNT success fixture whose header charset byte is 1; only constant/import parity is modeled for this subject unless a deliberately malformed fixture is added later."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftwinfnt.h:65-71"
+        ]
+      }
+    }
+  ]
+}

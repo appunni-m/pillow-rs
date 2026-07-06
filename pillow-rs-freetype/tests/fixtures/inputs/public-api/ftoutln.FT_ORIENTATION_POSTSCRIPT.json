@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "subject": "ftoutln.FT_ORIENTATION_POSTSCRIPT",
+  "manifest_cases": ["value_matches_header", "positive_area_returns_postscript"],
+  "cases": [
+    {
+      "case_id": "ftoutln.FT_ORIENTATION_POSTSCRIPT.value_matches_header",
+      "subject": "ftoutln.FT_ORIENTATION_POSTSCRIPT",
+      "case": "value_matches_header",
+      "operation": "ftoutln.constant",
+      "schema": "constant_value",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"symbol": "FT_ORIENTATION_POSTSCRIPT", "ctype": "FT_Orientation"}},
+      "classifiers": ["kind:enum_variant", "header:ftoutln", "surface:public-c-api"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_ORIENTATION_POSTSCRIPT", "kind": "enum_variant", "enum": "FT_Orientation"}, "value": {"decimal": 1, "alias": "FT_ORIENTATION_FILL_LEFT"}},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Orientation", "value": "integer"}, "compare": {"mode": "exact", "paths": ["symbol", "value", "ctype"]}, "source_refs": ["freetype/include/freetype/ftoutln.h:536-544"]}
+    },
+    {
+      "case_id": "ftoutln.FT_ORIENTATION_POSTSCRIPT.positive_area_returns_postscript",
+      "subject": "ftoutln.FT_ORIENTATION_POSTSCRIPT",
+      "case": "positive_area_returns_postscript",
+      "operation": "ftoutln.get_orientation",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/orientation/positive-area-square.json", "asset_kind": "outline_model"}}, "params": {"call": "FT_Outline_Get_Orientation", "expected_symbol": "FT_ORIENTATION_POSTSCRIPT"}},
+      "classifiers": ["kind:enum_variant", "header:ftoutln", "surface:public-c-api", "behavior:orientation-area"],
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_ORIENTATION_POSTSCRIPT", "kind": "enum_variant", "enum": "FT_Orientation"}, "source_behavior": "A positive signed polygon integral returns FT_ORIENTATION_POSTSCRIPT."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Orientation", "area_sign": "positive"}, "compare": {"mode": "exact", "paths": ["return", "area_sign"]}, "source_refs": ["freetype/include/freetype/ftoutln.h:550-571", "freetype/src/base/ftoutln.c:1090-1116"], "fixture_requirements": ["Non-degenerate outline with positive accumulated area under FreeType's area formula."]}
+    }
+  ]
+}

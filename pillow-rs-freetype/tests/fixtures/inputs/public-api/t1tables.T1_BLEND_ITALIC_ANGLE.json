@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "subject": "t1tables.T1_BLEND_ITALIC_ANGLE",
+  "manifest_cases": ["value_matches_header", "font_info_italic_angle_runtime_value"],
+  "cases": [
+    {
+      "case_id": "t1tables.T1_BLEND_ITALIC_ANGLE.value_matches_header",
+      "subject": "t1tables.T1_BLEND_ITALIC_ANGLE",
+      "case": "value_matches_header",
+      "operation": "t1tables.t1_blend_flag_constant",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {"header": "freetype/t1tables.h", "symbol": "T1_BLEND_ITALIC_ANGLE", "kind": "enum_variant", "enum": "T1_Blend_Flags", "value": 2},
+      "inputs": {"assets": {}, "params": {"include_header": "freetype/t1tables.h", "constant": "T1_BLEND_ITALIC_ANGLE", "expected_value": 2, "import_symbol": "T1_BLEND_ITALIC_ANGLE"}},
+      "classifiers": ["kind:enum_variant", "header:t1tables", "area:type1"],
+      "expectation": {"status": "ok", "output_shape": {"constant_value": "int"}, "compare": {"mode": "value", "paths": ["constant_value"]}, "source_refs": ["freetype/include/freetype/t1tables.h:226-245"]}
+    },
+    {
+      "case_id": "t1tables.T1_BLEND_ITALIC_ANGLE.font_info_italic_angle_runtime_value",
+      "subject": "t1tables.T1_BLEND_ITALIC_ANGLE",
+      "case": "font_info_italic_angle_runtime_value",
+      "operation": "t1tables.get_ps_font_info_mm_blend",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {"header": "freetype/t1tables.h", "symbol": "T1_BLEND_ITALIC_ANGLE", "record_field": "PS_FontInfoRec.italic_angle", "field_type": "FT_Fixed"},
+      "inputs": {"assets": {"type1_mm_font": {"kind": "ref", "id": "fonts/type1/mm-blend-fontinfo-private.pfb", "asset_kind": "font", "status": "required_future_asset"}}, "params": {"face_source": "type1_mm_font", "design_coordinates": ["default", "non_default"], "constant": "T1_BLEND_ITALIC_ANGLE", "font_info_fields": ["italic_angle"]}},
+      "classifiers": ["kind:enum_variant", "header:t1tables", "area:type1-mm"],
+      "expectation": {"status": "ok", "output_shape": {"constant_value": 2, "font_info_before_after": {"italic_angle": "FT_Fixed"}}, "compare": {"mode": "exact", "paths": ["constant_value", "font_info_before_after.italic_angle"]}, "source_refs": ["freetype/include/freetype/t1tables.h:85-95", "freetype/include/freetype/t1tables.h:226-245"], "fixture_requirements": ["fonts/type1/mm-blend-fontinfo-private.pfb must contain differing ItalicAngle values across masters."]}
+    }
+  ]
+}

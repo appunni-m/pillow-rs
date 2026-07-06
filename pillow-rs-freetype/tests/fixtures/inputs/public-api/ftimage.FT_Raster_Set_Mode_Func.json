@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_Raster_Set_Mode_Func",
+  "manifest_cases": [
+    "macro_alias_matches_typedef",
+    "callback_abi_matches_c",
+    "set_mode_result_is_observable"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_Raster_Set_Mode_Func.macro_alias_matches_typedef",
+      "subject": "ftimage.FT_Raster_Set_Mode_Func",
+      "case": "macro_alias_matches_typedef",
+      "operation": "ftimage.macro_alias",
+      "schema": "api_abi_type",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"include": "<freetype/ftimage.h>", "macro": "FT_Raster_Set_Mode_Func", "expands_to": "FT_Raster_SetModeFunc"}},
+      "classifiers": ["kind:macro", "header:ftimage", "area:raster"],
+      "expectation": {"status": "ok", "output_shape": {"macro": "FT_Raster_Set_Mode_Func", "typedef": "FT_Raster_SetModeFunc"}, "compare": {"mode": "exact", "paths": ["macro", "expands_to", "include"]}, "source_refs": ["freetype/include/freetype/ftimage.h:1173-1195"]}
+    },
+    {
+      "case_id": "ftimage.FT_Raster_Set_Mode_Func.callback_abi_matches_c",
+      "subject": "ftimage.FT_Raster_Set_Mode_Func",
+      "case": "callback_abi_matches_c",
+      "operation": "ftimage.callback_abi",
+      "schema": "api_abi_type",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"typedef": "FT_Raster_SetModeFunc", "return_type": "int", "arguments": [{"name": "raster", "type": "FT_Raster"}, {"name": "mode", "type": "unsigned long"}, {"name": "args", "type": "void*"}]}},
+      "classifiers": ["kind:callback", "header:ftimage", "abi:function-pointer"],
+      "expectation": {"status": "ok", "output_shape": {"return_type": "int", "argument_count": 3, "arguments": "raster, 4-byte mode tag, args pointer"}, "compare": {"mode": "layout", "paths": ["return_type", "arguments[*].type", "arguments[*].position"]}, "source_refs": ["freetype/include/freetype/ftimage.h:1173-1194"]}
+    },
+    {
+      "case_id": "ftimage.FT_Raster_Set_Mode_Func.set_mode_result_is_observable",
+      "subject": "ftimage.FT_Raster_Set_Mode_Func",
+      "case": "set_mode_result_is_observable",
+      "operation": "ftimage.raster_set_mode",
+      "schema": "callback_event_stream",
+      "expect_error": false,
+      "inputs": {"assets": {"renderer_module": {"kind": "ref", "id": "modules/raster/set-mode-logging-renderer.json"}}, "params": {"mode_tags": ["test", "prop"], "args_pointer_classes": ["null", "non_null"], "return_codes": [0, "FT_Err_Unimplemented_Feature"]}},
+      "classifiers": ["kind:callback", "header:ftimage", "path:runtime"],
+      "expectation": {"status": "ok", "output_shape": {"status": "FT_Error", "events": "set_mode calls with mode and args pointer class"}, "compare": {"mode": "exact", "paths": ["rows[*].status", "rows[*].mode", "rows[*].args_nullness", "rows[*].callback_called"]}, "fixture_requirements": ["set-mode renderer fixture must expose raster_set_mode and a no-set-mode renderer control."]}
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Size",
+  "manifest_cases": [
+    "alias_defined",
+    "active_size_handle_runtime"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Size.alias_defined",
+      "subject": "freetype.FT_Size",
+      "case": "alias_defined",
+      "operation": "abi.type_alias",
+      "schema": "c_abi_type",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Size",
+          "target": "struct FT_SizeRec_*",
+          "include": "<freetype/freetype.h>",
+          "import": "#include <freetype/freetype.h>",
+          "pointer_alias": true
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "target": "string",
+          "pointer_alias": "bool",
+          "pointer_width": "integer",
+          "null_value": "zero",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "target",
+            "pointer_alias",
+            "pointer_width",
+            "null_value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Size.active_size_handle_runtime",
+      "subject": "freetype.FT_Size",
+      "case": "active_size_handle_runtime",
+      "operation": "freetype.active_size_handle",
+      "schema": "opaque_handle_runtime",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "sizes": [
+            10,
+            16,
+            24
+          ],
+          "operations": [
+            "FT_Set_Pixel_Sizes",
+            "FT_Request_Size",
+            "FT_Activate_Size if multiple sizes are available"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "active_size_identity": "identity_class",
+          "metrics": "FT_Size_Metrics",
+          "later_load_uses_active_size": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "active_size_identity",
+            "metrics",
+            "later_load_uses_active_size"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h",
+          "freetype/src/base/ftobjs.c"
+        ]
+      }
+    }
+  ]
+}

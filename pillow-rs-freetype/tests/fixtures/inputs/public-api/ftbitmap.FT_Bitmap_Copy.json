@@ -1,0 +1,453 @@
+{
+  "version": 1,
+  "subject": "ftbitmap.FT_Bitmap_Copy",
+  "manifest_cases": [
+    "success_deep_copy_all_public_fields",
+    "success_source_equals_target_noop",
+    "success_null_source_buffer",
+    "success_flow_flip",
+    "error_null_library_or_bitmaps",
+    "ownership_replaces_target_buffer"
+  ],
+  "cases": [
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Copy.success_deep_copy_all_public_fields",
+      "subject": "ftbitmap.FT_Bitmap_Copy",
+      "case": "success_deep_copy_all_public_fields",
+      "operation": "ftbitmap.bitmap_copy",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "success_deep_copy_all_public_fields",
+          "source_target_alias": false,
+          "pitch_pairs": [
+            [
+              4,
+              0
+            ],
+            [
+              4,
+              -1
+            ],
+            [
+              -4,
+              1
+            ]
+          ],
+          "preallocated_target": false
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "buffer_identity": "source and target independent unless alias no-op"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "target.fields",
+            "target.buffer_bytes",
+            "buffer_identity_class",
+            "allocator.events"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Copy.success_source_equals_target_noop",
+      "subject": "ftbitmap.FT_Bitmap_Copy",
+      "case": "success_source_equals_target_noop",
+      "operation": "ftbitmap.bitmap_copy",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "success_source_equals_target_noop",
+          "source_target_alias": true,
+          "pitch_pairs": [
+            [
+              4,
+              0
+            ],
+            [
+              4,
+              -1
+            ],
+            [
+              -4,
+              1
+            ]
+          ],
+          "preallocated_target": false
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "buffer_identity": "source and target independent unless alias no-op"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "target.fields",
+            "target.buffer_bytes",
+            "buffer_identity_class",
+            "allocator.events"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Copy.success_null_source_buffer",
+      "subject": "ftbitmap.FT_Bitmap_Copy",
+      "case": "success_null_source_buffer",
+      "operation": "ftbitmap.bitmap_copy",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "success_null_source_buffer",
+          "source_target_alias": false,
+          "pitch_pairs": [
+            [
+              4,
+              0
+            ],
+            [
+              4,
+              -1
+            ],
+            [
+              -4,
+              1
+            ]
+          ],
+          "preallocated_target": false
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "buffer_identity": "source and target independent unless alias no-op"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "target.fields",
+            "target.buffer_bytes",
+            "buffer_identity_class",
+            "allocator.events"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Copy.success_flow_flip",
+      "subject": "ftbitmap.FT_Bitmap_Copy",
+      "case": "success_flow_flip",
+      "operation": "ftbitmap.bitmap_copy",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "success_flow_flip",
+          "source_target_alias": false,
+          "pitch_pairs": [
+            [
+              4,
+              0
+            ],
+            [
+              4,
+              -1
+            ],
+            [
+              -4,
+              1
+            ]
+          ],
+          "preallocated_target": false
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "buffer_identity": "source and target independent unless alias no-op"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "target.fields",
+            "target.buffer_bytes",
+            "buffer_identity_class",
+            "allocator.events"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Copy.error_null_library_or_bitmaps",
+      "subject": "ftbitmap.FT_Bitmap_Copy",
+      "case": "error_null_library_or_bitmaps",
+      "operation": "ftbitmap.bitmap_copy",
+      "schema": "bitmap_operation",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "error_null_library_or_bitmaps",
+          "source_target_alias": false,
+          "pitch_pairs": [
+            [
+              4,
+              0
+            ],
+            [
+              4,
+              -1
+            ],
+            [
+              -4,
+              1
+            ]
+          ],
+          "preallocated_target": false
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "buffer_identity": "source and target independent unless alias no-op"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "target.fields",
+            "target.buffer_bytes",
+            "buffer_identity_class",
+            "allocator.events"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_Copy.ownership_replaces_target_buffer",
+      "subject": "ftbitmap.FT_Bitmap_Copy",
+      "case": "ownership_replaces_target_buffer",
+      "operation": "ftbitmap.bitmap_copy",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "ownership_replaces_target_buffer",
+          "source_target_alias": false,
+          "pitch_pairs": [
+            [
+              4,
+              0
+            ],
+            [
+              4,
+              -1
+            ],
+            [
+              -4,
+              1
+            ]
+          ],
+          "preallocated_target": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "pixel_mode",
+            "num_grays",
+            "buffer"
+          ],
+          "buffer_bytes": true,
+          "allocator_events": true,
+          "buffer_identity": "source and target independent unless alias no-op"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "target.fields",
+            "target.buffer_bytes",
+            "buffer_identity_class",
+            "allocator.events"
+          ]
+        }
+      }
+    }
+  ]
+}

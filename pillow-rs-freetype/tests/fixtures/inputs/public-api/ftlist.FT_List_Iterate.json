@@ -1,0 +1,308 @@
+{
+  "version": 1,
+  "subject": "ftlist.FT_List_Iterate",
+  "manifest_cases": [
+    "import_contract",
+    "iterates_all_nodes_success",
+    "stops_on_callback_error",
+    "iterator_can_mutate_current_node",
+    "null_list_or_iterator_error"
+  ],
+  "cases": [
+    {
+      "case_id": "ftlist.FT_List_Iterate.import_contract",
+      "subject": "ftlist.FT_List_Iterate",
+      "case": "import_contract",
+      "operation": "ftlist.list_iterate_abi",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftlist.h",
+        "symbol": "FT_List_Iterate",
+        "signature": "FT_Error FT_List_Iterate(FT_List list, FT_List_Iterator iterator, void* user)",
+        "return": "FT_Error",
+        "params": [
+          "FT_List list",
+          "FT_List_Iterator iterator",
+          "void* user"
+        ],
+        "callback": "FT_Error (*FT_List_Iterator)(FT_ListNode node, void* user)"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include_header": "freetype/ftlist.h",
+          "import_symbol": "FT_List_Iterate"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftlist",
+        "area:list"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile": "symbol and callback typedef import succeeds",
+          "return": "FT_Error"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "signature",
+            "callback_signature"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftlist.h:157-194"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlist.FT_List_Iterate.iterates_all_nodes_success",
+      "subject": "ftlist.FT_List_Iterate",
+      "case": "iterates_all_nodes_success",
+      "operation": "ftlist.list_iterate",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftlist.h",
+        "symbol": "FT_List_Iterate",
+        "signature": "FT_Error FT_List_Iterate(FT_List list, FT_List_Iterator iterator, void* user)"
+      },
+      "inputs": {
+        "assets": {
+          "list_facade": {
+            "kind": "ref",
+            "id": "facades/list/ft-list-callbacks.json",
+            "asset_kind": "fixture"
+          }
+        },
+        "params": {
+          "initial_orders": [
+            [],
+            [
+              "N1"
+            ],
+            [
+              "N1",
+              "N2",
+              "N3"
+            ]
+          ],
+          "callback_return": "FT_Err_Ok",
+          "user_token": "USER_A"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftlist",
+        "area:list"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "visited": "head-to-tail node data tokens",
+          "user_pointer": "same identity passed to every callback"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].visited_data_tokens",
+            "rows[*].user_pointer_identity",
+            "rows[*].final_topology"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftutil.c:369-394"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlist.FT_List_Iterate.stops_on_callback_error",
+      "subject": "ftlist.FT_List_Iterate",
+      "case": "stops_on_callback_error",
+      "operation": "ftlist.list_iterate",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftlist.h",
+        "symbol": "FT_List_Iterate",
+        "signature": "FT_Error FT_List_Iterate(FT_List list, FT_List_Iterator iterator, void* user)"
+      },
+      "inputs": {
+        "assets": {
+          "list_facade": {
+            "kind": "ref",
+            "id": "facades/list/ft-list-callbacks.json",
+            "asset_kind": "fixture"
+          }
+        },
+        "params": {
+          "initial_order": [
+            "N1",
+            "N2",
+            "N3"
+          ],
+          "callback_error_rows": [
+            {
+              "return_error_at_index": 0,
+              "error": "FT_Err_Invalid_Argument"
+            },
+            {
+              "return_error_at_index": 1,
+              "error": "FT_Err_Invalid_Stream_Operation"
+            },
+            {
+              "return_error_at_index": 2,
+              "error": "FT_Err_Out_Of_Memory"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftlist",
+        "area:list"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "callback FT_Error",
+          "visited": "prefix through failing node"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].visited_data_tokens",
+            "rows[*].unvisited_tail"
+          ]
+        },
+        "error": "callback_return_value",
+        "source_refs": [
+          "freetype/src/base/ftutil.c:381-390"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlist.FT_List_Iterate.iterator_can_mutate_current_node",
+      "subject": "ftlist.FT_List_Iterate",
+      "case": "iterator_can_mutate_current_node",
+      "operation": "ftlist.list_iterate",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftlist.h",
+        "symbol": "FT_List_Iterate",
+        "signature": "FT_Error FT_List_Iterate(FT_List list, FT_List_Iterator iterator, void* user)"
+      },
+      "inputs": {
+        "assets": {
+          "list_facade": {
+            "kind": "ref",
+            "id": "facades/list/ft-list-callbacks.json",
+            "asset_kind": "fixture"
+          }
+        },
+        "params": {
+          "initial_order": [
+            "N1",
+            "N2",
+            "N3"
+          ],
+          "callback_mutations": [
+            "remove_current_with_FT_List_Remove",
+            "move_current_to_head_with_FT_List_Up",
+            "find_current_data_with_FT_List_Find_control",
+            "finalize_side_list_after_current_snapshot"
+          ],
+          "next_snapshot_before_callback": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftlist",
+        "area:list"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "visited": "snapshot-next traversal order",
+          "final_list": "topology after callback mutations"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].visited_data_tokens",
+            "rows[*].callback_events",
+            "rows[*].final_topology"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftutil.c:381-392",
+          "freetype/src/base/ftutil.c:307-396"
+        ],
+        "fixture_requirements": [
+          "facades/list/ft-list-callbacks.json must provide callback modes that exercise remove, up, find-control, and finalize-on-side-list behavior without embedding oracle output."
+        ]
+      }
+    },
+    {
+      "case_id": "ftlist.FT_List_Iterate.null_list_or_iterator_error",
+      "subject": "ftlist.FT_List_Iterate",
+      "case": "null_list_or_iterator_error",
+      "operation": "ftlist.list_iterate",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftlist.h",
+        "symbol": "FT_List_Iterate",
+        "signature": "FT_Error FT_List_Iterate(FT_List list, FT_List_Iterator iterator, void* user)"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "argument_matrix": [
+            {
+              "list": null,
+              "iterator": "valid_callback"
+            },
+            {
+              "list": "valid_empty_list",
+              "iterator": null
+            }
+          ],
+          "user": "USER_A"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftlist",
+        "area:list"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "callback_events": []
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].callback_events"
+          ]
+        },
+        "error": "FT_Err_Invalid_Argument",
+        "source_refs": [
+          "freetype/src/base/ftutil.c:376-377"
+        ]
+      }
+    }
+  ]
+}

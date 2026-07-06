@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "subject": "ttnameid.TT_NAME_ID_VARIATIONS_PREFIX",
+  "manifest_cases": ["value_matches_header", "public_import_contract", "representative_variable_name_record_match"],
+  "cases": [
+    {
+      "case_id": "ttnameid.TT_NAME_ID_VARIATIONS_PREFIX.value_matches_header",
+      "subject": "ttnameid.TT_NAME_ID_VARIATIONS_PREFIX",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"header": "freetype/ttnameid.h", "include": "<freetype/ttnameid.h>", "symbol": "TT_NAME_ID_VARIATIONS_PREFIX", "declared_as": "preprocessor integer constant", "expected_value_from_pinned_header": 25, "expected_value_hex": "0x0019", "name_table_field": "FT_SfntName.name_id", "source_ref": "freetype/include/freetype/ttnameid.h:785-833"}},
+      "classifiers": ["kind:constant", "header:ttnameid", "area:sfnt-name", "public-api-slice:1020-1039"],
+      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "value": "uint16", "value_hex": "string", "header": "string"}, "compare": {"mode": "value", "paths": ["symbol", "value", "value_hex", "header"]}, "sources_checked": ["freetype/include/freetype/ttnameid.h:785-833"]}
+    },
+    {
+      "case_id": "ttnameid.TT_NAME_ID_VARIATIONS_PREFIX.public_import_contract",
+      "subject": "ttnameid.TT_NAME_ID_VARIATIONS_PREFIX",
+      "case": "public_import_contract",
+      "operation": "constant.import",
+      "schema": "api_import",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"include": "<freetype/ttnameid.h>", "symbol": "TT_NAME_ID_VARIATIONS_PREFIX", "usage": "FT_UShort name_id = TT_NAME_ID_VARIATIONS_PREFIX", "expected_value_from_pinned_header": 25}},
+      "classifiers": ["kind:constant", "header:ttnameid", "area:public-import", "public-api-slice:1020-1039"],
+      "expectation": {"status": "ok", "output_shape": {"compile_status": "ok", "symbol": "TT_NAME_ID_VARIATIONS_PREFIX", "ctype": "FT_UShort-compatible integer", "value": "uint16"}, "compare": {"mode": "exact", "paths": ["compile_status", "symbol", "ctype", "value"]}, "sources_checked": ["freetype/include/freetype/ttnameid.h:785-833"]}
+    },
+    {
+      "case_id": "ttnameid.TT_NAME_ID_VARIATIONS_PREFIX.representative_variable_name_record_match",
+      "subject": "ttnameid.TT_NAME_ID_VARIATIONS_PREFIX",
+      "case": "representative_variable_name_record_match",
+      "operation": "ftsnames.get_sfnt_name_by_record",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {"assets": {"font": {"kind": "ref", "id": "input/fonts/names/variable-variations-prefix.ttf", "role": "font", "requirements": "Variable SFNT font with variation named-instance prefix record tagged name ID 25."}}, "params": {"face_index": 0, "lookup_group": "variable-variations-prefix", "name_id": "TT_NAME_ID_VARIATIONS_PREFIX", "name_id_value": 25}},
+      "classifiers": ["kind:constant", "header:ttnameid", "area:sfnt-name", "requires:future-font", "public-api-slice:1020-1039"],
+      "expectation": {"status": "ok", "fixture_requirements": ["Missing asset: input/fonts/names/variable-variations-prefix.ttf must contain a variations prefix name record with nameID 25."], "output_shape": {"status": "FT_Error", "name_index": "FT_UInt", "platform_id": "FT_UShort", "encoding_id": "FT_UShort", "language_id": "FT_UShort", "name_id": "FT_UShort", "string_len": "FT_UInt", "string_bytes": "bytes"}, "compare": {"mode": "exact", "paths": ["status", "name_index", "platform_id", "encoding_id", "language_id", "name_id", "string_len", "string_bytes"]}, "sources_checked": ["freetype/include/freetype/ftsnames.h:151-181", "freetype/src/base/ftsnames.c:43-88"]}
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "subject": "ftrender.FT_Glyph_Init_Func",
+  "manifest_cases": [
+    "alias_matches_callback_typedef",
+    "callback_signature_and_slot_input"
+  ],
+  "cases": [
+    {
+      "case_id": "ftrender.FT_Glyph_Init_Func.alias_matches_callback_typedef",
+      "subject": "ftrender.FT_Glyph_Init_Func",
+      "case": "alias_matches_callback_typedef",
+      "operation": "abi.callback_typedef_alias",
+      "schema": "c_abi_type",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Glyph_Init_Func",
+          "canonical": "FT_Glyph_InitFunc",
+          "include": "<freetype/ftrender.h>",
+          "definition": "#define FT_Glyph_Init_Func FT_Glyph_InitFunc",
+          "signature": "FT_Error (*)(FT_Glyph glyph, FT_GlyphSlot slot)",
+          "source_refs": [
+            "freetype/include/freetype/ftrender.h"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftrender",
+        "area:glyph-callback-alias"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "same_type": "bool",
+          "signature": "function_pointer",
+          "return_type": "FT_Error",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "same_type",
+            "signature",
+            "return_type",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftrender.FT_Glyph_Init_Func.callback_signature_and_slot_input",
+      "subject": "ftrender.FT_Glyph_Init_Func",
+      "case": "callback_signature_and_slot_input",
+      "operation": "abi.call_callback_probe",
+      "schema": "callback_abi",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "probe_source": {
+            "kind": "ref",
+            "role": "c_abi_probe",
+            "path": "input/abi-probes/ftrender/glyph_init_func.c",
+            "status": "required_future_asset"
+          },
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "typedef_spelling": "FT_Glyph_Init_Func",
+          "glyph_pointer_class": "allocated_glyph",
+          "slot_source": {
+            "glyph_index": 36,
+            "size_ppem": 20,
+            "load_flags": [
+              "FT_LOAD_DEFAULT"
+            ]
+          },
+          "callback_return_values": [
+            "FT_Err_Ok",
+            "FT_Err_Invalid_Argument"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftrender",
+        "area:glyph-callback-alias"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile_result": "success",
+          "return": "FT_Error",
+          "callback_event_log": "ordered array",
+          "slot_snapshot": "FT_GlyphSlotRec public fields"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "compile_result",
+            "return",
+            "callback_event_log",
+            "slot_snapshot"
+          ]
+        },
+        "fixture_requirements": [
+          "Add tiny C ABI probe source."
+        ]
+      }
+    }
+  ]
+}

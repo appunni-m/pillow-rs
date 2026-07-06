@@ -1,0 +1,198 @@
+{
+  "version": 1,
+  "subject": "ftlcdfil.FT_Library_SetLcdFilter",
+  "manifest_cases": [
+    "success_sets_none_default_light",
+    "error_null_library",
+    "error_invalid_filter",
+    "unimplemented_without_subpixel_filtering"
+  ],
+  "cases": [
+    {
+      "case_id": "ftlcdfil.FT_Library_SetLcdFilter.success_sets_none_default_light",
+      "subject": "ftlcdfil.FT_Library_SetLcdFilter",
+      "case": "success_sets_none_default_light",
+      "operation": "ftlcdfil.set_lcd_filter",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "function": "FT_Library_SetLcdFilter",
+          "signature": "FT_Error (FT_Library, FT_LcdFilter)",
+          "filters": {
+            "FT_LCD_FILTER_NONE": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "FT_LCD_FILTER_DEFAULT": [
+              8,
+              77,
+              86,
+              77,
+              8
+            ],
+            "FT_LCD_FILTER_LIGHT": [
+              0,
+              85,
+              86,
+              85,
+              0
+            ]
+          },
+          "subpixel_rendering_branch": "defined"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftlcdfil",
+        "runtime:lcd_filter"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "filter": "FT_LcdFilter",
+          "error": "FT_Error",
+          "library_weights": "array<u8,5>"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "filter",
+            "error",
+            "library_weights"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftlcdfil.h",
+          "freetype/src/base/ftlcdfil.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlcdfil.FT_Library_SetLcdFilter.error_null_library",
+      "subject": "ftlcdfil.FT_Library_SetLcdFilter",
+      "case": "error_null_library",
+      "operation": "ftlcdfil.set_lcd_filter",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": null,
+          "filter": "FT_LCD_FILTER_DEFAULT",
+          "subpixel_rendering_branch": "defined"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "runtime:lcd_filter",
+        "error_path"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error"
+          ]
+        },
+        "error": "FT_Err_Invalid_Library_Handle when subpixel rendering is enabled; FT_Err_Unimplemented_Feature when disabled",
+        "source_refs": [
+          "freetype/src/base/ftlcdfil.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlcdfil.FT_Library_SetLcdFilter.error_invalid_filter",
+      "subject": "ftlcdfil.FT_Library_SetLcdFilter",
+      "case": "error_invalid_filter",
+      "operation": "ftlcdfil.set_lcd_filter",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "valid",
+          "filters": [
+            "FT_LCD_FILTER_LEGACY1",
+            "FT_LCD_FILTER_LEGACY",
+            "FT_LCD_FILTER_MAX",
+            99
+          ],
+          "subpixel_rendering_branch": "defined"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "runtime:lcd_filter",
+        "error_path"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "filter": "FT_LcdFilter",
+          "error": "FT_Error",
+          "library_weights_unchanged": "bool"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "filter",
+            "error",
+            "library_weights_unchanged"
+          ]
+        },
+        "error": "FT_Err_Invalid_Argument when subpixel rendering is enabled",
+        "source_refs": [
+          "freetype/src/base/ftlcdfil.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlcdfil.FT_Library_SetLcdFilter.unimplemented_without_subpixel_filtering",
+      "subject": "ftlcdfil.FT_Library_SetLcdFilter",
+      "case": "unimplemented_without_subpixel_filtering",
+      "operation": "ftlcdfil.set_lcd_filter",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "valid_or_null",
+          "filter": "FT_LCD_FILTER_DEFAULT",
+          "subpixel_rendering_branch": "not_defined"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "runtime:lcd_filter",
+        "build_dependent"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "error": "FT_Error",
+          "feature_branch": "string"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "feature_branch"
+          ]
+        },
+        "error": "FT_Err_Unimplemented_Feature",
+        "source_refs": [
+          "freetype/src/base/ftlcdfil.c"
+        ]
+      }
+    }
+  ]
+}

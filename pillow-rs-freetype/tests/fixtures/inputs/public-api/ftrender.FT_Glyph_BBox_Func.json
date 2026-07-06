@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "subject": "ftrender.FT_Glyph_BBox_Func",
+  "manifest_cases": [
+    "alias_matches_callback_typedef",
+    "callback_signature_matches_c"
+  ],
+  "cases": [
+    {
+      "case_id": "ftrender.FT_Glyph_BBox_Func.alias_matches_callback_typedef",
+      "subject": "ftrender.FT_Glyph_BBox_Func",
+      "case": "alias_matches_callback_typedef",
+      "operation": "abi.callback_typedef_alias",
+      "schema": "c_abi_type",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Glyph_BBox_Func",
+          "canonical": "FT_Glyph_GetBBoxFunc",
+          "include": "<freetype/ftrender.h>",
+          "definition": "#define FT_Glyph_BBox_Func FT_Glyph_GetBBoxFunc",
+          "signature": "void (*)(FT_Glyph glyph, FT_BBox* abbox)",
+          "source_refs": [
+            "freetype/include/freetype/ftrender.h"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftrender",
+        "area:glyph-callback-alias"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "alias_symbol": "string",
+          "canonical_symbol": "string",
+          "same_type": "bool",
+          "signature": "function_pointer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "same_type",
+            "signature",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftrender.FT_Glyph_BBox_Func.callback_signature_matches_c",
+      "subject": "ftrender.FT_Glyph_BBox_Func",
+      "case": "callback_signature_matches_c",
+      "operation": "abi.call_callback_probe",
+      "schema": "callback_abi",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "probe_source": {
+            "kind": "ref",
+            "role": "c_abi_probe",
+            "path": "input/abi-probes/ftrender/glyph_bbox_func.c",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "typedef_spelling": "FT_Glyph_BBox_Func",
+          "glyph_pointer_class": "outline_and_bitmap_glyph",
+          "bbox_pointer_class": "valid_and_null",
+          "callback_effect": "write sentinel bbox for valid pointer and log pointer identity"
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftrender",
+        "area:glyph-callback-alias"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile_result": "success",
+          "callback_event_log": "ordered array",
+          "bbox": "FT_BBox fields when pointer is valid"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "compile_result",
+            "callback_event_log",
+            "bbox"
+          ]
+        },
+        "fixture_requirements": [
+          "Add tiny C ABI probe source; no generated oracle output belongs in this JSON."
+        ]
+      }
+    }
+  ]
+}

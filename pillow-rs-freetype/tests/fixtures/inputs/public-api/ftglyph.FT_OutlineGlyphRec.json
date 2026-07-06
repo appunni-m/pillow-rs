@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "subject": "ftglyph.FT_OutlineGlyphRec",
+  "manifest_cases": [
+    "layout_matches_c",
+    "fields_match_get_glyph_copy_transform",
+    "owns_outline_arrays"
+  ],
+  "cases": [
+    {
+      "case_id": "ftglyph.FT_OutlineGlyphRec.layout_matches_c",
+      "subject": "ftglyph.FT_OutlineGlyphRec",
+      "case": "layout_matches_c",
+      "operation": "ftglyph.record_layout",
+      "schema": "api_abi_record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftglyph.h",
+          "ctype": "FT_OutlineGlyphRec"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "ctype": "FT_OutlineGlyphRec",
+          "field_order": [
+            "root",
+            "outline"
+          ],
+          "layout": [
+            "sizeof",
+            "alignof",
+            "offsetof fields"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "ctype",
+            "sizeof",
+            "alignof",
+            "field_offsets",
+            "field_order"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_OutlineGlyphRec.fields_match_get_glyph_copy_transform",
+      "subject": "ftglyph.FT_OutlineGlyphRec",
+      "case": "fields_match_get_glyph_copy_transform",
+      "operation": "ftglyph.record_inspect",
+      "schema": "glyph_record",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "creation_paths": [
+            "FT_Get_Glyph outline",
+            "FT_Glyph_Copy",
+            "FT_Glyph_Transform"
+          ],
+          "glyph_indices": [
+            36,
+            43,
+            74
+          ],
+          "load_flags": [
+            "FT_LOAD_NO_HINTING"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_OutlineGlyphRec",
+          "fields": [
+            "root",
+            "outline.n_points",
+            "outline.n_contours",
+            "points",
+            "tags",
+            "contours",
+            "flags"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "record.root",
+            "record.outline",
+            "copy_independence",
+            "transform_result"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays",
+      "subject": "ftglyph.FT_OutlineGlyphRec",
+      "case": "owns_outline_arrays",
+      "operation": "ftglyph.done_glyph",
+      "schema": "glyph_lifecycle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "creation_paths": [
+            "FT_Get_Glyph outline",
+            "FT_Glyph_Copy outline"
+          ],
+          "destroy_with": "FT_Done_Glyph"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_OutlineGlyphRec",
+          "ownership": "outline arrays released by outline glyph done hook"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outline_owner_class",
+            "free_events"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    }
+  ]
+}

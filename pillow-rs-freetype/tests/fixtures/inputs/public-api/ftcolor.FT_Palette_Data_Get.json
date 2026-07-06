@@ -1,0 +1,268 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_Palette_Data_Get",
+  "manifest_cases": [
+    "success_sfnt_cpal_palette_data",
+    "success_sfnt_without_cpal",
+    "success_non_sfnt_null_palette_data",
+    "error_null_face_or_output",
+    "error_color_layers_disabled"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_Palette_Data_Get.success_sfnt_cpal_palette_data",
+      "subject": "ftcolor.FT_Palette_Data_Get",
+      "case": "success_sfnt_cpal_palette_data",
+      "operation": "ftcolor.palette_data_get",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/cpal-palettes-names-flags.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "CPAL table with multiple palettes",
+              "distinct BGRA entries per palette",
+              "palette flags for light and dark backgrounds",
+              "palette and entry name IDs including empty 0xFFFF values"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "sentinel_palette_data": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "record": "FT_Palette_Data",
+          "fields": [
+            "num_palettes",
+            "palette_name_ids",
+            "palette_flags",
+            "num_palette_entries",
+            "palette_entry_name_ids"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "palette_data.num_palettes",
+            "palette_data.palette_name_ids",
+            "palette_data.palette_flags",
+            "palette_data.num_palette_entries",
+            "palette_data.palette_entry_name_ids",
+            "pointer_nullness"
+          ]
+        },
+        "error": null,
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs",
+          "CPAL font with labels, flags, multiple palettes, entry labels, and empty-name 0xFFFF entries"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Palette_Data_Get.success_sfnt_without_cpal",
+      "subject": "ftcolor.FT_Palette_Data_Get",
+      "case": "success_sfnt_without_cpal",
+      "operation": "ftcolor.palette_data_get",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "SFNT face without CPAL data"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "sentinel_palette_data": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "record": "FT_Palette_Data",
+          "zero_null_policy": "C palette_data defaults"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "palette_data",
+            "pointer_nullness"
+          ]
+        },
+        "error": null,
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data",
+      "subject": "ftcolor.FT_Palette_Data_Get",
+      "case": "success_non_sfnt_null_palette_data",
+      "operation": "ftcolor.palette_data_get",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/bdf/properties-atoms-integers-cardinals.bdf",
+            "asset_kind": "font",
+            "properties": [
+              "non-SFNT face accepted by FreeType"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "sentinel_palette_data": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "record": "FT_Palette_Data",
+          "value": "null_palette_data"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "palette_data.num_palettes",
+            "palette_data.num_palette_entries",
+            "pointer_nullness"
+          ]
+        },
+        "error": null,
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Palette_Data_Get.error_null_face_or_output",
+      "subject": "ftcolor.FT_Palette_Data_Get",
+      "case": "error_null_face_or_output",
+      "operation": "ftcolor.palette_data_get",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/cpal-palettes-names-flags.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "CPAL table with multiple palettes",
+              "distinct BGRA entries per palette",
+              "palette flags for light and dark backgrounds",
+              "palette and entry name IDs including empty 0xFFFF values"
+            ]
+          }
+        },
+        "params": {
+          "variants": [
+            "null_face",
+            "null_apalette"
+          ],
+          "sentinel_palette_data": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "record": "FT_Palette_Data",
+          "preservation": "C oracle"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "variants[*].error",
+            "variants[*].palette_data_snapshot"
+          ]
+        },
+        "error": "c_oracle",
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Palette_Data_Get.error_color_layers_disabled",
+      "subject": "ftcolor.FT_Palette_Data_Get",
+      "case": "error_color_layers_disabled",
+      "operation": "ftcolor.palette_data_get",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "build_feature": "TT_CONFIG_OPTION_COLOR_LAYERS disabled",
+          "sentinel_palette_data": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "build_dependent": "Unimplemented_Feature"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "palette_data_snapshot"
+          ]
+        },
+        "error": "c_oracle",
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs",
+          "Alternate C oracle build without TT_CONFIG_OPTION_COLOR_LAYERS"
+        ]
+      }
+    }
+  ]
+}

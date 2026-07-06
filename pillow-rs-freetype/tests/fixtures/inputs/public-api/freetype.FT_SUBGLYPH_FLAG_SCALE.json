@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_SUBGLYPH_FLAG_SCALE",
+  "manifest_cases": [
+    "value_matches_header"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_SUBGLYPH_FLAG_SCALE.value_matches_header",
+      "subject": "freetype.FT_SUBGLYPH_FLAG_SCALE",
+      "case": "value_matches_header",
+      "operation": "public_api.constant_value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/freetype.h>",
+          "symbol": "FT_SUBGLYPH_FLAG_SCALE",
+          "expected_value": 8,
+          "c_expression": "FT_SUBGLYPH_FLAG_SCALE"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:subglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "integer_constant",
+          "c_type": "int",
+          "symbol": "FT_SUBGLYPH_FLAG_SCALE"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "type",
+            "import.compiles"
+          ]
+        },
+        "fixture_requirements": [],
+        "observable_runtime_use": {
+          "operation": "FT_Get_SubGlyph_Info",
+          "asset": "input/fonts/composite/compound-uniform-scale.ttf",
+          "compare": [
+            "flags",
+            "matrix.xx",
+            "matrix.yy"
+          ]
+        }
+      }
+    }
+  ]
+}

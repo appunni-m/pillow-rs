@@ -1,0 +1,344 @@
+{
+  "version": 1,
+  "subject": "ftbbox.FT_Outline_Get_BBox",
+  "manifest_cases": [
+    "success_simple_outline_bbox",
+    "success_curve_extrema_bbox",
+    "success_empty_outline_bbox",
+    "no_scale_tricky_font_behavior",
+    "error_null_outline_or_output",
+    "error_malformed_outline"
+  ],
+  "cases": [
+    {
+      "case_id": "ftbbox.FT_Outline_Get_BBox.success_simple_outline_bbox",
+      "subject": "ftbbox.FT_Outline_Get_BBox",
+      "case": "success_simple_outline_bbox",
+      "operation": "ftbbox.outline_get_bbox",
+      "schema": "outline_bbox",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 20,
+          "glyph_indices": [
+            43,
+            44
+          ],
+          "load_flags": [
+            "FT_LOAD_NO_HINTING"
+          ],
+          "expect_cbox_equals_bbox": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbbox"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "bbox": "FT_BBox 26.6",
+          "cbox": "FT_BBox 26.6"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].bbox",
+            "rows[*].cbox"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftbbox.h",
+          "freetype/src/base/ftbbox.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbbox.FT_Outline_Get_BBox.success_curve_extrema_bbox",
+      "subject": "ftbbox.FT_Outline_Get_BBox",
+      "case": "success_curve_extrema_bbox",
+      "operation": "ftbbox.outline_get_bbox",
+      "schema": "outline_bbox",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/outlines/curve-extrema.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 64,
+          "glyph_indices": [
+            "glyph with off-curve extrema"
+          ],
+          "load_flags": [
+            "FT_LOAD_NO_HINTING"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbbox"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "bbox": "exact curve extrema bbox",
+          "cbox": "control box"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "bbox",
+            "cbox",
+            "bbox_differs_from_cbox"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/outlines/curve-extrema.ttf must contain conic/cubic extrema between endpoints"
+        ],
+        "source_refs": [
+          "freetype/src/base/ftbbox.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbbox.FT_Outline_Get_BBox.success_empty_outline_bbox",
+      "subject": "ftbbox.FT_Outline_Get_BBox",
+      "case": "success_empty_outline_bbox",
+      "operation": "ftbbox.outline_get_bbox",
+      "schema": "outline_bbox",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/outlines/empty-glyph.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_indices": [
+            "space_or_empty_outline"
+          ],
+          "load_flags": [
+            "FT_LOAD_NO_HINTING"
+          ],
+          "sentinel_bbox": {
+            "xMin": 111,
+            "yMin": 222,
+            "xMax": 333,
+            "yMax": 444
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbbox"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "bbox": "zero FT_BBox"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "bbox.xMin",
+            "bbox.yMin",
+            "bbox.xMax",
+            "bbox.yMax"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/outlines/empty-glyph.ttf must contain a glyph with zero outline points or contours"
+        ],
+        "source_refs": [
+          "freetype/src/base/ftbbox.c:488-496"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbbox.FT_Outline_Get_BBox.no_scale_tricky_font_behavior",
+      "subject": "ftbbox.FT_Outline_Get_BBox",
+      "case": "no_scale_tricky_font_behavior",
+      "operation": "ftbbox.outline_get_bbox",
+      "schema": "outline_bbox",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/tricky/mingliu-tricky.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_indices": [
+            1,
+            2
+          ],
+          "load_flags": [
+            "FT_LOAD_NO_SCALE"
+          ],
+          "compare_even_if_documented_meaningless": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbbox"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "bbox": "C observable FT_BBox"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].bbox"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/tricky/mingliu-tricky.ttf or equivalent tricky TrueType fixture"
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftbbox.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output",
+      "subject": "ftbbox.FT_Outline_Get_BBox",
+      "case": "error_null_outline_or_output",
+      "operation": "ftbbox.outline_get_bbox",
+      "schema": "error_matrix",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "probes": [
+            "null_outline",
+            "null_abbox"
+          ],
+          "sentinel_bbox": {
+            "xMin": 111,
+            "yMin": 222,
+            "xMax": 333,
+            "yMax": 444
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbbox"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "bbox_preserved": "bool"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].probe",
+            "rows[*].status",
+            "rows[*].error",
+            "rows[*].bbox"
+          ]
+        },
+        "error": "Invalid_Outline_or_Invalid_Argument",
+        "source_refs": [
+          "freetype/src/base/ftbbox.c:474-486"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbbox.FT_Outline_Get_BBox.error_malformed_outline",
+      "subject": "ftbbox.FT_Outline_Get_BBox",
+      "case": "error_malformed_outline",
+      "operation": "ftbbox.outline_get_bbox",
+      "schema": "outline_bbox",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "outline": {
+            "kind": "file",
+            "role": "outline",
+            "path": "input/outlines/malformed-outline.bin"
+          }
+        },
+        "params": {
+          "malformations": [
+            "negative_n_points",
+            "contour_end_before_start",
+            "last_contour_exceeds_points",
+            "invalid_tag_sequence"
+          ],
+          "sentinel_bbox": {
+            "xMin": 111,
+            "yMin": 222,
+            "xMax": 333,
+            "yMax": 444
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbbox"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "bbox": "preserved_or_c_written_value"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].malformation",
+            "rows[*].status",
+            "rows[*].error",
+            "rows[*].bbox"
+          ]
+        },
+        "error": "C_oracle_outline_error",
+        "fixture_requirements": [
+          "input/outlines/malformed-outline.bin should encode synthetic FT_Outline records for harness construction"
+        ],
+        "source_refs": [
+          "freetype/src/base/ftbbox.c",
+          "freetype/src/base/ftoutln.c"
+        ]
+      }
+    }
+  ]
+}

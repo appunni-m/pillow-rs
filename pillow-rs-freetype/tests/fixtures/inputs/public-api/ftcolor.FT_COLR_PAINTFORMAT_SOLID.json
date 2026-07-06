@@ -1,0 +1,131 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_COLR_PAINTFORMAT_SOLID",
+  "manifest_cases": [
+    "value_matches_header",
+    "paint_solid_color_index"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_COLR_PAINTFORMAT_SOLID.value_matches_header",
+      "subject": "ftcolor.FT_COLR_PAINTFORMAT_SOLID",
+      "case": "value_matches_header",
+      "operation": "abi.enum_value_and_import",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_COLR_PAINTFORMAT_SOLID",
+          "include": "<freetype/ftcolor.h>",
+          "header": "freetype/ftcolor.h",
+          "probe": "compile_and_eval_enum_value",
+          "expected_header_value": 2
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftcolor",
+        "surface:public-c-api",
+        "coverage:value-import"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "sources_checked": [
+          "freetype/include/freetype/ftcolor.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_COLR_PAINTFORMAT_SOLID.paint_solid_color_index",
+      "subject": "ftcolor.FT_COLR_PAINTFORMAT_SOLID",
+      "case": "paint_solid_color_index",
+      "operation": "ftcolor.get_solid_paint_and_palette",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-solid-foreground-cpal.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "symbol_under_test": "FT_COLR_PAINTFORMAT_SOLID",
+          "base_glyphs": [
+            "solid_palette_index",
+            "solid_foreground_ffff"
+          ],
+          "palette_index": 0,
+          "foreground_color_bgra": {
+            "blue": 17,
+            "green": 34,
+            "red": 51,
+            "alpha": 255
+          },
+          "follow_calls": [
+            "FT_Palette_Data_Get",
+            "FT_Palette_Select",
+            "FT_Palette_Set_Foreground_Color",
+            "FT_Get_Color_Glyph_Paint",
+            "FT_Get_Paint"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftcolor",
+        "operation:color",
+        "coverage:runtime-observable"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "paint": {
+            "format": "FT_PaintFormat",
+            "palette_index": "FT_UInt16",
+            "alpha": "FT_F2Dot14"
+          },
+          "palette": "selected CPAL BGRA entries",
+          "foreground_color": "BGRA when palette_index is 0xFFFF"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "paint.format",
+            "paint.palette_index",
+            "paint.alpha",
+            "palette",
+            "foreground_color"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "sources_checked": [
+          "freetype/include/freetype/ftcolor.h",
+          "freetype/src/base/ftobjs.c",
+          "freetype/src/sfnt/ttcolr.c",
+          "freetype/src/sfnt/ttcpal.c",
+          "freetype/src/base/ftcolor.c"
+        ],
+        "fixture_requirements": [
+          "Needs COLR v1 PaintSolid with normal CPAL index and foreground index 0xFFFF."
+        ]
+      }
+    }
+  ]
+}

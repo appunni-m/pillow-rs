@@ -1,0 +1,286 @@
+{
+  "version": 1,
+  "subject": "ftglyph.FT_Glyph_Get_CBox",
+  "manifest_cases": [
+    "success_outline_modes",
+    "success_bitmap_modes",
+    "success_null_or_no_bbox_zeroes_output",
+    "success_null_output_is_noop",
+    "mode_aliases_and_unknown_modes"
+  ],
+  "cases": [
+    {
+      "case_id": "ftglyph.FT_Glyph_Get_CBox.success_outline_modes",
+      "subject": "ftglyph.FT_Glyph_Get_CBox",
+      "case": "success_outline_modes",
+      "operation": "ftglyph.glyph_get_cbox",
+      "schema": "glyph_cbox",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "source_creation": "FT_Get_Glyph outline",
+          "bbox_modes": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "glyph_indices": [
+            36,
+            43,
+            74
+          ],
+          "pixel_size": 19,
+          "load_flags": [
+            "FT_LOAD_NO_HINTING"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "bbox": "FT_BBox",
+          "modes": [
+            "UNSCALED/SUBPIXELS raw 26.6",
+            "GRIDFIT floor/ceil 26.6",
+            "TRUNCATE integer shift",
+            "PIXELS gridfit then shift"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].mode",
+            "rows[*].bbox"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_Get_CBox.success_bitmap_modes",
+      "subject": "ftglyph.FT_Glyph_Get_CBox",
+      "case": "success_bitmap_modes",
+      "operation": "ftglyph.glyph_get_cbox",
+      "schema": "glyph_cbox",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "bitmap_strike_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "source_creation": "FT_Get_Glyph bitmap",
+          "bbox_modes": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "include_negative_left_top_fixture": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "bitmap_cbox_formula": "xMin=left*64, xMax=xMin+width*64, yMax=top*64, yMin=yMax-rows*64",
+          "modes": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].bitmap_fields",
+            "rows[*].bbox"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "fixture_requirements": [
+          "fonts/bitmap-strikes/public-bitmap-strike.ttf must contain at least one loadable embedded bitmap strike whose FT_GlyphSlot format becomes FT_GLYPH_FORMAT_BITMAP."
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_Get_CBox.success_null_or_no_bbox_zeroes_output",
+      "subject": "ftglyph.FT_Glyph_Get_CBox",
+      "case": "success_null_or_no_bbox_zeroes_output",
+      "operation": "ftglyph.glyph_get_cbox",
+      "schema": "glyph_cbox",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "malformed_facade": {
+            "kind": "ref",
+            "id": "facades/glyph/malformed-slot-and-class-cases.json",
+            "asset_kind": "fixture"
+          },
+          "svg_font": {
+            "kind": "ref",
+            "id": "fonts/svg/ot-svg-glyphs.ttf",
+            "asset_kind": "font",
+            "optional": true
+          }
+        },
+        "params": {
+          "null_glyph": true,
+          "null_clazz": true,
+          "no_bbox_hook_class": "svg_if_enabled",
+          "sentinel_acbox": {
+            "xMin": 11,
+            "yMin": 22,
+            "xMax": 33,
+            "yMax": 44
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "bbox": "zero FT_BBox",
+          "write_classification": "non-null acbox zeroed before glyph/class/bbox-hook checks"
+        },
+        "compare": {
+          "mode": "nullness",
+          "paths": [
+            "bbox",
+            "write_classification"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_Get_CBox.success_null_output_is_noop",
+      "subject": "ftglyph.FT_Glyph_Get_CBox",
+      "case": "success_null_output_is_noop",
+      "operation": "ftglyph.glyph_get_cbox",
+      "schema": "glyph_cbox",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "null_acbox": true,
+          "glyph": "valid_outline"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "memory_touched": false
+        },
+        "compare": {
+          "mode": "nullness",
+          "paths": [
+            "null_acbox_noop"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_Get_CBox.mode_aliases_and_unknown_modes",
+      "subject": "ftglyph.FT_Glyph_Get_CBox",
+      "case": "mode_aliases_and_unknown_modes",
+      "operation": "ftglyph.glyph_get_cbox",
+      "schema": "glyph_cbox",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "bbox_modes": [
+            0,
+            4,
+            255,
+            4294967295
+          ],
+          "glyph": "outline_fractional_bounds"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "alias_values": {
+            "UNSCALED": 0,
+            "SUBPIXELS": 0
+          },
+          "unknown_modes": "raw class cbox, no gridfit or pixel conversion"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].mode_value",
+            "rows[*].bbox",
+            "alias_equality"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Stack_Underflow",
+  "manifest_cases": [
+    "value_matches_header",
+    "cff_charstring_missing_operands"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Stack_Underflow.value_matches_header",
+      "subject": "fterrdef.FT_Err_Stack_Underflow",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Stack_Underflow",
+          "include": "<freetype/fterrors.h>",
+          "public_import": "#include <freetype/freetype.h>",
+          "header": "freetype/fterrdef.h",
+          "expected_value_from_pinned_header": 161,
+          "expected_value_hex": "0xA1",
+          "expected_error_string_from_pinned_header": "argument stack underflow",
+          "pinned_source": "freetype/include/freetype/fterrdef.h:246-247"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Stack_Underflow",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Stack_Underflow.cff_charstring_missing_operands",
+      "subject": "fterrdef.FT_Err_Stack_Underflow",
+      "case": "cff_charstring_missing_operands",
+      "operation": "FT_Load_Glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/cff-type1/stack-underflow-charstring.otf",
+            "requirements": "CFF/Type1/CID font with charstring or dictionary operator missing required operands."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Stack_Underflow",
+          "face_index": 0,
+          "glyph_index": "fixture_defined_error_glyph",
+          "size_ppem": 12,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "pinned_sources": [
+            "freetype/src/psaux/t1decode.c:1678-1679",
+            "freetype/src/psaux/t1decode.c:2100-2101",
+            "freetype/src/cff/cffload.c:1322",
+            "freetype/src/cff/cffparse.c:732",
+            "freetype/src/psaux/psstack.c:142"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:cff-type1",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Stack_Underflow",
+        "fixture_requirements": "Synthetic CFF/Type1/CID fixture that reaches a public Stack_Underflow branch rather than CFF's Type2 Too_Few_Arguments translation.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "slot_state": "mutation_class_if_slot_is_involved",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "slot_state.mutation_class"
+          ]
+        }
+      }
+    }
+  ]
+}

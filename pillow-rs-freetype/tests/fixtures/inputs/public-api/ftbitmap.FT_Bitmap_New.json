@@ -1,0 +1,185 @@
+{
+  "version": 1,
+  "subject": "ftbitmap.FT_Bitmap_New",
+  "manifest_cases": [
+    "success_zeroes_record",
+    "success_null_pointer_noop",
+    "abi_alias_behavior"
+  ],
+  "cases": [
+    {
+      "case_id": "ftbitmap.FT_Bitmap_New.success_zeroes_record",
+      "subject": "ftbitmap.FT_Bitmap_New",
+      "case": "success_zeroes_record",
+      "operation": "ftbitmap.bitmap_new",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "success_zeroes_record",
+          "initial_record": "dirty non-zero FT_Bitmap",
+          "null_pointer_variant": false,
+          "compare_alias": false
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "buffer",
+            "num_grays",
+            "pixel_mode",
+            "palette_mode",
+            "palette"
+          ],
+          "symbol_export": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "bitmap.fields",
+            "null_pointer_write_state",
+            "symbol_presence"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_New.success_null_pointer_noop",
+      "subject": "ftbitmap.FT_Bitmap_New",
+      "case": "success_null_pointer_noop",
+      "operation": "ftbitmap.bitmap_new",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "success_null_pointer_noop",
+          "initial_record": "dirty non-zero FT_Bitmap",
+          "null_pointer_variant": true,
+          "compare_alias": false
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "buffer",
+            "num_grays",
+            "pixel_mode",
+            "palette_mode",
+            "palette"
+          ],
+          "symbol_export": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "bitmap.fields",
+            "null_pointer_write_state",
+            "symbol_presence"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftbitmap.FT_Bitmap_New.abi_alias_behavior",
+      "subject": "ftbitmap.FT_Bitmap_New",
+      "case": "abi_alias_behavior",
+      "operation": "ftbitmap.bitmap_new",
+      "schema": "bitmap_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "synthetic_bitmaps": {
+            "kind": "ref",
+            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+            "asset_kind": "binary"
+          },
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "scenario": "abi_alias_behavior",
+          "initial_record": "dirty non-zero FT_Bitmap",
+          "null_pointer_variant": false,
+          "compare_alias": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbitmap",
+        "area:bitmap"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "bitmap_fields": [
+            "rows",
+            "width",
+            "pitch",
+            "buffer",
+            "num_grays",
+            "pixel_mode",
+            "palette_mode",
+            "palette"
+          ],
+          "symbol_export": true
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "bitmap.fields",
+            "null_pointer_write_state",
+            "symbol_presence"
+          ]
+        }
+      }
+    }
+  ]
+}

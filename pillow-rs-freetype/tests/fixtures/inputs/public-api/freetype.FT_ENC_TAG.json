@@ -1,0 +1,132 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_ENC_TAG",
+  "manifest_cases": [
+    "value_matches_header",
+    "encoding_enum_tag_values"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_ENC_TAG.value_matches_header",
+      "subject": "freetype.FT_ENC_TAG",
+      "case": "value_matches_header",
+      "operation": "macro.ft_enc_tag",
+      "schema": "macro_value",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "macro": "FT_ENC_TAG",
+          "include": "<freetype/freetype.h>",
+          "samples": [
+            [
+              "u",
+              "n",
+              "i",
+              "c"
+            ],
+            [
+              "s",
+              "y",
+              "m",
+              "b"
+            ],
+            [
+              "g",
+              "b",
+              " ",
+              " "
+            ],
+            [
+              "\u0000",
+              "\u0000",
+              "\u0000",
+              "\u0000"
+            ],
+            [
+              "l",
+              "a",
+              "t",
+              "2"
+            ]
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:tag",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "samples": "array",
+          "value": "FT_UInt32 big_endian_packed_tag",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "samples[*].bytes",
+            "samples[*].value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_ENC_TAG.encoding_enum_tag_values",
+      "subject": "freetype.FT_ENC_TAG",
+      "case": "encoding_enum_tag_values",
+      "operation": "macro.ft_enc_tag_encoding_enum",
+      "schema": "macro_value",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/freetype.h>",
+          "symbols": [
+            "FT_ENCODING_NONE",
+            "FT_ENCODING_MS_SYMBOL",
+            "FT_ENCODING_UNICODE",
+            "FT_ENCODING_SJIS",
+            "FT_ENCODING_PRC",
+            "FT_ENCODING_BIG5",
+            "FT_ENCODING_WANSUNG",
+            "FT_ENCODING_JOHAB",
+            "FT_ENCODING_ADOBE_STANDARD",
+            "FT_ENCODING_ADOBE_EXPERT",
+            "FT_ENCODING_ADOBE_CUSTOM",
+            "FT_ENCODING_OLD_LATIN_2",
+            "FT_ENCODING_APPLE_ROMAN"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:tag",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbols": "array",
+          "value": "FT_Encoding numeric tag",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbols[*].symbol",
+            "symbols[*].value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "subject": "ftmodapi.FT_Get_Module",
+  "manifest_cases": [
+    "lookup_existing_and_missing_module",
+    "null_inputs_return_null"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmodapi.FT_Get_Module.lookup_existing_and_missing_module",
+      "subject": "ftmodapi.FT_Get_Module",
+      "case": "lookup_existing_and_missing_module",
+      "operation": "ftmodapi.get_module",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "new_from_FT_Init_FreeType",
+          "module_names": [
+            "truetype",
+            "sfnt",
+            "smooth",
+            "raster1",
+            "autofitter",
+            "fixture_missing"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:module"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "lookups": {
+            "module_name": "string",
+            "module_handle": "FT_Module",
+            "class_name": "string|null",
+            "nullness": "bool"
+          }
+        },
+        "compare": {
+          "mode": "nullness",
+          "paths": [
+            "lookups.module_name",
+            "lookups.nullness",
+            "lookups.class_name"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Get_Module"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmodapi.FT_Get_Module.null_inputs_return_null",
+      "subject": "ftmodapi.FT_Get_Module",
+      "case": "null_inputs_return_null",
+      "operation": "ftmodapi.get_module",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "scenarios": [
+            {
+              "library": "null",
+              "module_name": "truetype"
+            },
+            {
+              "library": "new_from_FT_Init_FreeType",
+              "module_name": "null"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:module",
+        "area:null"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "module_handle": "FT_Module",
+          "nullness": "bool"
+        },
+        "compare": {
+          "mode": "nullness",
+          "paths": [
+            "module_handle",
+            "nullness"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Get_Module"
+        ]
+      }
+    }
+  ]
+}

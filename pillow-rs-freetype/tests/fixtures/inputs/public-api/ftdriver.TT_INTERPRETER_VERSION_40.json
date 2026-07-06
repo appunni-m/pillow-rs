@@ -1,0 +1,233 @@
+{
+  "version": 1,
+  "subject": "ftdriver.TT_INTERPRETER_VERSION_40",
+  "manifest_cases": [
+    "value_matches_header",
+    "interpreter_version_property_roundtrip",
+    "default_interpreter_version",
+    "glyph_hinting_runtime_effect"
+  ],
+  "cases": [
+    {
+      "case_id": "ftdriver.TT_INTERPRETER_VERSION_40.value_matches_header",
+      "subject": "ftdriver.TT_INTERPRETER_VERSION_40",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftdriver.h>",
+          "symbol": "TT_INTERPRETER_VERSION_40",
+          "expected_value_from_pinned_header": 40,
+          "value_type": "FT_UInt"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftdriver",
+        "area:truetype-interpreter",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "TT_INTERPRETER_VERSION_40",
+          "value": "FT_UInt",
+          "expected_value": 40
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "numeric_value",
+            "import"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftdriver.TT_INTERPRETER_VERSION_40.interpreter_version_property_roundtrip",
+      "subject": "ftdriver.TT_INTERPRETER_VERSION_40",
+      "case": "interpreter_version_property_roundtrip",
+      "operation": "ftdriver.interpreter_version_property",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/truetype/bytecode-interpreter-version.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "module_name": "truetype",
+          "property_name": "interpreter-version",
+          "value_symbol": "TT_INTERPRETER_VERSION_40",
+          "value": 40,
+          "string_value": "40",
+          "sequence": [
+            "FT_Property_Set",
+            "FT_Property_Get"
+          ],
+          "invalid_controls": [
+            34,
+            39,
+            41
+          ],
+          "expected_readback": 40
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftdriver",
+        "area:truetype-interpreter",
+        "path:property"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "status": "FT_Error or build_dependent",
+          "readback": "FT_UInt interpreter_version",
+          "normalization": "TT_INTERPRETER_VERSION_38 may read back 40 in minimal subpixel builds",
+          "error": "Unimplemented_Feature when selected engine is unavailable"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "set_error",
+            "get_error",
+            "readback_value",
+            "normalization",
+            "string_value_behavior",
+            "post_error_readback",
+            "sentinel_preservation_on_error"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version",
+      "subject": "ftdriver.TT_INTERPRETER_VERSION_40",
+      "case": "default_interpreter_version",
+      "operation": "ftdriver.interpreter_version_default",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "module_name": "truetype",
+          "property_name": "interpreter-version",
+          "sequence": [
+            "FT_Init_FreeType",
+            "FT_Property_Get before any set"
+          ],
+          "pinned_config": "TT_SUPPORT_SUBPIXEL_HINTING_MINIMAL expected from ttobjs.c path when enabled"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftdriver",
+        "area:truetype-interpreter",
+        "path:default"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "default_readback": "FT_UInt interpreter_version from freshly initialized library"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "get_error",
+            "default_readback",
+            "build_config_classification"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftdriver.TT_INTERPRETER_VERSION_40.glyph_hinting_runtime_effect",
+      "subject": "ftdriver.TT_INTERPRETER_VERSION_40",
+      "case": "glyph_hinting_runtime_effect",
+      "operation": "ftdriver.interpreter_version_glyph_output",
+      "schema": "glyph_output",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/truetype/bytecode-interpreter-version.ttf",
+            "asset_kind": "font"
+          },
+          "control_font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/truetype/backward-compat-phantom-points.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "ppem_sizes": [
+            9,
+            12,
+            16,
+            24
+          ],
+          "load_flags": [
+            "FT_LOAD_DEFAULT",
+            "FT_LOAD_TARGET_NORMAL",
+            "FT_LOAD_TARGET_LIGHT"
+          ],
+          "value_symbol": "TT_INTERPRETER_VERSION_40",
+          "value": 40,
+          "glyphs": [
+            "GETINFO_probe",
+            "backward_compat_component",
+            "phantom_point_sensitive"
+          ],
+          "compare_after_property_set": true
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftdriver",
+        "area:truetype-interpreter",
+        "requires:font",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "glyph_output": {
+            "metrics": "exact 26.6 fields",
+            "outline": "point/tag/contour coordinates",
+            "bitmap": "mode,width,rows,pitch,left,top,bytes hash"
+          },
+          "getinfo_observation": "if fixture exposes a glyph that reports GETINFO-dependent branches"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "property_error",
+            "glyphs[].load_error",
+            "glyphs[].metrics",
+            "glyphs[].outline_hash",
+            "glyphs[].bitmap_hash",
+            "glyphs[].getinfo_observation"
+          ]
+        },
+        "fixture_requirements": [
+          "TrueType fixture with bytecode sensitive to interpreter-version GETINFO, subpixel/minimal behavior, backward compatibility, component offsets, and phantom point handling."
+        ]
+      }
+    }
+  ]
+}

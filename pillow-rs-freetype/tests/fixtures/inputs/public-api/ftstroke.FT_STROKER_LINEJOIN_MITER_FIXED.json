@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "subject": "ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED",
+  "manifest_cases": [
+    "value_matches_header",
+    "fixed_miter_limit_geometry"
+  ],
+  "metadata": {
+    "abi": {
+      "kind": "enum_variant",
+      "header": "freetype/ftstroke.h",
+      "enum": "FT_Stroker_LineJoin",
+      "symbol": "FT_STROKER_LINEJOIN_MITER_FIXED",
+      "value": 3,
+      "source_behavior": "ftstroke.c uses fixed_bevel = TRUE when the join is not MITER_VARIABLE"
+    }
+  },
+  "cases": [
+    {
+      "case_id": "ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED.value_matches_header",
+      "subject": "ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED",
+      "case": "value_matches_header",
+      "operation": "abi.enum_variant_value",
+      "schema": "abi_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftstroke.h",
+          "symbol": "FT_STROKER_LINEJOIN_MITER_FIXED",
+          "expected_value": 3
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftstroke",
+        "area:abi_enum"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "int"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "value"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED.fixed_miter_limit_geometry",
+      "subject": "ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED",
+      "case": "fixed_miter_limit_geometry",
+      "operation": "ftstroke.join_geometry",
+      "schema": "outline_geometry_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "path": [[0, 0], [512, 0], [576, 512]],
+          "radius": 64,
+          "line_cap": "FT_STROKER_LINECAP_BUTT",
+          "line_join": "FT_STROKER_LINEJOIN_MITER_FIXED",
+          "miter_limits": [65536, 131072]
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftstroke",
+        "area:stroker_geometry"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "outline_by_limit": "object<miter_limit,FT_Outline>",
+          "bevel_fallback": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outline_by_limit.points",
+            "outline_by_limit.tags",
+            "outline_by_limit.contours",
+            "bevel_fallback"
+          ]
+        }
+      }
+    }
+  ]
+}

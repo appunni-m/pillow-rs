@@ -1,0 +1,216 @@
+{
+  "version": 1,
+  "subject": "ftgzip.FT_Stream_OpenGzip",
+  "manifest_cases": [
+    "opens_valid_gzip_stream",
+    "rejects_invalid_stream_handles",
+    "rejects_invalid_gzip_header",
+    "reports_unimplemented_without_zlib"
+  ],
+  "cases": [
+    {
+      "case_id": "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream",
+      "subject": "ftgzip.FT_Stream_OpenGzip",
+      "case": "opens_valid_gzip_stream",
+      "operation": "ftgzip.stream_open_gzip",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "gzip_streams": {
+            "kind": "ref",
+            "id": "compressed/gzip/small-and-large-streams.json"
+          }
+        },
+        "params": {
+          "target_stream": "zeroed caller stream",
+          "source_stream_positions": [
+            0,
+            "nonzero_before_header"
+          ],
+          "read_ranges": [
+            "beginning",
+            "middle",
+            "end"
+          ],
+          "small_stream_threshold": 40960
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgzip"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "stream": {
+            "size": "FT_ULong or sentinel for unknown",
+            "base": "nullable in-memory buffer",
+            "read": "nullable callback",
+            "close": "callback"
+          },
+          "read_bytes": "decompressed byte ranges"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "stream.size",
+            "stream.base_class",
+            "stream.read_class",
+            "stream.close_class",
+            "read_ranges[*].bytes"
+          ]
+        },
+        "fixture_requirements": [
+          "compressed/gzip/small-and-large-streams.json must include one gzip stream below and one above the 40KiB in-memory threshold"
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftgzip.h:63-91",
+          "freetype/src/gzip/ftgzip.c:608-708"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgzip.FT_Stream_OpenGzip.rejects_invalid_stream_handles",
+      "subject": "ftgzip.FT_Stream_OpenGzip",
+      "case": "rejects_invalid_stream_handles",
+      "operation": "ftgzip.stream_open_gzip",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "gzip_stream": {
+            "kind": "ref",
+            "id": "compressed/gzip/small-valid.gz"
+          }
+        },
+        "params": {
+          "argument_matrix": [
+            {
+              "target_stream": null,
+              "source_stream": "valid"
+            },
+            {
+              "target_stream": "valid",
+              "source_stream": null
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgzip"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "target_stream": "preserved sentinel or no output"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].target_stream_preserved"
+          ]
+        },
+        "error": "FT_Err_Invalid_Stream_Handle",
+        "source_refs": [
+          "freetype/src/gzip/ftgzip.c:615-620"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgzip.FT_Stream_OpenGzip.rejects_invalid_gzip_header",
+      "subject": "ftgzip.FT_Stream_OpenGzip",
+      "case": "rejects_invalid_gzip_header",
+      "operation": "ftgzip.stream_open_gzip",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "invalid_headers": {
+            "kind": "ref",
+            "id": "compressed/gzip/invalid-headers.json"
+          }
+        },
+        "params": {
+          "target_stream": "zeroed caller stream",
+          "source_kinds": [
+            "plain_uncompressed_bytes",
+            "truncated_header",
+            "bad_magic"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgzip"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "target_stream": "not initialized as gzip stream"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].target_stream.base_class",
+            "rows[*].target_stream.read_class",
+            "rows[*].target_stream.close_class"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/gzip/ftgzip.c:623-627"
+        ]
+      }
+    },
+    {
+      "case_id": "ftgzip.FT_Stream_OpenGzip.reports_unimplemented_without_zlib",
+      "subject": "ftgzip.FT_Stream_OpenGzip",
+      "case": "reports_unimplemented_without_zlib",
+      "operation": "ftgzip.stream_open_gzip",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "gzip_stream": {
+            "kind": "ref",
+            "id": "compressed/gzip/small-valid.gz"
+          }
+        },
+        "params": {
+          "build_feature": "without FT_CONFIG_OPTION_USE_ZLIB",
+          "target_stream": "valid",
+          "source_stream": "valid"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgzip"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "status": "FT_Error",
+          "zlib_enabled": "bool"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "zlib_enabled"
+          ]
+        },
+        "error": "FT_Err_Unimplemented_Feature",
+        "source_refs": [
+          "freetype/src/gzip/ftgzip.c:773-784"
+        ]
+      }
+    }
+  ]
+}

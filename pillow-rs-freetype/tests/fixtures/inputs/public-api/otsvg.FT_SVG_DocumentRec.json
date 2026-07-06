@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "subject": "otsvg.FT_SVG_DocumentRec",
+  "manifest_cases": [
+    "layout_matches_c",
+    "document_range_and_payload_fields",
+    "transform_and_metrics_fields"
+  ],
+  "cases": [
+    {
+      "case_id": "otsvg.FT_SVG_DocumentRec.layout_matches_c",
+      "subject": "otsvg.FT_SVG_DocumentRec",
+      "case": "layout_matches_c",
+      "operation": "otsvg.svg_document_rec_abi",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/otsvg.h",
+        "symbol": "FT_SVG_DocumentRec",
+        "kind": "record",
+        "record": "struct FT_SVG_DocumentRec_"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include_header": "freetype/otsvg.h",
+          "probe": [
+            "sizeof",
+            "alignof",
+            "field_offsets"
+          ],
+          "fields": [
+            "svg_document",
+            "svg_document_length",
+            "metrics",
+            "units_per_EM",
+            "start_glyph_id",
+            "end_glyph_id",
+            "transform",
+            "delta"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:otsvg",
+        "area:abi"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "size_t",
+          "alignof": "size_t",
+          "field_offsets": "map<string,size_t>",
+          "nested_layouts": [
+            "FT_Size_Metrics",
+            "FT_Matrix",
+            "FT_Vector"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "field_offsets",
+            "nested_layouts"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/otsvg.h:300-314"
+        ]
+      }
+    },
+    {
+      "case_id": "otsvg.FT_SVG_DocumentRec.document_range_and_payload_fields",
+      "subject": "otsvg.FT_SVG_DocumentRec",
+      "case": "document_range_and_payload_fields",
+      "operation": "otsvg.svg_document_capture",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/otsvg.h",
+        "symbol": "FT_SVG_DocumentRec",
+        "producer": "OT-SVG glyph load/render hook"
+      },
+      "inputs": {
+        "assets": {
+          "otsvg_font": {
+            "kind": "ref",
+            "id": "fonts/svg/otsvg-document-ranges.otf",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "face_source": "otsvg_font",
+          "glyph_index": "first_svg_glyph",
+          "load_flags": [
+            "FT_LOAD_COLOR"
+          ],
+          "capture_from": "glyph_slot_other"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:otsvg",
+        "format:otsvg"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "svg_document": "non-null FT_Byte* when SVG module is enabled",
+          "svg_document_length": "FT_ULong",
+          "units_per_EM": "FT_UShort",
+          "start_glyph_id": "FT_UShort",
+          "end_glyph_id": "FT_UShort",
+          "unsupported_status": "explicit unsupported SVG module classification"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "document_length",
+            "units_per_EM",
+            "start_glyph_id",
+            "end_glyph_id",
+            "document_bytes_hash"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/otsvg.h:263-280",
+          "freetype/include/freetype/otsvg.h:300-314"
+        ],
+        "fixture_requirements": [
+          "fonts/svg/otsvg-document-ranges.otf must contain an SVG table with at least one document range covering the selected glyph."
+        ]
+      }
+    },
+    {
+      "case_id": "otsvg.FT_SVG_DocumentRec.transform_and_metrics_fields",
+      "subject": "otsvg.FT_SVG_DocumentRec",
+      "case": "transform_and_metrics_fields",
+      "operation": "otsvg.svg_document_transform_capture",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/otsvg.h",
+        "symbol": "FT_SVG_DocumentRec",
+        "nested_types": [
+          "FT_Size_Metrics",
+          "FT_Matrix",
+          "FT_Vector"
+        ]
+      },
+      "inputs": {
+        "assets": {
+          "otsvg_font": {
+            "kind": "ref",
+            "id": "fonts/svg/otsvg-document-ranges.otf",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "face_source": "otsvg_font",
+          "glyph_index": "first_svg_glyph",
+          "ppem": 32,
+          "transform": {
+            "xx": 65536,
+            "xy": 8192,
+            "yx": -4096,
+            "yy": 65536
+          },
+          "delta": {
+            "x": 64,
+            "y": -32
+          }
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:otsvg",
+        "format:otsvg"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "metrics": "FT_Size_Metrics",
+          "transform": "FT_Matrix",
+          "delta": "FT_Vector",
+          "units_per_EM": "FT_UShort",
+          "unsupported_status": "explicit unsupported SVG module classification"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "metrics",
+            "transform",
+            "delta",
+            "units_per_EM"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/otsvg.h:282-295",
+          "freetype/include/freetype/otsvg.h:305-312"
+        ],
+        "fixture_requirements": [
+          "Runner must install SVG renderer hooks or classify the pinned build as unsupported until SVG hook capture exists."
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_FACE_FLAG_FAST_GLYPHS",
+  "manifest_cases": [
+    "value_matches_header"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_FACE_FLAG_FAST_GLYPHS.value_matches_header",
+      "subject": "freetype.FT_FACE_FLAG_FAST_GLYPHS",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_FACE_FLAG_FAST_GLYPHS",
+          "include": "freetype/freetype.h"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:face_flags",
+        "deprecated:no_runtime_semantics"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "FT_Long macro bit flag",
+          "source": "1L << 7"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "import_compiles"
+          ]
+        },
+        "fixture_requirements": [
+          "No semantic runtime fixture should be added unless a pinned FreeType compatibility source starts setting this deprecated bit"
+        ]
+      }
+    }
+  ]
+}

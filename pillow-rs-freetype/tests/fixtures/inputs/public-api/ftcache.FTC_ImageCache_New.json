@@ -1,0 +1,370 @@
+{
+  "version": 1,
+  "subject": "ftcache.FTC_ImageCache_New",
+  "manifest_cases": [
+    "planned_cache_subsystem_not_out_of_scope",
+    "success_create_lookup_destroy_lifecycle",
+    "success_manager_reset_preserves_handle",
+    "error_null_manager_or_output",
+    "error_too_many_caches"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcache.FTC_ImageCache_New.planned_cache_subsystem_not_out_of_scope",
+      "subject": "ftcache.FTC_ImageCache_New",
+      "case": "planned_cache_subsystem_not_out_of_scope",
+      "operation": "ftcache.image_cache_new",
+      "schema": "cache_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          },
+          "alt_font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-serif.ttf",
+            "asset_kind": "font"
+          },
+          "multi_charmap_font": {
+            "kind": "ref",
+            "id": "fonts/charmap/multiple-charmaps.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "manager_limits": {
+            "max_faces": 0,
+            "max_sizes": 0,
+            "max_bytes": 0
+          },
+          "face_ids": [
+            "face-A",
+            "face-B"
+          ],
+          "requester": "path_face_requester_with_log",
+          "scenario": "planned_cache_subsystem_not_out_of_scope",
+          "create_count": "up_to_FTC_MAX_CACHES",
+          "reset_then_lookup": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-subsystem"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "return": "FT_Error",
+          "callback_log": true,
+          "pointer_identity_classes": true,
+          "cache_lifecycle": true,
+          "cache_handle_nullness": true,
+          "registration_limit": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "outputs",
+            "callback_log",
+            "pointer_identity_classes",
+            "lifecycle_events"
+          ]
+        },
+        "fixture_requirements": [
+          "Harness support for persistent FTC_FaceID callback data and requester invocation log"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_ImageCache_New.success_create_lookup_destroy_lifecycle",
+      "subject": "ftcache.FTC_ImageCache_New",
+      "case": "success_create_lookup_destroy_lifecycle",
+      "operation": "ftcache.image_cache_new",
+      "schema": "cache_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          },
+          "alt_font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-serif.ttf",
+            "asset_kind": "font"
+          },
+          "multi_charmap_font": {
+            "kind": "ref",
+            "id": "fonts/charmap/multiple-charmaps.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "manager_limits": {
+            "max_faces": 0,
+            "max_sizes": 0,
+            "max_bytes": 0
+          },
+          "face_ids": [
+            "face-A",
+            "face-B"
+          ],
+          "requester": "path_face_requester_with_log",
+          "scenario": "success_create_lookup_destroy_lifecycle",
+          "create_count": "up_to_FTC_MAX_CACHES",
+          "reset_then_lookup": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-subsystem"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "callback_log": true,
+          "pointer_identity_classes": true,
+          "cache_lifecycle": true,
+          "cache_handle_nullness": true,
+          "registration_limit": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "outputs",
+            "callback_log",
+            "pointer_identity_classes",
+            "lifecycle_events"
+          ]
+        },
+        "fixture_requirements": [
+          "Harness support for persistent FTC_FaceID callback data and requester invocation log"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_ImageCache_New.success_manager_reset_preserves_handle",
+      "subject": "ftcache.FTC_ImageCache_New",
+      "case": "success_manager_reset_preserves_handle",
+      "operation": "ftcache.image_cache_new",
+      "schema": "cache_operation",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          },
+          "alt_font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-serif.ttf",
+            "asset_kind": "font"
+          },
+          "multi_charmap_font": {
+            "kind": "ref",
+            "id": "fonts/charmap/multiple-charmaps.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "manager_limits": {
+            "max_faces": 0,
+            "max_sizes": 0,
+            "max_bytes": 0
+          },
+          "face_ids": [
+            "face-A",
+            "face-B"
+          ],
+          "requester": "path_face_requester_with_log",
+          "scenario": "success_manager_reset_preserves_handle",
+          "create_count": "up_to_FTC_MAX_CACHES",
+          "reset_then_lookup": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-subsystem"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "callback_log": true,
+          "pointer_identity_classes": true,
+          "cache_lifecycle": true,
+          "cache_handle_nullness": true,
+          "registration_limit": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "outputs",
+            "callback_log",
+            "pointer_identity_classes",
+            "lifecycle_events"
+          ]
+        },
+        "fixture_requirements": [
+          "Harness support for persistent FTC_FaceID callback data and requester invocation log"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_ImageCache_New.error_null_manager_or_output",
+      "subject": "ftcache.FTC_ImageCache_New",
+      "case": "error_null_manager_or_output",
+      "operation": "ftcache.image_cache_new",
+      "schema": "cache_operation",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          },
+          "alt_font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-serif.ttf",
+            "asset_kind": "font"
+          },
+          "multi_charmap_font": {
+            "kind": "ref",
+            "id": "fonts/charmap/multiple-charmaps.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "manager_limits": {
+            "max_faces": 0,
+            "max_sizes": 0,
+            "max_bytes": 0
+          },
+          "face_ids": [
+            "face-A",
+            "face-B"
+          ],
+          "requester": "path_face_requester_with_log",
+          "scenario": "error_null_manager_or_output",
+          "create_count": "up_to_FTC_MAX_CACHES",
+          "reset_then_lookup": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-subsystem"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "callback_log": true,
+          "pointer_identity_classes": true,
+          "cache_lifecycle": true,
+          "cache_handle_nullness": true,
+          "registration_limit": true
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "outputs",
+            "callback_log",
+            "pointer_identity_classes",
+            "lifecycle_events"
+          ]
+        },
+        "error": "Invalid_Argument",
+        "fixture_requirements": [
+          "Harness support for persistent FTC_FaceID callback data and requester invocation log"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_ImageCache_New.error_too_many_caches",
+      "subject": "ftcache.FTC_ImageCache_New",
+      "case": "error_too_many_caches",
+      "operation": "ftcache.image_cache_new",
+      "schema": "cache_operation",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font"
+          },
+          "alt_font": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-serif.ttf",
+            "asset_kind": "font"
+          },
+          "multi_charmap_font": {
+            "kind": "ref",
+            "id": "fonts/charmap/multiple-charmaps.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "manager_limits": {
+            "max_faces": 0,
+            "max_sizes": 0,
+            "max_bytes": 0
+          },
+          "face_ids": [
+            "face-A",
+            "face-B"
+          ],
+          "requester": "path_face_requester_with_log",
+          "scenario": "error_too_many_caches",
+          "create_count": "up_to_FTC_MAX_CACHES",
+          "reset_then_lookup": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-subsystem"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "callback_log": true,
+          "pointer_identity_classes": true,
+          "cache_lifecycle": true,
+          "cache_handle_nullness": true,
+          "registration_limit": true
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "outputs",
+            "callback_log",
+            "pointer_identity_classes",
+            "lifecycle_events"
+          ]
+        },
+        "error": "Too_Many_Caches",
+        "fixture_requirements": [
+          "Harness support for persistent FTC_FaceID callback data and requester invocation log"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_SIZE_REQUEST_TYPE_MAX",
+  "manifest_cases": [
+    "value_matches_header",
+    "request_size_rejects_sentinel"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_SIZE_REQUEST_TYPE_MAX.value_matches_header",
+      "subject": "freetype.FT_SIZE_REQUEST_TYPE_MAX",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_SIZE_REQUEST_TYPE_MAX",
+          "include": "<freetype/freetype.h>"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:freetype",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Size_Request_Type",
+          "symbol": "FT_SIZE_REQUEST_TYPE_MAX",
+          "header": "freetype/freetype.h"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "type",
+            "header_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_SIZE_REQUEST_TYPE_MAX.request_size_rejects_sentinel",
+      "subject": "freetype.FT_SIZE_REQUEST_TYPE_MAX",
+      "case": "request_size_rejects_sentinel",
+      "operation": "freetype.request_size",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "input/fonts/DejaVuSans.ttf",
+            "requirements": "Any face with active size; existing DejaVuSans asset is suitable for sentinel rejection."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "request": {
+            "type": "FT_SIZE_REQUEST_TYPE_MAX",
+            "width": 1280,
+            "height": 1280,
+            "horiResolution": 0,
+            "vertResolution": 0
+          }
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:freetype",
+        "area:size",
+        "requires:font"
+      ],
+      "expectation": {
+        "status": "error",
+        "fixture_requirements": "Any face with active size; existing DejaVuSans asset is suitable for sentinel rejection.",
+        "output_shape": {
+          "status": "FT_Error",
+          "request": {
+            "type": "FT_Size_Request_Type",
+            "width": "FT_Long",
+            "height": "FT_Long",
+            "horiResolution": "FT_UInt",
+            "vertResolution": "FT_UInt"
+          },
+          "metrics": {
+            "x_ppem": "FT_UShort",
+            "y_ppem": "FT_UShort",
+            "x_scale": "FT_Fixed",
+            "y_scale": "FT_Fixed",
+            "ascender": "FT_Pos",
+            "descender": "FT_Pos",
+            "height": "FT_Pos",
+            "max_advance": "FT_Pos"
+          }
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    }
+  ]
+}

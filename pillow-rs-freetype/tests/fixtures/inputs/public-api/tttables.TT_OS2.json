@@ -1,0 +1,574 @@
+{
+  "version": 1,
+  "subject": "tttables.TT_OS2",
+  "manifest_cases": [
+    "layout_matches_c",
+    "field_order_matches_header",
+    "public_import_contract",
+    "sfnt_table_present_runtime",
+    "sfnt_table_missing_runtime"
+  ],
+  "cases": [
+    {
+      "case_id": "tttables.TT_OS2.layout_matches_c",
+      "subject": "tttables.TT_OS2",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_record",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/tttables.h>",
+          "record": "TT_OS2",
+          "layout_probe": {
+            "sizeof": true,
+            "alignof": true,
+            "offsetof": [
+              "version",
+              "xAvgCharWidth",
+              "usWeightClass",
+              "usWidthClass",
+              "fsType",
+              "ySubscriptXSize",
+              "ySubscriptYSize",
+              "ySubscriptXOffset",
+              "ySubscriptYOffset",
+              "ySuperscriptXSize",
+              "ySuperscriptYSize",
+              "ySuperscriptXOffset",
+              "ySuperscriptYOffset",
+              "yStrikeoutSize",
+              "yStrikeoutPosition",
+              "sFamilyClass",
+              "panose",
+              "ulUnicodeRange1",
+              "ulUnicodeRange2",
+              "ulUnicodeRange3",
+              "ulUnicodeRange4",
+              "achVendID",
+              "fsSelection",
+              "usFirstCharIndex",
+              "usLastCharIndex",
+              "sTypoAscender",
+              "sTypoDescender",
+              "sTypoLineGap",
+              "usWinAscent",
+              "usWinDescent",
+              "ulCodePageRange1",
+              "ulCodePageRange2",
+              "sxHeight",
+              "sCapHeight",
+              "usDefaultChar",
+              "usBreakChar",
+              "usMaxContext",
+              "usLowerOpticalPointSize",
+              "usUpperOpticalPointSize"
+            ]
+          }
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "area:abi-layout",
+        "public-api-slice:1540-1543"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/tttables.h",
+          "symbol": "TT_OS2",
+          "kind": "public C typedef struct",
+          "pointer_type": "TT_OS2*",
+          "sfnt_tag": "FT_SFNT_OS2",
+          "owner": "FT_Face",
+          "array_fields": {
+            "panose": 10,
+            "achVendID": 4
+          }
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "string",
+          "sizeof": "size_t",
+          "alignof": "size_t",
+          "field_offsets": {
+            "*": "size_t"
+          }
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "field_offsets"
+          ]
+        },
+        "source_refs": [
+          "pillow-rs-freetype/freetype/include/freetype/tttables.h:288-408"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_OS2.field_order_matches_header",
+      "subject": "tttables.TT_OS2",
+      "case": "field_order_matches_header",
+      "operation": "abi.record_field_order",
+      "schema": "abi_record",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/tttables.h>",
+          "record": "TT_OS2",
+          "loader": "tt_face_load_os2",
+          "declared_field_order": [
+            "version",
+            "xAvgCharWidth",
+            "usWeightClass",
+            "usWidthClass",
+            "fsType",
+            "ySubscriptXSize",
+            "ySubscriptYSize",
+            "ySubscriptXOffset",
+            "ySubscriptYOffset",
+            "ySuperscriptXSize",
+            "ySuperscriptYSize",
+            "ySuperscriptXOffset",
+            "ySuperscriptYOffset",
+            "yStrikeoutSize",
+            "yStrikeoutPosition",
+            "sFamilyClass",
+            "panose[10]",
+            "ulUnicodeRange1",
+            "ulUnicodeRange2",
+            "ulUnicodeRange3",
+            "ulUnicodeRange4",
+            "achVendID[4]",
+            "fsSelection",
+            "usFirstCharIndex",
+            "usLastCharIndex",
+            "sTypoAscender",
+            "sTypoDescender",
+            "sTypoLineGap",
+            "usWinAscent",
+            "usWinDescent",
+            "ulCodePageRange1",
+            "ulCodePageRange2",
+            "sxHeight",
+            "sCapHeight",
+            "usDefaultChar",
+            "usBreakChar",
+            "usMaxContext",
+            "usLowerOpticalPointSize",
+            "usUpperOpticalPointSize"
+          ],
+          "loader_frames": [
+            {
+              "name": "base",
+              "bytes": 78
+            },
+            {
+              "name": "version_1_extra",
+              "bytes": 8
+            },
+            {
+              "name": "version_2_extra",
+              "bytes": 10
+            },
+            {
+              "name": "version_5_extra",
+              "bytes": 4
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "area:field-order",
+        "public-api-slice:1540-1543"
+      ],
+      "metadata": {
+        "source_behavior": "tt_face_load_os2 reads the 78-byte base frame, zero/default-initializes version-gated tail fields, then conditionally reads version 1, version 2, and version 5 tails."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "string",
+          "declared_field_order": [
+            "string"
+          ],
+          "loader_frames": [
+            {
+              "name": "string",
+              "bytes": "uint"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "declared_field_order",
+            "loader_frames"
+          ]
+        },
+        "source_refs": [
+          "pillow-rs-freetype/freetype/include/freetype/tttables.h:310-408",
+          "pillow-rs-freetype/freetype/src/sfnt/ttload.c:1064-1204"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_OS2.public_import_contract",
+      "subject": "tttables.TT_OS2",
+      "case": "public_import_contract",
+      "operation": "abi.public_import",
+      "schema": "compile_probe",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "language": "c",
+          "include": "<freetype/tttables.h>",
+          "symbol": "TT_OS2",
+          "usage": "TT_OS2* os2 = (TT_OS2*)FT_Get_Sfnt_Table(face, FT_SFNT_OS2);",
+          "requires_face_parameter": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "area:public-import",
+        "public-api-slice:1540-1543"
+      ],
+      "metadata": {
+        "abi": {
+          "visible_from": "freetype/tttables.h",
+          "result_type": "TT_OS2* cast from void*",
+          "function": "FT_Get_Sfnt_Table",
+          "sfnt_tag": "FT_SFNT_OS2"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile_status": "ok",
+          "symbol_visible": "bool",
+          "cast_type": "string",
+          "sfnt_tag_visible": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "compile_status",
+            "symbol_visible",
+            "cast_type",
+            "sfnt_tag_visible"
+          ]
+        },
+        "source_refs": [
+          "pillow-rs-freetype/freetype/include/freetype/tttables.h:310-408",
+          "pillow-rs-freetype/freetype/include/freetype/tttables.h:624",
+          "pillow-rs-freetype/freetype/include/freetype/tttables.h:686-687"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_OS2.sfnt_table_present_runtime.v5_full",
+      "subject": "tttables.TT_OS2",
+      "case": "sfnt_table_present_runtime",
+      "operation": "sfnt.get_sfnt_table.record",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sfnt/os2-v5-full.ttf",
+            "role": "font",
+            "requirements": "SFNT font with a valid OS/2 version 5 table containing non-default code-page, x-height/cap-height/default-char/max-context, and optical-size fields."
+          }
+        },
+        "params": {
+          "function": "FT_Get_Sfnt_Table",
+          "face_index": 0,
+          "sfnt_tag": "FT_SFNT_OS2",
+          "record": "TT_OS2",
+          "version_branch": "version >= 5",
+          "field_groups": [
+            "base_78_bytes",
+            "version_1_code_page_ranges",
+            "version_2_metrics",
+            "version_5_optical_sizes"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "runtime:sfnt-table",
+        "record:TT_OS2",
+        "asset:missing",
+        "public-api-slice:1540-1543"
+      ],
+      "metadata": {
+        "source_behavior": "FT_Get_Sfnt_Table delegates to the SFNT service; FT_SFNT_OS2 returns &face->os2 only when face->os2.version is not 0xFFFF."
+      },
+      "expectation": {
+        "status": "build_dependent",
+        "fixture_requirements": [
+          "Missing asset: input/fonts/sfnt/os2-v5-full.ttf must load as SFNT and include an OS/2 table with version >= 5."
+        ],
+        "output_shape": {
+          "face_load_status": "FT_Error",
+          "pointer_null": "bool",
+          "record": {
+            "version": "FT_UShort",
+            "xAvgCharWidth": "FT_Short",
+            "usWeightClass": "FT_UShort",
+            "usWidthClass": "FT_UShort",
+            "fsType": "FT_UShort",
+            "ySubscriptXSize": "FT_Short",
+            "ySubscriptYSize": "FT_Short",
+            "ySubscriptXOffset": "FT_Short",
+            "ySubscriptYOffset": "FT_Short",
+            "ySuperscriptXSize": "FT_Short",
+            "ySuperscriptYSize": "FT_Short",
+            "ySuperscriptXOffset": "FT_Short",
+            "ySuperscriptYOffset": "FT_Short",
+            "yStrikeoutSize": "FT_Short",
+            "yStrikeoutPosition": "FT_Short",
+            "sFamilyClass": "FT_Short",
+            "panose": [
+              "FT_Byte"
+            ],
+            "ulUnicodeRange1": "FT_ULong",
+            "ulUnicodeRange2": "FT_ULong",
+            "ulUnicodeRange3": "FT_ULong",
+            "ulUnicodeRange4": "FT_ULong",
+            "achVendID": [
+              "FT_Char"
+            ],
+            "fsSelection": "FT_UShort",
+            "usFirstCharIndex": "FT_UShort",
+            "usLastCharIndex": "FT_UShort",
+            "sTypoAscender": "FT_Short",
+            "sTypoDescender": "FT_Short",
+            "sTypoLineGap": "FT_Short",
+            "usWinAscent": "FT_UShort",
+            "usWinDescent": "FT_UShort",
+            "ulCodePageRange1": "FT_ULong",
+            "ulCodePageRange2": "FT_ULong",
+            "sxHeight": "FT_Short",
+            "sCapHeight": "FT_Short",
+            "usDefaultChar": "FT_UShort",
+            "usBreakChar": "FT_UShort",
+            "usMaxContext": "FT_UShort",
+            "usLowerOpticalPointSize": "FT_UShort",
+            "usUpperOpticalPointSize": "FT_UShort"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "face_load_status",
+            "pointer_null",
+            "record.version",
+            "record.xAvgCharWidth",
+            "record.usWeightClass",
+            "record.usWidthClass",
+            "record.fsType",
+            "record.ySubscriptXSize",
+            "record.ySubscriptYSize",
+            "record.ySubscriptXOffset",
+            "record.ySubscriptYOffset",
+            "record.ySuperscriptXSize",
+            "record.ySuperscriptYSize",
+            "record.ySuperscriptXOffset",
+            "record.ySuperscriptYOffset",
+            "record.yStrikeoutSize",
+            "record.yStrikeoutPosition",
+            "record.sFamilyClass",
+            "record.panose",
+            "record.ulUnicodeRange1",
+            "record.ulUnicodeRange2",
+            "record.ulUnicodeRange3",
+            "record.ulUnicodeRange4",
+            "record.achVendID",
+            "record.fsSelection",
+            "record.usFirstCharIndex",
+            "record.usLastCharIndex",
+            "record.sTypoAscender",
+            "record.sTypoDescender",
+            "record.sTypoLineGap",
+            "record.usWinAscent",
+            "record.usWinDescent",
+            "record.ulCodePageRange1",
+            "record.ulCodePageRange2",
+            "record.sxHeight",
+            "record.sCapHeight",
+            "record.usDefaultChar",
+            "record.usBreakChar",
+            "record.usMaxContext",
+            "record.usLowerOpticalPointSize",
+            "record.usUpperOpticalPointSize"
+          ]
+        },
+        "source_refs": [
+          "pillow-rs-freetype/freetype/src/base/ftobjs.c:4358-4371",
+          "pillow-rs-freetype/freetype/src/sfnt/sfdriver.c:123-125",
+          "pillow-rs-freetype/freetype/src/sfnt/ttload.c:1064-1204"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_OS2.sfnt_table_present_runtime.version0_defaults",
+      "subject": "tttables.TT_OS2",
+      "case": "sfnt_table_present_runtime",
+      "operation": "sfnt.get_sfnt_table.record",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sfnt/os2-v0-base.ttf",
+            "role": "font",
+            "requirements": "SFNT font with a valid OS/2 version 0 table and no version 1/2/5 tail fields."
+          }
+        },
+        "params": {
+          "function": "FT_Get_Sfnt_Table",
+          "face_index": 0,
+          "sfnt_tag": "FT_SFNT_OS2",
+          "record": "TT_OS2",
+          "version_branch": "version == 0",
+          "expected_loader_defaults": {
+            "ulCodePageRange1": 0,
+            "ulCodePageRange2": 0,
+            "sxHeight": 0,
+            "sCapHeight": 0,
+            "usDefaultChar": 0,
+            "usBreakChar": 0,
+            "usMaxContext": 0,
+            "usLowerOpticalPointSize": 0,
+            "usUpperOpticalPointSize": 65535
+          }
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "runtime:sfnt-table",
+        "record:TT_OS2",
+        "asset:missing",
+        "public-api-slice:1540-1543"
+      ],
+      "metadata": {
+        "source_behavior": "For OS/2 version 0, tt_face_load_os2 leaves the version 1/2/5 public tail fields at loader defaults instead of reading absent bytes."
+      },
+      "expectation": {
+        "status": "build_dependent",
+        "fixture_requirements": [
+          "Missing asset: input/fonts/sfnt/os2-v0-base.ttf must load as SFNT and include a valid OS/2 version 0 table."
+        ],
+        "output_shape": {
+          "face_load_status": "FT_Error",
+          "pointer_null": "bool",
+          "record": {
+            "version": "FT_UShort",
+            "base_fields": "TT_OS2 base scalar and fixed-array fields",
+            "loader_default_tail_fields": {
+              "ulCodePageRange1": "FT_ULong",
+              "ulCodePageRange2": "FT_ULong",
+              "sxHeight": "FT_Short",
+              "sCapHeight": "FT_Short",
+              "usDefaultChar": "FT_UShort",
+              "usBreakChar": "FT_UShort",
+              "usMaxContext": "FT_UShort",
+              "usLowerOpticalPointSize": "FT_UShort",
+              "usUpperOpticalPointSize": "FT_UShort"
+            }
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "face_load_status",
+            "pointer_null",
+            "record.version",
+            "record.base_fields",
+            "record.loader_default_tail_fields"
+          ]
+        },
+        "source_refs": [
+          "pillow-rs-freetype/freetype/src/sfnt/ttload.c:1159-1204"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_OS2.sfnt_table_missing_runtime",
+      "subject": "tttables.TT_OS2",
+      "case": "sfnt_table_missing_runtime",
+      "operation": "sfnt.get_sfnt_table.record",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sfnt/mac-no-os2.ttf",
+            "role": "font",
+            "requirements": "SFNT Mac-style face that loads successfully without an OS/2 table, leaving face->os2.version at 0xFFFF."
+          }
+        },
+        "params": {
+          "function": "FT_Get_Sfnt_Table",
+          "face_index": 0,
+          "sfnt_tag": "FT_SFNT_OS2",
+          "record": "TT_OS2",
+          "missing_sentinel": {
+            "field": "face->os2.version",
+            "value": 65535
+          }
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "runtime:sfnt-table",
+        "record:TT_OS2",
+        "asset:missing",
+        "public-api-slice:1540-1543"
+      ],
+      "metadata": {
+        "source_behavior": "sfdriver get_sfnt_table returns NULL for FT_SFNT_OS2 when ttface->os2.version == 0xFFFFU."
+      },
+      "expectation": {
+        "status": "build_dependent",
+        "fixture_requirements": [
+          "Missing asset: input/fonts/sfnt/mac-no-os2.ttf must be an SFNT face that FreeType accepts while the OS/2 table is absent."
+        ],
+        "output_shape": {
+          "face_load_status": "FT_Error",
+          "pointer_null": "bool",
+          "record": "null"
+        },
+        "compare": {
+          "mode": "nullness",
+          "paths": [
+            "face_load_status",
+            "pointer_null"
+          ]
+        },
+        "source_refs": [
+          "pillow-rs-freetype/freetype/src/sfnt/sfobjs.c:1001-1012",
+          "pillow-rs-freetype/freetype/src/sfnt/sfdriver.c:123-125"
+        ]
+      }
+    }
+  ]
+}

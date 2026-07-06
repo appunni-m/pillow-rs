@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_IS_VARIATION",
+  "manifest_cases": [
+    "altered_variation_face_returns_true",
+    "unaltered_variation_or_static_face_returns_false"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_IS_VARIATION.altered_variation_face_returns_true",
+      "subject": "freetype.FT_IS_VARIATION",
+      "case": "altered_variation_face_returns_true",
+      "operation": "freetype.face_macro.is_variation",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/variable/inter-var.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag_or_expression": "FT_FACE_FLAG_VARIATION",
+          "variation_calls": [
+            "FT_Set_Var_Design_Coordinates(non_default)",
+            "FT_Set_Var_Blend_Coordinates(non_default)",
+            "FT_Set_MM_WeightVector(non_default_if_MM)"
+          ],
+          "include": "freetype/freetype.h",
+          "macro": "FT_IS_VARIATION",
+          "expected_truth": true,
+          "probe": [
+            "macro_result",
+            "face.face_flags",
+            "face.face_index"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face_property_macro",
+        "runtime:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_result": "FT_Bool-compatible int",
+          "face_flags": "FT_Long",
+          "face_index": "FT_Long",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "face_flags",
+            "face_index",
+            "import_compiles"
+          ]
+        },
+        "fixture_requirements": [
+          "variable font with non-default design coordinates"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_IS_VARIATION.unaltered_variation_or_static_face_returns_false",
+      "subject": "freetype.FT_IS_VARIATION",
+      "case": "unaltered_variation_or_static_face_returns_false",
+      "operation": "freetype.face_macro.is_variation",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/variable/inter-var.ttf"
+          },
+          "static_font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag_or_expression": "FT_FACE_FLAG_VARIATION",
+          "control_states": [
+            "newly opened variable face at default coordinates",
+            "variable face after FT_Set_Var_Design_Coordinates(default_coords)",
+            "static face with no variation service"
+          ],
+          "include": "freetype/freetype.h",
+          "macro": "FT_IS_VARIATION",
+          "expected_truth": false,
+          "probe": [
+            "macro_result",
+            "face.face_flags",
+            "face.face_index"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face_property_macro",
+        "runtime:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_result": "FT_Bool-compatible int",
+          "face_flags": "FT_Long",
+          "face_index": "FT_Long",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "face_flags",
+            "face_index",
+            "import_compiles"
+          ]
+        },
+        "fixture_requirements": [
+          "variable font with known default coordinates plus static control font"
+        ]
+      }
+    }
+  ]
+}

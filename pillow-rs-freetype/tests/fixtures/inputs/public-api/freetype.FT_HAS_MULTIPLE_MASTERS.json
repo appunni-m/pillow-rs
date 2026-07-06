@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_HAS_MULTIPLE_MASTERS",
+  "manifest_cases": [
+    "variable_or_mm_face_returns_true",
+    "static_face_returns_false"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_HAS_MULTIPLE_MASTERS.variable_or_mm_face_returns_true",
+      "subject": "freetype.FT_HAS_MULTIPLE_MASTERS",
+      "case": "variable_or_mm_face_returns_true",
+      "operation": "freetype.face_macro.has_multiple_masters",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/variable/inter-var.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag_or_expression": "FT_FACE_FLAG_MULTIPLE_MASTERS",
+          "post_probe": [
+            "FT_Get_MM_Var"
+          ],
+          "include": "freetype/freetype.h",
+          "macro": "FT_HAS_MULTIPLE_MASTERS",
+          "expected_truth": true,
+          "probe": [
+            "macro_result",
+            "face.face_flags",
+            "face.face_index"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face_property_macro",
+        "runtime:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_result": "FT_Bool-compatible int",
+          "face_flags": "FT_Long",
+          "face_index": "FT_Long",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "face_flags",
+            "face_index",
+            "import_compiles"
+          ]
+        },
+        "fixture_requirements": [
+          "OpenType Font Variations or GX variable font"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_HAS_MULTIPLE_MASTERS.static_face_returns_false",
+      "subject": "freetype.FT_HAS_MULTIPLE_MASTERS",
+      "case": "static_face_returns_false",
+      "operation": "freetype.face_macro.has_multiple_masters",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag_or_expression": "FT_FACE_FLAG_MULTIPLE_MASTERS",
+          "post_probe": [
+            "FT_Get_MM_Var"
+          ],
+          "include": "freetype/freetype.h",
+          "macro": "FT_HAS_MULTIPLE_MASTERS",
+          "expected_truth": false,
+          "probe": [
+            "macro_result",
+            "face.face_flags",
+            "face.face_index"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face_property_macro",
+        "runtime:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_result": "FT_Bool-compatible int",
+          "face_flags": "FT_Long",
+          "face_index": "FT_Long",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "face_flags",
+            "face_index",
+            "import_compiles"
+          ]
+        },
+        "fixture_requirements": [
+          "static outline control font"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_HAS_VERTICAL",
+  "manifest_cases": [
+    "real_vertical_metrics_face_returns_true",
+    "synthesized_or_absent_vertical_metrics_returns_false"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_HAS_VERTICAL.real_vertical_metrics_face_returns_true",
+      "subject": "freetype.FT_HAS_VERTICAL",
+      "case": "real_vertical_metrics_face_returns_true",
+      "operation": "freetype.face_macro.has_vertical",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag_or_expression": "FT_FACE_FLAG_VERTICAL",
+          "post_probe": [
+            "FT_Load_Glyph with FT_LOAD_VERTICAL_LAYOUT"
+          ],
+          "include": "freetype/freetype.h",
+          "macro": "FT_HAS_VERTICAL",
+          "expected_truth": true,
+          "probe": [
+            "macro_result",
+            "face.face_flags",
+            "face.face_index"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face_property_macro",
+        "runtime:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_result": "FT_Bool-compatible int",
+          "face_flags": "FT_Long",
+          "face_index": "FT_Long",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "face_flags",
+            "face_index",
+            "import_compiles"
+          ]
+        },
+        "fixture_requirements": [
+          "font with real vertical metrics tables"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_HAS_VERTICAL.synthesized_or_absent_vertical_metrics_returns_false",
+      "subject": "freetype.FT_HAS_VERTICAL",
+      "case": "synthesized_or_absent_vertical_metrics_returns_false",
+      "operation": "freetype.face_macro.has_vertical",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag_or_expression": "FT_FACE_FLAG_VERTICAL",
+          "post_probe": [
+            "FT_Load_Glyph with FT_LOAD_VERTICAL_LAYOUT"
+          ],
+          "include": "freetype/freetype.h",
+          "macro": "FT_HAS_VERTICAL",
+          "expected_truth": false,
+          "probe": [
+            "macro_result",
+            "face.face_flags",
+            "face.face_index"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face_property_macro",
+        "runtime:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_result": "FT_Bool-compatible int",
+          "face_flags": "FT_Long",
+          "face_index": "FT_Long",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "face_flags",
+            "face_index",
+            "import_compiles"
+          ]
+        },
+        "fixture_requirements": [
+          "Latin control without real vertical metrics"
+        ]
+      }
+    }
+  ]
+}

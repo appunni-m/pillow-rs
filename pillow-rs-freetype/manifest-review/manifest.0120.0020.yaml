@@ -1,0 +1,329 @@
+  - id: freetype.FT_Face_Properties
+    kind: function
+    symbol: FT_Face_Properties
+    header: freetype/freetype.h
+    description: FreeType C API function that sets face-scoped driver properties from an array of FT_Parameter records.
+    cases:
+      # needs-input: operation FT_Face_Properties; fixture asset CFF or Type1 face plus optional TrueType/autofitter control; params FT_Parameter array with FT_PARAM_TAG_STEM_DARKENING and FT_PARAM_TAG_RANDOM_SEED where supported; expected output shape FT_Error plus before/after glyph slot metrics/outline/bitmap for affected loads; comparison rule exact C error code and exact downstream load output parity.
+      - id: success_supported_face_properties
+        description: Supported per-face driver properties return the same FreeType error code and affect later glyph loading exactly like the C oracle.
+      - id: success_zero_properties_noop
+        description: num_properties zero with a live face succeeds or fails exactly like C and leaves observable face state unchanged.
+      - id: error_null_face
+        description: Null face handle returns the pinned C FreeType error classification.
+      - id: error_invalid_property_tag_or_value
+        description: Unknown tags, invalid value pointers, unsupported drivers, and malformed property values return the same C error code without hidden state mutation.
+
+  - id: freetype.FT_Face_SetUnpatentedHinting
+    kind: function
+    symbol: FT_Face_SetUnpatentedHinting
+    header: freetype/freetype.h
+    description: Deprecated FreeType C API function that toggled legacy unpatented TrueType hinting behavior when compiled into older builds.
+    cases:
+      # needs-input: operation FT_Face_SetUnpatentedHinting; fixture asset TrueType font with bytecode programs and a non-TrueType control; params face handle and FT_Bool values 0 and 1; expected output shape FT_Bool return plus subsequent FT_Load_Glyph metrics/bitmap output where C still changes behavior; comparison rule exact boolean return parity and exact post-call glyph-slot parity, or documented no-op parity for the pinned C build.
+      - id: live_face_toggle_result
+        description: Live TrueType and non-TrueType faces return the same boolean result as the pinned C oracle for both enable and disable inputs.
+      - id: post_toggle_load_behavior
+        description: Subsequent TrueType glyph loads match the pinned C build after toggling, including no-op behavior if the function is obsolete in that build.
+      - id: null_face_result
+        description: Null face handle returns the same boolean result as the C oracle.
+
+  - id: freetype.FT_FloorFix
+    kind: function
+    symbol: FT_FloorFix
+    header: freetype/freetype.h
+    description: FreeType C API function that floors a 16.16 fixed-point value toward minus infinity.
+    cases:
+      - id: exact_integer_passthrough
+        description: Integral 16.16 inputs, including zero and negative integers, are returned unchanged.
+      - id: positive_fraction_rounds_down
+        description: Positive fractional 16.16 inputs round toward the previous integral 16.16 value.
+      - id: negative_fraction_rounds_toward_minus_infinity
+        description: Negative fractional 16.16 inputs round toward minus infinity and match C wrap-around behavior at edge values.
+
+  - id: freetype.FT_Get_Char_Index
+    kind: function
+    symbol: FT_Get_Char_Index
+    header: freetype/freetype.h
+    description: FreeType C API function that maps a character code through the currently active charmap to a glyph index.
+    cases:
+      - id: latin_capital_a
+        description: Resolves U+0041 to the C FreeType glyph index through the active charmap.
+        coverage:
+          font_variability:
+            folder: input/fonts
+            sizes: [20]
+            char_codes: [65]
+      - id: matrix_char_code
+        description: Resolves character codes from the broad matrix fixture corpus.
+        coverage:
+          font_variability:
+            folder: input/fonts_autohint
+            sizes: [10, 20]
+      # needs-input: operation FT_Get_Char_Index; fixture asset font with multiple charmaps including Unicode and non-Unicode charmaps; params selected charmap index/encoding and charcodes for present, absent, zero, BMP edge, and supplementary values; expected output shape FT_UInt glyph index; comparison rule exact glyph index parity and exact 0 for undefined/null/no-active-charmap cases.
+      - id: active_charmap_present_and_missing_codes
+        description: Present and absent character codes are resolved against the currently active charmap, with missing codes returning 0 like C.
+      - id: null_or_no_active_charmap_returns_zero
+        description: Null face handles and faces without an active charmap return the same zero result as the C oracle.
+
+  - id: freetype.FT_Get_Charmap_Index
+    kind: function
+    symbol: FT_Get_Charmap_Index
+    header: freetype/freetype.h
+    description: FreeType C API function that returns the index of an FT_CharMap within its owning face's charmap array.
+    cases:
+      # needs-input: operation FT_Get_Charmap_Index; fixture asset font with at least two charmaps plus an invalid/foreign charmap pointer scenario in the C harness; params each face->charmaps[i] and NULL/foreign charmap; expected output shape FT_Int; comparison rule exact index value for owned charmaps and exact -1/error sentinel parity otherwise.
+      - id: owned_charmap_indexes
+        description: Every charmap pointer owned by a face returns its exact zero-based index in face->charmaps.
+      - id: null_or_invalid_charmap_returns_negative_one
+        description: Null, invalid, or non-owned charmap handles return -1 like the C oracle.
+
+  - id: freetype.FT_Get_FSType_Flags
+    kind: function
+    symbol: FT_Get_FSType_Flags
+    header: freetype/freetype.h
+    description: FreeType C API function that returns OS/2 fsType or PostScript FSType embedding restriction flags.
+    cases:
+      # needs-input: operation FT_Get_FSType_Flags; fixture asset SFNT font with OS/2 fsType zero, SFNT font with nonzero restricted fsType, and Type1/CFF control if available; params live and null FT_Face handles; expected output shape FT_UShort; comparison rule exact bitfield parity with pinned C FreeType.
+      - id: sfnt_installable_embedding
+        description: Fonts whose OS/2 fsType is zero return FT_FSTYPE_INSTALLABLE_EMBEDDING exactly like C.
+      - id: sfnt_restricted_embedding_bits
+        description: Nonzero OS/2 fsType embedding and subsetting bits are returned exactly as the C oracle reports them.
+      - id: null_or_missing_fstype_returns_c_value
+        description: Null faces and formats without fsType data return the same value as the C oracle.
+
+  - id: freetype.FT_Get_First_Char
+    kind: function
+    symbol: FT_Get_First_Char
+    header: freetype/freetype.h
+    description: FreeType C API function that returns the first character code and glyph index in the active charmap.
+    cases:
+      # needs-input: operation FT_Get_First_Char; fixture asset font with Unicode charmap, font/charmap whose first valid charcode is 0 if available, and empty/no-active-charmap control; params live face with selected charmap and FT_UInt* output; expected output shape FT_ULong return plus written glyph index; comparison rule exact first charcode, exact written glyph index, and exact empty/null/no-active behavior.
+      - id: first_mapped_char_and_glyph
+        description: A populated active charmap returns the first mapped character code and writes its glyph index.
+      - id: empty_or_no_active_charmap
+        description: Empty charmaps, no active charmap, and null face cases return and write the same sentinel values as C.
+      - id: charcode_zero_disambiguated_by_glyph_index
+        description: A valid first character code of zero is distinguished from an empty charmap by the written glyph index exactly like C.
+
+  - id: freetype.FT_Get_Glyph_Name
+    kind: function
+    symbol: FT_Get_Glyph_Name
+    header: freetype/freetype.h
+    description: FreeType C API function that copies the ASCII name of a glyph into caller-provided storage.
+    cases:
+      # needs-input: operation FT_Get_Glyph_Name; fixture asset font with reliable glyph names plus a font without glyph names; params glyph indexes 0, A, invalid index, buffer_max values 0/1/small/full; expected output shape FT_Error plus output buffer bytes; comparison rule exact C error code, exact copied/truncated NUL-terminated bytes, and exact first-byte-zero behavior on failure.
+      - id: named_glyph_success
+        description: A valid glyph in a face with glyph names returns success and copies the same zero-terminated ASCII name as C.
+      - id: truncates_and_terminates_to_buffer_size
+        description: Small buffers receive the same truncated and zero-terminated bytes as the C oracle.
+      - id: error_no_names_or_invalid_glyph
+        description: Faces without glyph names and invalid glyph indexes return the same C error and clear the output name as C.
+      - id: error_null_face_or_buffer
+        description: Null face or buffer cases return the pinned C error/write behavior.
+
+  - id: freetype.FT_Get_Kerning
+    kind: function
+    symbol: FT_Get_Kerning
+    header: freetype/freetype.h
+    description: FreeType C API function that returns the horizontal kerning vector between two glyph indexes.
+    cases:
+      # needs-input: operation FT_Get_Kerning; fixture asset font with a legacy kern A/V pair at multiple ppem values; params left glyph A, right glyph V, mode FT_KERNING_DEFAULT; expected output shape FT_Error plus FT_Vector{x,y}; comparison rule exact C error code and grid-fitted 26.6 vector including small-ppem heuristic.
+      - id: legacy_pair_default_mode
+        description: A present legacy kern pair in FT_KERNING_DEFAULT mode returns exact grid-fitted 26.6 kerning with y zero.
+      # needs-input: operation FT_Get_Kerning; fixture asset same legacy kern A/V font; params modes FT_KERNING_UNFITTED and FT_KERNING_UNSCALED; expected output shape FT_Error plus FT_Vector{x,y}; comparison rule exact scaled un-grid-fitted 26.6 and exact unscaled font-unit vector parity.
+      - id: legacy_pair_unfitted_and_unscaled_modes
+        description: UNFITTED and UNSCALED modes return the exact C vector units for the same glyph pair.
+      - id: missing_pair_or_no_kerning_success_zero
+        description: Missing pairs and fonts without extractable kerning return success with the same zero vector and face flag behavior as C.
+      # needs-input: operation FT_Get_Kerning; fixture asset font with GPOS-only pair kerning and no legacy kern table; params representative LTR and RTL pair glyphs, all three kerning modes; expected output shape FT_Error plus FT_Vector{x,y}; comparison rule exact C build behavior, including zero if TT_CONFIG_OPTION_GPOS_KERNING is disabled or unsupported for the pair.
+      - id: gpos_only_pair_build_option_behavior
+        description: GPOS-only pair kerning follows the pinned C build behavior and does not assume legacy kern fallback.
+      - id: error_invalid_mode_or_null_output
+        description: Invalid kern_mode, null face, and null output pointer cases match the pinned C error and write behavior.
+
+  - id: freetype.FT_Get_Name_Index
+    kind: function
+    symbol: FT_Get_Name_Index
+    header: freetype/freetype.h
+    description: FreeType C API function that maps a glyph name to a glyph index when the face provides glyph names.
+    cases:
+      # needs-input: operation FT_Get_Name_Index; fixture asset font with post/CFF glyph names and a control font without glyph names; params glyph names '.notdef', 'A' or equivalent, unknown name, NULL; expected output shape FT_UInt glyph index; comparison rule exact glyph index parity and exact 0 for unknown/unavailable/null cases.
+      - id: known_glyph_name_success
+        description: Known glyph names return the same glyph index as the C oracle.
+      - id: unknown_or_unavailable_name_returns_zero
+        description: Unknown names, faces without glyph-name support, and unavailable name data return 0 like C.
+      - id: null_face_or_name_returns_zero
+        description: Null face and null glyph_name inputs return the same zero result as the C oracle.
+
+  - id: freetype.FT_Get_Next_Char
+    kind: function
+    symbol: FT_Get_Next_Char
+    header: freetype/freetype.h
+    description: FreeType C API function that returns the next character code strictly after a supplied code in the active charmap.
+    cases:
+      # needs-input: operation FT_Get_Next_Char; fixture asset font with sparse Unicode charmap plus non-Unicode charmap control; params starting charcodes before first, at mapped code, between mapped codes, final mapped code, and above final; expected output shape FT_ULong return plus written FT_UInt glyph index; comparison rule exact iteration order, strict-after semantics, and exact exhausted/null/no-active sentinel behavior.
+      - id: iterates_mapped_chars_in_c_order
+        description: Successive calls after FT_Get_First_Char enumerate exactly the same charcode/glyph-index pairs as C.
+      - id: strict_after_and_gap_behavior
+        description: Starting from a mapped code or a gap returns the next strictly greater mapped code exactly like C.
+      - id: exhausted_or_no_active_charmap
+        description: Exhausted charmaps, null faces, and no active charmap cases return and write the same zero sentinels as C.
+
+  - id: freetype.FT_Get_Postscript_Name
+    kind: function
+    symbol: FT_Get_Postscript_Name
+    header: freetype/freetype.h
+    description: FreeType C API function that returns a borrowed face-owned PostScript name string when available.
+    cases:
+      # needs-input: operation FT_Get_Postscript_Name; fixture asset TrueType/OpenType font with name/post PostScript name, CFF/Type1 face if available, variable font with named instances, and a no-name control; params live face before/after FT_Set_Named_Instance and null face; expected output shape nullable const char* string; comparison rule exact NULL/non-NULL behavior, exact bytes, and face-owned lifetime until FT_Done_Face.
+      - id: static_face_name_success
+        description: A supported face with a PostScript name returns the exact same borrowed ASCII string bytes as C.
+      - id: variation_instance_name_behavior
+        description: Variable-font named-instance changes update the returned name exactly like the pinned C oracle.
+      - id: unavailable_or_null_face_returns_null
+        description: Faces without a PostScript name and null face handles return NULL like C.
+
+  - id: freetype.FT_Get_SubGlyph_Info
+    kind: function
+    symbol: FT_Get_SubGlyph_Info
+    header: freetype/freetype.h
+    description: FreeType C API function that returns component glyph index, flags, arguments, and transform for a loaded composite glyph slot.
+    cases:
+      # needs-input: operation FT_Get_SubGlyph_Info; fixture asset TrueType font with composite glyphs covering XY args, scale, xy-scale, 2x2 transform, and USE_MY_METRICS flags; params FT_Load_Glyph with FT_LOAD_NO_RECURSE for composite glyph and sub_index range; expected output shape FT_Error plus p_index, p_flags, p_arg1, p_arg2, FT_Matrix; comparison rule exact C error code and exact component fields/transform values.
+      - id: composite_subglyph_components
+        description: Loaded composite glyph slots expose each subglyph's index, flags, args, and transform exactly like C.
+      - id: error_non_composite_or_out_of_range
+        description: Non-composite slots and sub_index values outside num_subglyphs return the same C error and output write behavior.
+      - id: error_null_slot_or_outputs
+        description: Null glyph slot and optional/null output pointer combinations match the pinned C behavior.
+
+  - id: freetype.FT_Get_Track_Kerning
+    kind: function
+    symbol: FT_Get_Track_Kerning
+    header: freetype/freetype.h
+    description: FreeType C API function that returns Type 1 AFM track kerning in 16.16 fractional points.
+    cases:
+      # needs-input: operation FT_Get_Track_Kerning; fixture pair Type1 PFA/PFB plus AFM with track kerning data attached via FT_Attach_File/Stream; params point_size values in 16.16 and degree values negative, zero, positive; expected output shape FT_Error plus FT_Fixed kerning; comparison rule exact C error code and exact 16.16 track kerning value.
+      - id: type1_afm_track_kerning_success
+        description: A Type 1 face with attached AFM track kerning returns exact C 16.16 kerning values for covered point sizes and degrees.
+      - id: sfnt_or_no_track_data_error
+        description: Supported SFNT fixtures and Type 1 faces without track kerning return the same no-data error/value behavior as C.
+      - id: error_null_face_or_output
+        description: Null face and null akerning pointers return the pinned C error and write behavior.
+
+  - id: freetype.FT_Get_Transform
+    kind: function
+    symbol: FT_Get_Transform
+    header: freetype/freetype.h
+    description: FreeType C API function that returns the current glyph-load transform matrix and delta for a face.
+    cases:
+      # needs-input: operation FT_Get_Transform; fixture asset input/fonts/DejaVuSans.ttf; params newly created face, then FT_Set_Transform with identity/null, non-identity matrix, delta-only, and both matrix/delta; expected output shape optional FT_Matrix and FT_Vector writes; comparison rule exact 16.16 matrix and 26.6 delta field parity, including behavior when either output pointer is NULL.
+      - id: default_identity_transform
+        description: A newly created face reports the same default identity matrix and zero delta as C.
+      - id: returns_last_set_transform
+        description: After FT_Set_Transform, matrix and delta outputs match the exact values stored by the C oracle.
+      - id: null_output_pointers_are_ignored
+        description: Null matrix and/or delta output pointers are ignored exactly like C, including null face behavior.
+
+  - id: freetype.FT_Init_FreeType
+    kind: function
+    symbol: FT_Init_FreeType
+    header: freetype/freetype.h
+    description: FreeType C API function that initializes a library object and registers the build-time default modules.
+    cases:
+      - id: creates_library_handle
+        description: Produces a usable library handle and returns the same success error code as C.
+      - id: created_library_reports_version_and_modules
+        description: A created library can be passed to FT_Library_Version and used to create supported faces like the C oracle.
+      - id: error_null_output_pointer
+        description: Null alibrary output pointer returns the pinned C error behavior without creating a library.
+
+  - id: freetype.FT_Library_Version
+    kind: function
+    symbol: FT_Library_Version
+    header: freetype/freetype.h
+    description: FreeType C API function that writes the runtime library major, minor, and patch version.
+    cases:
+      # needs-input: operation FT_Library_Version; fixture asset none; params live FT_Library and combinations of non-null/null amajor, aminor, apatch; expected output shape written FT_Int version fields; comparison rule exact major/minor/patch values for pinned C FreeType 2.14.3 and exact null-output handling.
+      - id: live_library_version_fields
+        description: A live library writes the exact pinned runtime version fields 2, 14, and 3.
+      - id: optional_null_outputs
+        description: Null major, minor, or patch output pointers are handled exactly like C.
+      - id: null_library_behavior
+        description: Null library handles have the same write or no-write behavior as the pinned C oracle.
+
+  - id: freetype.FT_Load_Char
+    kind: function
+    symbol: FT_Load_Char
+    header: freetype/freetype.h
+    description: FreeType C API function that maps a character code through the active charmap and loads the selected glyph into face->glyph.
+    cases:
+      - id: default_load
+        description: Loads an outline glyph with default flags and mutates face->glyph to match C slot metrics, outline, advance, and format.
+        coverage:
+          font_variability:
+            folder: input/fonts
+            sizes: [20]
+            char_codes: [65]
+            load_flags: [0]
+      - id: render_during_load
+        description: Loads and renders a glyph when FT_LOAD_RENDER is set, matching C bitmap fields and bytes.
+        coverage:
+          font_variability:
+            folder: input/fonts
+            sizes: [20]
+            char_codes: [65]
+            load_flags: [4]
+      - id: matrix_load
+        description: Loads character-selected glyphs from the broad matrix fixture corpus.
+        coverage:
+          font_variability:
+            folder: input/fonts_autohint
+            sizes: [10, 20]
+      # needs-input: operation FT_Load_Char; fixture asset input/fonts/DejaVuSans.ttf plus charmap-control font; params char_code present, missing, zero, supplementary value, selected non-Unicode charmap, and load_flags default/no_hinting/no_scale/render/target modes/vertical; expected output shape FT_Error plus full FT_GlyphSlotRec public fields, outline/bitmap bytes when present, and active slot side effects; comparison rule exact C error, metrics, advance, format, lsb/rsb deltas, outline points/tags, bitmap placement/pitch/pixel_mode/bytes.
+      - id: missing_char_loads_glyph_zero
+        description: Undefined character codes map to glyph index 0 and load the missing glyph with the same status and slot contents as C.
+      - id: error_null_face_or_invalid_flags
+        description: Null face and invalid or unsupported load flag combinations return the pinned C error and slot mutation behavior.
+
+  - id: freetype.FT_Load_Glyph
+    kind: function
+    symbol: FT_Load_Glyph
+    header: freetype/freetype.h
+    description: FreeType C API function that loads a glyph index into face->glyph according to C load flags.
+    cases:
+      - id: default_load
+        description: Loads an outline glyph with default flags and matches C glyph-slot metrics, outline, advance, and format.
+        coverage:
+          font_variability:
+            folder: input/fonts
+            sizes: [20]
+            glyph_indices: [36]
+            load_flags: [0]
+      - id: matrix_load
+        description: Loads glyph-index-selected glyphs from the broad matrix fixture corpus.
+        coverage:
+          font_variability:
+            folder: input/fonts_autohint
+            sizes: [10, 20]
+      # needs-input: operation FT_Load_Glyph; fixture asset input/fonts/DejaVuSans.ttf plus fonts with composite glyphs, vertical metrics, embedded bitmaps, and malformed/out-of-range controls; params glyph indices 0, 36, composite glyph, out-of-range glyph, sizes 10/20, and load_flags default/no_hinting/force_autohint/no_scale/no_recurse/render/target modes/vertical/linear_design/sbits_only; expected output shape FT_Error plus full FT_GlyphSlotRec public fields, outline/subglyph/bitmap data, and slot mutation; comparison rule exact C error, metrics, advance, linear advances, lsb/rsb deltas, format, outline points/tags, bitmap fields/bytes, and subglyph fields when applicable.
+      - id: render_and_target_modes
+        description: FT_LOAD_RENDER and FT_LOAD_TARGET_* combinations produce the same bitmap pixel mode, dimensions, bearings, pitch, and bytes as C.
+      - id: no_scale_no_hinting_and_vertical_flags
+        description: NO_SCALE, NO_HINTING, FORCE_AUTOHINT, VERTICAL_LAYOUT, and LINEAR_DESIGN alter units and slot fields exactly like C.
+      - id: error_out_of_range_null_face_or_invalid_flags
+        description: Invalid glyph indexes, null face, and unsupported flag combinations return the pinned C error and slot mutation behavior.
+
+  - id: freetype.FT_MulDiv
+    kind: function
+    symbol: FT_MulDiv
+    header: freetype/freetype.h
+    description: FreeType C API function that computes rounded signed (a*b)/c using a high-accuracy intermediate and divide-by-zero sentinels.
+    cases:
+      - id: signed_product_quotient_matches_c
+        description: Positive and negative multiplier/divisor combinations match C sign handling, rounding, and integer quotient behavior.
+      - id: zero_divisor_returns_signed_sentinel
+        description: A zero divisor returns the C MaxInt or MinInt sentinel according to the signs of the multipliers.
+      - id: large_operands_and_edge_values
+        description: Large 32-bit operand combinations and edge values match the pinned C implementation's overflow, rounding, and wrap-around behavior.

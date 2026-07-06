@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "subject": "ftmoderr.FT_MODERR_END_LIST",
+  "manifest_cases": [
+    "default_enum_closes_with_max",
+    "custom_table_end_hook"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmoderr.FT_MODERR_END_LIST.default_enum_closes_with_max",
+      "subject": "ftmoderr.FT_MODERR_END_LIST",
+      "case": "default_enum_closes_with_max",
+      "operation": "c_preprocessor.expand_ftmoderr",
+      "schema": "api_macro",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftmoderr.h>",
+          "predefined_macros": {},
+          "expected_default_definition": "FT_Mod_Err_Max };",
+          "expected_invocation_order": "after all FT_MODERRDEF entries",
+          "expected_cleanup_defined_after_include": false,
+          "pinned_sources": [
+            "freetype/include/freetype/ftmoderr.h:126-128",
+            "freetype/include/freetype/ftmoderr.h:177-198"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftmoderr",
+        "area:module-error-list",
+        "requires:c-preprocess"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro": "FT_MODERR_END_LIST",
+          "tokens": "preprocessed_token_stream_or_compile_probe",
+          "post_include_macro_defined": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "tokens",
+            "invocation_order",
+            "post_include_macro_defined"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmoderr.h:126-128",
+          "freetype/include/freetype/ftmoderr.h:177-198"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmoderr.FT_MODERR_END_LIST.custom_table_end_hook",
+      "subject": "ftmoderr.FT_MODERR_END_LIST",
+      "case": "custom_table_end_hook",
+      "operation": "c_preprocessor.custom_ftmoderr_table",
+      "schema": "api_macro",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "translation_unit": {
+            "kind": "ref",
+            "role": "c_source",
+            "id": "generated/c-preprocess/ftmoderr-custom-end-list.c",
+            "requirements": "C source undefines FTMODERR_H_, defines FT_MODERRDEF/FT_MODERR_START_LIST/FT_MODERR_END_LIST, includes ftmoderr.h, and records a sentinel row emitted by the custom end hook."
+          }
+        },
+        "params": {
+          "include": "<freetype/ftmoderr.h>",
+          "custom_end_hook": "{ 0, 0 } };",
+          "expected_last_entry_before_end": "FT_Mod_Err_Sdf",
+          "expected_cleanup_defined_after_include": false,
+          "pinned_sources": [
+            "freetype/include/freetype/ftmoderr.h:82-98",
+            "freetype/include/freetype/ftmoderr.h:177-198"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftmoderr",
+        "area:module-error-list",
+        "requires:c-preprocess"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro": "FT_MODERR_END_LIST",
+          "tokens": "preprocessed_token_stream_or_compile_probe",
+          "post_include_macro_defined": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "table_entries",
+            "sentinel_row",
+            "post_include_macro_defined"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmoderr.h:82-98",
+          "freetype/include/freetype/ftmoderr.h:177-198"
+        ]
+      }
+    }
+  ]
+}

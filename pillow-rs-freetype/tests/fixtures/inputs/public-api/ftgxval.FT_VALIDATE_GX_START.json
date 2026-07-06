@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "subject": "ftgxval.FT_VALIDATE_GX_START",
+  "manifest_cases": [
+    "value_matches_header",
+    "separates_gx_from_ot_validation_bits"
+  ],
+  "cases": [
+    {
+      "case_id": "ftgxval.FT_VALIDATE_GX_START.value_matches_header",
+      "subject": "ftgxval.FT_VALIDATE_GX_START",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftgxval.h>",
+          "symbol": "FT_VALIDATE_GX_START",
+          "expected_value_from_pinned_header": 16384,
+          "expected_value_hex": "0x4000",
+          "pinned_sources": [
+            "freetype/include/freetype/ftgxval.h:107-111"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftgxval",
+        "area:gx-validation",
+        "coverage:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_UInt",
+          "symbol": "FT_VALIDATE_GX_START"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgxval.FT_VALIDATE_GX_START.separates_gx_from_ot_validation_bits",
+      "subject": "ftgxval.FT_VALIDATE_GX_START",
+      "case": "separates_gx_from_ot_validation_bits",
+      "operation": "constant.bitfield_group",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftgxval.h>",
+          "gx_start_symbol": "FT_VALIDATE_GX_START",
+          "ot_reserved_range_note": "Up to 0x1000 is used by otvalid; 0x2xxx is reserved for feature OT extension.",
+          "symbols": [
+            "FT_VALIDATE_GX_START",
+            "FT_VALIDATE_feat",
+            "FT_VALIDATE_MS",
+            "FT_VALIDATE_APPLE"
+          ],
+          "expected_values_from_pinned_header": {
+            "FT_VALIDATE_GX_START": 16384,
+            "FT_VALIDATE_feat": 16384,
+            "FT_VALIDATE_MS": 16384,
+            "FT_VALIDATE_APPLE": 32768
+          }
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftgxval",
+        "area:gx-validation",
+        "coverage:bitfield-group"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "values": "integer_by_symbol",
+          "relations": "bool_by_relation"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "values",
+            "relations"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ftgxval.h"
+        ]
+      }
+    }
+  ]
+}

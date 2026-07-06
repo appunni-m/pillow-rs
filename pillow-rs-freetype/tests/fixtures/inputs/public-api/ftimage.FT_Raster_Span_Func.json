@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_Raster_Span_Func",
+  "manifest_cases": [
+    "macro_alias_matches_typedef",
+    "callback_abi_matches_c",
+    "direct_render_emits_spans",
+    "missing_span_callback_errors"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_Raster_Span_Func.macro_alias_matches_typedef",
+      "subject": "ftimage.FT_Raster_Span_Func",
+      "case": "macro_alias_matches_typedef",
+      "operation": "ftimage.macro_alias",
+      "schema": "api_abi_type",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"include": "<freetype/ftimage.h>", "macro": "FT_Raster_Span_Func", "expands_to": "FT_SpanFunc"}},
+      "classifiers": ["kind:macro", "header:ftimage", "area:raster"],
+      "expectation": {"status": "ok", "output_shape": {"macro": "FT_Raster_Span_Func", "typedef": "FT_SpanFunc"}, "compare": {"mode": "exact", "paths": ["macro", "expands_to", "include"]}, "source_refs": ["freetype/include/freetype/ftimage.h:879-913"]}
+    },
+    {
+      "case_id": "ftimage.FT_Raster_Span_Func.callback_abi_matches_c",
+      "subject": "ftimage.FT_Raster_Span_Func",
+      "case": "callback_abi_matches_c",
+      "operation": "ftimage.callback_abi",
+      "schema": "api_abi_type",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"typedef": "FT_SpanFunc", "return_type": "void", "arguments": [{"name": "y", "type": "int"}, {"name": "count", "type": "int"}, {"name": "spans", "type": "const FT_Span*"}, {"name": "user", "type": "void*"}], "span_fields": [{"name": "x", "type": "short"}, {"name": "len", "type": "unsigned short"}, {"name": "coverage", "type": "unsigned char"}]}},
+      "classifiers": ["kind:callback", "header:ftimage", "abi:function-pointer"],
+      "expectation": {"status": "ok", "output_shape": {"return_type": "void", "argument_count": 4, "span_record": "FT_Span layout"}, "compare": {"mode": "layout", "paths": ["return_type", "arguments[*].type", "span_fields[*].type"]}, "source_refs": ["freetype/include/freetype/ftimage.h:843-913"]}
+    },
+    {
+      "case_id": "ftimage.FT_Raster_Span_Func.direct_render_emits_spans",
+      "subject": "ftimage.FT_Raster_Span_Func",
+      "case": "direct_render_emits_spans",
+      "operation": "ftoutln.outline_render_direct",
+      "schema": "span_stream",
+      "expect_error": false,
+      "inputs": {"assets": {"outline_font": {"kind": "file", "role": "font", "path": "input/fonts/DejaVuSans.ttf"}}, "params": {"glyph_index": 36, "flags": ["FT_RASTER_FLAG_AA", "FT_RASTER_FLAG_DIRECT"], "clip_variants": ["none", "clip_box"], "user": "sentinel"}},
+      "classifiers": ["kind:callback", "header:ftimage", "path:runtime"],
+      "expectation": {"status": "ok", "output_shape": {"status": "FT_Error", "rows": "ordered y/count/span arrays", "spans": "FT_Span x/len/coverage"}, "compare": {"mode": "exact", "paths": ["status", "rows[*].y", "rows[*].count", "rows[*].spans[*].x", "rows[*].spans[*].len", "rows[*].spans[*].coverage", "rows[*].user_identity"]}}
+    },
+    {
+      "case_id": "ftimage.FT_Raster_Span_Func.missing_span_callback_errors",
+      "subject": "ftimage.FT_Raster_Span_Func",
+      "case": "missing_span_callback_errors",
+      "operation": "ftoutln.outline_render_direct",
+      "schema": "span_stream",
+      "expect_error": true,
+      "inputs": {"assets": {"outline_font": {"kind": "file", "role": "font", "path": "input/fonts/DejaVuSans.ttf"}}, "params": {"glyph_index": 36, "flags": ["FT_RASTER_FLAG_AA", "FT_RASTER_FLAG_DIRECT"], "gray_spans": null}},
+      "classifiers": ["kind:callback", "header:ftimage", "path:error"],
+      "expectation": {"status": "error", "output_shape": {"status": "FT_Error", "rows": "no callback rows", "target_mutation_class": "ignored in direct mode"}, "compare": {"mode": "exact_error", "paths": ["status", "rows", "target_mutation_class"]}, "error": "FT_Err_Invalid_Argument"}
+    }
+  ]
+}

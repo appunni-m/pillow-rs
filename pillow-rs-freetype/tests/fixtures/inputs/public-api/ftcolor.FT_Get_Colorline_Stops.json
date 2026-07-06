@@ -1,0 +1,349 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_Get_Colorline_Stops",
+  "manifest_cases": [
+    "success_iterates_static_colorline_stops",
+    "success_iterates_variable_colorline_stops",
+    "end_of_iteration",
+    "error_null_or_invalid_iterator",
+    "error_null_color_stop_policy"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops",
+      "subject": "ftcolor.FT_Get_Colorline_Stops",
+      "case": "success_iterates_static_colorline_stops",
+      "operation": "ftcolor.get_colorline_stops",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 1 base glyph list",
+              "CPAL table with at least two palettes and named entries",
+              "paint graph containing solid, colr_layers, glyph, colr_glyph, linear, radial, sweep, transform, translate, scale, rotate, skew, and composite paints",
+              "static ColorLine records using PAD, REPEAT, and REFLECT extend modes",
+              "foreground palette index 0xFFFF references"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_roles": [
+            "linear_pad_three_stops",
+            "radial_repeat_two_stops",
+            "sweep_reflect_one_stop"
+          ],
+          "walk": [
+            "FT_Get_Color_Glyph_Paint",
+            "FT_Get_Paint",
+            "FT_Get_Colorline_Stops"
+          ],
+          "iterate_until_zero": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Bool sequence",
+          "records": [
+            "FT_ColorStop",
+            "FT_ColorStopIterator"
+          ],
+          "fields": [
+            "stop_offset",
+            "color.palette_index",
+            "color.alpha",
+            "iterator.current_color_stop",
+            "iterator.num_color_stops",
+            "iterator.p_nullness",
+            "iterator.read_variable"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "calls[*].return",
+            "calls[*].color_stop.stop_offset",
+            "calls[*].color_stop.color.palette_index",
+            "calls[*].color_stop.color.alpha",
+            "calls[*].iterator.current_color_stop",
+            "calls[*].iterator.num_color_stops",
+            "calls[*].iterator.p_identity_class",
+            "calls[*].iterator.read_variable"
+          ]
+        },
+        "error": null,
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs",
+          "COLR v1 static gradient font with PAD/REPEAT/REFLECT color lines and 1/2/3-stop sequences"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops",
+      "subject": "ftcolor.FT_Get_Colorline_Stops",
+      "case": "success_iterates_variable_colorline_stops",
+      "operation": "ftcolor.get_colorline_stops",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-variable-gradients.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR v1 VarColorLine and variable paint records",
+              "fvar/gvar-compatible variation axes with non-zero COLR item variation deltas",
+              "gradient stops and linear gradient points that change at non-default design coordinates"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "design_coordinates": [
+            "default",
+            {
+              "wght": 900,
+              "GRAD": 1
+            }
+          ],
+          "walk": [
+            "FT_Set_Var_Design_Coordinates",
+            "FT_Get_Color_Glyph_Paint",
+            "FT_Get_Paint",
+            "FT_Get_Colorline_Stops"
+          ],
+          "iterate_until_zero": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Bool sequence",
+          "records": [
+            "FT_ColorStop",
+            "FT_ColorStopIterator"
+          ],
+          "variation_effects": [
+            "stop_offset_delta",
+            "alpha_delta",
+            "VarIdxBase cursor advancement"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "coordinate_runs[*].calls[*].return",
+            "coordinate_runs[*].calls[*].color_stop",
+            "coordinate_runs[*].calls[*].iterator.current_color_stop",
+            "coordinate_runs[*].calls[*].iterator.read_variable"
+          ]
+        },
+        "error": null,
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs",
+          "Variable COLR v1 font with VarColorStop item variation deltas"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Get_Colorline_Stops.end_of_iteration",
+      "subject": "ftcolor.FT_Get_Colorline_Stops",
+      "case": "end_of_iteration",
+      "operation": "ftcolor.get_colorline_stops",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 1 base glyph list",
+              "CPAL table with at least two palettes and named entries",
+              "paint graph containing solid, colr_layers, glyph, colr_glyph, linear, radial, sweep, transform, translate, scale, rotate, skew, and composite paints",
+              "static ColorLine records using PAD, REPEAT, and REFLECT extend modes",
+              "foreground palette index 0xFFFF references"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_role": "linear_pad_three_stops",
+          "iterate_past_end": 2,
+          "sentinel_color_stop": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Bool",
+          "end_return": 0,
+          "preservation": "color_stop and iterator after exhausted call per C oracle"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "end_calls[*].return",
+            "end_calls[*].color_stop_snapshot",
+            "end_calls[*].iterator_snapshot"
+          ]
+        },
+        "error": null,
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Get_Colorline_Stops.error_null_or_invalid_iterator",
+      "subject": "ftcolor.FT_Get_Colorline_Stops",
+      "case": "error_null_or_invalid_iterator",
+      "operation": "ftcolor.get_colorline_stops",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "valid_font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 1 base glyph list",
+              "CPAL table with at least two palettes and named entries",
+              "paint graph containing solid, colr_layers, glyph, colr_glyph, linear, radial, sweep, transform, translate, scale, rotate, skew, and composite paints",
+              "static ColorLine records using PAD, REPEAT, and REFLECT extend modes",
+              "foreground palette index 0xFFFF references"
+            ]
+          },
+          "malformed_font": {
+            "kind": "ref",
+            "id": "fonts/color/malformed-colr-v1-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "truncated paint table records",
+              "out-of-range paint offsets",
+              "invalid ColorLine offsets",
+              "invalid LayerV1List offsets",
+              "bad BaseGlyphV1List paint offsets"
+            ]
+          }
+        },
+        "params": {
+          "variants": [
+            "null_face",
+            "null_iterator",
+            "iterator_p_null",
+            "iterator_p_before_paints_start",
+            "iterator_p_after_table",
+            "truncated_color_stop_data"
+          ],
+          "sentinel_color_stop": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Bool",
+          "value": 0,
+          "write_policy": "C oracle sentinel preservation"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "variants[*].return",
+            "variants[*].color_stop_snapshot",
+            "variants[*].iterator_snapshot"
+          ]
+        },
+        "error": "zero_return_or_c_oracle",
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs",
+          "Runner support for invalid opaque iterator probes without unsafe dereference outside C oracle policy"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Get_Colorline_Stops.error_null_color_stop_policy",
+      "subject": "ftcolor.FT_Get_Colorline_Stops",
+      "case": "error_null_color_stop_policy",
+      "operation": "ftcolor.get_colorline_stops",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 1 base glyph list",
+              "CPAL table with at least two palettes and named entries",
+              "paint graph containing solid, colr_layers, glyph, colr_glyph, linear, radial, sweep, transform, translate, scale, rotate, skew, and composite paints",
+              "static ColorLine records using PAD, REPEAT, and REFLECT extend modes",
+              "foreground palette index 0xFFFF references"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_role": "linear_pad_three_stops",
+          "color_stop": "null",
+          "iterator": "valid_initialized"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Bool",
+          "value": 0,
+          "null_output_policy": "guarded by ftobjs.c"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "return",
+            "error_class",
+            "iterator_snapshot"
+          ]
+        },
+        "error": "zero_return_or_c_oracle",
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_LOAD_VERTICAL_LAYOUT",
+  "manifest_cases": [
+    "value_matches_header",
+    "vertical_layout_metrics"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_LOAD_VERTICAL_LAYOUT.value_matches_header",
+      "subject": "freetype.FT_LOAD_VERTICAL_LAYOUT",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_LOAD_VERTICAL_LAYOUT",
+          "include": "<freetype/freetype.h>",
+          "import": "#include <freetype/freetype.h>",
+          "expected_value_expr": "1L << 4"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:public-api",
+        "coverage:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "signed_or_unsigned_integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_LOAD_VERTICAL_LAYOUT.vertical_layout_metrics",
+      "subject": "freetype.FT_LOAD_VERTICAL_LAYOUT",
+      "case": "vertical_layout_metrics",
+      "operation": "freetype.load_glyph_pair",
+      "schema": "glyph_slot_metrics_delta",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/vertical/cjk-vertical-metrics.ttf",
+            "missing": true
+          },
+          "fallback_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "glyph_selector": {
+            "kind": "vertical_metrics_glyph"
+          },
+          "horizontal_load_flags": [],
+          "vertical_load_flags": [
+            "FT_LOAD_VERTICAL_LAYOUT"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:public-api",
+        "coverage:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "horizontal": {
+            "status": "FT_Error",
+            "advance": "FT_Vector",
+            "metrics": "FT_Glyph_Metrics"
+          },
+          "vertical": {
+            "status": "FT_Error",
+            "advance": "FT_Vector",
+            "metrics": "FT_Glyph_Metrics"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "horizontal.status",
+            "vertical.status",
+            "horizontal.advance",
+            "vertical.advance",
+            "horizontal.metrics",
+            "vertical.metrics"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h:3501-3636",
+          "freetype/src/base/ftobjs.c:943-1177",
+          "freetype/src/base/ftobjs.c:1091-1105",
+          "freetype/src/truetype/ttgload.c:2122-2140"
+        ],
+        "fixture_requirements": [
+          "Primary fixture should have real vertical metrics/vhea/vmtx data; fallback font records FreeType behavior when vertical metrics are synthesized or absent"
+        ]
+      }
+    }
+  ]
+}

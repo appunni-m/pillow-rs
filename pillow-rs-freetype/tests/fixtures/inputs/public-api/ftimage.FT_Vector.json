@@ -1,0 +1,188 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_Vector",
+  "manifest_cases": [
+    "layout_matches_c",
+    "outline_points_match_c",
+    "transform_matches_c"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_Vector.layout_matches_c",
+      "subject": "ftimage.FT_Vector",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftimage.h",
+          "symbol": "FT_Vector",
+          "fields_in_order": [
+            "x",
+            "y"
+          ],
+          "field_types": {
+            "x": "FT_Pos",
+            "y": "FT_Pos"
+          },
+          "probe": [
+            "sizeof",
+            "alignof",
+            "offsetof",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftimage",
+        "area:abi_layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "offsets": "object<field,usize>",
+          "field_types": "object<field,c_type>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "offsets",
+            "field_types",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:60-80"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Vector.outline_points_match_c",
+      "subject": "ftimage.FT_Vector",
+      "case": "outline_points_match_c",
+      "operation": "freetype.load_glyph",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 40
+          },
+          "glyph_indices": [
+            36,
+            74,
+            77
+          ],
+          "load_flags": [
+            "FT_LOAD_DEFAULT",
+            "FT_LOAD_NO_HINTING",
+            "FT_LOAD_NO_SCALE"
+          ],
+          "probe": [
+            "slot.outline.points[]"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftimage",
+        "area:outline",
+        "runtime:public_record"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "points": "array<FT_Vector>",
+          "units": "font_units_or_26_6"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "points[].x",
+            "points[].y"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:52-57",
+          "freetype/include/freetype/ftimage.h:313-315"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Vector.transform_matches_c",
+      "subject": "ftimage.FT_Vector",
+      "case": "transform_matches_c",
+      "operation": "freetype.vector_transform",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "vectors": [
+            {
+              "x": 64,
+              "y": -128
+            },
+            {
+              "x": -4096,
+              "y": 8192
+            },
+            {
+              "x": 2147483000,
+              "y": -2147483000
+            }
+          ],
+          "matrices": [
+            "identity",
+            "scale_1_5",
+            "rotate_90",
+            "negative_shear"
+          ],
+          "probe": [
+            "FT_Vector_Transform"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftimage",
+        "area:transform"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "vector": "FT_Vector"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "vector.x",
+            "vector.y"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h:3663-3685"
+        ]
+      }
+    }
+  ]
+}

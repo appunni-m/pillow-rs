@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "subject": "ftotval.FT_VALIDATE_GPOS",
+  "manifest_cases": [
+    "value_matches_header",
+    "validate_selects_gpos_table",
+    "malformed_table_error"
+  ],
+  "cases": [
+    {
+      "case_id": "ftotval.FT_VALIDATE_GPOS.value_matches_header",
+      "subject": "ftotval.FT_VALIDATE_GPOS",
+      "case": "value_matches_header",
+      "operation": "abi.constant_eval",
+      "schema": "constant_value",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ftotval.h",
+          "symbol": "FT_VALIDATE_GPOS",
+          "c_expression": "0x0400",
+          "value": 1024,
+          "type": "FT_UInt validation flag"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftotval",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "constant_value": "FT_UInt"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "constant_value"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftotval.h"
+        ]
+      }
+    },
+    {
+      "case_id": "ftotval.FT_VALIDATE_GPOS.validate_selects_gpos_table",
+      "subject": "ftotval.FT_VALIDATE_GPOS",
+      "case": "validate_selects_gpos_table",
+      "operation": "ftotval.open_type_validate",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/opentype/valid-gpos.otf"
+          }
+        },
+        "params": {
+          "validation_flags": [
+            "FT_VALIDATE_GPOS"
+          ],
+          "follow_up": "FT_OpenType_Free non-null GPOS table"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "runtime:opentype_validation"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "error": "FT_Error",
+          "GPOS_table": "nullable<FT_Bytes>",
+          "freed": "bool"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "error",
+            "GPOS_table.pointer_class",
+            "GPOS_table.bytes_hash",
+            "freed"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/opentype/valid-gpos.otf must contain a valid GPOS table."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftotval.h",
+          "freetype/src/base/ftotval.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftotval.FT_VALIDATE_GPOS.malformed_table_error",
+      "subject": "ftotval.FT_VALIDATE_GPOS",
+      "case": "malformed_table_error",
+      "operation": "ftotval.open_type_validate",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/opentype/malformed-gpos.otf"
+          }
+        },
+        "params": {
+          "validation_flags": [
+            "FT_VALIDATE_GPOS"
+          ],
+          "initialize_outputs_to": "null"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "runtime:opentype_validation",
+        "error_path"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error",
+          "GPOS_table": "nullable<FT_Bytes>",
+          "cleanup_obligation": "array<string>"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "GPOS_table.pointer_class",
+            "cleanup_obligation"
+          ]
+        },
+        "error": "OpenType validation service error for malformed GPOS data.",
+        "fixture_requirements": [
+          "fonts/opentype/malformed-gpos.otf must contain invalid GPOS offsets or indices."
+        ],
+        "source_refs": [
+          "freetype/src/base/ftotval.c",
+          "freetype/src/otvalid"
+        ]
+      }
+    }
+  ]
+}

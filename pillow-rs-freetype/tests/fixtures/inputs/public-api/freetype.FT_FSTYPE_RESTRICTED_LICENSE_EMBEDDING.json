@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_FSTYPE_RESTRICTED_LICENSE_EMBEDDING",
+  "manifest_cases": [
+    "value_matches_header",
+    "fs_type_value_observable"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_FSTYPE_RESTRICTED_LICENSE_EMBEDDING.value_matches_header",
+      "subject": "freetype.FT_FSTYPE_RESTRICTED_LICENSE_EMBEDDING",
+      "case": "value_matches_header",
+      "operation": "abi.macro_value_and_import",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_FSTYPE_RESTRICTED_LICENSE_EMBEDDING",
+          "include": "<freetype/freetype.h>",
+          "header": "freetype/freetype.h",
+          "probe": "compile_and_eval_integer_macro"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "surface:public-c-api",
+        "coverage:value-import"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "sources_checked": [
+          "freetype/include/freetype/freetype.h"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_FSTYPE_RESTRICTED_LICENSE_EMBEDDING.fs_type_value_observable",
+      "subject": "freetype.FT_FSTYPE_RESTRICTED_LICENSE_EMBEDDING",
+      "case": "fs_type_value_observable",
+      "operation": "freetype.get_fstype_flags",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/fstype/restricted_license_os2.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "symbol_under_test": "FT_FSTYPE_RESTRICTED_LICENSE_EMBEDDING",
+          "call_sequence": [
+            "FT_New_Memory_Face",
+            "FT_Get_FSType_Flags"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "operation:FT_Get_FSType_Flags",
+        "coverage:runtime-observable"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "fs_type": "u16",
+          "contains_symbol_bit": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "fs_type",
+            "contains_symbol_bit"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "fixture_requirements": "OS/2 fsType must include bit 0x0002 and expose it through FT_Get_FSType_Flags.",
+        "sources_checked": [
+          "freetype/include/freetype/freetype.h",
+          "freetype/src/sfnt/ttload.c"
+        ]
+      }
+    }
+  ]
+}

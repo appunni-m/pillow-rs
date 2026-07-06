@@ -1,0 +1,189 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_PaintSkew",
+  "manifest_cases": [
+    "layout_matches_c",
+    "field_order_matches_c",
+    "get_paint_skew_values"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_PaintSkew.layout_matches_c",
+      "subject": "ftcolor.FT_PaintSkew",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftcolor.h>",
+          "record": "FT_PaintSkew",
+          "fields": [
+            "paint",
+            "x_skew_angle",
+            "y_skew_angle",
+            "center_x",
+            "center_y"
+          ],
+          "field_types": {
+            "paint": "FT_OpaquePaint",
+            "x_skew_angle": "FT_Fixed 16.16 degrees/180",
+            "y_skew_angle": "FT_Fixed 16.16 degrees/180",
+            "center_x": "FT_Fixed 16.16",
+            "center_y": "FT_Fixed 16.16"
+          }
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "abi:layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_PaintSkew",
+          "size": "sizeof from pinned C",
+          "alignment": "_Alignof from pinned C",
+          "field_offsets": "offsetof for every public field"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "size",
+            "alignment",
+            "field_offsets",
+            "field_types",
+            "import"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_PaintSkew.field_order_matches_c",
+      "subject": "ftcolor.FT_PaintSkew",
+      "case": "field_order_matches_c",
+      "operation": "abi.record_field_order",
+      "schema": "record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftcolor.h>",
+          "record": "FT_PaintSkew",
+          "expected_field_order": [
+            "paint",
+            "x_skew_angle",
+            "y_skew_angle",
+            "center_x",
+            "center_y"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "abi:field-order"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_PaintSkew",
+          "field_order": [
+            "paint",
+            "x_skew_angle",
+            "y_skew_angle",
+            "center_x",
+            "center_y"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "field_order",
+            "field_types",
+            "nested_record_order"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_PaintSkew.get_paint_skew_values",
+      "subject": "ftcolor.FT_PaintSkew",
+      "case": "get_paint_skew_values",
+      "operation": "ftcolor.get_color_glyph_paint_and_get_paint",
+      "schema": "paint_graph",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/color/colr-v1-transform-paints.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "base_glyph": "paint_skew_matrix",
+          "root_transform_modes": [
+            "FT_COLOR_NO_ROOT_TRANSFORM",
+            "FT_COLOR_INCLUDE_ROOT_TRANSFORM"
+          ],
+          "traversal": "FT_Get_Color_Glyph_Paint then recursive FT_Get_Paint",
+          "expected_format": "FT_COLR_PAINTFORMAT_SKEW",
+          "active_union_member": "skew",
+          "variation_coords": [
+            "default",
+            "minmax if fixture is variable"
+          ],
+          "read_colorline_stops": "when record contains FT_ColorLine",
+          "malformed_controls": "separate malformed COLR fixture may assert false status/output preservation"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "requires:font",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Bool",
+          "paint": {
+            "format": "FT_COLR_PAINTFORMAT_SKEW",
+            "skew": {
+              "paint": "C oracle value or identity class",
+              "x_skew_angle": "C oracle value or identity class",
+              "y_skew_angle": "C oracle value or identity class",
+              "center_x": "C oracle value or identity class",
+              "center_y": "C oracle value or identity class"
+            }
+          },
+          "children": "opaque child paint identity classes when present",
+          "color_stops": "FT_ColorStop sequence when present"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "paint.format",
+            "paint.u.skew",
+            "child_paint_identity_classes",
+            "color_stop_iterator",
+            "variation_interpolation",
+            "root_transform_mode"
+          ]
+        },
+        "fixture_requirements": [
+          "COLR v1 font with PaintSkew and PaintSkewAroundCenter nodes covering x-only, y-only, both-axis, zero, positive, negative, centered, uncentered, and variable skew angle forms."
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "subject": "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY",
+  "manifest_cases": ["value_matches_header", "open_face_ignores_typographic_subfamily", "combined_family_and_subfamily_params"],
+  "cases": [
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY.value_matches_header",
+      "subject": "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY",
+      "case": "value_matches_header",
+      "operation": "ftparams.constant",
+      "schema": "constant_value",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"symbol": "FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY", "ctype": "FT_ULong", "macro": "FT_MAKE_TAG('i','g','p','s')"}},
+      "classifiers": ["kind:tag", "header:ftparams", "surface:public-c-api"],
+      "metadata": {"abi": {"header": "freetype/ftparams.h", "symbol": "FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY", "kind": "macro_tag", "underlying_type": "FT_ULong"}, "value": {"hex": "0x69677073", "decimal": 1768386675, "alias_of": "FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY"}},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_ULong", "value": "integer", "alias_value": "integer"}, "compare": {"mode": "exact", "paths": ["symbol", "value", "alias_value", "ctype"]}, "source_refs": ["freetype/include/freetype/ftparams.h:80-98"]}
+    },
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY.open_face_ignores_typographic_subfamily",
+      "subject": "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY",
+      "case": "open_face_ignores_typographic_subfamily",
+      "operation": "freetype.open_face",
+      "schema": "face_result",
+      "expect_error": false,
+      "inputs": {"assets": {"font": {"kind": "ref", "id": "fonts/names/preferred-subfamily-distinct.ttf", "asset_kind": "font"}}, "params": {"face_index": 0, "open_args": {"num_params": 1, "params": [{"tag": "FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY", "data": null}]}, "inspect": ["family_name", "style_name", "sfnt_names"]}},
+      "classifiers": ["kind:tag", "header:ftparams", "surface:public-c-api", "operation:open-face-param"],
+      "metadata": {"abi": {"header": "freetype/ftparams.h", "symbol": "FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY", "kind": "macro_tag", "underlying_type": "FT_ULong"}, "source_behavior": "The deprecated preferred-subfamily tag equals IGNORE_TYPOGRAPHIC_SUBFAMILY, so sfnt loading sets ignore_typographic_subfamily."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "family_name": "string", "style_name": "string", "param_seen": true}, "compare": {"mode": "exact", "paths": ["return", "family_name", "style_name", "param_seen"]}, "source_refs": ["freetype/include/freetype/ftparams.h:80-98", "freetype/src/sfnt/sfobjs.c:829-838"], "fixture_requirements": ["SFNT font with legacy subfamily name distinct from typographic/preferred subfamily name so the parameter changes face->style_name."]}
+    },
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY.combined_family_and_subfamily_params",
+      "subject": "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY",
+      "case": "combined_family_and_subfamily_params",
+      "operation": "freetype.open_face",
+      "schema": "face_result",
+      "expect_error": false,
+      "inputs": {"assets": {"font": {"kind": "ref", "id": "fonts/names/preferred-family-subfamily-distinct.ttf", "asset_kind": "font"}}, "params": {"face_index": 0, "open_args": {"num_params": 2, "params": [{"tag": "FT_PARAM_TAG_IGNORE_PREFERRED_FAMILY", "data": null}, {"tag": "FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY", "data": null}]}, "inspect": ["family_name", "style_name"]}},
+      "classifiers": ["kind:tag", "header:ftparams", "surface:public-c-api", "operation:open-face-param"],
+      "metadata": {"abi": {"header": "freetype/ftparams.h", "symbol": "FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY", "kind": "macro_tag", "underlying_type": "FT_ULong"}, "source_behavior": "The parameter loop independently recognizes family and subfamily ignore tags, allowing both flags to be set for one FT_Open_Face call."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "family_name": "string", "style_name": "string", "family_param_seen": true, "subfamily_param_seen": true}, "compare": {"mode": "exact", "paths": ["return", "family_name", "style_name", "family_param_seen", "subfamily_param_seen"]}, "source_refs": ["freetype/src/sfnt/sfobjs.c:829-838"], "fixture_requirements": ["SFNT font whose preferred family and preferred subfamily both differ from the legacy name records."]}
+    }
+  ]
+}

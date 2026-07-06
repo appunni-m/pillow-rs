@@ -1,0 +1,264 @@
+{
+  "version": 1,
+  "subject": "ftstroke.FT_Glyph_StrokeBorder",
+  "manifest_cases": [
+    "outside_border_success",
+    "inside_border_success",
+    "destroy_original_option",
+    "invalid_glyph_arguments"
+  ],
+  "cases": [
+    {
+      "case_id": "ftstroke.FT_Glyph_StrokeBorder.outside_border_success",
+      "subject": "ftstroke.FT_Glyph_StrokeBorder",
+      "case": "outside_border_success",
+      "operation": "ftstroke.glyph_stroke_border",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Glyph_StrokeBorder",
+        "signature": "FT_Error FT_Glyph_StrokeBorder(FT_Glyph* pglyph, FT_Stroker stroker, FT_Bool inside, FT_Bool destroy)",
+        "return": "FT_Error"
+      },
+      "inputs": {
+        "assets": {
+          "tt_font": {
+            "kind": "ref",
+            "id": "fonts/DejaVuSans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "glyph_index": 36,
+          "inside": false,
+          "destroy": false,
+          "stroker": {
+            "radius": 96,
+            "line_cap": "FT_STROKER_LINECAP_ROUND",
+            "line_join": "FT_STROKER_LINEJOIN_ROUND",
+            "miter_limit": 65536
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:glyph",
+        "area:border"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "selected_border": "FT_StrokerBorder",
+          "glyph_pointer_class": "new outline glyph",
+          "outline": "outside border points/tags/contours"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "selected_border",
+            "outline.n_points",
+            "outline.n_contours",
+            "outline.points",
+            "outline.tags",
+            "outline.contours"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftstroke.h:728-768",
+          "freetype/src/base/ftstroke.c:2330-2398"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Glyph_StrokeBorder.inside_border_success",
+      "subject": "ftstroke.FT_Glyph_StrokeBorder",
+      "case": "inside_border_success",
+      "operation": "ftstroke.glyph_stroke_border",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Glyph_StrokeBorder",
+        "signature": "FT_Error FT_Glyph_StrokeBorder(FT_Glyph* pglyph, FT_Stroker stroker, FT_Bool inside, FT_Bool destroy)"
+      },
+      "inputs": {
+        "assets": {
+          "ps_orientation_font": {
+            "kind": "ref",
+            "id": "fonts/cff/postscript-orientation.otf",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "glyph_index": 12,
+          "inside": true,
+          "destroy": false,
+          "orientation_rows": [
+            "truetype_orientation",
+            "postscript_orientation"
+          ],
+          "stroker": {
+            "radius": 160,
+            "line_cap": "FT_STROKER_LINECAP_ROUND",
+            "line_join": "FT_STROKER_LINEJOIN_BEVEL",
+            "miter_limit": 65536
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:glyph",
+        "area:border"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "outside_border": "FT_StrokerBorder",
+          "selected_border": "opposite of outside border",
+          "outline": "inside border points/tags/contours"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].outside_border",
+            "rows[*].selected_border",
+            "rows[*].outline.points",
+            "rows[*].outline.tags",
+            "rows[*].outline.contours"
+          ]
+        },
+        "fixture_requirements": [
+          "postscript-orientation fixture must expose at least one outline glyph whose FT_Outline_Get_Orientation result differs from the TrueType fixture."
+        ],
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:2349-2360"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Glyph_StrokeBorder.destroy_original_option",
+      "subject": "ftstroke.FT_Glyph_StrokeBorder",
+      "case": "destroy_original_option",
+      "operation": "ftstroke.glyph_stroke_border",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Glyph_StrokeBorder",
+        "signature": "FT_Error FT_Glyph_StrokeBorder(FT_Glyph* pglyph, FT_Stroker stroker, FT_Bool inside, FT_Bool destroy)"
+      },
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/DejaVuSans.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "glyph_index": 50,
+          "inside": false,
+          "destroy": true,
+          "ownership_probe": "counting glyph finalizer"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:glyph",
+        "area:ownership"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "pglyph_after": "replacement outline glyph",
+          "original_destroyed": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "pglyph_after.nullness",
+            "original_destroyed"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:2386-2392"
+        ]
+      }
+    },
+    {
+      "case_id": "ftstroke.FT_Glyph_StrokeBorder.invalid_glyph_arguments",
+      "subject": "ftstroke.FT_Glyph_StrokeBorder",
+      "case": "invalid_glyph_arguments",
+      "operation": "ftstroke.glyph_stroke_border",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Glyph_StrokeBorder",
+        "signature": "FT_Error FT_Glyph_StrokeBorder(FT_Glyph* pglyph, FT_Stroker stroker, FT_Bool inside, FT_Bool destroy)"
+      },
+      "inputs": {
+        "assets": {
+          "bitmap_glyph_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap/embedded-bitmap-glyph.ttf",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "scenarios": [
+            {
+              "pglyph": "null"
+            },
+            {
+              "pglyph": "valid_pointer_to_null_glyph"
+            },
+            {
+              "pglyph": "valid_pointer_to_non_outline_glyph"
+            }
+          ],
+          "inside": true,
+          "destroy": false
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:glyph",
+        "area:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Argument",
+        "output_shape": {
+          "status": "FT_Error",
+          "pglyph_after": "unchanged where address exists"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].pglyph_after"
+          ]
+        },
+        "fixture_requirements": [
+          "bitmap glyph asset must produce an FT_Glyph whose clazz is not ft_outline_glyph_class."
+        ],
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:2336-2346"
+        ]
+      }
+    }
+  ]
+}

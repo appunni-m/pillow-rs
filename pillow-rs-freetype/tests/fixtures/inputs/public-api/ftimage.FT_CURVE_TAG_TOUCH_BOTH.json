@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_CURVE_TAG_TOUCH_BOTH",
+  "manifest_cases": [
+    "value_matches_header",
+    "hinted_outline_touch_bits_match_c"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_CURVE_TAG_TOUCH_BOTH.value_matches_header",
+      "subject": "ftimage.FT_CURVE_TAG_TOUCH_BOTH",
+      "case": "value_matches_header",
+      "operation": "constant_eval",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_CURVE_TAG_TOUCH_BOTH",
+          "include": "<freetype/ftimage.h>",
+          "import": "#include <freetype/ftimage.h>",
+          "expected_value": 24,
+          "expected_value_hex": "0x18",
+          "expression": "FT_CURVE_TAG_TOUCH_X | FT_CURVE_TAG_TOUCH_Y"
+        }
+      },
+      "classifiers": [
+        "kind:tag",
+        "header:ftimage",
+        "area:outline-tags",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:483-487"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_CURVE_TAG_TOUCH_BOTH.hinted_outline_touch_bits_match_c",
+      "subject": "ftimage.FT_CURVE_TAG_TOUCH_BOTH",
+      "case": "hinted_outline_touch_bits_match_c",
+      "operation": "freetype.load_glyph",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "tt_font": {
+            "kind": "ref",
+            "id": "input/fonts_autohint/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 16
+          },
+          "glyph_indices": [
+            36,
+            43,
+            50
+          ],
+          "load_flags": [
+            "FT_LOAD_DEFAULT",
+            "FT_LOAD_NO_HINTING",
+            "FT_LOAD_NO_AUTOHINT"
+          ],
+          "probe": [
+            "slot.outline.tags[] & FT_CURVE_TAG_TOUCH_BOTH"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:tag",
+        "header:ftimage",
+        "area:truetype-hinting",
+        "runtime:public_record"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "tags": "array<unsigned char>",
+          "points": "array<FT_Vector>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "tags",
+            "points"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/truetype/ttinterp.c:5815",
+          "freetype/src/truetype/ttgload.c:1243-1246"
+        ]
+      }
+    }
+  ]
+}

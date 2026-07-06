@@ -1,0 +1,223 @@
+{
+  "version": 1,
+  "subject": "ftmm.FT_Get_Default_Named_Instance",
+  "manifest_cases": [
+    "import_contract",
+    "variable_font_default_instance",
+    "service_without_default_instance_success",
+    "invalid_face_error"
+  ],
+  "cases": [
+    {
+      "case_id": "ftmm.FT_Get_Default_Named_Instance.import_contract",
+      "subject": "ftmm.FT_Get_Default_Named_Instance",
+      "case": "import_contract",
+      "operation": "ftmm.get_default_named_instance_abi",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Get_Default_Named_Instance",
+        "signature": "FT_Error FT_Get_Default_Named_Instance(FT_Face face, FT_UInt* instance_index)",
+        "return": "FT_Error",
+        "params": [
+          "FT_Face face",
+          "FT_UInt* instance_index"
+        ]
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include_header": "freetype/ftmm.h",
+          "import_symbol": "FT_Get_Default_Named_Instance"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmm",
+        "area:variations"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile": "symbol import succeeds",
+          "return": "FT_Error"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "signature"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftmm.h:851-880"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmm.FT_Get_Default_Named_Instance.variable_font_default_instance",
+      "subject": "ftmm.FT_Get_Default_Named_Instance",
+      "case": "variable_font_default_instance",
+      "operation": "ftmm.get_default_named_instance",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Get_Default_Named_Instance",
+        "signature": "FT_Error FT_Get_Default_Named_Instance(FT_Face face, FT_UInt* instance_index)"
+      },
+      "inputs": {
+        "assets": {
+          "variable_font": {
+            "kind": "ref",
+            "id": "fonts/variable/multi-axis-named-instances.ttf",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "instance_index_initial": 3735928559,
+          "cross_check_with_FT_MM_Var_namedstyles": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmm",
+        "area:variations"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "instance_index": "FT_UInt",
+          "named_instance_metadata": "num_namedstyles and synthesized default class"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "instance_index",
+            "mm_var.num_namedstyles",
+            "mm_var.default_named_instance_class"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftmm.c:694-716",
+          "freetype/src/truetype/ttgxvar.c:3621-3639"
+        ]
+      }
+    },
+    {
+      "case_id": "ftmm.FT_Get_Default_Named_Instance.service_without_default_instance_success",
+      "subject": "ftmm.FT_Get_Default_Named_Instance",
+      "case": "service_without_default_instance_success",
+      "operation": "ftmm.get_default_named_instance",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Get_Default_Named_Instance",
+        "signature": "FT_Error FT_Get_Default_Named_Instance(FT_Face face, FT_UInt* instance_index)"
+      },
+      "inputs": {
+        "assets": {
+          "adobe_mm_font": {
+            "kind": "ref",
+            "id": "fonts/mm/adobe-multiple-master.pfb",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "face_kind": "multiple_master_service_with_null_get_default_named_instance",
+          "instance_index_initial": 3735928559
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmm",
+        "area:mm"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "instance_index": "preserved sentinel when service callback is null"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "instance_index_after"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftmm.c:705-713",
+          "freetype/src/type1/t1driver.c:139"
+        ],
+        "fixture_requirements": [
+          "fonts/mm/adobe-multiple-master.pfb must expose a multiple-master service whose get_default_named_instance slot follows the pinned driver behavior."
+        ]
+      }
+    },
+    {
+      "case_id": "ftmm.FT_Get_Default_Named_Instance.invalid_face_error",
+      "subject": "ftmm.FT_Get_Default_Named_Instance",
+      "case": "invalid_face_error",
+      "operation": "ftmm.get_default_named_instance",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftmm.h",
+        "symbol": "FT_Get_Default_Named_Instance",
+        "signature": "FT_Error FT_Get_Default_Named_Instance(FT_Face face, FT_UInt* instance_index)"
+      },
+      "inputs": {
+        "assets": {
+          "non_variable_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "argument_matrix": [
+            {
+              "face": null,
+              "instance_index": "valid_sentinel_pointer"
+            },
+            {
+              "face": "non_variable_font",
+              "instance_index": "valid_sentinel_pointer"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmm",
+        "area:variations"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "instance_index": "preserved sentinel"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].instance_index_after"
+          ]
+        },
+        "error": "FT_Err_Invalid_Face_Handle or FT_Err_Invalid_Argument",
+        "source_refs": [
+          "freetype/src/base/ftmm.c:24-45",
+          "freetype/src/base/ftmm.c:694-716"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Too_Few_Arguments",
+  "manifest_cases": [
+    "value_matches_header",
+    "tt_interpreter_argument_underflow",
+    "cff_decoder_underflow_translation"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Too_Few_Arguments.value_matches_header",
+      "subject": "fterrdef.FT_Err_Too_Few_Arguments",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Too_Few_Arguments",
+          "include": "<freetype/fterrors.h>",
+          "public_import": "#include <freetype/freetype.h>",
+          "header": "freetype/fterrdef.h",
+          "expected_value_from_pinned_header": 129,
+          "expected_value_hex": "0x81",
+          "expected_error_string_from_pinned_header": "too few arguments",
+          "pinned_source": "freetype/include/freetype/fterrdef.h:181-182"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Too_Few_Arguments",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Too_Few_Arguments.tt_interpreter_argument_underflow",
+      "subject": "fterrdef.FT_Err_Too_Few_Arguments",
+      "case": "tt_interpreter_argument_underflow",
+      "operation": "FT_Load_Glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/truetype/too-few-arguments-bytecode.ttf",
+            "requirements": "TrueType fixture with bytecode opcode that consumes more operands than are present."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Too_Few_Arguments",
+          "face_index": 0,
+          "glyph_index": "fixture_defined_error_glyph",
+          "size_ppem": 12,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "pinned_sources": [
+            "freetype/src/truetype/ttinterp.c:4819",
+            "freetype/src/truetype/ttinterp.c:5020",
+            "freetype/src/truetype/ttinterp.c:6781"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:truetype-bytecode",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Too_Few_Arguments",
+        "fixture_requirements": "Synthetic TrueType bytecode fixture with deterministic operand underflow.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "slot_state": "mutation_class_if_slot_is_involved",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "slot_state.mutation_class"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Too_Few_Arguments.cff_decoder_underflow_translation",
+      "subject": "fterrdef.FT_Err_Too_Few_Arguments",
+      "case": "cff_decoder_underflow_translation",
+      "operation": "FT_Load_Glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/cff-type2/too-few-arguments-charstring.otf",
+            "requirements": "CFF Type2 charstring whose decoder reaches Stack_Underflow and translates it to Too_Few_Arguments."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Too_Few_Arguments",
+          "face_index": 0,
+          "glyph_index": "fixture_defined_error_glyph",
+          "size_ppem": 12,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "pinned_source": "freetype/src/psaux/cffdecode.c:2277-2279"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:cff-type2",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Too_Few_Arguments",
+        "fixture_requirements": "CFF Type2 charstring underflow fixture that exercises cffdecode.c's public Too_Few_Arguments translation.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "slot_state": "mutation_class_if_slot_is_involved",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "slot_state.mutation_class"
+          ]
+        }
+      }
+    }
+  ]
+}

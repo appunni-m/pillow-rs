@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "subject": "fttrigon.FT_ANGLE_PI4",
+  "manifest_cases": ["value_matches_header", "sector_boundary_outputs"],
+  "metadata": {
+    "abi": {
+      "kind": "constant",
+      "header": "freetype/fttrigon.h",
+      "symbol": "FT_ANGLE_PI4",
+      "ctype": "FT_Angle",
+      "macro": "FT_ANGLE_PI / 4",
+      "value_decimal": 2949120,
+      "value_hex": "0x002D0000"
+    },
+    "source_refs": ["freetype/include/freetype/fttrigon.h", "freetype/src/base/fttrigon.c"]
+  },
+  "cases": [
+    {
+      "case_id": "fttrigon.FT_ANGLE_PI4.value_matches_header",
+      "subject": "fttrigon.FT_ANGLE_PI4",
+      "case": "value_matches_header",
+      "operation": "abi.constant_value",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/fttrigon.h",
+          "symbol": "FT_ANGLE_PI4",
+          "ctype": "FT_Angle",
+          "macro": "FT_ANGLE_PI / 4",
+          "value_decimal": 2949120,
+          "value_hex": "0x002D0000"
+        }
+      },
+      "classifiers": ["kind:constant", "header:fttrigon", "area:trigonometry"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"symbol": "string", "ctype": "FT_Angle", "value": "integer", "import_compiles": "bool"},
+        "compare": {"mode": "value", "paths": ["symbol", "value", "import_compiles"]}
+      }
+    },
+    {
+      "case_id": "fttrigon.FT_ANGLE_PI4.sector_boundary_outputs",
+      "subject": "fttrigon.FT_ANGLE_PI4",
+      "case": "sector_boundary_outputs",
+      "operation": "fttrigon.constant_runtime_probe",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "angles": [2949120, -2949120],
+          "operations": ["FT_Sin", "FT_Cos", "FT_Tan", "FT_Vector_Unit", "FT_Vector_Rotate", "FT_Vector_Polarize"],
+          "vectors": [{"x": 65536, "y": 65536}, {"x": 1048576, "y": -524288}, {"x": -32768, "y": 8192}]
+        }
+      },
+      "classifiers": ["kind:constant", "header:fttrigon", "area:trigonometry", "angle:sector-boundary"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"fixed_results": "object<operation,FT_Fixed>", "vector_results": "object<operation,FT_Vector>", "polar_results": "object"},
+        "compare": {"mode": "exact", "paths": ["fixed_results", "vector_results", "polar_results"]}
+      }
+    }
+  ]
+}

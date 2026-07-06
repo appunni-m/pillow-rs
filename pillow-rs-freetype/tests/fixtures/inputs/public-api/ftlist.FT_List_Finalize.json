@@ -1,0 +1,220 @@
+{
+  "version": 1,
+  "subject": "ftlist.FT_List_Finalize",
+  "manifest_cases": [
+    "success_destroys_all_nodes",
+    "success_null_destructor_frees_nodes_only",
+    "null_list_or_memory_noop",
+    "destructor_receives_memory_data_user"
+  ],
+  "cases": [
+    {
+      "case_id": "ftlist.FT_List_Finalize.success_destroys_all_nodes",
+      "subject": "ftlist.FT_List_Finalize",
+      "case": "success_destroys_all_nodes",
+      "operation": "ftlist.list_finalize",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "function": "FT_List_Finalize",
+          "signature": "void (FT_List, FT_List_Destructor, FT_Memory, void*)",
+          "list": [
+            {
+              "id": "node_a",
+              "data": "data_a"
+            },
+            {
+              "id": "node_b",
+              "data": "data_b"
+            },
+            {
+              "id": "node_c",
+              "data": "data_c"
+            }
+          ],
+          "destructor": "record_calls",
+          "memory": "valid_ft_memory",
+          "user": "user_cookie"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftlist",
+        "runtime:list"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "destructor_calls": "array<destructor_event>",
+          "freed_nodes": "array<node_id>",
+          "list_after": "FT_ListRec"
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "destructor_calls.data_identity",
+            "destructor_calls.user_identity",
+            "freed_nodes",
+            "list_after.head",
+            "list_after.tail"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftlist.h",
+          "freetype/src/base/ftutil.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlist.FT_List_Finalize.success_null_destructor_frees_nodes_only",
+      "subject": "ftlist.FT_List_Finalize",
+      "case": "success_null_destructor_frees_nodes_only",
+      "operation": "ftlist.list_finalize",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "list": [
+            {
+              "id": "node_a",
+              "data": "data_a"
+            },
+            {
+              "id": "node_b",
+              "data": "data_b"
+            }
+          ],
+          "destructor": null,
+          "memory": "valid_ft_memory",
+          "user": "user_cookie"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "runtime:list",
+        "nullability"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "destructor_call_count": "usize",
+          "freed_nodes": "array<node_id>",
+          "data_freed_by_destructor": "bool",
+          "list_after": "FT_ListRec"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "destructor_call_count",
+            "freed_nodes",
+            "data_freed_by_destructor",
+            "list_after.head",
+            "list_after.tail"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftutil.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlist.FT_List_Finalize.null_list_or_memory_noop",
+      "subject": "ftlist.FT_List_Finalize",
+      "case": "null_list_or_memory_noop",
+      "operation": "ftlist.list_finalize",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "variants": [
+            {
+              "list": null,
+              "memory": "valid_ft_memory"
+            },
+            {
+              "list": "list_a",
+              "memory": null
+            }
+          ],
+          "source_behavior": "if (!list || !memory) return"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "runtime:list",
+        "nullability"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "list_unchanged": "bool",
+          "destructor_call_count": "usize",
+          "freed_node_count": "usize"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "list_unchanged",
+            "destructor_call_count",
+            "freed_node_count"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftutil.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlist.FT_List_Finalize.destructor_receives_memory_data_user",
+      "subject": "ftlist.FT_List_Finalize",
+      "case": "destructor_receives_memory_data_user",
+      "operation": "ftlist.list_finalize",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "list": [
+            {
+              "id": "node_a",
+              "data": "data_a"
+            }
+          ],
+          "destructor": "record_memory_data_user",
+          "memory": "memory_cookie",
+          "user": "user_cookie"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "runtime:list",
+        "callback"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "destructor_calls": "array<{memory,data,user}>",
+          "list_after": "FT_ListRec"
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "destructor_calls.memory",
+            "destructor_calls.data",
+            "destructor_calls.user",
+            "list_after.head",
+            "list_after.tail"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftutil.c"
+        ]
+      }
+    }
+  ]
+}

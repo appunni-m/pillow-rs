@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Library_Version",
+  "manifest_cases": [
+    "live_library_version_fields",
+    "optional_null_outputs",
+    "null_library_behavior"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Library_Version.live_library_version_fields",
+      "subject": "freetype.FT_Library_Version",
+      "case": "live_library_version_fields",
+      "operation": "freetype.library_version",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "new_from_FT_Init_FreeType",
+          "outputs": [
+            "amajor",
+            "aminor",
+            "apatch"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:library"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "writes": {
+            "major": "FT_Int",
+            "minor": "FT_Int",
+            "patch": "FT_Int"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "writes.major",
+            "writes.minor",
+            "writes.patch"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Library_Version.optional_null_outputs",
+      "subject": "freetype.FT_Library_Version",
+      "case": "optional_null_outputs",
+      "operation": "freetype.library_version",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "new_from_FT_Init_FreeType",
+          "output_pointer_matrix": [
+            [],
+            [
+              "amajor"
+            ],
+            [
+              "aminor"
+            ],
+            [
+              "apatch"
+            ],
+            [
+              "amajor",
+              "apatch"
+            ]
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:library"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "writes": "only_non_null_outputs"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "writes",
+            "sentinel_outputs"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Library_Version.null_library_behavior",
+      "subject": "freetype.FT_Library_Version",
+      "case": "null_library_behavior",
+      "operation": "freetype.library_version",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "null",
+          "outputs": [
+            "amajor",
+            "aminor",
+            "apatch"
+          ],
+          "sentinel_initial_values": [
+            111,
+            222,
+            333
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:library"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "writes": {
+            "major": 0,
+            "minor": 0,
+            "patch": 0
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "writes"
+          ]
+        }
+      }
+    }
+  ]
+}

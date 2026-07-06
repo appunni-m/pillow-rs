@@ -1,0 +1,246 @@
+{
+  "version": 1,
+  "subject": "tttables.TT_Header",
+  "manifest_cases": [
+    "public_import_contract",
+    "abi_layout_matches_header",
+    "get_sfnt_table_head_fields"
+  ],
+  "cases": [
+    {
+      "case_id": "tttables.TT_Header.public_import_contract",
+      "subject": "tttables.TT_Header",
+      "case": "public_import_contract",
+      "operation": "abi.header_import",
+      "schema": "api_import",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/tttables.h>",
+          "symbol": "TT_Header",
+          "usage": "TT_Header* head = (TT_Header*)FT_Get_Sfnt_Table(face, FT_SFNT_HEAD); FT_UShort upem = head->Units_Per_EM;"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "area:public-import",
+        "public-api-slice:1520-1539"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile_status": "ok",
+          "type_visible": "bool",
+          "fields_accessible": [
+            "Table_Version",
+            "Font_Revision",
+            "CheckSum_Adjust",
+            "Magic_Number",
+            "Flags",
+            "Units_Per_EM",
+            "Created[0]",
+            "Created[1]",
+            "Modified[0]",
+            "Modified[1]",
+            "xMin",
+            "yMin",
+            "xMax",
+            "yMax",
+            "Mac_Style",
+            "Lowest_Rec_PPEM",
+            "Font_Direction",
+            "Index_To_Loc_Format",
+            "Glyph_Data_Format"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "compile_status",
+            "type_visible",
+            "fields_accessible"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/tttables.h:73-110",
+          "freetype/src/sfnt/ttload.c:655-705"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_Header.abi_layout_matches_header",
+      "subject": "tttables.TT_Header",
+      "case": "abi_layout_matches_header",
+      "operation": "abi.record_layout",
+      "schema": "record_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/tttables.h>",
+          "record": "TT_Header",
+          "fields": [
+            "Table_Version",
+            "Font_Revision",
+            "CheckSum_Adjust",
+            "Magic_Number",
+            "Flags",
+            "Units_Per_EM",
+            "Created[0]",
+            "Created[1]",
+            "Modified[0]",
+            "Modified[1]",
+            "xMin",
+            "yMin",
+            "xMax",
+            "yMax",
+            "Mac_Style",
+            "Lowest_Rec_PPEM",
+            "Font_Direction",
+            "Index_To_Loc_Format",
+            "Glyph_Data_Format"
+          ],
+          "array_fields": {
+            "Created": 2,
+            "Modified": 2
+          },
+          "probe": [
+            "sizeof",
+            "alignof",
+            "offsetof"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "area:abi-layout",
+        "public-api-slice:1520-1539"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "size_t",
+          "alignof": "size_t",
+          "field_offsets": "object<string,size_t>",
+          "field_order": [
+            "Table_Version",
+            "Font_Revision",
+            "CheckSum_Adjust",
+            "Magic_Number",
+            "Flags",
+            "Units_Per_EM",
+            "Created[0]",
+            "Created[1]",
+            "Modified[0]",
+            "Modified[1]",
+            "xMin",
+            "yMin",
+            "xMax",
+            "yMax",
+            "Mac_Style",
+            "Lowest_Rec_PPEM",
+            "Font_Direction",
+            "Index_To_Loc_Format",
+            "Glyph_Data_Format"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "field_offsets",
+            "field_order"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/tttables.h:73-110",
+          "freetype/src/sfnt/ttload.c:655-705"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.TT_Header.get_sfnt_table_head_fields",
+      "subject": "tttables.TT_Header",
+      "case": "get_sfnt_table_head_fields",
+      "operation": "sfnt.get_sfnt_table.head",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sfnt/basic-ttf.ttf",
+            "requirements": "Valid SFNT font with a head table whose parsed fields are stable."
+          }
+        },
+        "params": {
+          "function": "FT_Get_Sfnt_Table",
+          "sfnt_table": "FT_SFNT_HEAD",
+          "face_index": 0,
+          "fields": [
+            "Table_Version",
+            "Font_Revision",
+            "CheckSum_Adjust",
+            "Magic_Number",
+            "Flags",
+            "Units_Per_EM",
+            "Created[0]",
+            "Created[1]",
+            "Modified[0]",
+            "Modified[1]",
+            "xMin",
+            "yMin",
+            "xMax",
+            "yMax",
+            "Mac_Style",
+            "Lowest_Rec_PPEM",
+            "Font_Direction",
+            "Index_To_Loc_Format",
+            "Glyph_Data_Format"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "runtime:FT_Get_Sfnt_Table",
+        "requires:future-font",
+        "public-api-slice:1520-1539"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "pointer_null": false,
+          "fields": "object",
+          "abi_size": "size_t",
+          "abi_align": "size_t",
+          "field_offsets": "object"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "pointer_null",
+            "fields",
+            "abi_size",
+            "abi_align",
+            "field_offsets"
+          ]
+        },
+        "fixture_requirements": [
+          "Missing asset: input/fonts/sfnt/basic-ttf.ttf must contain a valid head table."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/tttables.h:73-110",
+          "freetype/src/sfnt/ttload.c:655-705",
+          "freetype/include/freetype/tttables.h:620-632",
+          "freetype/src/base/ftobjs.c:4357-4372",
+          "freetype/src/sfnt/sfdriver.c:100-143"
+        ]
+      }
+    }
+  ]
+}

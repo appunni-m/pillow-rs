@@ -1,0 +1,331 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_Palette_Select",
+  "manifest_cases": [
+    "success_selects_palette_and_returns_entries",
+    "success_null_output_selects_without_return",
+    "success_reselect_resets_user_modifications",
+    "success_non_sfnt_returns_null_palette",
+    "error_null_face_or_invalid_palette_index",
+    "error_color_layers_disabled"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries",
+      "subject": "ftcolor.FT_Palette_Select",
+      "case": "success_selects_palette_and_returns_entries",
+      "operation": "ftcolor.palette_select",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/cpal-palettes-names-flags.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "CPAL table with multiple palettes",
+              "distinct BGRA entries per palette",
+              "palette flags for light and dark backgrounds",
+              "palette and entry name IDs including empty 0xFFFF values"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "palette_indices": [
+            0,
+            "last_valid"
+          ],
+          "apalette": "non_null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "active_palette_index": "side_effect",
+          "array": "FT_Color[num_palette_entries]"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "runs[*].error",
+            "runs[*].active_palette_index",
+            "runs[*].palette_entries[*].blue",
+            "runs[*].palette_entries[*].green",
+            "runs[*].palette_entries[*].red",
+            "runs[*].palette_entries[*].alpha"
+          ]
+        },
+        "error": null,
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Palette_Select.success_null_output_selects_without_return",
+      "subject": "ftcolor.FT_Palette_Select",
+      "case": "success_null_output_selects_without_return",
+      "operation": "ftcolor.palette_select",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/cpal-palettes-names-flags.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "CPAL table with multiple palettes",
+              "distinct BGRA entries per palette",
+              "palette flags for light and dark backgrounds",
+              "palette and entry name IDs including empty 0xFFFF values"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "palette_index": 1,
+          "apalette": "null",
+          "verify_with_followup_select": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "active_palette_index": "side_effect",
+          "apalette": "not_written"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "active_palette_index",
+            "followup_palette_entries"
+          ]
+        },
+        "error": null,
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Palette_Select.success_reselect_resets_user_modifications",
+      "subject": "ftcolor.FT_Palette_Select",
+      "case": "success_reselect_resets_user_modifications",
+      "operation": "ftcolor.palette_select",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/cpal-palettes-names-flags.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "CPAL table with multiple palettes",
+              "distinct BGRA entries per palette",
+              "palette flags for light and dark backgrounds",
+              "palette and entry name IDs including empty 0xFFFF values"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "palette_index": 0,
+          "mutate_returned_entries": [
+            {
+              "entry": 0,
+              "blue": 1,
+              "green": 2,
+              "red": 3,
+              "alpha": 4
+            }
+          ],
+          "reselect_same_palette": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "array": "FT_Color reset to original CPAL values"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "first_select.entries",
+            "mutated_entries",
+            "second_select.entries",
+            "error_sequence"
+          ]
+        },
+        "error": null,
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette",
+      "subject": "ftcolor.FT_Palette_Select",
+      "case": "success_non_sfnt_returns_null_palette",
+      "operation": "ftcolor.palette_select",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/bdf/properties-atoms-integers-cardinals.bdf",
+            "asset_kind": "font",
+            "properties": [
+              "non-SFNT face accepted by FreeType"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "palette_index": 0,
+          "apalette": "non_null_sentinel"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "apalette": "NULL"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "apalette_nullness"
+          ]
+        },
+        "error": null,
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Palette_Select.error_null_face_or_invalid_palette_index",
+      "subject": "ftcolor.FT_Palette_Select",
+      "case": "error_null_face_or_invalid_palette_index",
+      "operation": "ftcolor.palette_select",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/cpal-palettes-names-flags.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "CPAL table with multiple palettes",
+              "distinct BGRA entries per palette",
+              "palette flags for light and dark backgrounds",
+              "palette and entry name IDs including empty 0xFFFF values"
+            ]
+          }
+        },
+        "params": {
+          "variants": [
+            "null_face",
+            "palette_index_equal_num_palettes",
+            "palette_index_65535"
+          ],
+          "apalette": "sentinel"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "apalette_write_policy": "C oracle"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "variants[*].error",
+            "variants[*].apalette_snapshot",
+            "variants[*].active_palette_index"
+          ]
+        },
+        "error": "c_oracle",
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Palette_Select.error_color_layers_disabled",
+      "subject": "ftcolor.FT_Palette_Select",
+      "case": "error_color_layers_disabled",
+      "operation": "ftcolor.palette_select",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "build_feature": "TT_CONFIG_OPTION_COLOR_LAYERS disabled",
+          "palette_index": 0
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "build_dependent": "Unimplemented_Feature"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "apalette_snapshot"
+          ]
+        },
+        "error": "c_oracle",
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs",
+          "Alternate C oracle build without TT_CONFIG_OPTION_COLOR_LAYERS"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "subject": "ftmodapi.FT_MODULE_DRIVER_NO_OUTLINES",
+  "manifest_cases": ["value_matches_header", "bitmap_driver_flags_match_c"],
+  "cases": [
+    {
+      "case_id": "ftmodapi.FT_MODULE_DRIVER_NO_OUTLINES.value_matches_header",
+      "subject": "ftmodapi.FT_MODULE_DRIVER_NO_OUTLINES",
+      "case": "value_matches_header",
+      "operation": "constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"symbol": "FT_MODULE_DRIVER_NO_OUTLINES", "include": "<freetype/ftmodapi.h>", "expected_value": 512, "expected_value_expr": "0x200"}},
+      "classifiers": ["kind:constant", "header:ftmodapi", "surface:public-c-api", "coverage:value"],
+      "metadata": {"abi": {"header": "freetype/ftmodapi.h", "symbol": "FT_MODULE_DRIVER_NO_OUTLINES", "kind": "macro_constant"}, "constant_type": "FT_Module_Class module_flags bit"},
+      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "value": "integer", "import_compiles": "bool"}, "compare": {"mode": "value", "paths": ["symbol", "value", "import_compiles"]}, "source_refs": ["freetype/include/freetype/ftmodapi.h:112-123"]}
+    },
+    {
+      "case_id": "ftmodapi.FT_MODULE_DRIVER_NO_OUTLINES.bitmap_driver_flags_match_c",
+      "subject": "ftmodapi.FT_MODULE_DRIVER_NO_OUTLINES",
+      "case": "bitmap_driver_flags_match_c",
+      "operation": "ftmodapi.inspect_module_flags",
+      "schema": "glyph_result",
+      "expect_error": false,
+      "inputs": {"assets": {"bdf_font": {"kind": "ref", "id": "fonts/bitmap/basic.bdf", "asset_kind": "font"}, "pcf_font": {"kind": "ref", "id": "fonts/bitmap/basic.pcf", "asset_kind": "font"}, "fnt_font": {"kind": "ref", "id": "fonts/bitmap/basic.fnt", "asset_kind": "font"}}, "params": {"module_names": ["bdf", "pcf", "winfonts"], "flag": "FT_MODULE_DRIVER_NO_OUTLINES", "glyph_index": 1, "pixel_size": 16}},
+      "classifiers": ["kind:constant", "header:ftmodapi", "surface:public-c-api", "operation:module-flags"],
+      "metadata": {"abi": {"header": "freetype/ftmodapi.h", "symbol": "FT_MODULE_DRIVER_NO_OUTLINES", "kind": "macro_constant"}, "source_behavior": "Bitmap-only drivers such as BDF, PCF, and Windows FNT set FONT_DRIVER | DRIVER_NO_OUTLINES."},
+      "expectation": {"status": "ok", "output_shape": {"macro_value": "integer", "modules": [{"module_name": "string", "module_flags": "integer", "has_flag": "bool"}], "glyph_format": "FT_Glyph_Format", "outline_pointer": "null_or_empty", "bitmap": {"buffer_hash": "sha256"}}, "compare": {"mode": "exact", "paths": ["macro_value", "modules.module_name", "modules.module_flags", "modules.has_flag", "glyph_format", "outline_pointer"]}, "source_refs": ["freetype/src/bdf/bdfdrivr.c:990-991", "freetype/src/pcf/pcfdrivr.c:801-802", "freetype/src/winfonts/winfnt.c:1182-1183"], "fixture_requirements": ["BDF, PCF, and Windows FNT bitmap fonts."]}
+    }
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "subject": "ftlogging.FT_Trace_Set_Default_Level",
+  "manifest_cases": [
+    "import_contract",
+    "debug_logging_restores_default_levels",
+    "non_debug_build_noop"
+  ],
+  "cases": [
+    {
+      "case_id": "ftlogging.FT_Trace_Set_Default_Level.import_contract",
+      "subject": "ftlogging.FT_Trace_Set_Default_Level",
+      "case": "import_contract",
+      "operation": "ftlogging.trace_set_default_level_abi",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftlogging.h",
+        "symbol": "FT_Trace_Set_Default_Level",
+        "signature": "void FT_Trace_Set_Default_Level(void)",
+        "return": "void",
+        "params": []
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include_header": "freetype/ftlogging.h",
+          "import_symbol": "FT_Trace_Set_Default_Level"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftlogging",
+        "area:logging"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile": "symbol import succeeds",
+          "return": "void"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "signature"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftlogging.h:53-80"
+        ]
+      }
+    },
+    {
+      "case_id": "ftlogging.FT_Trace_Set_Default_Level.debug_logging_restores_default_levels",
+      "subject": "ftlogging.FT_Trace_Set_Default_Level",
+      "case": "debug_logging_restores_default_levels",
+      "operation": "ftlogging.trace_set_default_level",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftlogging.h",
+        "symbol": "FT_Trace_Set_Default_Level",
+        "signature": "void FT_Trace_Set_Default_Level(void)",
+        "build_option": "FT_DEBUG_LOGGING"
+      },
+      "inputs": {
+        "assets": {
+          "logging_harness": {
+            "kind": "ref",
+            "id": "facades/logging/debug-logging-callbacks.json",
+            "asset_kind": "fixture"
+          }
+        },
+        "params": {
+          "debug_logging_enabled": true,
+          "FT2_DEBUG": "memory:1",
+          "custom_level_before_reset": "any:7 memory:0 -vt",
+          "emit_trace_after_reset": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftlogging",
+        "area:logging"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "return": "void",
+          "custom_trace_level": null,
+          "component_flag": false,
+          "timestamp_flag": false,
+          "trace_levels": "reinitialized from default FT2_DEBUG"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "trace_levels[*]",
+            "component_flag",
+            "timestamp_flag",
+            "emitted_trace_event_counts"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftdebug.c:526-533",
+          "freetype/src/base/ftdebug.c:198-334"
+        ],
+        "fixture_requirements": [
+          "facades/logging/debug-logging-callbacks.json must run in a build where FT_DEBUG_LOGGING exposes runtime trace-level changes."
+        ]
+      }
+    },
+    {
+      "case_id": "ftlogging.FT_Trace_Set_Default_Level.non_debug_build_noop",
+      "subject": "ftlogging.FT_Trace_Set_Default_Level",
+      "case": "non_debug_build_noop",
+      "operation": "ftlogging.trace_set_default_level",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftlogging.h",
+        "symbol": "FT_Trace_Set_Default_Level",
+        "signature": "void FT_Trace_Set_Default_Level(void)",
+        "build_option": "!FT_DEBUG_LOGGING"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "debug_logging_enabled": false,
+          "prior_trace_set_level": "any:7"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftlogging",
+        "area:logging"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "return": "void",
+          "mutation": "none"
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "build.debug_logging_enabled",
+            "mutation"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftdebug.c:624-628"
+        ]
+      }
+    }
+  ]
+}

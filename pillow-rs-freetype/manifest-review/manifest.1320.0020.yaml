@@ -1,0 +1,246 @@
+- id: ttnameid.TT_MS_LANGID_FRENCH_FRANCE
+  kind: tag
+  symbol: TT_MS_LANGID_FRENCH_FRANCE
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for French as used in France name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x040C in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_FRENCH_FRANCE as a public constant expression.
+    - id: windows_french_france_name_runtime
+      description: C oracle exposes Microsoft name records with language_id 0x040C and preserves the exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/windows-name-fr-fr.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_FRENCH_FRANCE}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_FRENCH_HAITI
+  kind: tag
+  symbol: TT_MS_LANGID_FRENCH_HAITI
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for French as used in Haiti name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x3C0C in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_FRENCH_HAITI as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_FRENCH_LUXEMBOURG
+  kind: tag
+  symbol: TT_MS_LANGID_FRENCH_LUXEMBOURG
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for French as used in Luxembourg name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x140C in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_FRENCH_LUXEMBOURG as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_FRENCH_MALI
+  kind: tag
+  symbol: TT_MS_LANGID_FRENCH_MALI
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for French as used in Mali name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x340C in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_FRENCH_MALI as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_FRENCH_MONACO
+  kind: tag
+  symbol: TT_MS_LANGID_FRENCH_MONACO
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for French as used in Monaco name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x180C in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_FRENCH_MONACO as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_FRENCH_MOROCCO
+  kind: tag
+  symbol: TT_MS_LANGID_FRENCH_MOROCCO
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for French as used in Morocco name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x380C in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_FRENCH_MOROCCO as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_FRENCH_NORTH_AFRICA
+  kind: tag
+  symbol: TT_MS_LANGID_FRENCH_NORTH_AFRICA
+  header: freetype/ttnameid.h
+  description: Legacy Microsoft platform language id for French as used in North Africa name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to unsigned integer value 0xE40CU in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_FRENCH_NORTH_AFRICA as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_FRENCH_REUNION
+  kind: tag
+  symbol: TT_MS_LANGID_FRENCH_REUNION
+  header: freetype/ttnameid.h
+  description: Legacy Microsoft platform language id for French as used in Reunion name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x200C in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_FRENCH_REUNION as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_FRENCH_SENEGAL
+  kind: tag
+  symbol: TT_MS_LANGID_FRENCH_SENEGAL
+  header: freetype/ttnameid.h
+  description: Legacy Microsoft platform language id for French as used in Senegal name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x280C in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_FRENCH_SENEGAL as a public constant expression.
+    - id: windows_french_senegal_name_runtime
+      description: C oracle exposes Microsoft name records with language_id 0x280C and preserves the exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/windows-name-fr-sn.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_FRENCH_SENEGAL}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_FRENCH_SWITZERLAND
+  kind: tag
+  symbol: TT_MS_LANGID_FRENCH_SWITZERLAND
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for French as used in Switzerland name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x100C in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_FRENCH_SWITZERLAND as a public constant expression.
+    - id: windows_french_switzerland_name_runtime
+      description: C oracle exposes Microsoft name records with language_id 0x100C and preserves the exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/windows-name-fr-ch.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_FRENCH_SWITZERLAND}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_FRENCH_WEST_INDIES
+  kind: tag
+  symbol: TT_MS_LANGID_FRENCH_WEST_INDIES
+  header: freetype/ttnameid.h
+  description: Legacy Microsoft platform language id for French as used in West Indies name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x1C0C in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_FRENCH_WEST_INDIES as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_FRENCH_ZAIRE
+  kind: tag
+  symbol: TT_MS_LANGID_FRENCH_ZAIRE
+  header: freetype/ttnameid.h
+  description: Legacy Microsoft platform language id alias for French Congo name records, formerly Zaire.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to TT_MS_LANGID_FRENCH_CONGO, which is integer value 0x240C in the pinned C public header.
+    - id: alias_matches_french_congo
+      description: TT_MS_LANGID_FRENCH_ZAIRE compares equal to TT_MS_LANGID_FRENCH_CONGO as a C constant expression.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_FRENCH_ZAIRE as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_FRISIAN_NETHERLANDS
+  kind: tag
+  symbol: TT_MS_LANGID_FRISIAN_NETHERLANDS
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Frisian as used in Netherlands name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x0462 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_FRISIAN_NETHERLANDS as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_FULFULDE_NIGERIA
+  kind: tag
+  symbol: TT_MS_LANGID_FULFULDE_NIGERIA
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Fulfulde as used in Nigeria name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x0467 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_FULFULDE_NIGERIA as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_GALICIAN_GALICIAN
+  kind: tag
+  symbol: TT_MS_LANGID_GALICIAN_GALICIAN
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Galician as used in Galician name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x0456 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_GALICIAN_GALICIAN as a public constant expression.
+    - id: windows_galician_name_runtime
+      description: C oracle exposes Microsoft name records with language_id 0x0456 and preserves the exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/windows-name-gl-es.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_GALICIAN_GALICIAN}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_GALICIAN_SPAIN
+  kind: tag
+  symbol: TT_MS_LANGID_GALICIAN_SPAIN
+  header: freetype/ttnameid.h
+  description: Legacy Microsoft platform language id alias for Galician name records in Spain.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to TT_MS_LANGID_GALICIAN_GALICIAN, which is integer value 0x0456 in the pinned C public header.
+    - id: alias_matches_galician_galician
+      description: TT_MS_LANGID_GALICIAN_SPAIN compares equal to TT_MS_LANGID_GALICIAN_GALICIAN as a C constant expression.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_GALICIAN_SPAIN as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_GEORGIAN_GEORGIA
+  kind: tag
+  symbol: TT_MS_LANGID_GEORGIAN_GEORGIA
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Georgian as used in Georgia name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x0437 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_GEORGIAN_GEORGIA as a public constant expression.
+    - id: windows_georgian_name_runtime
+      description: C oracle exposes Microsoft name records with language_id 0x0437 and preserves the exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/windows-name-ka-ge.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_GEORGIAN_GEORGIA}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_GERMAN_AUSTRIA
+  kind: tag
+  symbol: TT_MS_LANGID_GERMAN_AUSTRIA
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for German as used in Austria name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x0C07 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_GERMAN_AUSTRIA as a public constant expression.
+    - id: windows_german_austria_name_runtime
+      description: C oracle exposes Microsoft name records with language_id 0x0C07 and preserves the exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/windows-name-de-at.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_GERMAN_AUSTRIA}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_GERMAN_GERMANY
+  kind: tag
+  symbol: TT_MS_LANGID_GERMAN_GERMANY
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for German as used in Germany name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x0407 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_GERMAN_GERMANY as a public constant expression.
+    - id: windows_german_germany_name_runtime
+      description: C oracle exposes Microsoft name records with language_id 0x0407 and preserves the exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/windows-name-de-de.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_GERMAN_GERMANY}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_GERMAN_LIECHTENSTEI
+  kind: tag
+  symbol: TT_MS_LANGID_GERMAN_LIECHTENSTEI
+  header: freetype/ttnameid.h
+  description: Legacy misspelled public alias for the Microsoft platform language id for German as used in Liechtenstein name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to TT_MS_LANGID_GERMAN_LIECHTENSTEIN, which is integer value 0x1407 in the pinned C public header.
+    - id: alias_matches_german_liechtenstein
+      description: TT_MS_LANGID_GERMAN_LIECHTENSTEI compares equal to TT_MS_LANGID_GERMAN_LIECHTENSTEIN as a C constant expression.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_GERMAN_LIECHTENSTEI as a public constant expression.

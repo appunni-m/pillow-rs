@@ -1,0 +1,270 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_Bitmap",
+  "manifest_cases": [
+    "layout_matches_c",
+    "public_fields_match_render_output",
+    "empty_bitmap_is_valid",
+    "invalid_target_buffer_errors"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_Bitmap.layout_matches_c",
+      "subject": "ftimage.FT_Bitmap",
+      "case": "layout_matches_c",
+      "operation": "abi.record_layout",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftimage.h",
+          "symbol": "FT_Bitmap",
+          "fields_in_order": [
+            "rows",
+            "width",
+            "pitch",
+            "buffer",
+            "num_grays",
+            "pixel_mode",
+            "palette_mode",
+            "palette"
+          ],
+          "field_types": {
+            "rows": "unsigned int",
+            "width": "unsigned int",
+            "pitch": "int",
+            "buffer": "unsigned char*",
+            "num_grays": "unsigned short",
+            "pixel_mode": "unsigned char",
+            "palette_mode": "unsigned char",
+            "palette": "void*"
+          },
+          "probe": [
+            "sizeof",
+            "alignof",
+            "offsetof",
+            "field_types",
+            "import_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftimage",
+        "area:abi_layout"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "offsets": "object<field,usize>",
+          "field_types": "object<field,c_type>",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "offsets",
+            "field_types",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:210-286"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Bitmap.public_fields_match_render_output",
+      "subject": "ftimage.FT_Bitmap",
+      "case": "public_fields_match_render_output",
+      "operation": "freetype.render_glyph",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          },
+          "bitmap_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap/embedded-strikes.ttf"
+          },
+          "color_font": {
+            "kind": "ref",
+            "id": "fonts/color/bgra-color-glyph.ttf"
+          }
+        },
+        "params": {
+          "render_modes": [
+            "FT_RENDER_MODE_NORMAL",
+            "FT_RENDER_MODE_MONO",
+            "FT_RENDER_MODE_LCD",
+            "FT_RENDER_MODE_LCD_V",
+            "FT_RENDER_MODE_SDF"
+          ],
+          "probe": [
+            "slot.bitmap.rows",
+            "slot.bitmap.width",
+            "slot.bitmap.pitch",
+            "slot.bitmap.buffer",
+            "slot.bitmap.num_grays",
+            "slot.bitmap.pixel_mode"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftimage",
+        "area:bitmap",
+        "runtime:public_record"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "bitmap": "FT_Bitmap",
+          "buffer": "bytes"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "bitmap.rows",
+            "bitmap.width",
+            "bitmap.pitch",
+            "bitmap.num_grays",
+            "bitmap.pixel_mode",
+            "bitmap.palette_mode",
+            "bitmap.palette_nullness",
+            "bitmap.buffer"
+          ]
+        },
+        "fixture_requirements": [
+          "Future embedded bitmap and BGRA color fonts for non-outline bitmap modes."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:265-273",
+          "freetype/src/raster/ftrend1.c:90-176",
+          "freetype/src/smooth/ftsmooth.c:462-650"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Bitmap.empty_bitmap_is_valid",
+      "subject": "ftimage.FT_Bitmap",
+      "case": "empty_bitmap_is_valid",
+      "operation": "ftoutln.outline_get_bitmap",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "empty_outline": {
+            "kind": "ref",
+            "id": "outlines/synthetic/empty-outline.json",
+            "asset_kind": "outline"
+          }
+        },
+        "params": {
+          "target_bitmap": {
+            "rows": 0,
+            "width": 0,
+            "pitch": 0,
+            "buffer": "NULL",
+            "pixel_mode": "FT_PIXEL_MODE_GRAY"
+          }
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftimage",
+        "area:bitmap",
+        "path:edge-case"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "bitmap": "FT_Bitmap"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "bitmap.rows",
+            "bitmap.width",
+            "bitmap.pitch",
+            "bitmap.buffer_nullness"
+          ]
+        },
+        "fixture_requirements": [
+          "Future empty outline asset."
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:271-273"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Bitmap.invalid_target_buffer_errors",
+      "subject": "ftimage.FT_Bitmap",
+      "case": "invalid_target_buffer_errors",
+      "operation": "ftoutln.outline_get_bitmap",
+      "schema": "raster_params_error",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "outline": {
+            "kind": "ref",
+            "id": "outlines/synthetic/simple-rectangle.json",
+            "asset_kind": "outline"
+          }
+        },
+        "params": {
+          "target_bitmap": {
+            "rows": 16,
+            "width": 16,
+            "pitch": 16,
+            "buffer": "NULL",
+            "pixel_mode": "FT_PIXEL_MODE_GRAY"
+          },
+          "expected_error": "FT_Err_Invalid_Argument"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftimage",
+        "area:bitmap",
+        "path:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Argument",
+        "output_shape": {
+          "status": "FT_Error",
+          "bitmap": "FT_Bitmap"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error",
+            "bitmap.buffer_nullness"
+          ]
+        },
+        "fixture_requirements": [
+          "Future simple non-empty outline fixture."
+        ],
+        "source_refs": [
+          "freetype/src/smooth/ftgrays.c:2012-2019",
+          "freetype/src/raster/ftraster.c:2696-2703"
+        ]
+      }
+    }
+  ]
+}

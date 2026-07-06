@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_RoundFix",
+  "manifest_cases": [
+    "exact_integer_passthrough",
+    "positive_fraction_rounds_nearest",
+    "negative_fraction_rounds_nearest",
+    "wraparound_matches_c"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_RoundFix.exact_integer_passthrough",
+      "subject": "freetype.FT_RoundFix",
+      "case": "exact_integer_passthrough",
+      "operation": "freetype.round_fix",
+      "schema": "fixed_math",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "values": [
+            0,
+            65536,
+            -65536,
+            131072,
+            -131072
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:fixed-math"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Fixed",
+          "vectorized": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].input",
+            "outputs[*].result"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_RoundFix.positive_fraction_rounds_nearest",
+      "subject": "freetype.FT_RoundFix",
+      "case": "positive_fraction_rounds_nearest",
+      "operation": "freetype.round_fix",
+      "schema": "fixed_math",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "values": [
+            1,
+            32767,
+            32768,
+            32769,
+            65535,
+            98304
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:fixed-math"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Fixed",
+          "rounding": "nearest_half_away_from_zero"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].result"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_RoundFix.negative_fraction_rounds_nearest",
+      "subject": "freetype.FT_RoundFix",
+      "case": "negative_fraction_rounds_nearest",
+      "operation": "freetype.round_fix",
+      "schema": "fixed_math",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "values": [
+            -1,
+            -32767,
+            -32768,
+            -32769,
+            -65535,
+            -98304
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:fixed-math"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Fixed",
+          "rounding": "nearest_half_away_from_zero"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].result"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_RoundFix.wraparound_matches_c",
+      "subject": "freetype.FT_RoundFix",
+      "case": "wraparound_matches_c",
+      "operation": "freetype.round_fix",
+      "schema": "fixed_math",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "values": [
+            2147483647,
+            2147450880,
+            -2147483648,
+            -2147450881
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:fixed-math"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Fixed",
+          "arithmetic": "ADD_LONG wraparound and mask"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs[*].result"
+          ]
+        }
+      }
+    }
+  ]
+}

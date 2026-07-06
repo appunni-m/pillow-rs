@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_FACE_FLAG_SBIX_OVERLAY",
+  "manifest_cases": [
+    "value_matches_header"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_FACE_FLAG_SBIX_OVERLAY.value_matches_header",
+      "subject": "freetype.FT_FACE_FLAG_SBIX_OVERLAY",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_FACE_FLAG_SBIX_OVERLAY",
+          "include": "freetype/freetype.h"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "FT_Long macro bit flag",
+          "source": "1L << 18"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_FACE_FLAG_SBIX_OVERLAY.sbix_overlay_face_flag",
+      "subject": "freetype.FT_FACE_FLAG_SBIX_OVERLAY",
+      "case": "value_matches_header",
+      "covers_manifest_cases": [
+        "value_matches_header"
+      ],
+      "operation": "freetype.face_flags",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/sbix-overlay.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag": "FT_FACE_FLAG_SBIX_OVERLAY",
+          "also_check": [
+            "FT_FACE_FLAG_SBIX",
+            "FT_FACE_FLAG_COLOR"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "runtime:face_flags",
+        "runtime:sbix",
+        "asset:missing"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "face_flags": "FT_Long",
+          "overlay_bit_set": "bool",
+          "sbix_bit_set": "bool",
+          "color_bit_set": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "face_flags",
+            "overlay_bit_set",
+            "sbix_bit_set",
+            "color_bit_set"
+          ]
+        },
+        "fixture_requirements": [
+          "OpenType sbix fixture that FreeType marks for outline overlay via sfnt sbit handling"
+        ]
+      }
+    }
+  ]
+}

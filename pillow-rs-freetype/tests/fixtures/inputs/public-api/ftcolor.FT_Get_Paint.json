@@ -1,0 +1,304 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_Get_Paint",
+  "manifest_cases": [
+    "success_resolves_each_supported_paint_format",
+    "success_inserts_root_transform",
+    "error_null_or_missing_colr",
+    "error_null_output_policy"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format",
+      "subject": "ftcolor.FT_Get_Paint",
+      "case": "success_resolves_each_supported_paint_format",
+      "operation": "ftcolor.get_paint",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 1 base glyph list",
+              "CPAL table with at least two palettes and named entries",
+              "paint graph containing solid, colr_layers, glyph, colr_glyph, linear, radial, sweep, transform, translate, scale, rotate, skew, and composite paints",
+              "static ColorLine records using PAD, REPEAT, and REFLECT extend modes",
+              "foreground palette index 0xFFFF references"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_roles": [
+            "colr_layers",
+            "solid",
+            "glyph",
+            "colr_glyph",
+            "linear_gradient",
+            "radial_gradient",
+            "sweep_gradient",
+            "transform",
+            "translate",
+            "scale",
+            "rotate",
+            "skew",
+            "composite"
+          ],
+          "walk": [
+            "FT_Get_Color_Glyph_Paint",
+            "FT_Get_Paint"
+          ],
+          "resolve_children": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Bool",
+          "record": "FT_COLR_Paint",
+          "fields": "format and active union member for each supported public paint format"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "paints[*].return",
+            "paints[*].format",
+            "paints[*].active_union_fields",
+            "paints[*].child_opaque_paint_identity_class"
+          ]
+        },
+        "error": null,
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs",
+          "COLR v1 graph with every supported public paint format"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Get_Paint.success_inserts_root_transform",
+      "subject": "ftcolor.FT_Get_Paint",
+      "case": "success_inserts_root_transform",
+      "operation": "ftcolor.get_paint",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 1 base glyph list",
+              "CPAL table with at least two palettes and named entries",
+              "paint graph containing solid, colr_layers, glyph, colr_glyph, linear, radial, sweep, transform, translate, scale, rotate, skew, and composite paints",
+              "static ColorLine records using PAD, REPEAT, and REFLECT extend modes",
+              "foreground palette index 0xFFFF references"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_role": "root_transform_target",
+          "root_transform": "FT_COLOR_INCLUDE_ROOT_TRANSFORM",
+          "sizes_ppem": [
+            16,
+            37
+          ],
+          "transforms": [
+            {
+              "matrix": [
+                65536,
+                0,
+                0,
+                65536
+              ],
+              "delta": [
+                0,
+                0
+              ]
+            },
+            {
+              "matrix": [
+                65536,
+                16384,
+                -8192,
+                65536
+              ],
+              "delta": [
+                3,
+                -5
+              ]
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Bool",
+          "record": "FT_COLR_Paint",
+          "format": "FT_COLR_PAINTFORMAT_TRANSFORM",
+          "fields": [
+            "u.transform.paint",
+            "u.transform.affine.xx",
+            "xy",
+            "yx",
+            "yy",
+            "dx",
+            "dy"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "runs[*].return",
+            "runs[*].paint.format",
+            "runs[*].paint.u.transform.affine",
+            "runs[*].paint.u.transform.paint.insert_root_transform",
+            "runs[*].paint.u.transform.paint.p_identity_class"
+          ]
+        },
+        "error": null,
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Get_Paint.error_null_or_missing_colr",
+      "subject": "ftcolor.FT_Get_Paint",
+      "case": "error_null_or_missing_colr",
+      "operation": "ftcolor.get_paint",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "sfnt_no_colr": {
+            "kind": "ref",
+            "id": "fonts/basic/dejavu-sans.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "SFNT face without CPAL data"
+            ]
+          },
+          "malformed_font": {
+            "kind": "ref",
+            "id": "fonts/color/malformed-colr-v1-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "truncated paint table records",
+              "out-of-range paint offsets",
+              "invalid ColorLine offsets",
+              "invalid LayerV1List offsets",
+              "bad BaseGlyphV1List paint offsets"
+            ]
+          }
+        },
+        "params": {
+          "variants": [
+            "null_face",
+            "sfnt_without_colr_v1",
+            "non_colr_base_glyph",
+            "opaque_paint_p_null",
+            "opaque_paint_out_of_range",
+            "unsupported_paint_format",
+            "truncated_child_table"
+          ],
+          "sentinel_paint": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Bool",
+          "value": 0,
+          "paint_preservation": "C oracle"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "variants[*].return",
+            "variants[*].paint_snapshot"
+          ]
+        },
+        "error": "zero_return_or_c_oracle",
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs",
+          "Malformed COLR v1 fixture with unsupported paint format and truncated child records"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_Get_Paint.error_null_output_policy",
+      "subject": "ftcolor.FT_Get_Paint",
+      "case": "error_null_output_policy",
+      "operation": "ftcolor.get_paint",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 1 base glyph list",
+              "CPAL table with at least two palettes and named entries",
+              "paint graph containing solid, colr_layers, glyph, colr_glyph, linear, radial, sweep, transform, translate, scale, rotate, skew, and composite paints",
+              "static ColorLine records using PAD, REPEAT, and REFLECT extend modes",
+              "foreground palette index 0xFFFF references"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_role": "solid",
+          "paint_output": "null",
+          "opaque_paint": "valid"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcolor",
+        "area:colr-v1"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Bool",
+          "value": 0,
+          "null_output_policy": "guarded by ftobjs.c"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "return",
+            "error_class"
+          ]
+        },
+        "error": "zero_return_or_c_oracle",
+        "fixture_requirements": [
+          "Runtime compares C FreeType, Rust FFI, C FFI, and Wasm FFI outputs"
+        ]
+      }
+    }
+  ]
+}

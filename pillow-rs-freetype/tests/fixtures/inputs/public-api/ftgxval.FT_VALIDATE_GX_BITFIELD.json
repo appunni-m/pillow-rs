@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "subject": "ftgxval.FT_VALIDATE_GX_BITFIELD",
+  "manifest_cases": [
+    "expansion_matches_header",
+    "table_tokens_generate_distinct_bits"
+  ],
+  "cases": [
+    {
+      "case_id": "ftgxval.FT_VALIDATE_GX_BITFIELD.expansion_matches_header",
+      "subject": "ftgxval.FT_VALIDATE_GX_BITFIELD",
+      "case": "expansion_matches_header",
+      "operation": "macro.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftgxval.h>",
+          "symbol": "FT_VALIDATE_GX_BITFIELD",
+          "macro_expression": "FT_VALIDATE_GX_START << FT_VALIDATE_<tag>_INDEX",
+          "tokens": [
+            "feat",
+            "mort",
+            "morx",
+            "bsln",
+            "just",
+            "kern",
+            "opbd",
+            "trak",
+            "prop",
+            "lcar"
+          ],
+          "expected_values_from_pinned_header": {
+            "feat": 16384,
+            "mort": 32768,
+            "morx": 65536,
+            "bsln": 131072,
+            "just": 262144,
+            "kern": 524288,
+            "opbd": 1048576,
+            "trak": 2097152,
+            "prop": 4194304,
+            "lcar": 8388608
+          },
+          "pinned_sources": [
+            "freetype/include/freetype/ftgxval.h:109-111",
+            "freetype/include/freetype/ftgxval.h:160-169"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftgxval",
+        "area:gx-validation",
+        "coverage:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_results": "integer_by_token",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "macro_results",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgxval.FT_VALIDATE_GX_BITFIELD.table_tokens_generate_distinct_bits",
+      "subject": "ftgxval.FT_VALIDATE_GX_BITFIELD",
+      "case": "table_tokens_generate_distinct_bits",
+      "operation": "constant.bitfield_group",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftgxval.h>",
+          "bitfield_group": "gx_validation_flags",
+          "base_symbol": "FT_VALIDATE_GX_START",
+          "index_symbols": [
+            "FT_VALIDATE_feat_INDEX",
+            "FT_VALIDATE_mort_INDEX",
+            "FT_VALIDATE_morx_INDEX",
+            "FT_VALIDATE_bsln_INDEX",
+            "FT_VALIDATE_just_INDEX",
+            "FT_VALIDATE_kern_INDEX",
+            "FT_VALIDATE_opbd_INDEX",
+            "FT_VALIDATE_trak_INDEX",
+            "FT_VALIDATE_prop_INDEX",
+            "FT_VALIDATE_lcar_INDEX"
+          ],
+          "constant_symbols": [
+            "FT_VALIDATE_feat",
+            "FT_VALIDATE_mort",
+            "FT_VALIDATE_morx",
+            "FT_VALIDATE_bsln",
+            "FT_VALIDATE_just",
+            "FT_VALIDATE_kern",
+            "FT_VALIDATE_opbd",
+            "FT_VALIDATE_trak",
+            "FT_VALIDATE_prop",
+            "FT_VALIDATE_lcar"
+          ],
+          "expected_group_mask": 16760832
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:ftgxval",
+        "area:gx-validation",
+        "coverage:bitfield-group"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "values": "integer_by_symbol",
+          "distinct_non_overlapping": "bool",
+          "or_mask": "integer"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "values",
+            "distinct_non_overlapping",
+            "or_mask"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ftgxval.h"
+        ]
+      }
+    }
+  ]
+}

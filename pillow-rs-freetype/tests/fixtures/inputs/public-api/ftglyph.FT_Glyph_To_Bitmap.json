@@ -1,0 +1,356 @@
+{
+  "version": 1,
+  "subject": "ftglyph.FT_Glyph_To_Bitmap",
+  "manifest_cases": [
+    "success_outline_to_bitmap_destroy_false",
+    "success_outline_to_bitmap_destroy_true",
+    "success_already_bitmap_noop",
+    "success_origin_translation_affects_render",
+    "error_invalid_arguments_or_unrenderable_format",
+    "error_render_failure_preserves_original"
+  ],
+  "cases": [
+    {
+      "case_id": "ftglyph.FT_Glyph_To_Bitmap.success_outline_to_bitmap_destroy_false",
+      "subject": "ftglyph.FT_Glyph_To_Bitmap",
+      "case": "success_outline_to_bitmap_destroy_false",
+      "operation": "ftglyph.glyph_to_bitmap",
+      "schema": "glyph_to_bitmap",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "source_creation": "FT_Get_Glyph outline",
+          "destroy": false,
+          "render_modes": [
+            "FT_RENDER_MODE_NORMAL",
+            "FT_RENDER_MODE_MONO"
+          ],
+          "origin": null,
+          "glyph_indices": [
+            36,
+            43
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "result_kind": "FT_BitmapGlyph",
+          "original": "preserved and origin restored",
+          "bitmap": [
+            "left",
+            "top",
+            "FT_Bitmap fields",
+            "buffer bytes"
+          ],
+          "advance": "copied from source glyph"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "handle_replacement_class",
+            "bitmap",
+            "original_after_restore"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_To_Bitmap.success_outline_to_bitmap_destroy_true",
+      "subject": "ftglyph.FT_Glyph_To_Bitmap",
+      "case": "success_outline_to_bitmap_destroy_true",
+      "operation": "ftglyph.glyph_to_bitmap",
+      "schema": "glyph_to_bitmap",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "source_creation": "FT_Get_Glyph outline",
+          "destroy": true,
+          "render_modes": [
+            "FT_RENDER_MODE_NORMAL"
+          ],
+          "glyph_indices": [
+            36,
+            43
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "result_kind": "FT_BitmapGlyph",
+          "original": "destroyed after successful bitmap creation",
+          "free_events": true
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "handle_replacement_class",
+            "bitmap",
+            "free_events"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_To_Bitmap.success_already_bitmap_noop",
+      "subject": "ftglyph.FT_Glyph_To_Bitmap",
+      "case": "success_already_bitmap_noop",
+      "operation": "ftglyph.glyph_to_bitmap",
+      "schema": "glyph_to_bitmap",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "bitmap_strike_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "source_creation": "FT_Get_Glyph bitmap",
+          "destroy": true,
+          "render_modes": [
+            "FT_RENDER_MODE_NORMAL"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "handle": "unchanged",
+          "bitmap_bytes": "unchanged",
+          "ownership": "unchanged"
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "error",
+            "handle_identity_class",
+            "bitmap_before_after",
+            "free_events"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "fixture_requirements": [
+          "fonts/bitmap-strikes/public-bitmap-strike.ttf must contain at least one loadable embedded bitmap strike whose FT_GlyphSlot format becomes FT_GLYPH_FORMAT_BITMAP."
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_To_Bitmap.success_origin_translation_affects_render",
+      "subject": "ftglyph.FT_Glyph_To_Bitmap",
+      "case": "success_origin_translation_affects_render",
+      "operation": "ftglyph.glyph_to_bitmap",
+      "schema": "glyph_to_bitmap",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "source_creation": "FT_Get_Glyph outline",
+          "destroy": false,
+          "origins": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 32,
+              "y": -48
+            },
+            {
+              "x": -96,
+              "y": 64
+            }
+          ],
+          "render_modes": [
+            "FT_RENDER_MODE_NORMAL"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "origin": "26.6 translation applied before render and undone when destroy=false",
+          "bitmap": [
+            "left",
+            "top",
+            "buffer bytes"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "origin",
+            "bitmap.left",
+            "bitmap.top",
+            "bitmap.buffer_bytes",
+            "source_restored"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format",
+      "subject": "ftglyph.FT_Glyph_To_Bitmap",
+      "case": "error_invalid_arguments_or_unrenderable_format",
+      "operation": "ftglyph.glyph_to_bitmap",
+      "schema": "glyph_to_bitmap",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "malformed_facade": {
+            "kind": "ref",
+            "id": "facades/glyph/malformed-slot-and-class-cases.json",
+            "asset_kind": "fixture"
+          }
+        },
+        "params": {
+          "null_the_glyph": true,
+          "null_deref_glyph": true,
+          "null_library": true,
+          "null_clazz": true,
+          "no_prepare_hook": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "caller_handle": "preserved according to C Bad path",
+          "partial_bitmap": "none"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "caller_handle_class",
+            "free_events"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "error": "FT_Err_Invalid_Argument"
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_To_Bitmap.error_render_failure_preserves_original",
+      "subject": "ftglyph.FT_Glyph_To_Bitmap",
+      "case": "error_render_failure_preserves_original",
+      "operation": "ftglyph.glyph_to_bitmap",
+      "schema": "glyph_to_bitmap",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "malformed_facade": {
+            "kind": "ref",
+            "id": "facades/glyph/malformed-slot-and-class-cases.json",
+            "asset_kind": "fixture"
+          }
+        },
+        "params": {
+          "forced_renderer_failure": true,
+          "destroy_values": [
+            false,
+            true
+          ],
+          "origin": {
+            "x": 32,
+            "y": 32
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "caller_handle": "original unchanged",
+          "partial_bitmap": "freed",
+          "destroy_true_behavior": "original not destroyed on failure"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "caller_handle_class",
+            "partial_bitmap_cleanup",
+            "original_after_failure"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "error": "renderer failure from C oracle"
+      }
+    }
+  ]
+}

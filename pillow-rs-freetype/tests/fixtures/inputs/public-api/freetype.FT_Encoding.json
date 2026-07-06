@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Encoding",
+  "manifest_cases": [
+    "enum_variants_match_header"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Encoding.enum_variants_match_header",
+      "subject": "freetype.FT_Encoding",
+      "case": "enum_variants_match_header",
+      "operation": "abi.enum_variants",
+      "schema": "abi_enum",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/freetype.h",
+          "enum": "FT_Encoding",
+          "expected_variants": [
+            "FT_ENCODING_NONE",
+            "FT_ENCODING_MS_SYMBOL",
+            "FT_ENCODING_UNICODE",
+            "FT_ENCODING_SJIS",
+            "FT_ENCODING_PRC",
+            "FT_ENCODING_BIG5",
+            "FT_ENCODING_WANSUNG",
+            "FT_ENCODING_JOHAB",
+            "FT_ENCODING_GB2312",
+            "FT_ENCODING_MS_SJIS",
+            "FT_ENCODING_MS_GB2312",
+            "FT_ENCODING_MS_BIG5",
+            "FT_ENCODING_MS_WANSUNG",
+            "FT_ENCODING_MS_JOHAB",
+            "FT_ENCODING_ADOBE_STANDARD",
+            "FT_ENCODING_ADOBE_EXPERT",
+            "FT_ENCODING_ADOBE_CUSTOM",
+            "FT_ENCODING_ADOBE_LATIN_1",
+            "FT_ENCODING_OLD_LATIN_2",
+            "FT_ENCODING_APPLE_ROMAN"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:freetype",
+        "public-api-slice:0000-0019"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "enum": "string",
+          "variants": "ordered array<{name,value}>",
+          "aliases": "array<{name,alias_of,value}>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "enum",
+            "variants[*].name",
+            "variants[*].value",
+            "aliases[*].name",
+            "aliases[*].alias_of",
+            "aliases[*].value"
+          ]
+        },
+        "source": {
+          "header": "pillow-rs-freetype/freetype/include/freetype/freetype.h"
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Encoding.representative_runtime_observation",
+      "subject": "freetype.FT_Encoding",
+      "case": "representative_runtime_observation",
+      "operation": "freetype.inspect_charmaps",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "probe_encodings": [
+            "FT_ENCODING_UNICODE",
+            "FT_ENCODING_MS_SYMBOL",
+            "FT_ENCODING_NONE"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:freetype",
+        "public-api-slice:0000-0019"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "charmaps": "array<{encoding,platform_id,encoding_id}>",
+          "selected": "nullable<{encoding,platform_id,encoding_id}>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "charmaps[*].encoding",
+            "charmaps[*].platform_id",
+            "charmaps[*].encoding_id",
+            "selected.encoding"
+          ]
+        },
+        "fixture_requirements": [
+          "Uses an existing deterministic font asset; runtime oracle must generate C FreeType output and compare C vs Rust FFI vs C FFI vs Wasm FFI."
+        ]
+      },
+      "covers_manifest_cases": [
+        "enum_variants_match_header"
+      ]
+    }
+  ]
+}

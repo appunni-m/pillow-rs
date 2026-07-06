@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Invalid_Version",
+  "manifest_cases": [
+    "value_matches_header",
+    "module_requires_newer_freetype"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Version.value_matches_header",
+      "subject": "fterrdef.FT_Err_Invalid_Version",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Invalid_Version",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 4,
+          "expected_value_hex": "0x04",
+          "expected_error_string_from_pinned_header": "invalid FreeType version",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Invalid_Version",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Version.module_requires_newer_freetype",
+      "subject": "fterrdef.FT_Err_Invalid_Version",
+      "case": "module_requires_newer_freetype",
+      "operation": "FT_Add_Module",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "module": {
+            "kind": "ref",
+            "role": "module_class",
+            "id": "generated/modules/requires-newer-freetype.json",
+            "requirements": "Test FT_Module_Class whose module_requires is greater than FREETYPE_VER_FIXED for the pinned build."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Invalid_Version",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/base/ftobjs.c:5078",
+          "module_requires": "FREETYPE_VER_FIXED + 1",
+          "library_state": "fresh_library"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:abi-module-facade"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Version",
+        "fixture_requirements": "ABI module facade that safely passes a test FT_Module_Class with module_requires greater than the pinned FreeType version.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "module_table": "preserved_or_mutation_class",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "module_table.mutation_class"
+          ]
+        }
+      }
+    }
+  ]
+}

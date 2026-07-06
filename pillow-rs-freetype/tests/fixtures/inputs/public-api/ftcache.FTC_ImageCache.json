@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "subject": "ftcache.FTC_ImageCache",
+  "manifest_cases": [
+    "alias_defined",
+    "manager_owned_opaque_cache"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcache.FTC_ImageCache.alias_defined",
+      "subject": "ftcache.FTC_ImageCache",
+      "case": "alias_defined",
+      "operation": "abi.type_alias",
+      "schema": "abi_type",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftcache.h>",
+          "typedef": "FTC_ImageCache",
+          "expected_alias": "struct FTC_ImageCacheRec_*"
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftcache",
+        "area:cache"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "opaque_pointer_alias",
+          "sizeof": "pointer_size",
+          "assignability": "C compile probe"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignment",
+            "is_pointer",
+            "compile_probe"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcache.FTC_ImageCache.manager_owned_opaque_cache",
+      "subject": "ftcache.FTC_ImageCache",
+      "case": "manager_owned_opaque_cache",
+      "operation": "ftcache.type_contract",
+      "schema": "cache_lifecycle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "constructor": "FTC_ImageCache_New",
+          "destructor": "FTC_Manager_Done",
+          "manager": "live_manager"
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftcache",
+        "area:cache"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "handle": "opaque_non_null",
+          "ownership": "manager-owned image cache handle destroyed with FTC_Manager_Done",
+          "post_done": "handle invalidated by owner destruction"
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "create.status",
+            "handle.nullness",
+            "owner.identity_class",
+            "done.lifecycle_class"
+          ]
+        }
+      }
+    }
+  ]
+}

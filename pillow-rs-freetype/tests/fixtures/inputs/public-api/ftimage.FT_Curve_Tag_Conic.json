@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_Curve_Tag_Conic",
+  "manifest_cases": [
+    "value_matches_header",
+    "curve_tag_classifies_conic_points"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_Curve_Tag_Conic.value_matches_header",
+      "subject": "ftimage.FT_Curve_Tag_Conic",
+      "case": "value_matches_header",
+      "operation": "constant_eval",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ftimage.h",
+          "symbol": "FT_Curve_Tag_Conic",
+          "alias_of": "FT_CURVE_TAG_CONIC",
+          "expected_value": 0,
+          "type": "char tag low-bit constant"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftimage"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "integer macro value",
+          "alias_target": "FT_CURVE_TAG_CONIC"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "value",
+            "alias_target"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:474-495"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Curve_Tag_Conic.curve_tag_classifies_conic_points",
+      "subject": "ftimage.FT_Curve_Tag_Conic",
+      "case": "curve_tag_classifies_conic_points",
+      "operation": "ftimage.outline_decompose",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_fixture": {
+            "kind": "ref",
+            "id": "outlines/conic-consecutive-and-closing.json"
+          }
+        },
+        "params": {
+          "tag_values": [
+            "FT_Curve_Tag_Conic",
+            "FT_Curve_Tag_Conic | FT_Curve_Tag_Touch_X",
+            "FT_Curve_Tag_Conic | FT_Curve_Tag_Touch_Y"
+          ],
+          "shift_delta_matrix": [
+            {
+              "shift": 0,
+              "delta": 0
+            },
+            {
+              "shift": 1,
+              "delta": 32
+            }
+          ],
+          "callback_returns": 0
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftimage"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "events": "ordered move_to/conic_to/line_to callback records",
+          "implicit_midpoints": "FT_Vector coordinates when consecutive conic controls occur"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "events[*].kind",
+            "events[*].control",
+            "events[*].to",
+            "events[*].user_identity"
+          ]
+        },
+        "fixture_requirements": [
+          "outlines/conic-consecutive-and-closing.json must contain conic contours with consecutive off-curve points and closing conic arcs"
+        ],
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:474-495",
+          "freetype/src/base/ftoutln.c:103-221"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "subject": "ftsystem.FT_Memory",
+  "manifest_cases": [
+    "alias_defined",
+    "pointer_abi_contract",
+    "custom_allocator_runtime_events"
+  ],
+  "metadata": {
+    "abi": {
+      "kind": "type",
+      "header": "freetype/ftsystem.h",
+      "symbol": "FT_Memory",
+      "c_decl": "typedef struct FT_MemoryRec_* FT_Memory",
+      "pointee": {
+        "symbol": "FT_MemoryRec_",
+        "fields": ["void* user", "FT_Alloc_Func alloc", "FT_Free_Func free", "FT_Realloc_Func realloc"]
+      },
+      "callbacks": {
+        "FT_Alloc_Func": "void* (*)(FT_Memory memory, long size)",
+        "FT_Free_Func": "void (*)(FT_Memory memory, void* block)",
+        "FT_Realloc_Func": "void* (*)(FT_Memory memory, long cur_size, long new_size, void* block)"
+      }
+    },
+    "source_refs": [
+      "freetype/include/freetype/ftsystem.h",
+      "freetype/src/base/ftobjs.c:FT_New_Library",
+      "freetype/src/base/ftutil.c"
+    ],
+    "source_behavior": "FT_Memory is an opaque pointer passed unchanged to allocation callbacks; custom libraries route alloc/free/realloc through the supplied FT_MemoryRec function pointers."
+  },
+  "cases": [
+    {
+      "case_id": "ftsystem.FT_Memory.alias_defined",
+      "subject": "ftsystem.FT_Memory",
+      "case": "alias_defined",
+      "operation": "abi.type_alias",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftsystem.h",
+          "symbol": "FT_Memory",
+          "expected_decl": "struct FT_MemoryRec_*",
+          "probe": ["import_compiles", "is_pointer", "pointee_tag"]
+        }
+      },
+      "classifiers": ["kind:type", "header:ftsystem", "area:memory", "abi:opaque-pointer"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "import_compiles": "bool",
+          "is_pointer": "bool",
+          "pointee_tag": "string"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": ["import_compiles", "is_pointer", "pointee_tag"]
+        }
+      }
+    },
+    {
+      "case_id": "ftsystem.FT_Memory.pointer_abi_contract",
+      "subject": "ftsystem.FT_Memory",
+      "case": "pointer_abi_contract",
+      "operation": "abi.pointer_contract",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftsystem.h",
+          "symbol": "FT_Memory",
+          "probe": ["sizeof_pointer", "alignof_pointer", "callback_argument_identity"],
+          "callbacks": ["FT_Alloc_Func", "FT_Free_Func", "FT_Realloc_Func"]
+        }
+      },
+      "classifiers": ["kind:type", "header:ftsystem", "area:memory", "abi:pointer"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof_pointer": "usize",
+          "alignof_pointer": "usize",
+          "callback_argument_identity": "bool"
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": ["sizeof_pointer", "alignof_pointer", "callback_argument_identity"]
+        }
+      }
+    },
+    {
+      "case_id": "ftsystem.FT_Memory.custom_allocator_runtime_events",
+      "subject": "ftsystem.FT_Memory",
+      "case": "custom_allocator_runtime_events",
+      "operation": "ftsystem.new_library_with_custom_memory",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font_bytes": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf",
+            "role": "font"
+          },
+          "allocator_harness": {
+            "kind": "ref",
+            "id": "memory/harnesses/custom-allocator-events.json",
+            "role": "allocator_model",
+            "status": "required_future_asset",
+            "requires": "C and Rust ABI harness support for FT_MemoryRec callbacks and event logging"
+          }
+        },
+        "params": {
+          "library_sequence": ["FT_New_Library", "FT_Add_Default_Modules", "FT_New_Memory_Face", "FT_Done_Face", "FT_Done_Library"],
+          "allocator_plan": [
+            {"event": "alloc", "sizes": "record"},
+            {"event": "realloc", "cur_size": "record", "new_size": "record"},
+            {"event": "free", "block_identity": "record"}
+          ],
+          "failure_plan": {"alloc_fail_after": null, "realloc_fail_after": null}
+        }
+      },
+      "classifiers": ["kind:type", "header:ftsystem", "area:memory", "operation:custom-allocator"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "library_status": "FT_Error",
+          "face_load_status": "FT_Error",
+          "allocator_events": ["alloc_realloc_free_event"],
+          "memory_pointer_identity": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": ["library_status", "face_load_status", "allocator_events", "memory_pointer_identity"]
+        },
+        "fixture_requirements": ["Add an allocator harness that can record callback order and pointer identity without treating addresses as stable scalar values."]
+      }
+    }
+  ]
+}

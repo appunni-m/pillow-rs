@@ -1,0 +1,239 @@
+  - id: freetype.FT_ENCODING_PRC
+    kind: enum_variant
+    symbol: FT_ENCODING_PRC
+    header: freetype/freetype.h
+    description: FreeType public FT_Encoding variant from freetype/freetype.h for GB2312/PRC charmaps.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header tag 'gb  ' (0x67622020).
+      # needs-input: operation=FT_Select_Charmap; fixture asset=font with a PRC/GB2312 charmap, params={encoding:FT_ENCODING_PRC, probe char codes that exist and do not exist}; output shape={FT_Error, active charmap encoding/platform/encoding ids, FT_Get_Char_Index results}; comparison=exact C error code, selected charmap identity, and glyph indexes.
+      - id: select_charmap_encoding
+        description: Selecting this encoding chooses the matching PRC charmap and preserves C error behavior when absent.
+
+  - id: freetype.FT_ENCODING_SJIS
+    kind: enum_variant
+    symbol: FT_ENCODING_SJIS
+    header: freetype/freetype.h
+    description: FreeType public FT_Encoding variant from freetype/freetype.h for Shift-JIS charmaps.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header tag 'sjis' (0x736a6973).
+      # needs-input: operation=FT_Select_Charmap; fixture asset=font with a Shift-JIS charmap, params={encoding:FT_ENCODING_SJIS, probe char codes that exist and do not exist}; output shape={FT_Error, active charmap encoding/platform/encoding ids, FT_Get_Char_Index results}; comparison=exact C error code, selected charmap identity, and glyph indexes.
+      - id: select_charmap_encoding
+        description: Selecting this encoding chooses the matching Shift-JIS charmap and preserves C error behavior when absent.
+
+  - id: freetype.FT_ENCODING_UNICODE
+    kind: enum_variant
+    symbol: FT_ENCODING_UNICODE
+    header: freetype/freetype.h
+    description: FreeType public FT_Encoding variant from freetype/freetype.h for Unicode charmaps.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header tag 'unic' (0x756e6963).
+      # needs-input: operation=FT_Select_Charmap; fixture asset=font with both UCS-2 and UCS-4 Unicode charmaps when available plus a Unicode-only baseline font, params={encoding:FT_ENCODING_UNICODE, probe char codes in BMP and non-BMP ranges}; output shape={FT_Error, active charmap encoding/platform/encoding ids, FT_Get_Char_Index results}; comparison=exact C error code, FreeType's selected Unicode charmap preference, and glyph indexes.
+      - id: select_charmap_encoding
+        description: Selecting Unicode follows FreeType's best-Unicode charmap preference and returns exact glyph indexes.
+
+  - id: freetype.FT_ENCODING_WANSUNG
+    kind: enum_variant
+    symbol: FT_ENCODING_WANSUNG
+    header: freetype/freetype.h
+    description: FreeType public FT_Encoding variant from freetype/freetype.h for Wansung charmaps.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header tag 'wans' (0x77616e73).
+      # needs-input: operation=FT_Select_Charmap; fixture asset=font with a Wansung charmap, params={encoding:FT_ENCODING_WANSUNG, probe char codes that exist and do not exist}; output shape={FT_Error, active charmap encoding/platform/encoding ids, FT_Get_Char_Index results}; comparison=exact C error code, selected charmap identity, and glyph indexes.
+      - id: select_charmap_encoding
+        description: Selecting this encoding chooses the matching Wansung charmap and preserves C error behavior when absent.
+
+  - id: freetype.FT_KERNING_DEFAULT
+    kind: enum_variant
+    symbol: FT_KERNING_DEFAULT
+    header: freetype/freetype.h
+    description: FreeType public FT_Kerning_Mode variant from freetype/freetype.h for grid-fitted kerning.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 0.
+      # needs-input: operation=FT_Get_Kerning; fixture asset=font with a legacy kern pair such as A/V at multiple ppem values, params={left glyph, right glyph, mode:FT_KERNING_DEFAULT}; output shape={FT_Error, FT_Vector{x,y}}; comparison=exact C error code and grid-fitted 26.6 kerning vector including small-ppem heuristic.
+      - id: get_kerning_mode_units
+        description: Returns FreeType's default grid-fitted 26.6 kerning vector for present and missing pairs.
+
+  - id: freetype.FT_KERNING_UNFITTED
+    kind: enum_variant
+    symbol: FT_KERNING_UNFITTED
+    header: freetype/freetype.h
+    description: FreeType public FT_Kerning_Mode variant from freetype/freetype.h for scaled un-grid-fitted kerning.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 1.
+      # needs-input: operation=FT_Get_Kerning; fixture asset=font with a legacy kern pair such as A/V at multiple ppem values, params={left glyph, right glyph, mode:FT_KERNING_UNFITTED}; output shape={FT_Error, FT_Vector{x,y}}; comparison=exact C error code and scaled un-grid-fitted 26.6 kerning vector.
+      - id: get_kerning_mode_units
+        description: Returns FreeType's scaled un-grid-fitted 26.6 kerning vector for present and missing pairs.
+
+  - id: freetype.FT_KERNING_UNSCALED
+    kind: enum_variant
+    symbol: FT_KERNING_UNSCALED
+    header: freetype/freetype.h
+    description: FreeType public FT_Kerning_Mode variant from freetype/freetype.h for design-unit kerning.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 2.
+      # needs-input: operation=FT_Get_Kerning; fixture asset=font with a legacy kern pair such as A/V, params={left glyph, right glyph, mode:FT_KERNING_UNSCALED}; output shape={FT_Error, FT_Vector{x,y}}; comparison=exact C error code and unscaled font-unit kerning vector.
+      - id: get_kerning_mode_units
+        description: Returns FreeType's unscaled font-unit kerning vector for present and missing pairs.
+
+  - id: freetype.FT_RENDER_MODE_LCD
+    kind: enum_variant
+    symbol: FT_RENDER_MODE_LCD
+    header: freetype/freetype.h
+    description: FreeType public FT_Render_Mode variant from freetype/freetype.h for horizontal LCD rendering.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 3.
+      # needs-input: operation=FT_Render_Glyph; fixture asset=outline font such as DejaVuSans.ttf, params={pixel_size:20, glyph/char:'A', load_flags:0, render_mode:FT_RENDER_MODE_LCD}; output shape={FT_Error, FT_GlyphSlotRec bitmap fields, pixel_mode, pitch, bitmap_left/top, buffer bytes/hash}; comparison=exact C error code, slot mutation, bitmap metadata, and byte buffer.
+      - id: render_glyph_mode_dispatch
+        description: Rendering with this mode produces FreeType's LCD pixel mode, placement, pitch, and byte output.
+
+  - id: freetype.FT_RENDER_MODE_LCD_V
+    kind: enum_variant
+    symbol: FT_RENDER_MODE_LCD_V
+    header: freetype/freetype.h
+    description: FreeType public FT_Render_Mode variant from freetype/freetype.h for vertical LCD rendering.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 4.
+      # needs-input: operation=FT_Render_Glyph; fixture asset=outline font such as DejaVuSans.ttf, params={pixel_size:20, glyph/char:'A', load_flags:0, render_mode:FT_RENDER_MODE_LCD_V}; output shape={FT_Error, FT_GlyphSlotRec bitmap fields, pixel_mode, pitch, bitmap_left/top, buffer bytes/hash}; comparison=exact C error code, slot mutation, bitmap metadata, and byte buffer.
+      - id: render_glyph_mode_dispatch
+        description: Rendering with this mode produces FreeType's vertical LCD pixel mode, placement, pitch, and byte output.
+
+  - id: freetype.FT_RENDER_MODE_LIGHT
+    kind: enum_variant
+    symbol: FT_RENDER_MODE_LIGHT
+    header: freetype/freetype.h
+    description: FreeType public FT_Render_Mode variant from freetype/freetype.h for light rendering.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 1.
+      - id: render_glyph_mode_dispatch
+        description: Rendering with this mode follows FreeType's light-mode behavior and bitmap output.
+
+  - id: freetype.FT_RENDER_MODE_MAX
+    kind: enum_variant
+    symbol: FT_RENDER_MODE_MAX
+    header: freetype/freetype.h
+    description: FreeType public FT_Render_Mode sentinel variant from freetype/freetype.h.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 6.
+      # needs-input: operation=FT_Render_Glyph; fixture asset=outline font such as DejaVuSans.ttf, params={pixel_size:20, glyph/char:'A', load_flags:0, render_mode:FT_RENDER_MODE_MAX}; output shape={FT_Error}; comparison=exact C error code for invalid/sentinel render mode.
+      - id: render_glyph_rejects_sentinel
+        description: Passing the sentinel as a render mode returns FreeType's exact public error.
+
+  - id: freetype.FT_RENDER_MODE_MONO
+    kind: enum_variant
+    symbol: FT_RENDER_MODE_MONO
+    header: freetype/freetype.h
+    description: FreeType public FT_Render_Mode variant from freetype/freetype.h for monochrome rendering.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 2.
+      # needs-input: operation=FT_Render_Glyph; fixture asset=outline font such as DejaVuSans.ttf, params={pixel_size:20, glyph/char:'A', load_flags:0, render_mode:FT_RENDER_MODE_MONO}; output shape={FT_Error, FT_GlyphSlotRec bitmap fields, pixel_mode, pitch, bitmap_left/top, packed buffer bytes/hash}; comparison=exact C error code, slot mutation, bitmap metadata, and packed mono byte buffer.
+      - id: render_glyph_mode_dispatch
+        description: Rendering with this mode produces FreeType's mono pixel mode, placement, pitch, and packed byte output.
+
+  - id: freetype.FT_RENDER_MODE_NORMAL
+    kind: enum_variant
+    symbol: FT_RENDER_MODE_NORMAL
+    header: freetype/freetype.h
+    description: FreeType public FT_Render_Mode variant from freetype/freetype.h for normal grayscale rendering.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 0.
+      - id: render_glyph_mode_dispatch
+        description: Rendering with this mode produces FreeType's normal grayscale bitmap output.
+      - id: maps_supported_modes
+        description: Covers the public render-mode family used by migrated render cases.
+
+  - id: freetype.FT_RENDER_MODE_SDF
+    kind: enum_variant
+    symbol: FT_RENDER_MODE_SDF
+    header: freetype/freetype.h
+    description: FreeType public FT_Render_Mode variant from freetype/freetype.h for signed-distance-field rendering.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 5.
+      # needs-input: operation=FT_Render_Glyph; fixture asset=outline font such as DejaVuSans.ttf, params={pixel_size:20, glyph/char:'A', load_flags:0, render_mode:FT_RENDER_MODE_SDF}; output shape={FT_Error, FT_GlyphSlotRec bitmap fields when supported}; comparison=exact C error code and, if supported by the pinned build, exact slot mutation, bitmap metadata, and byte buffer.
+      - id: render_glyph_mode_dispatch
+        description: Rendering with this mode matches the pinned FreeType build's SDF support or exact unsupported error.
+
+  - id: freetype.FT_SIZE_REQUEST_TYPE_BBOX
+    kind: enum_variant
+    symbol: FT_SIZE_REQUEST_TYPE_BBOX
+    header: freetype/freetype.h
+    description: FreeType public FT_Size_Request_Type variant from freetype/freetype.h using the font bounding box.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 2.
+      # needs-input: operation=FT_Request_Size; fixture asset=scalable font such as DejaVuSans.ttf, params={request:{type:FT_SIZE_REQUEST_TYPE_BBOX,width:12*64,height:16*64,horiResolution:72,vertResolution:72}}; output shape={FT_Error, FT_Size_Metrics{x_ppem,y_ppem,x_scale,y_scale,ascender,descender,height,max_advance}}; comparison=exact C error code and exact metrics fields.
+      - id: request_size_metrics
+        description: Requesting this type computes FreeType's bbox-based size metrics.
+
+  - id: freetype.FT_SIZE_REQUEST_TYPE_CELL
+    kind: enum_variant
+    symbol: FT_SIZE_REQUEST_TYPE_CELL
+    header: freetype/freetype.h
+    description: FreeType public FT_Size_Request_Type variant from freetype/freetype.h using cell dimensions.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 3.
+      # needs-input: operation=FT_Request_Size; fixture asset=scalable font such as DejaVuSans.ttf, params={request:{type:FT_SIZE_REQUEST_TYPE_CELL,width:12*64,height:16*64,horiResolution:72,vertResolution:72}}; output shape={FT_Error, FT_Size_Metrics{x_ppem,y_ppem,x_scale,y_scale,ascender,descender,height,max_advance}}; comparison=exact C error code and exact metrics fields.
+      - id: request_size_metrics
+        description: Requesting this type computes FreeType's cell-based size metrics.
+
+  - id: freetype.FT_SIZE_REQUEST_TYPE_MAX
+    kind: enum_variant
+    symbol: FT_SIZE_REQUEST_TYPE_MAX
+    header: freetype/freetype.h
+    description: FreeType public FT_Size_Request_Type sentinel variant from freetype/freetype.h.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 5.
+      # needs-input: operation=FT_Request_Size; fixture asset=scalable font such as DejaVuSans.ttf, params={request:{type:FT_SIZE_REQUEST_TYPE_MAX,width:12*64,height:16*64,horiResolution:72,vertResolution:72}}; output shape={FT_Error}; comparison=exact C error code for invalid/sentinel request type.
+      - id: request_size_rejects_sentinel
+        description: Passing the sentinel as a size request type returns FreeType's exact public error.
+
+  - id: freetype.FT_SIZE_REQUEST_TYPE_NOMINAL
+    kind: enum_variant
+    symbol: FT_SIZE_REQUEST_TYPE_NOMINAL
+    header: freetype/freetype.h
+    description: FreeType public FT_Size_Request_Type variant from freetype/freetype.h using nominal EM dimensions.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 0.
+      # needs-input: operation=FT_Request_Size; fixture asset=scalable font such as DejaVuSans.ttf, params={request:{type:FT_SIZE_REQUEST_TYPE_NOMINAL,width:12*64,height:16*64,horiResolution:72,vertResolution:72}}; output shape={FT_Error, FT_Size_Metrics{x_ppem,y_ppem,x_scale,y_scale,ascender,descender,height,max_advance}}; comparison=exact C error code and exact metrics fields.
+      - id: request_size_metrics
+        description: Requesting this type computes FreeType's nominal EM size metrics.
+
+  - id: freetype.FT_SIZE_REQUEST_TYPE_REAL_DIM
+    kind: enum_variant
+    symbol: FT_SIZE_REQUEST_TYPE_REAL_DIM
+    header: freetype/freetype.h
+    description: FreeType public FT_Size_Request_Type variant from freetype/freetype.h using real ascender-to-descender dimensions.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 1.
+      # needs-input: operation=FT_Request_Size; fixture asset=scalable font such as DejaVuSans.ttf, params={request:{type:FT_SIZE_REQUEST_TYPE_REAL_DIM,width:12*64,height:16*64,horiResolution:72,vertResolution:72}}; output shape={FT_Error, FT_Size_Metrics{x_ppem,y_ppem,x_scale,y_scale,ascender,descender,height,max_advance}}; comparison=exact C error code and exact metrics fields.
+      - id: request_size_metrics
+        description: Requesting this type computes FreeType's real-dimensions size metrics.
+
+  - id: freetype.FT_SIZE_REQUEST_TYPE_SCALES
+    kind: enum_variant
+    symbol: FT_SIZE_REQUEST_TYPE_SCALES
+    header: freetype/freetype.h
+    description: FreeType public FT_Size_Request_Type variant from freetype/freetype.h using explicit scale values.
+    cases:
+      - id: value_matches_header
+        description: Value matches the pinned C public header value 4.
+      # needs-input: operation=FT_Request_Size; fixture asset=scalable font such as DejaVuSans.ttf, params={request:{type:FT_SIZE_REQUEST_TYPE_SCALES,width:0x10000,height:0x18000,horiResolution:0,vertResolution:0}}; output shape={FT_Error, FT_Size_Metrics{x_ppem,y_ppem,x_scale,y_scale,ascender,descender,height,max_advance}}; comparison=exact C error code and exact metrics fields.
+      - id: request_size_metrics
+        description: Requesting this type applies explicit x/y scales to FreeType size metrics.

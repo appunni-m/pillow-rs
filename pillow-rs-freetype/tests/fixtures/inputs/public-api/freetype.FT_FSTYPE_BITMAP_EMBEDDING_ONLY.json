@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_FSTYPE_BITMAP_EMBEDDING_ONLY",
+  "manifest_cases": [
+    "value_matches_header"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_FSTYPE_BITMAP_EMBEDDING_ONLY.value_matches_header",
+      "subject": "freetype.FT_FSTYPE_BITMAP_EMBEDDING_ONLY",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_FSTYPE_BITMAP_EMBEDDING_ONLY",
+          "include": "freetype/freetype.h"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:fstype"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "FT_UShort macro bit flag",
+          "source": "0x0200"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_FSTYPE_BITMAP_EMBEDDING_ONLY.get_fstype_bitmap_embedding_only",
+      "subject": "freetype.FT_FSTYPE_BITMAP_EMBEDDING_ONLY",
+      "case": "value_matches_header",
+      "covers_manifest_cases": [
+        "value_matches_header"
+      ],
+      "operation": "freetype.get_fstype_flags",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/license/fstype-bitmap-embedding-only.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "function": "FT_Get_FSType_Flags",
+          "required_bits": [
+            "FT_FSTYPE_BITMAP_EMBEDDING_ONLY"
+          ],
+          "also_probe_os2_fsType": true
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "runtime:license",
+        "asset:missing"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "fstype_flags": "FT_UShort",
+          "os2_fsType": "FT_UShort",
+          "bit_set": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "fstype_flags",
+            "os2_fsType",
+            "bit_set"
+          ]
+        },
+        "fixture_requirements": [
+          "TrueType/OpenType font whose OS/2 fsType includes 0x0200",
+          "Prefer a fixture with bitmap strikes so license and bitmap behavior are both meaningful"
+        ]
+      }
+    }
+  ]
+}

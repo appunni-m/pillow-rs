@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "subject": "ftimage.FT_Raster_New_Func",
+  "manifest_cases": [
+    "macro_alias_matches_typedef",
+    "callback_abi_matches_c",
+    "renderer_lifecycle_calls_new",
+    "renderer_new_error_propagates"
+  ],
+  "cases": [
+    {
+      "case_id": "ftimage.FT_Raster_New_Func.macro_alias_matches_typedef",
+      "subject": "ftimage.FT_Raster_New_Func",
+      "case": "macro_alias_matches_typedef",
+      "operation": "ftimage.macro_alias",
+      "schema": "api_abi_type",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"include": "<freetype/ftimage.h>", "macro": "FT_Raster_New_Func", "expands_to": "FT_Raster_NewFunc"}},
+      "classifiers": ["kind:macro", "header:ftimage", "area:raster"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"macro": "FT_Raster_New_Func", "typedef": "FT_Raster_NewFunc"},
+        "compare": {"mode": "exact", "paths": ["macro", "expands_to", "include"]},
+        "source_refs": ["freetype/include/freetype/ftimage.h:1086-1113"]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Raster_New_Func.callback_abi_matches_c",
+      "subject": "ftimage.FT_Raster_New_Func",
+      "case": "callback_abi_matches_c",
+      "operation": "ftimage.callback_abi",
+      "schema": "api_abi_type",
+      "expect_error": false,
+      "inputs": {"assets": {}, "params": {"typedef": "FT_Raster_NewFunc", "return_type": "int", "arguments": [{"name": "memory", "type": "void*"}, {"name": "raster", "type": "FT_Raster*"}]}},
+      "classifiers": ["kind:callback", "header:ftimage", "abi:function-pointer"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"return_type": "int", "argument_count": 2, "arguments": "memory handle and output FT_Raster pointer"},
+        "compare": {"mode": "layout", "paths": ["return_type", "arguments[*].type", "arguments[*].position"]},
+        "source_refs": ["freetype/include/freetype/ftimage.h:1086-1112"]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Raster_New_Func.renderer_lifecycle_calls_new",
+      "subject": "ftimage.FT_Raster_New_Func",
+      "case": "renderer_lifecycle_calls_new",
+      "operation": "ftimage.custom_renderer_lifecycle",
+      "schema": "callback_event_stream",
+      "expect_error": false,
+      "inputs": {"assets": {"renderer_module": {"kind": "ref", "id": "modules/raster/callback-logging-renderer.json"}}, "params": {"raster_new_result": 0, "raster_handle": "sentinel_non_null", "install_renderer": true}},
+      "classifiers": ["kind:callback", "header:ftimage", "path:lifecycle"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"status": "FT_Error", "events": "raster_new then raster_reset", "raster_output": "FT_Raster handle identity"},
+        "compare": {"mode": "identity_class", "paths": ["status", "events[*].kind", "events[*].memory_nullness", "events[*].raster_identity"]},
+        "fixture_requirements": ["Renderer module fixture must expose configurable raster_new return and raster handle identity."]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Raster_New_Func.renderer_new_error_propagates",
+      "subject": "ftimage.FT_Raster_New_Func",
+      "case": "renderer_new_error_propagates",
+      "operation": "ftimage.custom_renderer_lifecycle",
+      "schema": "callback_event_stream",
+      "expect_error": true,
+      "inputs": {"assets": {"renderer_module": {"kind": "ref", "id": "modules/raster/callback-logging-renderer.json"}}, "params": {"raster_new_result": "FT_Err_Out_Of_Memory", "install_renderer": true}},
+      "classifiers": ["kind:callback", "header:ftimage", "path:error"],
+      "expectation": {
+        "status": "error",
+        "output_shape": {"status": "FT_Error", "module_installed": false, "events": "raster_new only"},
+        "compare": {"mode": "exact_error", "paths": ["status", "module_installed", "events[*].kind"]},
+        "error": "FT_Err_Out_Of_Memory"
+      }
+    }
+  ]
+}

@@ -1,0 +1,360 @@
+{
+  "version": 1,
+  "subject": "ftglyph.FT_Glyph_Transform",
+  "manifest_cases": [
+    "success_outline_matrix_delta",
+    "success_outline_delta_only_or_matrix_only",
+    "success_svg_transform_accumulates",
+    "error_null_or_bad_glyph",
+    "error_non_scalable_bitmap"
+  ],
+  "cases": [
+    {
+      "case_id": "ftglyph.FT_Glyph_Transform.success_outline_matrix_delta",
+      "subject": "ftglyph.FT_Glyph_Transform",
+      "case": "success_outline_matrix_delta",
+      "operation": "ftglyph.glyph_transform",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "source_setup": {
+            "glyph_indices": [
+              36,
+              57
+            ],
+            "pixel_size": 20,
+            "load_flags": [
+              "FT_LOAD_NO_HINTING"
+            ]
+          },
+          "transforms": [
+            {
+              "matrix": {
+                "xx": 65536,
+                "xy": 16384,
+                "yx": 0,
+                "yy": 65536
+              },
+              "delta": {
+                "x": 64,
+                "y": -32
+              }
+            },
+            {
+              "matrix": {
+                "xx": 46341,
+                "xy": -46341,
+                "yx": 46341,
+                "yy": 46341
+              },
+              "delta": {
+                "x": -17,
+                "y": 29
+              }
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "outline": "mutated FT_Outline points",
+          "advance": "root advance transformed by matrix only"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].outline.points",
+            "rows[*].root.advance",
+            "rows[*].cbox"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftglyph.c:209-224",
+          "freetype/src/base/ftglyph.c:672-700"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only",
+      "subject": "ftglyph.FT_Glyph_Transform",
+      "case": "success_outline_delta_only_or_matrix_only",
+      "operation": "ftglyph.glyph_transform",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "source_setup": {
+            "glyph_index": 36,
+            "pixel_size": 20,
+            "load_flags": [
+              "FT_LOAD_NO_HINTING"
+            ]
+          },
+          "transforms": [
+            {
+              "matrix": null,
+              "delta": {
+                "x": 64,
+                "y": -64
+              },
+              "advance_expected": "unchanged"
+            },
+            {
+              "matrix": {
+                "xx": 131072,
+                "xy": 0,
+                "yx": 0,
+                "yy": 32768
+              },
+              "delta": null,
+              "advance_expected": "matrix_transformed"
+            },
+            {
+              "matrix": null,
+              "delta": null,
+              "advance_expected": "unchanged"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "outline": "mutated only by non-null arguments",
+          "advance": "transformed only when matrix is non-null"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].outline.points",
+            "rows[*].root.advance",
+            "rows[*].mutation_class"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftglyph.c:209-224",
+          "freetype/src/base/ftglyph.c:672-700"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_Transform.success_svg_transform_accumulates",
+      "subject": "ftglyph.FT_Glyph_Transform",
+      "case": "success_svg_transform_accumulates",
+      "operation": "ftglyph.glyph_transform",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "svg_font": {
+            "kind": "ref",
+            "id": "fonts/svg/otsvg-glyph.ttf"
+          }
+        },
+        "params": {
+          "build_feature": "FT_CONFIG_OPTION_SVG",
+          "source_setup": "FT_Load_Glyph with FT_LOAD_COLOR then FT_Get_Glyph",
+          "glyph_index": "svg_document_glyph",
+          "transforms": [
+            {
+              "matrix": {
+                "xx": 65536,
+                "xy": 16384,
+                "yx": 0,
+                "yy": 65536
+              },
+              "delta": {
+                "x": 64,
+                "y": -32
+              }
+            },
+            {
+              "matrix": null,
+              "delta": null
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "status": "FT_Error or unsupported classification",
+          "transform": "stored SVG transform composed with supplied matrix",
+          "delta": "matrix-applied previous delta plus supplied delta",
+          "advance": "root advance transformed by non-null matrix"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "build_feature_enabled",
+            "svg.transform",
+            "svg.delta",
+            "root.advance"
+          ]
+        },
+        "fixture_requirements": [
+          "fonts/svg/otsvg-glyph.ttf must contain a valid OT-SVG glyph"
+        ],
+        "source_refs": [
+          "freetype/src/base/ftglyph.c:400-442",
+          "freetype/src/base/ftglyph.c:672-700"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_Transform.error_null_or_bad_glyph",
+      "subject": "ftglyph.FT_Glyph_Transform",
+      "case": "error_null_or_bad_glyph",
+      "operation": "ftglyph.glyph_transform",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "glyph_facade": {
+            "kind": "ref",
+            "id": "facades/glyph/null-and-bad-class.json"
+          }
+        },
+        "params": {
+          "rows": [
+            {
+              "glyph": null
+            },
+            {
+              "glyph": "glyph_with_null_clazz"
+            }
+          ],
+          "matrix": {
+            "xx": 65536,
+            "xy": 0,
+            "yx": 0,
+            "yy": 65536
+          },
+          "delta": {
+            "x": 1,
+            "y": 2
+          },
+          "mutation_expected": "none"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "mutation": "none"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "rows[*].status",
+            "rows[*].mutation"
+          ]
+        },
+        "error": "FT_Err_Invalid_Argument",
+        "fixture_requirements": [
+          "facades/glyph/null-and-bad-class.json must model a glyph with null clazz"
+        ],
+        "source_refs": [
+          "freetype/src/base/ftglyph.c:672-680"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_Transform.error_non_scalable_bitmap",
+      "subject": "ftglyph.FT_Glyph_Transform",
+      "case": "error_non_scalable_bitmap",
+      "operation": "ftglyph.glyph_transform",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "source_setup": "FT_Render_Glyph then FT_Get_Glyph to create FT_BitmapGlyph",
+          "glyph_index": 36,
+          "pixel_size": 20,
+          "matrix": {
+            "xx": 65536,
+            "xy": 16384,
+            "yx": 0,
+            "yy": 65536
+          },
+          "delta": {
+            "x": 64,
+            "y": -64
+          },
+          "preservation_probe": "bitmap fields and advance unchanged"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "status": "FT_Error",
+          "bitmap": "unchanged",
+          "advance": "unchanged"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "bitmap_before",
+            "bitmap_after",
+            "advance_before",
+            "advance_after"
+          ]
+        },
+        "error": "FT_Err_Invalid_Glyph_Format",
+        "source_refs": [
+          "freetype/src/base/ftglyph.c:686-699",
+          "freetype/src/base/ftglyph.c:117-129"
+        ]
+      }
+    }
+  ]
+}

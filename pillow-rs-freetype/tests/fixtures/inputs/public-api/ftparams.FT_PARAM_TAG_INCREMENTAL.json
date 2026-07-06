@@ -1,0 +1,185 @@
+{
+  "version": 1,
+  "subject": "ftparams.FT_PARAM_TAG_INCREMENTAL",
+  "manifest_cases": [
+    "value_matches_header",
+    "incremental_interface_used_for_glyph_load",
+    "missing_or_null_interface_matches_c"
+  ],
+  "cases": [
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_INCREMENTAL.value_matches_header",
+      "subject": "ftparams.FT_PARAM_TAG_INCREMENTAL",
+      "case": "value_matches_header",
+      "operation": "abi.constant_value",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_PARAM_TAG_INCREMENTAL",
+          "include": "<freetype/ftparams.h>",
+          "ctype": "FT_ULong",
+          "macro": "FT_MAKE_TAG('i','n','c','r')",
+          "value_hex": "0x696e6372",
+          "value_decimal": 1768842098,
+          "use_site": "FT_Open_Face stores FT_Incremental_Interface in face->internal when FT_CONFIG_OPTION_INCREMENTAL is enabled",
+          "source_refs": [
+            "freetype/include/freetype/ftparams.h",
+            "freetype/src/base/ftobjs.c"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftparams",
+        "area:incremental"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "ctype": "FT_ULong",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_INCREMENTAL.incremental_interface_used_for_glyph_load",
+      "subject": "ftparams.FT_PARAM_TAG_INCREMENTAL",
+      "case": "incremental_interface_used_for_glyph_load",
+      "operation": "freetype.open_face_incremental",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/incremental/minimal-tt-incremental.ttf",
+            "status": "required_future_asset",
+            "requires": "Font usable by the incremental callback fixture"
+          },
+          "callbacks": {
+            "kind": "ref",
+            "role": "ffi_callback_fixture",
+            "path": "input/callbacks/incremental/basic-glyph-source.json",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "parameters": [
+            {
+              "tag": "FT_PARAM_TAG_INCREMENTAL",
+              "data": "FT_Incremental_Interface"
+            }
+          ],
+          "glyph_index": 1,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "build_option": "FT_CONFIG_OPTION_INCREMENTAL"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftparams",
+        "area:incremental",
+        "build-dependent:incremental"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "open_error": "FT_Error",
+          "load_error": "FT_Error",
+          "callback_event_log": "ordered array",
+          "glyph_slot": "public metrics and outline or bitmap fields"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "open_error",
+            "load_error",
+            "callback_event_log",
+            "glyph_slot"
+          ]
+        },
+        "fixture_requirements": [
+          "Add reusable incremental callback fixture; do not embed glyph data in this JSON."
+        ]
+      }
+    },
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c",
+      "subject": "ftparams.FT_PARAM_TAG_INCREMENTAL",
+      "case": "missing_or_null_interface_matches_c",
+      "operation": "freetype.open_face_incremental",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "variants": [
+            {
+              "label": "parameter_absent",
+              "parameters": []
+            },
+            {
+              "label": "parameter_data_null",
+              "parameters": [
+                {
+                  "tag": "FT_PARAM_TAG_INCREMENTAL",
+                  "data": "NULL"
+                }
+              ]
+            }
+          ],
+          "glyph_index": 1,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftparams",
+        "area:incremental"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "open_error": "FT_Error",
+          "load_error": "FT_Error",
+          "callback_event_log": "empty or unavailable",
+          "glyph_slot": "public fields"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "open_error",
+            "load_error",
+            "callback_event_log",
+            "glyph_slot"
+          ]
+        }
+      }
+    }
+  ]
+}

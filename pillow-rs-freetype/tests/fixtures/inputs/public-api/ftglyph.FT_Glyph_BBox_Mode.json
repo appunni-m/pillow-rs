@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "subject": "ftglyph.FT_Glyph_BBox_Mode",
+  "manifest_cases": [
+    "enum_variants_match_header",
+    "deprecated_lowercase_aliases_match"
+  ],
+  "cases": [
+    {
+      "case_id": "ftglyph.FT_Glyph_BBox_Mode.enum_variants_match_header",
+      "subject": "ftglyph.FT_Glyph_BBox_Mode",
+      "case": "enum_variants_match_header",
+      "operation": "ftglyph.glyph_bbox_mode.enum",
+      "schema": "api_abi_enum",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftglyph.h"
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "ctype": "FT_Glyph_BBox_Mode",
+          "ordered_variants": [
+            "FT_GLYPH_BBOX_UNSCALED",
+            "FT_GLYPH_BBOX_SUBPIXELS",
+            "FT_GLYPH_BBOX_GRIDFIT",
+            "FT_GLYPH_BBOX_TRUNCATE",
+            "FT_GLYPH_BBOX_PIXELS"
+          ],
+          "values": {
+            "FT_GLYPH_BBOX_UNSCALED": 0,
+            "FT_GLYPH_BBOX_SUBPIXELS": 0,
+            "FT_GLYPH_BBOX_GRIDFIT": 1,
+            "FT_GLYPH_BBOX_TRUNCATE": 2,
+            "FT_GLYPH_BBOX_PIXELS": 3
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "ctype",
+            "ordered_variants",
+            "values"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_BBox_Mode.deprecated_lowercase_aliases_match",
+      "subject": "ftglyph.FT_Glyph_BBox_Mode",
+      "case": "deprecated_lowercase_aliases_match",
+      "operation": "ftglyph.glyph_bbox_mode.aliases",
+      "schema": "api_abi_macro_aliases",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftglyph.h"
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "aliases": {
+            "ft_glyph_bbox_unscaled": "FT_GLYPH_BBOX_UNSCALED",
+            "ft_glyph_bbox_subpixels": "FT_GLYPH_BBOX_SUBPIXELS",
+            "ft_glyph_bbox_gridfit": "FT_GLYPH_BBOX_GRIDFIT",
+            "ft_glyph_bbox_truncate": "FT_GLYPH_BBOX_TRUNCATE",
+            "ft_glyph_bbox_pixels": "FT_GLYPH_BBOX_PIXELS"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "aliases[*].expanded_value"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    }
+  ]
+}

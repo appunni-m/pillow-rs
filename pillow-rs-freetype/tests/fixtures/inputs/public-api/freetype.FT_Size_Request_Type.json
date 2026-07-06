@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Size_Request_Type",
+  "manifest_cases": [
+    "enum_variants_match_header"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Size_Request_Type.enum_variants_match_header",
+      "subject": "freetype.FT_Size_Request_Type",
+      "case": "enum_variants_match_header",
+      "operation": "abi.enum_variants",
+      "schema": "abi_enum",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/freetype.h",
+          "enum": "FT_Size_Request_Type",
+          "expected_variants": [
+            "FT_SIZE_REQUEST_TYPE_NOMINAL",
+            "FT_SIZE_REQUEST_TYPE_REAL_DIM",
+            "FT_SIZE_REQUEST_TYPE_BBOX",
+            "FT_SIZE_REQUEST_TYPE_CELL",
+            "FT_SIZE_REQUEST_TYPE_SCALES",
+            "FT_SIZE_REQUEST_TYPE_MAX"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:freetype",
+        "public-api-slice:0000-0019"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "enum": "string",
+          "variants": "ordered array<{name,value}>",
+          "aliases": "array<{name,alias_of,value}>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "enum",
+            "variants[*].name",
+            "variants[*].value",
+            "aliases[*].name",
+            "aliases[*].alias_of",
+            "aliases[*].value"
+          ]
+        },
+        "source": {
+          "header": "pillow-rs-freetype/freetype/include/freetype/freetype.h"
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Size_Request_Type.representative_runtime_observation",
+      "subject": "freetype.FT_Size_Request_Type",
+      "case": "representative_runtime_observation",
+      "operation": "freetype.request_size",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "requests": [
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_NOMINAL",
+              "width": 0,
+              "height": 1024,
+              "horiResolution": 72,
+              "vertResolution": 72
+            },
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_REAL_DIM",
+              "width": 0,
+              "height": 1024,
+              "horiResolution": 72,
+              "vertResolution": 72
+            },
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_BBOX",
+              "width": 0,
+              "height": 1024,
+              "horiResolution": 72,
+              "vertResolution": 72
+            },
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_CELL",
+              "width": 1024,
+              "height": 1024,
+              "horiResolution": 72,
+              "vertResolution": 72
+            },
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_SCALES",
+              "width": 65536,
+              "height": 65536,
+              "horiResolution": 0,
+              "vertResolution": 0
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:freetype",
+        "public-api-slice:0000-0019"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "size_metrics": "array<{type,x_ppem,y_ppem,x_scale,y_scale,ascender,descender,height,max_advance}>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "size_metrics[*].type",
+            "size_metrics[*].x_ppem",
+            "size_metrics[*].y_ppem",
+            "size_metrics[*].x_scale",
+            "size_metrics[*].y_scale",
+            "size_metrics[*].ascender",
+            "size_metrics[*].descender",
+            "size_metrics[*].height",
+            "size_metrics[*].max_advance"
+          ]
+        },
+        "fixture_requirements": [
+          "Uses an existing deterministic font asset; runtime oracle must generate C FreeType output and compare C vs Rust FFI vs C FFI vs Wasm FFI."
+        ]
+      },
+      "covers_manifest_cases": [
+        "enum_variants_match_header"
+      ]
+    }
+  ]
+}

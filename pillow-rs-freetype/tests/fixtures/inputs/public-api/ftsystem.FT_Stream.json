@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "subject": "ftsystem.FT_Stream",
+  "manifest_cases": [
+    "alias_defined",
+    "pointer_abi_contract",
+    "external_stream_runtime_contract"
+  ],
+  "metadata": {
+    "abi": {
+      "kind": "type",
+      "header": "freetype/ftsystem.h",
+      "symbol": "FT_Stream",
+      "c_decl": "typedef struct FT_StreamRec_* FT_Stream",
+      "pointee": "FT_StreamRec_"
+    },
+    "source_refs": [
+      "freetype/include/freetype/ftsystem.h",
+      "freetype/src/base/ftobjs.c:FT_Open_Face",
+      "freetype/src/base/ftstream.c"
+    ],
+    "source_behavior": "FT_Stream is an opaque pointer to the public FT_StreamRec fields. With FT_OPEN_STREAM, the caller supplies the stream and FreeType reads through its callbacks while preserving external-stream ownership rules."
+  },
+  "cases": [
+    {
+      "case_id": "ftsystem.FT_Stream.alias_defined",
+      "subject": "ftsystem.FT_Stream",
+      "case": "alias_defined",
+      "operation": "abi.type_alias",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftsystem.h",
+          "symbol": "FT_Stream",
+          "expected_decl": "struct FT_StreamRec_*",
+          "probe": ["import_compiles", "is_pointer", "pointee_tag"]
+        }
+      },
+      "classifiers": ["kind:type", "header:ftsystem", "area:stream", "abi:opaque-pointer"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "import_compiles": "bool",
+          "is_pointer": "bool",
+          "pointee_tag": "string"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": ["import_compiles", "is_pointer", "pointee_tag"]
+        }
+      }
+    },
+    {
+      "case_id": "ftsystem.FT_Stream.pointer_abi_contract",
+      "subject": "ftsystem.FT_Stream",
+      "case": "pointer_abi_contract",
+      "operation": "abi.pointer_contract",
+      "schema": "abi_layout",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftsystem.h",
+          "symbol": "FT_Stream",
+          "pointee_record": "FT_StreamRec",
+          "probe": ["sizeof_pointer", "alignof_pointer", "field_access_via_pointer"]
+        }
+      },
+      "classifiers": ["kind:type", "header:ftsystem", "area:stream", "abi:pointer"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof_pointer": "usize",
+          "alignof_pointer": "usize",
+          "field_access_via_pointer": "bool"
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": ["sizeof_pointer", "alignof_pointer", "field_access_via_pointer"]
+        }
+      }
+    },
+    {
+      "case_id": "ftsystem.FT_Stream.external_stream_runtime_contract",
+      "subject": "ftsystem.FT_Stream",
+      "case": "external_stream_runtime_contract",
+      "operation": "ftsystem.open_face_with_external_stream",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font_bytes": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf",
+            "role": "font"
+          },
+          "malformed_stream_harness": {
+            "kind": "ref",
+            "id": "streams/harnesses/external-stream-errors.json",
+            "role": "stream_model",
+            "status": "required_future_asset",
+            "requires": "callback stream harness that can return short reads and seek failures"
+          }
+        },
+        "params": {
+          "open": "FT_Open_Face",
+          "open_flags": ["FT_OPEN_STREAM"],
+          "face_index": 0,
+          "stream_ownership": "caller_owned",
+          "scenarios": [
+            {"name": "valid_stream", "read_plan": "font_bytes"},
+            {"name": "seek_failure", "read_plan": "malformed_stream_harness:seek-fails"},
+            {"name": "short_header", "read_plan": "malformed_stream_harness:short-header"}
+          ],
+          "close_callback_present": true
+        }
+      },
+      "classifiers": ["kind:type", "header:ftsystem", "area:stream", "operation:external-stream"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "results": [
+            {
+              "face_load_status": "FT_Error",
+              "stream_pointer_identity": "bool",
+              "callback_events": ["read_or_close_event"],
+              "close_called": "bool"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": ["results[*].face_load_status", "results[*].stream_pointer_identity", "results[*].callback_events", "results[*].close_called"]
+        },
+        "fixture_requirements": ["Add a reusable external stream harness that can model valid reads, seek failures, short reads, and close callback ownership observations."]
+      }
+    }
+  ]
+}

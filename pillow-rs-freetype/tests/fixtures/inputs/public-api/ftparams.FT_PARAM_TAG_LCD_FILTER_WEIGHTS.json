@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "subject": "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS",
+  "manifest_cases": [
+    "value_matches_header",
+    "face_property_ignored",
+    "malformed_data_does_not_read_as_weights"
+  ],
+  "cases": [
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.value_matches_header",
+      "subject": "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS",
+      "case": "value_matches_header",
+      "operation": "abi.constant_value",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_PARAM_TAG_LCD_FILTER_WEIGHTS",
+          "include": "<freetype/ftparams.h>",
+          "ctype": "FT_ULong",
+          "macro": "FT_MAKE_TAG('l','c','d','f')",
+          "value_hex": "0x6c636466",
+          "value_decimal": 1818453094,
+          "use_site": "FT_Face_Properties",
+          "source_refs": [
+            "freetype/include/freetype/ftparams.h",
+            "freetype/src/base/ftobjs.c"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftparams",
+        "area:face-properties"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "ctype": "FT_ULong",
+          "value": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.face_property_ignored",
+      "subject": "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS",
+      "case": "face_property_ignored",
+      "operation": "freetype.face_properties_then_render",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "property": {
+            "tag": "FT_PARAM_TAG_LCD_FILTER_WEIGHTS",
+            "data": [
+              0,
+              85,
+              86,
+              85,
+              0
+            ]
+          },
+          "post_call_probe": {
+            "glyph_index": 36,
+            "size_ppem": 20,
+            "render_modes": [
+              "FT_RENDER_MODE_LCD",
+              "FT_RENDER_MODE_LCD_V"
+            ]
+          },
+          "c_behavior": "FT_Face_Properties returns Unimplemented_Feature for this tag before reading weights"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftparams",
+        "area:face-properties"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "property_error": "FT_Error",
+          "post_call_bitmap": "FT_Bitmap descriptor and bytes/hash from unchanged face state"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "property_error",
+            "post_call_bitmap"
+          ]
+        },
+        "error": "Unimplemented_Feature"
+      }
+    },
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.malformed_data_does_not_read_as_weights",
+      "subject": "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS",
+      "case": "malformed_data_does_not_read_as_weights",
+      "operation": "freetype.face_properties",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "properties": [
+            {
+              "tag": "FT_PARAM_TAG_LCD_FILTER_WEIGHTS",
+              "data": "NULL"
+            },
+            {
+              "tag": "FT_PARAM_TAG_LCD_FILTER_WEIGHTS",
+              "data_pointer_class": "misaligned_or_short_buffer"
+            }
+          ],
+          "c_behavior": "The C branch returns Unimplemented_Feature without dereferencing properties->data"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftparams",
+        "area:face-properties"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "face_state": "unchanged"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "return",
+            "face_state"
+          ]
+        },
+        "error": "Unimplemented_Feature"
+      }
+    }
+  ]
+}

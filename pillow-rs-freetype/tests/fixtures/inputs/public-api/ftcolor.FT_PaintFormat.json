@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "subject": "ftcolor.FT_PaintFormat",
+  "manifest_cases": [
+    "enum_variants_match_header",
+    "paint_union_shape_runtime"
+  ],
+  "cases": [
+    {
+      "case_id": "ftcolor.FT_PaintFormat.enum_variants_match_header",
+      "subject": "ftcolor.FT_PaintFormat",
+      "case": "enum_variants_match_header",
+      "operation": "ftcolor.enum_values",
+      "schema": "enum_value_set",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftcolor.h>",
+          "enum": "FT_PaintFormat",
+          "expected_values": {
+            "COLR_LAYERS": 1,
+            "SOLID": 2,
+            "LINEAR_GRADIENT": 4,
+            "RADIAL_GRADIENT": 6,
+            "SWEEP_GRADIENT": 8,
+            "GLYPH": 10,
+            "COLR_GLYPH": 11,
+            "TRANSFORM": 12,
+            "TRANSLATE": 14,
+            "SCALE": 16,
+            "ROTATE": 24,
+            "SKEW": 28,
+            "COMPOSITE": 32,
+            "MAX": 33,
+            "UNSUPPORTED": 255
+          }
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:ftcolor",
+        "area:colr-v1",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "enum": "FT_PaintFormat",
+          "sparse_values": true,
+          "unsupported_value": 255
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "enum.values",
+            "enum.order",
+            "import"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_PaintFormat.paint_union_shape_runtime",
+      "subject": "ftcolor.FT_PaintFormat",
+      "case": "paint_union_shape_runtime",
+      "operation": "ftcolor.traverse_paint_graph",
+      "schema": "paint_graph",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr_v1_all_paint_formats.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "base_glyphs": "all_supported_static_colr_v1_paint_formats",
+          "include_unsupported_control_if_constructible": true,
+          "read_layers_and_color_stops": true
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:ftcolor",
+        "area:colr-v1",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_COLR_Paint",
+          "discriminator": "format",
+          "union_members": [
+            "colr_layers",
+            "solid",
+            "linear_gradient",
+            "radial_gradient",
+            "sweep_gradient",
+            "glyph",
+            "colr_glyph",
+            "transform",
+            "translate",
+            "scale",
+            "rotate",
+            "skew",
+            "composite"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "paint_nodes[].format",
+            "paint_nodes[].active_union_member",
+            "paint_nodes[].payload",
+            "iterator_counts",
+            "child_refs",
+            "unsupported_classification"
+          ]
+        },
+        "fixture_requirements": [
+          "COLR v1 fixture covering each non-variable supported paint format and one malformed/unsupported paint format control if C accepts the face"
+        ]
+      }
+    }
+  ]
+}

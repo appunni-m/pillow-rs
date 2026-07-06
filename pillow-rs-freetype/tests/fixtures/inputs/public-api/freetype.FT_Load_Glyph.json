@@ -1,0 +1,325 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_Load_Glyph",
+  "manifest_cases": [
+    "default_load",
+    "matrix_load",
+    "render_and_target_modes",
+    "no_scale_no_hinting_and_vertical_flags",
+    "error_out_of_range_null_face_or_invalid_flags"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_Load_Glyph.default_load",
+      "subject": "freetype.FT_Load_Glyph",
+      "case": "default_load",
+      "operation": "freetype.load_glyph",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "size": 20,
+          "glyph_index": 36,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-load",
+        "font_variability:input/fonts"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "slot": "FT_GlyphSlotRec outline metrics advance format"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "slot.metrics",
+            "slot.advance",
+            "slot.format",
+            "slot.outline"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Load_Glyph.matrix_load",
+      "subject": "freetype.FT_Load_Glyph",
+      "case": "matrix_load",
+      "operation": "freetype.load_glyph_matrix",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font_folder": {
+            "kind": "file",
+            "role": "font_folder",
+            "path": "input/fonts"
+          }
+        },
+        "params": {
+          "sizes": [
+            10,
+            20,
+            32
+          ],
+          "glyph_indices": [
+            0,
+            1,
+            36,
+            57
+          ],
+          "load_flags": [
+            0,
+            4,
+            2,
+            8,
+            16,
+            32,
+            64,
+            8192,
+            131072
+          ],
+          "target_modes": [
+            "NORMAL",
+            "LIGHT",
+            "MONO",
+            "LCD",
+            "LCD_V"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-load",
+        "font_variability:input/fonts"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "rows": "per-font glyph load status and slot snapshot"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[].status",
+            "rows[].slot"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Load_Glyph.render_and_target_modes",
+      "subject": "freetype.FT_Load_Glyph",
+      "case": "render_and_target_modes",
+      "operation": "freetype.load_glyph",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "size": 20,
+          "glyph_index": 36,
+          "load_flag_sets": [
+            [
+              "FT_LOAD_RENDER"
+            ],
+            [
+              "FT_LOAD_RENDER",
+              "FT_LOAD_TARGET_MONO"
+            ],
+            [
+              "FT_LOAD_RENDER",
+              "FT_LOAD_TARGET_LCD"
+            ],
+            [
+              "FT_LOAD_RENDER",
+              "FT_LOAD_TARGET_LCD_V"
+            ]
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-load"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "bitmap": "rows width pitch pixel_mode left top bytes"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "slot.bitmap",
+            "slot.bitmap_bytes",
+            "slot.bitmap_left",
+            "slot.bitmap_top"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Load_Glyph.no_scale_no_hinting_and_vertical_flags",
+      "subject": "freetype.FT_Load_Glyph",
+      "case": "no_scale_no_hinting_and_vertical_flags",
+      "operation": "freetype.load_glyph",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "vertical_font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/vertical/vertical-metrics.ttf",
+            "status": "required_future_asset",
+            "requires": "font with vertical metrics for VERTICAL_LAYOUT comparison"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "size": 20,
+          "glyph_index": 36,
+          "load_flag_sets": [
+            [
+              "FT_LOAD_NO_SCALE"
+            ],
+            [
+              "FT_LOAD_NO_HINTING"
+            ],
+            [
+              "FT_LOAD_FORCE_AUTOHINT"
+            ],
+            [
+              "FT_LOAD_VERTICAL_LAYOUT"
+            ],
+            [
+              "FT_LOAD_LINEAR_DESIGN"
+            ],
+            [
+              "FT_LOAD_NO_RECURSE"
+            ]
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-load"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "slot": "metrics advances outline subglyphs according to flags"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "slot.metrics",
+            "slot.advance",
+            "slot.linear_advances",
+            "slot.outline",
+            "slot.subglyphs"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags",
+      "subject": "freetype.FT_Load_Glyph",
+      "case": "error_out_of_range_null_face_or_invalid_flags",
+      "operation": "freetype.load_glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "variants": [
+            {
+              "face": "null",
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            {
+              "face_index": 0,
+              "glyph_index": "num_glyphs",
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            {
+              "face_index": 0,
+              "glyph_index": 36,
+              "load_flags": [
+                "reserved_high_bits"
+              ]
+            }
+          ],
+          "size": 20
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-load"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "slot_mutation": "cleared_then_driver_or_c_oracle"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error",
+            "slot_snapshot"
+          ]
+        },
+        "error": "c_oracle"
+      }
+    }
+  ]
+}

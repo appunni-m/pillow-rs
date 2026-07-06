@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "subject": "ftglyph.FT_GLYPH_BBOX_SUBPIXELS",
+  "manifest_cases": [
+    "value_matches_header",
+    "cbox_subpixels_matches_c"
+  ],
+  "cases": [
+    {
+      "case_id": "ftglyph.FT_GLYPH_BBOX_SUBPIXELS.value_matches_header",
+      "subject": "ftglyph.FT_GLYPH_BBOX_SUBPIXELS",
+      "case": "value_matches_header",
+      "operation": "ftglyph.glyph_bbox_mode.value",
+      "schema": "api_abi_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/ftglyph.h",
+          "symbol": "FT_GLYPH_BBOX_SUBPIXELS"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "FT_GLYPH_BBOX_SUBPIXELS",
+          "value": 0,
+          "ctype": "FT_Glyph_BBox_Mode"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "symbol",
+            "value",
+            "ctype"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_GLYPH_BBOX_SUBPIXELS.cbox_subpixels_matches_c",
+      "subject": "ftglyph.FT_GLYPH_BBOX_SUBPIXELS",
+      "case": "cbox_subpixels_matches_c",
+      "operation": "ftglyph.glyph_get_cbox",
+      "schema": "glyph_cbox",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "bitmap_strike_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "bbox_modes": [
+            "FT_GLYPH_BBOX_SUBPIXELS"
+          ],
+          "glyph_sources": [
+            "outline_scaled"
+          ],
+          "load_flags": [
+            "FT_LOAD_NO_HINTING"
+          ],
+          "pixel_sizes": [
+            13,
+            26
+          ],
+          "face_index": 0
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftglyph",
+        "area:glyph-cbox"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "bbox": "raw class CBox in 26.6 coordinates",
+          "mode_value": 0
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].bbox",
+            "rows[*].mode_value",
+            "rows[*].write_classification"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "fixture_requirements": [
+          "fonts/bitmap-strikes/public-bitmap-strike.ttf must contain at least one loadable embedded bitmap strike whose FT_GlyphSlot format becomes FT_GLYPH_FORMAT_BITMAP."
+        ]
+      }
+    }
+  ]
+}

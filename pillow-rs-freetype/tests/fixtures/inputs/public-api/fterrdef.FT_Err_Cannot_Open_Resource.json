@@ -1,0 +1,162 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Cannot_Open_Resource",
+  "manifest_cases": [
+    "value_matches_header",
+    "missing_path_returns_error",
+    "resource_fork_open_failure_returns_error"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Cannot_Open_Resource.value_matches_header",
+      "subject": "fterrdef.FT_Err_Cannot_Open_Resource",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Cannot_Open_Resource",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 1,
+          "expected_value_hex": "0x01",
+          "expected_error_string_from_pinned_header": "cannot open resource",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "symbol": "FT_Err_Cannot_Open_Resource",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Cannot_Open_Resource.missing_path_returns_error",
+      "subject": "fterrdef.FT_Err_Cannot_Open_Resource",
+      "case": "missing_path_returns_error",
+      "operation": "FT_New_Face",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "expected_error_symbol": "FT_Err_Cannot_Open_Resource",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/base/ftsystem.c:264 and freetype/src/base/ftobjs.c:2199-2209",
+          "path": "${fixture_temp}/definitely-missing-font.ttf",
+          "path_must_not_exist": true,
+          "face_index": 0,
+          "output_face": "sentinel_non_null_before_call"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:filesystem"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Cannot_Open_Resource",
+        "fixture_requirements": "No asset; use a deliberately nonexistent pathname under the fixture temp root.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "output_face": "pointer_nullness_or_preservation",
+          "slot_state": "mutation_class_if_slot_is_involved",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class",
+            "slot_state.mutation_class"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Cannot_Open_Resource.resource_fork_open_failure_returns_error",
+      "subject": "fterrdef.FT_Err_Cannot_Open_Resource",
+      "case": "resource_fork_open_failure_returns_error",
+      "operation": "FT_Open_Face",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/resource-fork/missing-or-invalid-fork.bin",
+            "requirements": "Optional Mac/resource-fork fixture that enters ftrfork.c/ftmac.c and fails fork resource open."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Cannot_Open_Resource",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/base/ftrfork.c:315 and freetype/src/base/ftmac.c:288,535,713",
+          "face_index": 0,
+          "output_face": "sentinel_non_null_before_call"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Cannot_Open_Resource",
+        "fixture_requirements": "Optional Mac/resource-fork fixture that enters ftrfork.c/ftmac.c and fails fork resource open.",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "output_face": "pointer_nullness_or_preservation",
+          "slot_state": "mutation_class_if_slot_is_involved",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class",
+            "slot_state.mutation_class"
+          ]
+        }
+      }
+    }
+  ]
+}

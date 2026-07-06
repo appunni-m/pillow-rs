@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Missing_Property",
+  "manifest_cases": [
+    "value_matches_header",
+    "driver_property_unknown_name",
+    "known_property_success"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Missing_Property.value_matches_header",
+      "subject": "fterrdef.FT_Err_Missing_Property",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Missing_Property",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 12,
+          "expected_value_hex": "0x0C",
+          "expected_error_string_from_pinned_header": "missing property",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested",
+          "symbol": "FT_Err_Missing_Property"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name",
+      "subject": "fterrdef.FT_Err_Missing_Property",
+      "case": "driver_property_unknown_name",
+      "operation": "FT_Property_Get",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font_or_public_input",
+            "id": "fixtures/assets/fonts/DejaVuSans.ttf",
+            "requirements": "No special font content required; loaded library/module property dispatch with unknown property name __unknown_property__."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Missing_Property",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/autofit/afmodule.c:281,368; freetype/src/truetype/ttdriver.c:118,145; freetype/src/svg/ftsvg.c:199,223",
+          "module_names": [
+            "autofitter",
+            "truetype",
+            "pcf",
+            "sdf",
+            "svg"
+          ],
+          "property_name": "__unknown_property__",
+          "value_pointer": "valid_sentinel_buffer"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "output_face": "pointer_nullness_or_preservation",
+          "slot_state": "mutation_class_if_slot_is_involved",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class",
+            "slot_state.mutation_class"
+          ]
+        },
+        "error": "FT_Err_Missing_Property",
+        "fixture_requirements": "No special font content required; loaded library/module property dispatch with unknown property name __unknown_property__."
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Missing_Property.known_property_success",
+      "subject": "fterrdef.FT_Err_Missing_Property",
+      "case": "known_property_success",
+      "operation": "FT_Property_Get",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font_or_public_input",
+            "id": "fixtures/assets/fonts/DejaVuSans.ttf",
+            "requirements": "Known module property control such as svg-hooks or a documented autofitter/truetype property succeeds or value-validates, proving the unknown-name branch."
+          }
+        },
+        "params": {
+          "pinned_source": "freetype/src/svg/ftsvg.c:213-223; freetype/src/autofit/afmodule.c:281,368",
+          "module_name": "svg",
+          "property_name": "svg-hooks",
+          "value_pointer": "valid_hook_storage"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "success-control",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "observed_state": "public fields and pointer/nullness classifications described by the operation",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "public_fields",
+            "output_bytes_or_values"
+          ]
+        },
+        "fixture_requirements": "Known module property control such as svg-hooks or a documented autofitter/truetype property succeeds or value-validates, proving the unknown-name branch."
+      }
+    }
+  ]
+}

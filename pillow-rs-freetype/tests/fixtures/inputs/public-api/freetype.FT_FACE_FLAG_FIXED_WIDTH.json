@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "subject": "freetype.FT_FACE_FLAG_FIXED_WIDTH",
+  "manifest_cases": [
+    "value_matches_header",
+    "face_property_fixed_width_font"
+  ],
+  "cases": [
+    {
+      "case_id": "freetype.FT_FACE_FLAG_FIXED_WIDTH.value_matches_header",
+      "subject": "freetype.FT_FACE_FLAG_FIXED_WIDTH",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_FACE_FLAG_FIXED_WIDTH",
+          "include": "freetype/freetype.h"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "area:face_flags"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "type": "FT_Long macro bit flag",
+          "source": "1L << 2"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_FACE_FLAG_FIXED_WIDTH.face_property_fixed_width_font",
+      "subject": "freetype.FT_FACE_FLAG_FIXED_WIDTH",
+      "case": "face_property_fixed_width_font",
+      "operation": "freetype.face_flags",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts_autohint/DejaVuSansMono.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "flag": "FT_FACE_FLAG_FIXED_WIDTH",
+          "read_fields": [
+            "face_flags",
+            "family_name",
+            "style_name"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "runtime:face_flags",
+        "asset:existing"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "face_flags": "FT_Long",
+          "bit_set": "bool",
+          "family_name": "string",
+          "style_name": "string"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "face_flags",
+            "bit_set",
+            "family_name",
+            "style_name"
+          ]
+        }
+      }
+    }
+  ]
+}

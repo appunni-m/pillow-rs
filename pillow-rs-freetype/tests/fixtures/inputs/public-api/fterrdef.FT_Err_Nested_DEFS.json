@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "subject": "fterrdef.FT_Err_Nested_DEFS",
+  "manifest_cases": [
+    "value_matches_header",
+    "truetype_nested_fdef",
+    "truetype_nested_idef"
+  ],
+  "cases": [
+    {
+      "case_id": "fterrdef.FT_Err_Nested_DEFS.value_matches_header",
+      "subject": "fterrdef.FT_Err_Nested_DEFS",
+      "case": "value_matches_header",
+      "operation": "error_constant.value",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "FT_Err_Nested_DEFS",
+          "include": "<freetype/fterrors.h>",
+          "header": "freetype/fterrdef.h",
+          "public_import": "#include <freetype/freetype.h>",
+          "error_prefix": "FT_Err_",
+          "expected_value_from_pinned_header": 137,
+          "expected_value_hex": "0x89",
+          "expected_error_string_from_pinned_header": "nested DEFS",
+          "pinned_source": "freetype/include/freetype/fterrdef.h"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "area:constant"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "FT_Error",
+          "header": "freetype/fterrdef.h",
+          "public_import": "freetype/freetype.h or freetype/fterrors.h",
+          "value": "integer",
+          "error_string": "string_from_FT_ERRORDEF_when_requested",
+          "symbol": "FT_Err_Nested_DEFS"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "symbol",
+            "header_symbol",
+            "error_string"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Nested_DEFS.truetype_nested_fdef",
+      "subject": "fterrdef.FT_Err_Nested_DEFS",
+      "case": "truetype_nested_fdef",
+      "operation": "FT_Load_Glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font_or_public_input",
+            "id": "fixtures/assets/fonts/tt_nested_defs.ttf",
+            "requirements": "TrueType program in prep/fpgm/glyf where SkipCode sees FDEF while already skipping an FDEF definition."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Nested_DEFS",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/truetype/ttinterp.c:3330",
+          "face_index": 0,
+          "glyph_index": 1,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "bytecode_variant": "FDEF contains FDEF"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "output_face": "pointer_nullness_or_preservation",
+          "slot_state": "mutation_class_if_slot_is_involved",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class",
+            "slot_state.mutation_class"
+          ]
+        },
+        "error": "FT_Err_Nested_DEFS",
+        "fixture_requirements": "TrueType program in prep/fpgm/glyf where SkipCode sees FDEF while already skipping an FDEF definition."
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Nested_DEFS.truetype_nested_idef",
+      "subject": "fterrdef.FT_Err_Nested_DEFS",
+      "case": "truetype_nested_idef",
+      "operation": "FT_Load_Glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font_or_public_input",
+            "id": "fixtures/assets/fonts/tt_nested_defs.ttf",
+            "requirements": "TrueType program in prep/fpgm/glyf where SkipCode sees IDEF while already skipping a definition."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Nested_DEFS",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/truetype/ttinterp.c:3614",
+          "face_index": 0,
+          "glyph_index": 2,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "bytecode_variant": "IDEF contains IDEF or FDEF"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "area:error-code",
+        "error-trigger",
+        "requires:fixture"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error",
+          "error_symbol": "FT_Err_*",
+          "output_face": "pointer_nullness_or_preservation",
+          "slot_state": "mutation_class_if_slot_is_involved",
+          "diagnostic_source": "pinned FreeType source location"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "error_symbol",
+            "output_face.nullness",
+            "output_face.identity_class",
+            "slot_state.mutation_class"
+          ]
+        },
+        "error": "FT_Err_Nested_DEFS",
+        "fixture_requirements": "TrueType program in prep/fpgm/glyf where SkipCode sees IDEF while already skipping a definition."
+      }
+    }
+  ]
+}
