@@ -1887,16 +1887,7 @@ impl BackendComparisonWorker {
                 let mut metrics = wasm_abi::FontdoneWasmSizeMetrics::default();
                 let err = wasm_abi::fontdone_wasm_size_metrics(handle, &mut metrics);
                 if err == FT_Err_Ok {
-                    Ok(ok(json!({
-                        "x_ppem": metrics.x_ppem,
-                        "y_ppem": metrics.y_ppem,
-                        "x_scale": metrics.x_scale,
-                        "y_scale": metrics.y_scale,
-                        "ascender": metrics.ascender,
-                        "descender": metrics.descender,
-                        "height": metrics.height,
-                        "max_advance": metrics.max_advance
-                    })))
+                    Ok(ok(wasm_size_metrics_json(&metrics)))
                 } else {
                     Ok(error(err))
                 }
@@ -2795,10 +2786,30 @@ fn oracle_batch_input(cases: &[&InputCase]) -> Result<String, String> {
 fn oracle_cache_key(cases: &[&InputCase], batch_input: &str) -> Result<String, String> {
     let canonical_cases = serde_json::to_string(cases).map_err(|err| err.to_string())?;
     let mut hasher = Sha256::new();
-    hasher.update(b"fontdone-unified-oracle-cache-v1\n");
+    hasher.update(b"fontdone-unified-oracle-cache-v2\n");
+    hasher.update(b"\n--oracle--\n");
+    hasher.update(oracle_identity_hash()?.as_bytes());
     hasher.update(canonical_cases.as_bytes());
     hasher.update(b"\n--argv--\n");
     hasher.update(batch_input.as_bytes());
+    Ok(hex_bytes(&hasher.finalize()))
+}
+
+fn oracle_identity_hash() -> Result<String, String> {
+    let mut hasher = Sha256::new();
+    for path in [
+        oracle_bin()?,
+        manifest_dir()
+            .join("freetype")
+            .join("build")
+            .join("libfreetype.so"),
+    ] {
+        let bytes = fs::read(&path).map_err(|err| format!("read {}: {err}", path.display()))?;
+        hasher.update(path.to_string_lossy().as_bytes());
+        hasher.update(b"\0");
+        hasher.update(sha256_hex(&bytes).as_bytes());
+        hasher.update(b"\n");
+    }
     Ok(hex_bytes(&hasher.finalize()))
 }
 
@@ -3084,6 +3095,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
                 c_done_library(library);
                 return Ok(error(err));
             }
+            if is_face_probe(case)? {
+                c_done_face(face);
+                c_done_library(library);
+                return Ok(ok(json!({"opened": true})));
+            }
             let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
             let err = c_abi::FT_Set_Pixel_Sizes(face, pixel_width, pixel_height);
             c_done_face(face);
@@ -3096,9 +3112,10 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "set_pixel_sizes" => {
             let (library, face) = c_open_face(case)?;
+            let output = c_size_metrics_json(face);
             c_done_face(face);
             c_done_library(library);
-            Ok(ok(json!({"set": true})))
+            output.map(ok)
         }
         "set_char_size" => {
             let (library, face) = c_new_face_without_size(case)?;
@@ -3198,31 +3215,24 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
 fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
     match canonical_operation(&case.operation) {
         "constant" | "record_layout" | "set_char_size" => run_rust_ffi(case),
-        "new_memory_face" => {
-            let handle = wasm_open_face(case)?;
-            wasm_done_face(handle);
-            Ok(ok(json!({"opened": true})))
-        }
+        "new_memory_face" => wasm_new_memory_face(case),
         "set_pixel_sizes" => {
             let handle = wasm_open_face(case)?;
+            let mut metrics = wasm_abi::FontdoneWasmSizeMetrics::default();
+            let err = wasm_abi::fontdone_wasm_size_metrics(handle, &mut metrics);
             wasm_done_face(handle);
-            Ok(ok(json!({"set": true})))
+            if err == FT_Err_Ok {
+                Ok(ok(wasm_size_metrics_json(&metrics)))
+            } else {
+                Ok(error(err))
+            }
         }
         "size_metrics" => {
             let handle = wasm_open_face(case)?;
             let mut metrics = wasm_abi::FontdoneWasmSizeMetrics::default();
             let err = wasm_abi::fontdone_wasm_size_metrics(handle, &mut metrics);
             let output = if err == FT_Err_Ok {
-                Ok(ok(json!({
-                    "x_ppem": metrics.x_ppem,
-                    "y_ppem": metrics.y_ppem,
-                    "x_scale": metrics.x_scale,
-                    "y_scale": metrics.y_scale,
-                    "ascender": metrics.ascender,
-                    "descender": metrics.descender,
-                    "height": metrics.height,
-                    "max_advance": metrics.max_advance
-                })))
+                Ok(ok(wasm_size_metrics_json(&metrics)))
             } else {
                 Ok(error(err))
             };
@@ -3402,6 +3412,22 @@ fn wasm_open_face(case: &InputCase) -> Result<usize, String> {
     }
 }
 
+fn wasm_new_memory_face(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let status = wasm_abi::fontdone_wasm_open_face(
+        bytes.as_ptr(),
+        bytes.len(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    );
+    if status.error == FT_Err_Ok {
+        wasm_done_face(status.handle);
+        Ok(ok(json!({"opened": true})))
+    } else {
+        Ok(error(status.error))
+    }
+}
+
 fn wasm_slot_output(handle: usize, err: i32) -> Result<RunOutput, String> {
     if err != FT_Err_Ok {
         return Ok(error(err));
@@ -3454,6 +3480,9 @@ fn rust_new_memory_face(case: &InputCase) -> Result<RunOutput, String> {
         20.0,
     ) {
         Ok(mut face) => {
+            if is_face_probe(case)? {
+                return Ok(ok(json!({"opened": true})));
+            }
             let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
             let err = FT_Set_Pixel_Sizes(&mut face, pixel_width, pixel_height);
             if err == FT_Err_Ok {
@@ -3498,7 +3527,7 @@ fn rust_set_pixel_sizes(case: &InputCase) -> Result<RunOutput, String> {
             let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
             let err = FT_Set_Pixel_Sizes(&mut face, pixel_width, pixel_height);
             if err == FT_Err_Ok {
-                Ok(ok(json!({"set": true})))
+                Ok(ok(size_metrics_json(&FT_Size_Metrics(&face))))
             } else {
                 Ok(error(err))
             }
@@ -3829,6 +3858,19 @@ fn size_metrics_json(metrics: &FT_Size_Metrics) -> Value {
     })
 }
 
+fn wasm_size_metrics_json(metrics: &wasm_abi::FontdoneWasmSizeMetrics) -> Value {
+    json!({
+        "x_ppem": metrics.x_ppem,
+        "y_ppem": metrics.y_ppem,
+        "x_scale": metrics.x_scale,
+        "y_scale": metrics.y_scale,
+        "ascender": metrics.ascender,
+        "descender": metrics.descender,
+        "height": metrics.height,
+        "max_advance": metrics.max_advance
+    })
+}
+
 fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Result<(), String> {
     if oracle.status.kind == StatusKind::Ok && case.expect_error {
         return Err(format!(
@@ -4054,6 +4096,10 @@ fn face_index_param(value: &Value) -> Result<i64, String> {
     value
         .get("face_index")
         .map_or(Ok(0), |raw| i64_value(raw, "face_index"))
+}
+
+fn is_face_probe(case: &InputCase) -> Result<bool, String> {
+    Ok(face_index_param(&case.inputs.params)? < 0)
 }
 
 fn pixel_size_param(value: &Value) -> Result<(u32, u32), String> {

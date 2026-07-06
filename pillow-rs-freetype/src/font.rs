@@ -22,6 +22,10 @@ pub enum LoadMode {
     Default,
     /// `FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT`: force the auto-hinter.
     ForceAutoHint,
+    /// `FT_LOAD_NO_HINTING`: scale outlines without native or automatic hinting.
+    NoHinting,
+    /// `FT_LOAD_NO_AUTOHINT`: prefer native hints, but do not fall back to autohinting.
+    NoAutoHint,
 }
 
 /// A loaded TrueType font at a given point size.
@@ -721,6 +725,14 @@ impl Font {
         Ok(self.slot_metrics_from_scaled(glyph, &scaled))
     }
 
+    pub(crate) fn glyph_metrics_for_index_no_autohint(
+        &self,
+        glyph: u16,
+    ) -> Result<GlyphSlotMetrics, FontError> {
+        let scaled = self.scale_glyph_no_autohint_for_metrics(glyph)?;
+        Ok(self.slot_metrics_from_scaled(glyph, &scaled))
+    }
+
     /// `getbbox(text)` -> FreeType rendered bitmap bbox for the first glyph.
     ///
     /// Returns the rendered glyph-slot bitmap box for the first glyph.
@@ -823,6 +835,10 @@ impl Font {
                 let metrics_cache = self.face_globals.get_metrics(glyph);
                 scaler::scale_glyph(&self.data, glyph, metrics_cache.as_deref(), self.is_italic)
             }
+            LoadMode::NoHinting => {
+                scaler::scale_glyph_no_hinting(&self.data, glyph, self.is_italic)
+            }
+            LoadMode::NoAutoHint => self.scale_glyph_no_autohint_for_load(glyph),
         }
     }
 
@@ -857,6 +873,41 @@ impl Font {
                 metrics_cache.as_deref(),
                 self.is_italic,
             )
+        }
+    }
+
+    fn scale_glyph_no_autohint_for_load(
+        &self,
+        glyph: u16,
+    ) -> Result<scaler::ScaledGlyph, FontError> {
+        if self.data.fpgm.is_some() && self.data.cvt.is_some() {
+            let bytecode_context = self.native_bytecode_context()?;
+            scaler::scale_glyph_native_default_with_bytecode_context(
+                &self.data,
+                glyph,
+                None,
+                self.is_italic,
+                bytecode_context,
+            )
+        } else {
+            scaler::scale_glyph_no_hinting(&self.data, glyph, self.is_italic)
+        }
+    }
+
+    fn scale_glyph_no_autohint_for_metrics(
+        &self,
+        glyph: u16,
+    ) -> Result<scaler::ScaledGlyph, FontError> {
+        if self.data.fpgm.is_some() && self.data.cvt.is_some() {
+            let bytecode_context = self.native_bytecode_context()?;
+            scaler::scale_glyph_for_metrics_with_bytecode_context(
+                &self.data,
+                glyph,
+                self.is_italic,
+                bytecode_context,
+            )
+        } else {
+            scaler::scale_glyph_no_hinting(&self.data, glyph, self.is_italic)
         }
     }
 

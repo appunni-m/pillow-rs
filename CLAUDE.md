@@ -84,6 +84,24 @@ that document with `make repo-map-update` and verify it with
 - `if`/`elif`/`else` only for type checks, `None` defaults, or mode dispatch.
 - Bindings delegate to Rust core via `_core.xxx()` or `_rust_image.xxx()`.
 
+FreeType FFI/ABI crates must stay thin:
+
+- `fontdone` is the pure-Rust implementation and owns behavior.
+- `fontdone-ffi-c` exports only the intentionally implemented C ABI symbols.
+  It may own `repr(C)` records, handles, pointer validation, allocation
+  lifetime, and field copying needed to expose the ABI; it must not parse font
+  formats, implement glyph logic, interpret fixture JSON, call native FreeType,
+  or contain parity-specific behavior.
+- `fontdone-ffi-wasm` exports only the intentionally implemented WASM handle
+  ABI. It may own linear-memory allocation helpers, handle validation, and ABI
+  record copying; it must not contain font parsing or glyph logic.
+- Test-only ABI inspection helpers must be feature-gated, must not be
+  `no_mangle`, and must not appear in public C headers or exported symbol
+  checks.
+- Keep `scripts/check_public_api_inputs.py` as the thin-wrapper export gate:
+  C ABI exports must be public FreeType symbols only; WASM exports must match
+  the explicit WASM export allow-list.
+
 ## Drawing Rule
 
 Draw directly in the image's native pixel format. Never convert to RGBA just
@@ -133,6 +151,10 @@ Parity means:
 
 For FreeType work, load `.claude/skills/freetype-parity` and
 `systematic-debugging` before changing code.
+
+Full parity work must fix the pure-Rust implementation first. Do not grow C or
+WASM FFI wrappers to compensate for Rust behavior differences; wrappers should
+only reflect already-correct core behavior through the ABI surface.
 
 ## Harness And Fixtures
 
@@ -230,6 +252,12 @@ make fontdone-bench-quick
 make fontdone-fixtures
 ```
 
+`make fontdone-ffi` is the no-runtime-native-FFI guard for `fontdone` core.
+`make fontdone-ffi-compat` is the public API/ABI compatibility gate; it runs
+the generated FreeType C surface audit and verifies manifest/input coverage
+plus thin C/WASM ABI exports. These gates are not parity substitutes; they keep
+the harness and wrapper boundaries honest while parity failures remain visible.
+
 For narrow FreeType lanes, prefer the crate-local Makefile targets:
 
 ```bash
@@ -238,6 +266,7 @@ make -C pillow-rs-freetype test-generator
 make -C pillow-rs-freetype test-render-mode
 make -C pillow-rs-freetype test-fixed
 make -C pillow-rs-freetype test-interface
+make -C pillow-rs-freetype test-ffi
 make -C pillow-rs-freetype test-ffi-compat
 make -C pillow-rs-freetype test-perf
 ```

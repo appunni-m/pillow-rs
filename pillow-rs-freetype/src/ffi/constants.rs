@@ -15,6 +15,7 @@ pub const FT_Err_Invalid_Glyph_Format: FT_Error = 0x12;
 pub const FT_Err_Cannot_Render_Glyph: FT_Error = 0x13;
 pub const FT_Err_Invalid_Outline: FT_Error = 0x14;
 pub const FT_Err_Invalid_Pixel_Size: FT_Error = 0x17;
+pub const FT_Err_Invalid_Size_Handle: FT_Error = 0x24;
 pub const FT_Err_Invalid_CharMap_Handle: FT_Error = 0x26;
 pub const FT_Err_Out_Of_Memory: FT_Error = 0x40;
 pub const FT_Err_Raster_Overflow: FT_Error = 0x62;
@@ -75,8 +76,20 @@ pub const FT_GLYPH_FORMAT_PLOTTER: FT_Glyph_Format = 0x706c_6f74;
 pub const FT_GLYPH_FORMAT_SVG: FT_Glyph_Format = 0x5356_4720;
 
 pub(super) const LOAD_TARGET_MASK: FT_Int32 = 15 << 16;
+// FreeType's `FT_Load_Glyph` dependency resolution in `src/base/ftobjs.c`
+// treats these as ignored for our current supported outline path, or as
+// behavior already modeled by conversion before the core load.
+pub(super) const LOAD_FLAGS_ACCEPTED_WITHOUT_CORE_BITS: FT_Int32 = FT_LOAD_NO_BITMAP
+    | FT_LOAD_CROP_BITMAP
+    | FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH
+    | FT_LOAD_IGNORE_TRANSFORM
+    | FT_LOAD_LINEAR_DESIGN
+    | FT_LOAD_BITMAP_METRICS_ONLY;
+
 pub(super) const SUPPORTED_LOAD_FLAGS: FT_Int32 = FT_LOAD_RENDER
     | FT_LOAD_NO_HINTING
     | FT_LOAD_FORCE_AUTOHINT
     | FT_LOAD_MONOCHROME
+    | FT_LOAD_NO_AUTOHINT
+    | LOAD_FLAGS_ACCEPTED_WITHOUT_CORE_BITS
     | LOAD_TARGET_MASK;

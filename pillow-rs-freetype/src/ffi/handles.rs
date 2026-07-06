@@ -20,6 +20,7 @@ pub struct FT_Library {
 #[derive(Clone)]
 pub struct FT_Face {
     inner: api::Face,
+    probe_only: bool,
 }
 
 #[derive(Clone)]
@@ -47,11 +48,11 @@ pub fn FT_New_Memory_Face(
     face_index: FT_Long,
     size_pt: f32,
 ) -> Result<FT_Face, FT_Error> {
-    let face_index = usize::try_from(face_index).map_err(|_| FT_Err_Invalid_Argument)?;
+    let (face_index, probe_only) = c_face_index_to_core(face_index)?;
     library
         .inner
         .new_memory_face(data, face_index, size_pt)
-        .map(|inner| FT_Face { inner })
+        .map(|inner| FT_Face { inner, probe_only })
         .map_err(error_to_ft)
 }
 
@@ -62,6 +63,9 @@ pub fn FT_Set_Char_Size(
     horz_resolution: FT_UInt,
     vert_resolution: FT_UInt,
 ) -> FT_Error {
+    if face.probe_only {
+        return FT_Err_Invalid_Size_Handle;
+    }
     let Ok(char_width) = i32::try_from(char_width) else {
         return FT_Err_Invalid_Argument;
     };
@@ -78,6 +82,9 @@ pub fn FT_Set_Pixel_Sizes(
     pixel_width: FT_UInt,
     pixel_height: FT_UInt,
 ) -> FT_Error {
+    if face.probe_only {
+        return FT_Err_Invalid_Size_Handle;
+    }
     face.inner.set_pixel_sizes(pixel_width, pixel_height);
     FT_Err_Ok
 }
@@ -102,6 +109,9 @@ pub fn FT_Load_Glyph(
     glyph_index: FT_UInt,
     load_flags: FT_Int32,
 ) -> Result<FT_GlyphSlot, FT_Error> {
+    if face.probe_only {
+        return Err(FT_Err_Invalid_Size_Handle);
+    }
     let glyph_index = u16::try_from(glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
     let flags = load_flags_to_core(load_flags)?;
     face.inner
@@ -124,6 +134,7 @@ pub fn FT_Render_Glyph(
             slot_to_ffi(
                 &FT_Face {
                     inner: slot.source_face,
+                    probe_only: false,
                 },
                 rendered,
                 flags,
@@ -148,4 +159,19 @@ fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags)
         source_face: face.inner.clone(),
         load_flags,
     }
+}
+
+fn c_face_index_to_core(face_index: FT_Long) -> Result<(usize, bool), FT_Error> {
+    if face_index >= 0 {
+        let face_index = usize::try_from(face_index).map_err(|_| FT_Err_Invalid_Argument)?;
+        return Ok((face_index, false));
+    }
+    // FreeType treats negative face indexes as probes: `-(N+1)` opens face N
+    // without allocating glyph-slot or size objects.
+    let selected = face_index
+        .checked_neg()
+        .and_then(|value| value.checked_sub(1))
+        .ok_or(FT_Err_Invalid_Argument)?;
+    let face_index = usize::try_from(selected).map_err(|_| FT_Err_Invalid_Argument)?;
+    Ok((face_index, true))
 }

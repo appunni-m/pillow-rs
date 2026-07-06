@@ -89,7 +89,9 @@ pub fn load_flags_to_core(flags: FT_Int32) -> Result<api::LoadFlags, FT_Error> {
     }
 
     let mut core = api::LoadFlags::DEFAULT;
-    if flags & FT_LOAD_RENDER != 0 {
+    // FreeType resolves this dependency in `FT_Load_Glyph` before driver load:
+    // `FT_LOAD_BITMAP_METRICS_ONLY` clears `FT_LOAD_RENDER`.
+    if flags & FT_LOAD_RENDER != 0 && flags & FT_LOAD_BITMAP_METRICS_ONLY == 0 {
         core |= api::LoadFlags::RENDER;
     }
     if flags & FT_LOAD_NO_HINTING != 0 {
@@ -97,6 +99,9 @@ pub fn load_flags_to_core(flags: FT_Int32) -> Result<api::LoadFlags, FT_Error> {
     }
     if flags & FT_LOAD_FORCE_AUTOHINT != 0 {
         core |= api::LoadFlags::FORCE_AUTOHINT;
+    }
+    if flags & FT_LOAD_NO_AUTOHINT != 0 {
+        core |= api::LoadFlags::NO_AUTOHINT;
     }
     if flags & FT_LOAD_MONOCHROME != 0 {
         core |= api::LoadFlags::TARGET_MONO;

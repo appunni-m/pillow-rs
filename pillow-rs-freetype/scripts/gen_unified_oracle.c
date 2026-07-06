@@ -322,6 +322,15 @@ static int emit_face_or_slot(int argc, char** argv) {
 
     FT_Face face;
     err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    if (!err && face_index < 0 && streq(command, "--new-memory-face")) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":{\"opened\":true}}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
     if (!err) {
         err = FT_Set_Pixel_Sizes(face, pixel_width, pixel_height);
     }
@@ -331,9 +340,7 @@ static int emit_face_or_slot(int argc, char** argv) {
         print_status(err);
         if (err) {
             printf(",\"output\":null}\n");
-        } else if (streq(command, "--set-pixel-sizes")) {
-            printf(",\"output\":{\"set\":true}}\n");
-        } else if (streq(command, "--size-metrics")) {
+        } else if (streq(command, "--set-pixel-sizes") || streq(command, "--size-metrics")) {
             printf(",");
             print_size_metrics(face->size->metrics);
             printf("}\n");
