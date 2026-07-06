@@ -58,6 +58,11 @@
             57344
           ],
           "repeat_lookup": true
+        },
+        "variability": {
+          "axes": [
+            "codepoints"
+          ]
         }
       },
       "classifiers": [
@@ -135,6 +140,11 @@
             57344
           ],
           "repeat_lookup": true
+        },
+        "variability": {
+          "axes": [
+            "codepoints"
+          ]
         }
       },
       "classifiers": [
@@ -212,6 +222,11 @@
             57344
           ],
           "repeat_lookup": true
+        },
+        "variability": {
+          "axes": [
+            "codepoints"
+          ]
         }
       },
       "classifiers": [
@@ -289,6 +304,11 @@
             57344
           ],
           "repeat_lookup": true
+        },
+        "variability": {
+          "axes": [
+            "codepoints"
+          ]
         }
       },
       "classifiers": [
@@ -366,6 +386,11 @@
             57344
           ],
           "repeat_lookup": true
+        },
+        "variability": {
+          "axes": [
+            "codepoints"
+          ]
         }
       },
       "classifiers": [
@@ -440,6 +465,11 @@
             57344
           ],
           "repeat_lookup": true
+        },
+        "variability": {
+          "axes": [
+            "codepoints"
+          ]
         }
       },
       "classifiers": [

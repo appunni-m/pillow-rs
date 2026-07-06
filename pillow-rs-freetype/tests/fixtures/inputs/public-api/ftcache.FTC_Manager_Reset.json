@@ -76,6 +76,12 @@
             12,
             20
           ]
+        },
+        "variability": {
+          "axes": [
+            "sizes",
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

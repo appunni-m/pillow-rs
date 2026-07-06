@@ -143,6 +143,11 @@
             68
           ],
           "anode_output": "null"
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

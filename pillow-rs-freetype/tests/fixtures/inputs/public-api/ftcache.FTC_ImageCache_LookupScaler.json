@@ -72,6 +72,11 @@
             "RENDER",
             "HIGH_BITS_SET"
           ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [
@@ -172,6 +177,11 @@
             "NO_HINTING",
             "RENDER",
             "HIGH_BITS_SET"
+          ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
           ]
         }
       },
@@ -274,6 +284,11 @@
             "RENDER",
             "HIGH_BITS_SET"
           ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [
@@ -374,6 +389,11 @@
             "NO_HINTING",
             "RENDER",
             "HIGH_BITS_SET"
+          ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
           ]
         }
       },
@@ -476,6 +496,11 @@
             "RENDER",
             "HIGH_BITS_SET"
           ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [
@@ -577,6 +602,11 @@
             "NO_HINTING",
             "RENDER",
             "HIGH_BITS_SET"
+          ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
           ]
         }
       },

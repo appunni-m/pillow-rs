@@ -167,6 +167,11 @@
             "FT_LOAD_TARGET_MONO"
           ],
           "glyph_index": 36
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [
@@ -223,6 +228,11 @@
           ],
           "glyph_index": 36,
           "host_condition": "FT_ULong wider than FT_Int32"
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [

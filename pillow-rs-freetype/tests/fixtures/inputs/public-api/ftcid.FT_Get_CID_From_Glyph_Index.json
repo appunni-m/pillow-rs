@@ -33,6 +33,11 @@
             "last_valid"
           ],
           "cid_output": "nonnull_initialized_sentinel"
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [
@@ -85,6 +90,11 @@
             "last_valid"
           ],
           "cid_output": "nonnull_initialized_sentinel"
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [
