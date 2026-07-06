@@ -52,6 +52,8 @@ impl LoadFlags {
     pub const TARGET_LCD: Self = Self(1 << 4);
     /// Render with vertical LCD coverage when [`Self::RENDER`] is also set.
     pub const TARGET_LCD_V: Self = Self(1 << 5);
+    /// Disable FreeType's auto-hinter while still allowing native hints.
+    pub const NO_AUTOHINT: Self = Self(1 << 6);
 
     /// Return true if all bits in `other` are set.
     pub fn contains(self, other: Self) -> bool {
@@ -147,6 +149,8 @@ struct RenderFontKey {
 enum RenderLoadModeKey {
     Default,
     ForceAutoHint,
+    NoHinting,
+    NoAutoHint,
 }
 
 impl RenderFontCache {
@@ -190,6 +194,8 @@ impl From<LoadMode> for RenderLoadModeKey {
         match load_mode {
             LoadMode::Default => Self::Default,
             LoadMode::ForceAutoHint => Self::ForceAutoHint,
+            LoadMode::NoHinting => Self::NoHinting,
+            LoadMode::NoAutoHint => Self::NoAutoHint,
         }
     }
 }
@@ -240,9 +246,13 @@ impl Face {
     pub fn load_glyph(&self, glyph_index: u16, flags: LoadFlags) -> Result<GlyphSlot, FontError> {
         let metrics = if flags.contains(LoadFlags::NO_HINTING) {
             self.font.glyph_metrics_for_index_no_hinting(glyph_index)?
-        } else if flags.contains(LoadFlags::FORCE_AUTOHINT) {
+        } else if flags.contains(LoadFlags::FORCE_AUTOHINT)
+            && !flags.contains(LoadFlags::NO_AUTOHINT)
+        {
             self.font
                 .glyph_metrics_for_index_force_autohint(glyph_index)?
+        } else if flags.contains(LoadFlags::NO_AUTOHINT) {
+            self.font.glyph_metrics_for_index_no_autohint(glyph_index)?
         } else {
             self.font.glyph_metrics_for_index_default(glyph_index)?
         };
@@ -258,13 +268,16 @@ impl Face {
     }
 
     fn render_font(&self, flags: LoadFlags) -> Result<Font, FontError> {
-        if flags.contains(LoadFlags::NO_HINTING) {
-            return Err(FontError::UnsupportedLoadFlags(
-                "NO_HINTING | RENDER".to_string(),
-            ));
-        }
-        let load_mode = if flags.contains(LoadFlags::FORCE_AUTOHINT) {
-            LoadMode::ForceAutoHint
+        let load_mode = if flags.contains(LoadFlags::NO_HINTING) {
+            LoadMode::NoHinting
+        } else if flags.contains(LoadFlags::FORCE_AUTOHINT) {
+            if flags.contains(LoadFlags::NO_AUTOHINT) {
+                LoadMode::NoAutoHint
+            } else {
+                LoadMode::ForceAutoHint
+            }
+        } else if flags.contains(LoadFlags::NO_AUTOHINT) {
+            LoadMode::NoAutoHint
         } else {
             LoadMode::Default
         };
