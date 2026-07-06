@@ -8,7 +8,7 @@ use crate::casts::i32_from_f32;
 
 use crate::error::FontError;
 use crate::fixed::{ft_mul_div, ft_mul_fix};
-use crate::outline::{Outline, OutlinePoint};
+use crate::outline::{OUTLINE_HIGH_PRECISION, Outline, OutlinePoint};
 use crate::tables::FontData;
 use crate::tt::glyf::{GlyphOutline, load_glyph, load_glyph_with_scaled_component_offsets};
 use crate::tt::hinter::NativeHintMode;
@@ -79,7 +79,11 @@ pub struct ScaledGlyph {
     pub outline: Outline,
     pub advance_width: i32,      // 26.6
     pub slot_advance_width: i32, // 26.6, after hinted phantom adjustment
-    pub lsb: i32,                // 26.6
+    /// Hinted horizontal phantom points before bbox-origin translation.
+    pub phantom_pp1_x: i32,
+    pub phantom_pp2_x: i32,
+    pub vertical_bearing_x_advance_width: i32,
+    pub lsb: i32, // 26.6
     /// Raw scaled CBox before pixel floor/ceil conversion.
     pub cbox_x_min: i32,
     pub cbox_y_min: i32,
@@ -206,6 +210,10 @@ pub fn scale_glyph_for_metrics_with_bytecode_context_and_mode(
     native_hint_mode: NativeHintMode,
     bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
 ) -> Result<ScaledGlyph, FontError> {
+    // C `tt_loader_init` disables v40 backward compatibility for
+    // `FT_RENDER_MODE_MONO`; `TT_Hint_Glyph` then saves current hinted phantom
+    // points for `compute_glyph_metrics` (ttgload.c:790-865, 2270-2318).
+    let legacy_hinter_phantoms = native_hint_mode != NativeHintMode::Mono;
     scale_glyph_impl(
         data,
         glyph_index,
@@ -223,7 +231,7 @@ pub fn scale_glyph_for_metrics_with_bytecode_context_and_mode(
         true,
         false,
         false,
-        true,
+        legacy_hinter_phantoms,
         bytecode_context,
     )
 }
@@ -234,20 +242,72 @@ pub fn scale_glyph_for_metrics_with_autohint(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_for_metrics_with_autohint_and_mode(
+        data,
+        glyph_index,
+        latin_metrics,
+        is_italic,
+        NativeHintMode::Normal,
+    )
+}
+
+pub fn scale_glyph_for_metrics_with_autohint_and_mode(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+    native_hint_mode: NativeHintMode,
+) -> Result<ScaledGlyph, FontError> {
+    let (style, target_mono) = match native_hint_mode {
+        NativeHintMode::Normal => (
+            HintStyle {
+                is_italic,
+                no_horizontal_hinting: false,
+                stem_adjust: true,
+                horz_snap: false,
+                vert_snap: false,
+            },
+            false,
+        ),
+        NativeHintMode::Mono => (
+            HintStyle {
+                is_italic,
+                no_horizontal_hinting: false,
+                stem_adjust: true,
+                horz_snap: true,
+                vert_snap: true,
+            },
+            true,
+        ),
+        NativeHintMode::Lcd => (
+            HintStyle {
+                is_italic,
+                no_horizontal_hinting: true,
+                stem_adjust: false,
+                horz_snap: true,
+                vert_snap: false,
+            },
+            false,
+        ),
+        NativeHintMode::LcdV => (
+            HintStyle {
+                is_italic,
+                no_horizontal_hinting: false,
+                stem_adjust: true,
+                horz_snap: false,
+                vert_snap: true,
+            },
+            false,
+        ),
+    };
     scale_glyph_impl(
         data,
         glyph_index,
         latin_metrics,
-        HintStyle {
-            is_italic,
-            no_horizontal_hinting: false,
-            stem_adjust: true,
-            horz_snap: false,
-            vert_snap: false,
-        },
+        style,
         true,
-        false,
-        NativeHintMode::Normal,
+        target_mono,
+        native_hint_mode,
         false,
         true,
         false,
@@ -348,6 +408,24 @@ pub fn scale_glyph_native_default_with_bytecode_context(
     is_italic: bool,
     bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
 ) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_native_default_with_bytecode_context_and_mode(
+        data,
+        glyph_index,
+        latin_metrics,
+        is_italic,
+        NativeHintMode::Normal,
+        bytecode_context,
+    )
+}
+
+pub fn scale_glyph_native_default_with_bytecode_context_and_mode(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+    native_hint_mode: NativeHintMode,
+    bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
+) -> Result<ScaledGlyph, FontError> {
     scale_glyph_impl(
         data,
         glyph_index,
@@ -361,7 +439,7 @@ pub fn scale_glyph_native_default_with_bytecode_context(
         },
         true,
         false,
-        NativeHintMode::Normal,
+        native_hint_mode,
         false,
         false,
         true,
@@ -536,6 +614,38 @@ fn scale_glyph_impl(
     legacy_hinter_phantoms: bool,
     bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
 ) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl_with_context(
+        data,
+        glyph_index,
+        latin_metrics,
+        style,
+        allow_bytecode,
+        target_mono,
+        native_hint_mode,
+        round_component_offsets,
+        use_autohint_advance,
+        reset_vectors_at_glyph_entry,
+        legacy_hinter_phantoms,
+        bytecode_context,
+    )
+    .map(|(glyph, _)| glyph)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn scale_glyph_impl_with_context(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    style: HintStyle,
+    allow_bytecode: bool,
+    target_mono: bool,
+    native_hint_mode: NativeHintMode,
+    round_component_offsets: bool,
+    use_autohint_advance: bool,
+    reset_vectors_at_glyph_entry: bool,
+    legacy_hinter_phantoms: bool,
+    bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
+) -> Result<(ScaledGlyph, Option<crate::tt::hinter::exec::ExecContext>), FontError> {
     let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
 
     let h_metric = data.hmtx.get(glyph_index);
@@ -613,29 +723,35 @@ fn scale_glyph_impl(
         } else {
             None
         };
-        return Ok(ScaledGlyph {
-            outline: Outline::default(),
-            advance_width,
-            slot_advance_width,
-            lsb,
-            cbox_x_min: 0,
-            cbox_y_min: 0,
-            cbox_x_max: 0,
-            cbox_y_max: 0,
-            outline_cbox_x_min: 0,
-            outline_cbox_y_min: 0,
-            outline_cbox_x_max: 0,
-            outline_cbox_y_max: 0,
-            outline_bbox_x_min: 0,
-            outline_bbox_y_min: 0,
-            outline_bbox_x_max: 0,
-            outline_bbox_y_max: 0,
-            bbox_x_min: 0,
-            bbox_y_min: 0,
-            bbox_x_max: 0,
-            bbox_y_max: 0,
-            autohint_vertical,
-        });
+        return Ok((
+            ScaledGlyph {
+                outline: Outline::default(),
+                advance_width,
+                slot_advance_width,
+                phantom_pp1_x: 0,
+                phantom_pp2_x: slot_advance_width,
+                vertical_bearing_x_advance_width: slot_advance_width,
+                lsb,
+                cbox_x_min: 0,
+                cbox_y_min: 0,
+                cbox_x_max: 0,
+                cbox_y_max: 0,
+                outline_cbox_x_min: 0,
+                outline_cbox_y_min: 0,
+                outline_cbox_x_max: 0,
+                outline_cbox_y_max: 0,
+                outline_bbox_x_min: 0,
+                outline_bbox_y_min: 0,
+                outline_bbox_x_max: 0,
+                outline_bbox_y_max: 0,
+                bbox_x_min: 0,
+                bbox_y_min: 0,
+                bbox_x_max: 0,
+                bbox_y_max: 0,
+                autohint_vertical,
+            },
+            None,
+        ));
     }
 
     // pp1.x origin shift (ttgload.c:2582). Without this, italic fonts
@@ -655,6 +771,23 @@ fn scale_glyph_impl(
     } else {
         hinted_pp1x_fu
     };
+    let target_light_autohint = use_autohint
+        && style.no_horizontal_hinting
+        && !style.stem_adjust
+        && !style.horz_snap
+        && !style.vert_snap;
+    let autohint_pp1x_fu = if target_light_autohint {
+        // C's auto-hinter loads glyphs with `FT_LOAD_NO_SCALE` and computes
+        // its own pp1 from `hints->x_delta`; light mode keeps that x delta at
+        // zero (afloader.c:273-285, 407-410, 489-500).  For composites this
+        // means the autohinter sees the top-level glyph origin, not the
+        // selected component phantom used by native TrueType metrics.
+        top_level_pp1x_fu
+    } else {
+        pp1x_fu
+    };
+    let mut phantom_pp1_x = scale.scale_x(pp1x_fu);
+    let mut phantom_pp2_x = scale.scale_x(pp1x_fu + h_metric.advance_width as i32);
 
     #[cfg(debug_assertions)]
     if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
@@ -670,7 +803,7 @@ fn scale_glyph_impl(
             .points
             .iter()
             .map(|p| crate::tt::glyf::OutlinePoint {
-                x: p.x - pp1x_fu,
+                x: p.x - autohint_pp1x_fu,
                 ..*p
             })
             .collect(),
@@ -706,9 +839,12 @@ fn scale_glyph_impl(
     } else {
         0
     };
+    let mut composite_use_my_metrics_advance = None;
+    let mut composite_use_my_metrics_vertical_advance = None;
+    let mut composite_use_my_metrics_phantoms = None;
     let mut scaled: Vec<OutlinePoint> =
         if outline_raw.is_composite && !use_autohint && allow_bytecode {
-            scale_composite_components(
+            let composite = scale_composite_components(
                 data,
                 &outline_raw,
                 style.is_italic,
@@ -716,7 +852,11 @@ fn scale_glyph_impl(
                 legacy_hinter_phantoms,
                 native_hint_mode,
                 bytecode_context,
-            )?
+            )?;
+            composite_use_my_metrics_advance = composite.use_my_metrics_advance;
+            composite_use_my_metrics_vertical_advance = composite.use_my_metrics_vertical_advance;
+            composite_use_my_metrics_phantoms = composite.use_my_metrics_phantoms;
+            composite.points
         } else {
             let mut scaled = Vec::with_capacity(outline_raw.points.len());
             for (index, p) in outline_raw.points.iter().enumerate() {
@@ -726,7 +866,7 @@ fn scale_glyph_impl(
                 let x = if let Some(point) = scaled_point {
                     point.x
                 } else if use_autohint {
-                    scale.scale_x(p.x - pp1x_fu)
+                    scale.scale_x(p.x - autohint_pp1x_fu)
                 } else {
                     scale.scale_x(p.x)
                 };
@@ -741,6 +881,9 @@ fn scale_glyph_impl(
         };
 
     // ── Hinting dispatch ────────────────────────────────────────────────
+    let mut tt_outline_flags = 0;
+    let mut contour_dropouts = Vec::new();
+    let mut final_hint_context = None;
     if use_autohint {
         let hinted_advance = autohint_glyph(
             &mut scaled,
@@ -776,13 +919,16 @@ fn scale_glyph_impl(
             let hs = crate::tt::hinter::HintScale {
                 x_scale: scale.x_scale,
                 y_scale: y_adj,
+                tt_scale: scale.x_scale,
                 ppem: scale.ppem,
+                point_size: scale.ppem << 6,
                 storage_size: data.maxp.max_storage as usize,
                 twilight_points: data.maxp.max_twilight_points as usize,
                 is_composite: outline_raw.is_composite,
                 reset_vectors_at_glyph_entry,
                 metrics_legacy_phantoms: legacy_hinter_phantoms,
                 native_hint_mode,
+                phantom_x_override: composite_use_my_metrics_phantoms,
             };
             let prep = data.prep.as_deref().unwrap_or(&[]);
             let (raw_ascender, raw_descender) = data
@@ -810,7 +956,37 @@ fn scale_glyph_impl(
             );
             match hint_result {
                 Ok(outcome) => {
-                    slot_advance_width = outcome.advance_width;
+                    phantom_pp1_x = outcome.pp1_x;
+                    phantom_pp2_x = outcome.pp2_x;
+                    tt_outline_flags = outcome.outline_flags;
+                    contour_dropouts = outcome.contour_dropouts;
+                    if let Some(advance_width) = composite_use_my_metrics_advance {
+                        // C `load_truetype_glyph` keeps the subglyph phantoms
+                        // when a composite component has `USE_MY_METRICS`
+                        // (ttgload.c:1838-1869). In the covered DejaVu
+                        // composites, parent bytecode does not alter that
+                        // selected horizontal advance before metrics are read.
+                        slot_advance_width = advance_width;
+                    } else {
+                        slot_advance_width = outcome.advance_width;
+                    }
+                    if outline_raw.is_composite && outline_raw.instructions.is_empty() {
+                        // C does not run composite-parent instructions here,
+                        // so final outline translation uses the scaled but
+                        // unrounded top-level pp1.x (`ttgload.c:1908,2582`).
+                        // The VM call above preserves existing phantom/advance
+                        // behavior; this delta fixes only outline placement.
+                        let parent_pp1_x = scale.scale_x(top_level_pp1x_fu);
+                        let outline_delta = outcome.pp1_x - parent_pp1_x;
+                        if outline_delta != 0 {
+                            for point in &mut scaled {
+                                point.x += outline_delta;
+                            }
+                        }
+                        phantom_pp1_x = parent_pp1_x;
+                        phantom_pp2_x = parent_pp1_x.wrapping_add(outcome.advance_width);
+                    }
+                    final_hint_context = Some(outcome.context);
                 }
                 Err(e) => {
                     log::debug!("[VM] gi={glyph_index}: {e}");
@@ -819,19 +995,44 @@ fn scale_glyph_impl(
         }
     }
 
-    if legacy_hinter_phantoms && allow_bytecode {
-        if let Some(width) = data
-            .hdmx
+    let hdmx_slot_advance_width = if legacy_hinter_phantoms && allow_bytecode {
+        data.hdmx
             .as_ref()
             .and_then(|hdmx| hdmx.width_for_ppem(scale.ppem, glyph_index))
-        {
-            // C `compute_glyph_metrics` prefers `loader->widthp[glyph] * 64`
-            // for hinted native TrueType loads when an hdmx ppem record is
-            // active (ttgload.c:1974-1977). It affects only slot metrics, not
-            // the outline cbox/bbox.
-            slot_advance_width = i32::from(width) * 64;
-        }
+            .map(|width| i32::from(width) * 64)
+    } else {
+        None
+    };
+    if let Some(width) = hdmx_slot_advance_width {
+        // C `compute_glyph_metrics` prefers `loader->widthp[glyph] * 64`
+        // for hinted native TrueType loads when an hdmx ppem record is active
+        // (ttgload.c:1974-1977). It affects slot metrics, not the outline
+        // cbox/bbox.
+        slot_advance_width = width;
     }
+    let vertical_bearing_x_advance_width = if native_hint_mode == NativeHintMode::Mono {
+        if hdmx_slot_advance_width.is_some() {
+            slot_advance_width
+        } else if let Some(advance_width) = composite_use_my_metrics_vertical_advance {
+            // C `load_truetype_glyph` copies the selected subglyph phantom
+            // points for `USE_MY_METRICS`; `compute_glyph_metrics` derives
+            // synthetic vertical bearing from that effective phantom delta
+            // (ttgload.c:1838-1869, 1980-2104).  Simple selected
+            // components can already have rounded phantoms, while nested
+            // composites can still expose pre-grid phantoms.
+            advance_width
+        } else if outline_raw.is_composite && outline_raw.instructions.is_empty() {
+            // C scales composite phantom points before loading components
+            // and restores them after each component that does not set
+            // `USE_MY_METRICS`; without composite bytecode those raw
+            // phantoms reach `compute_glyph_metrics` unchanged.
+            advance_width
+        } else {
+            slot_advance_width
+        }
+    } else {
+        slot_advance_width
+    };
 
     // FT_Outline_Get_CBox: raw 26.6 min/max of the (hinted) points.
     let mut x_min = scaled[0].x;
@@ -883,6 +1084,14 @@ fn scale_glyph_impl(
         p.y -= off_y;
     }
 
+    // C `TT_Load_Glyph` sets `FT_OUTLINE_HIGH_PRECISION` for scaled TrueType
+    // outlines below 24 ppem before the black rasterizer sees them
+    // (`src/truetype/ttgload.c:2569-2577`).
+    let mut outline_flags = tt_outline_flags;
+    if scale.ppem < 24 {
+        outline_flags |= OUTLINE_HIGH_PRECISION;
+    }
+
     let outline = Outline {
         n_contours: outline_raw.num_contours as i32,
         contours: outline_raw
@@ -891,36 +1100,43 @@ fn scale_glyph_impl(
             .map(|&e| e as i16)
             .collect(),
         points: scaled,
-        flags: 0,
+        contour_dropouts,
+        flags: outline_flags,
         cbox_x_min: 0,
         cbox_y_min: 0,
         cbox_x_max: px_x_max - px_x_min,
         cbox_y_max: px_y_max - px_y_min,
     };
 
-    Ok(ScaledGlyph {
-        outline,
-        advance_width,
-        slot_advance_width,
-        lsb,
-        cbox_x_min: x_min,
-        cbox_y_min: y_min,
-        cbox_x_max: x_max,
-        cbox_y_max: y_max,
-        outline_cbox_x_min: outline_cbox.x_min,
-        outline_cbox_y_min: outline_cbox.y_min,
-        outline_cbox_x_max: outline_cbox.x_max,
-        outline_cbox_y_max: outline_cbox.y_max,
-        outline_bbox_x_min: outline_bbox.x_min,
-        outline_bbox_y_min: outline_bbox.y_min,
-        outline_bbox_x_max: outline_bbox.x_max,
-        outline_bbox_y_max: outline_bbox.y_max,
-        bbox_x_min: px_x_min,
-        bbox_y_min: px_y_min,
-        bbox_x_max: px_x_max,
-        bbox_y_max: px_y_max,
-        autohint_vertical,
-    })
+    Ok((
+        ScaledGlyph {
+            outline,
+            advance_width,
+            slot_advance_width,
+            phantom_pp1_x,
+            phantom_pp2_x,
+            vertical_bearing_x_advance_width,
+            lsb,
+            cbox_x_min: x_min,
+            cbox_y_min: y_min,
+            cbox_x_max: x_max,
+            cbox_y_max: y_max,
+            outline_cbox_x_min: outline_cbox.x_min,
+            outline_cbox_y_min: outline_cbox.y_min,
+            outline_cbox_x_max: outline_cbox.x_max,
+            outline_cbox_y_max: outline_cbox.y_max,
+            outline_bbox_x_min: outline_bbox.x_min,
+            outline_bbox_y_min: outline_bbox.y_min,
+            outline_bbox_x_max: outline_bbox.x_max,
+            outline_bbox_y_max: outline_bbox.y_max,
+            bbox_x_min: px_x_min,
+            bbox_y_min: px_y_min,
+            bbox_x_max: px_x_max,
+            bbox_y_max: px_y_max,
+            autohint_vertical,
+        },
+        final_hint_context,
+    ))
 }
 
 fn should_use_default_autohint(data: &FontData) -> bool {
@@ -1007,10 +1223,38 @@ fn scale_composite_components(
     legacy_hinter_phantoms: bool,
     native_hint_mode: NativeHintMode,
     bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
-) -> Result<Vec<OutlinePoint>, FontError> {
+) -> Result<CompositeScaleResult, FontError> {
     let mut points: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
+    let mut use_my_metrics_advance = None;
+    let mut use_my_metrics_vertical_advance = None;
+    let mut use_my_metrics_phantoms = None;
+    let owned_base_context = if bytecode_context.is_none() {
+        if let (Some(fpgm), Some(cvt)) = (&data.fpgm, &data.cvt) {
+            let hs = crate::tt::hinter::HintScale {
+                x_scale: scale.x_scale,
+                y_scale: scale.y_scale,
+                tt_scale: scale.x_scale,
+                ppem: scale.ppem,
+                point_size: scale.ppem << 6,
+                storage_size: data.maxp.max_storage as usize,
+                twilight_points: data.maxp.max_twilight_points as usize,
+                is_composite: false,
+                reset_vectors_at_glyph_entry: false,
+                metrics_legacy_phantoms: legacy_hinter_phantoms,
+                native_hint_mode,
+                phantom_x_override: None,
+            };
+            let prep = data.prep.as_deref().unwrap_or(&[]);
+            Some(crate::tt::hinter::prepare_context(cvt, fpgm, prep, &hs)?)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let base_context = bytecode_context.or(owned_base_context.as_ref());
     for comp in &outline_raw.components {
-        let sub = scale_glyph_impl(
+        let (sub, _) = scale_glyph_impl_with_context(
             data,
             comp.glyph_index,
             None,
@@ -1028,13 +1272,23 @@ fn scale_composite_components(
             false,
             false,
             legacy_hinter_phantoms,
-            bytecode_context,
+            base_context,
         )?;
+        if comp.use_my_metrics {
+            use_my_metrics_advance = Some(sub.slot_advance_width);
+            use_my_metrics_vertical_advance = Some(sub.vertical_bearing_x_advance_width);
+            use_my_metrics_phantoms = Some((sub.phantom_pp1_x, sub.phantom_pp2_x));
+        }
         let off_x = ft_pix_floor(sub.outline_cbox_x_min);
         let off_y = ft_pix_floor(sub.outline_cbox_y_min);
         let mut transformed = Vec::with_capacity(sub.outline.points.len());
         for point in &sub.outline.points {
-            let x = point.x + off_x;
+            // Recursive component loading happens before the final top-level
+            // `-loader.pp1.x` outline translation in `TT_Load_Glyph`
+            // (`ttgload.c:1858-1888, 2578-2583`). `scale_glyph_impl` returns
+            // standalone glyph coordinates after that translation, so add the
+            // subglyph pp1 back when reconstructing component coordinates.
+            let x = point.x + off_x + sub.phantom_pp1_x;
             let y = point.y + off_y;
             transformed.push(OutlinePoint {
                 x: ft_mul_fix(x, comp.transform.xx) + ft_mul_fix(y, comp.transform.xy),
@@ -1043,14 +1297,22 @@ fn scale_composite_components(
             });
         }
         let (dx, dy) = if comp.args_are_xy {
-            let dx = scale.scale_x(comp.arg1);
-            let dy = {
-                let scaled = scale.scale_y(comp.arg2);
-                if comp.round_xy_to_grid {
-                    ft_pix_round(scaled)
+            let scaled_x = scale.scale_x(comp.arg1);
+            let scaled_y = scale.scale_y(comp.arg2);
+            let (dx, dy) = if comp.round_xy_to_grid {
+                // Mono target loads disable the legacy compatibility branch,
+                // so C's rounded component X offset affects slot metrics.
+                // The normal/light compatibility path keeps the historical X
+                // placement used by existing pixel fixtures; Y was already
+                // rounded in both branches.
+                let dx = if native_hint_mode == NativeHintMode::Mono {
+                    ft_pix_round(scaled_x)
                 } else {
-                    scaled
-                }
+                    scaled_x
+                };
+                (dx, ft_pix_round(scaled_y))
+            } else {
+                (scaled_x, scaled_y)
             };
             (dx, dy)
         } else {
@@ -1073,7 +1335,19 @@ fn scale_composite_components(
             });
         }
     }
-    Ok(points)
+    Ok(CompositeScaleResult {
+        points,
+        use_my_metrics_advance,
+        use_my_metrics_vertical_advance,
+        use_my_metrics_phantoms,
+    })
+}
+
+struct CompositeScaleResult {
+    points: Vec<OutlinePoint>,
+    use_my_metrics_advance: Option<i32>,
+    use_my_metrics_vertical_advance: Option<i32>,
+    use_my_metrics_phantoms: Option<(i32, i32)>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1298,6 +1572,7 @@ fn autohint_glyph(
             .map(|&e| e as i16)
             .collect(),
         points,
+        contour_dropouts: Vec::new(),
         flags: 0,
         cbox_x_min: 0,
         cbox_y_min: 0,

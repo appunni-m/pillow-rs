@@ -28,6 +28,7 @@ const MORE_COMPONENTS: u16 = 0x0020;
 const WE_HAVE_AN_X_Y_SCALE: u16 = 0x0040;
 const WE_HAVE_A_TWO_BY_TWO: u16 = 0x0080;
 const WE_HAVE_INSTRUCTIONS: u16 = 0x0100;
+const USE_MY_METRICS: u16 = 0x0200;
 
 /// A single decoded outline point in font design units.
 #[derive(Debug, Clone, Copy)]
@@ -90,6 +91,7 @@ pub struct CompositeComponent {
     pub args_are_xy: bool,
     pub transform: Affine,
     pub round_xy_to_grid: bool,
+    pub use_my_metrics: bool,
 }
 
 struct CompositeGlyph {
@@ -632,6 +634,7 @@ fn parse_composite_components(data: &[u8], mut pos: usize) -> Result<CompositeGl
             args_are_xy,
             transform,
             round_xy_to_grid: flags & ROUND_XY_TO_GRID != 0,
+            use_my_metrics: flags & USE_MY_METRICS != 0,
         });
 
         if flags & MORE_COMPONENTS == 0 {

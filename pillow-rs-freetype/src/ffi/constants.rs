@@ -95,3 +95,5 @@ pub(super) const SUPPORTED_LOAD_FLAGS: FT_Int32 = FT_LOAD_RENDER
     | FT_LOAD_NO_AUTOHINT
     | LOAD_FLAGS_ACCEPTED_WITHOUT_CORE_BITS
     | LOAD_TARGET_MASK;
+
+include!("generated_constants.rs");

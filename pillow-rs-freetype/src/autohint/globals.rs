@@ -24,6 +24,7 @@
 //! Full 52-script support via generated data from afranges.c + afstyles.h.
 
 use super::blue_strings::{BlueStringEntry, SCRIPT_LATN, SCRIPT_TABLE};
+use super::cjk::{cjk_metrics_init_blues, cjk_metrics_init_widths, cjk_metrics_scale};
 use super::globals_data::{STYLE_FALLBACK, STYLE_TABLE, STYLE_UNASSIGNED};
 use super::latin::{metrics_init_blues_impl, metrics_init_widths};
 use super::types::AfLatinMetrics;
@@ -62,6 +63,7 @@ pub struct FaceGlobals {
 struct FaceCoverage {
     glyph_styles: Vec<usize>,
     non_base_glyphs: Vec<bool>,
+    digit_glyphs: Vec<bool>,
 }
 
 impl FaceGlobals {
@@ -134,11 +136,22 @@ impl FaceGlobals {
             let upem = self.font_data.head.units_per_em as i32;
             let mut m = AfLatinMetrics::new(upem, self.glyph_count);
             m.no_advance_hinting = style.script_tag == "hani";
+            m.digits_have_same_width = digits_have_same_width(&self.font_data);
+            m.fixed_width = self
+                .font_data
+                .post
+                .as_ref()
+                .is_some_and(|post| post.is_fixed_pitch != 0);
 
             // Copy non-base flags
             for (i, &nb) in coverage.non_base_glyphs.iter().enumerate() {
                 if nb {
                     m.non_base_glyphs[i] = true;
+                }
+            }
+            for (i, &digit) in coverage.digit_glyphs.iter().enumerate() {
+                if digit {
+                    m.digit_glyphs[i] = true;
                 }
             }
 
@@ -164,6 +177,10 @@ impl FaceGlobals {
                 "latb" => &['\u{2092}', '\u{2080}'],
                 // C Latin superscript: "ᵒ ᴼ ⁰" = U+1D52 U+1D3C U+2070
                 "latp" => &['\u{1D52}', '\u{1D3C}', '\u{2070}'],
+                // C Hani: "田 囗" (afscript.h).  Hani uses the CJK writing
+                // system, so this only selects the standard glyph for CJK
+                // width detection below.
+                "hani" => &['\u{7530}', '\u{56D7}'],
                 // Most scripts have a single standard character.
                 _ => &[
                     super::globals_data::standard_char_for_script(style.script_tag),
@@ -198,7 +215,11 @@ impl FaceGlobals {
                             on_curve: p.on_curve,
                         })
                         .collect();
-                    metrics_init_widths(&mut m, char_glyph, &outline_raw, &sp);
+                    if style.script_tag == "hani" {
+                        cjk_metrics_init_widths(&mut m, &outline_raw, &sp);
+                    } else {
+                        metrics_init_widths(&mut m, char_glyph, &outline_raw, &sp);
+                    }
                 }
             } else {
                 for dim in 0..2 {
@@ -210,14 +231,22 @@ impl FaceGlobals {
             }
 
             // Blue zones for this script
-            metrics_init_blues_impl(&mut m, &self.font_data, style.blue_entries);
+            if style.script_tag == "hani" {
+                cjk_metrics_init_blues(&mut m, &self.font_data, style.blue_entries);
+            } else {
+                metrics_init_blues_impl(&mut m, &self.font_data, style.blue_entries);
+            }
 
             // Scale
             let bs = crate::scaler::ScaleMetrics::new(
                 self.font_data.size_pt,
                 self.font_data.head.units_per_em,
             );
-            let (_, ya) = super::latin::metrics_scale_dim(&mut m, bs.x_scale, bs.y_scale, 0, 0);
+            let (_, ya) = if style.script_tag == "hani" {
+                cjk_metrics_scale(&mut m, bs.x_scale, bs.y_scale, 0, 0)
+            } else {
+                super::latin::metrics_scale_dim(&mut m, bs.x_scale, bs.y_scale, 0, 0)
+            };
             m.axis[1].org_scale = ya;
 
             cache[si] = Some(Rc::new(m));
@@ -229,57 +258,32 @@ impl FaceGlobals {
 
 fn build_coverage(font_data: &FontData, glyph_count: u16) -> FaceCoverage {
     let ng = glyph_count as usize;
-    // Build non-base glyph table (Latin diacritics etc.)
-    let nonbase_ranges: &[(u32, u32)] = &[
-        (0x005E, 0x0060),
-        (0x007E, 0x007E),
-        (0x00A8, 0x00A9),
-        (0x00AE, 0x00B0),
-        (0x00B4, 0x00B4),
-        (0x00B8, 0x00B8),
-        (0x00BC, 0x00BE),
-        (0x02B9, 0x02DF),
-        (0x02E5, 0x02FF),
-        (0x0300, 0x036F),
-        (0x1AB0, 0x1AEB),
-        (0x1DC0, 0x1DFF),
-        (0x2017, 0x2017),
-        (0x203E, 0x203E),
-        (0xA788, 0xA788),
-        (0xA7F8, 0xA7FA),
-    ];
     let mut non_base = vec![false; ng];
-    for &(first, last) in nonbase_ranges {
-        let mut ch = first;
-        loop {
-            if let Some(gi) = font_data.cmap.char_index(ch) {
-                if gi != 0 && (gi as usize) < ng {
-                    non_base[gi as usize] = true;
-                }
-            }
-            if ch >= last {
-                break;
-            }
-            ch += 1;
-        }
-    }
-
     let mut glyph_styles = vec![STYLE_UNASSIGNED; ng];
+    let mut digit_glyphs = vec![false; ng];
 
     // Run coverage scan
     compute_style_coverage(&font_data.cmap, glyph_count, &mut glyph_styles);
+    for cp in b'0'..=b'9' {
+        if let Some(gi) = font_data.cmap.char_index(u32::from(cp)) {
+            if gi != 0 && (gi as usize) < ng {
+                digit_glyphs[gi as usize] = true;
+            }
+        }
+    }
 
     // Per-script non-base ranges: C checks glyph_styles[gi] & AF_NONBASE
     // during coverage. Each style's non_base_ranges (RANGES_*_NONBASE
     // and RANGES_*_NONBASE_UNI) contain combining marks and diacritics
     // that should NOT get blue zone alignment (afglobal.c).
-    for style in STYLE_TABLE {
+    for (si, style) in STYLE_TABLE.iter().enumerate() {
         for range in style.non_base_ranges {
             let mut cp = range.first;
             while cp <= range.last {
                 if let Some(gi) = font_data.cmap.char_index(cp) {
-                    if gi != 0 && (gi as usize) < ng {
-                        non_base[gi as usize] = true;
+                    let gi = gi as usize;
+                    if gi != 0 && gi < ng && glyph_styles[gi] == si {
+                        non_base[gi] = true;
                     }
                 }
                 cp += 1;
@@ -293,7 +297,34 @@ fn build_coverage(font_data: &FontData, glyph_count: u16) -> FaceCoverage {
     FaceCoverage {
         glyph_styles,
         non_base_glyphs: non_base,
+        digit_glyphs,
     }
+}
+
+fn digits_have_same_width(font_data: &FontData) -> bool {
+    let mut old_advance = 0;
+    let mut started = false;
+
+    for cp in b'0'..=b'9' {
+        let Some(glyph_index) = font_data.cmap.char_index(u32::from(cp)) else {
+            continue;
+        };
+        if glyph_index == 0 {
+            continue;
+        }
+
+        let advance = font_data.hmtx.get(glyph_index).advance_width;
+        if started {
+            if advance != old_advance {
+                return false;
+            }
+        } else {
+            old_advance = advance;
+            started = true;
+        }
+    }
+
+    true
 }
 
 // ── Coverage scan ─────────────────────────────────────────────────────────

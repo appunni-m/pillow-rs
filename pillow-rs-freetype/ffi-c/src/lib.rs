@@ -90,6 +90,7 @@ pub struct FT_GlyphSlotRec {
     pub bitmap_left: FT_Int,
     pub bitmap_top: FT_Int,
     buffer: Vec<u8>,
+    rust_slot: rust_ffi::FT_GlyphSlot,
     source_face: FT_Face,
     load_flags: FT_Int32,
 }
@@ -144,12 +145,12 @@ pub fn abi_slot_snapshot(face: FT_Face) -> Option<AbiSlotSnapshot> {
     let slot = abi_glyph_slot(face)?;
     // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
     let slot = unsafe { slot.as_ref() };
-    let bitmap = if slot.bitmap.buffer.is_null() {
+    let len = usize::try_from(i64::from(slot.bitmap.pitch).abs())
+        .ok()?
+        .checked_mul(usize::try_from(slot.bitmap.rows).ok()?)?;
+    let bitmap = if slot.bitmap.buffer.is_null() || len == 0 {
         None
     } else {
-        let len = usize::try_from(i64::from(slot.bitmap.pitch).abs())
-            .ok()?
-            .checked_mul(usize::try_from(slot.bitmap.rows).ok()?)?;
         // SAFETY: the buffer is owned by the live slot for the duration of this copy.
         let buffer = unsafe { slice::from_raw_parts(slot.bitmap.buffer, len) }.to_vec();
         Some(AbiBitmapSnapshot {
@@ -372,19 +373,12 @@ pub extern "C" fn FT_Render_Glyph(slot: FT_GlyphSlot, render_mode: FT_Render_Mod
     };
     // SAFETY: `slot_ptr` is checked non-null and points to a live slot allocated by this crate.
     let source_face = unsafe { (*slot_ptr.as_ptr()).source_face };
-    let Some(source_state) = face_state(source_face) else {
-        return rust_ffi::FT_Err_Invalid_Argument;
-    };
+    // SAFETY: `slot_ptr` points to a live slot allocated by this crate.
+    let rust_slot = unsafe { (*slot_ptr.as_ptr()).rust_slot.clone() };
+    // SAFETY: `slot_ptr` points to a live slot allocated by this crate.
     let load_flags = unsafe { (*slot_ptr.as_ptr()).load_flags };
-    let Some(render_flags) = load_flags_for_render_mode(load_flags, render_mode) else {
-        return rust_ffi::FT_Err_Cannot_Render_Glyph;
-    };
-    match rust_ffi::FT_Load_Glyph(
-        &source_state.inner,
-        unsafe { (*slot_ptr.as_ptr()).glyph_index },
-        render_flags,
-    ) {
-        Ok(rendered) => store_slot(source_face, rendered, render_flags),
+    match rust_ffi::FT_Render_Glyph(rust_slot, render_mode) {
+        Ok(rendered) => store_slot(source_face, rendered, load_flags | rust_ffi::FT_LOAD_RENDER),
         Err(error) => error,
     }
 }
@@ -420,6 +414,7 @@ fn rust_slot_to_abi(
     source_face: FT_Face,
     load_flags: FT_Int32,
 ) -> FT_GlyphSlotRec {
+    let rust_slot = slot.clone();
     let mut buffer = slot
         .bitmap
         .as_ref()
@@ -448,6 +443,7 @@ fn rust_slot_to_abi(
         bitmap_left: slot.bitmap_left,
         bitmap_top: slot.bitmap_top,
         buffer,
+        rust_slot,
         source_face,
         load_flags,
     }
@@ -498,18 +494,6 @@ fn face_state_mut(face: FT_Face) -> Option<&'static mut FaceState> {
     let mut state = NonNull::new(internal.cast::<FaceState>())?;
     // SAFETY: `internal` points to a `FaceState` allocated by this crate.
     Some(unsafe { state.as_mut() })
-}
-
-fn load_flags_for_render_mode(load_flags: FT_Int32, render_mode: FT_Render_Mode) -> Option<FT_Int32> {
-    const TARGET_MASK: FT_Int32 = 15 << 16;
-    let target = match render_mode {
-        0 | 1 => 0,
-        2 => 2 << 16,
-        3 => 3 << 16,
-        4 => 4 << 16,
-        _ => return None,
-    };
-    Some((load_flags | rust_ffi::FT_LOAD_RENDER) & !TARGET_MASK | target)
 }
 
 fn non_null_mut<T>(ptr: *mut T) -> Option<NonNull<T>> {

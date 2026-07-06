@@ -9,16 +9,19 @@ pub struct PostTable {
     pub underline_position: i16,
     /// Underline thickness in font units.
     pub underline_thickness: i16,
+    /// Non-zero if the face reports fixed-pitch advances.
+    pub is_fixed_pitch: u32,
 }
 
 /// Parse the 'post' table header fields used by `FT_FaceRec`.
 pub fn parse_post(data: &[u8]) -> Option<PostTable> {
-    if data.len() < 12 {
+    if data.len() < 16 {
         return None;
     }
 
     Some(PostTable {
         underline_position: i16::from_be_bytes([data[8], data[9]]),
         underline_thickness: i16::from_be_bytes([data[10], data[11]]),
+        is_fixed_pitch: u32::from_be_bytes([data[12], data[13], data[14], data[15]]),
     })
 }

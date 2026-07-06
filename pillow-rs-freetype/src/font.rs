@@ -453,11 +453,20 @@ impl Font {
     /// Approximate `FT_FaceRec::face_flags` for supported SFNT outline faces.
     pub fn face_flags(&self) -> u32 {
         const FT_FACE_FLAG_SCALABLE: u32 = 1 << 0;
+        const FT_FACE_FLAG_FIXED_WIDTH: u32 = 1 << 2;
         const FT_FACE_FLAG_SFNT: u32 = 1 << 3;
         const FT_FACE_FLAG_HORIZONTAL: u32 = 1 << 4;
         const FT_FACE_FLAG_GLYPH_NAMES: u32 = 1 << 9;
 
         let mut flags = FT_FACE_FLAG_SCALABLE | FT_FACE_FLAG_SFNT | FT_FACE_FLAG_HORIZONTAL;
+        if self
+            .data
+            .post
+            .as_ref()
+            .is_some_and(|post| post.is_fixed_pitch != 0)
+        {
+            flags |= FT_FACE_FLAG_FIXED_WIDTH;
+        }
         if self.data.table_directory.record(tag(b"post")).is_some() {
             flags |= FT_FACE_FLAG_GLYPH_NAMES;
         }
@@ -509,6 +518,10 @@ impl Font {
         Arc::make_mut(&mut self.data).size_pt = self.size_pt;
         self.face_globals =
             crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
+        // C keeps TrueType bytecode execution state on the active size object
+        // (`ttobjs.c:tt_size_run_prep`).  A size request invalidates the
+        // prepared CVT/prep state; reusing it keeps stale scale values.
+        self.bytecode_context = BytecodeContextCache::default();
     }
 
     /// Equivalent to `FT_Set_Pixel_Sizes`.
@@ -523,6 +536,10 @@ impl Font {
         Arc::make_mut(&mut self.data).size_pt = self.size_pt;
         self.face_globals =
             crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
+        // C keeps TrueType bytecode execution state on the active size object
+        // (`ttobjs.c:tt_size_run_prep`).  A size request invalidates the
+        // prepared CVT/prep state; reusing it keeps stale scale values.
+        self.bytecode_context = BytecodeContextCache::default();
     }
 
     /// Return all selectable charmaps.
@@ -766,12 +783,26 @@ impl Font {
         glyph: u16,
         vertical_layout: bool,
     ) -> Result<GlyphSlotMetrics, FontError> {
-        let metrics_cache = self.face_globals.get_metrics(glyph);
-        let scaled = scaler::scale_glyph_for_metrics_with_autohint(
+        self.glyph_metrics_for_index_force_autohint_with_layout_and_mode(
+            glyph,
+            vertical_layout,
+            NativeHintMode::Normal,
+        )
+    }
+
+    pub(crate) fn glyph_metrics_for_index_force_autohint_with_layout_and_mode(
+        &self,
+        glyph: u16,
+        vertical_layout: bool,
+        native_hint_mode: NativeHintMode,
+    ) -> Result<GlyphSlotMetrics, FontError> {
+        let metrics_cache = self.autohint_metrics_for_glyph(glyph);
+        let scaled = scaler::scale_glyph_for_metrics_with_autohint_and_mode(
             &self.data,
             glyph,
             metrics_cache.as_deref(),
             self.is_italic,
+            native_hint_mode,
         )?;
         Ok(self.slot_metrics_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
     }
@@ -993,20 +1024,54 @@ impl Font {
         &self,
         glyph: u16,
     ) -> Result<scaler::ScaledGlyph, FontError> {
+        self.scale_glyph_for_load_mode_with_native_mode(glyph, NativeHintMode::Normal)
+    }
+
+    pub(crate) fn scale_glyph_for_load_mode_with_native_mode(
+        &self,
+        glyph: u16,
+        native_hint_mode: NativeHintMode,
+    ) -> Result<scaler::ScaledGlyph, FontError> {
         match self.load_mode {
             LoadMode::Default => {
-                let bytecode_context = self.native_bytecode_context()?;
-                scaler::scale_glyph_native_default_with_bytecode_context(
+                let bytecode_context = self.native_bytecode_context_for_mode(native_hint_mode)?;
+                scaler::scale_glyph_native_default_with_bytecode_context_and_mode(
                     &self.data,
                     glyph,
                     None,
                     self.is_italic,
+                    native_hint_mode,
                     bytecode_context,
                 )
             }
             LoadMode::ForceAutoHint => {
-                let metrics_cache = self.face_globals.get_metrics(glyph);
-                scaler::scale_glyph(&self.data, glyph, metrics_cache.as_deref(), self.is_italic)
+                let metrics_cache = self.autohint_metrics_for_glyph(glyph);
+                match native_hint_mode {
+                    NativeHintMode::Normal => scaler::scale_glyph(
+                        &self.data,
+                        glyph,
+                        metrics_cache.as_deref(),
+                        self.is_italic,
+                    ),
+                    NativeHintMode::Mono => scaler::scale_glyph_mono(
+                        &self.data,
+                        glyph,
+                        metrics_cache.as_deref(),
+                        self.is_italic,
+                    ),
+                    NativeHintMode::Lcd => scaler::scale_glyph_lcd(
+                        &self.data,
+                        glyph,
+                        metrics_cache.as_deref(),
+                        self.is_italic,
+                    ),
+                    NativeHintMode::LcdV => scaler::scale_glyph_lcd_v(
+                        &self.data,
+                        glyph,
+                        metrics_cache.as_deref(),
+                        self.is_italic,
+                    ),
+                }
             }
             LoadMode::TargetLight => {
                 let metrics_cache = self.autohint_metrics_for_glyph(glyph);
@@ -1020,7 +1085,9 @@ impl Font {
             LoadMode::NoHinting => {
                 scaler::scale_glyph_no_hinting(&self.data, glyph, self.is_italic)
             }
-            LoadMode::NoAutoHint => self.scale_glyph_no_autohint_for_load(glyph),
+            LoadMode::NoAutoHint => {
+                self.scale_glyph_no_autohint_for_load_with_mode(glyph, native_hint_mode)
+            }
         }
     }
 
@@ -1071,13 +1138,22 @@ impl Font {
         &self,
         glyph: u16,
     ) -> Result<scaler::ScaledGlyph, FontError> {
+        self.scale_glyph_no_autohint_for_load_with_mode(glyph, NativeHintMode::Normal)
+    }
+
+    fn scale_glyph_no_autohint_for_load_with_mode(
+        &self,
+        glyph: u16,
+        native_hint_mode: NativeHintMode,
+    ) -> Result<scaler::ScaledGlyph, FontError> {
         if self.data.fpgm.is_some() && self.data.cvt.is_some() {
-            let bytecode_context = self.native_bytecode_context()?;
-            scaler::scale_glyph_native_default_with_bytecode_context(
+            let bytecode_context = self.native_bytecode_context_for_mode(native_hint_mode)?;
+            scaler::scale_glyph_native_default_with_bytecode_context_and_mode(
                 &self.data,
                 glyph,
                 None,
                 self.is_italic,
+                native_hint_mode,
                 bytecode_context,
             )
         } else {
@@ -1127,13 +1203,16 @@ impl Font {
             let scale = tt::hinter::HintScale {
                 x_scale: self.size_metrics.x_scale,
                 y_scale: self.size_metrics.y_scale,
-                ppem: i32::from(self.size_metrics.x_ppem),
+                tt_scale: self.size_metrics.tt_scale(),
+                ppem: self.size_metrics.tt_ppem(),
+                point_size: self.size_metrics.tt_point_size(),
                 storage_size: self.data.maxp.max_storage as usize,
                 twilight_points: self.data.maxp.max_twilight_points as usize,
                 is_composite: false,
                 reset_vectors_at_glyph_entry: false,
                 metrics_legacy_phantoms: false,
                 native_hint_mode: mode,
+                phantom_x_override: None,
             };
             let prep = self.data.prep.as_deref().unwrap_or(&[]);
             let prepared = tt::hinter::prepare_context(cvt, fpgm, prep, &scale)?;
@@ -1235,7 +1314,8 @@ impl Font {
             metrics.vert_advance = ft_mul_fix(advance_fu, self.size_metrics.y_scale);
         }
         if scaled.autohint_vertical.is_none() {
-            metrics.vert_bearing_x = metrics.hori_bearing_x - metrics.hori_advance / 2;
+            metrics.vert_bearing_x =
+                metrics.hori_bearing_x - scaled.vertical_bearing_x_advance_width / 2;
         }
 
         match grid_fit_metrics {
@@ -1374,6 +1454,30 @@ fn grid_fit_vertical_metrics(metrics: &mut GlyphSlotMetrics) {
 }
 
 impl SizeMetrics {
+    fn tt_scale(&self) -> i32 {
+        if self.x_ppem >= self.y_ppem {
+            self.x_scale
+        } else {
+            self.y_scale
+        }
+    }
+
+    fn tt_ppem(&self) -> i32 {
+        i32::from(if self.x_ppem >= self.y_ppem {
+            self.x_ppem
+        } else {
+            self.y_ppem
+        })
+    }
+
+    fn tt_point_size(&self) -> i32 {
+        if self.char_height != 0 {
+            self.char_height
+        } else {
+            self.char_width
+        }
+    }
+
     fn from_char_size(
         char_width: i32,
         char_height: i32,

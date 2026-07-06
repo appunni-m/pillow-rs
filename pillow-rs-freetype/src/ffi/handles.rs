@@ -1,15 +1,17 @@
 #![allow(non_camel_case_types, non_snake_case)]
 
+use std::ptr;
+
 use crate::api;
 
 use super::constants::*;
 use super::convert::{
-    error_to_ft, glyph_format_from_core, load_flag_for_render_mode, load_flags_to_core,
-    render_mode_to_core,
+    error_to_ft, glyph_format_from_core, load_flags_to_core, render_mode_to_core,
 };
 use super::types::{
-    FT_Bitmap, FT_Error, FT_F26Dot6, FT_Glyph_Format, FT_Glyph_Metrics, FT_Int, FT_Int32, FT_Long,
-    FT_Render_Mode, FT_Size_Metrics as FT_Size_MetricsRec, FT_UInt, FT_ULong, FT_Vector,
+    FT_Bitmap, FT_Byte, FT_CharMap, FT_Error, FT_F26Dot6, FT_Glyph_Format, FT_Glyph_Metrics,
+    FT_Int, FT_Int32, FT_Long, FT_Pointer, FT_Render_Mode, FT_Sfnt_Tag,
+    FT_Size_Metrics as FT_Size_MetricsRec, FT_UInt, FT_ULong, FT_Vector,
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -126,10 +128,8 @@ pub fn FT_Render_Glyph(
 ) -> Result<FT_GlyphSlot, FT_Error> {
     let mode = render_mode_to_core(render_mode).ok_or(FT_Err_Cannot_Render_Glyph)?;
     let glyph_index = u16::try_from(slot.glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
-    let mut flags = slot.load_flags | api::LoadFlags::RENDER;
-    flags |= load_flag_for_render_mode(mode);
     slot.source_face
-        .load_glyph(glyph_index, flags)
+        .render_loaded_glyph(glyph_index, slot.load_flags, mode)
         .map(|rendered| {
             slot_to_ffi(
                 &FT_Face {
@@ -137,7 +137,7 @@ pub fn FT_Render_Glyph(
                     probe_only: false,
                 },
                 rendered,
-                flags,
+                slot.load_flags | api::LoadFlags::RENDER,
             )
         })
         .map_err(error_to_ft)
@@ -145,6 +145,37 @@ pub fn FT_Render_Glyph(
 
 pub fn FT_Size_Metrics(face: &FT_Face) -> FT_Size_MetricsRec {
     face.inner.size_metrics().into()
+}
+
+pub fn FT_Get_Sfnt_Table(_face: &FT_Face, _tag: FT_Sfnt_Tag) -> FT_Pointer {
+    ptr::null_mut()
+}
+
+pub fn FT_Load_Sfnt_Table(
+    _face: &FT_Face,
+    _tag: FT_ULong,
+    _offset: FT_Long,
+    _buffer: *mut FT_Byte,
+    _length: *mut FT_ULong,
+) -> FT_Error {
+    FT_Err_Unimplemented_Feature
+}
+
+pub fn FT_Sfnt_Table_Info(
+    _face: &FT_Face,
+    _table_index: FT_UInt,
+    _tag: *mut FT_ULong,
+    _length: *mut FT_ULong,
+) -> FT_Error {
+    FT_Err_Unimplemented_Feature
+}
+
+pub fn FT_Get_CMap_Language_ID(_charmap: FT_CharMap) -> FT_ULong {
+    0
+}
+
+pub fn FT_Get_CMap_Format(_charmap: FT_CharMap) -> FT_Long {
+    0
 }
 
 fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags) -> FT_GlyphSlot {

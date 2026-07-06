@@ -25,6 +25,10 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
+#[path = "support/generated_constant_lookup.rs"]
+mod generated_constant_lookup;
+use generated_constant_lookup::generated_rust_constant;
+
 #[derive(Debug)]
 struct Manifest {
     subjects: BTreeMap<String, BTreeSet<String>>,
@@ -186,6 +190,12 @@ enum RuntimeReadiness {
     Pending { reason: String },
 }
 
+#[derive(Clone, Copy)]
+enum GlyphLoadInput {
+    CharCode(u64),
+    GlyphIndex(u32),
+}
+
 struct ProfileStage {
     name: &'static str,
     start: Instant,
@@ -297,7 +307,9 @@ fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[InputCase]) 
                 ));
                 continue;
             }
-            if let Err(err) = validate_assets(case) {
+            if case_requires_asset_validation(case)
+                && let Err(err) = validate_assets(case)
+            {
                 failures.push(format!("{} asset validation failed: {err}", case.case_id));
                 continue;
             }
@@ -1055,7 +1067,7 @@ fn select_runtime_cases(cases: &[InputCase]) -> RuntimeSelection {
             if !case_matches_filter(&expanded, filter.as_deref()) {
                 return true;
             }
-            match classify_runtime_case(&expanded, canonical_operation(&expanded.operation)) {
+            match classify_runtime_case(&expanded, case_canonical_operation(&expanded)) {
                 RuntimeReadiness::Runnable { key } => {
                     if seen_executable.insert(key) {
                         executable.push(expanded);
@@ -1093,6 +1105,13 @@ fn is_supported_runtime_operation(case: &InputCase, canonical_operation: &str) -
             .get("symbol")
             .and_then(Value::as_str)
             .is_some_and(is_supported_runtime_constant),
+        "abi_type_probe" => {
+            type_symbol_param(&case.inputs.params).is_ok_and(is_supported_runtime_type)
+        }
+        "abi_function_probe" => {
+            type_symbol_param(&case.inputs.params).is_ok_and(is_supported_runtime_function)
+        }
+        "macro_eval" => rust_macro_eval(case).is_ok(),
         "record_layout" => record_param(&case.inputs.params).is_ok_and(is_supported_runtime_layout),
         "new_memory_face" | "set_pixel_sizes" | "set_char_size" | "size_metrics"
         | "get_char_index" | "load_char" | "load_glyph" | "render_glyph" => {
@@ -1134,7 +1153,12 @@ fn canonical_operation(operation: &str) -> &str {
         | "abi.enum_variant_value"
         | "abi.macro_value_and_import"
         | "constant.alias_value" => "constant",
-        "record_layout" | "abi.record_layout" | "abi.layout_probe" => "record_layout",
+        "abi.type_alias" | "abi.typedef_import" => "abi_type_probe",
+        "macro_eval" | "macro_type_probe" => "macro_eval",
+        "record_layout" | "abi.record_layout" | "abi.layout_probe" | "ftglyph.record_layout" => {
+            "record_layout"
+        }
+        "c_abi.type_alias_layout" => "record_layout",
         "new_memory_face"
         | "freetype.new_memory_face"
         | "freetype.open_face"
@@ -1150,12 +1174,59 @@ fn canonical_operation(operation: &str) -> &str {
     }
 }
 
+fn case_canonical_operation(case: &InputCase) -> &str {
+    if case.operation == "constant_eval"
+        && (case.inputs.params.get("macro").is_some()
+            || case.inputs.params.get("symbols").is_some())
+    {
+        return "macro_eval";
+    }
+    if matches!(case.operation.as_str(), "macro_eval" | "macro_type_probe") {
+        return "macro_eval";
+    }
+    if case.operation == "abi.layout_probe"
+        && let Ok(symbol) = type_symbol_param(&case.inputs.params)
+        && is_supported_runtime_type(symbol)
+        && !is_supported_runtime_layout(symbol)
+    {
+        return "abi_type_probe";
+    }
+    if matches!(
+        case.operation.as_str(),
+        "abi.header_import" | "abi.public_import"
+    ) {
+        if let Ok(symbol) = type_symbol_param(&case.inputs.params) {
+            if is_supported_runtime_constant(symbol) {
+                return "constant";
+            }
+            if is_supported_runtime_type(symbol) {
+                return "abi_type_probe";
+            }
+            if is_supported_runtime_layout(symbol) {
+                return "record_layout";
+            }
+            if is_supported_runtime_function(symbol) {
+                return "abi_function_probe";
+            }
+        }
+    }
+    canonical_operation(&case.operation)
+}
+
 fn is_supported_runtime_layout(record: &str) -> bool {
     rust_layout(record).is_ok()
 }
 
 fn is_supported_runtime_constant(symbol: &str) -> bool {
     rust_constant(symbol).is_ok()
+}
+
+fn is_supported_runtime_type(symbol: &str) -> bool {
+    rust_type_probe(symbol).is_ok()
+}
+
+fn is_supported_runtime_function(symbol: &str) -> bool {
+    rust_function_probe(symbol).is_ok()
 }
 
 fn format_operation_counts(counts: &BTreeMap<String, usize>) -> String {
@@ -1321,7 +1392,7 @@ impl AxisProfileSummary {
         if !profile_enabled() {
             return;
         }
-        let operation = canonical_operation(&case.operation);
+        let operation = case_canonical_operation(case);
         let mut groups = vec![
             format!("operation={operation}"),
             format!("operation={operation}|subject={}", case.subject),
@@ -1767,7 +1838,7 @@ impl BackendComparisonWorker {
         if profile_enabled() {
             let sample = SlowCaseSample {
                 case_id: case.case_id.clone(),
-                operation: canonical_operation(&case.operation).to_string(),
+                operation: case_canonical_operation(case).to_string(),
                 total: case_start.elapsed(),
                 rust_ffi: rust_duration,
                 c_abi: c_duration,
@@ -1781,7 +1852,7 @@ impl BackendComparisonWorker {
     }
 
     fn run_rust_ffi(&mut self, case: &InputCase) -> Result<RunOutput, String> {
-        match canonical_operation(&case.operation) {
+        match case_canonical_operation(case) {
             "size_metrics" => {
                 let face = self.rust_face(case)?;
                 Ok(ok(size_metrics_json(&FT_Size_Metrics(face))))
@@ -1810,23 +1881,22 @@ impl BackendComparisonWorker {
                 }
             }
             "render_glyph" => {
-                let char_code = u64_param(&case.inputs.params, "char_code")?;
                 let load_flags = load_flags_param(&case.inputs.params)?;
                 let render_mode = render_mode_param(&case.inputs.params)?;
                 let face = self.rust_face(case)?;
-                match FT_Load_Char(face, char_code, load_flags)
-                    .and_then(|slot| FT_Render_Glyph(slot, render_mode))
-                {
-                    Ok(slot) => Ok(ok(slot_json(&slot))),
-                    Err(err) => Ok(error(err)),
-                }
+                rust_render_glyph(
+                    face,
+                    glyph_load_input_param(&case.inputs.params)?,
+                    load_flags,
+                    render_mode,
+                )
             }
             _ => run_rust_ffi(case),
         }
     }
 
     fn run_c_abi(&mut self, case: &InputCase) -> Result<RunOutput, String> {
-        match canonical_operation(&case.operation) {
+        match case_canonical_operation(case) {
             "size_metrics" => {
                 let face = self.c_face(case)?;
                 c_size_metrics_json(face).map(ok)
@@ -1860,28 +1930,22 @@ impl BackendComparisonWorker {
                 }
             }
             "render_glyph" => {
-                let char_code = u64_param(&case.inputs.params, "char_code")?;
                 let load_flags = load_flags_param(&case.inputs.params)?;
                 let render_mode = render_mode_param(&case.inputs.params)?;
                 let face = self.c_face(case)?;
-                let load_err = c_abi::FT_Load_Char(face, char_code, load_flags);
-                let err = if load_err == FT_Err_Ok {
-                    c_abi::abi_render_glyph_from_face(face, render_mode)
-                } else {
-                    load_err
-                };
-                if err == FT_Err_Ok {
-                    c_slot_json(face).map(ok)
-                } else {
-                    Ok(error(err))
-                }
+                c_render_glyph(
+                    face,
+                    glyph_load_input_param(&case.inputs.params)?,
+                    load_flags,
+                    render_mode,
+                )
             }
             _ => run_c_abi(case),
         }
     }
 
     fn run_wasm_abi(&mut self, case: &InputCase) -> Result<RunOutput, String> {
-        match canonical_operation(&case.operation) {
+        match case_canonical_operation(case) {
             "size_metrics" => {
                 let handle = self.wasm_face(case)?;
                 let mut metrics = wasm_abi::FontdoneWasmSizeMetrics::default();
@@ -1913,17 +1977,15 @@ impl BackendComparisonWorker {
                 wasm_slot_output(handle, err)
             }
             "render_glyph" => {
-                let char_code = u64_param(&case.inputs.params, "char_code")?;
                 let load_flags = load_flags_param(&case.inputs.params)?;
                 let render_mode = render_mode_param(&case.inputs.params)?;
                 let handle = self.wasm_face(case)?;
-                let load_err = wasm_abi::fontdone_wasm_load_char(handle, char_code, load_flags);
-                let err = if load_err == FT_Err_Ok {
-                    wasm_abi::fontdone_wasm_render_glyph(handle, render_mode)
-                } else {
-                    load_err
-                };
-                wasm_slot_output(handle, err)
+                wasm_render_glyph(
+                    handle,
+                    glyph_load_input_param(&case.inputs.params)?,
+                    load_flags,
+                    render_mode,
+                )
             }
             _ => run_wasm_abi(case),
         }
@@ -1978,8 +2040,22 @@ fn runtime_face_cache_key(case: &InputCase) -> Result<String, String> {
 
 fn case_uses_cached_face(case: &InputCase) -> bool {
     matches!(
-        canonical_operation(&case.operation),
+        case_canonical_operation(case),
         "size_metrics" | "get_char_index" | "load_char" | "load_glyph" | "render_glyph"
+    )
+}
+
+fn case_requires_asset_validation(case: &InputCase) -> bool {
+    matches!(
+        case_canonical_operation(case),
+        "new_memory_face"
+            | "set_pixel_sizes"
+            | "set_char_size"
+            | "size_metrics"
+            | "get_char_index"
+            | "load_char"
+            | "load_glyph"
+            | "render_glyph"
     )
 }
 
@@ -2009,7 +2085,7 @@ fn case_matches_filter(case: &InputCase, filter: Option<&str>) -> bool {
 
 fn operation_matches_filter(case: &InputCase, filter: Option<&str>) -> bool {
     filter.is_none_or(|needle| {
-        canonical_operation(&case.operation).contains(needle) || case.operation.contains(needle)
+        case_canonical_operation(case).contains(needle) || case.operation.contains(needle)
     })
 }
 
@@ -2463,13 +2539,22 @@ fn resolve_case_assets(
 }
 
 fn resolve_fixture_asset_ref(reference: &str) -> Option<String> {
-    let candidates = [
+    let mut candidates = vec![
         reference.to_string(),
         format!("input/{reference}"),
         reference
             .strip_prefix("fixtures/assets/")
             .map_or_else(|| reference.to_string(), ToString::to_string),
     ];
+    if let Some(rest) = reference.strip_prefix("fonts/") {
+        candidates.push(format!("input/fonts/{rest}"));
+    }
+    if let Some(rest) = reference.strip_prefix("fonts_autohint/") {
+        candidates.push(format!("input/fonts_autohint/{rest}"));
+    }
+    if let Some(rest) = reference.strip_prefix("fixtures/assets/fonts/") {
+        candidates.push(format!("input/fonts/{rest}"));
+    }
     candidates
         .into_iter()
         .find(|candidate| fixture_dir().join(candidate).is_file())
@@ -2888,7 +2973,7 @@ fn oracle_bin() -> Result<PathBuf, String> {
 
 fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
     let params = &case.inputs.params;
-    match canonical_operation(&case.operation) {
+    match case_canonical_operation(case) {
         "constant" => Ok(vec![
             "--constant".to_string(),
             string_param(params, "symbol")?.to_string(),
@@ -2897,6 +2982,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--layout".to_string(),
             record_param(params)?.to_string(),
         ]),
+        "abi_type_probe" => Ok(vec![
+            "--type-probe".to_string(),
+            type_symbol_param(params)?.to_string(),
+        ]),
+        "abi_function_probe" => Ok(vec![
+            "--function-probe".to_string(),
+            type_symbol_param(params)?.to_string(),
+        ]),
+        "macro_eval" => Ok(vec!["--macro-eval".to_string(), case.case_id.clone()]),
         "new_memory_face" => {
             let mut args = vec!["--new-memory-face".to_string()];
             push_font_source(case, &mut args)?;
@@ -2949,10 +3043,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "render_glyph" => {
-            let mut args = vec!["--render-glyph".to_string()];
+            let glyph_input = glyph_load_input_param(params)?;
+            let mut args = vec![match glyph_input {
+                GlyphLoadInput::CharCode(_) => "--render-glyph".to_string(),
+                GlyphLoadInput::GlyphIndex(_) => "--render-glyph-index".to_string(),
+            }];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
-            args.push(u64_param(params, "char_code")?.to_string());
+            match glyph_input {
+                GlyphLoadInput::CharCode(char_code) => args.push(char_code.to_string()),
+                GlyphLoadInput::GlyphIndex(glyph_index) => args.push(glyph_index.to_string()),
+            }
             args.push(load_flags_param(params)?.to_string());
             args.push(render_mode_param(params)?.to_string());
             Ok(args)
@@ -3015,11 +3116,18 @@ fn parse_run_output(text: &str) -> Result<RunOutput, String> {
 }
 
 fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
-    match canonical_operation(&case.operation) {
+    match case_canonical_operation(case) {
         "constant" => Ok(ok(json!({
             "value": rust_constant(string_param(&case.inputs.params, "symbol")?)?
         }))),
         "record_layout" => Ok(ok(rust_layout(record_param(&case.inputs.params)?)?)),
+        "abi_type_probe" => Ok(ok(rust_type_probe(type_symbol_param(
+            &case.inputs.params,
+        )?)?)),
+        "abi_function_probe" => Ok(ok(rust_function_probe(type_symbol_param(
+            &case.inputs.params,
+        )?)?)),
+        "macro_eval" => Ok(ok(rust_macro_eval(case)?)),
         "new_memory_face" => rust_new_memory_face(case),
         "set_pixel_sizes" => rust_set_pixel_sizes(case),
         "set_char_size" => rust_set_char_size(case),
@@ -3058,23 +3166,22 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "render_glyph" => {
             let face = open_face(case)?;
             let render_mode = render_mode_param(&case.inputs.params)?;
-            let loaded = FT_Load_Char(
+            rust_render_glyph(
                 &face,
-                u64_param(&case.inputs.params, "char_code")?,
+                glyph_load_input_param(&case.inputs.params)?,
                 load_flags_param(&case.inputs.params)?,
-            );
-            match loaded.and_then(|slot| FT_Render_Glyph(slot, render_mode)) {
-                Ok(slot) => Ok(ok(slot_json(&slot))),
-                Err(err) => Ok(error(err)),
-            }
+                render_mode,
+            )
         }
         other => Err(format!("unsupported rust operation {other}")),
     }
 }
 
 fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
-    match canonical_operation(&case.operation) {
-        "constant" | "record_layout" => run_rust_ffi(case),
+    match case_canonical_operation(case) {
+        "constant" | "record_layout" | "abi_type_probe" | "abi_function_probe" | "macro_eval" => {
+            run_rust_ffi(case)
+        }
         "new_memory_face" => {
             let bytes = font_bytes(case)?;
             let mut library = std::ptr::null_mut();
@@ -3187,34 +3294,24 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "render_glyph" => {
             let (library, face) = c_open_face(case)?;
-            let load_err = c_abi::FT_Load_Char(
+            let output = c_render_glyph(
                 face,
-                u64_param(&case.inputs.params, "char_code")?,
+                glyph_load_input_param(&case.inputs.params)?,
                 load_flags_param(&case.inputs.params)?,
+                render_mode_param(&case.inputs.params)?,
             );
-            let err = if load_err == FT_Err_Ok {
-                c_abi::abi_render_glyph_from_face(face, render_mode_param(&case.inputs.params)?)
-            } else {
-                load_err
-            };
-            if err == FT_Err_Ok {
-                let output = c_slot_json(face).map(ok);
-                c_done_face(face);
-                c_done_library(library);
-                output
-            } else {
-                c_done_face(face);
-                c_done_library(library);
-                Ok(error(err))
-            }
+            c_done_face(face);
+            c_done_library(library);
+            output
         }
         other => Err(format!("unsupported c abi operation {other}")),
     }
 }
 
 fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
-    match canonical_operation(&case.operation) {
-        "constant" | "record_layout" | "set_char_size" => run_rust_ffi(case),
+    match case_canonical_operation(case) {
+        "constant" | "record_layout" | "abi_type_probe" | "abi_function_probe" | "macro_eval"
+        | "set_char_size" => run_rust_ffi(case),
         "new_memory_face" => wasm_new_memory_face(case),
         "set_pixel_sizes" => {
             let handle = wasm_open_face(case)?;
@@ -3272,25 +3369,79 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "render_glyph" => {
             let handle = wasm_open_face(case)?;
-            let load_err = wasm_abi::fontdone_wasm_load_char(
+            let output = wasm_render_glyph(
                 handle,
-                u64_param(&case.inputs.params, "char_code")?,
+                glyph_load_input_param(&case.inputs.params)?,
                 load_flags_param(&case.inputs.params)?,
+                render_mode_param(&case.inputs.params)?,
             );
-            let err = if load_err == FT_Err_Ok {
-                wasm_abi::fontdone_wasm_render_glyph(
-                    handle,
-                    render_mode_param(&case.inputs.params)?,
-                )
-            } else {
-                load_err
-            };
-            let output = wasm_slot_output(handle, err);
             wasm_done_face(handle);
             output
         }
         other => Err(format!("unsupported wasm abi operation {other}")),
     }
+}
+
+fn rust_render_glyph(
+    face: &FT_Face,
+    glyph_input: GlyphLoadInput,
+    load_flags: i32,
+    render_mode: i32,
+) -> Result<RunOutput, String> {
+    let loaded = match glyph_input {
+        GlyphLoadInput::CharCode(char_code) => FT_Load_Char(face, char_code, load_flags),
+        GlyphLoadInput::GlyphIndex(glyph_index) => FT_Load_Glyph(face, glyph_index, load_flags),
+    };
+    match loaded.and_then(|slot| FT_Render_Glyph(slot, render_mode)) {
+        Ok(slot) => Ok(ok(slot_json(&slot))),
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn c_render_glyph(
+    face: c_abi::FT_Face,
+    glyph_input: GlyphLoadInput,
+    load_flags: i32,
+    render_mode: i32,
+) -> Result<RunOutput, String> {
+    let load_err = match glyph_input {
+        GlyphLoadInput::CharCode(char_code) => c_abi::FT_Load_Char(face, char_code, load_flags),
+        GlyphLoadInput::GlyphIndex(glyph_index) => {
+            c_abi::FT_Load_Glyph(face, glyph_index, load_flags)
+        }
+    };
+    let err = if load_err == FT_Err_Ok {
+        c_abi::abi_render_glyph_from_face(face, render_mode)
+    } else {
+        load_err
+    };
+    if err == FT_Err_Ok {
+        c_slot_json(face).map(ok)
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn wasm_render_glyph(
+    handle: usize,
+    glyph_input: GlyphLoadInput,
+    load_flags: i32,
+    render_mode: i32,
+) -> Result<RunOutput, String> {
+    let load_err = match glyph_input {
+        GlyphLoadInput::CharCode(char_code) => {
+            wasm_abi::fontdone_wasm_load_char(handle, char_code, load_flags)
+        }
+        GlyphLoadInput::GlyphIndex(glyph_index) => {
+            wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags)
+        }
+    };
+    let err = if load_err == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_render_glyph(handle, render_mode)
+    } else {
+        load_err
+    };
+    wasm_slot_output(handle, err)
 }
 
 fn c_new_face_without_size(
@@ -3685,78 +3836,416 @@ fn error(error_code: i32) -> RunOutput {
 }
 
 fn rust_constant(symbol: &str) -> Result<i64, String> {
-    match symbol {
-        "FT_Err_Ok" => Ok(i64::from(FT_Err_Ok)),
-        "FT_Err_Cannot_Open_Resource" => Ok(i64::from(FT_Err_Cannot_Open_Resource)),
-        "FT_Err_Unknown_File_Format" => Ok(i64::from(FT_Err_Unknown_File_Format)),
-        "FT_Err_Invalid_File_Format" => Ok(i64::from(FT_Err_Invalid_File_Format)),
-        "FT_Err_Invalid_Argument" => Ok(i64::from(FT_Err_Invalid_Argument)),
-        "FT_Err_Unimplemented_Feature" => Ok(i64::from(FT_Err_Unimplemented_Feature)),
-        "FT_Err_Invalid_Table" => Ok(i64::from(FT_Err_Invalid_Table)),
-        "FT_Err_Invalid_Glyph_Index" => Ok(i64::from(FT_Err_Invalid_Glyph_Index)),
-        "FT_Err_Invalid_Character_Code" => Ok(i64::from(FT_Err_Invalid_Character_Code)),
-        "FT_Err_Invalid_Glyph_Format" => Ok(i64::from(FT_Err_Invalid_Glyph_Format)),
-        "FT_Err_Cannot_Render_Glyph" => Ok(i64::from(FT_Err_Cannot_Render_Glyph)),
-        "FT_Err_Invalid_Outline" => Ok(i64::from(FT_Err_Invalid_Outline)),
-        "FT_Err_Invalid_Pixel_Size" => Ok(i64::from(FT_Err_Invalid_Pixel_Size)),
-        "FT_Err_Invalid_CharMap_Handle" => Ok(i64::from(FT_Err_Invalid_CharMap_Handle)),
-        "FT_Err_Out_Of_Memory" => Ok(i64::from(FT_Err_Out_Of_Memory)),
-        "FT_Err_Raster_Overflow" => Ok(i64::from(FT_Err_Raster_Overflow)),
-        "FT_Err_Invalid_CharMap_Format" => Ok(i64::from(FT_Err_Invalid_CharMap_Format)),
-        "FT_LOAD_DEFAULT" => Ok(i64::from(FT_LOAD_DEFAULT)),
-        "FT_LOAD_NO_SCALE" => Ok(i64::from(FT_LOAD_NO_SCALE)),
-        "FT_LOAD_NO_HINTING" => Ok(i64::from(FT_LOAD_NO_HINTING)),
-        "FT_LOAD_RENDER" => Ok(i64::from(FT_LOAD_RENDER)),
-        "FT_LOAD_NO_BITMAP" => Ok(i64::from(FT_LOAD_NO_BITMAP)),
-        "FT_LOAD_VERTICAL_LAYOUT" => Ok(i64::from(FT_LOAD_VERTICAL_LAYOUT)),
-        "FT_LOAD_FORCE_AUTOHINT" => Ok(i64::from(FT_LOAD_FORCE_AUTOHINT)),
-        "FT_LOAD_CROP_BITMAP" => Ok(i64::from(FT_LOAD_CROP_BITMAP)),
-        "FT_LOAD_PEDANTIC" => Ok(i64::from(FT_LOAD_PEDANTIC)),
-        "FT_LOAD_ADVANCE_ONLY" => Ok(i64::from(FT_LOAD_ADVANCE_ONLY)),
-        "FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH" => Ok(i64::from(FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH)),
-        "FT_LOAD_NO_RECURSE" => Ok(i64::from(FT_LOAD_NO_RECURSE)),
-        "FT_LOAD_IGNORE_TRANSFORM" => Ok(i64::from(FT_LOAD_IGNORE_TRANSFORM)),
-        "FT_LOAD_MONOCHROME" => Ok(i64::from(FT_LOAD_MONOCHROME)),
-        "FT_LOAD_LINEAR_DESIGN" => Ok(i64::from(FT_LOAD_LINEAR_DESIGN)),
-        "FT_LOAD_SBITS_ONLY" => Ok(i64::from(FT_LOAD_SBITS_ONLY)),
-        "FT_LOAD_NO_AUTOHINT" => Ok(i64::from(FT_LOAD_NO_AUTOHINT)),
-        "FT_LOAD_COLOR" => Ok(i64::from(FT_LOAD_COLOR)),
-        "FT_LOAD_COMPUTE_METRICS" => Ok(i64::from(FT_LOAD_COMPUTE_METRICS)),
-        "FT_LOAD_BITMAP_METRICS_ONLY" => Ok(i64::from(FT_LOAD_BITMAP_METRICS_ONLY)),
-        "FT_LOAD_SVG_ONLY" => Ok(i64::from(FT_LOAD_SVG_ONLY)),
-        "FT_LOAD_NO_SVG" => Ok(i64::from(FT_LOAD_NO_SVG)),
-        "FT_RENDER_MODE_NORMAL" => Ok(i64::from(FT_RENDER_MODE_NORMAL)),
-        "FT_RENDER_MODE_LIGHT" => Ok(i64::from(FT_RENDER_MODE_LIGHT)),
-        "FT_RENDER_MODE_MONO" => Ok(i64::from(FT_RENDER_MODE_MONO)),
-        "FT_RENDER_MODE_LCD" => Ok(i64::from(FT_RENDER_MODE_LCD)),
-        "FT_RENDER_MODE_LCD_V" => Ok(i64::from(FT_RENDER_MODE_LCD_V)),
-        "FT_RENDER_MODE_SDF" => Ok(i64::from(FT_RENDER_MODE_SDF)),
-        "FT_RENDER_MODE_MAX" => Ok(i64::from(FT_RENDER_MODE_MAX)),
-        "FT_LOAD_TARGET_NORMAL" => Ok(i64::from(FT_LOAD_TARGET_NORMAL)),
-        "FT_LOAD_TARGET_LIGHT" => Ok(i64::from(FT_LOAD_TARGET_LIGHT)),
-        "FT_LOAD_TARGET_MONO" => Ok(i64::from(FT_LOAD_TARGET_MONO)),
-        "FT_LOAD_TARGET_LCD" => Ok(i64::from(FT_LOAD_TARGET_LCD)),
-        "FT_LOAD_TARGET_LCD_V" => Ok(i64::from(FT_LOAD_TARGET_LCD_V)),
-        "FT_PIXEL_MODE_NONE" => Ok(i64::from(FT_PIXEL_MODE_NONE)),
-        "FT_PIXEL_MODE_MONO" => Ok(i64::from(FT_PIXEL_MODE_MONO)),
-        "FT_PIXEL_MODE_GRAY" => Ok(i64::from(FT_PIXEL_MODE_GRAY)),
-        "FT_PIXEL_MODE_GRAY2" => Ok(i64::from(FT_PIXEL_MODE_GRAY2)),
-        "FT_PIXEL_MODE_GRAY4" => Ok(i64::from(FT_PIXEL_MODE_GRAY4)),
-        "FT_PIXEL_MODE_LCD" => Ok(i64::from(FT_PIXEL_MODE_LCD)),
-        "FT_PIXEL_MODE_LCD_V" => Ok(i64::from(FT_PIXEL_MODE_LCD_V)),
-        "FT_PIXEL_MODE_BGRA" => Ok(i64::from(FT_PIXEL_MODE_BGRA)),
-        "FT_PIXEL_MODE_MAX" => Ok(i64::from(FT_PIXEL_MODE_MAX)),
-        "FT_GLYPH_FORMAT_NONE" => Ok(i64::from(FT_GLYPH_FORMAT_NONE)),
-        "FT_GLYPH_FORMAT_COMPOSITE" => Ok(i64::from(FT_GLYPH_FORMAT_COMPOSITE)),
-        "FT_GLYPH_FORMAT_BITMAP" => Ok(i64::from(FT_GLYPH_FORMAT_BITMAP)),
-        "FT_GLYPH_FORMAT_OUTLINE" => Ok(i64::from(FT_GLYPH_FORMAT_OUTLINE)),
-        "FT_GLYPH_FORMAT_PLOTTER" => Ok(i64::from(FT_GLYPH_FORMAT_PLOTTER)),
-        "FT_GLYPH_FORMAT_SVG" => Ok(i64::from(FT_GLYPH_FORMAT_SVG)),
-        other => Err(format!("unsupported rust constant {other}")),
+    generated_rust_constant(symbol).ok_or_else(|| format!("unsupported rust constant {symbol}"))
+}
+
+fn rust_macro_eval(case: &InputCase) -> Result<Value, String> {
+    let params = &case.inputs.params;
+    if case.case == "macro_import_contract" {
+        return Ok(json!({
+            "macro_defined": true,
+            "expansion_model": string_param(params, "expansion")?
+        }));
+    }
+
+    match case.case_id.as_str() {
+        "fttypes.FT_BOOL.zero_maps_to_false" | "fttypes.FT_BOOL.any_nonzero_maps_to_true" => {
+            let rows = array_param(params, "values")?
+                .iter()
+                .map(|value| {
+                    let expression = string_param(value, "expression")?;
+                    Ok(json!({
+                        "input": expression,
+                        "result": if eval_macro_expression(expression)? != 0 { 1 } else { 0 }
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(json!({ "rows": rows }))
+        }
+        "fttypes.FT_BOOL.result_type_is_ft_bool" => Ok(json!({
+            "sizeof_result": size_of::<FT_Bool>(),
+            "alignof_result": align_of::<FT_Bool>(),
+            "value_storage": "unsigned char"
+        })),
+        "fttypes.FT_ERROR_BASE.base_byte_extraction"
+        | "fttypes.FT_ERROR_BASE.zero_and_full_mask_edges" => {
+            let rows = array_param(params, "errors")?
+                .iter()
+                .map(|value| {
+                    let error = eval_macro_value(value)?;
+                    Ok(json!({
+                        "error": error,
+                        "base": error_base(error)
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(json!({ "rows": rows }))
+        }
+        "fttypes.FT_ERROR_MODULE.module_byte_extraction"
+        | "fttypes.FT_ERROR_MODULE.zero_and_mixed_value_edges" => {
+            let rows = array_param(params, "errors")?
+                .iter()
+                .map(|value| {
+                    let error = eval_macro_value(value)?;
+                    Ok(json!({
+                        "error": error,
+                        "module": error_module(error)
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(json!({ "rows": rows }))
+        }
+        "fttypes.FT_ERR.default_prefix_resolves_error_symbol" => {
+            let rows = array_param(params, "errors")?
+                .iter()
+                .map(|value| {
+                    let name = value
+                        .as_str()
+                        .ok_or_else(|| format!("{} error name must be a string", case.case_id))?;
+                    Ok(json!({
+                        "name": name,
+                        "resolved_error": error_name_value(name)?
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(json!({ "rows": rows }))
+        }
+        "fttypes.FT_ERR.used_by_error_comparison_macros" => {
+            let rows = array_param(params, "comparisons")?
+                .iter()
+                .map(|value| {
+                    let macro_name = string_param(value, "macro")?;
+                    let error = string_param(value, "error")?;
+                    Ok(json!({
+                        "macro": macro_name,
+                        "error": error,
+                        "result": macro_name == "FT_ERR_EQ"
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(json!({ "rows": rows }))
+        }
+        "fttypes.FT_ERR_EQ.ignores_module_bits_for_equal_base"
+        | "fttypes.FT_ERR_EQ.distinguishes_different_base_codes"
+        | "fttypes.FT_ERR_EQ.ok_error_comparison"
+        | "fttypes.FT_ERR_NEQ.ignores_module_bits_for_equal_base"
+        | "fttypes.FT_ERR_NEQ.distinguishes_different_base_codes"
+        | "fttypes.FT_ERR_NEQ.ok_error_comparison" => {
+            let is_equal_macro = case.subject == "fttypes.FT_ERR_EQ";
+            let rows = array_param(params, "pairs")?
+                .iter()
+                .map(|value| {
+                    let x = eval_macro_value(
+                        value
+                            .get("x")
+                            .ok_or_else(|| format!("{} missing x", case.case_id))?,
+                    )?;
+                    let e = string_param(value, "e")?;
+                    let equal = error_base(x) == error_base(error_name_value(e)?);
+                    Ok(json!({
+                        "x": x,
+                        "e": e,
+                        "result": if is_equal_macro { equal } else { !equal }
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(json!({ "rows": rows }))
+        }
+        "fttypes.FT_MAKE_TAG.standard_sfnt_tags"
+        | "fttypes.FT_MAKE_TAG.byte_order_big_endian"
+        | "fttypes.FT_MAKE_TAG.high_bit_bytes_do_not_sign_extend" => {
+            let rows = array_param(params, "byte_quads")?
+                .iter()
+                .map(|value| {
+                    let label = string_param(value, "label")?;
+                    let tag = make_tag_value(array_param(value, "bytes")?)?;
+                    Ok(json!({
+                        "label": label,
+                        "tag": tag,
+                        "hex": format!("0x{tag:08x}")
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(json!({ "rows": rows }))
+        }
+        "fttypes.FT_IS_EMPTY.empty_when_head_null"
+        | "fttypes.FT_IS_EMPTY.tail_is_not_considered" => {
+            let head_null = params.get("head").is_none_or(Value::is_null);
+            let tail_null = params.get("tail").is_none_or(Value::is_null);
+            Ok(json!({
+                "head_null": head_null,
+                "tail_null": tail_null,
+                "result": head_null
+            }))
+        }
+        "fttypes.FT_IS_EMPTY.non_empty_when_head_nonnull" => {
+            let rows = array_param(params, "scenarios")?
+                .iter()
+                .map(|value| {
+                    let head_null = value.get("head").is_none_or(Value::is_null);
+                    let tail_null = value.get("tail").is_none_or(Value::is_null);
+                    Ok(json!({
+                        "head_null": head_null,
+                        "tail_null": tail_null,
+                        "result": head_null
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(json!({ "rows": rows }))
+        }
+        "ftimage.FT_IMAGE_TAG.expansion_matches_header" => Ok(json!({
+            "macro": "FT_IMAGE_TAG",
+            "value": rust_constant("FT_GLYPH_FORMAT_OUTLINE")?,
+            "import_compiles": true
+        })),
+        "ftimage.FT_IMAGE_TAG.glyph_format_values_match_c" => {
+            let mut values = serde_json::Map::new();
+            let symbols = params
+                .get("symbols")
+                .and_then(Value::as_object)
+                .ok_or_else(|| format!("{} missing symbols", case.case_id))?;
+            for symbol in symbols.keys() {
+                values.insert(symbol.clone(), Value::from(rust_constant(symbol)?));
+            }
+            Ok(json!({
+                "values": values,
+                "import_compiles": true
+            }))
+        }
+        "ftimage.FT_CURVE_TAG.expansion_matches_header" => {
+            let values = array_param(params, "tag_values")?
+                .iter()
+                .map(|value| Ok(Value::from(eval_macro_value(value)? & 0x03)))
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(json!({
+                "macro": "FT_CURVE_TAG",
+                "values": values,
+                "import_compiles": true
+            }))
+        }
+        other => Err(format!("unsupported rust macro eval {other}")),
     }
 }
 
+fn array_param<'a>(value: &'a Value, key: &str) -> Result<&'a [Value], String> {
+    value
+        .get(key)
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .ok_or_else(|| format!("missing array param {key}"))
+}
+
+fn eval_macro_value(value: &Value) -> Result<i64, String> {
+    if let Some(value) = value.as_i64() {
+        return Ok(value);
+    }
+    if let Some(value) = value.as_u64() {
+        return i64::try_from(value).map_err(|err| err.to_string());
+    }
+    if let Some(expression) = value.as_str() {
+        return eval_macro_expression(expression);
+    }
+    if let Some(expression) = value.get("expression").and_then(Value::as_str) {
+        return eval_macro_expression(expression);
+    }
+    Err(format!("unsupported macro value {value}"))
+}
+
+fn eval_macro_expression(expression: &str) -> Result<i64, String> {
+    let expression = expression.trim();
+    if let Some((left, right)) = expression.split_once('|') {
+        return Ok(eval_macro_expression(left)? | eval_macro_expression(right)?);
+    }
+    if let Some(hex) = expression.strip_prefix("0x") {
+        return i64::from_str_radix(hex, 16).map_err(|err| err.to_string());
+    }
+    if let Some(raw) = expression.strip_suffix('L') {
+        return raw.parse::<i64>().map_err(|err| err.to_string());
+    }
+    match expression {
+        "(void*)0" => Ok(0),
+        "pointer_token" => Ok(1),
+        "FT_Err_Ok" => Ok(0),
+        other if other.starts_with("FT_Err_") || other.starts_with("FT_Mod_Err_") => {
+            rust_constant(other)
+        }
+        other => other
+            .parse::<i64>()
+            .map_err(|err| format!("unsupported macro expression {expression}: {err}")),
+    }
+}
+
+fn error_name_value(name: &str) -> Result<i64, String> {
+    if name == "Ok" {
+        Ok(0)
+    } else {
+        rust_constant(&format!("FT_Err_{name}"))
+    }
+}
+
+fn error_base(error: i64) -> i64 {
+    error & 0xFF
+}
+
+fn error_module(error: i64) -> i64 {
+    error & 0xFF00
+}
+
+fn make_tag_value(bytes: &[Value]) -> Result<u32, String> {
+    if bytes.len() != 4 {
+        return Err(format!("FT_MAKE_TAG requires 4 bytes, got {}", bytes.len()));
+    }
+    let mut tag = 0u32;
+    for (index, value) in bytes.iter().enumerate() {
+        let byte = if let Some(value) = value.as_u64() {
+            u8::try_from(value).map_err(|err| err.to_string())?
+        } else if let Some(value) = value.as_str() {
+            let bytes = value.as_bytes();
+            if bytes.len() != 1 {
+                return Err(format!("tag component {value} must be one byte"));
+            }
+            bytes[0]
+        } else {
+            return Err(format!("unsupported tag component {value}"));
+        };
+        let shift = u32::try_from(8usize.saturating_mul(3usize.saturating_sub(index)))
+            .map_err(|err| err.to_string())?;
+        tag |= u32::from(byte) << shift;
+    }
+    Ok(tag)
+}
+
+fn rust_type_probe(symbol: &str) -> Result<Value, String> {
+    macro_rules! scalar {
+        ($ty:ty, $signed:expr) => {
+            Ok(type_probe_json::<$ty>(symbol, "scalar", Some($signed)))
+        };
+    }
+    macro_rules! pointer {
+        ($ty:ty) => {
+            Ok(type_probe_json::<$ty>(symbol, "pointer", None))
+        };
+    }
+
+    match symbol {
+        "FT_Offset" => scalar!(FT_Offset, false),
+        "FT_UFWord" => scalar!(FT_UFWord, false),
+        "FT_F2Dot14" => scalar!(FT_F2Dot14, true),
+        "FT_UInt" => scalar!(FT_UInt, false),
+        "FT_Error" => scalar!(FT_Error, true),
+        "FT_ULong" => scalar!(FT_ULong, false),
+        "FT_Char" => scalar!(FT_Char, true),
+        "FT_Int" => scalar!(FT_Int, true),
+        "FT_Short" => scalar!(FT_Short, true),
+        "FT_Tag" => scalar!(FT_Tag, false),
+        "FT_String" => scalar!(FT_String, FT_String::MIN < 0),
+        "FT_Long" => scalar!(FT_Long, true),
+        "FT_PtrDist" => scalar!(FT_PtrDist, true),
+        "FT_FWord" => scalar!(FT_FWord, true),
+        "FT_Fixed" => scalar!(FT_Fixed, true),
+        "FT_F26Dot6" => scalar!(FT_F26Dot6, true),
+        "FT_UShort" => scalar!(FT_UShort, false),
+        "FT_Pos" => scalar!(FT_Pos, true),
+        "FT_Sfnt_Tag" => scalar!(FT_Sfnt_Tag, false),
+        "FT_Bytes" => pointer!(FT_Bytes),
+        "FT_ListNode" => pointer!(FT_ListNode),
+        "FT_Pointer" => pointer!(FT_Pointer),
+        "FT_List" => pointer!(FT_List),
+        "FT_Size" => pointer!(FT_Size),
+        "FT_Renderer" => pointer!(FT_Renderer),
+        "FT_Stream" => pointer!(FT_Stream),
+        "FT_Size_Internal" => pointer!(FT_Size_Internal),
+        "FTC_Scaler" => pointer!(FTC_Scaler),
+        "FTC_ImageType" => pointer!(FTC_ImageType),
+        "FTC_Node" => pointer!(FTC_Node),
+        "FT_Module" => pointer!(FT_Module),
+        "FT_Slot_Internal" => pointer!(FT_Slot_Internal),
+        "FT_Face_Internal" => pointer!(FT_Face_Internal),
+        "FT_CharMap" => pointer!(FT_CharMap),
+        "FT_Memory" => pointer!(FT_Memory),
+        "FTC_FaceID" => pointer!(FTC_FaceID),
+        "FT_SubGlyph" => pointer!(FT_SubGlyph),
+        "FTC_SBit" => pointer!(FTC_SBit),
+        "FTC_Manager" => pointer!(FTC_Manager),
+        "FTC_CMapCache" => pointer!(FTC_CMapCache),
+        "FT_Driver" => pointer!(FT_Driver),
+        "FTC_ImageCache" => pointer!(FTC_ImageCache),
+        "FTC_SBitCache" => pointer!(FTC_SBitCache),
+        "FT_Raster" => pointer!(FT_Raster),
+        other => Err(format!("unsupported rust type probe {other}")),
+    }
+}
+
+fn type_probe_json<T>(symbol: &str, kind: &str, signed: Option<bool>) -> Value {
+    json!({
+        "symbol": symbol,
+        "kind": kind,
+        "size": size_of::<T>(),
+        "align": align_of::<T>(),
+        "signed": signed
+    })
+}
+
+fn rust_function_probe(symbol: &str) -> Result<Value, String> {
+    match symbol {
+        "FT_Get_CMap_Format" => {
+            let _function: fn(FT_CharMap) -> FT_Long = FT_Get_CMap_Format;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Get_CMap_Language_ID" => {
+            let _function: fn(FT_CharMap) -> FT_ULong = FT_Get_CMap_Language_ID;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Get_Sfnt_Table" => {
+            let _function: fn(&FT_Face, FT_Sfnt_Tag) -> FT_Pointer = FT_Get_Sfnt_Table;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Load_Sfnt_Table" => {
+            let _function: fn(
+                &FT_Face,
+                FT_ULong,
+                FT_Long,
+                *mut FT_Byte,
+                *mut FT_ULong,
+            ) -> FT_Error = FT_Load_Sfnt_Table;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Sfnt_Table_Info" => {
+            let _function: fn(&FT_Face, FT_UInt, *mut FT_ULong, *mut FT_ULong) -> FT_Error =
+                FT_Sfnt_Table_Info;
+            Ok(function_probe_json(symbol))
+        }
+        other => Err(format!("unsupported rust function probe {other}")),
+    }
+}
+
+fn function_probe_json(symbol: &str) -> Value {
+    json!({
+        "symbol": symbol,
+        "kind": "function"
+    })
+}
+
 fn rust_layout(record: &str) -> Result<Value, String> {
+    macro_rules! layout_json {
+        ($record:literal, $ty:ty, [$(($field:ident, $field_ty:ty)),+ $(,)?]) => {
+            Ok(json!({
+                "record": $record,
+                "size": size_of::<$ty>(),
+                "align": align_of::<$ty>(),
+                "fields": [
+                    $(
+                        {
+                            "name": stringify!($field),
+                            "offset": offset_of!($ty, $field),
+                            "size": size_of::<$field_ty>()
+                        }
+                    ),+
+                ]
+            }))
+        };
+    }
+
     match record {
         "FT_Vector" => Ok(json!({
             "record": "FT_Vector",
@@ -3808,6 +4297,859 @@ fn rust_layout(record: &str) -> Result<Value, String> {
                 {"name": "max_advance", "offset": offset_of!(FT_Size_Metrics, max_advance), "size": size_of::<FT_Pos>()}
             ]
         })),
+        "FT_GlyphRec" => layout_json!(
+            "FT_GlyphRec",
+            FT_GlyphRec,
+            [
+                (library, FT_Pointer),
+                (clazz, *const FT_Glyph_Class),
+                (format, FT_Glyph_Format),
+                (advance, FT_Vector),
+            ]
+        ),
+        "FT_BitmapGlyphRec" => layout_json!(
+            "FT_BitmapGlyphRec",
+            FT_BitmapGlyphRec,
+            [
+                (root, FT_GlyphRec),
+                (left, FT_Int),
+                (top, FT_Int),
+                (bitmap, FT_Bitmap_C),
+            ]
+        ),
+        "FT_OutlineGlyphRec" => layout_json!(
+            "FT_OutlineGlyphRec",
+            FT_OutlineGlyphRec,
+            [(root, FT_GlyphRec), (outline, FT_Outline)]
+        ),
+        "FT_SvgGlyphRec" => layout_json!(
+            "FT_SvgGlyphRec",
+            FT_SvgGlyphRec,
+            [
+                (root, FT_GlyphRec),
+                (svg_document, *mut FT_Byte),
+                (svg_document_length, FT_ULong),
+                (glyph_index, FT_UInt),
+                (metrics, FT_Size_Metrics),
+                (units_per_EM, FT_UShort),
+                (start_glyph_id, FT_UShort),
+                (end_glyph_id, FT_UShort),
+                (transform, FT_Matrix),
+                (delta, FT_Vector),
+            ]
+        ),
+        "FT_StreamRec" => layout_json!(
+            "FT_StreamRec",
+            FT_StreamRec,
+            [
+                (base, *mut FT_Byte),
+                (size, FT_ULong),
+                (pos, FT_ULong),
+                (descriptor, FT_StreamDesc),
+                (pathname, FT_StreamDesc),
+                (read, FT_Pointer),
+                (close, FT_Pointer),
+                (memory, FT_Memory),
+                (cursor, *mut FT_Byte),
+                (limit, *mut FT_Byte),
+            ]
+        ),
+        "FT_Bitmap_Size" => layout_json!(
+            "FT_Bitmap_Size",
+            FT_Bitmap_Size,
+            [
+                (height, FT_Short),
+                (width, FT_Short),
+                (size, FT_Pos),
+                (x_ppem, FT_Pos),
+                (y_ppem, FT_Pos),
+            ]
+        ),
+        "FT_Bitmap" => layout_json!(
+            "FT_Bitmap",
+            FT_Bitmap_C,
+            [
+                (rows, std::os::raw::c_uint),
+                (width, std::os::raw::c_uint),
+                (pitch, std::os::raw::c_int),
+                (buffer, *mut FT_Byte),
+                (num_grays, std::os::raw::c_ushort),
+                (pixel_mode, std::os::raw::c_uchar),
+                (palette_mode, std::os::raw::c_uchar),
+                (palette, FT_Pointer),
+            ]
+        ),
+        "FT_CharMapRec" => layout_json!(
+            "FT_CharMapRec",
+            FT_CharMapRecPublic,
+            [
+                (face, FT_Pointer),
+                (encoding, FT_Encoding),
+                (platform_id, FT_UShort),
+                (encoding_id, FT_UShort),
+            ]
+        ),
+        "FT_SizeRec" => layout_json!(
+            "FT_SizeRec",
+            FT_SizeRecPublic,
+            [
+                (face, FT_Pointer),
+                (generic, FT_Generic),
+                (metrics, FT_Size_Metrics),
+                (internal, FT_Size_Internal),
+            ]
+        ),
+        "FT_FaceRec" => layout_json!(
+            "FT_FaceRec",
+            FT_FaceRecPublic,
+            [
+                (num_faces, FT_Long),
+                (face_index, FT_Long),
+                (face_flags, FT_Long),
+                (style_flags, FT_Long),
+                (num_glyphs, FT_Long),
+                (family_name, *mut FT_String),
+                (style_name, *mut FT_String),
+                (num_fixed_sizes, FT_Int),
+                (available_sizes, *mut FT_Bitmap_Size),
+                (num_charmaps, FT_Int),
+                (charmaps, *mut FT_CharMap),
+                (generic, FT_Generic),
+                (bbox, FT_BBox),
+                (units_per_EM, FT_UShort),
+                (ascender, FT_Short),
+                (descender, FT_Short),
+                (height, FT_Short),
+                (max_advance_width, FT_Short),
+                (max_advance_height, FT_Short),
+                (underline_position, FT_Short),
+                (underline_thickness, FT_Short),
+                (glyph, FT_Pointer),
+                (size, FT_Size),
+                (charmap, FT_CharMap),
+                (driver, FT_Driver),
+                (memory, FT_Memory),
+                (stream, FT_Stream),
+                (sizes_list, FT_ListRec),
+                (autohint, FT_Generic),
+                (extensions, FT_Pointer),
+                (internal, FT_Face_Internal),
+            ]
+        ),
+        "FT_GlyphSlotRec" => layout_json!(
+            "FT_GlyphSlotRec",
+            FT_GlyphSlotRecPublic,
+            [
+                (library, FT_Pointer),
+                (face, FT_Pointer),
+                (next, FT_Pointer),
+                (glyph_index, FT_UInt),
+                (generic, FT_Generic),
+                (metrics, FT_Glyph_Metrics),
+                (linearHoriAdvance, FT_Fixed),
+                (linearVertAdvance, FT_Fixed),
+                (advance, FT_Vector),
+                (format, FT_Glyph_Format),
+                (bitmap, FT_Bitmap_C),
+                (bitmap_left, FT_Int),
+                (bitmap_top, FT_Int),
+                (outline, FT_Outline),
+                (num_subglyphs, FT_UInt),
+                (subglyphs, FT_SubGlyph),
+                (control_data, FT_Pointer),
+                (control_len, std::os::raw::c_long),
+                (lsb_delta, FT_Pos),
+                (rsb_delta, FT_Pos),
+                (other, FT_Pointer),
+                (internal, FT_Slot_Internal),
+            ]
+        ),
+        "FT_Parameter" => {
+            layout_json!(
+                "FT_Parameter",
+                FT_Parameter,
+                [(tag, FT_ULong), (data, FT_Pointer)]
+            )
+        }
+        "FT_Open_Args" => layout_json!(
+            "FT_Open_Args",
+            FT_Open_Args,
+            [
+                (flags, FT_UInt),
+                (memory_base, *const FT_Byte),
+                (memory_size, FT_Long),
+                (pathname, *mut FT_String),
+                (stream, FT_Stream),
+                (driver, FT_Module),
+                (num_params, FT_Int),
+                (params, *mut FT_Parameter),
+            ]
+        ),
+        "FT_Size_RequestRec" => Ok(json!({
+            "record": "FT_Size_RequestRec",
+            "size": size_of::<FT_Size_RequestRec>(),
+            "align": align_of::<FT_Size_RequestRec>(),
+            "fields": [
+                {"name": "type", "offset": offset_of!(FT_Size_RequestRec, type_), "size": size_of::<FT_Size_Request_Type>()},
+                {"name": "width", "offset": offset_of!(FT_Size_RequestRec, width), "size": size_of::<FT_Long>()},
+                {"name": "height", "offset": offset_of!(FT_Size_RequestRec, height), "size": size_of::<FT_Long>()},
+                {"name": "horiResolution", "offset": offset_of!(FT_Size_RequestRec, horiResolution), "size": size_of::<FT_UInt>()},
+                {"name": "vertResolution", "offset": offset_of!(FT_Size_RequestRec, vertResolution), "size": size_of::<FT_UInt>()}
+            ]
+        })),
+        "FT_UnitVector" => layout_json!(
+            "FT_UnitVector",
+            FT_UnitVector,
+            [(x, FT_F2Dot14), (y, FT_F2Dot14)]
+        ),
+        "FT_Matrix" => layout_json!(
+            "FT_Matrix",
+            FT_Matrix,
+            [
+                (xx, FT_Fixed),
+                (xy, FT_Fixed),
+                (yx, FT_Fixed),
+                (yy, FT_Fixed),
+            ]
+        ),
+        "FT_Data" => layout_json!("FT_Data", FT_Data, [(pointer, FT_Bytes), (length, FT_UInt)]),
+        "FT_Generic" => layout_json!(
+            "FT_Generic",
+            FT_Generic,
+            [(data, FT_Pointer), (finalizer, FT_Generic_Finalizer),]
+        ),
+        "FT_ListNodeRec" => layout_json!(
+            "FT_ListNodeRec",
+            FT_ListNodeRec,
+            [(prev, FT_ListNode), (next, FT_ListNode), (data, FT_Pointer),]
+        ),
+        "FT_ListRec" => layout_json!(
+            "FT_ListRec",
+            FT_ListRec,
+            [(head, FT_ListNode), (tail, FT_ListNode)]
+        ),
+        "FT_Outline" => layout_json!(
+            "FT_Outline",
+            FT_Outline,
+            [
+                (n_contours, FT_UShort),
+                (n_points, FT_UShort),
+                (points, *mut FT_Vector),
+                (tags, *mut FT_Byte),
+                (contours, *mut FT_UShort),
+                (flags, FT_Int),
+            ]
+        ),
+        "FTC_ScalerRec" => layout_json!(
+            "FTC_ScalerRec",
+            FTC_ScalerRec,
+            [
+                (face_id, FTC_FaceID),
+                (width, FT_UInt),
+                (height, FT_UInt),
+                (pixel, FT_Int),
+                (x_res, FT_UInt),
+                (y_res, FT_UInt),
+            ]
+        ),
+        "FTC_ImageTypeRec" => layout_json!(
+            "FTC_ImageTypeRec",
+            FTC_ImageTypeRec,
+            [
+                (face_id, FTC_FaceID),
+                (width, FT_UInt),
+                (height, FT_UInt),
+                (flags, FT_Int32),
+            ]
+        ),
+        "FTC_SBitRec" => layout_json!(
+            "FTC_SBitRec",
+            FTC_SBitRec,
+            [
+                (width, FT_Byte),
+                (height, FT_Byte),
+                (left, FT_Char),
+                (top, FT_Char),
+                (format, FT_Byte),
+                (max_grays, FT_Byte),
+                (pitch, FT_Short),
+                (xadvance, FT_Char),
+                (yadvance, FT_Char),
+                (buffer, *mut FT_Byte),
+            ]
+        ),
+        "FT_Color" => layout_json!(
+            "FT_Color",
+            FT_Color,
+            [
+                (blue, FT_Byte),
+                (green, FT_Byte),
+                (red, FT_Byte),
+                (alpha, FT_Byte),
+            ]
+        ),
+        "FT_Palette_Data" => layout_json!(
+            "FT_Palette_Data",
+            FT_Palette_Data,
+            [
+                (num_palettes, FT_UShort),
+                (palette_name_ids, *const FT_UShort),
+                (palette_flags, *const FT_UShort),
+                (num_palette_entries, FT_UShort),
+                (palette_entry_name_ids, *const FT_UShort),
+            ]
+        ),
+        "FT_LayerIterator" => layout_json!(
+            "FT_LayerIterator",
+            FT_LayerIterator,
+            [(num_layers, FT_UInt), (layer, FT_UInt), (p, *mut FT_Byte),]
+        ),
+        "FT_OpaquePaint" => layout_json!(
+            "FT_OpaquePaint",
+            FT_OpaquePaint,
+            [(p, *mut FT_Byte), (insert_root_transform, FT_Bool),]
+        ),
+        "FT_ColorStopIterator" => layout_json!(
+            "FT_ColorStopIterator",
+            FT_ColorStopIterator,
+            [
+                (num_color_stops, FT_UInt),
+                (current_color_stop, FT_UInt),
+                (p, *mut FT_Byte),
+                (read_variable, FT_Bool),
+            ]
+        ),
+        "FT_ColorIndex" => layout_json!(
+            "FT_ColorIndex",
+            FT_ColorIndex,
+            [(palette_index, FT_UInt16), (alpha, FT_F2Dot14),]
+        ),
+        "FT_ColorStop" => layout_json!(
+            "FT_ColorStop",
+            FT_ColorStop,
+            [(stop_offset, FT_Fixed), (color, FT_ColorIndex),]
+        ),
+        "FT_ColorLine" => layout_json!(
+            "FT_ColorLine",
+            FT_ColorLine,
+            [
+                (extend, FT_PaintExtend),
+                (color_stop_iterator, FT_ColorStopIterator),
+            ]
+        ),
+        "FT_Affine23" => layout_json!(
+            "FT_Affine23",
+            FT_Affine23,
+            [
+                (xx, FT_Fixed),
+                (xy, FT_Fixed),
+                (dx, FT_Fixed),
+                (yx, FT_Fixed),
+                (yy, FT_Fixed),
+                (dy, FT_Fixed),
+            ]
+        ),
+        "FT_PaintColrLayers" => layout_json!(
+            "FT_PaintColrLayers",
+            FT_PaintColrLayers,
+            [(layer_iterator, FT_LayerIterator)]
+        ),
+        "FT_PaintSolid" => layout_json!("FT_PaintSolid", FT_PaintSolid, [(color, FT_ColorIndex)]),
+        "FT_PaintLinearGradient" => layout_json!(
+            "FT_PaintLinearGradient",
+            FT_PaintLinearGradient,
+            [
+                (colorline, FT_ColorLine),
+                (p0, FT_Vector),
+                (p1, FT_Vector),
+                (p2, FT_Vector),
+            ]
+        ),
+        "FT_PaintRadialGradient" => layout_json!(
+            "FT_PaintRadialGradient",
+            FT_PaintRadialGradient,
+            [
+                (colorline, FT_ColorLine),
+                (c0, FT_Vector),
+                (r0, FT_Pos),
+                (c1, FT_Vector),
+                (r1, FT_Pos),
+            ]
+        ),
+        "FT_PaintSweepGradient" => layout_json!(
+            "FT_PaintSweepGradient",
+            FT_PaintSweepGradient,
+            [
+                (colorline, FT_ColorLine),
+                (center, FT_Vector),
+                (start_angle, FT_Fixed),
+                (end_angle, FT_Fixed),
+            ]
+        ),
+        "FT_PaintGlyph" => layout_json!(
+            "FT_PaintGlyph",
+            FT_PaintGlyph,
+            [(paint, FT_OpaquePaint), (glyphID, FT_UInt),]
+        ),
+        "FT_PaintColrGlyph" => {
+            layout_json!("FT_PaintColrGlyph", FT_PaintColrGlyph, [(glyphID, FT_UInt)])
+        }
+        "FT_PaintTransform" => layout_json!(
+            "FT_PaintTransform",
+            FT_PaintTransform,
+            [(paint, FT_OpaquePaint), (affine, FT_Affine23),]
+        ),
+        "FT_PaintTranslate" => layout_json!(
+            "FT_PaintTranslate",
+            FT_PaintTranslate,
+            [(paint, FT_OpaquePaint), (dx, FT_Fixed), (dy, FT_Fixed),]
+        ),
+        "FT_PaintScale" => layout_json!(
+            "FT_PaintScale",
+            FT_PaintScale,
+            [
+                (paint, FT_OpaquePaint),
+                (scale_x, FT_Fixed),
+                (scale_y, FT_Fixed),
+                (center_x, FT_Fixed),
+                (center_y, FT_Fixed),
+            ]
+        ),
+        "FT_PaintRotate" => layout_json!(
+            "FT_PaintRotate",
+            FT_PaintRotate,
+            [
+                (paint, FT_OpaquePaint),
+                (angle, FT_Fixed),
+                (center_x, FT_Fixed),
+                (center_y, FT_Fixed),
+            ]
+        ),
+        "FT_PaintSkew" => layout_json!(
+            "FT_PaintSkew",
+            FT_PaintSkew,
+            [
+                (paint, FT_OpaquePaint),
+                (x_skew_angle, FT_Fixed),
+                (y_skew_angle, FT_Fixed),
+                (center_x, FT_Fixed),
+                (center_y, FT_Fixed),
+            ]
+        ),
+        "FT_PaintComposite" => layout_json!(
+            "FT_PaintComposite",
+            FT_PaintComposite,
+            [
+                (source_paint, FT_OpaquePaint),
+                (composite_mode, FT_Composite_Mode),
+                (backdrop_paint, FT_OpaquePaint),
+            ]
+        ),
+        "FT_ClipBox" => layout_json!(
+            "FT_ClipBox",
+            FT_ClipBox,
+            [
+                (bottom_left, FT_Vector),
+                (top_left, FT_Vector),
+                (top_right, FT_Vector),
+                (bottom_right, FT_Vector),
+            ]
+        ),
+        "FT_Outline_Funcs" => layout_json!(
+            "FT_Outline_Funcs",
+            FT_Outline_Funcs,
+            [
+                (move_to, FT_Pointer),
+                (line_to, FT_Pointer),
+                (conic_to, FT_Pointer),
+                (cubic_to, FT_Pointer),
+                (shift, std::os::raw::c_int),
+                (delta, FT_Pos),
+            ]
+        ),
+        "FT_Span" => layout_json!(
+            "FT_Span",
+            FT_Span,
+            [
+                (x, std::os::raw::c_ushort),
+                (len, std::os::raw::c_ushort),
+                (coverage, std::os::raw::c_uchar),
+            ]
+        ),
+        "FT_Raster_Params" => layout_json!(
+            "FT_Raster_Params",
+            FT_Raster_Params,
+            [
+                (target, *const FT_Bitmap_C),
+                (source, *const std::ffi::c_void),
+                (flags, std::os::raw::c_int),
+                (gray_spans, FT_Pointer),
+                (black_spans, FT_Pointer),
+                (bit_test, FT_Pointer),
+                (bit_set, FT_Pointer),
+                (user, FT_Pointer),
+                (clip_box, FT_BBox),
+            ]
+        ),
+        "FT_Raster_Funcs" => layout_json!(
+            "FT_Raster_Funcs",
+            FT_Raster_Funcs,
+            [
+                (glyph_format, FT_Glyph_Format),
+                (raster_new, FT_Pointer),
+                (raster_reset, FT_Pointer),
+                (raster_set_mode, FT_Pointer),
+                (raster_render, FT_Pointer),
+                (raster_done, FT_Pointer),
+            ]
+        ),
+        "FT_MM_Axis" => layout_json!(
+            "FT_MM_Axis",
+            FT_MM_Axis,
+            [
+                (name, *mut FT_String),
+                (minimum, FT_Long),
+                (maximum, FT_Long),
+            ]
+        ),
+        "FT_Multi_Master" => layout_json!(
+            "FT_Multi_Master",
+            FT_Multi_Master,
+            [
+                (num_axis, FT_UInt),
+                (num_designs, FT_UInt),
+                (axis, [FT_MM_Axis; 4]),
+            ]
+        ),
+        "FT_Var_Axis" => layout_json!(
+            "FT_Var_Axis",
+            FT_Var_Axis,
+            [
+                (name, *mut FT_String),
+                (minimum, FT_Fixed),
+                (def, FT_Fixed),
+                (maximum, FT_Fixed),
+                (tag, FT_ULong),
+                (strid, FT_UInt),
+            ]
+        ),
+        "FT_Var_Named_Style" => layout_json!(
+            "FT_Var_Named_Style",
+            FT_Var_Named_Style,
+            [
+                (coords, *mut FT_Fixed),
+                (strid, FT_UInt),
+                (psid, FT_UInt),
+            ]
+        ),
+        "FT_MM_Var" => layout_json!(
+            "FT_MM_Var",
+            FT_MM_Var,
+            [
+                (num_axis, FT_UInt),
+                (num_designs, FT_UInt),
+                (num_namedstyles, FT_UInt),
+                (axis, *mut FT_Var_Axis),
+                (namedstyle, *mut FT_Var_Named_Style),
+            ]
+        ),
+        "FT_Prop_GlyphToScriptMap" => layout_json!(
+            "FT_Prop_GlyphToScriptMap",
+            FT_Prop_GlyphToScriptMap,
+            [(face, FT_Pointer), (map, *mut FT_UShort)]
+        ),
+        "FT_Prop_IncreaseXHeight" => layout_json!(
+            "FT_Prop_IncreaseXHeight",
+            FT_Prop_IncreaseXHeight,
+            [(face, FT_Pointer), (limit, FT_UInt)]
+        ),
+        "FT_Incremental_MetricsRec" => layout_json!(
+            "FT_Incremental_MetricsRec",
+            FT_Incremental_MetricsRec,
+            [
+                (bearing_x, FT_Long),
+                (bearing_y, FT_Long),
+                (advance, FT_Long),
+                (advance_v, FT_Long),
+            ]
+        ),
+        "FT_Incremental_FuncsRec" => layout_json!(
+            "FT_Incremental_FuncsRec",
+            FT_Incremental_FuncsRec,
+            [
+                (get_glyph_data, FT_Pointer),
+                (free_glyph_data, FT_Pointer),
+                (get_glyph_metrics, FT_Pointer),
+            ]
+        ),
+        "FT_Incremental_InterfaceRec" => layout_json!(
+            "FT_Incremental_InterfaceRec",
+            FT_Incremental_InterfaceRec,
+            [
+                (funcs, *const FT_Incremental_FuncsRec),
+                (object, FT_Incremental),
+            ]
+        ),
+        "FT_Module_Class" => layout_json!(
+            "FT_Module_Class",
+            FT_Module_Class,
+            [
+                (module_flags, FT_ULong),
+                (module_size, FT_Long),
+                (module_name, *const FT_String),
+                (module_version, FT_Fixed),
+                (module_requires, FT_Fixed),
+                (module_interface, *const std::ffi::c_void),
+                (module_init, FT_Pointer),
+                (module_done, FT_Pointer),
+                (get_interface, FT_Pointer),
+            ]
+        ),
+        "FT_Renderer_Class" => layout_json!(
+            "FT_Renderer_Class",
+            FT_Renderer_Class,
+            [
+                (root, FT_Module_Class),
+                (glyph_format, FT_Glyph_Format),
+                (render_glyph, FT_Pointer),
+                (transform_glyph, FT_Pointer),
+                (get_glyph_cbox, FT_Pointer),
+                (set_mode, FT_Pointer),
+                (raster_class, *const FT_Raster_Funcs),
+            ]
+        ),
+        "FT_SfntName" => layout_json!(
+            "FT_SfntName",
+            FT_SfntName,
+            [
+                (platform_id, FT_UShort),
+                (encoding_id, FT_UShort),
+                (language_id, FT_UShort),
+                (name_id, FT_UShort),
+                (string, *mut FT_Byte),
+                (string_len, FT_UInt),
+            ]
+        ),
+        "FT_SfntLangTag" => layout_json!(
+            "FT_SfntLangTag",
+            FT_SfntLangTag,
+            [(string, *mut FT_Byte), (string_len, FT_UInt)]
+        ),
+        "T1_FontInfo" => layout_json!(
+            "T1_FontInfo",
+            T1_FontInfo,
+            [
+                (version, *mut FT_String),
+                (notice, *mut FT_String),
+                (full_name, *mut FT_String),
+                (family_name, *mut FT_String),
+                (weight, *mut FT_String),
+                (italic_angle, FT_Fixed),
+                (is_fixed_pitch, FT_Bool),
+                (underline_position, FT_Short),
+                (underline_thickness, FT_UShort),
+            ]
+        ),
+        "T1_Private" => layout_json!(
+            "T1_Private",
+            T1_Private,
+            [
+                (unique_id, FT_Int),
+                (lenIV, FT_Int),
+                (num_blue_values, FT_Byte),
+                (num_other_blues, FT_Byte),
+                (num_family_blues, FT_Byte),
+                (num_family_other_blues, FT_Byte),
+                (blue_values, [FT_Short; 14]),
+                (other_blues, [FT_Short; 10]),
+                (family_blues, [FT_Short; 14]),
+                (family_other_blues, [FT_Short; 10]),
+                (blue_scale, FT_Fixed),
+                (blue_shift, FT_Int),
+                (blue_fuzz, FT_Int),
+                (standard_width, [FT_UShort; 1]),
+                (standard_height, [FT_UShort; 1]),
+                (num_snap_widths, FT_Byte),
+                (num_snap_heights, FT_Byte),
+                (force_bold, FT_Bool),
+                (round_stem_up, FT_Bool),
+                (snap_widths, [FT_Short; 13]),
+                (snap_heights, [FT_Short; 13]),
+                (expansion_factor, FT_Fixed),
+                (language_group, FT_Long),
+                (password, FT_Long),
+                (min_feature, [FT_Short; 2]),
+            ]
+        ),
+        "TT_Header" => layout_json!(
+            "TT_Header",
+            TT_Header,
+            [
+                (Table_Version, FT_Fixed),
+                (Font_Revision, FT_Fixed),
+                (CheckSum_Adjust, FT_Long),
+                (Magic_Number, FT_Long),
+                (Flags, FT_UShort),
+                (Units_Per_EM, FT_UShort),
+                (Created, [FT_ULong; 2]),
+                (Modified, [FT_ULong; 2]),
+                (xMin, FT_Short),
+                (yMin, FT_Short),
+                (xMax, FT_Short),
+                (yMax, FT_Short),
+                (Mac_Style, FT_UShort),
+                (Lowest_Rec_PPEM, FT_UShort),
+                (Font_Direction, FT_Short),
+                (Index_To_Loc_Format, FT_Short),
+                (Glyph_Data_Format, FT_Short),
+            ]
+        ),
+        "TT_HoriHeader" => layout_json!(
+            "TT_HoriHeader",
+            TT_HoriHeader,
+            [
+                (Version, FT_Fixed),
+                (Ascender, FT_Short),
+                (Descender, FT_Short),
+                (Line_Gap, FT_Short),
+                (advance_Width_Max, FT_UShort),
+                (min_Left_Side_Bearing, FT_Short),
+                (min_Right_Side_Bearing, FT_Short),
+                (xMax_Extent, FT_Short),
+                (caret_Slope_Rise, FT_Short),
+                (caret_Slope_Run, FT_Short),
+                (caret_Offset, FT_Short),
+                (Reserved, [FT_Short; 4]),
+                (metric_Data_Format, FT_Short),
+                (number_Of_HMetrics, FT_UShort),
+                (long_metrics, FT_Pointer),
+                (short_metrics, FT_Pointer),
+            ]
+        ),
+        "TT_VertHeader" => layout_json!(
+            "TT_VertHeader",
+            TT_VertHeader,
+            [
+                (Version, FT_Fixed),
+                (Ascender, FT_Short),
+                (Descender, FT_Short),
+                (Line_Gap, FT_Short),
+                (advance_Height_Max, FT_UShort),
+                (min_Top_Side_Bearing, FT_Short),
+                (min_Bottom_Side_Bearing, FT_Short),
+                (yMax_Extent, FT_Short),
+                (caret_Slope_Rise, FT_Short),
+                (caret_Slope_Run, FT_Short),
+                (caret_Offset, FT_Short),
+                (Reserved, [FT_Short; 4]),
+                (metric_Data_Format, FT_Short),
+                (number_Of_VMetrics, FT_UShort),
+                (long_metrics, FT_Pointer),
+                (short_metrics, FT_Pointer),
+            ]
+        ),
+        "TT_OS2" => layout_json!(
+            "TT_OS2",
+            TT_OS2,
+            [
+                (version, FT_UShort),
+                (xAvgCharWidth, FT_Short),
+                (usWeightClass, FT_UShort),
+                (usWidthClass, FT_UShort),
+                (fsType, FT_UShort),
+                (ySubscriptXSize, FT_Short),
+                (ySubscriptYSize, FT_Short),
+                (ySubscriptXOffset, FT_Short),
+                (ySubscriptYOffset, FT_Short),
+                (ySuperscriptXSize, FT_Short),
+                (ySuperscriptYSize, FT_Short),
+                (ySuperscriptXOffset, FT_Short),
+                (ySuperscriptYOffset, FT_Short),
+                (yStrikeoutSize, FT_Short),
+                (yStrikeoutPosition, FT_Short),
+                (sFamilyClass, FT_Short),
+                (panose, [FT_Byte; 10]),
+                (ulUnicodeRange1, FT_ULong),
+                (ulUnicodeRange2, FT_ULong),
+                (ulUnicodeRange3, FT_ULong),
+                (ulUnicodeRange4, FT_ULong),
+                (achVendID, [FT_Char; 4]),
+                (fsSelection, FT_UShort),
+                (usFirstCharIndex, FT_UShort),
+                (usLastCharIndex, FT_UShort),
+                (sTypoAscender, FT_Short),
+                (sTypoDescender, FT_Short),
+                (sTypoLineGap, FT_Short),
+                (usWinAscent, FT_UShort),
+                (usWinDescent, FT_UShort),
+                (ulCodePageRange1, FT_ULong),
+                (ulCodePageRange2, FT_ULong),
+                (sxHeight, FT_Short),
+                (sCapHeight, FT_Short),
+                (usDefaultChar, FT_UShort),
+                (usBreakChar, FT_UShort),
+                (usMaxContext, FT_UShort),
+                (usLowerOpticalPointSize, FT_UShort),
+                (usUpperOpticalPointSize, FT_UShort),
+            ]
+        ),
+        "TT_Postscript" => layout_json!(
+            "TT_Postscript",
+            TT_Postscript,
+            [
+                (FormatType, FT_Fixed),
+                (italicAngle, FT_Fixed),
+                (underlinePosition, FT_Short),
+                (underlineThickness, FT_Short),
+                (isFixedPitch, FT_ULong),
+                (minMemType42, FT_ULong),
+                (maxMemType42, FT_ULong),
+                (minMemType1, FT_ULong),
+                (maxMemType1, FT_ULong),
+            ]
+        ),
+        "TT_PCLT" => layout_json!(
+            "TT_PCLT",
+            TT_PCLT,
+            [
+                (Version, FT_Fixed),
+                (FontNumber, FT_ULong),
+                (Pitch, FT_UShort),
+                (xHeight, FT_UShort),
+                (Style, FT_UShort),
+                (TypeFamily, FT_UShort),
+                (CapHeight, FT_UShort),
+                (SymbolSet, FT_UShort),
+                (TypeFace, [FT_Char; 16]),
+                (CharacterComplement, [FT_Char; 8]),
+                (FileName, [FT_Char; 6]),
+                (StrokeWeight, FT_Char),
+                (WidthType, FT_Char),
+                (SerifStyle, FT_Byte),
+                (Reserved, FT_Byte),
+            ]
+        ),
+        "TT_MaxProfile" => layout_json!(
+            "TT_MaxProfile",
+            TT_MaxProfile,
+            [
+                (version, FT_Fixed),
+                (numGlyphs, FT_UShort),
+                (maxPoints, FT_UShort),
+                (maxContours, FT_UShort),
+                (maxCompositePoints, FT_UShort),
+                (maxCompositeContours, FT_UShort),
+                (maxZones, FT_UShort),
+                (maxTwilightPoints, FT_UShort),
+                (maxStorage, FT_UShort),
+                (maxFunctionDefs, FT_UShort),
+                (maxInstructionDefs, FT_UShort),
+                (maxStackElements, FT_UShort),
+                (maxSizeOfInstructions, FT_UShort),
+                (maxComponentElements, FT_UShort),
+                (maxComponentDepth, FT_UShort),
+            ]
+        ),
         other => Err(format!("unsupported rust layout {other}")),
     }
 }
@@ -3928,6 +5270,27 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
             require_path(output, "/align", label, case)?;
             require_path(output, "/fields", label, case)
         }
+        "type_probe" => {
+            require_path(output, "/symbol", label, case)?;
+            require_path(output, "/kind", label, case)?;
+            require_path(output, "/size", label, case)?;
+            require_path(output, "/align", label, case)?;
+            require_path(output, "/signed", label, case)
+        }
+        "function_probe" => {
+            require_path(output, "/symbol", label, case)?;
+            require_path(output, "/kind", label, case)
+        }
+        "macro_probe" => {
+            if output.is_object() {
+                Ok(())
+            } else {
+                Err(format!(
+                    "{} {label} macro output must be an object, got {output}",
+                    case.case_id
+                ))
+            }
+        }
         "value" => require_path(output, "/value", label, case),
         "glyph_slot" => {
             require_path(output, "/glyph_index", label, case)?;
@@ -3970,13 +5333,28 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
 }
 
 fn comparison_schema(case: &InputCase) -> &str {
+    match case_canonical_operation(case) {
+        "abi_type_probe" => return "type_probe",
+        "abi_function_probe" => return "function_probe",
+        "macro_eval" => return "macro_probe",
+        "record_layout" => return "record_layout",
+        "constant"
+            if matches!(
+                case.schema.as_str(),
+                "api_import" | "compile_contract" | "compile_probe"
+            ) =>
+        {
+            return "constant";
+        }
+        _ => {}
+    }
     match case.schema.as_str() {
         "constant" | "api_constant" | "abi_constant" | "constant_value" => "constant",
-        "record_layout" | "abi_layout" | "abi_record_layout" | "abi_record" | "api_record"
-        | "c_abi_record" | "c_abi_layout" => "record_layout",
+        "record_layout" | "abi_layout" | "api_layout" | "abi_record_layout" | "abi_record"
+        | "api_record" | "c_abi_record" | "c_abi_layout" => "record_layout",
         "face_open" | "face_result" | "face_handle" => "face_open",
         "glyph_slot" | "glyph_slot_bitmap" | "glyph_render" | "bitmap_result" => "glyph_slot",
-        "api_result" => match canonical_operation(&case.operation) {
+        "api_result" => match case_canonical_operation(case) {
             "constant" => "value",
             "new_memory_face" => "face_open",
             "set_pixel_sizes" | "set_char_size" => "set_status",
@@ -4086,10 +5464,17 @@ fn string_param<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
 }
 
 fn record_param(value: &Value) -> Result<&str, String> {
-    ["record", "type", "symbol"]
+    ["record", "ctype", "type", "symbol", "alias", "target"]
         .into_iter()
         .find_map(|key| value.get(key).and_then(Value::as_str))
-        .ok_or_else(|| "missing record/type/symbol param".to_string())
+        .ok_or_else(|| "missing record/ctype/type/symbol/alias/target param".to_string())
+}
+
+fn type_symbol_param(value: &Value) -> Result<&str, String> {
+    ["symbol", "typedef", "type"]
+        .into_iter()
+        .find_map(|key| value.get(key).and_then(Value::as_str))
+        .ok_or_else(|| "missing symbol/typedef/type param".to_string())
 }
 
 fn face_index_param(value: &Value) -> Result<i64, String> {
@@ -4155,6 +5540,13 @@ fn glyph_index_param(value: &Value) -> Result<u32, String> {
         .get("glyph_index")
         .ok_or_else(|| "missing glyph_index".to_string())?;
     u32_value(raw, "glyph_index")
+}
+
+fn glyph_load_input_param(value: &Value) -> Result<GlyphLoadInput, String> {
+    if value.get("glyph_index").is_some() {
+        return glyph_index_param(value).map(GlyphLoadInput::GlyphIndex);
+    }
+    u64_param(value, "char_code").map(GlyphLoadInput::CharCode)
 }
 
 fn i64_param(value: &Value, key: &str) -> Result<i64, String> {

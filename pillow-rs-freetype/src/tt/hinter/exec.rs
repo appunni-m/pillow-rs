@@ -14,7 +14,7 @@ use super::iup;
 use super::zone::GlyphZone;
 use super::{HintScale, NativeHintMode};
 use crate::error::FontError;
-use crate::fixed::{ft_mul_fix, ft_normalize_2dot14};
+use crate::fixed::{ft_mul_div, ft_mul_fix, ft_normalize_2dot14};
 
 /// Maximum stack depth. TrueType spec says max 255, but fonts may request
 /// more via maxp->maxStackElements. We use a generous default.
@@ -94,9 +94,13 @@ pub struct ExecContext {
     /// Scale factors: x_scale, y_scale in 16.16 format.
     pub x_scale: i32,
     pub y_scale: i32,
+    /// FreeType `TT_Size_Metrics.scale`, used for CVT font-unit scaling.
+    pub tt_scale: i32,
 
     /// Pixels per em (for MPPEM opcode).
     pub ppem: i32,
+    /// Requested point size in 26.6 units (for MPS opcode).
+    pub point_size: i32,
 
     // ── Code ranges ───────────────────────────────────────────────────
     /// Font program code range (fpgm table).
@@ -180,7 +184,9 @@ impl ExecContext {
             gs: GraphicsState::default(),
             x_scale: scale.x_scale,
             y_scale: scale.y_scale,
+            tt_scale: scale.tt_scale,
             ppem: scale.ppem,
+            point_size: scale.point_size,
             font_range: CodeRange {
                 base: 0,
                 size: fpgm.len(),
@@ -330,7 +336,7 @@ impl ExecContext {
         // intentionally divides by 64 before applying the 16.16 size scale;
         // this rounding-sensitive order produces 26.6 pixel values.
         for i in 0..self.cvt.len() {
-            self.cvt[i] = crate::fixed::ft_mul_fix(self.cvt[i] / 64, self.y_scale);
+            self.cvt[i] = crate::fixed::ft_mul_fix(self.cvt[i] / 64, self.tt_scale);
         }
 
         // Restore the post-fpgm storage snapshot saved by TT_Save_Context.
@@ -993,7 +999,9 @@ impl ExecContext {
                     self.push(self.ppem);
                 }
                 0x4C => {
-                    self.push(self.ppem);
+                    // C: `Ins_MPS` returns `exec->pointSize` for interpreter
+                    // v40 subpixel-minimal mode; `MPPEM` is the ppem value.
+                    self.push(self.point_size);
                 }
 
                 // ── MD — Measure Distance ────────────────────────
@@ -1047,8 +1055,11 @@ impl ExecContext {
 
                 // ── SCFS — Set Coordinate From Stack ─────────────
                 0x48 => {
-                    let p = self.pop()? as usize;
+                    // C `Ins_SCFS` in ttinterp.c:4352-4379 receives
+                    // args[0] as the point index and args[1] as the target
+                    // coordinate.  The target is on top of the VM stack.
                     let val = self.pop()?;
+                    let p = self.pop()? as usize;
                     let (cx, cy) = self.cur_in(zone, self.gs.zp2, p);
                     let old_proj = self.gs.project(cx, cy);
                     let dist = val - old_proj;
@@ -1734,10 +1745,73 @@ impl ExecContext {
                     self.push(self.gs.freedom_vector.1);
                 }
                 // ── ISECT (0x0F) — Move point to intersection of two lines ──
-                // C: Ins_ISECT. Rarely used. Skip with stack cleanup.
+                // C: Ins_ISECT (ttinterp.c:5725-5811).  The args array is
+                // laid out in the original pushed order, so the interpreter
+                // pops the five stack entries in reverse.
                 0x0F => {
-                    for _ in 0..5 {
-                        let _ = self.pop()?;
+                    let b1 = self.pop()? as usize;
+                    let b0 = self.pop()? as usize;
+                    let a1 = self.pop()? as usize;
+                    let a0 = self.pop()? as usize;
+                    let point = self.pop()? as usize;
+
+                    let len0 = if self.gs.zp0 == 0 {
+                        self.twilight.cur_x.len()
+                    } else {
+                        zone.cur_x.len()
+                    };
+                    let len1 = if self.gs.zp1 == 0 {
+                        self.twilight.cur_x.len()
+                    } else {
+                        zone.cur_x.len()
+                    };
+                    let len2 = if self.gs.zp2 == 0 {
+                        self.twilight.cur_x.len()
+                    } else {
+                        zone.cur_x.len()
+                    };
+                    if b0 >= len0 || b1 >= len0 || a0 >= len1 || a1 >= len1 || point >= len2 {
+                        continue;
+                    }
+
+                    let (b0x, b0y) = self.cur_in(zone, self.gs.zp0, b0);
+                    let (b1x, b1y) = self.cur_in(zone, self.gs.zp0, b1);
+                    let (a0x, a0y) = self.cur_in(zone, self.gs.zp1, a0);
+                    let (a1x, a1y) = self.cur_in(zone, self.gs.zp1, a1);
+
+                    let dbx = b1x.wrapping_sub(b0x);
+                    let dby = b1y.wrapping_sub(b0y);
+                    let dax = a1x.wrapping_sub(a0x);
+                    let day = a1y.wrapping_sub(a0y);
+                    let dx = b0x.wrapping_sub(a0x);
+                    let dy = b0y.wrapping_sub(a0y);
+
+                    let discriminant = ft_mul_div(dax, dby.wrapping_neg(), 0x40)
+                        .wrapping_add(ft_mul_div(day, dbx, 0x40));
+                    let dotproduct =
+                        ft_mul_div(dax, dbx, 0x40).wrapping_add(ft_mul_div(day, dby, 0x40));
+
+                    let (new_x, new_y) =
+                        if 19i64 * i64::from(discriminant).abs() > i64::from(dotproduct).abs() {
+                            let val = ft_mul_div(dx, dby.wrapping_neg(), 0x40)
+                                .wrapping_add(ft_mul_div(dy, dbx, 0x40));
+                            (
+                                a0x.wrapping_add(ft_mul_div(val, dax, discriminant)),
+                                a0y.wrapping_add(ft_mul_div(val, day, discriminant)),
+                            )
+                        } else {
+                            (
+                                a0x.wrapping_add(a1x).wrapping_add(b0x.wrapping_add(b1x)) / 4,
+                                a0y.wrapping_add(a1y).wrapping_add(b0y.wrapping_add(b1y)) / 4,
+                            )
+                        };
+
+                    if self.gs.zp2 == 0 {
+                        self.twilight.set_cur(point, new_x, new_y);
+                        self.twilight.set_tag(point, 0x03);
+                    } else {
+                        zone.set_cur(point, new_x, new_y);
+                        zone.set_tag(point, 0x03);
                     }
                 }
                 // ── Rounding modes ────────────────────────────────
@@ -1783,7 +1857,7 @@ impl ExecContext {
                     let val = self.pop()?; // top = value
                     let idx = self.pop()? as usize; // deeper = index
                     // Scale: FT_MulFix(value, scale) then write to CVT
-                    let scaled = crate::fixed::ft_mul_fix(val, self.y_scale);
+                    let scaled = crate::fixed::ft_mul_fix(val, self.tt_scale);
                     let _ = self.set_cvt(idx, scaled);
                 }
                 // ── GetINFO (0x88) — Get Info ───────────────────────
@@ -1909,7 +1983,8 @@ impl ExecContext {
                                 let (cx, cy) = zone.cur(a);
                                 if self.backward_compatibility == 0
                                     || (self.backward_compatibility != 0x7
-                                        && (zone.tag(a) & 0x02) != 0)
+                                        && ((self.is_composite && self.gs.freedom_vector.1 != 0)
+                                            || (zone.tag(a) & 0x02) != 0))
                                 {
                                     self.set_glyph_cur(zone, a, cx + dx, cy + dy);
                                     self.touch_point(zone, a);
@@ -1992,7 +2067,7 @@ impl ExecContext {
                 // C: Ins_SSW (ttinterp.c:4115). Pops value → GS.single_width_value.
                 0x1F => {
                     let v = self.pop()?;
-                    self.gs.single_width_value = crate::fixed::ft_mul_fix(v, self.y_scale);
+                    self.gs.single_width_value = crate::fixed::ft_mul_fix(v, self.tt_scale);
                 }
                 // ── RAW (0x28) — ??? ───────────────────────────────
                 // C: Undocumented. Skip.
@@ -2044,9 +2119,26 @@ impl ExecContext {
                     let _ = self.call_instruction_def(opcode);
                 }
                 // ── SCANCTRL (0x85) ──────────────────────────────
-                // C: Ins_SCANCTRL. Sets scan control. Pop and ignore.
+                // C: Ins_SCANCTRL (ttinterp.c:4739-4781). Rotated and
+                // stretched flags are false for the currently supported
+                // untransformed size requests, so only ppem predicates apply.
                 0x85 => {
-                    let _ = self.pop()?;
+                    let v = self.pop()?;
+                    let threshold = v & 0xFF;
+                    if threshold == 0xFF {
+                        self.gs.scan_control = true;
+                        continue;
+                    }
+                    if threshold == 0 {
+                        self.gs.scan_control = false;
+                        continue;
+                    }
+                    if v & 0x100 != 0 && self.ppem <= threshold {
+                        self.gs.scan_control = true;
+                    }
+                    if v & 0x800 != 0 && self.ppem > threshold {
+                        self.gs.scan_control = false;
+                    }
                 }
                 // ── SDPVTL (0x86) — already covered by 0x87 above ──
                 // ── IDEF (0x89) — Instruction Definition ────────────

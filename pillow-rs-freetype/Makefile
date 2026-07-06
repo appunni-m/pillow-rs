@@ -49,6 +49,7 @@ help:
 	@printf "  make unified-inputs   Regenerate unified FFI input cases from matrices\n"
 	@printf "  make unified-inputs-check Check generated unified FFI input cases are current\n"
 	@printf "  make unified-oracle   Build the runtime C FreeType oracle helper\n"
+	@printf "  make public-constants Regenerate public constant parity tables\n"
 	@printf "\nBenchmark:\n"
 	@printf "  make bench            Run Rust vs C FreeType benchmark report\n"
 	@printf "  make bench-quick      Run short benchmark smoke comparison\n"
@@ -92,6 +93,10 @@ test-parity: test-unified-fixtures
 unified-oracle: oracle-fetch
 	bash scripts/build_ft.sh
 	$(PYTHON) scripts/build_unified_oracle.py
+
+.PHONY: public-constants
+public-constants: oracle-fetch
+	$(PYTHON) scripts/generate_public_constants.py --rust-src src/ffi/generated_constants.rs --test-lookup tests/support/generated_constant_lookup.rs
 
 .PHONY: unified-inputs
 unified-inputs:

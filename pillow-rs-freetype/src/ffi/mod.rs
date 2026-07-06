@@ -16,8 +16,9 @@ pub use convert::{
     render_mode_to_core,
 };
 pub use handles::{
-    FT_Face, FT_Get_Char_Index, FT_GlyphSlot, FT_Init_FreeType, FT_Library, FT_Load_Char,
-    FT_Load_Glyph, FT_New_Memory_Face, FT_Render_Glyph, FT_Set_Char_Size, FT_Set_Pixel_Sizes,
+    FT_Face, FT_Get_CMap_Format, FT_Get_CMap_Language_ID, FT_Get_Char_Index, FT_Get_Sfnt_Table,
+    FT_GlyphSlot, FT_Init_FreeType, FT_Library, FT_Load_Char, FT_Load_Glyph, FT_Load_Sfnt_Table,
+    FT_New_Memory_Face, FT_Render_Glyph, FT_Set_Char_Size, FT_Set_Pixel_Sizes, FT_Sfnt_Table_Info,
     FT_Size_Metrics,
 };
 pub use types::*;

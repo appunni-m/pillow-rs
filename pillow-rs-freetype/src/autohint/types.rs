@@ -141,6 +141,14 @@ pub struct AfLatinMetrics {
     /// glyph_index → is non-base (skip blue-zone alignment).
     /// Mirrors C's globals->glyph_styles\[gindex\] & AF_NONBASE.
     pub non_base_glyphs: Vec<bool>,
+    /// glyph_index → ASCII digit marker.
+    /// Mirrors C's globals->glyph_styles\[gindex\] & AF_DIGIT.
+    pub digit_glyphs: Vec<bool>,
+    /// Whether all mapped ASCII digits share one advance width.
+    /// Mirrors `style_metrics->digits_have_same_width`.
+    pub digits_have_same_width: bool,
+    /// Whether `FT_IS_FIXED_WIDTH(face)` is true for this face.
+    pub fixed_width: bool,
     /// TOP_TO_BOTTOM hinting for Indic scripts (beng, deva, guru, goth, mong).
     /// Most scripts use bottom-to-top (false).
     pub top_to_bottom_hinting: bool,
@@ -164,6 +172,9 @@ impl AfLatinMetrics {
             units_per_em: upem,
             axis: [AfLatinAxisMetrics::new(), AfLatinAxisMetrics::new()],
             non_base_glyphs: vec![false; num_glyphs as usize],
+            digit_glyphs: vec![false; num_glyphs as usize],
+            digits_have_same_width: true,
+            fixed_width: false,
             top_to_bottom_hinting: false,
             skip_xh_adjust: false,
             no_advance_hinting: false,
