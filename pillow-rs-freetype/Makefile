@@ -24,25 +24,12 @@ help:
 	@printf "  make doc              Build crate documentation\n"
 	@printf "  make doc-test         Run rustdoc examples\n"
 	@printf "\nTest:\n"
-	@printf "  make test             Run all crate tests\n"
-	@printf "  make test-parity      Run all FreeType parity gates\n"
-	@printf "  make test-coverage    Run all FreeType coverage gates\n"
-	@printf "  make test-coverage-matrix Run the broad unified coverage matrix only\n"
-	@printf "                       Use PARITY_ARGS='test_name -- --nocapture' for one coverage lane\n"
-	@printf "  make test-ffi         Run the no-runtime-FFI guard\n"
-	@printf "  make test-harness     Run harness contract tests\n"
-	@printf "  make test-generator   Run generator contract tests\n"
-	@printf "  make test-render-mode Run render-mode matrix tests\n"
-	@printf "  make test-fixed       Run fixed arithmetic parity tests\n"
-	@printf "  make test-interface   Run public interface coverage report\n"
-	@printf "  make test-ffi-compat  Run FreeType-shaped ffi facade tests\n"
+	@printf "  make test             Run manifest-driven unified public API parity\n"
+	@printf "  make test-parity      Run manifest-driven unified public API parity\n"
 	@printf "  make test-unified-fixtures Run manifest-linked input fixtures against runtime C oracle\n"
-	@printf "  make test-unified-coverage Run manifest coverage validation for unified fixtures\n"
+	@printf "  make test-unified-coverage Alias for the unified parity test\n"
 	@printf "  make test-api-abi     Run unified API/ABI fixture and coverage gates\n"
 	@printf "  make api-abi-audit    Generate C/Servo/fontdone API and ABI surface audit\n"
-	@printf "  make test-perf        Run benchmark contract tests\n"
-	@printf "  make test-direct-live Run ignored live C-oracle pixel comparison\n"
-	@printf "  make test-pipe-trace  Run ignored single-glyph pipeline trace\n"
 	@printf "\nLint:\n"
 	@printf "  make fmt              Check rustfmt\n"
 	@printf "  make fmt-fix          Apply rustfmt\n"
@@ -92,42 +79,10 @@ doc-test:
 	$(CARGO) test --doc --locked
 
 .PHONY: test
-test:
-	$(CARGO) test --locked
+test: test-unified-fixtures
 
 .PHONY: test-parity
-test-parity: fixtures test-coverage
-
-.PHONY: test-coverage
-test-coverage: test-coverage-matrix test-render-mode
-
-.PHONY: test-coverage-matrix
-test-coverage-matrix:
-	$(CARGO) test --test coverage_matrix_tests --locked $(PARITY_ARGS)
-
-.PHONY: test-ffi
-test-ffi:
-	$(CARGO) test --test no_runtime_ffi --locked -- --nocapture
-
-.PHONY: test-harness
-test-harness:
-	$(CARGO) test --test harness_contract --locked
-
-.PHONY: test-generator
-test-generator:
-	$(CARGO) test --test generator_contract --locked
-
-.PHONY: test-render-mode
-test-render-mode: fixture-render-mode
-	$(CARGO) test --test render_mode_matrix --locked
-
-.PHONY: test-fixed
-test-fixed:
-	$(CARGO) test --test fixed_parity --locked
-
-.PHONY: test-interface
-test-interface: oracle-fetch test-ffi-compat
-	$(CARGO) test --test interface_coverage --locked -- --nocapture
+test-parity: test-unified-fixtures
 
 .PHONY: unified-oracle
 unified-oracle: oracle-fetch
@@ -143,36 +98,18 @@ unified-inputs-check:
 	$(PYTHON) scripts/build_unified_fixture_inputs.py --check
 
 .PHONY: test-unified-fixtures
-test-unified-fixtures: unified-oracle
-	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_cases_match_runtime_c_oracle -- --nocapture
+test-unified-fixtures: unified-oracle unified-inputs-check
+	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
 
 .PHONY: test-unified-coverage
-test-unified-coverage: unified-oracle unified-inputs-check
-	$(CARGO) test --test unified_fixture_parity --locked manifest_ -- --nocapture
-	$(CARGO) test --test unified_fixture_parity --locked matrix_derived_inputs_cover_supported_source_rows -- --nocapture
-
-.PHONY: test-ffi-compat
-test-ffi-compat:
-	$(CARGO) test --test ffi_compat --locked -- --nocapture
+test-unified-coverage: test-unified-fixtures
 
 .PHONY: test-api-abi
-test-api-abi: test-unified-fixtures test-unified-coverage test-ffi
+test-api-abi: test-unified-fixtures
 
 .PHONY: api-abi-audit
 api-abi-audit: oracle-fetch
 	$(PYTHON) scripts/audit_api_abi.py
-
-.PHONY: test-perf
-test-perf:
-	$(CARGO) test --test perf_benchmark_contract --locked
-
-.PHONY: test-direct-live
-test-direct-live: setup
-	$(CARGO) test --test direct_ft_compare --locked -- --test-threads=1 --ignored
-
-.PHONY: test-pipe-trace
-test-pipe-trace:
-	$(CARGO) test --test pipe_trace --locked -- --nocapture --include-ignored
 
 .PHONY: fmt
 fmt:

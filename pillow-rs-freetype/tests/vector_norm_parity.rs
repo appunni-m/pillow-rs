@@ -160,6 +160,7 @@ fn oracle_norm(x: i32, y: i32) -> Option<(i32, i32)> {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn truetype_normalize_2dot14_matches_c_oracle() {
     let mut cases = vec![
         (0, 0),

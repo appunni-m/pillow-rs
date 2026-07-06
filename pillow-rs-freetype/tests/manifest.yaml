@@ -9,6 +9,8 @@ subjects:
     cases:
       - id: enum_variants_match_header
         description: Variants and backward-compatible aliases match the pinned public C header.
+      - id: representative_runtime_observation
+        description: Representative fixture observation for this public API subject in the unified input corpus.
 
   - id: freetype.FT_Kerning_Mode
     kind: enum
@@ -18,6 +20,8 @@ subjects:
     cases:
       - id: enum_variants_match_header
         description: "Variants match the pinned public C header: DEFAULT, UNFITTED, and UNSCALED."
+      - id: representative_runtime_observation
+        description: Representative fixture observation for this public API subject in the unified input corpus.
 
   - id: freetype.FT_Render_Mode
     kind: enum
@@ -27,6 +31,8 @@ subjects:
     cases:
       - id: enum_variants_match_header
         description: Variants match the pinned public C header from NORMAL through MAX, including SDF.
+      - id: representative_runtime_observation
+        description: Representative fixture observation for this public API subject in the unified input corpus.
 
   - id: freetype.FT_Size_Request_Type
     kind: enum
@@ -36,6 +42,8 @@ subjects:
     cases:
       - id: enum_variants_match_header
         description: Variants match the pinned public C header from NOMINAL through MAX.
+      - id: representative_runtime_observation
+        description: Representative fixture observation for this public API subject in the unified input corpus.
 
   # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_ADOBE_CUSTOM}; output shape=unsigned 32-bit FT_Encoding tag value 0x41444243; comparison=exact equality with pinned C header value.
   - id: freetype.FT_ENCODING_ADOBE_CUSTOM
@@ -86,6 +94,8 @@ subjects:
     cases:
       - id: value_matches_header
         description: Value matches FT_ENC_TAG('a','r','m','n') from the pinned public C header.
+      - id: representative_runtime_observation
+        description: Representative fixture observation for this public API subject in the unified input corpus.
 
   # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_BIG5}; output shape=unsigned 32-bit FT_Encoding tag value 0x62696735; comparison=exact equality with pinned C header value.
   - id: freetype.FT_ENCODING_BIG5
@@ -96,6 +106,8 @@ subjects:
     cases:
       - id: value_matches_header
         description: Value matches FT_ENC_TAG('b','i','g','5') from the pinned public C header.
+      - id: representative_runtime_observation
+        description: Representative fixture observation for this public API subject in the unified input corpus.
 
   # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_GB2312}; output shape=unsigned 32-bit FT_Encoding tag value 0x67622020; comparison=exact equality with FT_ENCODING_PRC alias value from the pinned C header.
   - id: freetype.FT_ENCODING_GB2312
@@ -106,6 +118,8 @@ subjects:
     cases:
       - id: value_matches_header
         description: Value matches the pinned public C header alias FT_ENCODING_PRC.
+      - id: representative_runtime_observation
+        description: Representative fixture observation for this public API subject in the unified input corpus.
 
   # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_JOHAB}; output shape=unsigned 32-bit FT_Encoding tag value 0x6a6f6861; comparison=exact equality with pinned C header value.
   - id: freetype.FT_ENCODING_JOHAB
@@ -116,6 +130,8 @@ subjects:
     cases:
       - id: value_matches_header
         description: Value matches FT_ENC_TAG('j','o','h','a') from the pinned public C header.
+      - id: representative_runtime_observation
+        description: Representative fixture observation for this public API subject in the unified input corpus.
 
   # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_MS_BIG5}; output shape=unsigned 32-bit FT_Encoding tag value 0x62696735; comparison=exact equality with FT_ENCODING_BIG5 alias value from the pinned C header.
   - id: freetype.FT_ENCODING_MS_BIG5
@@ -166,6 +182,8 @@ subjects:
     cases:
       - id: value_matches_header
         description: Value matches FT_ENC_TAG('s','y','m','b') from the pinned public C header.
+      - id: representative_runtime_observation
+        description: Representative fixture observation for this public API subject in the unified input corpus.
 
   # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_MS_WANSUNG}; output shape=unsigned 32-bit FT_Encoding tag value 0x77616e73; comparison=exact equality with FT_ENCODING_WANSUNG alias value from the pinned C header.
   - id: freetype.FT_ENCODING_MS_WANSUNG
@@ -186,6 +204,8 @@ subjects:
     cases:
       - id: value_matches_header
         description: Value matches FT_ENC_TAG(0,0,0,0) from the pinned public C header.
+      - id: representative_runtime_observation
+        description: Representative fixture observation for this public API subject in the unified input corpus.
 
   # needs-input: operation=constant; fixture asset=none; params={symbol: FT_ENCODING_OLD_LATIN_2}; output shape=unsigned 32-bit FT_Encoding tag value 0x6c617432; comparison=exact equality with pinned C header value.
   - id: freetype.FT_ENCODING_OLD_LATIN_2

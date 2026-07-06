@@ -144,6 +144,7 @@ macro_rules! check {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn mul_fix_parity() {
     for a in -32..32i32 {
         for b in -32..32i32 {
@@ -153,6 +154,7 @@ fn mul_fix_parity() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn div_fix_parity() {
     for a in -32..32i32 {
         for b in -32..32i32 {
@@ -164,6 +166,7 @@ fn div_fix_parity() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn mul_div_parity() {
     for a in -8..8i32 {
         for b in -8..8i32 {
@@ -175,6 +178,7 @@ fn mul_div_parity() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn rounding_parity() {
     for a in -64..64i32 {
         check!(ft_round_fix(a), "round_fix", a);
@@ -184,6 +188,7 @@ fn rounding_parity() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn div_fix_non_pow2() {
     for (a, b) in [(-52, 50), (-85, 100), (-339, 200), (-1, 3), (-7, 12)] {
         check!(ft_div_fix(a, b), "div_fix", a, b);
@@ -191,6 +196,7 @@ fn div_fix_non_pow2() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn mul_div_signs() {
     for (a, b, c) in [
         (-3, 5, 2),

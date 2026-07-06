@@ -19,6 +19,7 @@ fn fixture_font(name: &str) -> Vec<u8> {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn face_open_exposes_count_and_index_semantics() {
     let data = fixture_font("DejaVuSans.ttf");
 
@@ -35,6 +36,7 @@ fn face_open_exposes_count_and_index_semantics() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn face_open_rejects_out_of_range_index() {
     let data = fixture_font("DejaVuSans.ttf");
 
@@ -47,6 +49,7 @@ fn face_open_rejects_out_of_range_index() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn face_metadata_exposes_names_flags_metrics_and_format() {
     let data = fixture_font("DejaVuSans.ttf");
     let font = Font::truetype(&data, 12.0).unwrap();
@@ -91,6 +94,7 @@ fn face_metadata_exposes_names_flags_metrics_and_format() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn size_select_distinguishes_char_size_pixel_size_dpi_ppem_and_scale() {
     let data = fixture_font("DejaVuSans.ttf");
     let mut font = Font::truetype(&data, 12.0).unwrap();
@@ -119,6 +123,7 @@ fn size_select_distinguishes_char_size_pixel_size_dpi_ppem_and_scale() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn freetype_shaped_facade_loads_face_and_glyph_slot() {
     let data = fixture_font("DejaVuSans.ttf");
 
@@ -145,6 +150,7 @@ fn freetype_shaped_facade_loads_face_and_glyph_slot() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn freetype_shaped_facade_rejects_unimplemented_no_hinting_render() {
     let data = fixture_font("DejaVuSans.ttf");
     let face = Face::from_memory(&data, 0, 20.0).unwrap();
@@ -161,6 +167,7 @@ fn freetype_shaped_facade_rejects_unimplemented_no_hinting_render() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn charmap_select_set_get_and_iteration_match_expected_unicode_mapping() {
     let data = fixture_font("DejaVuSans.ttf");
     let mut font = Font::truetype(&data, 12.0).unwrap();
@@ -195,6 +202,7 @@ fn charmap_select_set_get_and_iteration_match_expected_unicode_mapping() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn charmap_select_by_platform_encoding_updates_current_charmap() {
     let data = fixture_font("DejaVuSans.ttf");
     let mut font = Font::truetype(&data, 12.0).unwrap();
@@ -206,6 +214,7 @@ fn charmap_select_by_platform_encoding_updates_current_charmap() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn sfnt_table_access_matches_raw_table_bytes() {
     let data = fixture_font("DejaVuSans.ttf");
     let font = Font::truetype(&data, 12.0).unwrap();

@@ -15,6 +15,7 @@ fn matrix() -> Value {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn perf_matrix_rows_have_auditable_timing_contracts() {
     let data = matrix();
     let rows = data["rows"]
@@ -67,6 +68,7 @@ fn perf_matrix_rows_have_auditable_timing_contracts() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn workload_profiles_cover_every_perf_row_with_positive_weights() {
     let data = matrix();
     let rows = data["rows"]

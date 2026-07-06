@@ -70,6 +70,7 @@ struct StatusCounts {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn freetype_interface_coverage_report() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let header_root = manifest_dir

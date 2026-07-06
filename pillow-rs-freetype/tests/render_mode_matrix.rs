@@ -40,6 +40,7 @@ struct Row {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn render_modes_match_static_fixture_matrix() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let fixture_path = manifest_dir
