@@ -148,6 +148,14 @@ pub struct AfLatinMetrics {
     /// (latb/latp). Without HarfBuzz GSUB reshaping, the raw subscript
     /// glyph forms have wrong x-height → adjustment compresses glyph.
     pub skip_xh_adjust: bool,
+    /// Disable edge-adjusted advance hinting for styles whose C hint init sets
+    /// `AF_SCALER_FLAG_NO_ADVANCE`.
+    ///
+    /// C: `afstyles.h` maps `hani_dflt` to the CJK writing system, and
+    /// `af_cjk_hints_init` always sets `AF_SCALER_FLAG_NO_ADVANCE`
+    /// (`afcjk.c:1419`).  The outline can still be hinted, but pp2 is rounded
+    /// from the original phantom instead of edge-adjusted.
+    pub no_advance_hinting: bool,
 }
 
 impl AfLatinMetrics {
@@ -158,6 +166,7 @@ impl AfLatinMetrics {
             non_base_glyphs: vec![false; num_glyphs as usize],
             top_to_bottom_hinting: false,
             skip_xh_adjust: false,
+            no_advance_hinting: false,
         }
     }
 }

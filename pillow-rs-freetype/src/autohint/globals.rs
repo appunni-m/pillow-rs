@@ -133,6 +133,7 @@ impl FaceGlobals {
             let style = &STYLE_TABLE[si];
             let upem = self.font_data.head.units_per_em as i32;
             let mut m = AfLatinMetrics::new(upem, self.glyph_count);
+            m.no_advance_hinting = style.script_tag == "hani";
 
             // Copy non-base flags
             for (i, &nb) in coverage.non_base_glyphs.iter().enumerate() {
