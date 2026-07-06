@@ -3,7 +3,7 @@
   "cases": [
     {
       "case_id": "layout.FT_Vector",
-      "subject": "freetype.FT_Vector",
+      "subject": "ftimage.FT_Vector",
       "case": "layout_matches_c",
       "operation": "record_layout",
       "schema": "record_layout",
@@ -19,7 +19,7 @@
     },
     {
       "case_id": "layout.FT_BBox",
-      "subject": "freetype.FT_BBox",
+      "subject": "ftimage.FT_BBox",
       "case": "layout_matches_c",
       "operation": "record_layout",
       "schema": "record_layout",

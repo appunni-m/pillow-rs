@@ -3,7 +3,7 @@
   "cases": [
     {
       "case_id": "constant.FT_Err_Ok",
-      "subject": "freetype.FT_Err_Ok",
+      "subject": "fterrdef.FT_Err_Ok",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -19,7 +19,7 @@
     },
     {
       "case_id": "constant.FT_Err_Cannot_Open_Resource",
-      "subject": "freetype.FT_Err_Cannot_Open_Resource",
+      "subject": "fterrdef.FT_Err_Cannot_Open_Resource",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -35,7 +35,7 @@
     },
     {
       "case_id": "constant.FT_Err_Unknown_File_Format",
-      "subject": "freetype.FT_Err_Unknown_File_Format",
+      "subject": "fterrdef.FT_Err_Unknown_File_Format",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -51,7 +51,7 @@
     },
     {
       "case_id": "constant.FT_Err_Invalid_File_Format",
-      "subject": "freetype.FT_Err_Invalid_File_Format",
+      "subject": "fterrdef.FT_Err_Invalid_File_Format",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -67,7 +67,7 @@
     },
     {
       "case_id": "constant.FT_Err_Invalid_Argument",
-      "subject": "freetype.FT_Err_Invalid_Argument",
+      "subject": "fterrdef.FT_Err_Invalid_Argument",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -83,7 +83,7 @@
     },
     {
       "case_id": "constant.FT_Err_Unimplemented_Feature",
-      "subject": "freetype.FT_Err_Unimplemented_Feature",
+      "subject": "fterrdef.FT_Err_Unimplemented_Feature",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -99,7 +99,7 @@
     },
     {
       "case_id": "constant.FT_Err_Invalid_Table",
-      "subject": "freetype.FT_Err_Invalid_Table",
+      "subject": "fterrdef.FT_Err_Invalid_Table",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -115,7 +115,7 @@
     },
     {
       "case_id": "constant.FT_Err_Invalid_Glyph_Index",
-      "subject": "freetype.FT_Err_Invalid_Glyph_Index",
+      "subject": "fterrdef.FT_Err_Invalid_Glyph_Index",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -131,7 +131,7 @@
     },
     {
       "case_id": "constant.FT_Err_Invalid_Character_Code",
-      "subject": "freetype.FT_Err_Invalid_Character_Code",
+      "subject": "fterrdef.FT_Err_Invalid_Character_Code",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -147,7 +147,7 @@
     },
     {
       "case_id": "constant.FT_Err_Invalid_Glyph_Format",
-      "subject": "freetype.FT_Err_Invalid_Glyph_Format",
+      "subject": "fterrdef.FT_Err_Invalid_Glyph_Format",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -163,7 +163,7 @@
     },
     {
       "case_id": "constant.FT_Err_Cannot_Render_Glyph",
-      "subject": "freetype.FT_Err_Cannot_Render_Glyph",
+      "subject": "fterrdef.FT_Err_Cannot_Render_Glyph",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -179,7 +179,7 @@
     },
     {
       "case_id": "constant.FT_Err_Invalid_Outline",
-      "subject": "freetype.FT_Err_Invalid_Outline",
+      "subject": "fterrdef.FT_Err_Invalid_Outline",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -195,7 +195,7 @@
     },
     {
       "case_id": "constant.FT_Err_Invalid_Pixel_Size",
-      "subject": "freetype.FT_Err_Invalid_Pixel_Size",
+      "subject": "fterrdef.FT_Err_Invalid_Pixel_Size",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -211,7 +211,7 @@
     },
     {
       "case_id": "constant.FT_Err_Invalid_CharMap_Handle",
-      "subject": "freetype.FT_Err_Invalid_CharMap_Handle",
+      "subject": "fterrdef.FT_Err_Invalid_CharMap_Handle",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -227,7 +227,7 @@
     },
     {
       "case_id": "constant.FT_Err_Out_Of_Memory",
-      "subject": "freetype.FT_Err_Out_Of_Memory",
+      "subject": "fterrdef.FT_Err_Out_Of_Memory",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -243,7 +243,7 @@
     },
     {
       "case_id": "constant.FT_Err_Raster_Overflow",
-      "subject": "freetype.FT_Err_Raster_Overflow",
+      "subject": "fterrdef.FT_Err_Raster_Overflow",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -259,7 +259,7 @@
     },
     {
       "case_id": "constant.FT_Err_Invalid_CharMap_Format",
-      "subject": "freetype.FT_Err_Invalid_CharMap_Format",
+      "subject": "fterrdef.FT_Err_Invalid_CharMap_Format",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -819,7 +819,7 @@
     },
     {
       "case_id": "constant.FT_PIXEL_MODE_NONE",
-      "subject": "freetype.FT_PIXEL_MODE_NONE",
+      "subject": "ftimage.FT_PIXEL_MODE_NONE",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -835,7 +835,7 @@
     },
     {
       "case_id": "constant.FT_PIXEL_MODE_MONO",
-      "subject": "freetype.FT_PIXEL_MODE_MONO",
+      "subject": "ftimage.FT_PIXEL_MODE_MONO",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -851,7 +851,7 @@
     },
     {
       "case_id": "constant.FT_PIXEL_MODE_GRAY",
-      "subject": "freetype.FT_PIXEL_MODE_GRAY",
+      "subject": "ftimage.FT_PIXEL_MODE_GRAY",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -867,7 +867,7 @@
     },
     {
       "case_id": "constant.FT_PIXEL_MODE_GRAY2",
-      "subject": "freetype.FT_PIXEL_MODE_GRAY2",
+      "subject": "ftimage.FT_PIXEL_MODE_GRAY2",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -883,7 +883,7 @@
     },
     {
       "case_id": "constant.FT_PIXEL_MODE_GRAY4",
-      "subject": "freetype.FT_PIXEL_MODE_GRAY4",
+      "subject": "ftimage.FT_PIXEL_MODE_GRAY4",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -899,7 +899,7 @@
     },
     {
       "case_id": "constant.FT_PIXEL_MODE_LCD",
-      "subject": "freetype.FT_PIXEL_MODE_LCD",
+      "subject": "ftimage.FT_PIXEL_MODE_LCD",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -915,7 +915,7 @@
     },
     {
       "case_id": "constant.FT_PIXEL_MODE_LCD_V",
-      "subject": "freetype.FT_PIXEL_MODE_LCD_V",
+      "subject": "ftimage.FT_PIXEL_MODE_LCD_V",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -931,7 +931,7 @@
     },
     {
       "case_id": "constant.FT_PIXEL_MODE_BGRA",
-      "subject": "freetype.FT_PIXEL_MODE_BGRA",
+      "subject": "ftimage.FT_PIXEL_MODE_BGRA",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -947,7 +947,7 @@
     },
     {
       "case_id": "constant.FT_PIXEL_MODE_MAX",
-      "subject": "freetype.FT_PIXEL_MODE_MAX",
+      "subject": "ftimage.FT_PIXEL_MODE_MAX",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -963,7 +963,7 @@
     },
     {
       "case_id": "constant.FT_GLYPH_FORMAT_NONE",
-      "subject": "freetype.FT_GLYPH_FORMAT_NONE",
+      "subject": "ftimage.FT_GLYPH_FORMAT_NONE",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -979,7 +979,7 @@
     },
     {
       "case_id": "constant.FT_GLYPH_FORMAT_COMPOSITE",
-      "subject": "freetype.FT_GLYPH_FORMAT_COMPOSITE",
+      "subject": "ftimage.FT_GLYPH_FORMAT_COMPOSITE",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -995,7 +995,7 @@
     },
     {
       "case_id": "constant.FT_GLYPH_FORMAT_BITMAP",
-      "subject": "freetype.FT_GLYPH_FORMAT_BITMAP",
+      "subject": "ftimage.FT_GLYPH_FORMAT_BITMAP",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -1011,7 +1011,7 @@
     },
     {
       "case_id": "constant.FT_GLYPH_FORMAT_OUTLINE",
-      "subject": "freetype.FT_GLYPH_FORMAT_OUTLINE",
+      "subject": "ftimage.FT_GLYPH_FORMAT_OUTLINE",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -1027,7 +1027,7 @@
     },
     {
       "case_id": "constant.FT_GLYPH_FORMAT_PLOTTER",
-      "subject": "freetype.FT_GLYPH_FORMAT_PLOTTER",
+      "subject": "ftimage.FT_GLYPH_FORMAT_PLOTTER",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
@@ -1043,7 +1043,7 @@
     },
     {
       "case_id": "constant.FT_GLYPH_FORMAT_SVG",
-      "subject": "freetype.FT_GLYPH_FORMAT_SVG",
+      "subject": "ftimage.FT_GLYPH_FORMAT_SVG",
       "case": "value_matches_header",
       "operation": "constant",
       "schema": "constant",
