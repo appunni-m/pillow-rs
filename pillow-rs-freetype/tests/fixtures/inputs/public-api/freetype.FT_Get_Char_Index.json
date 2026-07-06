@@ -28,6 +28,11 @@
           "select_charmap": "FT_ENCODING_UNICODE",
           "char_code": 65,
           "size": 20
+        },
+        "variability": {
+          "axes": [
+            "fonts"
+          ]
         }
       },
       "classifiers": [

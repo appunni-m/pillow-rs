@@ -42,6 +42,11 @@
             "FT_RENDER_MODE_LCD",
             "FT_RENDER_MODE_LCD_V"
           ]
+        },
+        "variability": {
+          "axes": [
+            "fonts"
+          ]
         }
       },
       "classifiers": [
@@ -92,6 +97,11 @@
           "size_ppem": 20,
           "glyph_index": 36,
           "render_mode": 255
+        },
+        "variability": {
+          "axes": [
+            "fonts"
+          ]
         }
       },
       "classifiers": [

@@ -32,6 +32,11 @@
             "FT_LOAD_DEFAULT"
           ],
           "select_charmap": "FT_ENCODING_UNICODE"
+        },
+        "variability": {
+          "axes": [
+            "fonts"
+          ]
         }
       },
       "classifiers": [
@@ -81,6 +86,11 @@
             "FT_LOAD_RENDER"
           ],
           "select_charmap": "FT_ENCODING_UNICODE"
+        },
+        "variability": {
+          "axes": [
+            "fonts"
+          ]
         }
       },
       "classifiers": [

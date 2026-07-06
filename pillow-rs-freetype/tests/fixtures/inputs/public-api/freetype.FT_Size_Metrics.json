@@ -90,6 +90,11 @@
               "vres": 96
             }
           ]
+        },
+        "variability": {
+          "axes": [
+            "fonts"
+          ]
         }
       },
       "classifiers": [
