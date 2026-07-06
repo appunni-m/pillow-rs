@@ -450,6 +450,12 @@ impl Font {
         self.size_metrics
     }
 
+    pub(crate) fn clone_with_load_mode(&self, load_mode: LoadMode) -> Self {
+        let mut font = self.clone();
+        font.load_mode = load_mode;
+        font
+    }
+
     /// Equivalent to `FT_Set_Char_Size`.
     pub fn set_char_size(&mut self, char_width: i32, char_height: i32, x_dpi: u32, y_dpi: u32) {
         let height = if char_height == 0 {

@@ -7,14 +7,17 @@
 #![allow(missing_docs)]
 #![allow(unused_crate_dependencies)]
 
+use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::mem::{align_of, offset_of, size_of};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
+use std::time::{Duration, Instant};
 
+use fontdone::Face;
 use fontdone::ffi::*;
 use fontdone_ffi_c as c_abi;
 use fontdone_ffi_wasm as wasm_abi;
@@ -178,95 +181,148 @@ enum StatusKind {
 }
 
 #[derive(Debug)]
-struct UnifiedCase {
-    input: InputCase,
-    runtime: RuntimeReadiness,
-}
-
-#[derive(Debug)]
 enum RuntimeReadiness {
     Runnable { key: String },
     Pending { reason: String },
 }
 
-#[test]
-fn unified_fixture_parity() {
-    eprintln!("unified_fixture_parity: loading unified input cases");
-    let input_cases = read_all_case_files();
-    assert_unified_inputs_use_single_aggregate_model(&input_cases);
-    let unified_cases = prepare_unified_cases(&input_cases);
-    let unique_case_keys = unified_cases
-        .iter()
-        .map(|case| {
-            (
-                case.input.subject.clone(),
-                case.input.case.clone(),
-                case.input.case_id.clone(),
-            )
-        })
-        .collect::<BTreeSet<_>>();
-    eprintln!(
-        "unified_cases: total={} deduped_case_keys={} runnable={} pending={}",
-        unified_cases.len(),
-        unique_case_keys.len(),
-        unified_cases
-            .iter()
-            .filter(|case| matches!(case.runtime, RuntimeReadiness::Runnable { .. }))
-            .count(),
-        unified_cases
-            .iter()
-            .filter(|case| matches!(case.runtime, RuntimeReadiness::Pending { .. }))
-            .count()
-    );
-    assert_manifest_cases_cover_fixture_inputs(&unified_cases);
-    assert_manifest_font_variability_cases_cover_declared_fixture_folder(&unified_cases);
-    assert_unified_variability_cases_have_single_model(&unified_cases);
-    assert_unified_fixture_cases_match_runtime_c_oracle(&unified_cases);
+struct ProfileStage {
+    name: &'static str,
+    start: Instant,
+    enabled: bool,
 }
 
-fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[UnifiedCase]) {
-    let manifest = read_manifest();
-    let runtime_selection = select_runtime_cases(all_cases);
+impl ProfileStage {
+    fn new(name: &'static str) -> Self {
+        Self {
+            name,
+            start: Instant::now(),
+            enabled: profile_enabled(),
+        }
+    }
+}
+
+impl Drop for ProfileStage {
+    fn drop(&mut self) {
+        if self.enabled {
+            let elapsed = self.start.elapsed();
+            eprintln!(
+                "profile_stage: name={} elapsed_ns={} elapsed_ms={:.3}",
+                self.name,
+                duration_ns(elapsed),
+                duration_ms(elapsed)
+            );
+        }
+    }
+}
+
+fn profile_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var("FONTDONE_UNIFIED_PROFILE").is_ok())
+}
+
+fn duration_ms(duration: Duration) -> f64 {
+    duration.as_secs_f64() * 1000.0
+}
+
+fn duration_ns(duration: Duration) -> u128 {
+    duration.as_nanos()
+}
+
+#[test]
+fn unified_fixture_parity() {
+    let _profile = ProfileStage::new("unified_fixture_parity.total");
+    if let Some(limit) = variability_axis_limit() {
+        eprintln!("profile_variability_limit: axis_values={limit}");
+    }
+    let input_cases = {
+        let _profile = ProfileStage::new("load_global_input_cache");
+        read_all_case_files()
+    };
+    {
+        let _profile = ProfileStage::new("preload_global_fixture_caches");
+        preload_global_fixture_caches(input_cases);
+    }
+    {
+        let _profile = ProfileStage::new("assert_single_aggregate_model");
+        assert_unified_inputs_use_single_aggregate_model(input_cases);
+    }
+    {
+        let _profile = ProfileStage::new("assert_manifest_cases_cover_fixture_inputs");
+        assert_manifest_cases_cover_fixture_inputs(input_cases);
+    }
+    {
+        let _profile = ProfileStage::new(
+            "assert_manifest_font_variability_cases_cover_declared_fixture_folder",
+        );
+        assert_manifest_font_variability_cases_cover_declared_fixture_folder(input_cases);
+    }
+    {
+        let _profile = ProfileStage::new("assert_unified_variability_cases_have_single_model");
+        assert_unified_variability_cases_have_single_model(input_cases);
+    }
+    {
+        let _profile = ProfileStage::new("assert_unified_fixture_cases_match_runtime_c_oracle");
+        assert_unified_fixture_cases_match_runtime_c_oracle(input_cases);
+    }
+}
+
+fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[InputCase]) {
+    let manifest = {
+        let _profile = ProfileStage::new("runtime.load_manifest_cache");
+        read_manifest()
+    };
+    let runtime_selection = {
+        let _profile = ProfileStage::new("runtime.select_runtime_cases");
+        select_runtime_cases(all_cases)
+    };
     let cases = runtime_selection.executable;
     let mut passed = 0usize;
     let mut failures = Vec::new();
+    let mut runtime_failures = FailureSummary::default();
+    let mut backend_profile = BackendProfile::default();
+    let mut face_prewarm_profile = FacePrewarmProfile::default();
+    let mut slow_cases = SlowCaseSummary::default();
+    let mut axis_profile = AxisProfileSummary::default();
     let mut covered = BTreeSet::new();
     let mut valid_cases = Vec::new();
 
-    for case in &cases {
-        if !manifest.has_case(&case.subject, &case.case) {
-            failures.push(format!(
-                "{} references unknown manifest case {}::{}",
-                case.case_id, case.subject, case.case
-            ));
-            continue;
-        }
-        if let Err(err) = validate_assets(case) {
-            failures.push(format!("{} asset validation failed: {err}", case.case_id));
-            continue;
-        }
-        valid_cases.push(*case);
-    }
-
-    let oracle_outputs = if failures.is_empty() {
-        match run_oracles_with_cache(&valid_cases) {
-            Ok(outputs) => outputs,
-            Err(err) => {
-                failures.push(format!("batch oracle failed: {err}"));
-                Vec::new()
+    {
+        let _profile = ProfileStage::new("runtime.validate_cases_and_assets");
+        for case in &cases {
+            if !manifest.has_case(&case.subject, &case.case) {
+                failures.push(format!(
+                    "{} references unknown manifest case {}::{}",
+                    case.case_id, case.subject, case.case
+                ));
+                continue;
             }
+            if let Err(err) = validate_assets(case) {
+                failures.push(format!("{} asset validation failed: {err}", case.case_id));
+                continue;
+            }
+            valid_cases.push(case);
         }
-    } else {
-        Vec::new()
-    };
+    }
 
     if failures.is_empty() {
-        let result = compare_backend_outputs(&valid_cases, &oracle_outputs);
-        passed += result.passed;
-        covered.extend(result.covered);
-        failures.extend(result.failures);
+        match compare_backend_outputs_with_oracle_cache(&valid_cases) {
+            Ok(result) => {
+                passed = passed.saturating_add(result.passed);
+                covered.extend(result.covered);
+                runtime_failures.extend(result.failures);
+                backend_profile.extend(result.profile);
+                face_prewarm_profile.extend(result.face_prewarm);
+                slow_cases.extend(result.slow_cases);
+                axis_profile.extend(result.axis_profile);
+            }
+            Err(err) => {
+                failures.push(format!("runtime oracle comparison failed: {err}"));
+            }
+        }
     }
 
+    let total_failures = failures.len().saturating_add(runtime_failures.count);
     eprintln!(
         "runtime_cases: runnable={} pending={} pending_reasons={}",
         cases.len(),
@@ -274,17 +330,93 @@ fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[UnifiedCase]
         format_operation_counts(&runtime_selection.unsupported_operations)
     );
     eprintln!(
-        "runtime_parity: passed={} failed={} total={} covered_manifest_cases={}",
+        "runtime_parity: passed={} failed={} total={} covered_manifest_cases={} failure_buckets={}",
         passed,
-        failures.len(),
+        total_failures,
         cases.len(),
-        covered.len()
+        covered.len(),
+        format_operation_counts(&runtime_failures.buckets)
     );
-    if !failures.is_empty() {
+    if profile_enabled() {
+        eprintln!(
+            "profile_backend_totals: rust_ns={} c_abi_ns={} wasm_ns={} compare_ns={} rust_ms={:.3} c_abi_ms={:.3} wasm_ms={:.3} compare_ms={:.3}",
+            duration_ns(backend_profile.rust_ffi),
+            duration_ns(backend_profile.c_abi),
+            duration_ns(backend_profile.wasm_abi),
+            duration_ns(backend_profile.compare),
+            duration_ms(backend_profile.rust_ffi),
+            duration_ms(backend_profile.c_abi),
+            duration_ms(backend_profile.wasm_abi),
+            duration_ms(backend_profile.compare)
+        );
+        if face_prewarm_profile.cases > 0 {
+            eprintln!(
+                "profile_face_warmup: chunks={} cases={} opened_face_handles={} total_ns={} rust_ns={} c_abi_ns={} wasm_ns={} total_ms={:.3} rust_ms={:.3} c_abi_ms={:.3} wasm_ms={:.3}",
+                face_prewarm_profile.chunks,
+                face_prewarm_profile.cases,
+                face_prewarm_profile.opened_face_handles,
+                duration_ns(face_prewarm_profile.total),
+                duration_ns(face_prewarm_profile.rust_ffi),
+                duration_ns(face_prewarm_profile.c_abi),
+                duration_ns(face_prewarm_profile.wasm_abi),
+                duration_ms(face_prewarm_profile.total),
+                duration_ms(face_prewarm_profile.rust_ffi),
+                duration_ms(face_prewarm_profile.c_abi),
+                duration_ms(face_prewarm_profile.wasm_abi)
+            );
+        }
+        for sample in &slow_cases.samples {
+            eprintln!(
+                "profile_slow_case: case_id={} operation={} total_ns={} rust_ns={} c_abi_ns={} wasm_ns={} compare_ns={}",
+                sample.case_id,
+                sample.operation,
+                duration_ns(sample.total),
+                duration_ns(sample.rust_ffi),
+                duration_ns(sample.c_abi),
+                duration_ns(sample.wasm_abi),
+                duration_ns(sample.compare)
+            );
+        }
+        let mut axis_entries = axis_profile.groups.iter().collect::<Vec<_>>();
+        axis_entries.sort_by(|(left_group, left_stats), (right_group, right_stats)| {
+            right_stats
+                .total
+                .cmp(&left_stats.total)
+                .then_with(|| left_group.cmp(right_group))
+        });
+        axis_entries.truncate(axis_profile_sample_limit());
+        for (group, stats) in axis_entries {
+            eprintln!(
+                "profile_axis_group: group={} count={} total_ns={} avg_ns={} min_ns={} max_ns={} rust_ns={} c_abi_ns={} wasm_ns={} compare_ns={}",
+                group,
+                stats.count,
+                duration_ns(stats.total),
+                stats.avg_ns(),
+                duration_ns(stats.min),
+                duration_ns(stats.max),
+                duration_ns(stats.rust_ffi),
+                duration_ns(stats.c_abi),
+                duration_ns(stats.wasm_abi),
+                duration_ns(stats.compare)
+            );
+        }
+    }
+    if !failures.is_empty() || !runtime_failures.is_empty() {
         for failure in &failures {
             eprintln!("{failure}");
         }
-        panic!("{} unified fixture cases failed", failures.len());
+        for failure in &runtime_failures.samples {
+            eprintln!("{failure}");
+        }
+        if runtime_failures.count > runtime_failures.samples.len() {
+            eprintln!(
+                "... omitted {} additional runtime parity failures",
+                runtime_failures
+                    .count
+                    .saturating_sub(runtime_failures.samples.len())
+            );
+        }
+        panic!("{total_failures} unified fixture cases failed");
     }
 }
 
@@ -325,30 +457,14 @@ fn assert_unified_inputs_use_single_aggregate_model(cases: &[InputCase]) {
     );
 }
 
-struct RuntimeSelection<'a> {
-    executable: Vec<&'a InputCase>,
+struct RuntimeSelection {
+    executable: Vec<InputCase>,
     model_only: usize,
     unsupported_operations: BTreeMap<String, usize>,
 }
 
-fn prepare_unified_cases(cases: &[InputCase]) -> Vec<UnifiedCase> {
-    let mut unified = Vec::new();
-    for case in cases {
-        for expanded in expand_input_case(case) {
-            let canonical_operation = canonical_operation(&expanded.operation);
-            let runtime = classify_runtime_case(&expanded, canonical_operation);
-            unified.push(UnifiedCase {
-                input: expanded,
-                runtime,
-            });
-        }
-    }
-    unified
-}
-
 const DEFAULT_VARIABILITY_SIZES: &[u32] = &[10, 20];
 const DEFAULT_VARIABILITY_CODEPOINTS: &[u64] = &[33, 65, 103, 109];
-const DEFAULT_VARIABILITY_GLYPH_INDICES: &[u32] = &[0, 1, 36, 57];
 const DEFAULT_VARIABILITY_LOAD_FLAGS: &[i32] = &[FT_LOAD_DEFAULT];
 const DEFAULT_VARIABILITY_RENDER_MODES: &[i32] = &[FT_RENDER_MODE_NORMAL];
 
@@ -357,7 +473,7 @@ struct ExpansionPlan {
     fonts: Vec<Option<Asset>>,
     sizes: Vec<Option<u32>>,
     codepoints: Vec<Option<u64>>,
-    glyph_indices: Vec<Option<u32>>,
+    glyph_indices_enabled: bool,
     load_flags: Vec<Option<i32>>,
     render_modes: Vec<Option<i32>>,
 }
@@ -370,8 +486,7 @@ impl ExpansionPlan {
             && self.sizes[0].is_none()
             && self.codepoints.len() == 1
             && self.codepoints[0].is_none()
-            && self.glyph_indices.len() == 1
-            && self.glyph_indices[0].is_none()
+            && !self.glyph_indices_enabled
             && self.load_flags.len() == 1
             && self.load_flags[0].is_none()
             && self.render_modes.len() == 1
@@ -379,17 +494,20 @@ impl ExpansionPlan {
     }
 }
 
-fn expand_input_case(case: &InputCase) -> Vec<InputCase> {
+fn for_each_expanded_input_case(
+    case: &InputCase,
+    mut visit: impl FnMut(InputCase) -> bool,
+) -> bool {
     let plan = expansion_plan(case);
     if plan.is_identity() {
-        return vec![case.clone()];
+        return visit(case.clone());
     }
 
-    let mut expanded = Vec::new();
     for font in &plan.fonts {
+        let glyph_indices = glyph_indices_axis(case, font.as_ref(), plan.glyph_indices_enabled);
         for size in &plan.sizes {
             for codepoint in &plan.codepoints {
-                for glyph_index in &plan.glyph_indices {
+                for glyph_index in &glyph_indices {
                     for load_flags in &plan.load_flags {
                         for render_mode in &plan.render_modes {
                             let mut case = case.clone();
@@ -402,14 +520,16 @@ fn expand_input_case(case: &InputCase) -> Vec<InputCase> {
                                 *load_flags,
                                 *render_mode,
                             );
-                            expanded.push(case);
+                            if !visit(case) {
+                                return false;
+                            }
                         }
                     }
                 }
             }
         }
     }
-    expanded
+    true
 }
 
 fn expansion_plan(case: &InputCase) -> ExpansionPlan {
@@ -435,15 +555,7 @@ fn expansion_plan(case: &InputCase) -> ExpansionPlan {
         .into_iter()
         .map(Some)
         .collect(),
-        glyph_indices: u32_axis(
-            params,
-            &["glyph_indices"],
-            axes.contains("glyph_indices"),
-            DEFAULT_VARIABILITY_GLYPH_INDICES,
-        )
-        .into_iter()
-        .map(Some)
-        .collect(),
+        glyph_indices_enabled: axes.contains("glyph_indices"),
         load_flags: load_flags_axis(params, axes.contains("load_flags"))
             .into_iter()
             .map(Some)
@@ -458,7 +570,26 @@ fn expansion_plan(case: &InputCase) -> ExpansionPlan {
         .collect(),
     };
     normalize_empty_axes(&mut plan);
+    apply_variability_axis_limit(&mut plan);
     plan
+}
+
+fn expansion_count(case: &InputCase) -> usize {
+    let plan = expansion_plan(case);
+    let other_axes = plan
+        .sizes
+        .len()
+        .saturating_mul(plan.codepoints.len())
+        .saturating_mul(plan.load_flags.len())
+        .saturating_mul(plan.render_modes.len());
+    if !plan.glyph_indices_enabled {
+        return plan.fonts.len().saturating_mul(other_axes);
+    }
+    plan.fonts
+        .iter()
+        .map(|font| glyph_indices_axis(case, font.as_ref(), true).len())
+        .sum::<usize>()
+        .saturating_mul(other_axes)
 }
 
 fn normalize_empty_axes(plan: &mut ExpansionPlan) {
@@ -471,15 +602,43 @@ fn normalize_empty_axes(plan: &mut ExpansionPlan) {
     if plan.codepoints.is_empty() {
         plan.codepoints.push(None);
     }
-    if plan.glyph_indices.is_empty() {
-        plan.glyph_indices.push(None);
-    }
     if plan.load_flags.is_empty() {
         plan.load_flags.push(None);
     }
     if plan.render_modes.is_empty() {
         plan.render_modes.push(None);
     }
+}
+
+fn apply_variability_axis_limit(plan: &mut ExpansionPlan) {
+    let Some(limit) = variability_axis_limit() else {
+        return;
+    };
+    truncate_axis(&mut plan.fonts, limit);
+    truncate_axis(&mut plan.sizes, limit);
+    truncate_axis(&mut plan.codepoints, limit);
+    truncate_axis(&mut plan.load_flags, limit);
+    truncate_axis(&mut plan.render_modes, limit);
+}
+
+fn truncate_axis<T>(values: &mut Vec<T>, limit: usize) {
+    if values.len() > limit {
+        values.truncate(limit);
+    }
+}
+
+fn variability_axis_limit() -> Option<usize> {
+    static LIMIT: OnceLock<Option<usize>> = OnceLock::new();
+    *LIMIT.get_or_init(|| {
+        std::env::var("FONTDONE_UNIFIED_VARIABILITY_LIMIT")
+            .ok()
+            .map(|value| {
+                value.parse::<usize>().unwrap_or_else(|err| {
+                    panic!("FONTDONE_UNIFIED_VARIABILITY_LIMIT must be usize: {err}")
+                })
+            })
+            .map(|value| value.max(1))
+    })
 }
 
 fn variability_axes(case: &InputCase) -> BTreeSet<&str> {
@@ -514,6 +673,17 @@ fn font_axis(case: &InputCase, axes: &BTreeSet<&str>) -> Vec<Option<Asset>> {
 }
 
 fn fixture_font_assets(folder: &str) -> Vec<Asset> {
+    static CACHE: OnceLock<Mutex<BTreeMap<String, Vec<Asset>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    if let Some(assets) = cache
+        .lock()
+        .expect("font asset cache lock")
+        .get(folder)
+        .cloned()
+    {
+        return assets;
+    }
+
     let folder_path = fixture_dir().join(folder);
     let Ok(entries) = fs::read_dir(&folder_path) else {
         return Vec::new();
@@ -544,6 +714,10 @@ fn fixture_font_assets(folder: &str) -> Vec<Asset> {
         })
         .collect::<Vec<_>>();
     assets.sort_by_key(asset_label);
+    cache
+        .lock()
+        .expect("font asset cache lock")
+        .insert(folder.to_string(), assets.clone());
     assets
 }
 
@@ -667,6 +841,69 @@ fn render_modes_axis(params: &Value, enabled: bool, defaults: &[i32]) -> Vec<i32
         defaults.to_vec()
     } else {
         Vec::new()
+    }
+}
+
+fn glyph_indices_axis(
+    case: &InputCase,
+    font_override: Option<&Asset>,
+    enabled: bool,
+) -> Vec<Option<u32>> {
+    if !enabled {
+        return vec![None];
+    }
+    if let Some(indices) = runtime_glyph_indices(case, font_override) {
+        if !indices.is_empty() {
+            let mut values = indices.iter().copied().map(Some).collect::<Vec<_>>();
+            if let Some(limit) = variability_axis_limit() {
+                truncate_axis(&mut values, limit);
+            }
+            return values;
+        }
+    }
+    let explicit = u32_axis(&case.inputs.params, &["glyph_indices"], true, &[]);
+    let mut values = if explicit.is_empty() {
+        vec![None]
+    } else {
+        explicit.into_iter().map(Some).collect()
+    };
+    if let Some(limit) = variability_axis_limit() {
+        truncate_axis(&mut values, limit);
+    }
+    values
+}
+
+fn runtime_glyph_indices(case: &InputCase, font_override: Option<&Asset>) -> Option<Arc<[u32]>> {
+    let font = font_override.or_else(|| runtime_font_asset(case))?;
+    let face_index = usize::try_from(face_index_param(&case.inputs.params).ok()?).ok()?;
+    let key = glyph_domain_cache_key(font, face_index)?;
+
+    static CACHE: OnceLock<Mutex<BTreeMap<String, Arc<[u32]>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    if let Some(indices) = cache.lock().ok()?.get(&key).map(Arc::clone) {
+        return Some(indices);
+    }
+
+    let bytes = font_asset_bytes(font).ok()?;
+    let face = Face::from_memory(bytes.as_ref(), face_index, 20.0).ok()?;
+    let indices = Arc::<[u32]>::from((0..u32::from(face.info().num_glyphs)).collect::<Vec<_>>());
+    cache.lock().ok()?.insert(key, Arc::clone(&indices));
+    Some(indices)
+}
+
+fn glyph_domain_cache_key(font: &Asset, face_index: usize) -> Option<String> {
+    match font {
+        Asset::File { path, .. } => Some(format!("file:{path}:face:{face_index}")),
+        Asset::InlineBytes { .. } => {
+            let value = inline_bytes_hex(font)?;
+            let mut hasher = Sha256::new();
+            hasher.update(value.as_bytes());
+            Some(format!(
+                "inline:{}:face:{face_index}",
+                hex_bytes(&hasher.finalize())
+            ))
+        }
+        Asset::Ref { .. } | Asset::Other(_) => None,
     }
 }
 
@@ -800,31 +1037,44 @@ fn classify_runtime_case(case: &InputCase, canonical_operation: &str) -> Runtime
     }
 }
 
-fn select_runtime_cases(cases: &[UnifiedCase]) -> RuntimeSelection<'_> {
+fn select_runtime_cases(cases: &[InputCase]) -> RuntimeSelection {
     let filter = case_filter();
+    let operation_filter = operation_filter();
     let limit = case_limit();
     let mut executable = Vec::new();
     let mut model_only = 0usize;
-    let mut unsupported_operations = BTreeMap::new();
+    let mut unsupported_operations: BTreeMap<String, usize> = BTreeMap::new();
     let mut seen_executable = BTreeSet::new();
 
     for case in cases {
-        if !case_matches_filter(&case.input, filter.as_deref()) {
+        if !operation_matches_filter(case, operation_filter.as_deref()) {
             continue;
         }
-        match &case.runtime {
-            RuntimeReadiness::Runnable { key } => {
-                if seen_executable.insert(key.clone()) {
-                    executable.push(&case.input);
-                    if limit.is_some_and(|limit| executable.len() >= limit) {
-                        break;
+        let mut should_continue = true;
+        for_each_expanded_input_case(case, |expanded| {
+            if !case_matches_filter(&expanded, filter.as_deref()) {
+                return true;
+            }
+            match classify_runtime_case(&expanded, canonical_operation(&expanded.operation)) {
+                RuntimeReadiness::Runnable { key } => {
+                    if seen_executable.insert(key) {
+                        executable.push(expanded);
+                        if limit.is_some_and(|limit| executable.len() >= limit) {
+                            should_continue = false;
+                            return false;
+                        }
                     }
                 }
+                RuntimeReadiness::Pending { reason } => {
+                    model_only = model_only.saturating_add(1);
+                    let count = unsupported_operations.entry(reason).or_default();
+                    *count = count.saturating_add(1);
+                }
             }
-            RuntimeReadiness::Pending { reason } => {
-                model_only = model_only.saturating_add(1);
-                *unsupported_operations.entry(reason.clone()).or_default() += 1;
-            }
+            true
+        });
+        if !should_continue {
+            break;
         }
     }
 
@@ -938,7 +1188,282 @@ fn compare_named_output(
 struct BackendComparisonResult {
     passed: usize,
     covered: BTreeSet<(String, String)>,
-    failures: Vec<String>,
+    failures: FailureSummary,
+    profile: BackendProfile,
+    face_prewarm: FacePrewarmProfile,
+    slow_cases: SlowCaseSummary,
+    axis_profile: AxisProfileSummary,
+}
+
+#[derive(Clone, Copy, Default)]
+struct BackendProfile {
+    rust_ffi: Duration,
+    c_abi: Duration,
+    wasm_abi: Duration,
+    compare: Duration,
+}
+
+impl BackendProfile {
+    fn extend(&mut self, other: Self) {
+        self.rust_ffi = self.rust_ffi.saturating_add(other.rust_ffi);
+        self.c_abi = self.c_abi.saturating_add(other.c_abi);
+        self.wasm_abi = self.wasm_abi.saturating_add(other.wasm_abi);
+        self.compare = self.compare.saturating_add(other.compare);
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+struct FacePrewarmProfile {
+    chunks: usize,
+    cases: usize,
+    opened_face_handles: usize,
+    total: Duration,
+    rust_ffi: Duration,
+    c_abi: Duration,
+    wasm_abi: Duration,
+}
+
+impl FacePrewarmProfile {
+    fn extend(&mut self, other: Self) {
+        self.chunks = self.chunks.saturating_add(other.chunks);
+        self.cases = self.cases.saturating_add(other.cases);
+        self.opened_face_handles = self
+            .opened_face_handles
+            .saturating_add(other.opened_face_handles);
+        self.total = self.total.saturating_add(other.total);
+        self.rust_ffi = self.rust_ffi.saturating_add(other.rust_ffi);
+        self.c_abi = self.c_abi.saturating_add(other.c_abi);
+        self.wasm_abi = self.wasm_abi.saturating_add(other.wasm_abi);
+    }
+}
+
+struct SlowCaseSummary {
+    samples: Vec<SlowCaseSample>,
+    limit: usize,
+}
+
+struct SlowCaseSample {
+    case_id: String,
+    operation: String,
+    total: Duration,
+    rust_ffi: Duration,
+    c_abi: Duration,
+    wasm_abi: Duration,
+    compare: Duration,
+}
+
+impl SlowCaseSummary {
+    fn new() -> Self {
+        Self {
+            samples: Vec::new(),
+            limit: slow_case_sample_limit(),
+        }
+    }
+
+    fn push(&mut self, sample: SlowCaseSample) {
+        if self.limit == 0 {
+            return;
+        }
+        self.samples.push(sample);
+        self.samples.sort_by_key(|sample| Reverse(sample.total));
+        if self.samples.len() > self.limit {
+            self.samples.truncate(self.limit);
+        }
+    }
+
+    fn extend(&mut self, other: Self) {
+        for sample in other.samples {
+            self.push(sample);
+        }
+    }
+}
+
+impl Default for SlowCaseSummary {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Default)]
+struct AxisProfileSummary {
+    groups: BTreeMap<String, AxisProfileStats>,
+}
+
+#[derive(Clone, Copy)]
+struct AxisProfileStats {
+    count: usize,
+    total: Duration,
+    min: Duration,
+    max: Duration,
+    rust_ffi: Duration,
+    c_abi: Duration,
+    wasm_abi: Duration,
+    compare: Duration,
+}
+
+impl Default for AxisProfileStats {
+    fn default() -> Self {
+        Self {
+            count: 0,
+            total: Duration::ZERO,
+            min: Duration::MAX,
+            max: Duration::ZERO,
+            rust_ffi: Duration::ZERO,
+            c_abi: Duration::ZERO,
+            wasm_abi: Duration::ZERO,
+            compare: Duration::ZERO,
+        }
+    }
+}
+
+impl AxisProfileSummary {
+    fn record(&mut self, case: &InputCase, sample: &SlowCaseSample) {
+        if !profile_enabled() {
+            return;
+        }
+        let operation = canonical_operation(&case.operation);
+        let mut groups = vec![
+            format!("operation={operation}"),
+            format!("operation={operation}|subject={}", case.subject),
+        ];
+        if let Some(font) = input_font_file_name(case) {
+            groups.push(format!("operation={operation}|font={font}"));
+        }
+        if let Some(size) = input_pixel_y(case) {
+            groups.push(format!("operation={operation}|size_y={size}"));
+        }
+        if let Some(glyph_index) = input_u32_param(case, "glyph_index") {
+            groups.push(format!("operation={operation}|glyph_index={glyph_index}"));
+        }
+        if let Some(char_code) = input_u64_param(case, "char_code") {
+            groups.push(format!("operation={operation}|char_code={char_code}"));
+        }
+        if let Ok(load_flags) = load_flags_param(&case.inputs.params) {
+            groups.push(format!("operation={operation}|load_flags={load_flags}"));
+        }
+        if let Ok(render_mode) = render_mode_param(&case.inputs.params) {
+            groups.push(format!("operation={operation}|render_mode={render_mode}"));
+        }
+
+        for group in groups {
+            self.groups.entry(group).or_default().record(sample);
+        }
+    }
+
+    fn extend(&mut self, other: Self) {
+        for (group, stats) in other.groups {
+            self.groups.entry(group).or_default().extend(stats);
+        }
+    }
+}
+
+impl AxisProfileStats {
+    fn record(&mut self, sample: &SlowCaseSample) {
+        self.count = self.count.saturating_add(1);
+        self.total = self.total.saturating_add(sample.total);
+        self.min = self.min.min(sample.total);
+        self.max = self.max.max(sample.total);
+        self.rust_ffi = self.rust_ffi.saturating_add(sample.rust_ffi);
+        self.c_abi = self.c_abi.saturating_add(sample.c_abi);
+        self.wasm_abi = self.wasm_abi.saturating_add(sample.wasm_abi);
+        self.compare = self.compare.saturating_add(sample.compare);
+    }
+
+    fn extend(&mut self, other: Self) {
+        self.count = self.count.saturating_add(other.count);
+        self.total = self.total.saturating_add(other.total);
+        self.min = self.min.min(other.min);
+        self.max = self.max.max(other.max);
+        self.rust_ffi = self.rust_ffi.saturating_add(other.rust_ffi);
+        self.c_abi = self.c_abi.saturating_add(other.c_abi);
+        self.wasm_abi = self.wasm_abi.saturating_add(other.wasm_abi);
+        self.compare = self.compare.saturating_add(other.compare);
+    }
+
+    fn avg_ns(&self) -> u128 {
+        if self.count == 0 {
+            0
+        } else {
+            let count = u128::try_from(self.count).unwrap_or(u128::MAX);
+            duration_ns(self.total).checked_div(count).unwrap_or(0)
+        }
+    }
+}
+
+fn axis_profile_sample_limit() -> usize {
+    40
+}
+
+fn slow_case_sample_limit() -> usize {
+    20
+}
+
+struct FailureSummary {
+    count: usize,
+    samples: Vec<String>,
+    buckets: BTreeMap<String, usize>,
+    sample_limit: usize,
+}
+
+impl Default for FailureSummary {
+    fn default() -> Self {
+        Self {
+            count: 0,
+            samples: Vec::new(),
+            buckets: BTreeMap::new(),
+            sample_limit: failure_sample_limit(),
+        }
+    }
+}
+
+impl FailureSummary {
+    fn push(&mut self, failure: String) {
+        self.count = self.count.saturating_add(1);
+        let count = self.buckets.entry(failure_bucket(&failure)).or_default();
+        *count = count.saturating_add(1);
+        if self.samples.len() < self.sample_limit {
+            self.samples.push(failure);
+        }
+    }
+
+    fn extend(&mut self, other: Self) {
+        self.count = self.count.saturating_add(other.count);
+        for (bucket, count) in other.buckets {
+            let existing = self.buckets.entry(bucket).or_default();
+            *existing = existing.saturating_add(count);
+        }
+        for sample in other.samples {
+            if self.samples.len() >= self.sample_limit {
+                break;
+            }
+            self.samples.push(sample);
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+}
+
+fn failure_sample_limit() -> usize {
+    200
+}
+
+fn failure_bucket(failure: &str) -> String {
+    let Some((backend, detail)) = failure.split_once(": ") else {
+        return "setup".to_string();
+    };
+    let kind = if detail.contains("status mismatch") {
+        "status".to_string()
+    } else if let Some((_, rest)) = detail.split_once(" field=") {
+        let field = rest.split_whitespace().next().unwrap_or("value");
+        format!("field:{field}")
+    } else if detail.contains("backend failed") {
+        "backend_error".to_string()
+    } else {
+        "value".to_string()
+    };
+    format!("{backend}:{kind}")
 }
 
 fn compare_backend_outputs(
@@ -952,55 +1477,165 @@ fn compare_backend_outputs(
     );
     let workers = unified_worker_count(cases.len());
     if workers <= 1 {
-        return compare_backend_output_range(cases, oracle_outputs);
+        let pairs = cases
+            .iter()
+            .copied()
+            .zip(oracle_outputs.iter())
+            .collect::<Vec<_>>();
+        return compare_backend_output_pairs(&pairs);
     }
 
-    let chunk_size = cases.len().div_ceil(workers);
+    let partitions = partition_backend_pairs(cases, oracle_outputs, workers);
     let mut result = BackendComparisonResult::default();
     thread::scope(|scope| {
         let mut handles = Vec::new();
-        for (case_chunk, oracle_chunk) in cases
-            .chunks(chunk_size)
-            .zip(oracle_outputs.chunks(chunk_size))
-        {
-            handles
-                .push(scope.spawn(move || compare_backend_output_range(case_chunk, oracle_chunk)));
+        for partition in partitions {
+            handles.push(scope.spawn(move || compare_backend_output_pairs(&partition)));
         }
         for handle in handles {
             let partial = handle.join().expect("backend comparison worker panicked");
             result.passed = result.passed.saturating_add(partial.passed);
             result.covered.extend(partial.covered);
             result.failures.extend(partial.failures);
+            result.profile.extend(partial.profile);
+            result.face_prewarm.extend(partial.face_prewarm);
+            result.slow_cases.extend(partial.slow_cases);
+            result.axis_profile.extend(partial.axis_profile);
         }
     });
     result
+}
+
+fn partition_backend_pairs<'a>(
+    cases: &[&'a InputCase],
+    oracle_outputs: &'a [RunOutput],
+    workers: usize,
+) -> Vec<Vec<(&'a InputCase, &'a RunOutput)>> {
+    let worker_count = workers.clamp(1, cases.len().max(1));
+    let partition_capacity = cases
+        .len()
+        .checked_div(worker_count)
+        .and_then(|value| value.checked_add(1))
+        .unwrap_or(1);
+    let mut partitions = (0..worker_count)
+        .map(|_| Vec::with_capacity(partition_capacity))
+        .collect::<Vec<_>>();
+    for (index, (case, oracle)) in cases.iter().copied().zip(oracle_outputs.iter()).enumerate() {
+        let partition_index = index.checked_rem(worker_count).unwrap_or(0);
+        partitions[partition_index].push((case, oracle));
+    }
+    partitions
+        .into_iter()
+        .filter(|partition| !partition.is_empty())
+        .collect()
+}
+
+fn compare_backend_outputs_with_oracle_cache(
+    cases: &[&InputCase],
+) -> Result<BackendComparisonResult, String> {
+    if cases.is_empty() {
+        return Ok(BackendComparisonResult::default());
+    }
+    let cache_path = {
+        let _profile = ProfileStage::new("runtime.ensure_oracle_cache");
+        ensure_oracle_cache(cases)?
+    };
+    let oracle_outputs = {
+        let _profile = ProfileStage::new("runtime.load_oracle_cache_outputs");
+        read_oracle_cache_outputs(cases, &cache_path)?
+    };
+    let result = {
+        let _profile = ProfileStage::new("runtime.compare_backend_outputs");
+        compare_backend_outputs(cases, oracle_outputs.as_ref())
+    };
+    eprintln!(
+        "runtime_parity_progress: compared={} total={} passed={} failed={} rust_ns={} c_abi_ns={} wasm_ns={} compare_ns={} rust_ms={:.3} c_abi_ms={:.3} wasm_ms={:.3} compare_ms={:.3}",
+        cases.len(),
+        cases.len(),
+        result.passed,
+        result.failures.count,
+        duration_ns(result.profile.rust_ffi),
+        duration_ns(result.profile.c_abi),
+        duration_ns(result.profile.wasm_abi),
+        duration_ns(result.profile.compare),
+        duration_ms(result.profile.rust_ffi),
+        duration_ms(result.profile.c_abi),
+        duration_ms(result.profile.wasm_abi),
+        duration_ms(result.profile.compare)
+    );
+    Ok(result)
+}
+
+fn read_oracle_cache_outputs(
+    cases: &[&InputCase],
+    cache_path: &Path,
+) -> Result<Arc<[RunOutput]>, String> {
+    static CACHE: OnceLock<Mutex<BTreeMap<String, Arc<[RunOutput]>>>> = OnceLock::new();
+    let key = cache_path.to_string_lossy().into_owned();
+    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    if let Some(outputs) = cache
+        .lock()
+        .map_err(|err| err.to_string())?
+        .get(&key)
+        .map(Arc::clone)
+    {
+        if outputs.len() == cases.len() {
+            return Ok(outputs);
+        }
+    }
+
+    let text = fs::read_to_string(cache_path)
+        .map_err(|err| format!("read oracle cache {}: {err}", cache_path.display()))?;
+    let lines = text.lines().collect::<Vec<_>>();
+    if lines.len() != cases.len() {
+        return Err(format!(
+            "oracle cache {} has {} lines for {} cases",
+            cache_path.display(),
+            lines.len(),
+            cases.len()
+        ));
+    }
+    let outputs = cases
+        .iter()
+        .zip(lines)
+        .map(|(case, line)| {
+            parse_run_output(line).map_err(|err| format!("{} oracle failed: {err}", case.case_id))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let outputs = Arc::<[RunOutput]>::from(outputs);
+    cache
+        .lock()
+        .map_err(|err| err.to_string())?
+        .insert(key, Arc::clone(&outputs));
+    Ok(outputs)
 }
 
 fn unified_worker_count(case_count: usize) -> usize {
     if case_count < 2 {
         return 1;
     }
-    let default_workers = thread::available_parallelism()
+    thread::available_parallelism()
         .map_or(1, usize::from)
-        .clamp(1, 8);
-    let requested =
-        std::env::var("FONTDONE_UNIFIED_WORKERS")
-            .ok()
-            .map_or(default_workers, |value| {
-                value
-                    .parse::<usize>()
-                    .unwrap_or_else(|err| panic!("FONTDONE_UNIFIED_WORKERS must be usize: {err}"))
-            });
-    requested.clamp(1, case_count)
+        .clamp(1, 8)
+        .min(case_count)
 }
 
-fn compare_backend_output_range(
-    cases: &[&InputCase],
-    oracle_outputs: &[RunOutput],
-) -> BackendComparisonResult {
+fn compare_backend_output_pairs(pairs: &[(&InputCase, &RunOutput)]) -> BackendComparisonResult {
     let mut result = BackendComparisonResult::default();
-    for (case, oracle) in cases.iter().zip(oracle_outputs.iter()) {
-        match compare_backend_output_case(case, oracle) {
+    let mut worker = BackendComparisonWorker::default();
+    let cases = pairs
+        .iter()
+        .map(|(case, _oracle)| *case)
+        .collect::<Vec<_>>();
+    match worker.prewarm_faces(&cases) {
+        Ok(profile) => result.face_prewarm.extend(profile),
+        Err(err) => {
+            result.failures.push(err);
+            return result;
+        }
+    }
+    for (case, oracle) in pairs {
+        match worker.compare_case(case, oracle) {
             Ok(()) => {
                 result.passed = result.passed.saturating_add(1);
                 result
@@ -1010,24 +1645,369 @@ fn compare_backend_output_range(
             Err(err) => result.failures.push(err),
         }
     }
+    result.profile = worker.profile;
+    result.slow_cases = worker.slow_cases;
+    result.axis_profile = worker.axis_profile;
     result
 }
 
-fn compare_backend_output_case(case: &InputCase, oracle: &RunOutput) -> Result<(), String> {
-    let rust_actual =
-        run_rust_ffi(case).map_err(|err| format!("{} rust backend failed: {err}", case.case_id))?;
-    let c_actual =
-        run_c_abi(case).map_err(|err| format!("{} c abi backend failed: {err}", case.case_id))?;
-    let wasm_actual = run_wasm_abi(case)
-        .map_err(|err| format!("{} wasm abi backend failed: {err}", case.case_id))?;
+#[derive(Default)]
+struct BackendComparisonWorker {
+    rust_faces: BTreeMap<String, FT_Face>,
+    c_faces: BTreeMap<String, CachedCAbiFace>,
+    wasm_faces: BTreeMap<String, CachedWasmFace>,
+    profile: BackendProfile,
+    slow_cases: SlowCaseSummary,
+    axis_profile: AxisProfileSummary,
+}
 
-    compare_named_output(case, "rust ffi", oracle, &rust_actual)
-        .and_then(|()| compare_named_output(case, "c abi", oracle, &c_actual))
-        .and_then(|()| compare_named_output(case, "wasm abi", oracle, &wasm_actual))
+struct CachedCAbiFace {
+    library: c_abi::FT_Library,
+    face: c_abi::FT_Face,
+}
+
+impl Drop for CachedCAbiFace {
+    fn drop(&mut self) {
+        c_done_face(self.face);
+        c_done_library(self.library);
+    }
+}
+
+struct CachedWasmFace {
+    handle: usize,
+}
+
+impl Drop for CachedWasmFace {
+    fn drop(&mut self) {
+        wasm_done_face(self.handle);
+    }
+}
+
+impl BackendComparisonWorker {
+    fn prewarm_faces(&mut self, cases: &[&InputCase]) -> Result<FacePrewarmProfile, String> {
+        let total_start = Instant::now();
+        let opened_before = self.opened_face_handle_count();
+        let mut profile = FacePrewarmProfile {
+            chunks: 1,
+            ..FacePrewarmProfile::default()
+        };
+
+        for case in cases {
+            if !case_uses_cached_face(case) {
+                continue;
+            }
+            profile.cases = profile.cases.saturating_add(1);
+            let start = Instant::now();
+            self.rust_face(case)
+                .map_err(|err| format!("{} rust face warmup failed: {err}", case.case_id))?;
+            profile.rust_ffi = profile.rust_ffi.saturating_add(start.elapsed());
+        }
+        for case in cases {
+            if !case_uses_cached_face(case) {
+                continue;
+            }
+            let start = Instant::now();
+            self.c_face(case)
+                .map_err(|err| format!("{} c abi face warmup failed: {err}", case.case_id))?;
+            profile.c_abi = profile.c_abi.saturating_add(start.elapsed());
+        }
+        for case in cases {
+            if !case_uses_cached_face(case) {
+                continue;
+            }
+            let start = Instant::now();
+            self.wasm_face(case)
+                .map_err(|err| format!("{} wasm abi face warmup failed: {err}", case.case_id))?;
+            profile.wasm_abi = profile.wasm_abi.saturating_add(start.elapsed());
+        }
+
+        profile.opened_face_handles = self
+            .opened_face_handle_count()
+            .saturating_sub(opened_before);
+        profile.total = total_start.elapsed();
+        Ok(profile)
+    }
+
+    fn opened_face_handle_count(&self) -> usize {
+        self.rust_faces
+            .len()
+            .saturating_add(self.c_faces.len())
+            .saturating_add(self.wasm_faces.len())
+    }
+
+    fn compare_case(&mut self, case: &InputCase, oracle: &RunOutput) -> Result<(), String> {
+        let case_start = Instant::now();
+        let start = Instant::now();
+        let rust_actual = self
+            .run_rust_ffi(case)
+            .map_err(|err| format!("{} rust backend failed: {err}", case.case_id))?;
+        let rust_duration = start.elapsed();
+        self.profile.rust_ffi = self.profile.rust_ffi.saturating_add(rust_duration);
+
+        let start = Instant::now();
+        let c_actual = self
+            .run_c_abi(case)
+            .map_err(|err| format!("{} c abi backend failed: {err}", case.case_id))?;
+        let c_duration = start.elapsed();
+        self.profile.c_abi = self.profile.c_abi.saturating_add(c_duration);
+
+        let start = Instant::now();
+        let wasm_actual = self
+            .run_wasm_abi(case)
+            .map_err(|err| format!("{} wasm abi backend failed: {err}", case.case_id))?;
+        let wasm_duration = start.elapsed();
+        self.profile.wasm_abi = self.profile.wasm_abi.saturating_add(wasm_duration);
+
+        let start = Instant::now();
+        let result = compare_named_output(case, "rust ffi", oracle, &rust_actual)
+            .and_then(|()| compare_named_output(case, "c abi", oracle, &c_actual))
+            .and_then(|()| compare_named_output(case, "wasm abi", oracle, &wasm_actual));
+        let compare_duration = start.elapsed();
+        self.profile.compare = self.profile.compare.saturating_add(compare_duration);
+        if profile_enabled() {
+            let sample = SlowCaseSample {
+                case_id: case.case_id.clone(),
+                operation: canonical_operation(&case.operation).to_string(),
+                total: case_start.elapsed(),
+                rust_ffi: rust_duration,
+                c_abi: c_duration,
+                wasm_abi: wasm_duration,
+                compare: compare_duration,
+            };
+            self.axis_profile.record(case, &sample);
+            self.slow_cases.push(sample);
+        }
+        result
+    }
+
+    fn run_rust_ffi(&mut self, case: &InputCase) -> Result<RunOutput, String> {
+        match canonical_operation(&case.operation) {
+            "size_metrics" => {
+                let face = self.rust_face(case)?;
+                Ok(ok(size_metrics_json(&FT_Size_Metrics(face))))
+            }
+            "get_char_index" => {
+                let char_code = u64_param(&case.inputs.params, "char_code")?;
+                let face = self.rust_face(case)?;
+                Ok(ok(json!({"value": FT_Get_Char_Index(face, char_code)})))
+            }
+            "load_char" => {
+                let char_code = u64_param(&case.inputs.params, "char_code")?;
+                let load_flags = load_flags_param(&case.inputs.params)?;
+                let face = self.rust_face(case)?;
+                match FT_Load_Char(face, char_code, load_flags) {
+                    Ok(slot) => Ok(ok(slot_json(&slot))),
+                    Err(err) => Ok(error(err)),
+                }
+            }
+            "load_glyph" => {
+                let glyph_index = glyph_index_param(&case.inputs.params)?;
+                let load_flags = load_flags_param(&case.inputs.params)?;
+                let face = self.rust_face(case)?;
+                match FT_Load_Glyph(face, glyph_index, load_flags) {
+                    Ok(slot) => Ok(ok(slot_json(&slot))),
+                    Err(err) => Ok(error(err)),
+                }
+            }
+            "render_glyph" => {
+                let char_code = u64_param(&case.inputs.params, "char_code")?;
+                let load_flags = load_flags_param(&case.inputs.params)?;
+                let render_mode = render_mode_param(&case.inputs.params)?;
+                let face = self.rust_face(case)?;
+                match FT_Load_Char(face, char_code, load_flags)
+                    .and_then(|slot| FT_Render_Glyph(slot, render_mode))
+                {
+                    Ok(slot) => Ok(ok(slot_json(&slot))),
+                    Err(err) => Ok(error(err)),
+                }
+            }
+            _ => run_rust_ffi(case),
+        }
+    }
+
+    fn run_c_abi(&mut self, case: &InputCase) -> Result<RunOutput, String> {
+        match canonical_operation(&case.operation) {
+            "size_metrics" => {
+                let face = self.c_face(case)?;
+                let metrics = c_abi::FT_Size_Metrics_Get(face);
+                Ok(ok(json!({
+                    "x_ppem": metrics.x_ppem,
+                    "y_ppem": metrics.y_ppem,
+                    "x_scale": metrics.x_scale,
+                    "y_scale": metrics.y_scale,
+                    "ascender": metrics.ascender,
+                    "descender": metrics.descender,
+                    "height": metrics.height,
+                    "max_advance": metrics.max_advance
+                })))
+            }
+            "get_char_index" => {
+                let char_code = u64_param(&case.inputs.params, "char_code")?;
+                let face = self.c_face(case)?;
+                let value = c_abi::FT_Get_Char_Index(face, char_code);
+                Ok(ok(json!({"value": value})))
+            }
+            "load_char" => {
+                let char_code = u64_param(&case.inputs.params, "char_code")?;
+                let load_flags = load_flags_param(&case.inputs.params)?;
+                let face = self.c_face(case)?;
+                let err = c_abi::FT_Load_Char(face, char_code, load_flags);
+                if err == FT_Err_Ok {
+                    c_slot_json(face).map(ok)
+                } else {
+                    Ok(error(err))
+                }
+            }
+            "load_glyph" => {
+                let glyph_index = glyph_index_param(&case.inputs.params)?;
+                let load_flags = load_flags_param(&case.inputs.params)?;
+                let face = self.c_face(case)?;
+                let err = c_abi::FT_Load_Glyph(face, glyph_index, load_flags);
+                if err == FT_Err_Ok {
+                    c_slot_json(face).map(ok)
+                } else {
+                    Ok(error(err))
+                }
+            }
+            "render_glyph" => {
+                let char_code = u64_param(&case.inputs.params, "char_code")?;
+                let load_flags = load_flags_param(&case.inputs.params)?;
+                let render_mode = render_mode_param(&case.inputs.params)?;
+                let face = self.c_face(case)?;
+                let load_err = c_abi::FT_Load_Char(face, char_code, load_flags);
+                let err = if load_err == FT_Err_Ok {
+                    c_abi::fontdone_test_render_glyph(face, render_mode)
+                } else {
+                    load_err
+                };
+                if err == FT_Err_Ok {
+                    c_slot_json(face).map(ok)
+                } else {
+                    Ok(error(err))
+                }
+            }
+            _ => run_c_abi(case),
+        }
+    }
+
+    fn run_wasm_abi(&mut self, case: &InputCase) -> Result<RunOutput, String> {
+        match canonical_operation(&case.operation) {
+            "size_metrics" => {
+                let handle = self.wasm_face(case)?;
+                let mut metrics = wasm_abi::FontdoneWasmSizeMetrics::default();
+                let err = wasm_abi::fontdone_wasm_size_metrics(handle, &mut metrics);
+                if err == FT_Err_Ok {
+                    Ok(ok(json!({
+                        "x_ppem": metrics.x_ppem,
+                        "y_ppem": metrics.y_ppem,
+                        "x_scale": metrics.x_scale,
+                        "y_scale": metrics.y_scale,
+                        "ascender": metrics.ascender,
+                        "descender": metrics.descender,
+                        "height": metrics.height,
+                        "max_advance": metrics.max_advance
+                    })))
+                } else {
+                    Ok(error(err))
+                }
+            }
+            "get_char_index" => {
+                let char_code = u64_param(&case.inputs.params, "char_code")?;
+                let handle = self.wasm_face(case)?;
+                let value = wasm_abi::fontdone_wasm_get_char_index(handle, char_code);
+                Ok(ok(json!({"value": value})))
+            }
+            "load_char" => {
+                let char_code = u64_param(&case.inputs.params, "char_code")?;
+                let load_flags = load_flags_param(&case.inputs.params)?;
+                let handle = self.wasm_face(case)?;
+                let err = wasm_abi::fontdone_wasm_load_char(handle, char_code, load_flags);
+                wasm_slot_output(handle, err)
+            }
+            "load_glyph" => {
+                let glyph_index = glyph_index_param(&case.inputs.params)?;
+                let load_flags = load_flags_param(&case.inputs.params)?;
+                let handle = self.wasm_face(case)?;
+                let err = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags);
+                wasm_slot_output(handle, err)
+            }
+            "render_glyph" => {
+                let char_code = u64_param(&case.inputs.params, "char_code")?;
+                let load_flags = load_flags_param(&case.inputs.params)?;
+                let render_mode = render_mode_param(&case.inputs.params)?;
+                let handle = self.wasm_face(case)?;
+                let load_err = wasm_abi::fontdone_wasm_load_char(handle, char_code, load_flags);
+                let err = if load_err == FT_Err_Ok {
+                    wasm_abi::fontdone_wasm_render_glyph(handle, render_mode)
+                } else {
+                    load_err
+                };
+                wasm_slot_output(handle, err)
+            }
+            _ => run_wasm_abi(case),
+        }
+    }
+
+    fn rust_face(&mut self, case: &InputCase) -> Result<&FT_Face, String> {
+        let key = runtime_face_cache_key(case)?;
+        if !self.rust_faces.contains_key(&key) {
+            self.rust_faces.insert(key.clone(), open_face(case)?);
+        }
+        self.rust_faces
+            .get(&key)
+            .ok_or_else(|| format!("missing cached rust face {key}"))
+    }
+
+    fn c_face(&mut self, case: &InputCase) -> Result<c_abi::FT_Face, String> {
+        let key = runtime_face_cache_key(case)?;
+        if !self.c_faces.contains_key(&key) {
+            let (library, face) = c_open_face(case)?;
+            self.c_faces
+                .insert(key.clone(), CachedCAbiFace { library, face });
+        }
+        self.c_faces
+            .get(&key)
+            .map(|cached| cached.face)
+            .ok_or_else(|| format!("missing cached c abi face {key}"))
+    }
+
+    fn wasm_face(&mut self, case: &InputCase) -> Result<usize, String> {
+        let key = runtime_face_cache_key(case)?;
+        if !self.wasm_faces.contains_key(&key) {
+            let handle = wasm_open_face(case)?;
+            self.wasm_faces
+                .insert(key.clone(), CachedWasmFace { handle });
+        }
+        self.wasm_faces
+            .get(&key)
+            .map(|cached| cached.handle)
+            .ok_or_else(|| format!("missing cached wasm face {key}"))
+    }
+}
+
+fn runtime_face_cache_key(case: &InputCase) -> Result<String, String> {
+    let font = runtime_font_asset(case).ok_or_else(|| "missing font asset".to_string())?;
+    let face_index =
+        usize::try_from(face_index_param(&case.inputs.params)?).map_err(|err| err.to_string())?;
+    let font_key = glyph_domain_cache_key(font, face_index)
+        .ok_or_else(|| format!("unsupported cached font asset {}", asset_label(font)))?;
+    let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+    Ok(format!("{font_key}:pixel:{pixel_width}:{pixel_height}"))
+}
+
+fn case_uses_cached_face(case: &InputCase) -> bool {
+    matches!(
+        canonical_operation(&case.operation),
+        "size_metrics" | "get_char_index" | "load_char" | "load_glyph" | "render_glyph"
+    )
 }
 
 fn case_filter() -> Option<String> {
     std::env::var("FONTDONE_UNIFIED_CASE_FILTER").ok()
+}
+
+fn operation_filter() -> Option<String> {
+    std::env::var("FONTDONE_UNIFIED_OPERATION_FILTER").ok()
 }
 
 fn case_limit() -> Option<usize> {
@@ -1046,28 +2026,34 @@ fn case_matches_filter(case: &InputCase, filter: Option<&str>) -> bool {
     })
 }
 
-fn assert_manifest_cases_cover_fixture_inputs(cases: &[UnifiedCase]) {
+fn operation_matches_filter(case: &InputCase, filter: Option<&str>) -> bool {
+    filter.is_none_or(|needle| {
+        canonical_operation(&case.operation).contains(needle) || case.operation.contains(needle)
+    })
+}
+
+fn assert_manifest_cases_cover_fixture_inputs(cases: &[InputCase]) {
     let manifest = read_manifest();
     let mut covered = BTreeSet::new();
 
     for case in cases {
         assert!(
-            manifest.has_case(&case.input.subject, &case.input.case),
+            manifest.has_case(&case.subject, &case.case),
             "{} references unknown manifest case {}::{}",
-            case.input.case_id,
-            case.input.subject,
-            case.input.case
+            case.case_id,
+            case.subject,
+            case.case
         );
-        covered.insert((case.input.subject.clone(), case.input.case.clone()));
-        for covered_case in &case.input.covers_manifest_cases {
+        covered.insert((case.subject.clone(), case.case.clone()));
+        for covered_case in &case.covers_manifest_cases {
             assert!(
-                manifest.has_case(&case.input.subject, covered_case),
+                manifest.has_case(&case.subject, covered_case),
                 "{} references unknown covered manifest case {}::{}",
-                case.input.case_id,
-                case.input.subject,
+                case.case_id,
+                case.subject,
                 covered_case
             );
-            covered.insert((case.input.subject.clone(), covered_case.clone()));
+            covered.insert((case.subject.clone(), covered_case.clone()));
         }
     }
     eprintln!(
@@ -1077,7 +2063,7 @@ fn assert_manifest_cases_cover_fixture_inputs(cases: &[UnifiedCase]) {
     );
 }
 
-fn assert_manifest_font_variability_cases_cover_declared_fixture_folder(cases: &[UnifiedCase]) {
+fn assert_manifest_font_variability_cases_cover_declared_fixture_folder(cases: &[InputCase]) {
     let manifest = read_manifest();
     let mut checked = 0usize;
     let mut failures = Vec::new();
@@ -1113,9 +2099,10 @@ fn assert_manifest_font_variability_cases_cover_declared_fixture_folder(cases: &
                                     load_flag: *load_flag,
                                     render_mode: *render_mode,
                                 };
-                                if !cases.iter().any(|input| {
-                                    input_covers_font_variability(&input.input, &probe)
-                                }) {
+                                if !cases
+                                    .iter()
+                                    .any(|input| input_covers_font_variability(input, &probe))
+                                {
                                     failures.push(format!(
                                         "{}::{} missing font={} size={} char_code={:?} glyph_index={:?} load_flags={:?} render_mode={:?}",
                                         subject,
@@ -1146,6 +2133,21 @@ fn assert_manifest_font_variability_cases_cover_declared_fixture_folder(cases: &
         failures.len(),
         manifest.font_variability.len()
     );
+    if variability_axis_limit().is_some() && !failures.is_empty() {
+        eprintln!(
+            "font_variability_coverage: diagnostic variability limit is active; missing probes are reported but not asserted"
+        );
+        for failure in failures.iter().take(20) {
+            eprintln!("{failure}");
+        }
+        if failures.len() > 20 {
+            eprintln!(
+                "... omitted {} additional font variability coverage gaps",
+                failures.len().saturating_sub(20)
+            );
+        }
+        return;
+    }
     assert!(
         failures.is_empty(),
         "font variability coverage gaps:\n{}",
@@ -1153,16 +2155,16 @@ fn assert_manifest_font_variability_cases_cover_declared_fixture_folder(cases: &
     );
 }
 
-fn assert_unified_variability_cases_have_single_model(cases: &[UnifiedCase]) {
-    let expanded = cases
-        .iter()
-        .filter(|case| case.input.case_id.contains('#'))
-        .count();
-    let aggregate_subjects = cases
-        .iter()
-        .filter(|case| case.input.case_id.contains('#'))
-        .map(|case| case.input.subject.as_str())
-        .collect::<BTreeSet<_>>();
+fn assert_unified_variability_cases_have_single_model(cases: &[InputCase]) {
+    let mut expanded = 0usize;
+    let mut aggregate_subjects = BTreeSet::new();
+    for case in cases {
+        let count = expansion_count(case);
+        if count > 1 {
+            expanded = expanded.saturating_add(count);
+            aggregate_subjects.insert(case.subject.as_str());
+        }
+    }
     eprintln!(
         "variability_expansion: expanded_cases={} aggregate_subjects={}",
         expanded,
@@ -1186,10 +2188,13 @@ fn fixture_dir() -> PathBuf {
     manifest_dir().join("tests").join("fixtures")
 }
 
-fn read_manifest() -> Manifest {
-    let text = fs::read_to_string(manifest_dir().join("tests").join("manifest.yaml"))
-        .expect("read manifest.yaml");
-    parse_manifest(&text)
+fn read_manifest() -> &'static Manifest {
+    static MANIFEST: OnceLock<Manifest> = OnceLock::new();
+    MANIFEST.get_or_init(|| {
+        let text = fs::read_to_string(manifest_dir().join("tests").join("manifest.yaml"))
+            .expect("read manifest.yaml");
+        parse_manifest(&text)
+    })
 }
 
 fn parse_manifest(text: &str) -> Manifest {
@@ -1296,11 +2301,114 @@ fn parse_manifest(text: &str) -> Manifest {
     }
 }
 
-fn read_all_case_files() -> Vec<InputCase> {
-    read_case_files(None, None)
+fn read_all_case_files() -> &'static [InputCase] {
+    static CASES: OnceLock<Vec<InputCase>> = OnceLock::new();
+    CASES.get_or_init(load_all_case_files)
 }
 
-fn read_case_files(filter: Option<&str>, limit: Option<usize>) -> Vec<InputCase> {
+fn preload_global_fixture_caches(cases: &[InputCase]) {
+    let manifest = read_manifest();
+    let mut folders = BTreeSet::new();
+    let mut file_assets = BTreeSet::new();
+    let mut inline_assets = BTreeSet::new();
+
+    for variability in manifest.font_variability.values() {
+        folders.insert(variability.folder.clone());
+    }
+
+    for case in cases {
+        collect_case_cache_inputs(case, &mut folders, &mut file_assets, &mut inline_assets);
+    }
+
+    for folder in &folders {
+        for asset in fixture_font_assets(folder) {
+            collect_asset_cache_input(&asset, &mut file_assets, &mut inline_assets);
+        }
+    }
+
+    for path in &file_assets {
+        if !fixture_dir().join(path).is_file() {
+            continue;
+        }
+        cached_file_bytes(path).unwrap_or_else(|err| panic!("preload fixture bytes {path}: {err}"));
+        validated_file_asset(path)
+            .unwrap_or_else(|err| panic!("preload fixture validation {path}: {err}"));
+    }
+    for inline_hex in &inline_assets {
+        cached_inline_bytes(inline_hex).unwrap_or_else(|err| panic!("preload inline bytes: {err}"));
+    }
+
+    preload_glyph_domains(cases);
+
+    if profile_enabled() {
+        eprintln!(
+            "profile_global_cache_warmup: input_cases={} font_folders={} file_assets={} inline_assets={}",
+            cases.len(),
+            folders.len(),
+            file_assets.len(),
+            inline_assets.len()
+        );
+    }
+}
+
+fn collect_case_cache_inputs(
+    case: &InputCase,
+    folders: &mut BTreeSet<String>,
+    file_assets: &mut BTreeSet<String>,
+    inline_assets: &mut BTreeSet<String>,
+) {
+    if let Some(folder) = case
+        .inputs
+        .variability
+        .as_ref()
+        .and_then(|variability| variability.fonts_folder.as_deref())
+    {
+        folders.insert(folder.to_string());
+    }
+    if let Some(folder) = file_asset_path(case.inputs.assets.get("font_folder")) {
+        folders.insert(folder.to_string());
+    }
+    for asset in case.inputs.assets.values() {
+        collect_asset_cache_input(asset, file_assets, inline_assets);
+    }
+}
+
+fn collect_asset_cache_input(
+    asset: &Asset,
+    file_assets: &mut BTreeSet<String>,
+    inline_assets: &mut BTreeSet<String>,
+) {
+    match asset {
+        Asset::File { path, .. } => {
+            file_assets.insert(path.clone());
+        }
+        Asset::InlineBytes { .. } => {
+            if let Some(value) = inline_bytes_hex(asset) {
+                inline_assets.insert(value.to_string());
+            }
+        }
+        Asset::Ref { .. } | Asset::Other(_) => {}
+    }
+}
+
+fn preload_glyph_domains(cases: &[InputCase]) {
+    for case in cases {
+        let axes = variability_axes(case);
+        if !axes.contains("glyph_indices") {
+            continue;
+        }
+        let fonts = font_axis(case, &axes);
+        if fonts.is_empty() {
+            let _ = runtime_glyph_indices(case, None);
+            continue;
+        }
+        for font in &fonts {
+            let _ = runtime_glyph_indices(case, font.as_ref());
+        }
+    }
+}
+
+fn load_all_case_files() -> Vec<InputCase> {
     let input_dir = fixture_dir().join("inputs").join("public-api");
     let mut paths = input_case_paths(&input_dir);
     paths.sort();
@@ -1319,12 +2427,7 @@ fn read_case_files(filter: Option<&str>, limit: Option<usize>) -> Vec<InputCase>
             .unwrap_or_else(|err| panic!("parse {}: {err}", path.display()));
         for mut case in parsed.cases {
             resolve_case_assets(&path, &parsed.assets, &mut case);
-            if case_matches_filter(&case, filter) {
-                cases.push(case);
-                if limit.is_some_and(|limit| cases.len() >= limit) {
-                    return cases;
-                }
-            }
+            cases.push(case);
         }
     }
     cases
@@ -1465,33 +2568,80 @@ struct CoverageProbe<'a> {
 }
 
 fn input_covers_font_variability(input: &InputCase, probe: &CoverageProbe<'_>) -> bool {
-    input.subject == probe.subject
-        && input.case == probe.case_id
-        && input_font_file_name(input).is_some_and(|file_name| file_name == probe.font)
-        && input_pixel_y(input) == Some(probe.size)
-        && probe
-            .char_code
-            .is_none_or(|value| input_u64_param(input, "char_code") == Some(value))
-        && probe
-            .glyph_index
-            .is_none_or(|value| input_u32_param(input, "glyph_index") == Some(value))
-        && probe
-            .load_flag
-            .is_none_or(|value| input_i32_param(input, "load_flags") == Some(value))
-        && probe
-            .render_mode
-            .is_none_or(|value| input_i32_param(input, "render_mode") == Some(value))
+    if input.subject != probe.subject || input.case != probe.case_id {
+        return false;
+    }
+    let plan = expansion_plan(input);
+    input_covers_font_name(input, &plan, probe.font)
+        && option_axis_covers_u32(&plan.sizes, input_pixel_y(input), probe.size)
+        && probe.char_code.is_none_or(|value| {
+            option_axis_covers_u64(&plan.codepoints, input_u64_param(input, "char_code"), value)
+        })
+        && probe.glyph_index.is_none_or(|value| {
+            if plan.glyph_indices_enabled {
+                plan.fonts.iter().any(|font| {
+                    glyph_indices_axis(input, font.as_ref(), true)
+                        .into_iter()
+                        .flatten()
+                        .any(|glyph_index| glyph_index == value)
+                })
+            } else {
+                input_u32_param(input, "glyph_index") == Some(value)
+            }
+        })
+        && probe.load_flag.is_none_or(|value| {
+            option_axis_covers_i32(
+                &plan.load_flags,
+                input_i32_param(input, "load_flags"),
+                value,
+            )
+        })
+        && probe.render_mode.is_none_or(|value| {
+            option_axis_covers_i32(
+                &plan.render_modes,
+                input_i32_param(input, "render_mode"),
+                value,
+            )
+        })
 }
 
-fn input_font_file_name(input: &InputCase) -> Option<String> {
-    match input.inputs.assets.get("font")? {
+fn input_covers_font_name(input: &InputCase, plan: &ExpansionPlan, font_name: &str) -> bool {
+    if plan.fonts.iter().any(|font| {
+        font.as_ref()
+            .and_then(asset_file_name)
+            .is_some_and(|candidate| candidate == font_name)
+    }) {
+        return true;
+    }
+    input_font_file_name(input).is_some_and(|candidate| candidate == font_name)
+}
+
+fn option_axis_covers_u32(axis: &[Option<u32>], base: Option<u32>, value: u32) -> bool {
+    axis.iter()
+        .any(|candidate| candidate.map_or(base == Some(value), |candidate| candidate == value))
+}
+
+fn option_axis_covers_u64(axis: &[Option<u64>], base: Option<u64>, value: u64) -> bool {
+    axis.iter()
+        .any(|candidate| candidate.map_or(base == Some(value), |candidate| candidate == value))
+}
+
+fn option_axis_covers_i32(axis: &[Option<i32>], base: Option<i32>, value: i32) -> bool {
+    axis.iter()
+        .any(|candidate| candidate.map_or(base == Some(value), |candidate| candidate == value))
+}
+
+fn asset_file_name(asset: &Asset) -> Option<String> {
+    match asset {
         Asset::File { path, .. } => Path::new(path)
             .file_name()
             .map(|name| name.to_string_lossy().into_owned()),
-        Asset::InlineBytes { .. } => None,
-        Asset::Ref { .. } => None,
-        Asset::Other(_) => None,
+        Asset::InlineBytes { .. } | Asset::Ref { .. } | Asset::Other(_) => None,
     }
+}
+
+fn input_font_file_name(input: &InputCase) -> Option<String> {
+    asset_file_name(input.inputs.assets.get("font")?)
 }
 
 fn input_pixel_y(input: &InputCase) -> Option<u32> {
@@ -1557,7 +2707,7 @@ fn validate_assets(case: &InputCase) -> Result<(), String> {
                 }
                 let value = inline_bytes_hex(asset)
                     .ok_or_else(|| format!("{name} missing inline hex bytes"))?;
-                decode_hex(value).map_err(|err| format!("{name} invalid hex: {err}"))?;
+                cached_inline_bytes(value).map_err(|err| format!("{name} invalid hex: {err}"))?;
             }
             Asset::Ref { .. } => {
                 return Err(format!(
@@ -1576,48 +2726,61 @@ fn validate_assets(case: &InputCase) -> Result<(), String> {
 fn validated_file_asset(path: &str) -> Result<(u64, String), String> {
     static CACHE: OnceLock<Mutex<BTreeMap<String, (u64, String)>>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
-    let mut cache = cache.lock().map_err(|err| err.to_string())?;
-    if let Some(entry) = cache.get(path) {
-        return Ok(entry.clone());
+    if let Some(entry) = cache
+        .lock()
+        .map_err(|err| err.to_string())?
+        .get(path)
+        .cloned()
+    {
+        return Ok(entry);
     }
     let bytes = cached_file_bytes(path)?;
     let entry = (
         u64::try_from(bytes.len()).map_err(|err| err.to_string())?,
-        sha256_hex(&bytes),
+        sha256_hex(bytes.as_ref()),
     );
-    cache.insert(path.to_string(), entry.clone());
+    let mut cache = cache.lock().map_err(|err| err.to_string())?;
+    let entry = cache.entry(path.to_string()).or_insert(entry).clone();
     Ok(entry)
 }
 
-fn run_oracles_with_cache(cases: &[&InputCase]) -> Result<Vec<RunOutput>, String> {
+fn ensure_oracle_cache(cases: &[&InputCase]) -> Result<PathBuf, String> {
     if cases.is_empty() {
-        return Ok(Vec::new());
+        return Err("cannot cache empty oracle case set".to_string());
     }
-    let batch_input = oracle_batch_input(cases)?;
-    let cache_key = oracle_cache_key(cases, &batch_input)?;
+    let batch_input = {
+        let _profile = ProfileStage::new("oracle_cache.build_batch_input");
+        oracle_batch_input(cases)?
+    };
+    let cache_key = {
+        let _profile = ProfileStage::new("oracle_cache.compute_key");
+        oracle_cache_key(cases, &batch_input)?
+    };
     let cache_path = oracle_cache_path(&cache_key);
 
     if std::env::var("FONTDONE_UNIFIED_ORACLE_REFRESH").is_err() && cache_path.exists() {
-        let cached = fs::read_to_string(&cache_path)
-            .map_err(|err| format!("read oracle cache {}: {err}", cache_path.display()))?;
         eprintln!(
             "unified_oracle_cache: hit {} cases key={}",
             cases.len(),
             cache_key
         );
-        return parse_oracle_lines(cases, &cached)
-            .map_err(|err| format!("oracle cache {} invalid: {err}", cache_path.display()));
+        return Ok(cache_path);
     }
 
-    let stdout = run_oracles_batch(cases, &batch_input)?;
-    let outputs = parse_oracle_lines(cases, &stdout)?;
-    write_oracle_cache(&cache_path, &stdout)?;
+    let stdout = {
+        let _profile = ProfileStage::new("oracle_cache.run_c_oracle_batch");
+        run_oracles_batch(cases, &batch_input)?
+    };
+    {
+        let _profile = ProfileStage::new("oracle_cache.write_cache");
+        write_oracle_cache(&cache_path, &stdout)?;
+    }
     eprintln!(
         "unified_oracle_cache: wrote {} cases key={}",
         cases.len(),
         cache_key
     );
-    Ok(outputs)
+    Ok(cache_path)
 }
 
 fn oracle_batch_input(cases: &[&InputCase]) -> Result<String, String> {
@@ -1702,24 +2865,6 @@ fn run_oracles_batch(cases: &[&InputCase], batch_input: &str) -> Result<String, 
     }
 
     String::from_utf8(output.stdout).map_err(|err| err.to_string())
-}
-
-fn parse_oracle_lines(cases: &[&InputCase], stdout: &str) -> Result<Vec<RunOutput>, String> {
-    let lines = stdout.lines().collect::<Vec<_>>();
-    if lines.len() != cases.len() {
-        return Err(format!(
-            "batch oracle returned {} lines for {} cases",
-            lines.len(),
-            cases.len()
-        ));
-    }
-    cases
-        .iter()
-        .zip(lines)
-        .map(|(case, line)| {
-            parse_run_output(line).map_err(|err| format!("{} oracle failed: {err}", case.case_id))
-        })
-        .collect()
 }
 
 fn oracle_bin() -> Result<PathBuf, String> {
@@ -1960,8 +3105,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             }
         }
         "set_pixel_sizes" => {
-            let (_library, face) = c_open_face(case)?;
+            let (library, face) = c_open_face(case)?;
             c_done_face(face);
+            c_done_library(library);
             Ok(ok(json!({"set": true})))
         }
         "set_char_size" => {
@@ -1982,7 +3128,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             }
         }
         "size_metrics" => {
-            let (_library, face) = c_open_face(case)?;
+            let (library, face) = c_open_face(case)?;
             let metrics = c_abi::FT_Size_Metrics_Get(face);
             let output = json!({
                 "x_ppem": metrics.x_ppem,
@@ -1995,49 +3141,55 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
                 "max_advance": metrics.max_advance
             });
             c_done_face(face);
+            c_done_library(library);
             Ok(ok(output))
         }
         "get_char_index" => {
-            let (_library, face) = c_open_face(case)?;
+            let (library, face) = c_open_face(case)?;
             let value =
                 c_abi::FT_Get_Char_Index(face, u64_param(&case.inputs.params, "char_code")?);
             c_done_face(face);
+            c_done_library(library);
             Ok(ok(json!({"value": value})))
         }
         "load_char" => {
-            let (_library, face) = c_open_face(case)?;
+            let (library, face) = c_open_face(case)?;
             let err = c_abi::FT_Load_Char(
                 face,
                 u64_param(&case.inputs.params, "char_code")?,
                 load_flags_param(&case.inputs.params)?,
             );
             if err == FT_Err_Ok {
-                let value = c_slot_json(face)?;
+                let output = c_slot_json(face).map(ok);
                 c_done_face(face);
-                Ok(ok(value))
+                c_done_library(library);
+                output
             } else {
                 c_done_face(face);
+                c_done_library(library);
                 Ok(error(err))
             }
         }
         "load_glyph" => {
-            let (_library, face) = c_open_face(case)?;
+            let (library, face) = c_open_face(case)?;
             let err = c_abi::FT_Load_Glyph(
                 face,
                 glyph_index_param(&case.inputs.params)?,
                 load_flags_param(&case.inputs.params)?,
             );
             if err == FT_Err_Ok {
-                let value = c_slot_json(face)?;
+                let output = c_slot_json(face).map(ok);
                 c_done_face(face);
-                Ok(ok(value))
+                c_done_library(library);
+                output
             } else {
                 c_done_face(face);
+                c_done_library(library);
                 Ok(error(err))
             }
         }
         "render_glyph" => {
-            let (_library, face) = c_open_face(case)?;
+            let (library, face) = c_open_face(case)?;
             let load_err = c_abi::FT_Load_Char(
                 face,
                 u64_param(&case.inputs.params, "char_code")?,
@@ -2049,11 +3201,13 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
                 load_err
             };
             if err == FT_Err_Ok {
-                let value = c_slot_json(face)?;
+                let output = c_slot_json(face).map(ok);
                 c_done_face(face);
-                Ok(ok(value))
+                c_done_library(library);
+                output
             } else {
                 c_done_face(face);
+                c_done_library(library);
                 Ok(error(err))
             }
         }
@@ -2300,7 +3454,7 @@ fn rust_new_memory_face(case: &InputCase) -> Result<RunOutput, String> {
     let library = FT_Init_FreeType();
     match FT_New_Memory_Face(
         &library,
-        &data,
+        data.as_ref(),
         face_index_param(&case.inputs.params)?,
         20.0,
     ) {
@@ -2322,7 +3476,7 @@ fn open_face(case: &InputCase) -> Result<FT_Face, String> {
     let library = FT_Init_FreeType();
     let mut face = FT_New_Memory_Face(
         &library,
-        &data,
+        data.as_ref(),
         face_index_param(&case.inputs.params)?,
         20.0,
     )
@@ -2341,7 +3495,7 @@ fn rust_set_pixel_sizes(case: &InputCase) -> Result<RunOutput, String> {
     let library = FT_Init_FreeType();
     match FT_New_Memory_Face(
         &library,
-        &data,
+        data.as_ref(),
         face_index_param(&case.inputs.params)?,
         20.0,
     ) {
@@ -2363,7 +3517,7 @@ fn rust_set_char_size(case: &InputCase) -> Result<RunOutput, String> {
     let library = FT_Init_FreeType();
     match FT_New_Memory_Face(
         &library,
-        &data,
+        data.as_ref(),
         face_index_param(&case.inputs.params)?,
         20.0,
     ) {
@@ -2385,8 +3539,12 @@ fn rust_set_char_size(case: &InputCase) -> Result<RunOutput, String> {
     }
 }
 
-fn font_bytes(case: &InputCase) -> Result<Vec<u8>, String> {
+fn font_bytes(case: &InputCase) -> Result<Arc<[u8]>, String> {
     let font = runtime_font_asset(case).ok_or_else(|| "missing font asset".to_string())?;
+    font_asset_bytes(font)
+}
+
+fn font_asset_bytes(font: &Asset) -> Result<Arc<[u8]>, String> {
     match font {
         Asset::File { path, .. } => cached_file_bytes(path),
         Asset::InlineBytes { encoding, .. } => {
@@ -2395,7 +3553,7 @@ fn font_bytes(case: &InputCase) -> Result<Vec<u8>, String> {
             }
             let value =
                 inline_bytes_hex(font).ok_or_else(|| "missing inline hex bytes".to_string())?;
-            decode_hex(value)
+            cached_inline_bytes(value)
         }
         Asset::Ref { .. } => Err(format!("unresolved shared asset ref {}", asset_label(font))),
         Asset::Other(_) => Err("unsupported font asset shape".to_string()),
@@ -2442,16 +3600,44 @@ fn inline_bytes_hex(asset: &Asset) -> Option<&str> {
     }
 }
 
-fn cached_file_bytes(path: &str) -> Result<Vec<u8>, String> {
-    static CACHE: OnceLock<Mutex<BTreeMap<String, Vec<u8>>>> = OnceLock::new();
+fn cached_inline_bytes(value: &str) -> Result<Arc<[u8]>, String> {
+    static CACHE: OnceLock<Mutex<BTreeMap<String, Arc<[u8]>>>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
-    let mut cache = cache.lock().map_err(|err| err.to_string())?;
-    if let Some(bytes) = cache.get(path) {
-        return Ok(bytes.clone());
+    if let Some(bytes) = cache
+        .lock()
+        .map_err(|err| err.to_string())?
+        .get(value)
+        .map(Arc::clone)
+    {
+        return Ok(bytes);
     }
-    let bytes = fs::read(fixture_dir().join(path)).map_err(|err| format!("read {path}: {err}"))?;
-    cache.insert(path.to_string(), bytes.clone());
-    Ok(bytes)
+    let bytes = Arc::<[u8]>::from(decode_hex(value)?);
+    let mut cache = cache.lock().map_err(|err| err.to_string())?;
+    let bytes = cache
+        .entry(value.to_string())
+        .or_insert_with(|| Arc::clone(&bytes));
+    Ok(Arc::clone(bytes))
+}
+
+fn cached_file_bytes(path: &str) -> Result<Arc<[u8]>, String> {
+    static CACHE: OnceLock<Mutex<BTreeMap<String, Arc<[u8]>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    if let Some(bytes) = cache
+        .lock()
+        .map_err(|err| err.to_string())?
+        .get(path)
+        .map(Arc::clone)
+    {
+        return Ok(bytes);
+    }
+    let bytes = Arc::<[u8]>::from(
+        fs::read(fixture_dir().join(path)).map_err(|err| format!("read {path}: {err}"))?,
+    );
+    let mut cache = cache.lock().map_err(|err| err.to_string())?;
+    let bytes = cache
+        .entry(path.to_string())
+        .or_insert_with(|| Arc::clone(&bytes));
+    Ok(Arc::clone(bytes))
 }
 
 fn ok(output: Value) -> RunOutput {

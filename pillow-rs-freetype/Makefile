@@ -27,6 +27,7 @@ help:
 	@printf "  make test             Run manifest-driven unified public API parity\n"
 	@printf "  make test-parity      Run manifest-driven unified public API parity\n"
 	@printf "  make test-unified-fixtures Run manifest-linked input fixtures against runtime C oracle\n"
+	@printf "  make test-unified-fixtures-release Run unified fixture parity with Cargo --release\n"
 	@printf "  make test-unified-coverage Alias for the unified parity test\n"
 	@printf "  make test-api-abi     Run unified API/ABI fixture and coverage gates\n"
 	@printf "  make api-abi-audit    Generate C/Servo/fontdone API and ABI surface audit\n"
@@ -100,6 +101,10 @@ unified-inputs-check:
 .PHONY: test-unified-fixtures
 test-unified-fixtures: unified-oracle unified-inputs-check
 	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
+
+.PHONY: test-unified-fixtures-release
+test-unified-fixtures-release: unified-oracle unified-inputs-check
+	$(CARGO) test --release --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
 
 .PHONY: test-unified-coverage
 test-unified-coverage: test-unified-fixtures
