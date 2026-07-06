@@ -42,31 +42,41 @@ struct FontVariability {
 struct CaseFile {
     #[serde(default)]
     assets: BTreeMap<String, Asset>,
-    #[serde(default)]
-    matrix_cases: Vec<MatrixCaseSpec>,
+    #[serde(default, rename = "matrix_cases")]
+    legacy_matrix_cases: Vec<Value>,
     cases: Vec<InputCase>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct InputCase {
     case_id: String,
     subject: String,
     case: String,
+    #[serde(default)]
+    covers_manifest_cases: Vec<String>,
     operation: String,
     schema: String,
     #[serde(default)]
     expect_error: bool,
     inputs: Inputs,
-    #[serde(default)]
-    source: Option<CaseSource>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct Inputs {
     #[serde(default)]
     assets: BTreeMap<String, Asset>,
     #[serde(default)]
     params: Value,
+    #[serde(default)]
+    variability: Option<VariabilitySpec>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+struct VariabilitySpec {
+    #[serde(default)]
+    axes: Vec<String>,
+    #[serde(default)]
+    fonts_folder: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -151,33 +161,6 @@ impl<'de> Deserialize<'de> for Asset {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct CaseSource {
-    matrix: String,
-    row_id: String,
-    row_operation: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct MatrixCaseSpec {
-    id: String,
-    subject: String,
-    case: String,
-    operation: String,
-    schema: String,
-    source: MatrixCaseSource,
-    #[serde(default)]
-    classifiers: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct MatrixCaseSource {
-    matrix: String,
-    row_operation: String,
-    #[serde(default)]
-    requires_glyph_index: bool,
-}
-
 #[derive(Debug)]
 struct RunOutput {
     status: Status,
@@ -196,32 +179,53 @@ enum StatusKind {
     Error,
 }
 
+#[derive(Debug)]
+struct UnifiedCase {
+    input: InputCase,
+    runtime: RuntimeReadiness,
+}
+
+#[derive(Debug)]
+enum RuntimeReadiness {
+    Runnable { key: String },
+    Pending { reason: String },
+}
+
 #[test]
 fn unified_fixture_parity() {
-    eprintln!("unified_fixture_parity: loading expanded input cases");
-    let all_cases = read_all_case_files();
-    let unique_case_keys = all_cases
+    eprintln!("unified_fixture_parity: loading unified input cases");
+    let input_cases = read_all_case_files();
+    let unified_cases = prepare_unified_cases(&input_cases);
+    let unique_case_keys = unified_cases
         .iter()
         .map(|case| {
             (
-                case.subject.clone(),
-                case.case.clone(),
-                case.case_id.clone(),
+                case.input.subject.clone(),
+                case.input.case.clone(),
+                case.input.case_id.clone(),
             )
         })
         .collect::<BTreeSet<_>>();
     eprintln!(
-        "unified_fixture_parity: loaded_cases={} deduped_case_keys={}",
-        all_cases.len(),
-        unique_case_keys.len()
+        "unified_cases: total={} deduped_case_keys={} runnable={} pending={}",
+        unified_cases.len(),
+        unique_case_keys.len(),
+        unified_cases
+            .iter()
+            .filter(|case| matches!(case.runtime, RuntimeReadiness::Runnable { .. }))
+            .count(),
+        unified_cases
+            .iter()
+            .filter(|case| matches!(case.runtime, RuntimeReadiness::Pending { .. }))
+            .count()
     );
-    assert_manifest_cases_cover_fixture_inputs(&all_cases);
-    assert_manifest_font_variability_cases_cover_declared_fixture_folder(&all_cases);
-    assert_matrix_derived_inputs_cover_supported_source_rows(&all_cases);
-    assert_unified_fixture_cases_match_runtime_c_oracle(&all_cases);
+    assert_manifest_cases_cover_fixture_inputs(&unified_cases);
+    assert_manifest_font_variability_cases_cover_declared_fixture_folder(&unified_cases);
+    assert_unified_variability_cases_have_single_model(&unified_cases);
+    assert_unified_fixture_cases_match_runtime_c_oracle(&unified_cases);
 }
 
-fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[InputCase]) {
+fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[UnifiedCase]) {
     let manifest = read_manifest();
     let runtime_selection = select_runtime_cases(all_cases);
     let cases = runtime_selection.executable;
@@ -265,14 +269,9 @@ fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[InputCase]) 
     }
 
     eprintln!(
-        "runtime_selection: executable={} model_only={} direct_model_only={} matrix_model_only={} matrix_runtime_enabled={} unsupported_ops={}",
+        "runtime_cases: runnable={} pending={} pending_reasons={}",
         cases.len(),
         runtime_selection.model_only,
-        runtime_selection
-            .model_only
-            .saturating_sub(runtime_selection.matrix_model_only),
-        runtime_selection.matrix_model_only,
-        include_matrix_runtime_cases(),
         format_operation_counts(&runtime_selection.unsupported_operations)
     );
     eprintln!(
@@ -293,46 +292,505 @@ fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[InputCase]) 
 struct RuntimeSelection<'a> {
     executable: Vec<&'a InputCase>,
     model_only: usize,
-    matrix_model_only: usize,
     unsupported_operations: BTreeMap<String, usize>,
 }
 
-fn select_runtime_cases(cases: &[InputCase]) -> RuntimeSelection<'_> {
+fn prepare_unified_cases(cases: &[InputCase]) -> Vec<UnifiedCase> {
+    let mut unified = Vec::new();
+    for case in cases {
+        for expanded in expand_input_case(case) {
+            let canonical_operation = canonical_operation(&expanded.operation);
+            let runtime = classify_runtime_case(&expanded, canonical_operation);
+            unified.push(UnifiedCase {
+                input: expanded,
+                runtime,
+            });
+        }
+    }
+    unified
+}
+
+const DEFAULT_VARIABILITY_SIZES: &[u32] = &[10, 20];
+const DEFAULT_VARIABILITY_CODEPOINTS: &[u64] = &[33, 65, 103, 109];
+const DEFAULT_VARIABILITY_GLYPH_INDICES: &[u32] = &[0, 1, 36, 57];
+const DEFAULT_VARIABILITY_LOAD_FLAGS: &[i32] = &[FT_LOAD_DEFAULT];
+const DEFAULT_VARIABILITY_RENDER_MODES: &[i32] = &[FT_RENDER_MODE_NORMAL];
+
+#[derive(Clone, Default)]
+struct ExpansionPlan {
+    fonts: Vec<Option<Asset>>,
+    sizes: Vec<Option<u32>>,
+    codepoints: Vec<Option<u64>>,
+    glyph_indices: Vec<Option<u32>>,
+    load_flags: Vec<Option<i32>>,
+    render_modes: Vec<Option<i32>>,
+}
+
+impl ExpansionPlan {
+    fn is_identity(&self) -> bool {
+        self.fonts.len() == 1
+            && self.fonts[0].is_none()
+            && self.sizes.len() == 1
+            && self.sizes[0].is_none()
+            && self.codepoints.len() == 1
+            && self.codepoints[0].is_none()
+            && self.glyph_indices.len() == 1
+            && self.glyph_indices[0].is_none()
+            && self.load_flags.len() == 1
+            && self.load_flags[0].is_none()
+            && self.render_modes.len() == 1
+            && self.render_modes[0].is_none()
+    }
+}
+
+fn expand_input_case(case: &InputCase) -> Vec<InputCase> {
+    let plan = expansion_plan(case);
+    if plan.is_identity() {
+        return vec![case.clone()];
+    }
+
+    let mut expanded = Vec::new();
+    for font in &plan.fonts {
+        for size in &plan.sizes {
+            for codepoint in &plan.codepoints {
+                for glyph_index in &plan.glyph_indices {
+                    for load_flags in &plan.load_flags {
+                        for render_mode in &plan.render_modes {
+                            let mut case = case.clone();
+                            apply_expansion_axes(
+                                &mut case,
+                                font.clone(),
+                                *size,
+                                *codepoint,
+                                *glyph_index,
+                                *load_flags,
+                                *render_mode,
+                            );
+                            expanded.push(case);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    expanded
+}
+
+fn expansion_plan(case: &InputCase) -> ExpansionPlan {
+    let axes = variability_axes(case);
+    let params = &case.inputs.params;
+    let mut plan = ExpansionPlan {
+        fonts: font_axis(case, &axes),
+        sizes: u32_axis(
+            params,
+            &["sizes", "pixel_sizes"],
+            axes.contains("sizes"),
+            DEFAULT_VARIABILITY_SIZES,
+        )
+        .into_iter()
+        .map(Some)
+        .collect(),
+        codepoints: u64_axis(
+            params,
+            &["codepoints", "char_codes"],
+            axes.contains("codepoints"),
+            DEFAULT_VARIABILITY_CODEPOINTS,
+        )
+        .into_iter()
+        .map(Some)
+        .collect(),
+        glyph_indices: u32_axis(
+            params,
+            &["glyph_indices"],
+            axes.contains("glyph_indices"),
+            DEFAULT_VARIABILITY_GLYPH_INDICES,
+        )
+        .into_iter()
+        .map(Some)
+        .collect(),
+        load_flags: load_flags_axis(params, axes.contains("load_flags"))
+            .into_iter()
+            .map(Some)
+            .collect(),
+        render_modes: render_modes_axis(
+            params,
+            axes.contains("render_modes"),
+            DEFAULT_VARIABILITY_RENDER_MODES,
+        )
+        .into_iter()
+        .map(Some)
+        .collect(),
+    };
+    normalize_empty_axes(&mut plan);
+    plan
+}
+
+fn normalize_empty_axes(plan: &mut ExpansionPlan) {
+    if plan.fonts.is_empty() {
+        plan.fonts.push(None);
+    }
+    if plan.sizes.is_empty() {
+        plan.sizes.push(None);
+    }
+    if plan.codepoints.is_empty() {
+        plan.codepoints.push(None);
+    }
+    if plan.glyph_indices.is_empty() {
+        plan.glyph_indices.push(None);
+    }
+    if plan.load_flags.is_empty() {
+        plan.load_flags.push(None);
+    }
+    if plan.render_modes.is_empty() {
+        plan.render_modes.push(None);
+    }
+}
+
+fn variability_axes(case: &InputCase) -> BTreeSet<&str> {
+    case.inputs
+        .variability
+        .as_ref()
+        .map(|variability| {
+            variability
+                .axes
+                .iter()
+                .map(String::as_str)
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_default()
+}
+
+fn font_axis(case: &InputCase, axes: &BTreeSet<&str>) -> Vec<Option<Asset>> {
+    let folder = case
+        .inputs
+        .variability
+        .as_ref()
+        .and_then(|variability| variability.fonts_folder.as_deref())
+        .map(ToString::to_string)
+        .or_else(|| {
+            file_asset_path(case.inputs.assets.get("font_folder")).map(ToString::to_string)
+        });
+    if !axes.contains("fonts") && folder.is_none() {
+        return Vec::new();
+    }
+    let folder = folder.unwrap_or_else(|| "input/fonts".to_string());
+    fixture_font_assets(&folder).into_iter().map(Some).collect()
+}
+
+fn fixture_font_assets(folder: &str) -> Vec<Asset> {
+    let folder_path = fixture_dir().join(folder);
+    let Ok(entries) = fs::read_dir(&folder_path) else {
+        return Vec::new();
+    };
+    let mut assets = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file())
+        .filter(|path| {
+            path.extension().is_some_and(|extension| {
+                matches!(
+                    extension.to_string_lossy().as_ref(),
+                    "ttf" | "otf" | "ttc" | "pfb" | "bdf" | "otb"
+                )
+            })
+        })
+        .filter_map(|path| {
+            let relative = path
+                .strip_prefix(fixture_dir())
+                .ok()?
+                .to_string_lossy()
+                .into_owned();
+            Some(Asset::File {
+                path: relative,
+                sha256: None,
+                length: None,
+            })
+        })
+        .collect::<Vec<_>>();
+    assets.sort_by_key(asset_label);
+    assets
+}
+
+fn file_asset_path(asset: Option<&Asset>) -> Option<&str> {
+    match asset {
+        Some(Asset::File { path, .. }) => Some(path),
+        Some(Asset::Ref { id: Some(id), .. }) => Some(id),
+        Some(Asset::Ref {
+            path: Some(path), ..
+        }) => Some(path),
+        _ => None,
+    }
+}
+
+fn u32_axis(params: &Value, keys: &[&str], enabled: bool, defaults: &[u32]) -> Vec<u32> {
+    for key in keys {
+        if let Some(values) = numeric_array(params, key) {
+            return values
+                .iter()
+                .map(|value| u32_value(value, key))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap_or_default();
+        }
+    }
+    if enabled {
+        defaults.to_vec()
+    } else {
+        Vec::new()
+    }
+}
+
+fn u64_axis(params: &Value, keys: &[&str], enabled: bool, defaults: &[u64]) -> Vec<u64> {
+    for key in keys {
+        if let Some(values) = numeric_array(params, key) {
+            return values
+                .iter()
+                .map(|value| u64_value(value, key))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap_or_default();
+        }
+    }
+    if enabled {
+        defaults.to_vec()
+    } else {
+        Vec::new()
+    }
+}
+
+fn load_flags_axis(params: &Value, enabled: bool) -> Vec<i32> {
+    for key in ["load_flag_sets", "load_flags_matrix"] {
+        if let Some(values) = params.get(key).and_then(Value::as_array) {
+            let base_flags = values
+                .iter()
+                .map(|value| flag_value(value, key))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap_or_default();
+            return combine_load_targets(base_flags, target_mode_axis(params));
+        }
+    }
+    if let Some(values) = params.get("load_flags").and_then(Value::as_array) {
+        if enabled || values.iter().all(|value| value.is_number()) {
+            let base_flags = values
+                .iter()
+                .map(|value| flag_value(value, "load_flags"))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap_or_default();
+            return combine_load_targets(base_flags, target_mode_axis(params));
+        }
+    }
+    if enabled {
+        combine_load_targets(
+            DEFAULT_VARIABILITY_LOAD_FLAGS.to_vec(),
+            target_mode_axis(params),
+        )
+    } else if params.get("target_modes").is_some() {
+        combine_load_targets(vec![FT_LOAD_DEFAULT], target_mode_axis(params))
+    } else {
+        Vec::new()
+    }
+}
+
+fn combine_load_targets(base_flags: Vec<i32>, target_modes: Vec<i32>) -> Vec<i32> {
+    if target_modes.is_empty() {
+        return base_flags;
+    }
+    let bases = if base_flags.is_empty() {
+        vec![FT_LOAD_DEFAULT]
+    } else {
+        base_flags
+    };
+    let mut combined = Vec::new();
+    for base in bases {
+        for target in &target_modes {
+            let value = base | target;
+            if !combined.contains(&value) {
+                combined.push(value);
+            }
+        }
+    }
+    combined
+}
+
+fn target_mode_axis(params: &Value) -> Vec<i32> {
+    let Some(values) = params.get("target_modes").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    values
+        .iter()
+        .map(load_target_mode_value)
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap_or_default()
+}
+
+fn render_modes_axis(params: &Value, enabled: bool, defaults: &[i32]) -> Vec<i32> {
+    if let Some(values) = params.get("render_modes").and_then(Value::as_array) {
+        return values
+            .iter()
+            .map(render_mode_value)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap_or_default();
+    }
+    if enabled {
+        defaults.to_vec()
+    } else {
+        Vec::new()
+    }
+}
+
+fn numeric_array<'a>(params: &'a Value, key: &str) -> Option<&'a [Value]> {
+    params.get(key)?.as_array().map(Vec::as_slice)
+}
+
+fn flag_value(value: &Value, key: &str) -> Result<i32, String> {
+    let raw = match value {
+        Value::Array(items) => {
+            let mut flags = 0i64;
+            for item in items {
+                flags |= i64_value(item, key)?;
+            }
+            flags
+        }
+        _ => i64_value(value, key)?,
+    };
+    i32::try_from(raw).map_err(|err| format!("{key} does not fit i32: {err}"))
+}
+
+fn load_target_mode_value(value: &Value) -> Result<i32, String> {
+    if let Some(text) = value.as_str() {
+        return match text {
+            "NORMAL" | "FT_LOAD_TARGET_NORMAL" => Ok(FT_LOAD_TARGET_NORMAL),
+            "LIGHT" | "FT_LOAD_TARGET_LIGHT" => Ok(FT_LOAD_TARGET_LIGHT),
+            "MONO" | "FT_LOAD_TARGET_MONO" => Ok(FT_LOAD_TARGET_MONO),
+            "LCD" | "FT_LOAD_TARGET_LCD" => Ok(FT_LOAD_TARGET_LCD),
+            "LCD_V" | "FT_LOAD_TARGET_LCD_V" => Ok(FT_LOAD_TARGET_LCD_V),
+            _ => i64_value(value, "target_modes").and_then(|value| {
+                i32::try_from(value).map_err(|err| format!("target_modes does not fit i32: {err}"))
+            }),
+        };
+    }
+    let raw = i64_value(value, "target_modes")?;
+    i32::try_from(raw).map_err(|err| format!("target_modes does not fit i32: {err}"))
+}
+
+fn render_mode_value(value: &Value) -> Result<i32, String> {
+    if let Some(text) = value.as_str() {
+        return match text {
+            "NORMAL" | "FT_RENDER_MODE_NORMAL" => Ok(FT_RENDER_MODE_NORMAL),
+            "LIGHT" | "FT_RENDER_MODE_LIGHT" => Ok(FT_RENDER_MODE_LIGHT),
+            "MONO" | "FT_RENDER_MODE_MONO" => Ok(FT_RENDER_MODE_MONO),
+            "LCD" | "FT_RENDER_MODE_LCD" => Ok(FT_RENDER_MODE_LCD),
+            "LCD_V" | "FT_RENDER_MODE_LCD_V" => Ok(FT_RENDER_MODE_LCD_V),
+            "SDF" | "FT_RENDER_MODE_SDF" => Ok(FT_RENDER_MODE_SDF),
+            _ => i64_value(value, "render_modes").and_then(|value| {
+                i32::try_from(value).map_err(|err| format!("render_modes does not fit i32: {err}"))
+            }),
+        };
+    }
+    let raw = i64_value(value, "render_modes")?;
+    i32::try_from(raw).map_err(|err| format!("render_modes does not fit i32: {err}"))
+}
+
+fn apply_expansion_axes(
+    case: &mut InputCase,
+    font: Option<Asset>,
+    size: Option<u32>,
+    codepoint: Option<u64>,
+    glyph_index: Option<u32>,
+    load_flags: Option<i32>,
+    render_mode: Option<i32>,
+) {
+    let mut suffix = Vec::new();
+    if let Some(font) = font {
+        suffix.push(format!("font={}", asset_label(&font)));
+        case.inputs.assets.insert("font".to_string(), font);
+        case.inputs.assets.remove("font_folder");
+    }
+    let params = case
+        .inputs
+        .params
+        .as_object_mut()
+        .expect("fixture input params must be a JSON object");
+    remove_aggregate_params(params);
+    if let Some(size) = size {
+        suffix.push(format!("size={size}"));
+        params.insert("pixel_size".to_string(), json!({"x": 0, "y": size}));
+    }
+    if let Some(codepoint) = codepoint {
+        suffix.push(format!("cp={codepoint}"));
+        params.insert("char_code".to_string(), Value::from(codepoint));
+    }
+    if let Some(glyph_index) = glyph_index {
+        suffix.push(format!("gid={glyph_index}"));
+        params.insert("glyph_index".to_string(), Value::from(glyph_index));
+    }
+    if let Some(load_flags) = load_flags {
+        suffix.push(format!("flags={load_flags}"));
+        params.insert("load_flags".to_string(), Value::from(load_flags));
+    }
+    if let Some(render_mode) = render_mode {
+        suffix.push(format!("mode={render_mode}"));
+        params.insert("render_mode".to_string(), Value::from(render_mode));
+    }
+    if !suffix.is_empty() {
+        case.case_id = format!("{}#{}", case.case_id, suffix.join(";"));
+    }
+}
+
+fn remove_aggregate_params(params: &mut serde_json::Map<String, Value>) {
+    for key in [
+        "sizes",
+        "pixel_sizes",
+        "codepoints",
+        "char_codes",
+        "glyph_indices",
+        "load_flag_sets",
+        "load_flags_matrix",
+        "render_modes",
+        "target_modes",
+    ] {
+        params.remove(key);
+    }
+}
+
+fn classify_runtime_case(case: &InputCase, canonical_operation: &str) -> RuntimeReadiness {
+    if !is_supported_runtime_operation(case, canonical_operation) {
+        return RuntimeReadiness::Pending {
+            reason: canonical_operation.to_string(),
+        };
+    }
+    match oracle_args(case) {
+        Ok(args) => RuntimeReadiness::Runnable {
+            key: args.join("\t"),
+        },
+        Err(err) => RuntimeReadiness::Pending {
+            reason: format!("{canonical_operation}:{err}"),
+        },
+    }
+}
+
+fn select_runtime_cases(cases: &[UnifiedCase]) -> RuntimeSelection<'_> {
     let filter = case_filter();
     let limit = case_limit();
     let mut executable = Vec::new();
     let mut model_only = 0usize;
-    let mut matrix_model_only = 0usize;
     let mut unsupported_operations = BTreeMap::new();
     let mut seen_executable = BTreeSet::new();
 
     for case in cases {
-        if !case_matches_filter(case, filter.as_deref()) {
+        if !case_matches_filter(&case.input, filter.as_deref()) {
             continue;
         }
-        if case.source.is_some() && !include_matrix_runtime_cases() {
-            model_only = model_only.saturating_add(1);
-            matrix_model_only = matrix_model_only.saturating_add(1);
-            *unsupported_operations
-                .entry(format!("matrix:{}", case.operation))
-                .or_default() += 1;
-            continue;
-        }
-        if !is_runtime_executable_case(case) {
-            model_only = model_only.saturating_add(1);
-            if case.source.is_some() {
-                matrix_model_only = matrix_model_only.saturating_add(1);
+        match &case.runtime {
+            RuntimeReadiness::Runnable { key } => {
+                if seen_executable.insert(key.clone()) {
+                    executable.push(&case.input);
+                    if limit.is_some_and(|limit| executable.len() >= limit) {
+                        break;
+                    }
+                }
             }
-            *unsupported_operations
-                .entry(case.operation.clone())
-                .or_default() += 1;
-            continue;
-        }
-        let key = runtime_case_key(case);
-        if seen_executable.insert(key) {
-            executable.push(case);
-            if limit.is_some_and(|limit| executable.len() >= limit) {
-                break;
+            RuntimeReadiness::Pending { reason } => {
+                model_only = model_only.saturating_add(1);
+                *unsupported_operations.entry(reason.clone()).or_default() += 1;
             }
         }
     }
@@ -340,137 +798,91 @@ fn select_runtime_cases(cases: &[InputCase]) -> RuntimeSelection<'_> {
     RuntimeSelection {
         executable,
         model_only,
-        matrix_model_only,
         unsupported_operations,
     }
 }
 
-fn include_matrix_runtime_cases() -> bool {
-    std::env::var("FONTDONE_UNIFIED_MATRIX_RUNTIME")
-        .ok()
-        .is_some_and(|value| value == "1" || value.eq_ignore_ascii_case("true"))
-}
-
-fn is_runtime_executable_case(case: &InputCase) -> bool {
-    match case.operation.as_str() {
+fn is_supported_runtime_operation(case: &InputCase, canonical_operation: &str) -> bool {
+    match canonical_operation {
         "constant" => case
             .inputs
             .params
             .get("symbol")
             .and_then(Value::as_str)
             .is_some_and(is_supported_runtime_constant),
-        "record_layout" => case
-            .inputs
-            .params
-            .get("record")
-            .and_then(Value::as_str)
-            .is_some_and(is_supported_runtime_layout),
+        "record_layout" => record_param(&case.inputs.params).is_ok_and(is_supported_runtime_layout),
         "new_memory_face" | "set_pixel_sizes" | "set_char_size" | "size_metrics"
         | "get_char_index" | "load_char" | "load_glyph" | "render_glyph" => {
-            has_runtime_font_source(case)
+            has_runtime_font_source(case) && assets_are_runtime_resolved(case)
         }
         _ => false,
     }
 }
 
 fn has_runtime_font_source(case: &InputCase) -> bool {
-    case.inputs
-        .assets
-        .get("font")
-        .is_some_and(|font| match font {
-            Asset::File { .. } => true,
-            Asset::InlineBytes { encoding, .. } => encoding == "hex",
-            Asset::Ref { .. } | Asset::Other(_) => false,
-        })
+    runtime_font_asset(case).is_some_and(|font| match font {
+        Asset::File { path, .. } => fixture_dir().join(path).is_file(),
+        Asset::InlineBytes { encoding, .. } => encoding == "hex",
+        Asset::Ref { .. } | Asset::Other(_) => false,
+    })
+}
+
+fn assets_are_runtime_resolved(case: &InputCase) -> bool {
+    case.inputs.assets.values().all(|asset| match asset {
+        Asset::File { path, .. } => fixture_dir().join(path).is_file(),
+        Asset::InlineBytes { encoding, .. } => {
+            encoding == "hex" && inline_bytes_hex(asset).is_some()
+        }
+        Asset::Ref { .. } | Asset::Other(_) => false,
+    })
+}
+
+fn canonical_operation(operation: &str) -> &str {
+    match operation {
+        "constant"
+        | "constant.value"
+        | "constant.import"
+        | "constant_eval"
+        | "error_constant.value"
+        | "public_api.constant_value"
+        | "abi.constant_eval"
+        | "abi.constant_value"
+        | "abi.error_code_value_and_import"
+        | "abi.enum_variant_value"
+        | "abi.macro_value_and_import"
+        | "constant.alias_value" => "constant",
+        "record_layout" | "abi.record_layout" | "abi.layout_probe" => "record_layout",
+        "new_memory_face"
+        | "freetype.new_memory_face"
+        | "freetype.open_face"
+        | "FT_New_Memory_Face" => "new_memory_face",
+        "set_pixel_sizes" | "freetype.set_pixel_sizes" | "FT_Set_Pixel_Sizes" => "set_pixel_sizes",
+        "set_char_size" | "freetype.set_char_size" | "FT_Set_Char_Size" => "set_char_size",
+        "size_metrics" | "freetype.size_metrics" | "FT_Size_Metrics" => "size_metrics",
+        "get_char_index"
+        | "freetype.get_char_index"
+        | "freetype.get_char_index_matrix"
+        | "FT_Get_Char_Index" => "get_char_index",
+        "load_char" | "freetype.load_char" | "freetype.load_char_matrix" | "FT_Load_Char" => {
+            "load_char"
+        }
+        "load_glyph" | "freetype.load_glyph" | "freetype.load_glyph_matrix" | "FT_Load_Glyph" => {
+            "load_glyph"
+        }
+        "render_glyph"
+        | "freetype.render_glyph"
+        | "freetype.render_glyph_matrix"
+        | "FT_Render_Glyph" => "render_glyph",
+        _ => operation,
+    }
 }
 
 fn is_supported_runtime_layout(record: &str) -> bool {
-    matches!(
-        record,
-        "FT_Vector" | "FT_BBox" | "FT_Glyph_Metrics" | "FT_Size_Metrics"
-    )
+    rust_layout(record).is_ok()
 }
 
 fn is_supported_runtime_constant(symbol: &str) -> bool {
-    matches!(
-        symbol,
-        "FT_Err_Ok"
-            | "FT_Err_Cannot_Open_Resource"
-            | "FT_Err_Unknown_File_Format"
-            | "FT_Err_Invalid_File_Format"
-            | "FT_Err_Invalid_Argument"
-            | "FT_Err_Unimplemented_Feature"
-            | "FT_Err_Invalid_Table"
-            | "FT_Err_Invalid_Glyph_Index"
-            | "FT_Err_Invalid_Character_Code"
-            | "FT_Err_Invalid_Glyph_Format"
-            | "FT_Err_Cannot_Render_Glyph"
-            | "FT_Err_Invalid_Outline"
-            | "FT_Err_Invalid_Pixel_Size"
-            | "FT_Err_Invalid_CharMap_Handle"
-            | "FT_Err_Out_Of_Memory"
-            | "FT_Err_Raster_Overflow"
-            | "FT_Err_Invalid_CharMap_Format"
-            | "FT_LOAD_DEFAULT"
-            | "FT_LOAD_NO_SCALE"
-            | "FT_LOAD_NO_HINTING"
-            | "FT_LOAD_RENDER"
-            | "FT_LOAD_NO_BITMAP"
-            | "FT_LOAD_VERTICAL_LAYOUT"
-            | "FT_LOAD_FORCE_AUTOHINT"
-            | "FT_LOAD_CROP_BITMAP"
-            | "FT_LOAD_PEDANTIC"
-            | "FT_LOAD_ADVANCE_ONLY"
-            | "FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH"
-            | "FT_LOAD_NO_RECURSE"
-            | "FT_LOAD_IGNORE_TRANSFORM"
-            | "FT_LOAD_MONOCHROME"
-            | "FT_LOAD_LINEAR_DESIGN"
-            | "FT_LOAD_SBITS_ONLY"
-            | "FT_LOAD_NO_AUTOHINT"
-            | "FT_LOAD_COLOR"
-            | "FT_LOAD_COMPUTE_METRICS"
-            | "FT_LOAD_BITMAP_METRICS_ONLY"
-            | "FT_LOAD_SVG_ONLY"
-            | "FT_LOAD_NO_SVG"
-            | "FT_RENDER_MODE_NORMAL"
-            | "FT_RENDER_MODE_LIGHT"
-            | "FT_RENDER_MODE_MONO"
-            | "FT_RENDER_MODE_LCD"
-            | "FT_RENDER_MODE_LCD_V"
-            | "FT_RENDER_MODE_SDF"
-            | "FT_RENDER_MODE_MAX"
-            | "FT_LOAD_TARGET_NORMAL"
-            | "FT_LOAD_TARGET_LIGHT"
-            | "FT_LOAD_TARGET_MONO"
-            | "FT_LOAD_TARGET_LCD"
-            | "FT_LOAD_TARGET_LCD_V"
-            | "FT_PIXEL_MODE_NONE"
-            | "FT_PIXEL_MODE_MONO"
-            | "FT_PIXEL_MODE_GRAY"
-            | "FT_PIXEL_MODE_GRAY2"
-            | "FT_PIXEL_MODE_GRAY4"
-            | "FT_PIXEL_MODE_LCD"
-            | "FT_PIXEL_MODE_LCD_V"
-            | "FT_PIXEL_MODE_BGRA"
-            | "FT_PIXEL_MODE_MAX"
-            | "FT_GLYPH_FORMAT_NONE"
-            | "FT_GLYPH_FORMAT_COMPOSITE"
-            | "FT_GLYPH_FORMAT_BITMAP"
-            | "FT_GLYPH_FORMAT_OUTLINE"
-            | "FT_GLYPH_FORMAT_PLOTTER"
-            | "FT_GLYPH_FORMAT_SVG"
-    )
-}
-
-fn runtime_case_key(case: &InputCase) -> String {
-    serde_json::to_string(&json!({
-        "operation": case.operation,
-        "schema": case.schema,
-        "expect_error": case.expect_error,
-        "inputs": case.inputs,
-    }))
-    .expect("runtime case key serializes")
+    rust_constant(symbol).is_ok()
 }
 
 fn format_operation_counts(counts: &BTreeMap<String, usize>) -> String {
@@ -607,29 +1019,33 @@ fn case_limit() -> Option<usize> {
 
 fn case_matches_filter(case: &InputCase, filter: Option<&str>) -> bool {
     filter.is_none_or(|needle| {
-        case.case_id.contains(needle)
-            || case.subject.contains(needle)
-            || case.case.contains(needle)
-            || case
-                .source
-                .as_ref()
-                .is_some_and(|source| source.matrix.contains(needle))
+        case.case_id.contains(needle) || case.subject.contains(needle) || case.case.contains(needle)
     })
 }
 
-fn assert_manifest_cases_cover_fixture_inputs(cases: &[InputCase]) {
+fn assert_manifest_cases_cover_fixture_inputs(cases: &[UnifiedCase]) {
     let manifest = read_manifest();
     let mut covered = BTreeSet::new();
 
     for case in cases {
         assert!(
-            manifest.has_case(&case.subject, &case.case),
+            manifest.has_case(&case.input.subject, &case.input.case),
             "{} references unknown manifest case {}::{}",
-            case.case_id,
-            case.subject,
-            case.case
+            case.input.case_id,
+            case.input.subject,
+            case.input.case
         );
-        covered.insert((case.subject.clone(), case.case.clone()));
+        covered.insert((case.input.subject.clone(), case.input.case.clone()));
+        for covered_case in &case.input.covers_manifest_cases {
+            assert!(
+                manifest.has_case(&case.input.subject, covered_case),
+                "{} references unknown covered manifest case {}::{}",
+                case.input.case_id,
+                case.input.subject,
+                covered_case
+            );
+            covered.insert((case.input.subject.clone(), covered_case.clone()));
+        }
     }
     eprintln!(
         "manifest_coverage: checked_cases={} covered_manifest_cases={}",
@@ -638,7 +1054,7 @@ fn assert_manifest_cases_cover_fixture_inputs(cases: &[InputCase]) {
     );
 }
 
-fn assert_manifest_font_variability_cases_cover_declared_fixture_folder(cases: &[InputCase]) {
+fn assert_manifest_font_variability_cases_cover_declared_fixture_folder(cases: &[UnifiedCase]) {
     let manifest = read_manifest();
     let mut checked = 0usize;
     let mut failures = Vec::new();
@@ -674,10 +1090,9 @@ fn assert_manifest_font_variability_cases_cover_declared_fixture_folder(cases: &
                                     load_flag: *load_flag,
                                     render_mode: *render_mode,
                                 };
-                                if !cases
-                                    .iter()
-                                    .any(|input| input_covers_font_variability(input, &probe))
-                                {
+                                if !cases.iter().any(|input| {
+                                    input_covers_font_variability(&input.input, &probe)
+                                }) {
                                     failures.push(format!(
                                         "{}::{} missing font={} size={} char_code={:?} glyph_index={:?} load_flags={:?} render_mode={:?}",
                                         subject,
@@ -715,161 +1130,21 @@ fn assert_manifest_font_variability_cases_cover_declared_fixture_folder(cases: &
     );
 }
 
-fn assert_matrix_derived_inputs_cover_supported_source_rows(cases: &[InputCase]) {
-    let matrix_sources = cases
+fn assert_unified_variability_cases_have_single_model(cases: &[UnifiedCase]) {
+    let expanded = cases
         .iter()
-        .filter_map(|case| {
-            case.source.as_ref().map(|source| {
-                (
-                    source.matrix.clone(),
-                    source.row_id.clone(),
-                    source.row_operation.clone(),
-                    case.subject.clone(),
-                )
-            })
-        })
+        .filter(|case| case.input.case_id.contains('#'))
+        .count();
+    let aggregate_subjects = cases
+        .iter()
+        .filter(|case| case.input.case_id.contains('#'))
+        .map(|case| case.input.subject.as_str())
         .collect::<BTreeSet<_>>();
-    let expected = expected_matrix_subject_coverage();
-
-    assert!(
-        matrix_sources.len() >= 100_000,
-        "expected matrix-derived unified FFI coverage to be at least 100k subject cases, got {}",
-        matrix_sources.len()
-    );
-
-    let mut missing = Vec::new();
-    for expectation in &expected {
-        if !matrix_sources.contains(expectation) {
-            missing.push(format!(
-                "{} row={} operation={} subject={}",
-                expectation.0, expectation.1, expectation.2, expectation.3
-            ));
-        }
-    }
     eprintln!(
-        "matrix_coverage: covered_subject_rows={} expected_subject_rows={} missing={}",
-        matrix_sources.len(),
-        expected.len(),
-        missing.len()
+        "variability_expansion: expanded_cases={} aggregate_subjects={}",
+        expanded,
+        aggregate_subjects.len()
     );
-    assert!(
-        missing.is_empty(),
-        "matrix-derived unified input gaps:\n{}",
-        missing.join("\n")
-    );
-}
-
-fn expected_matrix_subject_coverage() -> BTreeSet<(String, String, String, String)> {
-    let mut expected = BTreeSet::new();
-    for (matrix, mappings) in matrix_subject_mappings() {
-        let rows = read_source_matrix_rows(matrix);
-        for row in rows {
-            let operation = string_param(&row, "operation")
-                .unwrap_or_else(|err| panic!("{matrix} row operation: {err}"))
-                .to_string();
-            let row_id = string_param(&row, "id")
-                .unwrap_or_else(|err| panic!("{matrix} row id: {err}"))
-                .to_string();
-            if string_param(&row, "status").unwrap_or("active") != "active" {
-                continue;
-            }
-            for (mapped_operation, subjects) in &mappings {
-                if operation != *mapped_operation {
-                    continue;
-                }
-                for subject in subjects {
-                    if *subject == "freetype.FT_Load_Glyph"
-                        && row.get("glyph_index").and_then(Value::as_u64).is_none()
-                    {
-                        continue;
-                    }
-                    expected.insert((
-                        matrix.to_string(),
-                        row_id.clone(),
-                        operation.clone(),
-                        (*subject).to_string(),
-                    ));
-                }
-            }
-        }
-    }
-    expected
-}
-
-fn matrix_subject_mappings() -> BTreeMap<&'static str, BTreeMap<&'static str, Vec<&'static str>>> {
-    let mut mappings = BTreeMap::new();
-    mappings.insert(
-        "native_tt_default_matrix.json",
-        BTreeMap::from([
-            (
-                "getmask",
-                vec![
-                    "freetype.FT_Get_Char_Index",
-                    "freetype.FT_Load_Char",
-                    "freetype.FT_Load_Glyph",
-                ],
-            ),
-            ("getmetrics", vec!["freetype.FT_Size_Metrics"]),
-        ]),
-    );
-    mappings.insert(
-        "force_autohint_matrix.json",
-        BTreeMap::from([(
-            "getmask",
-            vec!["freetype.FT_Get_Char_Index", "freetype.FT_Load_Char"],
-        )]),
-    );
-    mappings.insert(
-        "no_hinting_matrix.json",
-        BTreeMap::from([(
-            "getmask",
-            vec![
-                "freetype.FT_Get_Char_Index",
-                "freetype.FT_Load_Char",
-                "freetype.FT_Load_Glyph",
-            ],
-        )]),
-    );
-    for matrix in ["render_mono_matrix.json", "render_lcd_matrix.json"] {
-        mappings.insert(
-            matrix,
-            BTreeMap::from([(
-                "getmask",
-                vec![
-                    "freetype.FT_Get_Char_Index",
-                    "freetype.FT_Load_Char",
-                    "freetype.FT_Load_Glyph",
-                    "freetype.FT_Render_Glyph",
-                ],
-            )]),
-        );
-    }
-    mappings.insert(
-        "metrics_only_matrix.json",
-        BTreeMap::from([(
-            "metrics_only",
-            vec![
-                "freetype.FT_Get_Char_Index",
-                "freetype.FT_Load_Char",
-                "freetype.FT_Load_Glyph",
-            ],
-        )]),
-    );
-    mappings
-}
-
-fn read_source_matrix_rows(matrix: &str) -> Vec<Value> {
-    let path = fixture_dir().join(matrix);
-    let value: Value =
-        serde_json::from_str(&fs::read_to_string(&path).expect("read source matrix"))
-            .unwrap_or_else(|err| panic!("parse {}: {err}", path.display()));
-    if let Some(rows) = value.get("rows").and_then(Value::as_array) {
-        return rows.clone();
-    }
-    if let Some(rows) = value.as_array() {
-        return rows.clone();
-    }
-    panic!("{} has no rows array", path.display());
 }
 
 impl Manifest {
@@ -999,42 +1274,30 @@ fn parse_manifest(text: &str) -> Manifest {
 }
 
 fn read_all_case_files() -> Vec<InputCase> {
-    read_case_files(None, None, true)
+    read_case_files(None, None)
 }
 
-fn read_case_files(
-    filter: Option<&str>,
-    limit: Option<usize>,
-    include_matrix_cases: bool,
-) -> Vec<InputCase> {
-    let input_dir = fixture_dir().join("inputs");
+fn read_case_files(filter: Option<&str>, limit: Option<usize>) -> Vec<InputCase> {
+    let input_dir = fixture_dir().join("inputs").join("public-api");
     let mut paths = input_case_paths(&input_dir);
     paths.sort();
 
     let mut cases = Vec::new();
-    let mut matrix_asset_cache = BTreeMap::new();
     for path in paths {
         let parsed: CaseFile =
             serde_json::from_str(&fs::read_to_string(&path).expect("read input case file"))
                 .unwrap_or_else(|err| panic!("parse {}: {err}", path.display()));
+        assert!(
+            parsed.legacy_matrix_cases.is_empty(),
+            "{} uses legacy matrix_cases; move coverage into cases[].inputs.variability",
+            path.display()
+        );
         for mut case in parsed.cases {
             resolve_case_assets(&path, &parsed.assets, &mut case);
             if case_matches_filter(&case, filter) {
                 cases.push(case);
                 if limit.is_some_and(|limit| cases.len() >= limit) {
                     return cases;
-                }
-            }
-        }
-        if include_matrix_cases {
-            for spec in parsed.matrix_cases {
-                for case in expand_matrix_case_spec(&spec, &mut matrix_asset_cache) {
-                    if case_matches_filter(&case, filter) {
-                        cases.push(case);
-                        if limit.is_some_and(|limit| cases.len() >= limit) {
-                            return cases;
-                        }
-                    }
                 }
             }
         }
@@ -1062,173 +1325,45 @@ fn collect_input_case_paths(dir: &Path, paths: &mut Vec<PathBuf>) {
     }
 }
 
-fn expand_matrix_case_spec(
-    spec: &MatrixCaseSpec,
-    matrix_asset_cache: &mut BTreeMap<String, Asset>,
-) -> Vec<InputCase> {
-    let mut expanded = Vec::new();
-    for row in read_source_matrix_rows(&spec.source.matrix) {
-        let operation = string_param(&row, "operation")
-            .unwrap_or_else(|err| panic!("{} row operation: {err}", spec.source.matrix));
-        if operation != spec.source.row_operation {
-            continue;
-        }
-        if string_param(&row, "status").unwrap_or("active") != "active" {
-            continue;
-        }
-        if spec.source.requires_glyph_index
-            && row.get("glyph_index").and_then(Value::as_u64).is_none()
-        {
-            continue;
-        }
-        expanded.push(matrix_row_to_input_case(spec, &row, matrix_asset_cache));
-    }
-    expanded
-}
-
-fn matrix_row_to_input_case(
-    spec: &MatrixCaseSpec,
-    row: &Value,
-    matrix_asset_cache: &mut BTreeMap<String, Asset>,
-) -> InputCase {
-    let matrix = &spec.source.matrix;
-    let row_id = string_param(row, "id").unwrap_or_else(|err| panic!("{matrix} row id: {err}"));
-    let row_operation = string_param(row, "operation")
-        .unwrap_or_else(|err| panic!("{matrix} row operation: {err}"));
-    let font_name = string_param(row, "font").unwrap_or_else(|err| panic!("{row_id} font: {err}"));
-    let font_file = row
-        .get("font_file")
-        .and_then(Value::as_str)
-        .map_or_else(|| format!("{font_name}.ttf"), ToString::to_string);
-    let size = row
-        .get("size_pt")
-        .and_then(Value::as_f64)
-        .unwrap_or_else(|| panic!("{row_id} size_pt missing"))
-        .round() as u32;
-    let mut params = json!({
-        "face_index": 0,
-        "pixel_size": {"x": 0, "y": size}
-    });
-    if matches!(
-        spec.operation.as_str(),
-        "get_char_index" | "load_char" | "render_glyph"
-    ) {
-        params["char_code"] = Value::from(
-            row.get("codepoint")
-                .and_then(Value::as_u64)
-                .unwrap_or_else(|| panic!("{row_id} codepoint missing")),
-        );
-    }
-    if matches!(
-        spec.operation.as_str(),
-        "load_char" | "load_glyph" | "render_glyph"
-    ) {
-        params["load_flags"] = Value::from(matrix_load_flags_value(row));
-    }
-    if spec.operation == "load_glyph" {
-        params["glyph_index"] = Value::from(
-            row.get("glyph_index")
-                .and_then(Value::as_u64)
-                .unwrap_or_else(|| panic!("{row_id} glyph_index missing")),
-        );
-    }
-    if spec.operation == "render_glyph" {
-        params["render_mode"] = Value::from(matrix_render_mode_value(row));
-    }
-
-    let mut classifiers = spec.classifiers.clone();
-    if let Some(script) = row.get("script").and_then(Value::as_str) {
-        classifiers.push(format!("script:{script}"));
-    }
-
-    InputCase {
-        case_id: format!("{}.{}", spec.id, row_id),
-        subject: spec.subject.clone(),
-        case: spec.case.clone(),
-        operation: spec.operation.clone(),
-        schema: spec.schema.clone(),
-        expect_error: false,
-        inputs: Inputs {
-            assets: BTreeMap::from([(
-                "font".to_string(),
-                matrix_font_asset(&font_file, matrix_asset_cache),
-            )]),
-            params,
-        },
-        source: Some(CaseSource {
-            matrix: matrix.clone(),
-            row_id: row_id.to_string(),
-            row_operation: row_operation.to_string(),
-        }),
-    }
-}
-
-fn matrix_font_asset(font_file: &str, cache: &mut BTreeMap<String, Asset>) -> Asset {
-    if let Some(asset) = cache.get(font_file) {
-        return asset.clone();
-    }
-    let relative_path = format!("input/fonts_autohint/{font_file}");
-    let bytes = fs::read(fixture_dir().join(&relative_path))
-        .unwrap_or_else(|err| panic!("read matrix font {relative_path}: {err}"));
-    let asset = Asset::File {
-        path: relative_path,
-        sha256: Some(sha256_hex(&bytes)),
-        length: Some(u64::try_from(bytes.len()).expect("font length fits u64")),
-    };
-    cache.insert(font_file.to_string(), asset.clone());
-    asset
-}
-
-fn matrix_load_flags_value(row: &Value) -> i64 {
-    if let Some(value) = row.get("load_flags_value").and_then(Value::as_i64) {
-        return value;
-    }
-    row.get("load_flags")
-        .and_then(Value::as_array)
-        .unwrap_or_else(|| panic!("matrix row missing load_flags"))
-        .iter()
-        .map(|flag| match flag.as_str().expect("load flag is string") {
-            "FT_LOAD_DEFAULT" => 0,
-            "FT_LOAD_RENDER" => 4,
-            "FT_LOAD_NO_BITMAP" => 8,
-            "FT_LOAD_NO_HINTING" => 2,
-            "FT_LOAD_FORCE_AUTOHINT" => 32,
-            "FT_LOAD_TARGET_MONO" => 2 << 16,
-            "FT_LOAD_TARGET_LCD" => 3 << 16,
-            "FT_LOAD_TARGET_LCD_V" => 4 << 16,
-            other => panic!("unsupported matrix load flag {other}"),
-        })
-        .sum()
-}
-
-fn matrix_render_mode_value(row: &Value) -> i64 {
-    match row
-        .get("render_mode")
-        .and_then(Value::as_str)
-        .unwrap_or("FT_RENDER_MODE_NORMAL")
-    {
-        "none" | "FT_RENDER_MODE_NORMAL" => 0,
-        "FT_RENDER_MODE_LIGHT" => 1,
-        "FT_RENDER_MODE_MONO" => 2,
-        "FT_RENDER_MODE_LCD" => 3,
-        "FT_RENDER_MODE_LCD_V" => 4,
-        other => panic!("unsupported matrix render mode {other}"),
-    }
-}
-
 fn resolve_case_assets(
     _path: &Path,
     shared_assets: &BTreeMap<String, Asset>,
     case: &mut InputCase,
 ) {
     for asset in case.inputs.assets.values_mut() {
-        let Asset::Ref { id: Some(id), .. } = asset else {
+        let Asset::Ref { id, path } = asset else {
             continue;
         };
-        if let Some(resolved) = shared_assets.get(id) {
-            *asset = resolved.clone();
+        if let Some(id) = id.as_deref() {
+            if let Some(resolved) = shared_assets.get(id) {
+                *asset = resolved.clone();
+                continue;
+            }
+        }
+        let reference = id.as_deref().or(path.as_deref());
+        if let Some(reference) = reference {
+            if let Some(path) = resolve_fixture_asset_ref(reference) {
+                *asset = Asset::File {
+                    path,
+                    sha256: None,
+                    length: None,
+                };
+            }
         }
     }
+}
+
+fn resolve_fixture_asset_ref(reference: &str) -> Option<String> {
+    let candidates = [
+        reference.to_string(),
+        format!("input/{reference}"),
+        reference
+            .strip_prefix("fixtures/assets/")
+            .map_or_else(|| reference.to_string(), ToString::to_string),
+    ];
+    candidates
+        .into_iter()
+        .find(|candidate| fixture_dir().join(candidate).is_file())
 }
 
 fn parse_u32_array(value: &str) -> Vec<u32> {
@@ -1335,13 +1470,7 @@ fn input_font_file_name(input: &InputCase) -> Option<String> {
 }
 
 fn input_pixel_y(input: &InputCase) -> Option<u32> {
-    input
-        .inputs
-        .params
-        .get("pixel_size")?
-        .get("y")?
-        .as_u64()
-        .and_then(|value| u32::try_from(value).ok())
+    pixel_size_param(&input.inputs.params).ok().map(|(_x, y)| y)
 }
 
 fn input_u64_param(input: &InputCase, key: &str) -> Option<u64> {
@@ -1358,6 +1487,12 @@ fn input_u32_param(input: &InputCase, key: &str) -> Option<u32> {
 }
 
 fn input_i32_param(input: &InputCase, key: &str) -> Option<i32> {
+    if key == "load_flags" {
+        return load_flags_param(&input.inputs.params).ok();
+    }
+    if key == "render_mode" {
+        return render_mode_param(&input.inputs.params).ok();
+    }
     input
         .inputs
         .params
@@ -1582,14 +1717,14 @@ fn oracle_bin() -> Result<PathBuf, String> {
 
 fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
     let params = &case.inputs.params;
-    match case.operation.as_str() {
+    match canonical_operation(&case.operation) {
         "constant" => Ok(vec![
             "--constant".to_string(),
             string_param(params, "symbol")?.to_string(),
         ]),
         "record_layout" => Ok(vec![
             "--layout".to_string(),
-            string_param(params, "record")?.to_string(),
+            record_param(params)?.to_string(),
         ]),
         "new_memory_face" => {
             let mut args = vec!["--new-memory-face".to_string()];
@@ -1606,7 +1741,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "set_char_size" => {
             let mut args = vec!["--set-char-size".to_string()];
             push_font_source(case, &mut args)?;
-            args.push(i64_param(params, "face_index")?.to_string());
+            args.push(face_index_param(params)?.to_string());
             args.push(i64_param(params, "char_width")?.to_string());
             args.push(i64_param(params, "char_height")?.to_string());
             args.push(u64_param(params, "horz_resolution")?.to_string());
@@ -1631,15 +1766,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
             args.push(u64_param(params, "char_code")?.to_string());
-            args.push(i64_param(params, "load_flags")?.to_string());
+            args.push(load_flags_param(params)?.to_string());
             Ok(args)
         }
         "load_glyph" => {
             let mut args = vec!["--load-glyph".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
-            args.push(u64_param(params, "glyph_index")?.to_string());
-            args.push(i64_param(params, "load_flags")?.to_string());
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(load_flags_param(params)?.to_string());
             Ok(args)
         }
         "render_glyph" => {
@@ -1647,8 +1782,8 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
             args.push(u64_param(params, "char_code")?.to_string());
-            args.push(i64_param(params, "load_flags")?.to_string());
-            args.push(i64_param(params, "render_mode")?.to_string());
+            args.push(load_flags_param(params)?.to_string());
+            args.push(render_mode_param(params)?.to_string());
             Ok(args)
         }
         other => Err(format!("unsupported oracle operation {other}")),
@@ -1656,11 +1791,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
 }
 
 fn push_font_source(case: &InputCase, args: &mut Vec<String>) -> Result<(), String> {
-    let font = case
-        .inputs
-        .assets
-        .get("font")
-        .ok_or_else(|| "missing font asset".to_string())?;
+    let font = runtime_font_asset(case).ok_or_else(|| "missing font asset".to_string())?;
     match font {
         Asset::File { path, .. } => {
             args.push("file".to_string());
@@ -1683,12 +1814,10 @@ fn push_font_source(case: &InputCase, args: &mut Vec<String>) -> Result<(), Stri
 }
 
 fn push_face_size(params: &Value, args: &mut Vec<String>) -> Result<(), String> {
-    args.push(i64_param(params, "face_index")?.to_string());
-    let size = params
-        .get("pixel_size")
-        .ok_or_else(|| "missing pixel_size".to_string())?;
-    args.push(u64_param(size, "x")?.to_string());
-    args.push(u64_param(size, "y")?.to_string());
+    args.push(face_index_param(params)?.to_string());
+    let (x, y) = pixel_size_param(params)?;
+    args.push(x.to_string());
+    args.push(y.to_string());
     Ok(())
 }
 
@@ -1715,14 +1844,11 @@ fn parse_run_output(text: &str) -> Result<RunOutput, String> {
 }
 
 fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
-    match case.operation.as_str() {
+    match canonical_operation(&case.operation) {
         "constant" => Ok(ok(json!({
             "value": rust_constant(string_param(&case.inputs.params, "symbol")?)?
         }))),
-        "record_layout" => Ok(ok(rust_layout(string_param(
-            &case.inputs.params,
-            "record",
-        )?)?)),
+        "record_layout" => Ok(ok(rust_layout(record_param(&case.inputs.params)?)?)),
         "new_memory_face" => rust_new_memory_face(case),
         "set_pixel_sizes" => rust_set_pixel_sizes(case),
         "set_char_size" => rust_set_char_size(case),
@@ -1741,7 +1867,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             match FT_Load_Char(
                 &face,
                 u64_param(&case.inputs.params, "char_code")?,
-                i32_param(&case.inputs.params, "load_flags")?,
+                load_flags_param(&case.inputs.params)?,
             ) {
                 Ok(slot) => Ok(ok(slot_json(&slot))),
                 Err(err) => Ok(error(err)),
@@ -1751,8 +1877,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             let face = open_face(case)?;
             match FT_Load_Glyph(
                 &face,
-                u32_param(&case.inputs.params, "glyph_index")?,
-                i32_param(&case.inputs.params, "load_flags")?,
+                glyph_index_param(&case.inputs.params)?,
+                load_flags_param(&case.inputs.params)?,
             ) {
                 Ok(slot) => Ok(ok(slot_json(&slot))),
                 Err(err) => Ok(error(err)),
@@ -1760,11 +1886,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "render_glyph" => {
             let face = open_face(case)?;
-            let render_mode = i32_param(&case.inputs.params, "render_mode")?;
+            let render_mode = render_mode_param(&case.inputs.params)?;
             let loaded = FT_Load_Char(
                 &face,
                 u64_param(&case.inputs.params, "char_code")?,
-                i32_param(&case.inputs.params, "load_flags")?,
+                load_flags_param(&case.inputs.params)?,
             );
             match loaded.and_then(|slot| FT_Render_Glyph(slot, render_mode)) {
                 Ok(slot) => Ok(ok(slot_json(&slot))),
@@ -1776,12 +1902,37 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
-    match case.operation.as_str() {
+    match canonical_operation(&case.operation) {
         "constant" | "record_layout" => run_rust_ffi(case),
         "new_memory_face" => {
-            let (_library, face) = c_open_face(case)?;
+            let bytes = font_bytes(case)?;
+            let mut library = std::ptr::null_mut();
+            let err = c_abi::FT_Init_FreeType(&mut library);
+            if err != FT_Err_Ok {
+                return Ok(error(err));
+            }
+            let mut face = std::ptr::null_mut();
+            let file_size = i64::try_from(bytes.len()).map_err(|err| err.to_string())?;
+            let err = c_abi::FT_New_Memory_Face(
+                library,
+                bytes.as_ptr(),
+                file_size,
+                face_index_param(&case.inputs.params)?,
+                &mut face,
+            );
+            if err != FT_Err_Ok {
+                c_done_library(library);
+                return Ok(error(err));
+            }
+            let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+            let err = c_abi::FT_Set_Pixel_Sizes(face, pixel_width, pixel_height);
             c_done_face(face);
-            Ok(ok(json!({"opened": true})))
+            c_done_library(library);
+            if err == FT_Err_Ok {
+                Ok(ok(json!({"opened": true})))
+            } else {
+                Ok(error(err))
+            }
         }
         "set_pixel_sizes" => {
             let (_library, face) = c_open_face(case)?;
@@ -1833,7 +1984,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             let err = c_abi::FT_Load_Char(
                 face,
                 u64_param(&case.inputs.params, "char_code")?,
-                i32_param(&case.inputs.params, "load_flags")?,
+                load_flags_param(&case.inputs.params)?,
             );
             if err == FT_Err_Ok {
                 let value = c_slot_json(face)?;
@@ -1848,8 +1999,8 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             let (_library, face) = c_open_face(case)?;
             let err = c_abi::FT_Load_Glyph(
                 face,
-                u32_param(&case.inputs.params, "glyph_index")?,
-                i32_param(&case.inputs.params, "load_flags")?,
+                glyph_index_param(&case.inputs.params)?,
+                load_flags_param(&case.inputs.params)?,
             );
             if err == FT_Err_Ok {
                 let value = c_slot_json(face)?;
@@ -1865,13 +2016,10 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             let load_err = c_abi::FT_Load_Char(
                 face,
                 u64_param(&case.inputs.params, "char_code")?,
-                i32_param(&case.inputs.params, "load_flags")?,
+                load_flags_param(&case.inputs.params)?,
             );
             let err = if load_err == FT_Err_Ok {
-                c_abi::fontdone_test_render_glyph(
-                    face,
-                    i32_param(&case.inputs.params, "render_mode")?,
-                )
+                c_abi::fontdone_test_render_glyph(face, render_mode_param(&case.inputs.params)?)
             } else {
                 load_err
             };
@@ -1889,7 +2037,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
-    match case.operation.as_str() {
+    match canonical_operation(&case.operation) {
         "constant" | "record_layout" | "set_char_size" => run_rust_ffi(case),
         "new_memory_face" => {
             let handle = wasm_open_face(case)?;
@@ -1936,7 +2084,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             let err = wasm_abi::fontdone_wasm_load_char(
                 handle,
                 u64_param(&case.inputs.params, "char_code")?,
-                i32_param(&case.inputs.params, "load_flags")?,
+                load_flags_param(&case.inputs.params)?,
             );
             let output = wasm_slot_output(handle, err);
             wasm_done_face(handle);
@@ -1946,8 +2094,8 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             let handle = wasm_open_face(case)?;
             let err = wasm_abi::fontdone_wasm_load_glyph(
                 handle,
-                u32_param(&case.inputs.params, "glyph_index")?,
-                i32_param(&case.inputs.params, "load_flags")?,
+                glyph_index_param(&case.inputs.params)?,
+                load_flags_param(&case.inputs.params)?,
             );
             let output = wasm_slot_output(handle, err);
             wasm_done_face(handle);
@@ -1958,12 +2106,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             let load_err = wasm_abi::fontdone_wasm_load_char(
                 handle,
                 u64_param(&case.inputs.params, "char_code")?,
-                i32_param(&case.inputs.params, "load_flags")?,
+                load_flags_param(&case.inputs.params)?,
             );
             let err = if load_err == FT_Err_Ok {
                 wasm_abi::fontdone_wasm_render_glyph(
                     handle,
-                    i32_param(&case.inputs.params, "render_mode")?,
+                    render_mode_param(&case.inputs.params)?,
                 )
             } else {
                 load_err
@@ -1991,7 +2139,7 @@ fn c_new_face_without_size(
         library,
         bytes.as_ptr(),
         file_size,
-        i64_param(&case.inputs.params, "face_index")?,
+        face_index_param(&case.inputs.params)?,
         &mut face,
     );
     if err != FT_Err_Ok {
@@ -2003,12 +2151,8 @@ fn c_new_face_without_size(
 
 fn c_open_face(case: &InputCase) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
     let (library, face) = c_new_face_without_size(case)?;
-    let size = case
-        .inputs
-        .params
-        .get("pixel_size")
-        .ok_or_else(|| "missing pixel_size".to_string())?;
-    let err = c_abi::FT_Set_Pixel_Sizes(face, u32_param(size, "x")?, u32_param(size, "y")?);
+    let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+    let err = c_abi::FT_Set_Pixel_Sizes(face, pixel_width, pixel_height);
     if err == FT_Err_Ok {
         Ok((library, face))
     } else {
@@ -2068,22 +2212,14 @@ fn wasm_open_face(case: &InputCase) -> Result<usize, String> {
     let status = wasm_abi::fontdone_wasm_open_face(
         bytes.as_ptr(),
         bytes.len(),
-        i64_param(&case.inputs.params, "face_index")?,
+        face_index_param(&case.inputs.params)?,
         20.0,
     );
     if status.error != FT_Err_Ok {
         return Err(format!("fontdone_wasm_open_face returned {}", status.error));
     }
-    let size = case
-        .inputs
-        .params
-        .get("pixel_size")
-        .ok_or_else(|| "missing pixel_size".to_string())?;
-    let err = wasm_abi::fontdone_wasm_set_pixel_sizes(
-        status.handle,
-        u32_param(size, "x")?,
-        u32_param(size, "y")?,
-    );
+    let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+    let err = wasm_abi::fontdone_wasm_set_pixel_sizes(status.handle, pixel_width, pixel_height);
     if err == FT_Err_Ok {
         Ok(status.handle)
     } else {
@@ -2140,16 +2276,12 @@ fn rust_new_memory_face(case: &InputCase) -> Result<RunOutput, String> {
     match FT_New_Memory_Face(
         &library,
         &data,
-        i64_param(&case.inputs.params, "face_index")?,
+        face_index_param(&case.inputs.params)?,
         20.0,
     ) {
         Ok(mut face) => {
-            let size = case
-                .inputs
-                .params
-                .get("pixel_size")
-                .ok_or_else(|| "missing pixel_size".to_string())?;
-            let err = FT_Set_Pixel_Sizes(&mut face, u32_param(size, "x")?, u32_param(size, "y")?);
+            let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+            let err = FT_Set_Pixel_Sizes(&mut face, pixel_width, pixel_height);
             if err == FT_Err_Ok {
                 Ok(ok(json!({"opened": true})))
             } else {
@@ -2166,16 +2298,12 @@ fn open_face(case: &InputCase) -> Result<FT_Face, String> {
     let mut face = FT_New_Memory_Face(
         &library,
         &data,
-        i64_param(&case.inputs.params, "face_index")?,
+        face_index_param(&case.inputs.params)?,
         20.0,
     )
     .map_err(|err| format!("FT_New_Memory_Face returned {err}"))?;
-    let size = case
-        .inputs
-        .params
-        .get("pixel_size")
-        .ok_or_else(|| "missing pixel_size".to_string())?;
-    let err = FT_Set_Pixel_Sizes(&mut face, u32_param(size, "x")?, u32_param(size, "y")?);
+    let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+    let err = FT_Set_Pixel_Sizes(&mut face, pixel_width, pixel_height);
     if err == FT_Err_Ok {
         Ok(face)
     } else {
@@ -2189,16 +2317,12 @@ fn rust_set_pixel_sizes(case: &InputCase) -> Result<RunOutput, String> {
     match FT_New_Memory_Face(
         &library,
         &data,
-        i64_param(&case.inputs.params, "face_index")?,
+        face_index_param(&case.inputs.params)?,
         20.0,
     ) {
         Ok(mut face) => {
-            let size = case
-                .inputs
-                .params
-                .get("pixel_size")
-                .ok_or_else(|| "missing pixel_size".to_string())?;
-            let err = FT_Set_Pixel_Sizes(&mut face, u32_param(size, "x")?, u32_param(size, "y")?);
+            let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+            let err = FT_Set_Pixel_Sizes(&mut face, pixel_width, pixel_height);
             if err == FT_Err_Ok {
                 Ok(ok(json!({"set": true})))
             } else {
@@ -2215,7 +2339,7 @@ fn rust_set_char_size(case: &InputCase) -> Result<RunOutput, String> {
     match FT_New_Memory_Face(
         &library,
         &data,
-        i64_param(&case.inputs.params, "face_index")?,
+        face_index_param(&case.inputs.params)?,
         20.0,
     ) {
         Ok(mut face) => {
@@ -2237,11 +2361,7 @@ fn rust_set_char_size(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn font_bytes(case: &InputCase) -> Result<Vec<u8>, String> {
-    let font = case
-        .inputs
-        .assets
-        .get("font")
-        .ok_or_else(|| "missing font asset".to_string())?;
+    let font = runtime_font_asset(case).ok_or_else(|| "missing font asset".to_string())?;
     match font {
         Asset::File { path, .. } => cached_file_bytes(path),
         Asset::InlineBytes { encoding, .. } => {
@@ -2255,6 +2375,21 @@ fn font_bytes(case: &InputCase) -> Result<Vec<u8>, String> {
         Asset::Ref { .. } => Err(format!("unresolved shared asset ref {}", asset_label(font))),
         Asset::Other(_) => Err("unsupported font asset shape".to_string()),
     }
+}
+
+fn runtime_font_asset(case: &InputCase) -> Option<&Asset> {
+    ["font", "font_bytes", "fixture", "blob"]
+        .into_iter()
+        .find_map(|key| case.inputs.assets.get(key))
+        .or_else(|| {
+            let mut assets = case.inputs.assets.values();
+            let first = assets.next()?;
+            if assets.next().is_none() {
+                Some(first)
+            } else {
+                None
+            }
+        })
 }
 
 fn asset_label(asset: &Asset) -> String {
@@ -2507,6 +2642,16 @@ fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Res
             case.case_id, oracle.status, actual.status
         ));
     }
+    if oracle.status.kind == StatusKind::Error {
+        return if oracle.output == actual.output {
+            Ok(())
+        } else {
+            Err(format!(
+                "{} error output mismatch: oracle={} actual={}",
+                case.case_id, oracle.output, actual.output
+            ))
+        };
+    }
     validate_schema_output(case, &oracle.output, "oracle")?;
     validate_schema_output(case, &actual.output, "actual")?;
 
@@ -2527,7 +2672,7 @@ fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Res
 }
 
 fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Result<(), String> {
-    match case.schema.as_str() {
+    match comparison_schema(case) {
         "constant" => require_path(output, "/value", label, case),
         "record_layout" => {
             require_path(output, "/record", label, case)?;
@@ -2535,7 +2680,7 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
             require_path(output, "/align", label, case)?;
             require_path(output, "/fields", label, case)
         }
-        "scalar" => require_path(output, "/value", label, case),
+        "value" => require_path(output, "/value", label, case),
         "glyph_slot" => {
             require_path(output, "/glyph_index", label, case)?;
             require_path(output, "/format", label, case)?;
@@ -2573,6 +2718,30 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
             }
         }
         other => Err(format!("{} uses unknown schema {other}", case.case_id)),
+    }
+}
+
+fn comparison_schema(case: &InputCase) -> &str {
+    match case.schema.as_str() {
+        "constant" | "api_constant" | "abi_constant" | "constant_value" => "constant",
+        "record_layout" | "abi_layout" | "abi_record_layout" | "abi_record" | "api_record"
+        | "c_abi_record" | "c_abi_layout" => "record_layout",
+        "face_open" | "face_result" | "face_handle" => "face_open",
+        "glyph_slot"
+        | "glyph_slot_bitmap"
+        | "glyph_render"
+        | "glyph_render_matrix"
+        | "bitmap_result" => "glyph_slot",
+        "api_result" => match canonical_operation(&case.operation) {
+            "new_memory_face" => "face_open",
+            "set_pixel_sizes" | "set_char_size" => "set_status",
+            "size_metrics" => "size_metrics",
+            "get_char_index" => "value",
+            "load_char" | "load_glyph" | "render_glyph" => "glyph_slot",
+            _ => case.schema.as_str(),
+        },
+        "scalar" => "value",
+        other => other,
     }
 }
 
@@ -2672,28 +2841,168 @@ fn string_param<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
         .ok_or_else(|| format!("missing string param {key}"))
 }
 
-fn i64_param(value: &Value, key: &str) -> Result<i64, String> {
+fn record_param(value: &Value) -> Result<&str, String> {
+    ["record", "type", "symbol"]
+        .into_iter()
+        .find_map(|key| value.get(key).and_then(Value::as_str))
+        .ok_or_else(|| "missing record/type/symbol param".to_string())
+}
+
+fn face_index_param(value: &Value) -> Result<i64, String> {
     value
+        .get("face_index")
+        .map_or(Ok(0), |raw| i64_value(raw, "face_index"))
+}
+
+fn pixel_size_param(value: &Value) -> Result<(u32, u32), String> {
+    if let Some(size) = value.get("pixel_size") {
+        if let Some(object) = size.as_object() {
+            return Ok((
+                u32_param_object(object, "x")?,
+                u32_param_object(object, "y")?,
+            ));
+        }
+        let y = u32_value(size, "pixel_size")?;
+        return Ok((0, y));
+    }
+    for key in ["size", "size_ppem"] {
+        if let Some(size) = value.get(key) {
+            return Ok((0, u32_value(size, key)?));
+        }
+    }
+    Ok((0, 20))
+}
+
+fn load_flags_param(value: &Value) -> Result<i32, String> {
+    let Some(raw) = value.get("load_flags") else {
+        return Ok(FT_LOAD_DEFAULT);
+    };
+    let flags = match raw {
+        Value::Array(items) => {
+            let mut flags = 0i64;
+            for item in items {
+                if item.is_array() {
+                    return Err("load_flags contains aggregate flag sets".to_string());
+                }
+                flags |= i64_value(item, "load_flags")?;
+            }
+            flags
+        }
+        _ => i64_value(raw, "load_flags")?,
+    };
+    i32::try_from(flags).map_err(|err| format!("load_flags does not fit i32: {err}"))
+}
+
+fn render_mode_param(value: &Value) -> Result<i32, String> {
+    value
+        .get("render_mode")
+        .map_or(Ok(FT_RENDER_MODE_NORMAL), |raw| {
+            let mode = i64_value(raw, "render_mode")?;
+            i32::try_from(mode).map_err(|err| format!("render_mode does not fit i32: {err}"))
+        })
+}
+
+fn glyph_index_param(value: &Value) -> Result<u32, String> {
+    let raw = value
+        .get("glyph_index")
+        .ok_or_else(|| "missing glyph_index".to_string())?;
+    u32_value(raw, "glyph_index")
+}
+
+fn i64_param(value: &Value, key: &str) -> Result<i64, String> {
+    let raw = value
         .get(key)
-        .and_then(Value::as_i64)
-        .ok_or_else(|| format!("missing i64 param {key}"))
+        .ok_or_else(|| format!("missing i64 param {key}"))?;
+    i64_value(raw, key)
 }
 
 fn u64_param(value: &Value, key: &str) -> Result<u64, String> {
-    value
+    let raw = value
         .get(key)
-        .and_then(Value::as_u64)
-        .ok_or_else(|| format!("missing u64 param {key}"))
-}
-
-fn i32_param(value: &Value, key: &str) -> Result<i32, String> {
-    let raw = i64_param(value, key)?;
-    i32::try_from(raw).map_err(|err| format!("{key} does not fit i32: {err}"))
+        .ok_or_else(|| format!("missing u64 param {key}"))?;
+    u64_value(raw, key)
 }
 
 fn u32_param(value: &Value, key: &str) -> Result<u32, String> {
     let raw = u64_param(value, key)?;
     u32::try_from(raw).map_err(|err| format!("{key} does not fit u32: {err}"))
+}
+
+fn u32_param_object(object: &serde_json::Map<String, Value>, key: &str) -> Result<u32, String> {
+    let raw = object
+        .get(key)
+        .ok_or_else(|| format!("missing u32 param {key}"))?;
+    u32_value(raw, key)
+}
+
+fn u32_value(value: &Value, key: &str) -> Result<u32, String> {
+    let raw = u64_value(value, key)?;
+    u32::try_from(raw).map_err(|err| format!("{key} does not fit u32: {err}"))
+}
+
+fn u64_value(value: &Value, key: &str) -> Result<u64, String> {
+    if let Some(value) = value.as_u64() {
+        return Ok(value);
+    }
+    if let Some(value) = value.as_i64() {
+        return u64::try_from(value).map_err(|err| format!("{key} is negative: {err}"));
+    }
+    if let Some(text) = value.as_str() {
+        let value = symbolic_i64(text)?;
+        return u64::try_from(value).map_err(|err| format!("{key} is negative: {err}"));
+    }
+    Err(format!("missing u64 param {key}"))
+}
+
+fn i64_value(value: &Value, key: &str) -> Result<i64, String> {
+    if let Some(value) = value.as_i64() {
+        return Ok(value);
+    }
+    if let Some(value) = value.as_u64() {
+        return i64::try_from(value).map_err(|err| format!("{key} does not fit i64: {err}"));
+    }
+    if let Some(text) = value.as_str() {
+        return symbolic_i64(text);
+    }
+    Err(format!("missing i64 param {key}"))
+}
+
+fn symbolic_i64(text: &str) -> Result<i64, String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Err("empty integer expression".to_string());
+    }
+    if text.contains('|') {
+        let mut value = 0i64;
+        for part in text.split('|') {
+            value |= symbolic_i64(part)?;
+        }
+        return Ok(value);
+    }
+    let text = text
+        .strip_prefix('(')
+        .and_then(|value| value.strip_suffix(')'))
+        .unwrap_or(text)
+        .trim();
+    if let Some((left, right)) = text.split_once("<<") {
+        let left = symbolic_i64(left)?;
+        let right = symbolic_i64(right)?;
+        let shift = u32::try_from(right).map_err(|err| format!("negative shift: {err}"))?;
+        return left
+            .checked_shl(shift)
+            .ok_or_else(|| format!("shift overflows i64: {text}"));
+    }
+    if let Some(hex) = text.strip_prefix("0x") {
+        return i64::from_str_radix(hex, 16).map_err(|err| format!("parse hex {text}: {err}"));
+    }
+    if let Some(hex) = text.strip_prefix("U+") {
+        return i64::from_str_radix(hex, 16)
+            .map_err(|err| format!("parse codepoint {text}: {err}"));
+    }
+    if let Ok(value) = text.parse::<i64>() {
+        return Ok(value);
+    }
+    rust_constant(text).map_err(|_| format!("unsupported integer expression {text}"))
 }
 
 fn sha256_hex(data: &[u8]) -> String {
