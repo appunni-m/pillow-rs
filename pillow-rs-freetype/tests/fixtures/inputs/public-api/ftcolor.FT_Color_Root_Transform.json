@@ -77,6 +77,11 @@
             "FT_COLOR_INCLUDE_ROOT_TRANSFORM",
             "FT_COLOR_NO_ROOT_TRANSFORM"
           ]
+        },
+        "variability": {
+          "axes": [
+            "sizes"
+          ]
         }
       },
       "classifiers": [

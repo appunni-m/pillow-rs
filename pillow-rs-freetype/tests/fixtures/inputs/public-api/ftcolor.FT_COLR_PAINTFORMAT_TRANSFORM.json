@@ -160,6 +160,11 @@
             "FT_Get_Color_Glyph_Paint",
             "FT_Get_Paint"
           ]
+        },
+        "variability": {
+          "axes": [
+            "sizes"
+          ]
         }
       },
       "classifiers": [
