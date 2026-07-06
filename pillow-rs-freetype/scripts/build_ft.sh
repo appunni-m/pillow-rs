@@ -16,5 +16,4 @@ cmake .. \
   -DFT_DISABLE_BROTLI=ON \
   -DFT_DISABLE_HARFBUZZ=ON
 cmake --build . -j$(nproc)
-cmake --install .
-echo "FreeType 2.14.3 installed to $HOME/.local"
+echo "FreeType 2.14.3 built at ${ROOT}/freetype/build"

@@ -11,12 +11,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::mem::{align_of, offset_of, size_of};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::{Mutex, OnceLock};
+use std::thread;
 
 use fontdone::ffi::*;
 use fontdone_ffi_c as c_abi;
 use fontdone_ffi_wasm as wasm_abi;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
@@ -45,7 +47,7 @@ struct CaseFile {
     cases: Vec<InputCase>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct InputCase {
     case_id: String,
     subject: String,
@@ -59,7 +61,7 @@ struct InputCase {
     source: Option<CaseSource>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct Inputs {
     #[serde(default)]
     assets: BTreeMap<String, Asset>,
@@ -67,7 +69,7 @@ struct Inputs {
     params: Value,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "kind")]
 enum Asset {
     #[serde(rename = "ref")]
@@ -82,7 +84,7 @@ enum Asset {
     InlineBytes { encoding: String, value: String },
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct CaseSource {
     matrix: String,
     row_id: String,
@@ -130,10 +132,11 @@ enum StatusKind {
 #[test]
 fn unified_fixture_cases_match_runtime_c_oracle() {
     let manifest = read_manifest();
-    let cases = filtered_cases(read_all_case_files());
+    let cases = read_filtered_runtime_case_files();
     let mut passed = 0usize;
     let mut failures = Vec::new();
     let mut covered = BTreeSet::new();
+    let mut valid_cases = Vec::new();
 
     for case in &cases {
         if !manifest.has_case(&case.subject, &case.case) {
@@ -147,46 +150,26 @@ fn unified_fixture_cases_match_runtime_c_oracle() {
             failures.push(format!("{} asset validation failed: {err}", case.case_id));
             continue;
         }
+        valid_cases.push(case);
+    }
 
-        let oracle = match run_oracle(case) {
-            Ok(output) => output,
+    let oracle_outputs = if failures.is_empty() {
+        match run_oracles_with_cache(&valid_cases) {
+            Ok(outputs) => outputs,
             Err(err) => {
-                failures.push(format!("{} oracle failed: {err}", case.case_id));
-                continue;
+                failures.push(format!("batch oracle failed: {err}"));
+                Vec::new()
             }
-        };
-        let rust_actual = match run_rust_ffi(case) {
-            Ok(output) => output,
-            Err(err) => {
-                failures.push(format!("{} rust backend failed: {err}", case.case_id));
-                continue;
-            }
-        };
-        let c_actual = match run_c_abi(case) {
-            Ok(output) => output,
-            Err(err) => {
-                failures.push(format!("{} c abi backend failed: {err}", case.case_id));
-                continue;
-            }
-        };
-        let wasm_actual = match run_wasm_abi(case) {
-            Ok(output) => output,
-            Err(err) => {
-                failures.push(format!("{} wasm abi backend failed: {err}", case.case_id));
-                continue;
-            }
-        };
-
-        match compare_named_output(case, "rust ffi", &oracle, &rust_actual)
-            .and_then(|()| compare_named_output(case, "c abi", &oracle, &c_actual))
-            .and_then(|()| compare_named_output(case, "wasm abi", &oracle, &wasm_actual))
-        {
-            Ok(()) => {
-                passed += 1;
-                covered.insert((case.subject.clone(), case.case.clone()));
-            }
-            Err(err) => failures.push(err),
         }
+    } else {
+        Vec::new()
+    };
+
+    if failures.is_empty() {
+        let result = compare_backend_outputs(&valid_cases, &oracle_outputs);
+        passed += result.passed;
+        covered.extend(result.covered);
+        failures.extend(result.failures);
     }
 
     eprintln!(
@@ -212,30 +195,118 @@ fn compare_named_output(
     compare_case(case, oracle, actual).map_err(|err| format!("{backend}: {err}"))
 }
 
-fn filtered_cases(cases: Vec<InputCase>) -> Vec<InputCase> {
-    let filter = std::env::var("FONTDONE_UNIFIED_CASE_FILTER").ok();
-    let limit = std::env::var("FONTDONE_UNIFIED_CASE_LIMIT")
+#[derive(Default)]
+struct BackendComparisonResult {
+    passed: usize,
+    covered: BTreeSet<(String, String)>,
+    failures: Vec<String>,
+}
+
+fn compare_backend_outputs(
+    cases: &[&InputCase],
+    oracle_outputs: &[RunOutput],
+) -> BackendComparisonResult {
+    assert_eq!(
+        cases.len(),
+        oracle_outputs.len(),
+        "oracle output count must match case count"
+    );
+    let workers = unified_worker_count(cases.len());
+    if workers <= 1 {
+        return compare_backend_output_range(cases, oracle_outputs);
+    }
+
+    let chunk_size = cases.len().div_ceil(workers);
+    let mut result = BackendComparisonResult::default();
+    thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for (case_chunk, oracle_chunk) in cases
+            .chunks(chunk_size)
+            .zip(oracle_outputs.chunks(chunk_size))
+        {
+            handles
+                .push(scope.spawn(move || compare_backend_output_range(case_chunk, oracle_chunk)));
+        }
+        for handle in handles {
+            let partial = handle.join().expect("backend comparison worker panicked");
+            result.passed = result.passed.saturating_add(partial.passed);
+            result.covered.extend(partial.covered);
+            result.failures.extend(partial.failures);
+        }
+    });
+    result
+}
+
+fn unified_worker_count(case_count: usize) -> usize {
+    if case_count < 2 {
+        return 1;
+    }
+    let requested = std::env::var("FONTDONE_UNIFIED_WORKERS")
+        .ok()
+        .map_or(1, |value| {
+            value
+                .parse::<usize>()
+                .unwrap_or_else(|err| panic!("FONTDONE_UNIFIED_WORKERS must be usize: {err}"))
+        });
+    requested.clamp(1, case_count)
+}
+
+fn compare_backend_output_range(
+    cases: &[&InputCase],
+    oracle_outputs: &[RunOutput],
+) -> BackendComparisonResult {
+    let mut result = BackendComparisonResult::default();
+    for (case, oracle) in cases.iter().zip(oracle_outputs.iter()) {
+        match compare_backend_output_case(case, oracle) {
+            Ok(()) => {
+                result.passed = result.passed.saturating_add(1);
+                result
+                    .covered
+                    .insert((case.subject.clone(), case.case.clone()));
+            }
+            Err(err) => result.failures.push(err),
+        }
+    }
+    result
+}
+
+fn compare_backend_output_case(case: &InputCase, oracle: &RunOutput) -> Result<(), String> {
+    let rust_actual =
+        run_rust_ffi(case).map_err(|err| format!("{} rust backend failed: {err}", case.case_id))?;
+    let c_actual =
+        run_c_abi(case).map_err(|err| format!("{} c abi backend failed: {err}", case.case_id))?;
+    let wasm_actual = run_wasm_abi(case)
+        .map_err(|err| format!("{} wasm abi backend failed: {err}", case.case_id))?;
+
+    compare_named_output(case, "rust ffi", oracle, &rust_actual)
+        .and_then(|()| compare_named_output(case, "c abi", oracle, &c_actual))
+        .and_then(|()| compare_named_output(case, "wasm abi", oracle, &wasm_actual))
+}
+
+fn case_filter() -> Option<String> {
+    std::env::var("FONTDONE_UNIFIED_CASE_FILTER").ok()
+}
+
+fn case_limit() -> Option<usize> {
+    std::env::var("FONTDONE_UNIFIED_CASE_LIMIT")
         .ok()
         .map(|value| {
             value
                 .parse::<usize>()
                 .unwrap_or_else(|err| panic!("FONTDONE_UNIFIED_CASE_LIMIT must be usize: {err}"))
-        });
-    let iter = cases.into_iter().filter(|case| {
-        filter.as_ref().is_none_or(|needle| {
-            case.case_id.contains(needle)
-                || case.subject.contains(needle)
-                || case.case.contains(needle)
-                || case
-                    .source
-                    .as_ref()
-                    .is_some_and(|source| source.matrix.contains(needle))
         })
-    });
-    match limit {
-        Some(limit) => iter.take(limit).collect(),
-        None => iter.collect(),
-    }
+}
+
+fn case_matches_filter(case: &InputCase, filter: Option<&str>) -> bool {
+    filter.is_none_or(|needle| {
+        case.case_id.contains(needle)
+            || case.subject.contains(needle)
+            || case.case.contains(needle)
+            || case
+                .source
+                .as_ref()
+                .is_some_and(|source| source.matrix.contains(needle))
+    })
 }
 
 #[test]
@@ -526,9 +597,7 @@ fn parse_manifest(text: &str) -> Manifest {
                 .as_ref()
                 .expect("symbol entry appears before subject");
             if let Some(existing_subject) = symbols.insert(symbol.clone(), subject.clone()) {
-                panic!(
-                    "manifest symbol {symbol} appears in both {existing_subject} and {subject}"
-                );
+                panic!("manifest symbol {symbol} appears in both {existing_subject} and {subject}");
             }
         } else if raw_line.starts_with("    cases:") {
             in_cases = true;
@@ -542,10 +611,7 @@ fn parse_manifest(text: &str) -> Manifest {
                 .entry(subject.clone())
                 .or_default()
                 .insert(case.clone());
-            assert!(
-                inserted,
-                "{subject} has duplicate manifest case id {case}"
-            );
+            assert!(inserted, "{subject} has duplicate manifest case id {case}");
             current_case = Some(case);
             in_font_variability = false;
         } else if in_cases && raw_line.starts_with("          font_variability:") {
@@ -608,6 +674,19 @@ fn parse_manifest(text: &str) -> Manifest {
 }
 
 fn read_all_case_files() -> Vec<InputCase> {
+    read_case_files(None, None, true)
+}
+
+fn read_filtered_runtime_case_files() -> Vec<InputCase> {
+    let filter = case_filter();
+    read_case_files(filter.as_deref(), case_limit(), false)
+}
+
+fn read_case_files(
+    filter: Option<&str>,
+    limit: Option<usize>,
+    include_matrix_cases: bool,
+) -> Vec<InputCase> {
     let input_dir = fixture_dir().join("inputs");
     let mut paths = fs::read_dir(&input_dir)
         .unwrap_or_else(|err| panic!("read {}: {err}", input_dir.display()))
@@ -627,10 +706,24 @@ fn read_all_case_files() -> Vec<InputCase> {
                 .unwrap_or_else(|err| panic!("parse {}: {err}", path.display()));
         for mut case in parsed.cases {
             resolve_case_assets(&path, &parsed.assets, &mut case);
-            cases.push(case);
+            if case_matches_filter(&case, filter) {
+                cases.push(case);
+                if limit.is_some_and(|limit| cases.len() >= limit) {
+                    return cases;
+                }
+            }
         }
-        for spec in parsed.matrix_cases {
-            cases.extend(expand_matrix_case_spec(&spec, &mut matrix_asset_cache));
+        if include_matrix_cases {
+            for spec in parsed.matrix_cases {
+                for case in expand_matrix_case_spec(&spec, &mut matrix_asset_cache) {
+                    if case_matches_filter(&case, filter) {
+                        cases.push(case);
+                        if limit.is_some_and(|limit| cases.len() >= limit) {
+                            return cases;
+                        }
+                    }
+                }
+            }
         }
     }
     cases
@@ -945,12 +1038,11 @@ fn validate_assets(case: &InputCase) -> Result<(), String> {
                 sha256,
                 length,
             } => {
-                let bytes = fs::read(fixture_dir().join(path))
+                let (actual_length, digest) = validated_file_asset(path)
                     .map_err(|err| format!("{name} read {path}: {err}"))?;
-                if u64::try_from(bytes.len()).map_err(|err| err.to_string())? != *length {
+                if actual_length != *length {
                     return Err(format!("{name} length mismatch for {path}"));
                 }
-                let digest = sha256_hex(&bytes);
                 if digest != *sha256 {
                     return Err(format!(
                         "{name} sha256 mismatch for {path}: actual={digest} expected={sha256}"
@@ -973,17 +1065,126 @@ fn validate_assets(case: &InputCase) -> Result<(), String> {
     Ok(())
 }
 
-fn run_oracle(case: &InputCase) -> Result<RunOutput, String> {
+fn validated_file_asset(path: &str) -> Result<(u64, String), String> {
+    static CACHE: OnceLock<Mutex<BTreeMap<String, (u64, String)>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    let mut cache = cache.lock().map_err(|err| err.to_string())?;
+    if let Some(entry) = cache.get(path) {
+        return Ok(entry.clone());
+    }
+    let bytes = cached_file_bytes(path)?;
+    let entry = (
+        u64::try_from(bytes.len()).map_err(|err| err.to_string())?,
+        sha256_hex(&bytes),
+    );
+    cache.insert(path.to_string(), entry.clone());
+    Ok(entry)
+}
+
+fn run_oracles_with_cache(cases: &[&InputCase]) -> Result<Vec<RunOutput>, String> {
+    if cases.is_empty() {
+        return Ok(Vec::new());
+    }
+    let batch_input = oracle_batch_input(cases)?;
+    let cache_key = oracle_cache_key(cases, &batch_input)?;
+    let cache_path = oracle_cache_path(&cache_key);
+
+    if std::env::var("FONTDONE_UNIFIED_ORACLE_REFRESH").is_err() && cache_path.exists() {
+        let cached = fs::read_to_string(&cache_path)
+            .map_err(|err| format!("read oracle cache {}: {err}", cache_path.display()))?;
+        eprintln!(
+            "unified_oracle_cache: hit {} cases key={}",
+            cases.len(),
+            cache_key
+        );
+        return parse_oracle_lines(cases, &cached)
+            .map_err(|err| format!("oracle cache {} invalid: {err}", cache_path.display()));
+    }
+
+    let stdout = run_oracles_batch(cases, &batch_input)?;
+    let outputs = parse_oracle_lines(cases, &stdout)?;
+    write_oracle_cache(&cache_path, &stdout)?;
+    eprintln!(
+        "unified_oracle_cache: wrote {} cases key={}",
+        cases.len(),
+        cache_key
+    );
+    Ok(outputs)
+}
+
+fn oracle_batch_input(cases: &[&InputCase]) -> Result<String, String> {
+    let mut input = String::new();
+    for case in cases {
+        let args = oracle_args(case)?;
+        if args
+            .iter()
+            .any(|arg| arg.contains('\t') || arg.contains('\n'))
+        {
+            return Err(format!(
+                "{} contains unsupported batch argument",
+                case.case_id
+            ));
+        }
+        input.push_str(&args.join("\t"));
+        input.push('\n');
+    }
+    Ok(input)
+}
+
+fn oracle_cache_key(cases: &[&InputCase], batch_input: &str) -> Result<String, String> {
+    let canonical_cases = serde_json::to_string(cases).map_err(|err| err.to_string())?;
+    let mut hasher = Sha256::new();
+    hasher.update(b"fontdone-unified-oracle-cache-v1\n");
+    hasher.update(canonical_cases.as_bytes());
+    hasher.update(b"\n--argv--\n");
+    hasher.update(batch_input.as_bytes());
+    Ok(hex_bytes(&hasher.finalize()))
+}
+
+fn oracle_cache_path(cache_key: &str) -> PathBuf {
+    fixture_dir()
+        .join("outputs")
+        .join("unified_oracle_cache")
+        .join(format!("{cache_key}.jsonl"))
+}
+
+fn write_oracle_cache(path: &Path, stdout: &str) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("oracle cache path {} has no parent", path.display()))?;
+    fs::create_dir_all(parent)
+        .map_err(|err| format!("create oracle cache dir {}: {err}", parent.display()))?;
+    let tmp = path.with_extension(format!("jsonl.tmp.{}", std::process::id()));
+    fs::write(&tmp, stdout)
+        .map_err(|err| format!("write oracle cache {}: {err}", tmp.display()))?;
+    fs::rename(&tmp, path).map_err(|err| format!("install oracle cache {}: {err}", path.display()))
+}
+
+fn run_oracles_batch(cases: &[&InputCase], batch_input: &str) -> Result<String, String> {
+    if cases.is_empty() {
+        return Ok(String::new());
+    }
     let oracle = oracle_bin()?;
-    let args = oracle_args(case)?;
+
+    let batch_path = manifest_dir()
+        .join("target")
+        .join("unified-fixtures")
+        .join(format!("oracle_batch_{}.argv", std::process::id()));
+    fs::write(&batch_path, batch_input)
+        .map_err(|err| format!("write batch oracle input {}: {err}", batch_path.display()))?;
+
     let output = Command::new(&oracle)
-        .args(&args)
+        .arg("--batch-argv")
         .env(
             "LD_LIBRARY_PATH",
             manifest_dir().join("freetype").join("build"),
         )
+        .stdin(Stdio::from(fs::File::open(&batch_path).map_err(|err| {
+            format!("open batch oracle input {}: {err}", batch_path.display())
+        })?))
         .output()
         .map_err(|err| format!("spawn {}: {err}", oracle.display()))?;
+    let _ = fs::remove_file(&batch_path);
     if !output.status.success() {
         return Err(format!(
             "exit={} stderr={}",
@@ -991,7 +1192,26 @@ fn run_oracle(case: &InputCase) -> Result<RunOutput, String> {
             String::from_utf8_lossy(&output.stderr)
         ));
     }
-    parse_run_output(&String::from_utf8(output.stdout).map_err(|err| err.to_string())?)
+
+    String::from_utf8(output.stdout).map_err(|err| err.to_string())
+}
+
+fn parse_oracle_lines(cases: &[&InputCase], stdout: &str) -> Result<Vec<RunOutput>, String> {
+    let lines = stdout.lines().collect::<Vec<_>>();
+    if lines.len() != cases.len() {
+        return Err(format!(
+            "batch oracle returned {} lines for {} cases",
+            lines.len(),
+            cases.len()
+        ));
+    }
+    cases
+        .iter()
+        .zip(lines)
+        .map(|(case, line)| {
+            parse_run_output(line).map_err(|err| format!("{} oracle failed: {err}", case.case_id))
+        })
+        .collect()
 }
 
 fn oracle_bin() -> Result<PathBuf, String> {
@@ -1668,9 +1888,7 @@ fn font_bytes(case: &InputCase) -> Result<Vec<u8>, String> {
         .get("font")
         .ok_or_else(|| "missing font asset".to_string())?;
     match font {
-        Asset::File { path, .. } => {
-            fs::read(fixture_dir().join(path)).map_err(|err| format!("read {path}: {err}"))
-        }
+        Asset::File { path, .. } => cached_file_bytes(path),
         Asset::InlineBytes { encoding, value } => {
             if encoding != "hex" {
                 return Err(format!("unsupported inline byte encoding {encoding}"));
@@ -1679,6 +1897,18 @@ fn font_bytes(case: &InputCase) -> Result<Vec<u8>, String> {
         }
         Asset::Ref { id } => Err(format!("unresolved shared asset ref {id}")),
     }
+}
+
+fn cached_file_bytes(path: &str) -> Result<Vec<u8>, String> {
+    static CACHE: OnceLock<Mutex<BTreeMap<String, Vec<u8>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    let mut cache = cache.lock().map_err(|err| err.to_string())?;
+    if let Some(bytes) = cache.get(path) {
+        return Ok(bytes.clone());
+    }
+    let bytes = fs::read(fixture_dir().join(path)).map_err(|err| format!("read {path}: {err}"))?;
+    cache.insert(path.to_string(), bytes.clone());
+    Ok(bytes)
 }
 
 fn ok(output: Value) -> RunOutput {

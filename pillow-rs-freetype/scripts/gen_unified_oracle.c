@@ -449,7 +449,7 @@ static int emit_set_char_size(int argc, char** argv) {
     return 0;
 }
 
-int main(int argc, char** argv) {
+static int dispatch(int argc, char** argv) {
     if (argc == 3 && streq(argv[1], "--constant")) {
         return emit_constant(argv[2]);
     }
@@ -473,4 +473,38 @@ int main(int argc, char** argv) {
     }
     fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | --layout RECORD | --new-memory-face SRC_KIND SRC FACE_INDEX PX PY | --set-pixel-sizes SRC_KIND SRC FACE_INDEX PX PY | --set-char-size SRC_KIND SRC FACE_INDEX WIDTH HEIGHT HR VR | --size-metrics SRC_KIND SRC FACE_INDEX PX PY | --get-char-index SRC_KIND SRC FACE_INDEX PX PY CHAR | --load-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --render-glyph SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS MODE\n");
     return 2;
+}
+
+static int run_batch_argv(void) {
+    char line[16384];
+    char* argv[16];
+    argv[0] = (char*)"gen_unified_oracle";
+    while (fgets(line, sizeof(line), stdin)) {
+        int argc = 1;
+        char* token = strtok(line, "\t\r\n");
+        while (token && argc < 16) {
+            argv[argc++] = token;
+            token = strtok(NULL, "\t\r\n");
+        }
+        if (token) {
+            fprintf(stderr, "too many batch arguments\n");
+            return 2;
+        }
+        if (argc == 1) {
+            continue;
+        }
+        int status = dispatch(argc, argv);
+        fflush(stdout);
+        if (status != 0) {
+            return status;
+        }
+    }
+    return 0;
+}
+
+int main(int argc, char** argv) {
+    if (argc == 2 && streq(argv[1], "--batch-argv")) {
+        return run_batch_argv();
+    }
+    return dispatch(argc, argv);
 }

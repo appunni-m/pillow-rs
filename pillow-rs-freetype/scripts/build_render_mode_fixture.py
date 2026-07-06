@@ -10,9 +10,7 @@ Build the helper first, for example:
 
 Then run:
 
-  LD_LIBRARY_PATH="$HOME/.local/lib" \
-    FT_REF_BIN=/tmp/gen_refs_v4 \
-    python3 scripts/build_render_mode_fixture.py
+  FT_REF_BIN=/tmp/gen_refs_v4 python3 scripts/build_render_mode_fixture.py
 """
 
 import hashlib
@@ -26,6 +24,7 @@ FONT_DIR = os.path.join(ROOT, "tests/fixtures/input/fonts_autohint")
 RAW_DIR = os.path.join(ROOT, "tests/fixtures/outputs/render_modes")
 OUTPUT = os.path.join(ROOT, "tests/fixtures/render_mode_matrix.json")
 REF_BIN = os.environ.get("FT_REF_BIN", "/tmp/gen_refs_v4")
+BUILD_DIR = os.path.join(ROOT, "freetype", "build")
 
 CASES = [
     ("DejaVuSans", "DejaVuSans.ttf", 20, 65),
@@ -93,11 +92,14 @@ def main():
     for font_name, filename, size, cp in CASES:
         font_path = os.path.join(FONT_DIR, filename)
         for fixture_mode, ft_mode, pixel_mode in MODES:
+            env = dict(os.environ)
+            env["LD_LIBRARY_PATH"] = BUILD_DIR
             output = subprocess.run(
                 [REF_BIN, font_path, ft_mode],
                 check=True,
                 text=True,
                 stdout=subprocess.PIPE,
+                env=env,
             ).stdout
             glyph = parse_glyphs(output)[(size, cp)]
             row_id = f"{font_name}_{size}_{cp}_render_{fixture_mode}"

@@ -360,7 +360,9 @@ pub extern "C" fn FT_Render_Glyph(slot: FT_GlyphSlot, render_mode: FT_Render_Mod
         return rust_ffi::FT_Err_Invalid_Argument;
     };
     let load_flags = unsafe { (*slot_ptr.as_ptr()).load_flags };
-    let render_flags = load_flags_for_render_mode(load_flags, render_mode);
+    let Some(render_flags) = load_flags_for_render_mode(load_flags, render_mode) else {
+        return rust_ffi::FT_Err_Cannot_Render_Glyph;
+    };
     match rust_ffi::FT_Load_Glyph(
         &source_state.inner,
         unsafe { (*slot_ptr.as_ptr()).glyph_index },
@@ -477,16 +479,16 @@ fn face_state_mut(face: FT_Face) -> Option<&'static mut FaceState> {
     Some(unsafe { state.as_mut() })
 }
 
-fn load_flags_for_render_mode(load_flags: FT_Int32, render_mode: FT_Render_Mode) -> FT_Int32 {
+fn load_flags_for_render_mode(load_flags: FT_Int32, render_mode: FT_Render_Mode) -> Option<FT_Int32> {
     const TARGET_MASK: FT_Int32 = 15 << 16;
     let target = match render_mode {
         0 | 1 => 0,
         2 => 2 << 16,
         3 => 3 << 16,
         4 => 4 << 16,
-        _ => 0,
+        _ => return None,
     };
-    (load_flags | rust_ffi::FT_LOAD_RENDER) & !TARGET_MASK | target
+    Some((load_flags | rust_ffi::FT_LOAD_RENDER) & !TARGET_MASK | target)
 }
 
 fn non_null_mut<T>(ptr: *mut T) -> Option<NonNull<T>> {

@@ -1141,6 +1141,8 @@ pub fn apply_hints(
     is_italic: bool,
     no_horizontal_hinting: bool,
     stem_adjust: bool,
+    horz_snap: bool,
+    vert_snap: bool,
     font_data: Option<&crate::tables::FontData>,
     target_mono: bool,
 ) -> ApplyHintsMetrics {
@@ -1157,17 +1159,20 @@ pub fn apply_hints(
     if metrics.is_none_or(|m| m.axis[1].blue_count == 0) {
         return output;
     }
-    // Smooth anti-aliased hinting normally enables stem adjustment. LCD target
-    // clears it in FreeType to preserve horizontal subpixel coverage.
-    if target_mono {
-        hints.other_flags |= AF_LATIN_HINTS_HORZ_SNAP
-            | AF_LATIN_HINTS_VERT_SNAP
-            | AF_LATIN_HINTS_STEM_ADJUST
-            | AF_LATIN_HINTS_MONO;
-    } else if stem_adjust {
+    // Match FreeType's af_latin_hints_init target table:
+    // mono/LCD snap vertical stems, mono/LCD_V snap horizontal stems, and LCD
+    // clears stem adjustment to preserve horizontal subpixel coverage.
+    if horz_snap {
+        hints.other_flags |= AF_LATIN_HINTS_HORZ_SNAP;
+    }
+    if vert_snap {
+        hints.other_flags |= AF_LATIN_HINTS_VERT_SNAP;
+    }
+    if stem_adjust {
         hints.other_flags |= AF_LATIN_HINTS_STEM_ADJUST;
-    } else {
-        hints.other_flags &= !AF_LATIN_HINTS_STEM_ADJUST;
+    }
+    if target_mono {
+        hints.other_flags |= AF_LATIN_HINTS_MONO;
     }
 
     // Italic, light, and LCD targets disable horizontal hinting.
