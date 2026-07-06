@@ -84,17 +84,19 @@ struct WasmFaceState {
     slot: Option<rust_ffi::FT_GlyphSlot>,
 }
 
+#[cfg(feature = "abi-test-support")]
 #[derive(Clone)]
-pub struct FontdoneWasmSlotSnapshot {
+pub struct AbiSlotSnapshot {
     pub glyph_index: u32,
     pub metrics: FontdoneWasmGlyphMetrics,
     pub advance: FontdoneWasmVector,
     pub format: i32,
-    pub bitmap: Option<FontdoneWasmBitmapSnapshot>,
+    pub bitmap: Option<AbiBitmapSnapshot>,
 }
 
+#[cfg(feature = "abi-test-support")]
 #[derive(Clone)]
-pub struct FontdoneWasmBitmapSnapshot {
+pub struct AbiBitmapSnapshot {
     pub rows: u32,
     pub width: u32,
     pub pitch: i32,
@@ -105,38 +107,32 @@ pub struct FontdoneWasmBitmapSnapshot {
     pub buffer: Vec<u8>,
 }
 
-pub fn fontdone_test_slot_snapshot(handle: usize) -> Option<FontdoneWasmSlotSnapshot> {
-    let face = face_ref(handle)?;
-    let slot = face.slot.as_ref()?;
-    let bitmap = slot
-        .bitmap
-        .as_ref()
-        .map(|bitmap| FontdoneWasmBitmapSnapshot {
-            rows: bitmap.rows,
-            width: bitmap.width,
-            pitch: bitmap.pitch,
-            num_grays: bitmap.num_grays,
-            pixel_mode: bitmap.pixel_mode,
+#[cfg(feature = "abi-test-support")]
+pub fn abi_slot_snapshot(handle: usize) -> Option<AbiSlotSnapshot> {
+    let mut slot = FontdoneWasmGlyphSlot::default();
+    if fontdone_wasm_get_slot(handle, &mut slot) != rust_ffi::FT_Err_Ok {
+        return None;
+    }
+    let bitmap = if slot.bitmap.buffer.is_null() || slot.bitmap.buffer_len == 0 {
+        None
+    } else {
+        // SAFETY: `fontdone_wasm_get_slot` returns a buffer owned by the live handle.
+        let buffer = unsafe { slice::from_raw_parts(slot.bitmap.buffer, slot.bitmap.buffer_len) };
+        Some(AbiBitmapSnapshot {
+            rows: slot.bitmap.rows,
+            width: slot.bitmap.width,
+            pitch: slot.bitmap.pitch,
+            num_grays: slot.bitmap.num_grays,
+            pixel_mode: slot.bitmap.pixel_mode,
             left: slot.bitmap_left,
             top: slot.bitmap_top,
-            buffer: bitmap.buffer.clone(),
-        });
-    Some(FontdoneWasmSlotSnapshot {
+            buffer: buffer.to_vec(),
+        })
+    };
+    Some(AbiSlotSnapshot {
         glyph_index: slot.glyph_index,
-        metrics: FontdoneWasmGlyphMetrics {
-            width: slot.metrics.width,
-            height: slot.metrics.height,
-            horiBearingX: slot.metrics.horiBearingX,
-            horiBearingY: slot.metrics.horiBearingY,
-            horiAdvance: slot.metrics.horiAdvance,
-            vertBearingX: slot.metrics.vertBearingX,
-            vertBearingY: slot.metrics.vertBearingY,
-            vertAdvance: slot.metrics.vertAdvance,
-        },
-        advance: FontdoneWasmVector {
-            x: slot.advance.x,
-            y: slot.advance.y,
-        },
+        metrics: slot.metrics,
+        advance: slot.advance,
         format: slot.format,
         bitmap,
     })

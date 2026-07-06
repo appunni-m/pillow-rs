@@ -30,7 +30,10 @@ help:
 	@printf "  make test-unified-fixtures-release Run unified fixture parity with Cargo --release\n"
 	@printf "  make test-unified-coverage Alias for the unified parity test\n"
 	@printf "  make test-api-abi     Run unified API/ABI fixture and coverage gates\n"
+	@printf "  make test-ffi         Run the no-runtime-FFI guard for core\n"
+	@printf "  make test-ffi-compat  Run API/ABI coverage and thin-wrapper checks\n"
 	@printf "  make api-abi-audit    Generate C/Servo/fontdone API and ABI surface audit\n"
+	@printf "  make api-abi-check    Check manifest/input coverage and thin FFI ABI surfaces\n"
 	@printf "\nLint:\n"
 	@printf "  make fmt              Check rustfmt\n"
 	@printf "  make fmt-fix          Apply rustfmt\n"
@@ -99,11 +102,11 @@ unified-inputs-check:
 	$(PYTHON) scripts/build_unified_fixture_inputs.py --check
 
 .PHONY: test-unified-fixtures
-test-unified-fixtures: unified-oracle unified-inputs-check
+test-unified-fixtures: unified-oracle unified-inputs-check api-abi-check
 	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
 
 .PHONY: test-unified-fixtures-release
-test-unified-fixtures-release: unified-oracle unified-inputs-check
+test-unified-fixtures-release: unified-oracle unified-inputs-check api-abi-check
 	$(CARGO) test --release --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
 
 .PHONY: test-unified-coverage
@@ -112,9 +115,20 @@ test-unified-coverage: test-unified-fixtures
 .PHONY: test-api-abi
 test-api-abi: test-unified-fixtures
 
+.PHONY: test-ffi
+test-ffi:
+	@! rg -n 'freetype-sys|bindgen|cc::|extern "C"|dlopen|libloading|pkg-config' src Cargo.toml
+
+.PHONY: test-ffi-compat
+test-ffi-compat: api-abi-check
+
 .PHONY: api-abi-audit
 api-abi-audit: oracle-fetch
 	$(PYTHON) scripts/audit_api_abi.py
+
+.PHONY: api-abi-check
+api-abi-check: api-abi-audit
+	$(PYTHON) scripts/check_public_api_inputs.py --audit-json target/api-abi-audit/api_abi_audit.json
 
 .PHONY: fmt
 fmt:
