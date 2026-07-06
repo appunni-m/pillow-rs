@@ -207,6 +207,11 @@
             "FT_LOAD_DEFAULT",
             "FT_LOAD_IGNORE_TRANSFORM"
           ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [

@@ -80,6 +80,11 @@
             "FT_Request_Size",
             "FT_Activate_Size if multiple sizes are available"
           ]
+        },
+        "variability": {
+          "axes": [
+            "sizes"
+          ]
         }
       },
       "classifiers": [

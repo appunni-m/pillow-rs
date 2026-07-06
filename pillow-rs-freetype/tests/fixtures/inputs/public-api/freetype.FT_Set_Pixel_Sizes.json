@@ -44,6 +44,11 @@
               20
             ]
           ]
+        },
+        "variability": {
+          "axes": [
+            "sizes"
+          ]
         }
       },
       "classifiers": [
@@ -95,6 +100,11 @@
               17,
               0
             ]
+          ]
+        },
+        "variability": {
+          "axes": [
+            "sizes"
           ]
         }
       },
@@ -148,6 +158,11 @@
               20,
               70000
             ]
+          ]
+        },
+        "variability": {
+          "axes": [
+            "sizes"
           ]
         }
       },

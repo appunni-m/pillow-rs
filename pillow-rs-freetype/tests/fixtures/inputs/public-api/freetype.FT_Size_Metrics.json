@@ -179,6 +179,11 @@
               "FT_LOAD_NO_HINTING"
             ]
           }
+        },
+        "variability": {
+          "axes": [
+            "sizes"
+          ]
         }
       },
       "classifiers": [

@@ -44,6 +44,12 @@
               "FT_LOAD_TARGET_LIGHT"
             ]
           ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices",
+            "load_flags"
+          ]
         }
       },
       "classifiers": [
@@ -91,6 +97,11 @@
           ],
           "load_flags": [
             "FT_LOAD_NO_SCALE"
+          ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
           ]
         }
       },
@@ -147,6 +158,11 @@
           ],
           "load_flags": [
             "FT_LOAD_VERTICAL_LAYOUT"
+          ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
           ]
         }
       },
@@ -321,6 +337,11 @@
             ]
           ],
           "sentinel_padvance": "0x24681357"
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

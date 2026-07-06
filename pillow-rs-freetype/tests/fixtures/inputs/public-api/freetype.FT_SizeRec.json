@@ -85,6 +85,11 @@
             }
           ],
           "generic_probe": "set_and_read_client_pointer_identity"
+        },
+        "variability": {
+          "axes": [
+            "sizes"
+          ]
         }
       },
       "classifiers": [

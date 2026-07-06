@@ -36,6 +36,11 @@
             "FT_LOAD_NO_HINTING"
           ],
           "expect_cbox_equals_bbox": true
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [
@@ -201,6 +206,11 @@
             "FT_LOAD_NO_SCALE"
           ],
           "compare_even_if_documented_meaningless": true
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

@@ -50,6 +50,11 @@
               "FT_LOAD_TARGET_LIGHT"
             ]
           ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [

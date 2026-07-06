@@ -60,6 +60,11 @@
             "positive_pitch",
             "negative_pitch"
           ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [
@@ -151,6 +156,11 @@
           "flow": [
             "positive_pitch",
             "negative_pitch"
+          ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
           ]
         }
       },
@@ -244,6 +254,11 @@
             "positive_pitch",
             "negative_pitch"
           ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [
@@ -335,6 +350,11 @@
           "flow": [
             "positive_pitch",
             "negative_pitch"
+          ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
           ]
         }
       },
@@ -428,6 +448,11 @@
             "positive_pitch",
             "negative_pitch"
           ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [
@@ -520,6 +545,11 @@
           "flow": [
             "positive_pitch",
             "negative_pitch"
+          ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
           ]
         }
       },

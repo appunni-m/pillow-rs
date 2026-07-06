@@ -87,6 +87,11 @@
             "FT_LOAD_SBITS_ONLY",
             "FT_LOAD_NO_BITMAP"
           ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [
