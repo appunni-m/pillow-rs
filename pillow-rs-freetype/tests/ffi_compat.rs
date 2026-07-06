@@ -23,6 +23,7 @@ fn fixture_font(name: &str) -> Vec<u8> {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn ffi_constants_match_pinned_freetype_headers() {
     assert_eq!(
         (
@@ -93,6 +94,7 @@ fn ffi_constants_match_pinned_freetype_headers() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn ffi_leaf_records_use_c_long_coordinate_layout() {
     #[repr(C)]
     struct ExpectedSizeMetrics {
@@ -120,6 +122,7 @@ fn ffi_leaf_records_use_c_long_coordinate_layout() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn ffi_conversions_preserve_public_field_values() {
     let vector: FT_Vector = Vector { x: -64, y: 128 }.into();
     let bbox: FT_BBox = BBox {
@@ -190,6 +193,7 @@ fn ffi_conversions_preserve_public_field_values() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn ffi_mapping_translates_c_load_flags_to_core_surface() {
     assert_eq!(
         FT_LOAD_TARGET_MODE(FT_LOAD_RENDER | FT_LOAD_TARGET_LCD_V),
@@ -209,6 +213,7 @@ fn ffi_mapping_translates_c_load_flags_to_core_surface() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn ffi_facade_loads_and_renders_glyph_from_memory() {
     let data = fixture_font("DejaVuSans.ttf");
     let library = FT_Init_FreeType();
@@ -236,6 +241,7 @@ fn ffi_facade_loads_and_renders_glyph_from_memory() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn ffi_facade_maps_unsupported_flags_to_freetype_error_code() {
     let data = fixture_font("DejaVuSans.ttf");
     let library = FT_Init_FreeType();

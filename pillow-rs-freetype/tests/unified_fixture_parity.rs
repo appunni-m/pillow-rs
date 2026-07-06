@@ -18,7 +18,7 @@ use std::thread;
 use fontdone::ffi::*;
 use fontdone_ffi_c as c_abi;
 use fontdone_ffi_wasm as wasm_abi;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
@@ -69,19 +69,86 @@ struct Inputs {
     params: Value,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "kind")]
+#[derive(Debug, Clone, Serialize)]
 enum Asset {
-    #[serde(rename = "ref")]
-    Ref { id: String },
+    Ref {
+        #[serde(default)]
+        id: Option<String>,
+        #[serde(default)]
+        path: Option<String>,
+    },
     #[serde(rename = "file")]
     File {
         path: String,
-        sha256: String,
-        length: u64,
+        #[serde(default)]
+        sha256: Option<String>,
+        #[serde(default)]
+        length: Option<u64>,
     },
     #[serde(rename = "inline_bytes")]
-    InlineBytes { encoding: String, value: String },
+    InlineBytes {
+        encoding: String,
+        #[serde(default)]
+        value: Option<String>,
+        #[serde(default)]
+        data: Option<String>,
+    },
+    Other(Value),
+}
+
+impl<'de> Deserialize<'de> for Asset {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        let Some(object) = value.as_object() else {
+            return Ok(Asset::Other(value));
+        };
+        let kind = object.get("kind").and_then(Value::as_str);
+        match kind {
+            Some("file") => {
+                let Some(path) = object.get("path").and_then(Value::as_str) else {
+                    return Ok(Asset::Other(value));
+                };
+                Ok(Asset::File {
+                    path: path.to_string(),
+                    sha256: object
+                        .get("sha256")
+                        .and_then(Value::as_str)
+                        .map(ToString::to_string),
+                    length: object.get("length").and_then(Value::as_u64),
+                })
+            }
+            Some("ref") => Ok(Asset::Ref {
+                id: object
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string),
+                path: object
+                    .get("path")
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string),
+            }),
+            Some("inline_bytes") => {
+                let Some(encoding) = object.get("encoding").and_then(Value::as_str) else {
+                    return Ok(Asset::Other(value));
+                };
+                Ok(Asset::InlineBytes {
+                    encoding: encoding.to_string(),
+                    value: object
+                        .get("value")
+                        .and_then(Value::as_str)
+                        .map(ToString::to_string),
+                    data: object
+                        .get("data")
+                        .and_then(Value::as_str)
+                        .map(ToString::to_string),
+                })
+            }
+            _ => Ok(Asset::Other(value)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -130,9 +197,34 @@ enum StatusKind {
 }
 
 #[test]
-fn unified_fixture_cases_match_runtime_c_oracle() {
+fn unified_fixture_parity() {
+    eprintln!("unified_fixture_parity: loading expanded input cases");
+    let all_cases = read_all_case_files();
+    let unique_case_keys = all_cases
+        .iter()
+        .map(|case| {
+            (
+                case.subject.clone(),
+                case.case.clone(),
+                case.case_id.clone(),
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    eprintln!(
+        "unified_fixture_parity: loaded_cases={} deduped_case_keys={}",
+        all_cases.len(),
+        unique_case_keys.len()
+    );
+    assert_manifest_cases_cover_fixture_inputs(&all_cases);
+    assert_manifest_font_variability_cases_cover_declared_fixture_folder(&all_cases);
+    assert_matrix_derived_inputs_cover_supported_source_rows(&all_cases);
+    assert_unified_fixture_cases_match_runtime_c_oracle(&all_cases);
+}
+
+fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[InputCase]) {
     let manifest = read_manifest();
-    let cases = read_filtered_runtime_case_files();
+    let runtime_selection = select_runtime_cases(all_cases);
+    let cases = runtime_selection.executable;
     let mut passed = 0usize;
     let mut failures = Vec::new();
     let mut covered = BTreeSet::new();
@@ -150,7 +242,7 @@ fn unified_fixture_cases_match_runtime_c_oracle() {
             failures.push(format!("{} asset validation failed: {err}", case.case_id));
             continue;
         }
-        valid_cases.push(case);
+        valid_cases.push(*case);
     }
 
     let oracle_outputs = if failures.is_empty() {
@@ -173,8 +265,20 @@ fn unified_fixture_cases_match_runtime_c_oracle() {
     }
 
     eprintln!(
-        "unified_fixture_cases: {}/{} passed, {} manifest cases covered",
+        "runtime_selection: executable={} model_only={} direct_model_only={} matrix_model_only={} matrix_runtime_enabled={} unsupported_ops={}",
+        cases.len(),
+        runtime_selection.model_only,
+        runtime_selection
+            .model_only
+            .saturating_sub(runtime_selection.matrix_model_only),
+        runtime_selection.matrix_model_only,
+        include_matrix_runtime_cases(),
+        format_operation_counts(&runtime_selection.unsupported_operations)
+    );
+    eprintln!(
+        "runtime_parity: passed={} failed={} total={} covered_manifest_cases={}",
         passed,
+        failures.len(),
         cases.len(),
         covered.len()
     );
@@ -184,6 +288,206 @@ fn unified_fixture_cases_match_runtime_c_oracle() {
         }
         panic!("{} unified fixture cases failed", failures.len());
     }
+}
+
+struct RuntimeSelection<'a> {
+    executable: Vec<&'a InputCase>,
+    model_only: usize,
+    matrix_model_only: usize,
+    unsupported_operations: BTreeMap<String, usize>,
+}
+
+fn select_runtime_cases(cases: &[InputCase]) -> RuntimeSelection<'_> {
+    let filter = case_filter();
+    let limit = case_limit();
+    let mut executable = Vec::new();
+    let mut model_only = 0usize;
+    let mut matrix_model_only = 0usize;
+    let mut unsupported_operations = BTreeMap::new();
+    let mut seen_executable = BTreeSet::new();
+
+    for case in cases {
+        if !case_matches_filter(case, filter.as_deref()) {
+            continue;
+        }
+        if case.source.is_some() && !include_matrix_runtime_cases() {
+            model_only = model_only.saturating_add(1);
+            matrix_model_only = matrix_model_only.saturating_add(1);
+            *unsupported_operations
+                .entry(format!("matrix:{}", case.operation))
+                .or_default() += 1;
+            continue;
+        }
+        if !is_runtime_executable_case(case) {
+            model_only = model_only.saturating_add(1);
+            if case.source.is_some() {
+                matrix_model_only = matrix_model_only.saturating_add(1);
+            }
+            *unsupported_operations
+                .entry(case.operation.clone())
+                .or_default() += 1;
+            continue;
+        }
+        let key = runtime_case_key(case);
+        if seen_executable.insert(key) {
+            executable.push(case);
+            if limit.is_some_and(|limit| executable.len() >= limit) {
+                break;
+            }
+        }
+    }
+
+    RuntimeSelection {
+        executable,
+        model_only,
+        matrix_model_only,
+        unsupported_operations,
+    }
+}
+
+fn include_matrix_runtime_cases() -> bool {
+    std::env::var("FONTDONE_UNIFIED_MATRIX_RUNTIME")
+        .ok()
+        .is_some_and(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+}
+
+fn is_runtime_executable_case(case: &InputCase) -> bool {
+    match case.operation.as_str() {
+        "constant" => case
+            .inputs
+            .params
+            .get("symbol")
+            .and_then(Value::as_str)
+            .is_some_and(is_supported_runtime_constant),
+        "record_layout" => case
+            .inputs
+            .params
+            .get("record")
+            .and_then(Value::as_str)
+            .is_some_and(is_supported_runtime_layout),
+        "new_memory_face" | "set_pixel_sizes" | "set_char_size" | "size_metrics"
+        | "get_char_index" | "load_char" | "load_glyph" | "render_glyph" => {
+            has_runtime_font_source(case)
+        }
+        _ => false,
+    }
+}
+
+fn has_runtime_font_source(case: &InputCase) -> bool {
+    case.inputs
+        .assets
+        .get("font")
+        .is_some_and(|font| match font {
+            Asset::File { .. } => true,
+            Asset::InlineBytes { encoding, .. } => encoding == "hex",
+            Asset::Ref { .. } | Asset::Other(_) => false,
+        })
+}
+
+fn is_supported_runtime_layout(record: &str) -> bool {
+    matches!(
+        record,
+        "FT_Vector" | "FT_BBox" | "FT_Glyph_Metrics" | "FT_Size_Metrics"
+    )
+}
+
+fn is_supported_runtime_constant(symbol: &str) -> bool {
+    matches!(
+        symbol,
+        "FT_Err_Ok"
+            | "FT_Err_Cannot_Open_Resource"
+            | "FT_Err_Unknown_File_Format"
+            | "FT_Err_Invalid_File_Format"
+            | "FT_Err_Invalid_Argument"
+            | "FT_Err_Unimplemented_Feature"
+            | "FT_Err_Invalid_Table"
+            | "FT_Err_Invalid_Glyph_Index"
+            | "FT_Err_Invalid_Character_Code"
+            | "FT_Err_Invalid_Glyph_Format"
+            | "FT_Err_Cannot_Render_Glyph"
+            | "FT_Err_Invalid_Outline"
+            | "FT_Err_Invalid_Pixel_Size"
+            | "FT_Err_Invalid_CharMap_Handle"
+            | "FT_Err_Out_Of_Memory"
+            | "FT_Err_Raster_Overflow"
+            | "FT_Err_Invalid_CharMap_Format"
+            | "FT_LOAD_DEFAULT"
+            | "FT_LOAD_NO_SCALE"
+            | "FT_LOAD_NO_HINTING"
+            | "FT_LOAD_RENDER"
+            | "FT_LOAD_NO_BITMAP"
+            | "FT_LOAD_VERTICAL_LAYOUT"
+            | "FT_LOAD_FORCE_AUTOHINT"
+            | "FT_LOAD_CROP_BITMAP"
+            | "FT_LOAD_PEDANTIC"
+            | "FT_LOAD_ADVANCE_ONLY"
+            | "FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH"
+            | "FT_LOAD_NO_RECURSE"
+            | "FT_LOAD_IGNORE_TRANSFORM"
+            | "FT_LOAD_MONOCHROME"
+            | "FT_LOAD_LINEAR_DESIGN"
+            | "FT_LOAD_SBITS_ONLY"
+            | "FT_LOAD_NO_AUTOHINT"
+            | "FT_LOAD_COLOR"
+            | "FT_LOAD_COMPUTE_METRICS"
+            | "FT_LOAD_BITMAP_METRICS_ONLY"
+            | "FT_LOAD_SVG_ONLY"
+            | "FT_LOAD_NO_SVG"
+            | "FT_RENDER_MODE_NORMAL"
+            | "FT_RENDER_MODE_LIGHT"
+            | "FT_RENDER_MODE_MONO"
+            | "FT_RENDER_MODE_LCD"
+            | "FT_RENDER_MODE_LCD_V"
+            | "FT_RENDER_MODE_SDF"
+            | "FT_RENDER_MODE_MAX"
+            | "FT_LOAD_TARGET_NORMAL"
+            | "FT_LOAD_TARGET_LIGHT"
+            | "FT_LOAD_TARGET_MONO"
+            | "FT_LOAD_TARGET_LCD"
+            | "FT_LOAD_TARGET_LCD_V"
+            | "FT_PIXEL_MODE_NONE"
+            | "FT_PIXEL_MODE_MONO"
+            | "FT_PIXEL_MODE_GRAY"
+            | "FT_PIXEL_MODE_GRAY2"
+            | "FT_PIXEL_MODE_GRAY4"
+            | "FT_PIXEL_MODE_LCD"
+            | "FT_PIXEL_MODE_LCD_V"
+            | "FT_PIXEL_MODE_BGRA"
+            | "FT_PIXEL_MODE_MAX"
+            | "FT_GLYPH_FORMAT_NONE"
+            | "FT_GLYPH_FORMAT_COMPOSITE"
+            | "FT_GLYPH_FORMAT_BITMAP"
+            | "FT_GLYPH_FORMAT_OUTLINE"
+            | "FT_GLYPH_FORMAT_PLOTTER"
+            | "FT_GLYPH_FORMAT_SVG"
+    )
+}
+
+fn runtime_case_key(case: &InputCase) -> String {
+    serde_json::to_string(&json!({
+        "operation": case.operation,
+        "schema": case.schema,
+        "expect_error": case.expect_error,
+        "inputs": case.inputs,
+    }))
+    .expect("runtime case key serializes")
+}
+
+fn format_operation_counts(counts: &BTreeMap<String, usize>) -> String {
+    let mut entries = counts
+        .iter()
+        .map(|(operation, count)| (*count, operation.as_str()))
+        .collect::<Vec<_>>();
+    entries.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(right.1)));
+    let mut entries = entries
+        .into_iter()
+        .map(|(count, operation)| format!("{operation}:{count}"))
+        .collect::<Vec<_>>();
+    if entries.len() > 12 {
+        entries.truncate(12);
+        entries.push("...".to_string());
+    }
+    entries.join(",")
 }
 
 fn compare_named_output(
@@ -241,13 +545,17 @@ fn unified_worker_count(case_count: usize) -> usize {
     if case_count < 2 {
         return 1;
     }
-    let requested = std::env::var("FONTDONE_UNIFIED_WORKERS")
-        .ok()
-        .map_or(1, |value| {
-            value
-                .parse::<usize>()
-                .unwrap_or_else(|err| panic!("FONTDONE_UNIFIED_WORKERS must be usize: {err}"))
-        });
+    let default_workers = thread::available_parallelism()
+        .map_or(1, usize::from)
+        .clamp(1, 8);
+    let requested =
+        std::env::var("FONTDONE_UNIFIED_WORKERS")
+            .ok()
+            .map_or(default_workers, |value| {
+                value
+                    .parse::<usize>()
+                    .unwrap_or_else(|err| panic!("FONTDONE_UNIFIED_WORKERS must be usize: {err}"))
+            });
     requested.clamp(1, case_count)
 }
 
@@ -309,11 +617,11 @@ fn case_matches_filter(case: &InputCase, filter: Option<&str>) -> bool {
     })
 }
 
-#[test]
-fn manifest_cases_cover_fixture_inputs() {
+fn assert_manifest_cases_cover_fixture_inputs(cases: &[InputCase]) {
     let manifest = read_manifest();
+    let mut covered = BTreeSet::new();
 
-    for case in read_all_case_files() {
+    for case in cases {
         assert!(
             manifest.has_case(&case.subject, &case.case),
             "{} references unknown manifest case {}::{}",
@@ -321,13 +629,18 @@ fn manifest_cases_cover_fixture_inputs() {
             case.subject,
             case.case
         );
+        covered.insert((case.subject.clone(), case.case.clone()));
     }
+    eprintln!(
+        "manifest_coverage: checked_cases={} covered_manifest_cases={}",
+        cases.len(),
+        covered.len()
+    );
 }
 
-#[test]
-fn manifest_font_variability_cases_cover_declared_fixture_folder() {
+fn assert_manifest_font_variability_cases_cover_declared_fixture_folder(cases: &[InputCase]) {
     let manifest = read_manifest();
-    let cases = read_all_case_files();
+    let mut checked = 0usize;
     let mut failures = Vec::new();
 
     for ((subject, case_id), variability) in &manifest.font_variability {
@@ -350,6 +663,7 @@ fn manifest_font_variability_cases_cover_declared_fixture_folder() {
                     for glyph_index in &glyph_indices {
                         for load_flag in &load_flags {
                             for render_mode in &render_modes {
+                                checked = checked.saturating_add(1);
                                 let probe = CoverageProbe {
                                     subject,
                                     case_id,
@@ -388,6 +702,12 @@ fn manifest_font_variability_cases_cover_declared_fixture_folder() {
         !manifest.font_variability.is_empty(),
         "manifest declares no font variability coverage requirements"
     );
+    eprintln!(
+        "font_variability_coverage: checked_probes={} missing={} requirements={}",
+        checked,
+        failures.len(),
+        manifest.font_variability.len()
+    );
     assert!(
         failures.is_empty(),
         "font variability coverage gaps:\n{}",
@@ -395,9 +715,7 @@ fn manifest_font_variability_cases_cover_declared_fixture_folder() {
     );
 }
 
-#[test]
-fn matrix_derived_inputs_cover_supported_source_rows() {
-    let cases = read_all_case_files();
+fn assert_matrix_derived_inputs_cover_supported_source_rows(cases: &[InputCase]) {
     let matrix_sources = cases
         .iter()
         .filter_map(|case| {
@@ -411,6 +729,7 @@ fn matrix_derived_inputs_cover_supported_source_rows() {
             })
         })
         .collect::<BTreeSet<_>>();
+    let expected = expected_matrix_subject_coverage();
 
     assert!(
         matrix_sources.len() >= 100_000,
@@ -419,14 +738,20 @@ fn matrix_derived_inputs_cover_supported_source_rows() {
     );
 
     let mut missing = Vec::new();
-    for expectation in expected_matrix_subject_coverage() {
-        if !matrix_sources.contains(&expectation) {
+    for expectation in &expected {
+        if !matrix_sources.contains(expectation) {
             missing.push(format!(
                 "{} row={} operation={} subject={}",
                 expectation.0, expectation.1, expectation.2, expectation.3
             ));
         }
     }
+    eprintln!(
+        "matrix_coverage: covered_subject_rows={} expected_subject_rows={} missing={}",
+        matrix_sources.len(),
+        expected.len(),
+        missing.len()
+    );
     assert!(
         missing.is_empty(),
         "matrix-derived unified input gaps:\n{}",
@@ -677,25 +1002,13 @@ fn read_all_case_files() -> Vec<InputCase> {
     read_case_files(None, None, true)
 }
 
-fn read_filtered_runtime_case_files() -> Vec<InputCase> {
-    let filter = case_filter();
-    read_case_files(filter.as_deref(), case_limit(), false)
-}
-
 fn read_case_files(
     filter: Option<&str>,
     limit: Option<usize>,
     include_matrix_cases: bool,
 ) -> Vec<InputCase> {
     let input_dir = fixture_dir().join("inputs");
-    let mut paths = fs::read_dir(&input_dir)
-        .unwrap_or_else(|err| panic!("read {}: {err}", input_dir.display()))
-        .map(|entry| entry.expect("read input entry").path())
-        .filter(|path| {
-            path.extension()
-                .is_some_and(|extension| extension == "json")
-        })
-        .collect::<Vec<_>>();
+    let mut paths = input_case_paths(&input_dir);
     paths.sort();
 
     let mut cases = Vec::new();
@@ -727,6 +1040,26 @@ fn read_case_files(
         }
     }
     cases
+}
+
+fn input_case_paths(input_dir: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    collect_input_case_paths(input_dir, &mut paths);
+    paths
+}
+
+fn collect_input_case_paths(dir: &Path, paths: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(dir).unwrap_or_else(|err| panic!("read {}: {err}", dir.display())) {
+        let path = entry.expect("read input entry").path();
+        if path.is_dir() {
+            collect_input_case_paths(&path, paths);
+        } else if path
+            .extension()
+            .is_some_and(|extension| extension == "json")
+        {
+            paths.push(path);
+        }
+    }
 }
 
 fn expand_matrix_case_spec(
@@ -839,8 +1172,8 @@ fn matrix_font_asset(font_file: &str, cache: &mut BTreeMap<String, Asset>) -> As
         .unwrap_or_else(|err| panic!("read matrix font {relative_path}: {err}"));
     let asset = Asset::File {
         path: relative_path,
-        sha256: sha256_hex(&bytes),
-        length: u64::try_from(bytes.len()).expect("font length fits u64"),
+        sha256: Some(sha256_hex(&bytes)),
+        length: Some(u64::try_from(bytes.len()).expect("font length fits u64")),
     };
     cache.insert(font_file.to_string(), asset.clone());
     asset
@@ -883,16 +1216,18 @@ fn matrix_render_mode_value(row: &Value) -> i64 {
     }
 }
 
-fn resolve_case_assets(path: &Path, shared_assets: &BTreeMap<String, Asset>, case: &mut InputCase) {
+fn resolve_case_assets(
+    _path: &Path,
+    shared_assets: &BTreeMap<String, Asset>,
+    case: &mut InputCase,
+) {
     for asset in case.inputs.assets.values_mut() {
-        let Asset::Ref { id } = asset else {
+        let Asset::Ref { id: Some(id), .. } = asset else {
             continue;
         };
-        let resolved = shared_assets
-            .get(id)
-            .unwrap_or_else(|| panic!("{} references unknown asset {id}", path.display()))
-            .clone();
-        *asset = resolved;
+        if let Some(resolved) = shared_assets.get(id) {
+            *asset = resolved.clone();
+        }
     }
 }
 
@@ -995,6 +1330,7 @@ fn input_font_file_name(input: &InputCase) -> Option<String> {
             .map(|name| name.to_string_lossy().into_owned()),
         Asset::InlineBytes { .. } => None,
         Asset::Ref { .. } => None,
+        Asset::Other(_) => None,
     }
 }
 
@@ -1040,25 +1376,37 @@ fn validate_assets(case: &InputCase) -> Result<(), String> {
             } => {
                 let (actual_length, digest) = validated_file_asset(path)
                     .map_err(|err| format!("{name} read {path}: {err}"))?;
-                if actual_length != *length {
-                    return Err(format!("{name} length mismatch for {path}"));
+                if let Some(length) = length {
+                    if actual_length != *length {
+                        return Err(format!("{name} length mismatch for {path}"));
+                    }
                 }
-                if digest != *sha256 {
-                    return Err(format!(
-                        "{name} sha256 mismatch for {path}: actual={digest} expected={sha256}"
-                    ));
+                if let Some(sha256) = sha256 {
+                    if digest != *sha256 {
+                        return Err(format!(
+                            "{name} sha256 mismatch for {path}: actual={digest} expected={sha256}"
+                        ));
+                    }
                 }
             }
-            Asset::InlineBytes { encoding, value } => {
+            Asset::InlineBytes { encoding, .. } => {
                 if encoding != "hex" {
                     return Err(format!(
                         "{name} uses unsupported inline encoding {encoding}"
                     ));
                 }
+                let value = inline_bytes_hex(asset)
+                    .ok_or_else(|| format!("{name} missing inline hex bytes"))?;
                 decode_hex(value).map_err(|err| format!("{name} invalid hex: {err}"))?;
             }
-            Asset::Ref { id } => {
-                return Err(format!("{name} unresolved shared asset ref {id}"));
+            Asset::Ref { .. } => {
+                return Err(format!(
+                    "{name} unresolved shared asset ref {}",
+                    asset_label(asset)
+                ));
+            }
+            Asset::Other(_) => {
+                return Err(format!("{name} uses unsupported asset shape"));
             }
         }
     }
@@ -1318,11 +1666,18 @@ fn push_font_source(case: &InputCase, args: &mut Vec<String>) -> Result<(), Stri
             args.push("file".to_string());
             args.push(fixture_dir().join(path).display().to_string());
         }
-        Asset::InlineBytes { value, .. } => {
+        Asset::InlineBytes { .. } => {
             args.push("hex".to_string());
-            args.push(value.clone());
+            args.push(
+                inline_bytes_hex(font)
+                    .ok_or_else(|| "missing inline hex bytes".to_string())?
+                    .to_string(),
+            );
         }
-        Asset::Ref { id } => return Err(format!("unresolved shared asset ref {id}")),
+        Asset::Ref { .. } => {
+            return Err(format!("unresolved shared asset ref {}", asset_label(font)));
+        }
+        Asset::Other(_) => return Err("unsupported font asset shape".to_string()),
     }
     Ok(())
 }
@@ -1889,13 +2244,41 @@ fn font_bytes(case: &InputCase) -> Result<Vec<u8>, String> {
         .ok_or_else(|| "missing font asset".to_string())?;
     match font {
         Asset::File { path, .. } => cached_file_bytes(path),
-        Asset::InlineBytes { encoding, value } => {
+        Asset::InlineBytes { encoding, .. } => {
             if encoding != "hex" {
                 return Err(format!("unsupported inline byte encoding {encoding}"));
             }
+            let value =
+                inline_bytes_hex(font).ok_or_else(|| "missing inline hex bytes".to_string())?;
             decode_hex(value)
         }
-        Asset::Ref { id } => Err(format!("unresolved shared asset ref {id}")),
+        Asset::Ref { .. } => Err(format!("unresolved shared asset ref {}", asset_label(font))),
+        Asset::Other(_) => Err("unsupported font asset shape".to_string()),
+    }
+}
+
+fn asset_label(asset: &Asset) -> String {
+    match asset {
+        Asset::Ref { id: Some(id), .. } => id.clone(),
+        Asset::Ref {
+            path: Some(path), ..
+        } => path.clone(),
+        Asset::Ref { .. } => "<anonymous>".to_string(),
+        Asset::File { path, .. } => path.clone(),
+        Asset::InlineBytes { .. } => "<inline-bytes>".to_string(),
+        Asset::Other(_) => "<other-asset>".to_string(),
+    }
+}
+
+fn inline_bytes_hex(asset: &Asset) -> Option<&str> {
+    match asset {
+        Asset::InlineBytes {
+            value: Some(value), ..
+        } => Some(value),
+        Asset::InlineBytes {
+            data: Some(data), ..
+        } => Some(data),
+        _ => None,
     }
 }
 

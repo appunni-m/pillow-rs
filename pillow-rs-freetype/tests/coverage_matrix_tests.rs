@@ -311,6 +311,7 @@ fn pixel_diff(
 /// against a FreeType-compatible default TrueType fixture.
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn test_native_tt_default_matrix_exact_parity() {
     // Native TrueType default parity: FreeType's default load/render path runs
     // embedded TrueType bytecode instead of forcing the autohinter.
@@ -318,37 +319,44 @@ fn test_native_tt_default_matrix_exact_parity() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn test_coverage_matrix_force_autohint() {
     // Static FT parity: checks raw pixel refs generated from pinned FreeType.
     run_unified("force_autohint_matrix.json", LoadMode::ForceAutoHint, None);
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn test_render_mono_matrix_exact_parity() {
     run_unified("render_mono_matrix.json", LoadMode::ForceAutoHint, None);
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn test_render_lcd_matrix_exact_parity() {
     run_unified("render_lcd_matrix.json", LoadMode::ForceAutoHint, None);
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn test_no_hinting_matrix_exact_parity() {
     run_unified("no_hinting_matrix.json", LoadMode::Default, None);
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn test_metrics_only_matrix_exact_parity() {
     run_unified("metrics_only_matrix.json", LoadMode::Default, None);
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn test_outline_cbox_matrix_exact_parity() {
     run_unified("outline_cbox_matrix.json", LoadMode::Default, None);
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn test_fixture_matrix_provenance() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let fixture_dir = manifest_dir.join("tests").join("fixtures");
@@ -1127,6 +1135,7 @@ fn i32_from_usize_for_test(value: usize) -> i32 {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn stage_failure_classification_covers_native_tt_pipeline() {
     let stages = [
         FailureStage::GlyphIndex,

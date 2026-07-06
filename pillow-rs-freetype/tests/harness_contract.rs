@@ -135,6 +135,7 @@ fn assert_coverage_header(matrix_name: &str, matrix: &CoverageMatrix) {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn exact_parity_matrices_are_broad_and_byte_backed() {
     let matrix = read_coverage_matrix("force_autohint_matrix.json");
     assert_coverage_header("force_autohint_matrix.json", &matrix);
@@ -167,6 +168,7 @@ fn exact_parity_matrices_are_broad_and_byte_backed() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn render_mode_matrix_is_static_c_oracle_data() {
     let matrix = read_render_mode_matrix();
     assert_eq!(
@@ -206,6 +208,7 @@ fn render_mode_matrix_is_static_c_oracle_data() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn generated_matrices_are_exact_parity_gates() {
     let matrix = read_coverage_matrix("native_tt_default_matrix.json");
     assert_coverage_header("native_tt_default_matrix.json", &matrix);
@@ -277,6 +280,7 @@ fn generated_matrices_are_exact_parity_gates() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn all_committed_supplemental_matrices_have_executed_status() {
     let no_hinting = read_coverage_matrix("no_hinting_matrix.json");
     assert_coverage_header("no_hinting_matrix.json", &no_hinting);

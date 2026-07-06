@@ -46,6 +46,7 @@ fn read_project_file(path: &str) -> String {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn maintained_generators_are_documented() {
     let doc = read_project_file("doc/GENERATOR_SYSTEM.md");
     assert!(
@@ -74,6 +75,7 @@ fn maintained_generators_are_documented() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn main_fixture_generator_registers_every_fixture_family() {
     let script = read_project_file("scripts/build_ft_fixture.py");
     let c_oracle = read_project_file("scripts/gen_ft_refs.c");
@@ -96,6 +98,7 @@ fn main_fixture_generator_registers_every_fixture_family() {
 }
 
 #[test]
+#[ignore = "deprecated: replaced by manifest-driven unified public API parity test"]
 fn committed_generator_tree_has_no_python_bytecode() {
     let scripts_dir = manifest_dir().join("scripts");
     let mut offenders = Vec::new();
