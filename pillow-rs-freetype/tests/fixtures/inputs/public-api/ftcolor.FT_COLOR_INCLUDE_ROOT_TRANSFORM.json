@@ -67,6 +67,11 @@
             48
           ],
           "face_transform": "scale_translate"
+        },
+        "variability": {
+          "axes": [
+            "sizes"
+          ]
         }
       },
       "classifiers": [
