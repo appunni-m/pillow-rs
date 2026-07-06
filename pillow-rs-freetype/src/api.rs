@@ -9,6 +9,9 @@
 use crate::error::FontError;
 use crate::font::{FaceInfo, Font, GlyphSlotMetrics, LoadMode, SizeMetrics};
 use crate::render::{PixelMode, RenderMode, RenderedBitmap};
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::rc::Rc;
 
 /// FreeType-style 2D vector in 26.6 pixel units unless documented otherwise.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -103,7 +106,10 @@ impl Library {
         size_pt: f32,
     ) -> Result<Face, FontError> {
         let font = Font::truetype_face(data, face_index, size_pt)?;
-        Ok(Face { font })
+        Ok(Face {
+            font,
+            render_fonts: RenderFontCache::default(),
+        })
     }
 }
 
@@ -111,6 +117,81 @@ impl Library {
 #[derive(Clone)]
 pub struct Face {
     font: Font,
+    render_fonts: RenderFontCache,
+}
+
+#[derive(Clone, Default)]
+struct RenderFontCache {
+    fonts: Rc<RefCell<BTreeMap<RenderFontKey, Font>>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct RenderFontKey {
+    load_mode: RenderLoadModeKey,
+    size_pt_bits: u32,
+    x_ppem: u16,
+    y_ppem: u16,
+    x_scale: i32,
+    y_scale: i32,
+    ascender: i32,
+    descender: i32,
+    height: i32,
+    max_advance: i32,
+    x_dpi: u32,
+    y_dpi: u32,
+    char_width: i32,
+    char_height: i32,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum RenderLoadModeKey {
+    Default,
+    ForceAutoHint,
+}
+
+impl RenderFontCache {
+    fn get_or_insert_with(&self, key: RenderFontKey, build: impl FnOnce() -> Font) -> Font {
+        if let Some(font) = self.fonts.borrow().get(&key).cloned() {
+            return font;
+        }
+        let font = build();
+        self.fonts
+            .borrow_mut()
+            .entry(key)
+            .or_insert_with(|| font.clone())
+            .clone()
+    }
+}
+
+impl RenderFontKey {
+    fn new(font: &Font, load_mode: LoadMode) -> Self {
+        let metrics = font.size_metrics();
+        Self {
+            load_mode: RenderLoadModeKey::from(load_mode),
+            size_pt_bits: font.size_pt.to_bits(),
+            x_ppem: metrics.x_ppem,
+            y_ppem: metrics.y_ppem,
+            x_scale: metrics.x_scale,
+            y_scale: metrics.y_scale,
+            ascender: metrics.ascender,
+            descender: metrics.descender,
+            height: metrics.height,
+            max_advance: metrics.max_advance,
+            x_dpi: metrics.x_dpi,
+            y_dpi: metrics.y_dpi,
+            char_width: metrics.char_width,
+            char_height: metrics.char_height,
+        }
+    }
+}
+
+impl From<LoadMode> for RenderLoadModeKey {
+    fn from(load_mode: LoadMode) -> Self {
+        match load_mode {
+            LoadMode::Default => Self::Default,
+            LoadMode::ForceAutoHint => Self::ForceAutoHint,
+        }
+    }
 }
 
 impl Face {
@@ -187,12 +268,10 @@ impl Face {
         } else {
             LoadMode::Default
         };
-        Font::truetype_face_with_load_mode(
-            &self.font.data.raw_data,
-            self.font.face_index(),
-            self.font.size_pt,
-            load_mode,
-        )
+        let key = RenderFontKey::new(&self.font, load_mode);
+        Ok(self
+            .render_fonts
+            .get_or_insert_with(key, || self.font.clone_with_load_mode(load_mode)))
     }
 }
 

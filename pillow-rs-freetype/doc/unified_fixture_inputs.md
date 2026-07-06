@@ -61,7 +61,10 @@ Only common coverage dimensions are variability axes:
   `inputs.variability.fonts_folder`; otherwise the runner uses `input/fonts`.
 - `sizes`: expands `sizes` or `pixel_sizes` into `pixel_size`.
 - `codepoints`: expands `codepoints` or `char_codes` into `char_code`.
-- `glyph_indices`: expands `glyph_indices` into `glyph_index`.
+- `glyph_indices`: expands to every glyph ID available in the active runtime
+  font face. Do not add selector markers such as `"all"` to JSON inputs.
+  Explicit `glyph_indices` arrays are only a fallback for unresolved model-only
+  assets where the runner cannot inspect a font file yet.
 - `load_flags`: expands `load_flag_sets`, numeric `load_flags`, and combines
   optional `target_modes`.
 - `render_modes`: expands `render_modes` into `render_mode`.
@@ -95,6 +98,33 @@ Error cases still compare the error status and error code across all backends.
 Schema names should be semantic, such as `constant`, `value`, `glyph_slot`,
 `size_metrics`, `record_layout`, `face_open`, `set_status`, or `error`.
 Do not use migration names such as `scalar` or `*_matrix`.
+
+## Profiling
+
+For diagnostic profiling only, the runner accepts these environment variables:
+
+- `FONTDONE_UNIFIED_PROFILE=1`: print elapsed nanoseconds and milliseconds for
+  runner stages and backend totals.
+- `FONTDONE_UNIFIED_VARIABILITY_LIMIT=1`: cap each variability axis to the
+  first value so stage costs can be measured without the full Cartesian product.
+- `FONTDONE_UNIFIED_OPERATION_FILTER=load_glyph`: restrict runtime parity to a
+  canonical operation while keeping manifest and input validation active.
+
+Use `make test-unified-fixtures-release` to run the same unified fixture test
+under Cargo's release profile.
+
+The runner preloads deterministic fixture state once per test process:
+manifest data, input JSON, fixture font folders, fixture bytes, asset hashes,
+inline byte blobs, glyph-index domains, and C oracle outputs. Immutable fixture
+bytes and parsed oracle outputs are shared as process-global in-memory blobs,
+not cloned per case. During runtime comparison it also opens and sizes
+face-backed Rust FFI, C ABI, and WASM ABI handles before timing the operations.
+The face warmup is reported separately as `profile_face_warmup` when profiling
+is enabled.
+
+The variability limit is not a correctness run. It reports manifest
+font-variability gaps caused by the cap, but only the default unlimited runner
+is authoritative for coverage.
 
 ## Worker Checklist
 
