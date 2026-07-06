@@ -142,7 +142,7 @@ fn freetype_shaped_facade_loads_face_and_glyph_slot() {
     assert_eq!(slot.advance.y, 0);
     assert_eq!(slot.pixel_mode(), Some(PixelMode::Mono));
     assert_eq!(bitmap.pixel_mode, PixelMode::Mono);
-    assert_eq!(bitmap.num_grays, 2);
+    assert_eq!(bitmap.num_grays, 256);
     assert_eq!(
         (bitmap.left, bitmap.top),
         (slot.bitmap_left, slot.bitmap_top)

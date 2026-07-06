@@ -478,30 +478,14 @@ fn scale_glyph_impl(
         )?
     };
 
-    if outline_raw.num_contours == 0 || outline_raw.points.is_empty() {
-        return Ok(ScaledGlyph {
-            outline: Outline::default(),
-            advance_width,
-            slot_advance_width,
-            lsb,
-            cbox_x_min: 0,
-            cbox_y_min: 0,
-            cbox_x_max: 0,
-            cbox_y_max: 0,
-            outline_cbox_x_min: 0,
-            outline_cbox_y_min: 0,
-            outline_cbox_x_max: 0,
-            outline_cbox_y_max: 0,
-            outline_bbox_x_min: 0,
-            outline_bbox_y_min: 0,
-            outline_bbox_x_max: 0,
-            outline_bbox_y_max: 0,
-            bbox_x_min: 0,
-            bbox_y_min: 0,
-            bbox_x_max: 0,
-            bbox_y_max: 0,
-            autohint_vertical: None,
-        });
+    if !allow_bytecode && latin_metrics.is_none() {
+        // C: unhinted TrueType loads scale phantom points independently, then
+        // compute `horiAdvance = pp2.x - pp1.x` in `compute_glyph_metrics`
+        // (`src/truetype/ttgload.c`).  Scaling the raw advance as one value
+        // loses one 26.6 unit whenever `pp1.x` and `pp2.x` round differently.
+        let pp1x_fu = outline_raw.bbox_xmin - h_metric.lsb as i32;
+        let pp2x_fu = pp1x_fu + h_metric.advance_width as i32;
+        slot_advance_width = scale.scale_x(pp2x_fu) - scale.scale_x(pp1x_fu);
     }
 
     let fallback_metrics = if latin_metrics.is_none()
@@ -527,22 +511,63 @@ fn scale_glyph_impl(
             if s != 0 { Some(s) } else { None }
         })
         .unwrap_or(scale.y_scale);
+    let use_autohint = hint_metrics.is_some();
+
+    if outline_raw.num_contours == 0 || outline_raw.points.is_empty() {
+        let autohint_vertical = if use_autohint {
+            // C: the auto-hinter path still updates slot vertical metrics for
+            // empty outlines.  The outline bbox is zero, but the synthetic
+            // vertical vector and adjusted vertical scale are preserved.
+            Some(empty_autohint_vertical_metrics(
+                data,
+                glyph_index,
+                h_metric.advance_width as i32,
+                y_adj,
+            ))
+        } else {
+            None
+        };
+        return Ok(ScaledGlyph {
+            outline: Outline::default(),
+            advance_width,
+            slot_advance_width,
+            lsb,
+            cbox_x_min: 0,
+            cbox_y_min: 0,
+            cbox_x_max: 0,
+            cbox_y_max: 0,
+            outline_cbox_x_min: 0,
+            outline_cbox_y_min: 0,
+            outline_cbox_x_max: 0,
+            outline_cbox_y_max: 0,
+            outline_bbox_x_min: 0,
+            outline_bbox_y_min: 0,
+            outline_bbox_x_max: 0,
+            outline_bbox_y_max: 0,
+            bbox_x_min: 0,
+            bbox_y_min: 0,
+            bbox_x_max: 0,
+            bbox_y_max: 0,
+            autohint_vertical,
+        });
+    }
+
     // pp1.x origin shift (ttgload.c:2582). Without this, italic fonts
     // produce 26.6 coords that differ from C by 1 unit (e.g. 344→345),
     // changing the DDA prod init → pixel mismatch.
-    //
-    // C's compute_glyph_metrics (ttgload.c:1962-68) has a 1996-era
-    // optimization: for composite glyphs it SKIPS the O(n) point walk
-    // of FT_Outline_Get_CBox and reuses whatever is cached from the
-    // last recursive sub-glyph load. pp1.x = cache.xMin - cache.lsb.
-    //
-    // Our glyf.rs tracks both values from the final sub-glyph:
-    // xmin = last_sub_xmin, sub_lsb = last_sub_lsb.
-    // For simple glyphs: xmin = header xmin, sub_lsb = hmtx lsb.
-    let pp1x_fu = if outline_raw.is_composite {
+    let top_level_pp1x_fu = outline_raw.bbox_xmin - h_metric.lsb as i32;
+    let hinted_pp1x_fu = if outline_raw.is_composite {
         outline_raw.xmin - outline_raw.sub_lsb
     } else {
-        outline_raw.xmin - h_metric.lsb as i32
+        top_level_pp1x_fu
+    };
+    let pp1x_fu = if !use_autohint && !allow_bytecode {
+        // C sets pp1 from the top-level glyph header before recursing into
+        // components.  `FT_LOAD_NO_HINTING` scales that phantom point and
+        // translates the final outline by the scaled pp1.
+        top_level_pp1x_fu
+    } else {
+        hinted_pp1x_fu
     };
 
     #[cfg(debug_assertions)]
@@ -574,7 +599,6 @@ fn scale_glyph_impl(
         components: Vec::new(),
     };
 
-    let use_autohint = hint_metrics.is_some();
     let no_hinting_scaled = if !use_autohint && !allow_bytecode && outline_raw.is_composite {
         Some(crate::tt::glyf::load_glyph_scaled_no_hinting(
             &data.glyf_data,
@@ -834,14 +858,8 @@ fn autohint_vertical_metrics(
         raw_y_max = raw_y_max.max(point.y);
     }
 
-    let (top_fu, advance_fu) = if let Some(vmtx) = &data.vmtx {
-        let vertical = vmtx.get(glyph_index);
-        (vertical.tsb as i32, vertical.advance_height as i32)
-    } else {
-        let height_fu = raw_y_max - raw_y_min;
-        let advance_fu = vertical_advance_font_units(data);
-        ((advance_fu - height_fu) / 2, advance_fu)
-    };
+    let (top_fu, advance_fu) =
+        vertical_top_and_advance_font_units(data, glyph_index, raw_y_max - raw_y_min);
 
     let vvector_x = ft_mul_fix(
         -(hori_advance_fu / 2),
@@ -853,6 +871,36 @@ fn autohint_vertical_metrics(
         bearing_x: ft_pix_floor(ft_pix_floor(hinted_x_min) + vvector_x),
         bearing_y: ft_pix_floor(ft_pix_ceil(hinted_y_max) + vvector_y),
         advance: ft_pix_round(ft_mul_fix(advance_fu, y_scale)),
+    }
+}
+
+fn empty_autohint_vertical_metrics(
+    data: &FontData,
+    glyph_index: u16,
+    hori_advance_fu: i32,
+    y_scale: i32,
+) -> AutohintVerticalMetrics {
+    let (top_fu, advance_fu) = vertical_top_and_advance_font_units(data, glyph_index, 0);
+    let x_scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em).x_scale;
+
+    AutohintVerticalMetrics {
+        bearing_x: ft_pix_floor(ft_mul_fix(-(hori_advance_fu / 2), x_scale)),
+        bearing_y: ft_pix_floor(ft_mul_fix(top_fu, y_scale)),
+        advance: ft_pix_round(ft_mul_fix(advance_fu, y_scale)),
+    }
+}
+
+fn vertical_top_and_advance_font_units(
+    data: &FontData,
+    glyph_index: u16,
+    height_fu: i32,
+) -> (i32, i32) {
+    if let Some(vmtx) = &data.vmtx {
+        let vertical = vmtx.get(glyph_index);
+        (vertical.tsb as i32, vertical.advance_height as i32)
+    } else {
+        let advance_fu = vertical_advance_font_units(data);
+        ((advance_fu - height_fu) / 2, advance_fu)
     }
 }
 

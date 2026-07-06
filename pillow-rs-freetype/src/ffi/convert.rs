@@ -112,11 +112,18 @@ pub fn load_flags_to_core(flags: FT_Int32) -> Result<api::LoadFlags, FT_Error> {
     if flags & FT_LOAD_NO_AUTOHINT != 0 {
         core |= api::LoadFlags::NO_AUTOHINT;
     }
+    if flags & FT_LOAD_VERTICAL_LAYOUT != 0 {
+        core |= api::LoadFlags::VERTICAL_LAYOUT;
+    }
     if flags & FT_LOAD_MONOCHROME != 0 {
         core |= api::LoadFlags::TARGET_MONO;
     }
     core |= match FT_LOAD_TARGET_MODE(flags) {
-        FT_RENDER_MODE_NORMAL | FT_RENDER_MODE_LIGHT => api::LoadFlags::DEFAULT,
+        FT_RENDER_MODE_NORMAL => api::LoadFlags::DEFAULT,
+        // C `FT_Load_Glyph` routes LIGHT target loads through the auto-hinter
+        // when the font driver does not provide native light hinting
+        // (`src/base/ftobjs.c`).  The resulting bitmap is still normal gray.
+        FT_RENDER_MODE_LIGHT => api::LoadFlags::FORCE_AUTOHINT,
         FT_RENDER_MODE_MONO => api::LoadFlags::TARGET_MONO,
         FT_RENDER_MODE_LCD => api::LoadFlags::TARGET_LCD,
         FT_RENDER_MODE_LCD_V => api::LoadFlags::TARGET_LCD_V,

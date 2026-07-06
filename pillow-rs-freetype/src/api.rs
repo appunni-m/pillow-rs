@@ -56,6 +56,8 @@ impl LoadFlags {
     pub const NO_AUTOHINT: Self = Self(1 << 6);
     /// Load scalable glyphs in font units without scaling or rendering.
     pub const NO_SCALE: Self = Self(1 << 7);
+    /// Use vertical layout advances for the loaded glyph slot.
+    pub const VERTICAL_LAYOUT: Self = Self(1 << 8);
 
     /// Return true if all bits in `other` are set.
     pub fn contains(self, other: Self) -> bool {
@@ -246,6 +248,7 @@ impl Face {
 
     /// Load a glyph index, equivalent to `FT_Load_Glyph`.
     pub fn load_glyph(&self, glyph_index: u16, flags: LoadFlags) -> Result<GlyphSlot, FontError> {
+        let vertical_layout = flags.contains(LoadFlags::VERTICAL_LAYOUT);
         let metrics = if flags.contains(LoadFlags::NO_SCALE) {
             self.font.glyph_metrics_for_index_no_scale(glyph_index)?
         } else if flags.contains(LoadFlags::NO_HINTING) {
@@ -254,21 +257,36 @@ impl Face {
             && !flags.contains(LoadFlags::NO_AUTOHINT)
         {
             self.font
-                .glyph_metrics_for_index_force_autohint(glyph_index)?
+                .glyph_metrics_for_index_force_autohint_with_layout(glyph_index, vertical_layout)?
         } else if flags.contains(LoadFlags::NO_AUTOHINT) {
-            self.font.glyph_metrics_for_index_no_autohint(glyph_index)?
+            self.font
+                .glyph_metrics_for_index_no_autohint_with_layout(glyph_index, vertical_layout)?
         } else {
-            self.font.glyph_metrics_for_index_default(glyph_index)?
+            self.font
+                .glyph_metrics_for_index_default_with_layout(glyph_index, vertical_layout)?
         };
 
-        let bitmap = if flags.contains(LoadFlags::RENDER) {
+        let render_requested = flags.contains(LoadFlags::RENDER);
+        let bitmap = if render_requested {
             let render_font = self.render_font(flags)?;
-            Some(render_font.render_char_mode_for_index(glyph_index, flags.render_mode())?)
+            let bitmap =
+                render_font.render_char_mode_for_index(glyph_index, flags.render_mode())?;
+            if bitmap.buffer.is_empty() {
+                None
+            } else {
+                Some(bitmap)
+            }
         } else {
             None
         };
 
-        Ok(GlyphSlot::new(glyph_index, metrics, bitmap))
+        Ok(GlyphSlot::new(
+            glyph_index,
+            metrics,
+            bitmap,
+            vertical_layout,
+            render_requested,
+        ))
     }
 
     fn render_font(&self, flags: LoadFlags) -> Result<Font, FontError> {
@@ -313,8 +331,14 @@ pub struct GlyphSlot {
 }
 
 impl GlyphSlot {
-    fn new(glyph_index: u16, metrics: GlyphSlotMetrics, bitmap: Option<RenderedBitmap>) -> Self {
-        let format = if bitmap.is_some() {
+    fn new(
+        glyph_index: u16,
+        metrics: GlyphSlotMetrics,
+        bitmap: Option<RenderedBitmap>,
+        vertical_layout: bool,
+        rendered: bool,
+    ) -> Self {
+        let format = if rendered {
             GlyphFormat::Bitmap
         } else {
             GlyphFormat::Outline
@@ -326,9 +350,16 @@ impl GlyphSlot {
         Self {
             glyph_index,
             metrics,
-            advance: Vector {
-                x: metrics.hori_advance,
-                y: 0,
+            advance: if vertical_layout {
+                Vector {
+                    x: 0,
+                    y: metrics.vert_advance,
+                }
+            } else {
+                Vector {
+                    x: metrics.hori_advance,
+                    y: 0,
+                }
             },
             format,
             bitmap,
