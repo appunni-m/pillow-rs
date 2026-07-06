@@ -9,13 +9,13 @@ The active source is `tests/fixtures/inputs/public-api/*.json`. Workers process
 
 | Slice | Files | Branch | Status |
 |---|---:|---|---|
-| 000-029 | 30 | `codex/unified-inputs-000-029` | active |
+| 000-029 | 30 | `codex/unified-inputs-000-029` | complete, no changes |
 | 030-059 | 30 | `codex/unified-inputs-030-059` | active |
 | 060-089 | 30 | `codex/unified-inputs-060-089` | active |
 | 090-119 | 30 | `codex/unified-inputs-090-119` | active |
 | 120-149 | 30 | `codex/unified-inputs-120-149` | active |
 | 150-179 | 30 | `codex/unified-inputs-150-179` | active |
-| 180-209 | 30 | `codex/unified-inputs-180-209` | pending thread slot |
+| 180-209 | 30 | `codex/unified-inputs-180-209` | active |
 | 210-239 | 30 | `codex/unified-inputs-210-239` | pending thread slot |
 | 240-269 | 30 | `codex/unified-inputs-240-269` | pending thread slot |
 | 270-299 | 30 | `codex/unified-inputs-270-299` | pending thread slot |
