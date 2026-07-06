@@ -27,9 +27,19 @@ cases that still need explicit `inputs.variability.axes`.
 
 | Slice | Files | Branch | Status |
 |---|---:|---|---|
-| remaining-00 | 30 | `codex/unified-inputs-remaining-00` | pending |
-| remaining-01 | 30 | `codex/unified-inputs-remaining-01` | pending |
-| remaining-02 | 17 | `codex/unified-inputs-remaining-02` | pending |
+| remaining-00 | 30 | `codex/unified-inputs-remaining-00` | merged, 35 cases |
+| remaining-01 | 30 | `codex/unified-inputs-remaining-01` | merged, 32 cases |
+| remaining-02 | 17 | `codex/unified-inputs-remaining-02` | merged, 17 cases |
+
+## Single Model Cleanup
+
+After merging the remaining aggregate-axis slices, the runner and inputs were
+normalized to one aggregate model:
+
+- No top-level `matrix_cases`.
+- No `schema: "scalar"`.
+- No `_matrix` operation or schema names.
+- `load_flag_sets` is the only aggregate load-flag axis field.
 
 ## Worker Acceptance Criteria
 
@@ -37,6 +47,8 @@ cases that still need explicit `inputs.variability.axes`.
 - Cases with common aggregate fields declare `inputs.variability.axes`.
 - No per-font, per-size, per-codepoint, or legacy matrix row materialization is
   added.
+- Do not introduce `_matrix` operation/schema names, `schema: "scalar"`, or
+  `load_flags_matrix`.
 - No expected outputs are committed.
 - Edited JSON files pass `python3 -m json.tool`.
 - `git diff --check` passes in the worker worktree.

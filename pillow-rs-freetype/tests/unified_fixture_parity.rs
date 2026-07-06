@@ -42,8 +42,6 @@ struct FontVariability {
 struct CaseFile {
     #[serde(default)]
     assets: BTreeMap<String, Asset>,
-    #[serde(default, rename = "matrix_cases")]
-    legacy_matrix_cases: Vec<Value>,
     cases: Vec<InputCase>,
 }
 
@@ -195,6 +193,7 @@ enum RuntimeReadiness {
 fn unified_fixture_parity() {
     eprintln!("unified_fixture_parity: loading unified input cases");
     let input_cases = read_all_case_files();
+    assert_unified_inputs_use_single_aggregate_model(&input_cases);
     let unified_cases = prepare_unified_cases(&input_cases);
     let unique_case_keys = unified_cases
         .iter()
@@ -287,6 +286,43 @@ fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[UnifiedCase]
         }
         panic!("{} unified fixture cases failed", failures.len());
     }
+}
+
+fn assert_unified_inputs_use_single_aggregate_model(cases: &[InputCase]) {
+    let mut failures = Vec::new();
+    for case in cases {
+        if case.schema == "scalar" {
+            failures.push(format!("{} uses migration schema scalar", case.case_id));
+        }
+        if case.schema.ends_with("_matrix") {
+            failures.push(format!(
+                "{} uses legacy matrix schema {}",
+                case.case_id, case.schema
+            ));
+        }
+        if case.operation.ends_with("_matrix") {
+            failures.push(format!(
+                "{} uses legacy matrix operation {}",
+                case.case_id, case.operation
+            ));
+        }
+        if case
+            .inputs
+            .params
+            .as_object()
+            .is_some_and(|params| params.contains_key("load_flags_matrix"))
+        {
+            failures.push(format!(
+                "{} uses load_flags_matrix; use load_flag_sets",
+                case.case_id
+            ));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "legacy fixture model entries:\n{}",
+        failures.join("\n")
+    );
 }
 
 struct RuntimeSelection<'a> {
@@ -557,15 +593,13 @@ fn u64_axis(params: &Value, keys: &[&str], enabled: bool, defaults: &[u64]) -> V
 }
 
 fn load_flags_axis(params: &Value, enabled: bool) -> Vec<i32> {
-    for key in ["load_flag_sets", "load_flags_matrix"] {
-        if let Some(values) = params.get(key).and_then(Value::as_array) {
-            let base_flags = values
-                .iter()
-                .map(|value| flag_value(value, key))
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap_or_default();
-            return combine_load_targets(base_flags, target_mode_axis(params));
-        }
+    if let Some(values) = params.get("load_flag_sets").and_then(Value::as_array) {
+        let base_flags = values
+            .iter()
+            .map(|value| flag_value(value, "load_flag_sets"))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap_or_default();
+        return combine_load_targets(base_flags, target_mode_axis(params));
     }
     if let Some(values) = params.get("load_flags").and_then(Value::as_array) {
         if enabled || values.iter().all(|value| value.is_number()) {
@@ -743,7 +777,6 @@ fn remove_aggregate_params(params: &mut serde_json::Map<String, Value>) {
         "char_codes",
         "glyph_indices",
         "load_flag_sets",
-        "load_flags_matrix",
         "render_modes",
         "target_modes",
     ] {
@@ -859,20 +892,10 @@ fn canonical_operation(operation: &str) -> &str {
         "set_pixel_sizes" | "freetype.set_pixel_sizes" | "FT_Set_Pixel_Sizes" => "set_pixel_sizes",
         "set_char_size" | "freetype.set_char_size" | "FT_Set_Char_Size" => "set_char_size",
         "size_metrics" | "freetype.size_metrics" | "FT_Size_Metrics" => "size_metrics",
-        "get_char_index"
-        | "freetype.get_char_index"
-        | "freetype.get_char_index_matrix"
-        | "FT_Get_Char_Index" => "get_char_index",
-        "load_char" | "freetype.load_char" | "freetype.load_char_matrix" | "FT_Load_Char" => {
-            "load_char"
-        }
-        "load_glyph" | "freetype.load_glyph" | "freetype.load_glyph_matrix" | "FT_Load_Glyph" => {
-            "load_glyph"
-        }
-        "render_glyph"
-        | "freetype.render_glyph"
-        | "freetype.render_glyph_matrix"
-        | "FT_Render_Glyph" => "render_glyph",
+        "get_char_index" | "freetype.get_char_index" | "FT_Get_Char_Index" => "get_char_index",
+        "load_char" | "freetype.load_char" | "FT_Load_Char" => "load_char",
+        "load_glyph" | "freetype.load_glyph" | "FT_Load_Glyph" => "load_glyph",
+        "render_glyph" | "freetype.render_glyph" | "FT_Render_Glyph" => "render_glyph",
         _ => operation,
     }
 }
@@ -1284,14 +1307,16 @@ fn read_case_files(filter: Option<&str>, limit: Option<usize>) -> Vec<InputCase>
 
     let mut cases = Vec::new();
     for path in paths {
-        let parsed: CaseFile =
-            serde_json::from_str(&fs::read_to_string(&path).expect("read input case file"))
-                .unwrap_or_else(|err| panic!("parse {}: {err}", path.display()));
+        let text = fs::read_to_string(&path).expect("read input case file");
+        let raw: Value = serde_json::from_str(&text)
+            .unwrap_or_else(|err| panic!("parse {}: {err}", path.display()));
         assert!(
-            parsed.legacy_matrix_cases.is_empty(),
+            raw.get("matrix_cases").is_none(),
             "{} uses legacy matrix_cases; move coverage into cases[].inputs.variability",
             path.display()
         );
+        let parsed: CaseFile = serde_json::from_value(raw)
+            .unwrap_or_else(|err| panic!("parse {}: {err}", path.display()));
         for mut case in parsed.cases {
             resolve_case_assets(&path, &parsed.assets, &mut case);
             if case_matches_filter(&case, filter) {
@@ -2727,12 +2752,9 @@ fn comparison_schema(case: &InputCase) -> &str {
         "record_layout" | "abi_layout" | "abi_record_layout" | "abi_record" | "api_record"
         | "c_abi_record" | "c_abi_layout" => "record_layout",
         "face_open" | "face_result" | "face_handle" => "face_open",
-        "glyph_slot"
-        | "glyph_slot_bitmap"
-        | "glyph_render"
-        | "glyph_render_matrix"
-        | "bitmap_result" => "glyph_slot",
+        "glyph_slot" | "glyph_slot_bitmap" | "glyph_render" | "bitmap_result" => "glyph_slot",
         "api_result" => match canonical_operation(&case.operation) {
+            "constant" => "value",
             "new_memory_face" => "face_open",
             "set_pixel_sizes" | "set_char_size" => "set_status",
             "size_metrics" => "size_metrics",
@@ -2740,7 +2762,6 @@ fn comparison_schema(case: &InputCase) -> &str {
             "load_char" | "load_glyph" | "render_glyph" => "glyph_slot",
             _ => case.schema.as_str(),
         },
-        "scalar" => "value",
         other => other,
     }
 }
