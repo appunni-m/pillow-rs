@@ -65,6 +65,7 @@ fn trace_one_glyph() {
         ymin: 0,
         xmax: 0,
         ymax: 0,
+        bbox_xmin: raw.bbox_xmin,
         is_composite: raw.is_composite,
         sub_lsb: raw.sub_lsb,
         instructions: raw.instructions.clone(),

@@ -567,6 +567,7 @@ fn scale_glyph_impl(
         ymin: 0,
         xmax: 0,
         ymax: 0,
+        bbox_xmin: outline_raw.bbox_xmin,
         is_composite: outline_raw.is_composite,
         sub_lsb: outline_raw.sub_lsb,
         instructions: outline_raw.instructions.clone(),

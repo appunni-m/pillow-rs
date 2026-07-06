@@ -54,6 +54,8 @@ impl LoadFlags {
     pub const TARGET_LCD_V: Self = Self(1 << 5);
     /// Disable FreeType's auto-hinter while still allowing native hints.
     pub const NO_AUTOHINT: Self = Self(1 << 6);
+    /// Load scalable glyphs in font units without scaling or rendering.
+    pub const NO_SCALE: Self = Self(1 << 7);
 
     /// Return true if all bits in `other` are set.
     pub fn contains(self, other: Self) -> bool {
@@ -244,7 +246,9 @@ impl Face {
 
     /// Load a glyph index, equivalent to `FT_Load_Glyph`.
     pub fn load_glyph(&self, glyph_index: u16, flags: LoadFlags) -> Result<GlyphSlot, FontError> {
-        let metrics = if flags.contains(LoadFlags::NO_HINTING) {
+        let metrics = if flags.contains(LoadFlags::NO_SCALE) {
+            self.font.glyph_metrics_for_index_no_scale(glyph_index)?
+        } else if flags.contains(LoadFlags::NO_HINTING) {
             self.font.glyph_metrics_for_index_no_hinting(glyph_index)?
         } else if flags.contains(LoadFlags::FORCE_AUTOHINT)
             && !flags.contains(LoadFlags::NO_AUTOHINT)
@@ -312,8 +316,6 @@ impl GlyphSlot {
     fn new(glyph_index: u16, metrics: GlyphSlotMetrics, bitmap: Option<RenderedBitmap>) -> Self {
         let format = if bitmap.is_some() {
             GlyphFormat::Bitmap
-        } else if metrics.width == 0 && metrics.height == 0 {
-            GlyphFormat::None
         } else {
             GlyphFormat::Outline
         };
