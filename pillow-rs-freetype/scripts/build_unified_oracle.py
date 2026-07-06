@@ -16,9 +16,12 @@ def main() -> None:
     out = root / args.out
     out.parent.mkdir(parents=True, exist_ok=True)
     source = root / "scripts" / "gen_unified_oracle.c"
+    script = pathlib.Path(__file__).resolve()
     library = root / "freetype" / "build" / "libfreetype.so"
+    freetype_build = root / "freetype" / "build"
 
     if out.exists() and out.stat().st_mtime >= max(
+        script.stat().st_mtime,
         source.stat().st_mtime,
         library.stat().st_mtime,
     ):
@@ -32,7 +35,8 @@ def main() -> None:
         str(root / "freetype" / "include"),
         str(source),
         "-L",
-        str(root / "freetype" / "build"),
+        str(freetype_build),
+        f"-Wl,-rpath,{freetype_build}",
         "-lfreetype",
         "-lm",
         "-o",

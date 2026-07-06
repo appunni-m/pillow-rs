@@ -163,12 +163,6 @@ pub fn cjk_metrics_init_widths(
 ///   2. Linked segment compatibility check
 ///   3. Top-to-bottom edge insertion order
 ///
-/// Internal CJK edge-grouping helper.
-///
-/// The current Hani pipeline uses CJK edge fitting with Latin edge grouping.
-/// Full CJK edge grouping remains private to experiments and parity
-/// investigations until it is verified against the C fixture matrix.
-#[allow(dead_code)]
 pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: bool) {
     let axis = &mut hints.axis[dim as usize];
     let scale = if dim == Dimension::Horz {
@@ -261,10 +255,7 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
                 last: seg_idx,
                 blue_edge: None,
             };
-            // afcjk.c:1089 — af_axis_hints_new_edge with tb=0 for CJK
-            // (CJK always uses af_axis_hints_new_edge(..., 0, ...)
-            // because afcjk.c doesn't pass top_to_bottom — it's only
-            // used in the BOUND checks in hint_edges)
+            axis.segments[seg_idx].edge_next = seg_idx;
             let insert_at = if top_to_bottom {
                 let mut p = 0;
                 while p < axis.edges.len() && axis.edges[p].fpos > fpos {
@@ -272,7 +263,11 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
                 }
                 p
             } else {
-                axis.edges.len() // append to end
+                let mut p = 0;
+                while p < axis.edges.len() && axis.edges[p].fpos < fpos {
+                    p += 1;
+                }
+                p
             };
             axis.edges.insert(insert_at, new_edge);
         }
@@ -289,9 +284,72 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
             s = axis.segments[s].edge_next;
         }
     }
-    // afcjk.c:1170-1193 — edge flags (simplified for non-Hani scripts)
-    for e in &mut axis.edges {
-        e.flags = AF_EDGE_NORMAL;
+
+    // afcjk.c:1170-1258 — compute edge properties from grouped segments.
+    for e_idx in 0..axis.edges.len() {
+        let mut is_round = 0i32;
+        let mut is_straight = 0i32;
+        let first_seg = axis.edges[e_idx].first;
+        let mut seg_idx = first_seg;
+
+        loop {
+            let seg = axis.segments[seg_idx];
+            if seg.flags & AF_EDGE_ROUND != 0 {
+                is_round += 1;
+            } else {
+                is_straight += 1;
+            }
+
+            let is_serif = if seg.serif != usize::MAX {
+                let serif_edge = axis.segments[seg.serif].edge;
+                serif_edge != usize::MAX && serif_edge != e_idx
+            } else {
+                false
+            };
+
+            if (seg.link != usize::MAX && axis.segments[seg.link].edge != usize::MAX) || is_serif {
+                let mut edge2_idx = if is_serif {
+                    axis.edges[e_idx].serif
+                } else {
+                    axis.edges[e_idx].link
+                };
+                let linked_seg = if is_serif { seg.serif } else { seg.link };
+
+                if edge2_idx != usize::MAX {
+                    let edge_delta =
+                        (axis.edges[e_idx].fpos as i32 - axis.edges[edge2_idx].fpos as i32).abs();
+                    let seg_delta = (seg.pos as i32 - axis.segments[linked_seg].pos as i32).abs();
+                    if seg_delta < edge_delta {
+                        edge2_idx = axis.segments[linked_seg].edge;
+                    }
+                } else {
+                    edge2_idx = axis.segments[linked_seg].edge;
+                }
+
+                if edge2_idx != usize::MAX && edge2_idx != e_idx {
+                    if is_serif {
+                        axis.edges[e_idx].serif = edge2_idx;
+                        axis.edges[edge2_idx].flags |= AF_EDGE_SERIF;
+                    } else {
+                        axis.edges[e_idx].link = edge2_idx;
+                    }
+                }
+            }
+
+            if seg_idx == axis.edges[e_idx].last {
+                break;
+            }
+            seg_idx = axis.segments[seg_idx].edge_next;
+        }
+
+        axis.edges[e_idx].flags = AF_EDGE_NORMAL;
+        if is_round > 0 && is_round >= is_straight {
+            axis.edges[e_idx].flags |= AF_EDGE_ROUND;
+        }
+
+        if axis.edges[e_idx].serif != usize::MAX && axis.edges[e_idx].link != usize::MAX {
+            axis.edges[e_idx].serif = usize::MAX;
+        }
     }
 }
 
@@ -622,11 +680,8 @@ pub(super) fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i
             continue;
         }
 
-        let stem_anchor = if dim != Dimension::Vert && anchor.is_none() {
-            0
-        } else {
-            delta
-        };
+        let update_delta = dim != Dimension::Vert && anchor.is_none();
+        let stem_anchor = if update_delta { 0 } else { delta };
         let (pos1, pos2, new_delta) = hint_normal_stem(
             other_flags,
             dim,
@@ -637,7 +692,12 @@ pub(super) fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i
         );
         axis.edges[i].pos = pos1;
         axis.edges[link].pos = pos2;
-        delta = new_delta;
+        if update_delta {
+            // C `af_cjk_hint_edges` stores the returned delta only for the
+            // first non-vertical anchor stem; all other `af_hint_normal_stem`
+            // calls discard it (afcjk.c:1904-1947).
+            delta = new_delta;
+        }
         anchor = Some(i);
         axis.edges[i].flags |= AF_EDGE_DONE;
         axis.edges[link].flags |= AF_EDGE_DONE;
@@ -698,6 +758,57 @@ pub(super) fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i
                 }
             }
             (None, None) => {}
+        }
+    }
+}
+
+/// Move CJK edge points after `af_cjk_hint_edges`.
+///
+/// C: `af_cjk_align_edge_points` in afcjk.c:2172-2261.  Unlike the Latin
+/// `af_glyph_hints_align_edge_points`, unsnapped CJK edges translate their
+/// member points by `edge.pos - edge.opos` instead of assigning `edge.pos`
+/// directly.
+pub(super) fn align_edge_points(hints: &mut GlyphHints, dim: Dimension) {
+    let snapping = (dim == Dimension::Horz && hints.other_flags & AF_LATIN_HINTS_HORZ_SNAP != 0)
+        || (dim == Dimension::Vert && hints.other_flags & AF_LATIN_HINTS_VERT_SNAP != 0);
+    let is_vert = dim == Dimension::Vert;
+    let axis = &hints.axis[dim as usize];
+
+    for edge in &axis.edges {
+        let pos = edge.pos;
+        let delta = edge.pos - edge.opos;
+        let mut seg_idx = edge.first;
+        loop {
+            if seg_idx == usize::MAX {
+                break;
+            }
+            let seg = &axis.segments[seg_idx];
+            let mut pt_idx = seg.first;
+            loop {
+                if is_vert {
+                    if snapping {
+                        hints.points[pt_idx].y = pos;
+                    } else {
+                        hints.points[pt_idx].y += delta;
+                    }
+                    hints.points[pt_idx].flags |= AF_FLAG_TOUCH_Y;
+                } else {
+                    if snapping {
+                        hints.points[pt_idx].x = pos;
+                    } else {
+                        hints.points[pt_idx].x += delta;
+                    }
+                    hints.points[pt_idx].flags |= AF_FLAG_TOUCH_X;
+                }
+                if pt_idx == seg.last {
+                    break;
+                }
+                pt_idx = hints.points[pt_idx].next;
+            }
+            if seg_idx == edge.last {
+                break;
+            }
+            seg_idx = seg.edge_next;
         }
     }
 }

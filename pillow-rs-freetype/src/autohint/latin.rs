@@ -1175,8 +1175,12 @@ pub fn apply_hints(
         hints.other_flags |= AF_LATIN_HINTS_MONO;
     }
 
-    // Italic, light, and LCD targets disable horizontal hinting.
-    if is_italic || no_horizontal_hinting {
+    let no_advance_hinting = hints.metrics.as_ref().is_some_and(|m| m.no_advance_hinting);
+
+    // CJK/Hani fallback uses `af_cjk_hints_init`, which always sets
+    // AF_SCALER_FLAG_NO_ADVANCE but does not inherit Latin light-mode
+    // AF_SCALER_FLAG_NO_HORIZONTAL (afcjk.c:1390-1421).
+    if is_italic || (no_horizontal_hinting && !no_advance_hinting) {
         hints.scaler_flags |= AF_SCALER_FLAG_NO_HORIZONTAL;
         if is_italic {
             crate::autohint::coverage::record(crate::autohint::coverage::COV_ITALIC_NO_HORZ);
@@ -1201,6 +1205,7 @@ pub fn apply_hints(
     // by earlier ones.
     // Phase A: detect_features for HORZ (segs → link → edges)
     let do_horz = hints.scaler_flags & AF_SCALER_FLAG_NO_HORIZONTAL == 0;
+    let use_cjk_edges = hints.metrics.as_ref().is_some_and(|m| m.no_advance_hinting);
     let mut horz_widths_26_6: Vec<i32> = Vec::new();
     if do_horz {
         compute_segments(&mut hints, Dimension::Horz);
@@ -1209,7 +1214,11 @@ pub fn apply_hints(
             horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
             link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
         }
-        compute_edges(&mut hints, Dimension::Horz);
+        if use_cjk_edges {
+            super::cjk::cjk_compute_edges(&mut hints, Dimension::Horz, false);
+        } else {
+            compute_edges(&mut hints, Dimension::Horz);
+        }
     }
 
     // Phase B: detect_features for VERT (segs → link → edges) + blue zones.
@@ -1221,7 +1230,11 @@ pub fn apply_hints(
         vert_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
         link_segments_inner(&mut hints, Dimension::Vert, wc, &widths);
     }
-    compute_edges(&mut hints, Dimension::Vert);
+    if use_cjk_edges {
+        super::cjk::cjk_compute_edges(&mut hints, Dimension::Vert, false);
+    } else {
+        compute_edges(&mut hints, Dimension::Vert);
+    }
     let is_nonbase = hints.metrics.as_ref().is_some_and(|m| {
         (glyph_index as usize) < m.non_base_glyphs.len() && m.non_base_glyphs[glyph_index as usize]
     });
@@ -1245,8 +1258,13 @@ pub fn apply_hints(
         } else {
             &vert_widths_26_6
         };
-        hint_edges(&mut hints, dim, widths, ppem);
-        align_edge_points(&mut hints, dim);
+        if use_cjk_edges {
+            super::cjk::hint_edges(&mut hints, dim, widths);
+            super::cjk::align_edge_points(&mut hints, dim);
+        } else {
+            hint_edges(&mut hints, dim, widths, ppem);
+            align_edge_points(&mut hints, dim);
+        }
         align_strong_points(&mut hints, dim);
         align_weak_points(&mut hints, dim);
         vertical_separation_adjustments(
@@ -1266,7 +1284,6 @@ pub fn apply_hints(
         let advance_width = font_data.map_or(0, |data| {
             ft_mul_fix(data.hmtx.get(glyph_index).advance_width as i32, x_scale)
         });
-        let no_advance_hinting = hints.metrics.as_ref().is_some_and(|m| m.no_advance_hinting);
         #[cfg(debug_assertions)]
         if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
             log::trace!(target: "autohint::pipeline", "[PHANTOM_PRE] gi={glyph_index} num_horz_edges={num_horz_edges}");
