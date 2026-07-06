@@ -12,6 +12,12 @@ pub struct OutlinePoint {
     pub on_curve: bool,
 }
 
+pub(crate) const OUTLINE_HIGH_PRECISION: u32 = 0x100;
+pub(crate) const OUTLINE_SINGLE_PASS: u32 = 0x200;
+pub(crate) const OUTLINE_IGNORE_DROPOUTS: u32 = 0x8;
+pub(crate) const OUTLINE_SMART_DROPOUTS: u32 = 0x10;
+pub(crate) const OUTLINE_INCLUDE_STUBS: u32 = 0x20;
+
 /// FreeType's `FT_Outline`: flattened contours in 26.6 units.
 #[derive(Debug, Clone, Default)]
 pub struct Outline {
@@ -21,6 +27,9 @@ pub struct Outline {
     pub contours: Vec<i16>,
     /// Flattened points across all contours.
     pub points: Vec<OutlinePoint>,
+    /// Per-contour black rasterizer dropout controls.  Empty means derive the
+    /// control from [`Self::flags`].
+    pub contour_dropouts: Vec<u8>,
     /// Outline flags (`FT_OUTLINE_EVEN_ODD_FILL` etc.). TrueType uses the
     /// default non-zero fill.
     pub flags: u32,

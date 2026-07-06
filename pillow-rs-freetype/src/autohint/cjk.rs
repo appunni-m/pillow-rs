@@ -23,9 +23,11 @@
 //! dimension. The edge sort direction and hint_edges BOUND checks
 //! are handled in latin.rs.
 
+use super::blue_strings::BlueStringEntry;
 use super::types::*;
 use crate::casts::i16_from_i32;
-use crate::fixed::{ft_mul_div, ft_mul_fix};
+use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
+use crate::tables::FontData;
 
 /// Compute CJK-style stem widths from a standard character glyph.
 /// Port of af_cjk_metrics_init_widths (afcjk.c:63-270).
@@ -155,6 +157,191 @@ pub fn cjk_metrics_init_widths(
     }
 }
 
+/// Find CJK blue zones.
+///
+/// Port of `af_cjk_metrics_init_blues` for the FreeType build used by this
+/// crate. `afcjk.c` undefines `AF_CONFIG_OPTION_CJK_BLUE_HANI_VERT`, so Hani
+/// uses vertical top/bottom blue zones only; horizontal left/right entries in
+/// generated data are intentionally ignored here.
+pub fn cjk_metrics_init_blues(
+    metrics: &mut AfLatinMetrics,
+    font_data: &FontData,
+    script_strings: &[BlueStringEntry],
+) {
+    for axis in &mut metrics.axis {
+        axis.blue_count = 0;
+        axis.blues.clear();
+    }
+
+    for entry in script_strings {
+        let horiz = entry.props & 0x2 != 0;
+        if horiz {
+            continue;
+        }
+
+        let is_top = entry.props & 0x1 != 0;
+        let axis = &mut metrics.axis[Dimension::Vert as usize];
+        let mut fills: Vec<i32> = Vec::new();
+        let mut flats: Vec<i32> = Vec::new();
+        let mut fill = true;
+
+        for &ch in entry.chars {
+            if ch == '|' {
+                fill = false;
+                continue;
+            }
+
+            let glyph_index = font_data.cmap.char_index(ch as u32).unwrap_or(0);
+            if glyph_index == 0 {
+                continue;
+            }
+
+            let Ok(outline) = crate::tt::glyf::load_glyph(
+                &font_data.glyf_data,
+                &font_data.loca_data,
+                font_data.head.index_to_loc_format,
+                glyph_index,
+                &font_data.hmtx,
+            ) else {
+                continue;
+            };
+            if outline.num_contours == 0 || outline.points.len() <= 2 {
+                continue;
+            }
+
+            let mut best_pos: Option<i32> = None;
+            let mut last = -1i32;
+            for &end_pt in outline
+                .end_pts_of_contours
+                .iter()
+                .take(outline.num_contours as usize)
+            {
+                let first = last + 1;
+                last = end_pt as i32;
+                if last <= first {
+                    continue;
+                }
+
+                for idx in first..=last {
+                    let y = outline.points[idx as usize].y;
+                    best_pos = Some(match best_pos {
+                        None => y,
+                        Some(best) if is_top => best.max(y),
+                        Some(best) => best.min(y),
+                    });
+                }
+            }
+
+            let Some(best_pos) = best_pos else {
+                continue;
+            };
+            if fill {
+                fills.push(best_pos);
+            } else {
+                flats.push(best_pos);
+            }
+        }
+
+        if fills.is_empty() && flats.is_empty() {
+            continue;
+        }
+        fills.sort_unstable();
+        flats.sort_unstable();
+
+        let (mut ref_org, mut shoot_org) = if flats.is_empty() {
+            let value = fills[fills.len() / 2];
+            (value, value)
+        } else if fills.is_empty() {
+            let value = flats[flats.len() / 2];
+            (value, value)
+        } else {
+            (fills[fills.len() / 2], flats[flats.len() / 2])
+        };
+
+        if shoot_org != ref_org {
+            let under_ref = shoot_org < ref_org;
+            if is_top ^ under_ref {
+                let mean = (shoot_org + ref_org) / 2;
+                ref_org = mean;
+                shoot_org = mean;
+            }
+        }
+
+        let mut blue = AfLatinBlue::default();
+        blue.ref_width.org = ref_org;
+        blue.shoot_width.org = shoot_org;
+        if is_top {
+            blue.flags |= AF_LATIN_BLUE_TOP;
+        }
+        axis.blues.push(blue);
+        axis.blue_count = axis.blues.len();
+    }
+}
+
+/// Scale CJK metrics and blue zones.
+///
+/// CJK has no Latin x-height scale adjustment; both axes are scaled directly.
+pub fn cjk_metrics_scale(
+    metrics: &mut AfLatinMetrics,
+    x_scale: i32,
+    y_scale: i32,
+    x_delta: i32,
+    y_delta: i32,
+) -> (i32, i32) {
+    for dim in 0..2 {
+        let scale = if dim == Dimension::Horz as usize {
+            x_scale
+        } else {
+            y_scale
+        };
+        let delta = if dim == Dimension::Horz as usize {
+            x_delta
+        } else {
+            y_delta
+        };
+        let axis = &mut metrics.axis[dim];
+        axis.org_scale = scale;
+        axis.org_delta = delta;
+        axis.scale = scale;
+        axis.delta = delta;
+
+        for width in axis.widths.iter_mut() {
+            width.cur = ft_mul_fix(width.org, scale);
+            width.fit = width.cur;
+        }
+        axis.extra_light = ft_mul_fix(axis.standard_width, scale) < 40;
+
+        for blue in &mut axis.blues {
+            blue.ref_width.cur = ft_mul_fix(blue.ref_width.org, scale) + delta;
+            blue.ref_width.fit = blue.ref_width.cur;
+            blue.shoot_width.cur = ft_mul_fix(blue.shoot_width.org, scale) + delta;
+            blue.shoot_width.fit = blue.shoot_width.cur;
+            blue.flags &= !AF_LATIN_BLUE_ACTIVE;
+
+            let dist = ft_mul_fix(blue.ref_width.org - blue.shoot_width.org, scale);
+            if (-48..=48).contains(&dist) {
+                blue.ref_width.fit = ft_pix_round(blue.ref_width.cur);
+
+                let delta1 = ft_div_fix(blue.ref_width.fit, scale) - blue.shoot_width.org;
+                let mut delta2 = ft_mul_fix(delta1.abs(), scale);
+                if delta2 < 32 {
+                    delta2 = 0;
+                } else {
+                    delta2 = ft_pix_round(delta2);
+                }
+                if delta1 < 0 {
+                    delta2 = -delta2;
+                }
+
+                blue.shoot_width.fit = blue.ref_width.fit - delta2;
+                blue.flags |= AF_LATIN_BLUE_ACTIVE;
+            }
+        }
+    }
+
+    (x_scale, y_scale)
+}
+
 /// Compute edges for CJK/Indic scripts using best-distance matching.
 /// Port of af_cjk_hints_compute_edges (afcjk.c:993-1193).
 ///
@@ -189,21 +376,22 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
 
     // afcjk.c:1040-1120 — create edges from segments
     for seg_idx in 0..axis.segments.len() {
-        let seg = &axis.segments[seg_idx];
-        let seg_pos = seg.pos as i32;
+        let seg_pos = axis.segments[seg_idx].pos as i32;
+        let seg_dir = axis.segments[seg_idx].dir;
+        let seg_link = axis.segments[seg_idx].link;
         let mut best_edge: Option<usize> = None;
         let mut best_dist = i32::MAX;
 
         // afcjk.c:1050-1085 — find best-matching edge
         for e_idx in 0..axis.edges.len() {
             let edge = &axis.edges[e_idx];
-            if edge.dir != seg.dir {
+            if edge.dir != seg_dir {
                 continue;
             }
             let dist = (edge.fpos as i32 - seg_pos).abs();
             if dist < edge_dist_thresh && dist < best_dist {
                 // afcjk.c:1065-1085 — linked segment compatibility
-                let link = seg.link;
+                let link = seg_link;
                 if link != usize::MAX {
                     let mut ok = true;
                     let mut s1 = edge.first;
@@ -248,7 +436,7 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
                 opos,
                 pos: opos,
                 flags: 0,
-                dir: seg.dir,
+                dir: seg_dir,
                 link: usize::MAX,
                 serif: usize::MAX,
                 first: seg_idx,
@@ -256,19 +444,28 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
                 blue_edge: None,
             };
             axis.segments[seg_idx].edge_next = seg_idx;
-            let insert_at = if top_to_bottom {
-                let mut p = 0;
-                while p < axis.edges.len() && axis.edges[p].fpos > fpos {
-                    p += 1;
+            let mut insert_at = axis.edges.len();
+            while insert_at > 0 {
+                let prev = &axis.edges[insert_at - 1];
+                let is_before = if top_to_bottom {
+                    prev.fpos > fpos
+                } else {
+                    prev.fpos < fpos
+                };
+                if is_before {
+                    break;
                 }
-                p
-            } else {
-                let mut p = 0;
-                while p < axis.edges.len() && axis.edges[p].fpos < fpos {
-                    p += 1;
+
+                // FreeType's `af_axis_hints_new_edge` keeps same-position
+                // major-direction edges after earlier peers; minor-direction
+                // peers are inserted before them.  Duplicate CJK strokes rely
+                // on this order when segment links are reduced to edge links.
+                if prev.fpos == fpos && seg_dir == axis.major_dir {
+                    break;
                 }
-                p
-            };
+
+                insert_at -= 1;
+            }
             axis.edges.insert(insert_at, new_edge);
         }
     }
@@ -353,8 +550,240 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
     }
 }
 
+/// Apply the CJK-specific roundness rule from `af_cjk_hints_compute_segments`.
+///
+/// C first reuses the Latin segment scanner, then marks a segment as round
+/// only if it doesn't contain two successive on-curve points. This differs
+/// from Latin's flat-threshold heuristic and feeds directly into stem
+/// alignment thresholds.
+pub fn cjk_mark_round_segments(hints: &mut GlyphHints, dim: Dimension) {
+    let axis = &mut hints.axis[dim as usize];
+    for seg in &mut axis.segments {
+        seg.flags &= !AF_EDGE_ROUND;
+
+        let mut pt = seg.first;
+        let last = seg.last;
+        let mut f0 = hints.points[pt].flags & AF_FLAG_CONTROL;
+        loop {
+            if pt == last {
+                break;
+            }
+            pt = hints.points[pt].next;
+            let f1 = hints.points[pt].flags & AF_FLAG_CONTROL;
+            if f0 == 0 && f1 == 0 {
+                break;
+            }
+            if pt == last {
+                seg.flags |= AF_EDGE_ROUND;
+                break;
+            }
+            f0 = f1;
+        }
+    }
+}
+
+/// Link CJK segments into stems and serifs.
+///
+/// This is the CJK-specific counterpart to Latin `link_segments_inner`, ported
+/// from `af_cjk_hints_link_segments` in `afcjk.c`. CJK uses direct distance
+/// scoring plus a Hanzi serif pass instead of Latin width-demerit scoring.
+pub fn cjk_link_segments(hints: &mut GlyphHints, dim: Dimension) {
+    let axis = &mut hints.axis[dim as usize];
+    let n = axis.segments.len();
+    let major_dir = axis.major_dir;
+    let upem = hints.metrics.as_ref().map_or(2048, |m| m.units_per_em);
+    let len_threshold = (8 * upem) / 2048;
+    let scale = if dim == Dimension::Horz {
+        hints.x_scale
+    } else {
+        hints.y_scale
+    };
+    let dist_threshold = ft_div_fix(64 * 3, scale);
+
+    for seg in &mut axis.segments {
+        seg.score = 32000;
+        seg.link = usize::MAX;
+        seg.serif = usize::MAX;
+    }
+
+    for i in 0..n {
+        if axis.segments[i].dir != major_dir {
+            continue;
+        }
+
+        let pos1 = axis.segments[i].pos as i32;
+        for j in 0..n {
+            if i == j {
+                continue;
+            }
+            if axis.segments[i].dir as i8 + axis.segments[j].dir as i8 != 0 {
+                continue;
+            }
+
+            let dist = axis.segments[j].pos as i32 - pos1;
+            if dist < 0 {
+                continue;
+            }
+
+            let min = (axis.segments[i].min_coord as i32).max(axis.segments[j].min_coord as i32);
+            let max = (axis.segments[i].max_coord as i32).min(axis.segments[j].max_coord as i32);
+            let len = max - min;
+            if len < len_threshold {
+                continue;
+            }
+
+            if dist * 8 < axis.segments[i].score * 9
+                && (dist * 8 < axis.segments[i].score * 7 || (axis.segments[i].height as i32) < len)
+            {
+                axis.segments[i].score = dist;
+                axis.segments[i].height = i16_from_i32(len);
+                axis.segments[i].link = j;
+            }
+
+            if dist * 8 < axis.segments[j].score * 9
+                && (dist * 8 < axis.segments[j].score * 7 || (axis.segments[j].height as i32) < len)
+            {
+                axis.segments[j].score = dist;
+                axis.segments[j].height = i16_from_i32(len);
+                axis.segments[j].link = i;
+            }
+        }
+    }
+
+    for i in 0..n {
+        let link1 = axis.segments[i].link;
+        if link1 == usize::MAX || axis.segments[link1].link != i {
+            continue;
+        }
+        if axis.segments[link1].pos <= axis.segments[i].pos {
+            continue;
+        }
+        if axis.segments[i].score >= dist_threshold {
+            continue;
+        }
+
+        for j in 0..n {
+            if axis.segments[j].pos > axis.segments[i].pos || i == j {
+                continue;
+            }
+
+            let link2 = axis.segments[j].link;
+            if link2 == usize::MAX || axis.segments[link2].link != j {
+                continue;
+            }
+            if axis.segments[link2].pos < axis.segments[link1].pos {
+                continue;
+            }
+            if axis.segments[i].pos == axis.segments[j].pos
+                && axis.segments[link1].pos == axis.segments[link2].pos
+            {
+                continue;
+            }
+            if axis.segments[j].score <= axis.segments[i].score
+                || axis.segments[i].score * 4 <= axis.segments[j].score
+            {
+                continue;
+            }
+
+            if axis.segments[i].height as i32 >= axis.segments[j].height as i32 * 3 {
+                for k in 0..n {
+                    let link = axis.segments[k].link;
+                    if link == j {
+                        axis.segments[k].link = usize::MAX;
+                        axis.segments[k].serif = link1;
+                    } else if link == link2 {
+                        axis.segments[k].link = usize::MAX;
+                        axis.segments[k].serif = i;
+                    }
+                }
+            } else {
+                axis.segments[i].link = usize::MAX;
+                axis.segments[link1].link = usize::MAX;
+                break;
+            }
+        }
+    }
+
+    for i in 0..n {
+        let seg2 = axis.segments[i].link;
+        if seg2 == usize::MAX {
+            continue;
+        }
+        let seg2_link = axis.segments[seg2].link;
+        if seg2_link != i {
+            axis.segments[i].link = usize::MAX;
+            if seg2_link != usize::MAX
+                && (axis.segments[seg2].score < dist_threshold
+                    || axis.segments[i].score < axis.segments[seg2].score * 4)
+            {
+                axis.segments[i].serif = seg2_link;
+            }
+        }
+    }
+}
+
+/// Assign CJK edges to active blue zones for the current dimension.
+///
+/// CJK has horizontal and vertical blue zones and no Latin neutral/round
+/// overshoot special cases. The nearest active reference/shoot blue wins.
+pub fn cjk_compute_blue_edges(hints: &mut GlyphHints, dim: Dimension) {
+    let Some(metrics) = hints.metrics.as_ref() else {
+        return;
+    };
+    let axis_metrics = &metrics.axis[dim as usize];
+    if axis_metrics.blue_count == 0 {
+        return;
+    }
+
+    let axis = &mut hints.axis[dim as usize];
+    let scale = axis_metrics.scale;
+    let major_dir = axis.major_dir;
+    let mut best_dist0 = ft_mul_fix(metrics.units_per_em / 40, scale);
+    if best_dist0 > 32 {
+        best_dist0 = 32;
+    }
+
+    for edge in &mut axis.edges {
+        let mut best_blue = None;
+        let mut best_dist = best_dist0;
+
+        for blue in axis_metrics.blues.iter().take(axis_metrics.blue_count) {
+            if blue.flags & AF_LATIN_BLUE_ACTIVE == 0 {
+                continue;
+            }
+
+            let is_top_right = blue.flags & AF_LATIN_BLUE_TOP != 0;
+            let is_major = edge.dir == major_dir;
+            if !(is_top_right ^ is_major) {
+                continue;
+            }
+
+            let compare = if (edge.fpos as i32 - blue.ref_width.org).abs()
+                > (edge.fpos as i32 - blue.shoot_width.org).abs()
+            {
+                blue.shoot_width
+            } else {
+                blue.ref_width
+            };
+            let dist = ft_mul_fix((edge.fpos as i32 - compare.org).abs(), scale);
+            if dist < best_dist {
+                best_dist = dist;
+                best_blue = Some(compare);
+            }
+        }
+
+        if let Some(blue) = best_blue {
+            edge.blue_edge = Some(blue);
+        }
+    }
+}
+
 fn ft_pix_floor(x: i32) -> i32 {
     x & !63
+}
+
+fn ft_pix_round(x: i32) -> i32 {
+    (x + 32) & !63
 }
 
 fn cjk_snap_width(widths: &[i32], mut width: i32) -> i32 {
@@ -703,6 +1132,40 @@ pub(super) fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i
         axis.edges[link].flags |= AF_EDGE_DONE;
         has_last_stem = true;
         last_stem_pos = axis.edges[link].pos;
+    }
+
+    // CJK keeps symmetric repeated stems stable before interpolating skipped
+    // edges.  FreeType applies this only to horizontal edge sets shaped like a
+    // sans-serif `m` (6 edges) or serif `m` (12 edges); see afcjk.c:2036-2097.
+    if dim == Dimension::Horz && (num_edges == 6 || num_edges == 12) {
+        let (edge1, edge2, edge3) = if num_edges == 6 {
+            (0usize, 2usize, 4usize)
+        } else {
+            (1usize, 5usize, 9usize)
+        };
+        let dist1 = axis.edges[edge2].opos - axis.edges[edge1].opos;
+        let dist2 = axis.edges[edge3].opos - axis.edges[edge2].opos;
+
+        if (dist1 - dist2).abs() < 8
+            && axis.edges[edge1].link == edge1 + 1
+            && axis.edges[edge2].link == edge2 + 1
+            && axis.edges[edge3].link == edge3 + 1
+        {
+            let delta = axis.edges[edge3].pos - (2 * axis.edges[edge2].pos - axis.edges[edge1].pos);
+            axis.edges[edge3].pos -= delta;
+            let edge3_link = axis.edges[edge3].link;
+            if edge3_link != usize::MAX {
+                axis.edges[edge3_link].pos -= delta;
+            }
+            if num_edges == 12 {
+                axis.edges[8].pos -= delta;
+                axis.edges[11].pos -= delta;
+            }
+            axis.edges[edge3].flags |= AF_EDGE_DONE;
+            if edge3_link != usize::MAX {
+                axis.edges[edge3_link].flags |= AF_EDGE_DONE;
+            }
+        }
     }
 
     if skipped == 0 {

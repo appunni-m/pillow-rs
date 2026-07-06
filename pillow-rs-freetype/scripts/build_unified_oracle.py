@@ -16,13 +16,28 @@ def main() -> None:
     out = root / args.out
     out.parent.mkdir(parents=True, exist_ok=True)
     source = root / "scripts" / "gen_unified_oracle.c"
+    constants = root / "target" / "unified-fixtures" / "generated_constants.inc"
+    generator = root / "scripts" / "generate_public_constants.py"
     script = pathlib.Path(__file__).resolve()
     library = root / "freetype" / "build" / "libfreetype.so"
     freetype_build = root / "freetype" / "build"
 
+    subprocess.run(
+        [
+            os.environ.get("PYTHON", "python3"),
+            str(generator),
+            "--oracle-inc",
+            str(constants.relative_to(root)),
+        ],
+        check=True,
+        cwd=root,
+    )
+
     if out.exists() and out.stat().st_mtime >= max(
         script.stat().st_mtime,
         source.stat().st_mtime,
+        generator.stat().st_mtime,
+        constants.stat().st_mtime,
         library.stat().st_mtime,
     ):
         print(out)
@@ -33,6 +48,8 @@ def main() -> None:
         "-std=c11",
         "-I",
         str(root / "freetype" / "include"),
+        "-I",
+        str(constants.parent),
         str(source),
         "-L",
         str(freetype_build),

@@ -55,6 +55,19 @@ fn main() {
             fontdone::LoadMode::NoHinting => fontdone::LoadFlags::NO_HINTING,
             fontdone::LoadMode::NoAutoHint => fontdone::LoadFlags::NO_AUTOHINT,
         };
+        let flags = match env::var("FT_RS_TARGET_MODE").ok().as_deref() {
+            Some("mono") => flags | fontdone::LoadFlags::TARGET_MONO,
+            Some("lcd") => flags | fontdone::LoadFlags::TARGET_LCD,
+            Some("lcd-v") => flags | fontdone::LoadFlags::TARGET_LCD_V,
+            Some("light") => flags | fontdone::LoadFlags::TARGET_LIGHT,
+            Some("normal") | None => flags,
+            Some(other) => panic!("unknown FT_RS_TARGET_MODE={other}"),
+        };
+        let flags = if env::var_os("FT_RS_VERTICAL_LAYOUT").is_some() {
+            flags | fontdone::LoadFlags::VERTICAL_LAYOUT
+        } else {
+            flags
+        };
         let glyph = glyph_override.unwrap_or_else(|| face.get_char_index(ch as u32));
         let slot = if glyph_override.is_some() {
             face.load_glyph(glyph, flags).expect("load glyph")
@@ -80,13 +93,21 @@ fn main() {
     if env::var_os("FT_RS_DUMP_METRICS").is_some() {
         let glyph = glyph_override.unwrap_or_else(|| font.char_index(ch as u32));
         let metrics_cache = font.face_globals.get_metrics(glyph);
+        let native_hint_mode = match env::var("FT_RS_TARGET_MODE").ok().as_deref() {
+            Some("mono") => fontdone::tt::hinter::NativeHintMode::Mono,
+            Some("lcd") => fontdone::tt::hinter::NativeHintMode::Lcd,
+            Some("lcd-v") => fontdone::tt::hinter::NativeHintMode::LcdV,
+            Some("light") | Some("normal") | None => fontdone::tt::hinter::NativeHintMode::Normal,
+            Some(other) => panic!("unknown FT_RS_TARGET_MODE={other}"),
+        };
         let metrics_scaled = match load_mode {
             fontdone::LoadMode::ForceAutoHint => {
-                fontdone::scaler::scale_glyph_for_metrics_with_autohint(
+                fontdone::scaler::scale_glyph_for_metrics_with_autohint_and_mode(
                     &font.data,
                     glyph,
                     metrics_cache.as_deref(),
                     font.is_italic,
+                    native_hint_mode,
                 )
                 .expect("scale glyph for force-autohint metrics")
             }
@@ -102,12 +123,18 @@ fn main() {
                     .expect("scale glyph for no-hinting metrics")
             }
             fontdone::LoadMode::Default | fontdone::LoadMode::NoAutoHint => {
-                fontdone::scaler::scale_glyph_for_metrics(&font.data, glyph, font.is_italic)
-                    .expect("scale glyph for metrics")
+                fontdone::scaler::scale_glyph_for_metrics_with_bytecode_context_and_mode(
+                    &font.data,
+                    glyph,
+                    font.is_italic,
+                    native_hint_mode,
+                    None,
+                )
+                .expect("scale glyph for metrics")
             }
         };
         eprintln!(
-            "[R METRICS SCALED] glyph={} cbox=({}, {}, {}, {}) outline_cbox=({}, {}, {}, {}) outline_bbox=({}, {}, {}, {}) bitmap=({}, {}, {}, {}) advance={} slot_advance={} lsb={}",
+            "[R METRICS SCALED] glyph={} cbox=({}, {}, {}, {}) outline_cbox=({}, {}, {}, {}) outline_bbox=({}, {}, {}, {}) bitmap=({}, {}, {}, {}) advance={} slot_advance={} lsb={} pp1={} pp2={}",
             glyph,
             metrics_scaled.cbox_x_min,
             metrics_scaled.cbox_y_min,
@@ -127,7 +154,9 @@ fn main() {
             metrics_scaled.bbox_y_max,
             metrics_scaled.advance_width,
             metrics_scaled.slot_advance_width,
-            metrics_scaled.lsb
+            metrics_scaled.lsb,
+            metrics_scaled.phantom_pp1_x,
+            metrics_scaled.phantom_pp2_x
         );
         let outline_scaled = fontdone::scaler::scale_glyph(&font.data, glyph, None, font.is_italic)
             .expect("scale glyph for outline");
@@ -172,8 +201,62 @@ fn main() {
 
     if env::var_os("FT_RS_DUMP_OUTLINE").is_some() {
         let glyph = glyph_override.unwrap_or_else(|| font.char_index(ch as u32));
-        let scaled = fontdone::scaler::scale_glyph(&font.data, glyph, None, font.is_italic)
-            .expect("scale glyph");
+        let metrics_cache = font.face_globals.get_metrics(glyph);
+        let native_hint_mode = match env::var("FT_RS_TARGET_MODE").ok().as_deref() {
+            Some("mono") => fontdone::tt::hinter::NativeHintMode::Mono,
+            Some("lcd") => fontdone::tt::hinter::NativeHintMode::Lcd,
+            Some("lcd-v") => fontdone::tt::hinter::NativeHintMode::LcdV,
+            Some("light") | Some("normal") | None => fontdone::tt::hinter::NativeHintMode::Normal,
+            Some(other) => panic!("unknown FT_RS_TARGET_MODE={other}"),
+        };
+        let scaled = match load_mode {
+            fontdone::LoadMode::ForceAutoHint => match native_hint_mode {
+                fontdone::tt::hinter::NativeHintMode::Normal => fontdone::scaler::scale_glyph(
+                    &font.data,
+                    glyph,
+                    metrics_cache.as_deref(),
+                    font.is_italic,
+                ),
+                fontdone::tt::hinter::NativeHintMode::Mono => fontdone::scaler::scale_glyph_mono(
+                    &font.data,
+                    glyph,
+                    metrics_cache.as_deref(),
+                    font.is_italic,
+                ),
+                fontdone::tt::hinter::NativeHintMode::Lcd => fontdone::scaler::scale_glyph_lcd(
+                    &font.data,
+                    glyph,
+                    metrics_cache.as_deref(),
+                    font.is_italic,
+                ),
+                fontdone::tt::hinter::NativeHintMode::LcdV => fontdone::scaler::scale_glyph_lcd_v(
+                    &font.data,
+                    glyph,
+                    metrics_cache.as_deref(),
+                    font.is_italic,
+                ),
+            },
+            fontdone::LoadMode::TargetLight => fontdone::scaler::scale_glyph_light(
+                &font.data,
+                glyph,
+                metrics_cache.as_deref(),
+                font.is_italic,
+            ),
+            fontdone::LoadMode::NoHinting => {
+                fontdone::scaler::scale_glyph_no_hinting(&font.data, glyph, font.is_italic)
+            }
+            fontdone::LoadMode::Default | fontdone::LoadMode::NoAutoHint => {
+                fontdone::scaler::scale_glyph_native_default_with_bytecode_context_and_mode(
+                    &font.data,
+                    glyph,
+                    None,
+                    font.is_italic,
+                    native_hint_mode,
+                    None,
+                )
+            }
+        }
+        .expect("scale glyph");
         eprintln!(
             "[R OUTLINE] glyph={} contours={} points={} cbox=({}, {}, {}, {})",
             glyph,

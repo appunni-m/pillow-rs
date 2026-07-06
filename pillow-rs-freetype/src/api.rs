@@ -61,6 +61,8 @@ impl LoadFlags {
     pub const VERTICAL_LAYOUT: Self = Self(1 << 8);
     /// Use FreeType's light auto-hint target: vertical hinting only, gray render.
     pub const TARGET_LIGHT: Self = Self(1 << 9);
+    /// Render as monochrome when the load target is normal.
+    pub const MONOCHROME_RENDER: Self = Self(1 << 10);
 
     /// Return true if all bits in `other` are set.
     pub fn contains(self, other: Self) -> bool {
@@ -68,7 +70,12 @@ impl LoadFlags {
     }
 
     fn render_mode(self) -> RenderMode {
-        if self.contains(Self::TARGET_MONO) {
+        if self.contains(Self::TARGET_MONO)
+            || (self.contains(Self::MONOCHROME_RENDER)
+                && !self.contains(Self::TARGET_LCD)
+                && !self.contains(Self::TARGET_LCD_V)
+                && !self.contains(Self::TARGET_LIGHT))
+        {
             RenderMode::Mono
         } else if self.contains(Self::TARGET_LCD) {
             RenderMode::Lcd
@@ -89,6 +96,10 @@ impl LoadFlags {
         } else {
             NativeHintMode::Normal
         }
+    }
+
+    pub(crate) fn without(self, other: Self) -> Self {
+        Self(self.0 & !other.0)
     }
 }
 
@@ -279,7 +290,11 @@ impl Face {
             && !flags.contains(LoadFlags::NO_AUTOHINT)
         {
             self.font
-                .glyph_metrics_for_index_force_autohint_with_layout(glyph_index, vertical_layout)?
+                .glyph_metrics_for_index_force_autohint_with_layout_and_mode(
+                    glyph_index,
+                    vertical_layout,
+                    native_hint_mode,
+                )?
         } else if flags.contains(LoadFlags::NO_AUTOHINT) {
             self.font
                 .glyph_metrics_for_index_no_autohint_with_layout_and_mode(
@@ -299,8 +314,11 @@ impl Face {
         let render_requested = flags.contains(LoadFlags::RENDER);
         let bitmap = if render_requested {
             let render_font = self.render_font(flags)?;
-            let bitmap =
-                render_font.render_char_mode_for_index(glyph_index, flags.render_mode())?;
+            let bitmap = render_font.render_char_mode_for_index_with_native_hint_mode(
+                glyph_index,
+                flags.render_mode(),
+                native_hint_mode,
+            )?;
             if bitmap.buffer.is_empty() {
                 None
             } else {
@@ -317,6 +335,20 @@ impl Face {
             vertical_layout,
             render_requested,
         ))
+    }
+
+    pub fn render_loaded_glyph(
+        &self,
+        glyph_index: u16,
+        load_flags: LoadFlags,
+        mode: RenderMode,
+    ) -> Result<GlyphSlot, FontError> {
+        let load_only_flags = load_flags.without(LoadFlags::RENDER);
+        let mut slot = self.load_glyph(glyph_index, load_only_flags)?;
+        let render_font = self.render_font(load_only_flags)?;
+        let bitmap = render_font.render_loaded_char_mode_for_index(glyph_index, mode)?;
+        slot.set_rendered_bitmap(bitmap);
+        Ok(slot)
     }
 
     fn render_font(&self, flags: LoadFlags) -> Result<Font, FontError> {
@@ -404,5 +436,18 @@ impl GlyphSlot {
     /// Return the rendered bitmap's pixel mode, if a bitmap is present.
     pub fn pixel_mode(&self) -> Option<PixelMode> {
         self.bitmap.as_ref().map(|bitmap| bitmap.pixel_mode)
+    }
+
+    fn set_rendered_bitmap(&mut self, bitmap: RenderedBitmap) {
+        if bitmap.buffer.is_empty() {
+            self.bitmap_left = 0;
+            self.bitmap_top = 0;
+            self.bitmap = None;
+        } else {
+            self.bitmap_left = bitmap.left;
+            self.bitmap_top = bitmap.top;
+            self.bitmap = Some(bitmap);
+        }
+        self.format = GlyphFormat::Bitmap;
     }
 }

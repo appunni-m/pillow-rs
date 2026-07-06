@@ -130,6 +130,7 @@ fn dump_render_mode_glyph() {
         "mono" => RenderMode::Mono,
         "lcd" => RenderMode::Lcd,
         "lcd_v" => RenderMode::LcdV,
+        "sdf" => RenderMode::Sdf,
         other => panic!("unknown PIPE_MODE {other}"),
     };
 
@@ -139,7 +140,7 @@ fn dump_render_mode_glyph() {
     let gid = font.data.cmap.char_index(ch as u32).unwrap_or(0);
     let metrics_cache = font.face_globals.get_metrics(gid);
     let scaled = match mode {
-        RenderMode::Normal => {
+        RenderMode::Normal | RenderMode::Sdf => {
             scaler::scale_glyph_native_default(&font.data, gid, None, font.is_italic).unwrap()
         }
         RenderMode::Mono => {

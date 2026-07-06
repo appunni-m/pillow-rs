@@ -37,6 +37,7 @@ pub mod zone;
 
 use crate::error::FontError;
 use crate::outline::OutlinePoint;
+use crate::outline::{OUTLINE_IGNORE_DROPOUTS, OUTLINE_INCLUDE_STUBS, OUTLINE_SMART_DROPOUTS};
 use zone::GlyphZone;
 
 /// TrueType interpreter render mode used by GETINFO and prep re-execution.
@@ -56,20 +57,31 @@ pub enum NativeHintMode {
 pub struct HintScale {
     pub x_scale: i32,
     pub y_scale: i32,
+    pub tt_scale: i32,
     pub ppem: i32,
+    pub point_size: i32,
     pub storage_size: usize,
     pub twilight_points: usize,
     pub is_composite: bool,
     pub reset_vectors_at_glyph_entry: bool,
     pub metrics_legacy_phantoms: bool,
     pub native_hint_mode: NativeHintMode,
+    pub phantom_x_override: Option<(i32, i32)>,
 }
 
 /// Metrics side effects produced by glyph bytecode hinting.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct HintOutcome {
     /// Horizontal advance derived from hinted phantom points, in 26.6 pixels.
     pub advance_width: i32,
+    pub pp1_x: i32,
+    pub pp2_x: i32,
+    /// Outline dropout flags derived from TrueType scan-control state.
+    pub outline_flags: u32,
+    /// Per-contour black rasterizer dropout controls.
+    pub contour_dropouts: Vec<u8>,
+    /// Execution context after running this glyph program.
+    pub context: exec::ExecContext,
 }
 
 /// Build the reusable TrueType execution state for one face/size.
@@ -161,7 +173,12 @@ pub fn hint_glyph(
     let n_phantoms = 4;
     let total = n_points + n_phantoms;
     let n_pts: u16 = u16::try_from(total).unwrap_or(u16::MAX);
-    let seed_pp2_x = crate::fixed::ft_mul_fix(raw_pp1_x + raw_advance_width, scale.x_scale);
+    let default_pp2_x = crate::fixed::ft_mul_fix(raw_pp1_x + raw_advance_width, scale.x_scale);
+    let (seed_pp1_x, seed_pp2_x) = if scale.is_composite && !scale.metrics_legacy_phantoms {
+        scale.phantom_x_override.unwrap_or((pp1_x, default_pp2_x))
+    } else {
+        (pp1_x, default_pp2_x)
+    };
 
     let mut zone = GlyphZone {
         cur_x: Vec::with_capacity(total),
@@ -214,7 +231,7 @@ pub fn hint_glyph(
         // Add phantom points.
         // FreeType seeds horizontal phantoms as pp1 = xMin - lsb and
         // pp2 = pp1 + advance, then translates the final outline by -pp1.x.
-        zone.cur_x.push(pp1_x);
+        zone.cur_x.push(seed_pp1_x);
         zone.cur_y.push(0);
         zone.orus_x.push(raw_pp1_x);
         zone.orus_y.push(0);
@@ -240,6 +257,13 @@ pub fn hint_glyph(
     // Copy cur → org for the bytecode interpreter's initial state
     zone.org_x = zone.cur_x.clone();
     zone.org_y = zone.cur_y.clone();
+    if scale.is_composite {
+        // C `TT_Hint_Glyph` treats composite parent instructions as operating
+        // on already hinted subglyph positions: it copies `cur` into `orus`
+        // and runs the interpreter with identity scales (ttgload.c:797-806).
+        zone.orus_x = zone.cur_x.clone();
+        zone.orus_y = zone.cur_y.clone();
+    }
 
     // ── Initialize execution context ──────────────────────────────────
     let mut ctx = if let Some(prepared) = prepared_context {
@@ -248,6 +272,10 @@ pub fn hint_glyph(
         prepare_context(cvt, fpgm, prep, scale)?
     };
     ctx.is_composite = scale.is_composite;
+    if scale.is_composite {
+        ctx.x_scale = 1 << 16;
+        ctx.y_scale = 1 << 16;
+    }
 
     if !scale.metrics_legacy_phantoms || ctx.backward_compatibility == 0 {
         // C `TT_Hint_Glyph` rounds phantom points before bytecode execution
@@ -267,6 +295,10 @@ pub fn hint_glyph(
 
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {
+        // C `TT_Run_Context` resets the IUP tracking bits before every glyph
+        // program while preserving the compatibility-mode enable bit
+        // (`ttinterp.c:7529-7532`).
+        ctx.backward_compatibility &= !0x3;
         if scale.reset_vectors_at_glyph_entry {
             ctx.gs.set_vectors_to_x();
         }
@@ -307,10 +339,58 @@ pub fn hint_glyph(
                 .unwrap_or(advance_width),
         )
     } else {
-        (pp1_x, seed_pp2_x)
+        (seed_pp1_x, seed_pp2_x)
     };
+    let outline_flags = outline_flags_from_scan_control(ctx.gs.scan_control, ctx.gs.scan_type);
+    let mut contour_dropouts =
+        vec![dropout_control_from_outline_flags(outline_flags); contours.len()];
+    if !glyph_ins.is_empty() && !contour_dropouts.is_empty() {
+        // C `TT_Hint_Glyph` stores `GS.scan_type` in the first outline tag
+        // after executing glyph bytecode; `ftraster.c` lets that tag override
+        // outline-level dropout flags for the first contour only.
+        contour_dropouts[0] = ctx.gs.scan_type & 7;
+    }
 
     Ok(HintOutcome {
         advance_width: pp2 - pp1,
+        pp1_x: pp1,
+        pp2_x: pp2,
+        outline_flags,
+        contour_dropouts,
+        context: ctx,
     })
+}
+
+fn outline_flags_from_scan_control(scan_control: bool, scan_type: u8) -> u32 {
+    if !scan_control {
+        return OUTLINE_IGNORE_DROPOUTS;
+    }
+
+    outline_flags_from_scan_type(scan_type)
+}
+
+fn outline_flags_from_scan_type(scan_type: u8) -> u32 {
+    // C `ttgload.c` maps TrueType scan conversion modes to
+    // `FT_OUTLINE_*` flags before the black rasterizer consumes them.
+    match scan_type {
+        0 => OUTLINE_INCLUDE_STUBS,
+        1 => 0,
+        4 => OUTLINE_SMART_DROPOUTS | OUTLINE_INCLUDE_STUBS,
+        5 => OUTLINE_SMART_DROPOUTS,
+        _ => OUTLINE_IGNORE_DROPOUTS,
+    }
+}
+
+fn dropout_control_from_outline_flags(flags: u32) -> u8 {
+    let mut control = 0;
+    if flags & OUTLINE_IGNORE_DROPOUTS != 0 {
+        control |= 2;
+    }
+    if flags & OUTLINE_SMART_DROPOUTS != 0 {
+        control |= 4;
+    }
+    if flags & OUTLINE_INCLUDE_STUBS == 0 {
+        control |= 1;
+    }
+    control
 }

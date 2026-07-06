@@ -63,17 +63,12 @@ impl From<SizeMetrics> for FT_Size_Metrics {
 
 impl From<RenderedBitmap> for FT_Bitmap {
     fn from(value: RenderedBitmap) -> Self {
-        // FreeType exposes 256 grays on rendered glyph slot bitmaps in the
-        // matrix lanes, including FT_PIXEL_MODE_MONO.
-        let num_grays = match value.pixel_mode {
-            PixelMode::Mono | PixelMode::Gray | PixelMode::Lcd | PixelMode::LcdV => 256,
-        };
         Self {
             rows: value.rows,
             width: value.width,
             pitch: value.pitch,
             buffer: value.buffer,
-            num_grays,
+            num_grays: value.num_grays,
             pixel_mode: pixel_mode_from_core(value.pixel_mode),
         }
     }
@@ -116,7 +111,7 @@ pub fn load_flags_to_core(flags: FT_Int32) -> Result<api::LoadFlags, FT_Error> {
         core |= api::LoadFlags::VERTICAL_LAYOUT;
     }
     if flags & FT_LOAD_MONOCHROME != 0 {
-        core |= api::LoadFlags::TARGET_MONO;
+        core |= api::LoadFlags::MONOCHROME_RENDER;
     }
     core |= match FT_LOAD_TARGET_MODE(flags) {
         FT_RENDER_MODE_NORMAL => api::LoadFlags::DEFAULT,
@@ -144,7 +139,8 @@ pub fn render_mode_to_core(mode: FT_Render_Mode) -> Option<RenderMode> {
         FT_RENDER_MODE_MONO => Some(RenderMode::Mono),
         FT_RENDER_MODE_LCD => Some(RenderMode::Lcd),
         FT_RENDER_MODE_LCD_V => Some(RenderMode::LcdV),
-        FT_RENDER_MODE_SDF | FT_RENDER_MODE_MAX => None,
+        FT_RENDER_MODE_SDF => Some(RenderMode::Sdf),
+        FT_RENDER_MODE_MAX => None,
         _ => None,
     }
 }
@@ -172,6 +168,7 @@ pub(super) fn load_flag_for_render_mode(mode: RenderMode) -> api::LoadFlags {
         RenderMode::Mono => api::LoadFlags::TARGET_MONO,
         RenderMode::Lcd => api::LoadFlags::TARGET_LCD,
         RenderMode::LcdV => api::LoadFlags::TARGET_LCD_V,
+        RenderMode::Sdf => api::LoadFlags::DEFAULT,
     }
 }
 

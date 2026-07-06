@@ -61,44 +61,958 @@ pub struct ApplyHintsMetrics {
 
 // ── Vertical separation adjustment constants (from afadjust.h) ──────────────
 pub const AF_ADJUST_UP: u32 = 0x0001;
-pub const AF_ADJUST_UP2: u32 = 0x0002;
-pub const AF_ADJUST_DOWN: u32 = 0x0004;
+pub const AF_ADJUST_DOWN: u32 = 0x0002;
+pub const AF_ADJUST_UP2: u32 = 0x0004;
 pub const AF_ADJUST_DOWN2: u32 = 0x0008;
+pub const AF_ADJUST_TILDE_TOP: u32 = 0x0010;
+pub const AF_ADJUST_TILDE_BOTTOM: u32 = 0x0020;
+pub const AF_ADJUST_TILDE_TOP2: u32 = 0x0040;
+pub const AF_ADJUST_TILDE_BOTTOM2: u32 = 0x0080;
+pub const AF_IGNORE_CAPITAL_TOP: u32 = 0x0100;
+pub const AF_IGNORE_CAPITAL_BOTTOM: u32 = 0x0200;
+pub const AF_IGNORE_SMALL_TOP: u32 = 0x0400;
+pub const AF_IGNORE_SMALL_BOTTOM: u32 = 0x0800;
+pub const AF_ADJUST_NO_HEIGHT_CHECK: u32 = 0x1000;
 
-/// Port of FreeType's af_adjustment_database_lookup (afadjust.c).
-/// Keyed by Unicode codepoint → AF_ADJUST_* flags.
-/// Only entries relevant to subscript/superscript (latb/latp) included.
+/// Port of FreeType's `adjustment_database` in `afadjust.c`.
+/// Keyed by Unicode codepoint; sorted for binary search lookup.
 #[rustfmt::skip]
 static ADJUSTMENT_DATABASE: &[(u32, u32)] = &[
-    (0x0021, AF_ADJUST_UP),  /* ! */
-    (0x003F, AF_ADJUST_UP),  /* ? */
-    (0x0069, AF_ADJUST_UP),  /* i */
-    (0x006A, AF_ADJUST_UP),  /* j */
-    (0x006C, AF_ADJUST_UP),  /* l */
-    (0x00AA, AF_ADJUST_UP),  /* ª */
-    (0x00BA, AF_ADJUST_UP),  /* º */
-    (0x00BF, AF_ADJUST_UP),  /* ¿ */
-    (0x0131, AF_ADJUST_UP),  /* ı */
-    (0x0132, AF_ADJUST_UP),  /* Ĳ */
-    (0x0133, AF_ADJUST_UP),  /* ĳ */
-    (0x0237, AF_ADJUST_UP),  /* ȷ */
-    (0x02B0, AF_ADJUST_UP),  /* ʰ superscript h */
-    (0x02B2, AF_ADJUST_UP),  /* ʲ superscript j */
-    (0x02B3, AF_ADJUST_UP),  /* ʳ superscript r */
-    (0x02E1, AF_ADJUST_UP),  /* ˡ superscript l */
-    (0x02E2, AF_ADJUST_UP),  /* ˢ superscript s */
-    (0x1D43, AF_ADJUST_UP),  /* ᵃ superscript a */
-    (0x1D47, AF_ADJUST_UP),  /* ᵇ superscript b */
-    (0x1D52, AF_ADJUST_UP),  /* ᵒ superscript o */
-    (0x1D56, AF_ADJUST_UP),  /* ᵖ superscript p */
-    (0x1D58, AF_ADJUST_UP),  /* ᵘ superscript u */
-    (0x1D62, AF_ADJUST_UP),  /* ᵢ subscript i */
-    (0x2071, AF_ADJUST_UP),  /* ⁱ superscript i */
-    (0x207A, AF_ADJUST_UP),  /* ⁺ superscript + */
-    (0x207E, AF_ADJUST_UP),  /* ⁾ superscript ) */
-    (0x2092, AF_ADJUST_UP),  /* ₒ subscript o */
-    (0x2C7C, AF_ADJUST_UP),  /* ⱼ subscript j */
-    (0xA770, AF_ADJUST_UP),  /* ꝰ modifier letter */
+    (0x0021, AF_ADJUST_UP | AF_ADJUST_NO_HEIGHT_CHECK), /* ! */
+    (0x003F, AF_ADJUST_UP | AF_ADJUST_NO_HEIGHT_CHECK), /* ? */
+    (0x0051, AF_IGNORE_CAPITAL_BOTTOM), /* Q */
+    (0x0069, AF_ADJUST_UP), /* i */
+    (0x006A, AF_ADJUST_UP), /* j */
+    (0x00A1, AF_ADJUST_UP), /* ¡ */
+    (0x00A6, AF_ADJUST_UP | AF_ADJUST_NO_HEIGHT_CHECK), /* ¦ */
+    (0x00AA, AF_ADJUST_UP), /* ª */
+    (0x00BA, AF_ADJUST_UP), /* º */
+    (0x00BF, AF_ADJUST_UP), /* ¿ */
+    (0x00C0, AF_ADJUST_UP), /* À */
+    (0x00C1, AF_ADJUST_UP), /* Á */
+    (0x00C2, AF_ADJUST_UP), /* Â */
+    (0x00C3, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* Ã */
+    (0x00C4, AF_ADJUST_UP), /* Ä */
+    (0x00C5, AF_ADJUST_UP), /* Å */
+    (0x00C7, AF_IGNORE_CAPITAL_BOTTOM), /* Ç */
+    (0x00C8, AF_ADJUST_UP), /* È */
+    (0x00C9, AF_ADJUST_UP), /* É */
+    (0x00CA, AF_ADJUST_UP), /* Ê */
+    (0x00CB, AF_ADJUST_UP), /* Ë */
+    (0x00CC, AF_ADJUST_UP), /* Ì */
+    (0x00CD, AF_ADJUST_UP), /* Í */
+    (0x00CE, AF_ADJUST_UP), /* Î */
+    (0x00CF, AF_ADJUST_UP), /* Ï */
+    (0x00D1, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* Ñ */
+    (0x00D2, AF_ADJUST_UP), /* Ò */
+    (0x00D3, AF_ADJUST_UP), /* Ó */
+    (0x00D4, AF_ADJUST_UP), /* Ô */
+    (0x00D5, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* Õ */
+    (0x00D6, AF_ADJUST_UP), /* Ö */
+    (0x00D8, AF_IGNORE_CAPITAL_TOP | AF_IGNORE_CAPITAL_BOTTOM), /* Ø */
+    (0x00D9, AF_ADJUST_UP), /* Ù */
+    (0x00DA, AF_ADJUST_UP), /* Ú */
+    (0x00DB, AF_ADJUST_UP), /* Û */
+    (0x00DC, AF_ADJUST_UP), /* Ü */
+    (0x00DD, AF_ADJUST_UP), /* Ý */
+    (0x00E0, AF_ADJUST_UP), /* à */
+    (0x00E1, AF_ADJUST_UP), /* á */
+    (0x00E2, AF_ADJUST_UP), /* â */
+    (0x00E3, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* ã */
+    (0x00E4, AF_ADJUST_UP), /* ä */
+    (0x00E5, AF_ADJUST_UP), /* å */
+    (0x00E7, AF_IGNORE_SMALL_BOTTOM), /* ç */
+    (0x00E8, AF_ADJUST_UP), /* è */
+    (0x00E9, AF_ADJUST_UP), /* é */
+    (0x00EA, AF_ADJUST_UP), /* ê */
+    (0x00EB, AF_ADJUST_UP), /* ë */
+    (0x00EC, AF_ADJUST_UP), /* ì */
+    (0x00ED, AF_ADJUST_UP), /* í */
+    (0x00EE, AF_ADJUST_UP), /* î */
+    (0x00EF, AF_ADJUST_UP), /* ï */
+    (0x00F1, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* ñ */
+    (0x00F2, AF_ADJUST_UP), /* ò */
+    (0x00F3, AF_ADJUST_UP), /* ó */
+    (0x00F4, AF_ADJUST_UP), /* ô */
+    (0x00F5, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* õ */
+    (0x00F6, AF_ADJUST_UP), /* ö */
+    (0x00F8, AF_IGNORE_SMALL_TOP | AF_IGNORE_SMALL_BOTTOM), /* ø */
+    (0x00F9, AF_ADJUST_UP), /* ù */
+    (0x00FA, AF_ADJUST_UP), /* ú */
+    (0x00FB, AF_ADJUST_UP), /* û */
+    (0x00FC, AF_ADJUST_UP), /* ü */
+    (0x00FD, AF_ADJUST_UP), /* ý */
+    (0x00FF, AF_ADJUST_UP), /* ÿ */
+    (0x0100, AF_ADJUST_UP), /* Ā */
+    (0x0101, AF_ADJUST_UP), /* ā */
+    (0x0102, AF_ADJUST_UP), /* Ă */
+    (0x0103, AF_ADJUST_UP), /* ă */
+    (0x0104, AF_IGNORE_CAPITAL_BOTTOM), /* Ą */
+    (0x0105, AF_IGNORE_SMALL_BOTTOM), /* ą */
+    (0x0106, AF_ADJUST_UP), /* Ć */
+    (0x0107, AF_ADJUST_UP), /* ć */
+    (0x0108, AF_ADJUST_UP), /* Ĉ */
+    (0x0109, AF_ADJUST_UP), /* ĉ */
+    (0x010A, AF_ADJUST_UP), /* Ċ */
+    (0x010B, AF_ADJUST_UP), /* ċ */
+    (0x010C, AF_ADJUST_UP), /* Č */
+    (0x010D, AF_ADJUST_UP), /* č */
+    (0x010E, AF_ADJUST_UP), /* Ď */
+    (0x0112, AF_ADJUST_UP), /* Ē */
+    (0x0113, AF_ADJUST_UP), /* ē */
+    (0x0114, AF_ADJUST_UP), /* Ĕ */
+    (0x0115, AF_ADJUST_UP), /* ĕ */
+    (0x0116, AF_ADJUST_UP), /* Ė */
+    (0x0117, AF_ADJUST_UP), /* ė */
+    (0x0118, AF_IGNORE_CAPITAL_BOTTOM), /* Ę */
+    (0x0119, AF_IGNORE_SMALL_BOTTOM), /* ę */
+    (0x011A, AF_ADJUST_UP), /* Ě */
+    (0x011B, AF_ADJUST_UP), /* ě */
+    (0x011C, AF_ADJUST_UP), /* Ĝ */
+    (0x011D, AF_ADJUST_UP), /* ĝ */
+    (0x011E, AF_ADJUST_UP), /* Ğ */
+    (0x011F, AF_ADJUST_UP), /* ğ */
+    (0x0120, AF_ADJUST_UP), /* Ġ */
+    (0x0121, AF_ADJUST_UP), /* ġ */
+    (0x0122, AF_ADJUST_DOWN), /* Ģ */
+    (0x0123, AF_ADJUST_UP), /* ģ */
+    (0x0124, AF_ADJUST_UP), /* Ĥ */
+    (0x0125, AF_ADJUST_UP), /* ĥ */
+    (0x0128, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* Ĩ */
+    (0x0129, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* ĩ */
+    (0x012A, AF_ADJUST_UP), /* Ī */
+    (0x012B, AF_ADJUST_UP), /* ī */
+    (0x012C, AF_ADJUST_UP), /* Ĭ */
+    (0x012D, AF_ADJUST_UP), /* ĭ */
+    (0x012E, AF_IGNORE_CAPITAL_BOTTOM), /* Į */
+    (0x012F, AF_ADJUST_UP | AF_IGNORE_SMALL_BOTTOM), /* į */
+    (0x0130, AF_ADJUST_UP), /* İ */
+    (0x0133, AF_ADJUST_UP), /* ĳ */
+    (0x0134, AF_ADJUST_UP), /* Ĵ */
+    (0x0135, AF_ADJUST_UP), /* ĵ */
+    (0x0136, AF_ADJUST_DOWN), /* Ķ */
+    (0x0137, AF_ADJUST_DOWN), /* ķ */
+    (0x0139, AF_ADJUST_UP), /* Ĺ */
+    (0x013A, AF_ADJUST_UP), /* ĺ */
+    (0x013B, AF_ADJUST_DOWN), /* Ļ */
+    (0x013C, AF_ADJUST_DOWN), /* ļ */
+    (0x0143, AF_ADJUST_UP), /* Ń */
+    (0x0144, AF_ADJUST_UP), /* ń */
+    (0x0145, AF_ADJUST_DOWN), /* Ņ */
+    (0x0146, AF_ADJUST_DOWN), /* ņ */
+    (0x0147, AF_ADJUST_UP), /* Ň */
+    (0x0148, AF_ADJUST_UP), /* ň */
+    (0x014C, AF_ADJUST_UP), /* Ō */
+    (0x014D, AF_ADJUST_UP), /* ō */
+    (0x014E, AF_ADJUST_UP), /* Ŏ */
+    (0x014F, AF_ADJUST_UP), /* ŏ */
+    (0x0150, AF_ADJUST_UP), /* Ő */
+    (0x0151, AF_ADJUST_UP), /* ő */
+    (0x0154, AF_ADJUST_UP), /* Ŕ */
+    (0x0155, AF_ADJUST_UP), /* ŕ */
+    (0x0156, AF_ADJUST_DOWN), /* Ŗ */
+    (0x0157, AF_ADJUST_DOWN), /* ŗ */
+    (0x0158, AF_ADJUST_UP), /* Ř */
+    (0x0159, AF_ADJUST_UP), /* ř */
+    (0x015A, AF_ADJUST_UP), /* Ś */
+    (0x015B, AF_ADJUST_UP), /* ś */
+    (0x015C, AF_ADJUST_UP), /* Ŝ */
+    (0x015D, AF_ADJUST_UP), /* ŝ */
+    (0x015E, AF_IGNORE_CAPITAL_BOTTOM), /* Ş */
+    (0x015F, AF_IGNORE_SMALL_BOTTOM), /* ş */
+    (0x0160, AF_ADJUST_UP), /* Š */
+    (0x0161, AF_ADJUST_UP), /* š */
+    (0x0162, AF_IGNORE_CAPITAL_BOTTOM), /* Ţ */
+    (0x0163, AF_IGNORE_SMALL_BOTTOM), /* ţ */
+    (0x0164, AF_ADJUST_UP), /* Ť */
+    (0x0168, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* Ũ */
+    (0x0169, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* ũ */
+    (0x016A, AF_ADJUST_UP), /* Ū */
+    (0x016B, AF_ADJUST_UP), /* ū */
+    (0x016C, AF_ADJUST_UP), /* Ŭ */
+    (0x016D, AF_ADJUST_UP), /* ŭ */
+    (0x016E, AF_ADJUST_UP), /* Ů */
+    (0x016F, AF_ADJUST_UP), /* ů */
+    (0x0170, AF_ADJUST_UP), /* Ű */
+    (0x0171, AF_ADJUST_UP), /* ű */
+    (0x0172, AF_IGNORE_CAPITAL_BOTTOM), /* Ų */
+    (0x0173, AF_IGNORE_SMALL_BOTTOM), /* ų */
+    (0x0174, AF_ADJUST_UP), /* Ŵ */
+    (0x0175, AF_ADJUST_UP), /* ŵ */
+    (0x0176, AF_ADJUST_UP), /* Ŷ */
+    (0x0177, AF_ADJUST_UP), /* ŷ */
+    (0x0178, AF_ADJUST_UP), /* Ÿ */
+    (0x0179, AF_ADJUST_UP), /* Ź */
+    (0x017A, AF_ADJUST_UP), /* ź */
+    (0x017B, AF_ADJUST_UP), /* Ż */
+    (0x017C, AF_ADJUST_UP), /* ż */
+    (0x017D, AF_ADJUST_UP), /* Ž */
+    (0x017E, AF_ADJUST_UP), /* ž */
+    (0x0187, AF_IGNORE_CAPITAL_TOP), /* Ƈ */
+    (0x0188, AF_IGNORE_SMALL_TOP), /* ƈ */
+    (0x01A0, AF_IGNORE_CAPITAL_TOP), /* Ơ */
+    (0x01A1, AF_IGNORE_SMALL_TOP), /* ơ */
+    (0x01A5, AF_IGNORE_SMALL_TOP), /* ƥ */
+    (0x01AB, AF_IGNORE_SMALL_BOTTOM), /* ƫ */
+    (0x01AE, AF_IGNORE_CAPITAL_BOTTOM), /* Ʈ */
+    (0x01AF, AF_IGNORE_CAPITAL_TOP), /* Ư */
+    (0x01B0, AF_IGNORE_SMALL_TOP), /* ư */
+    (0x01B4, AF_IGNORE_SMALL_TOP), /* ƴ */
+    (0x01C3, AF_ADJUST_UP | AF_ADJUST_NO_HEIGHT_CHECK), /* ǃ */
+    (0x01C4, AF_ADJUST_UP), /* Ǆ */
+    (0x01CC, AF_ADJUST_UP), /* ǌ */
+    (0x01CD, AF_ADJUST_UP), /* Ǎ */
+    (0x01CE, AF_ADJUST_UP), /* ǎ */
+    (0x01CF, AF_ADJUST_UP), /* Ǐ */
+    (0x01D0, AF_ADJUST_UP), /* ǐ */
+    (0x01D1, AF_ADJUST_UP), /* Ǒ */
+    (0x01D2, AF_ADJUST_UP), /* ǒ */
+    (0x01D3, AF_ADJUST_UP), /* Ǔ */
+    (0x01D4, AF_ADJUST_UP), /* ǔ */
+    (0x01D5, AF_ADJUST_UP2), /* Ǖ */
+    (0x01D6, AF_ADJUST_UP2), /* ǖ */
+    (0x01D7, AF_ADJUST_UP2), /* Ǘ */
+    (0x01D8, AF_ADJUST_UP2), /* ǘ */
+    (0x01D9, AF_ADJUST_UP2), /* Ǚ */
+    (0x01DA, AF_ADJUST_UP2), /* ǚ */
+    (0x01DB, AF_ADJUST_UP2), /* Ǜ */
+    (0x01DC, AF_ADJUST_UP2), /* ǜ */
+    (0x01DE, AF_ADJUST_UP2), /* Ǟ */
+    (0x01DF, AF_ADJUST_UP2), /* ǟ */
+    (0x01E0, AF_ADJUST_UP2), /* Ǡ */
+    (0x01E1, AF_ADJUST_UP2), /* ǡ */
+    (0x01E2, AF_ADJUST_UP), /* Ǣ */
+    (0x01E3, AF_ADJUST_UP), /* ǣ */
+    (0x01E6, AF_ADJUST_UP), /* Ǧ */
+    (0x01E7, AF_ADJUST_UP), /* ǧ */
+    (0x01E8, AF_ADJUST_UP), /* Ǩ */
+    (0x01E9, AF_ADJUST_UP), /* ǩ */
+    (0x01EA, AF_IGNORE_CAPITAL_BOTTOM), /* Ǫ */
+    (0x01EB, AF_IGNORE_SMALL_BOTTOM), /* ǫ */
+    (0x01EC, AF_ADJUST_UP | AF_IGNORE_CAPITAL_BOTTOM), /* Ǭ */
+    (0x01ED, AF_ADJUST_UP | AF_IGNORE_SMALL_BOTTOM), /* ǭ */
+    (0x01EE, AF_ADJUST_UP), /* Ǯ */
+    (0x01EF, AF_ADJUST_UP), /* ǯ */
+    (0x01F0, AF_ADJUST_UP), /* ǰ */
+    (0x01F4, AF_ADJUST_UP), /* Ǵ */
+    (0x01F5, AF_ADJUST_UP), /* ǵ */
+    (0x01F8, AF_ADJUST_UP), /* Ǹ */
+    (0x01F9, AF_ADJUST_UP), /* ǹ */
+    (0x01FA, AF_ADJUST_UP2), /* Ǻ */
+    (0x01FB, AF_ADJUST_UP2), /* ǻ */
+    (0x01FC, AF_ADJUST_UP), /* Ǽ */
+    (0x01FD, AF_ADJUST_UP), /* ǽ */
+    (0x01FE, AF_ADJUST_UP), /* Ǿ */
+    (0x01FF, AF_ADJUST_UP), /* ǿ */
+    (0x0200, AF_ADJUST_UP), /* Ȁ */
+    (0x0201, AF_ADJUST_UP), /* ȁ */
+    (0x0202, AF_ADJUST_UP), /* Ȃ */
+    (0x0203, AF_ADJUST_UP), /* ȃ */
+    (0x0204, AF_ADJUST_UP), /* Ȅ */
+    (0x0205, AF_ADJUST_UP), /* ȅ */
+    (0x0206, AF_ADJUST_UP), /* Ȇ */
+    (0x0207, AF_ADJUST_UP), /* ȇ */
+    (0x0208, AF_ADJUST_UP), /* Ȉ */
+    (0x0209, AF_ADJUST_UP), /* ȉ */
+    (0x020A, AF_ADJUST_UP), /* Ȋ */
+    (0x020B, AF_ADJUST_UP), /* ȋ */
+    (0x020C, AF_ADJUST_UP), /* Ȍ */
+    (0x020D, AF_ADJUST_UP), /* ȍ */
+    (0x020E, AF_ADJUST_UP), /* Ȏ */
+    (0x020F, AF_ADJUST_UP), /* ȏ */
+    (0x0210, AF_ADJUST_UP), /* Ȑ */
+    (0x0211, AF_ADJUST_UP), /* ȑ */
+    (0x0212, AF_ADJUST_UP), /* Ȓ */
+    (0x0213, AF_ADJUST_UP), /* ȓ */
+    (0x0214, AF_ADJUST_UP), /* Ȕ */
+    (0x0215, AF_ADJUST_UP), /* ȕ */
+    (0x0216, AF_ADJUST_UP), /* Ȗ */
+    (0x0217, AF_ADJUST_UP), /* ȗ */
+    (0x0218, AF_ADJUST_DOWN), /* Ș */
+    (0x0219, AF_ADJUST_DOWN), /* ș */
+    (0x021A, AF_ADJUST_DOWN), /* Ț */
+    (0x021B, AF_ADJUST_DOWN), /* ț */
+    (0x021E, AF_ADJUST_UP), /* Ȟ */
+    (0x021F, AF_ADJUST_UP), /* ȟ */
+    (0x0224, AF_IGNORE_CAPITAL_BOTTOM), /* Ȥ */
+    (0x0225, AF_IGNORE_SMALL_BOTTOM), /* ȥ */
+    (0x0226, AF_ADJUST_UP), /* Ȧ */
+    (0x0227, AF_ADJUST_UP), /* ȧ */
+    (0x0228, AF_IGNORE_CAPITAL_BOTTOM), /* Ȩ */
+    (0x0229, AF_IGNORE_SMALL_BOTTOM), /* ȩ */
+    (0x022A, AF_ADJUST_UP2), /* Ȫ */
+    (0x022B, AF_ADJUST_UP2), /* ȫ */
+    (0x022C, AF_ADJUST_UP2), /* Ȭ */
+    (0x022D, AF_ADJUST_UP2), /* ȭ */
+    (0x022E, AF_ADJUST_UP), /* Ȯ */
+    (0x022F, AF_ADJUST_UP), /* ȯ */
+    (0x0230, AF_ADJUST_UP2), /* Ȱ */
+    (0x0231, AF_ADJUST_UP2), /* ȱ */
+    (0x0232, AF_ADJUST_UP), /* Ȳ */
+    (0x0233, AF_ADJUST_UP), /* ȳ */
+    (0x023A, AF_IGNORE_CAPITAL_TOP | AF_IGNORE_CAPITAL_BOTTOM), /* Ⱥ */
+    (0x023B, AF_IGNORE_CAPITAL_TOP | AF_IGNORE_CAPITAL_BOTTOM), /* Ȼ */
+    (0x023F, AF_IGNORE_SMALL_BOTTOM), /* ȿ */
+    (0x0240, AF_IGNORE_SMALL_BOTTOM), /* ɀ */
+    (0x0249, AF_ADJUST_UP), /* ɉ */
+    (0x0256, AF_IGNORE_SMALL_BOTTOM), /* ɖ */
+    (0x0260, AF_IGNORE_SMALL_TOP), /* ɠ */
+    (0x0267, AF_IGNORE_SMALL_BOTTOM), /* ɧ */
+    (0x0268, AF_ADJUST_UP), /* ɨ */
+    (0x0272, AF_IGNORE_SMALL_BOTTOM), /* ɲ */
+    (0x0273, AF_IGNORE_SMALL_BOTTOM), /* ɳ */
+    (0x027B, AF_IGNORE_SMALL_BOTTOM), /* ɻ */
+    (0x027D, AF_IGNORE_SMALL_BOTTOM), /* ɽ */
+    (0x0282, AF_IGNORE_SMALL_BOTTOM), /* ʂ */
+    (0x0288, AF_IGNORE_SMALL_BOTTOM), /* ʈ */
+    (0x0290, AF_IGNORE_SMALL_BOTTOM), /* ʐ */
+    (0x029B, AF_IGNORE_SMALL_TOP), /* ʛ */
+    (0x02A0, AF_IGNORE_SMALL_TOP), /* ʠ */
+    (0x02B2, AF_ADJUST_UP), /* ʲ */
+    (0x02B5, AF_IGNORE_SMALL_BOTTOM), /* ʵ */
+    (0x0390, AF_ADJUST_UP2), /* ΐ */
+    (0x03AA, AF_ADJUST_UP), /* Ϊ */
+    (0x03AB, AF_ADJUST_UP), /* Ϋ */
+    (0x03AC, AF_ADJUST_UP), /* ά */
+    (0x03AD, AF_ADJUST_UP), /* έ */
+    (0x03AE, AF_ADJUST_UP), /* ή */
+    (0x03AF, AF_ADJUST_UP), /* ί */
+    (0x03B0, AF_ADJUST_UP2), /* ΰ */
+    (0x03CA, AF_ADJUST_UP), /* ϊ */
+    (0x03CB, AF_ADJUST_UP), /* ϋ */
+    (0x03CC, AF_ADJUST_UP), /* ό */
+    (0x03CD, AF_ADJUST_UP), /* ύ */
+    (0x03CE, AF_ADJUST_UP), /* ώ */
+    (0x03CF, AF_IGNORE_CAPITAL_BOTTOM), /* Ϗ */
+    (0x03D4, AF_ADJUST_UP), /* ϔ */
+    (0x03D7, AF_IGNORE_SMALL_BOTTOM), /* ϗ */
+    (0x03D9, AF_IGNORE_SMALL_BOTTOM), /* ϙ */
+    (0x03E2, AF_IGNORE_CAPITAL_BOTTOM), /* Ϣ */
+    (0x03E3, AF_IGNORE_SMALL_BOTTOM), /* ϣ */
+    (0x03F3, AF_ADJUST_UP), /* ϳ */
+    (0x0400, AF_ADJUST_UP), /* Ѐ */
+    (0x0401, AF_ADJUST_UP), /* Ё */
+    (0x0403, AF_ADJUST_UP), /* Ѓ */
+    (0x0407, AF_ADJUST_UP), /* Ї */
+    (0x040C, AF_ADJUST_UP), /* Ќ */
+    (0x040D, AF_ADJUST_UP), /* Ѝ */
+    (0x040E, AF_ADJUST_UP), /* Ў */
+    (0x040F, AF_IGNORE_CAPITAL_BOTTOM), /* Џ */
+    (0x0419, AF_ADJUST_UP), /* Й */
+    (0x0426, AF_IGNORE_CAPITAL_BOTTOM), /* Ц */
+    (0x0429, AF_IGNORE_CAPITAL_BOTTOM), /* Щ */
+    (0x0439, AF_ADJUST_UP), /* й */
+    (0x0446, AF_IGNORE_SMALL_BOTTOM), /* ц */
+    (0x0449, AF_IGNORE_SMALL_BOTTOM), /* щ */
+    (0x0450, AF_ADJUST_UP), /* ѐ */
+    (0x0451, AF_ADJUST_UP), /* ё */
+    (0x0453, AF_ADJUST_UP), /* ѓ */
+    (0x0456, AF_ADJUST_UP), /* і */
+    (0x0457, AF_ADJUST_UP), /* ї */
+    (0x0458, AF_ADJUST_UP), /* ј */
+    (0x045C, AF_ADJUST_UP), /* ќ */
+    (0x045D, AF_ADJUST_UP), /* ѝ */
+    (0x045E, AF_ADJUST_UP), /* ў */
+    (0x045F, AF_IGNORE_SMALL_BOTTOM), /* џ */
+    (0x0476, AF_ADJUST_UP), /* Ѷ */
+    (0x0477, AF_ADJUST_UP), /* ѷ */
+    (0x047C, AF_ADJUST_UP2), /* Ѽ */
+    (0x047D, AF_ADJUST_UP2), /* ѽ */
+    (0x047E, AF_ADJUST_UP), /* Ѿ */
+    (0x047F, AF_ADJUST_UP), /* ѿ */
+    (0x0480, AF_IGNORE_CAPITAL_BOTTOM), /* Ҁ */
+    (0x0481, AF_IGNORE_SMALL_BOTTOM), /* ҁ */
+    (0x048A, AF_ADJUST_UP | AF_IGNORE_CAPITAL_BOTTOM), /* Ҋ */
+    (0x048B, AF_ADJUST_UP | AF_IGNORE_SMALL_BOTTOM), /* ҋ */
+    (0x0490, AF_IGNORE_CAPITAL_TOP), /* Ґ */
+    (0x0491, AF_IGNORE_SMALL_TOP), /* ґ */
+    (0x0496, AF_IGNORE_CAPITAL_BOTTOM), /* Җ */
+    (0x0497, AF_IGNORE_SMALL_BOTTOM), /* җ */
+    (0x0498, AF_IGNORE_CAPITAL_BOTTOM), /* Ҙ */
+    (0x0499, AF_IGNORE_SMALL_BOTTOM), /* ҙ */
+    (0x049A, AF_IGNORE_CAPITAL_BOTTOM), /* Қ */
+    (0x049B, AF_IGNORE_SMALL_BOTTOM), /* қ */
+    (0x04A2, AF_IGNORE_CAPITAL_BOTTOM), /* Ң */
+    (0x04A3, AF_IGNORE_SMALL_BOTTOM), /* ң */
+    (0x04AA, AF_IGNORE_CAPITAL_BOTTOM), /* Ҫ */
+    (0x04AB, AF_IGNORE_SMALL_BOTTOM), /* ҫ */
+    (0x04AC, AF_IGNORE_CAPITAL_BOTTOM), /* Ҭ */
+    (0x04AD, AF_IGNORE_SMALL_BOTTOM), /* ҭ */
+    (0x04B2, AF_IGNORE_CAPITAL_BOTTOM), /* Ҳ */
+    (0x04B3, AF_IGNORE_SMALL_BOTTOM), /* ҳ */
+    (0x04B4, AF_IGNORE_CAPITAL_BOTTOM), /* Ҵ */
+    (0x04B5, AF_IGNORE_SMALL_BOTTOM), /* ҵ */
+    (0x04B6, AF_IGNORE_CAPITAL_BOTTOM), /* Ҷ */
+    (0x04B7, AF_IGNORE_SMALL_BOTTOM), /* ҷ */
+    (0x04BE, AF_IGNORE_CAPITAL_BOTTOM), /* Ҿ */
+    (0x04BF, AF_IGNORE_SMALL_BOTTOM), /* ҿ */
+    (0x04C1, AF_ADJUST_UP), /* Ӂ */
+    (0x04C2, AF_ADJUST_UP), /* ӂ */
+    (0x04C5, AF_IGNORE_CAPITAL_BOTTOM), /* Ӆ */
+    (0x04C6, AF_IGNORE_SMALL_BOTTOM), /* ӆ */
+    (0x04C9, AF_IGNORE_CAPITAL_BOTTOM), /* Ӊ */
+    (0x04CA, AF_IGNORE_SMALL_BOTTOM), /* ӊ */
+    (0x04CB, AF_IGNORE_CAPITAL_BOTTOM), /* Ӌ */
+    (0x04CC, AF_IGNORE_SMALL_BOTTOM), /* ӌ */
+    (0x04CD, AF_IGNORE_CAPITAL_BOTTOM), /* Ӎ */
+    (0x04CE, AF_IGNORE_SMALL_BOTTOM), /* ӎ */
+    (0x04D0, AF_ADJUST_UP), /* Ӑ */
+    (0x04D1, AF_ADJUST_UP), /* ӑ */
+    (0x04D2, AF_ADJUST_UP), /* Ӓ */
+    (0x04D3, AF_ADJUST_UP), /* ӓ */
+    (0x04D6, AF_ADJUST_UP), /* Ӗ */
+    (0x04D7, AF_ADJUST_UP), /* ӗ */
+    (0x04DA, AF_ADJUST_UP), /* Ӛ */
+    (0x04DB, AF_ADJUST_UP), /* ӛ */
+    (0x04DC, AF_ADJUST_UP), /* Ӝ */
+    (0x04DD, AF_ADJUST_UP), /* ӝ */
+    (0x04DE, AF_ADJUST_UP), /* Ӟ */
+    (0x04DF, AF_ADJUST_UP), /* ӟ */
+    (0x04E2, AF_ADJUST_UP), /* Ӣ */
+    (0x04E3, AF_ADJUST_UP), /* ӣ */
+    (0x04E4, AF_ADJUST_UP), /* Ӥ */
+    (0x04E5, AF_ADJUST_UP), /* ӥ */
+    (0x04E6, AF_ADJUST_UP), /* Ӧ */
+    (0x04E7, AF_ADJUST_UP), /* ӧ */
+    (0x04EA, AF_ADJUST_UP), /* Ӫ */
+    (0x04EB, AF_ADJUST_UP), /* ӫ */
+    (0x04EC, AF_ADJUST_UP), /* Ӭ */
+    (0x04ED, AF_ADJUST_UP), /* ӭ */
+    (0x04EE, AF_ADJUST_UP), /* Ӯ */
+    (0x04EF, AF_ADJUST_UP), /* ӯ */
+    (0x04F0, AF_ADJUST_UP), /* Ӱ */
+    (0x04F1, AF_ADJUST_UP), /* ӱ */
+    (0x04F2, AF_ADJUST_UP), /* Ӳ */
+    (0x04F3, AF_ADJUST_UP), /* ӳ */
+    (0x04F4, AF_ADJUST_UP), /* Ӵ */
+    (0x04F5, AF_ADJUST_UP), /* ӵ */
+    (0x04F6, AF_IGNORE_CAPITAL_BOTTOM), /* Ӷ */
+    (0x04F7, AF_IGNORE_SMALL_BOTTOM), /* ӷ */
+    (0x04F8, AF_ADJUST_UP), /* Ӹ */
+    (0x04F9, AF_ADJUST_UP), /* ӹ */
+    (0x04FA, AF_IGNORE_CAPITAL_BOTTOM), /* Ӻ */
+    (0x04FB, AF_IGNORE_SMALL_BOTTOM), /* ӻ */
+    (0x0506, AF_IGNORE_CAPITAL_BOTTOM), /* Ԇ */
+    (0x0507, AF_IGNORE_SMALL_BOTTOM), /* ԇ */
+    (0x0524, AF_IGNORE_CAPITAL_BOTTOM), /* Ԥ */
+    (0x0525, AF_IGNORE_SMALL_BOTTOM), /* ԥ */
+    (0x0526, AF_IGNORE_CAPITAL_BOTTOM), /* Ԧ */
+    (0x0527, AF_IGNORE_SMALL_BOTTOM), /* ԧ */
+    (0x052E, AF_IGNORE_CAPITAL_BOTTOM), /* Ԯ */
+    (0x052F, AF_IGNORE_SMALL_BOTTOM), /* ԯ */
+    (0x13A5, AF_ADJUST_UP), /* Ꭵ */
+    (0x1D09, AF_ADJUST_DOWN), /* ᴉ */
+    (0x1D4E, AF_ADJUST_DOWN), /* ᵎ */
+    (0x1D51, AF_IGNORE_SMALL_BOTTOM), /* ᵑ */
+    (0x1D62, AF_ADJUST_UP), /* ᵢ */
+    (0x1D80, AF_IGNORE_SMALL_BOTTOM), /* ᶀ */
+    (0x1D81, AF_IGNORE_SMALL_BOTTOM), /* ᶁ */
+    (0x1D82, AF_IGNORE_SMALL_BOTTOM), /* ᶂ */
+    (0x1D84, AF_IGNORE_SMALL_BOTTOM), /* ᶄ */
+    (0x1D85, AF_IGNORE_SMALL_BOTTOM), /* ᶅ */
+    (0x1D86, AF_IGNORE_SMALL_BOTTOM), /* ᶆ */
+    (0x1D87, AF_IGNORE_SMALL_BOTTOM), /* ᶇ */
+    (0x1D89, AF_IGNORE_SMALL_BOTTOM), /* ᶉ */
+    (0x1D8A, AF_IGNORE_SMALL_BOTTOM), /* ᶊ */
+    (0x1D8C, AF_IGNORE_SMALL_BOTTOM), /* ᶌ */
+    (0x1D8D, AF_IGNORE_SMALL_BOTTOM), /* ᶍ */
+    (0x1D8E, AF_IGNORE_SMALL_BOTTOM), /* ᶎ */
+    (0x1D8F, AF_IGNORE_SMALL_BOTTOM), /* ᶏ */
+    (0x1D90, AF_IGNORE_SMALL_BOTTOM), /* ᶐ */
+    (0x1D91, AF_IGNORE_SMALL_BOTTOM), /* ᶑ */
+    (0x1D92, AF_IGNORE_SMALL_BOTTOM), /* ᶒ */
+    (0x1D93, AF_IGNORE_SMALL_BOTTOM), /* ᶓ */
+    (0x1D94, AF_IGNORE_SMALL_BOTTOM), /* ᶔ */
+    (0x1D95, AF_IGNORE_SMALL_BOTTOM), /* ᶕ */
+    (0x1D96, AF_ADJUST_UP | AF_IGNORE_SMALL_BOTTOM), /* ᶖ */
+    (0x1D97, AF_IGNORE_SMALL_BOTTOM), /* ᶗ */
+    (0x1D98, AF_IGNORE_SMALL_BOTTOM), /* ᶘ */
+    (0x1D99, AF_IGNORE_SMALL_BOTTOM), /* ᶙ */
+    (0x1D9A, AF_IGNORE_SMALL_BOTTOM), /* ᶚ */
+    (0x1DA4, AF_ADJUST_UP), /* ᶤ */
+    (0x1DA8, AF_ADJUST_UP), /* ᶨ */
+    (0x1DA9, AF_IGNORE_SMALL_BOTTOM), /* ᶩ */
+    (0x1DAA, AF_IGNORE_SMALL_BOTTOM), /* ᶪ */
+    (0x1DAC, AF_IGNORE_SMALL_BOTTOM), /* ᶬ */
+    (0x1DAE, AF_IGNORE_SMALL_BOTTOM), /* ᶮ */
+    (0x1DAF, AF_IGNORE_SMALL_BOTTOM), /* ᶯ */
+    (0x1DB3, AF_IGNORE_SMALL_BOTTOM), /* ᶳ */
+    (0x1DB5, AF_IGNORE_SMALL_BOTTOM), /* ᶵ */
+    (0x1DBC, AF_IGNORE_SMALL_BOTTOM), /* ᶼ */
+    (0x1E00, AF_ADJUST_DOWN), /* Ḁ */
+    (0x1E01, AF_ADJUST_DOWN), /* ḁ */
+    (0x1E02, AF_ADJUST_UP), /* Ḃ */
+    (0x1E03, AF_ADJUST_UP), /* ḃ */
+    (0x1E04, AF_ADJUST_DOWN), /* Ḅ */
+    (0x1E05, AF_ADJUST_DOWN), /* ḅ */
+    (0x1E06, AF_ADJUST_DOWN), /* Ḇ */
+    (0x1E07, AF_ADJUST_DOWN), /* ḇ */
+    (0x1E08, AF_ADJUST_UP | AF_IGNORE_CAPITAL_BOTTOM), /* Ḉ */
+    (0x1E09, AF_ADJUST_UP | AF_IGNORE_SMALL_BOTTOM), /* ḉ */
+    (0x1E0A, AF_ADJUST_UP), /* Ḋ */
+    (0x1E0B, AF_ADJUST_UP), /* ḋ */
+    (0x1E0C, AF_ADJUST_DOWN), /* Ḍ */
+    (0x1E0D, AF_ADJUST_DOWN), /* ḍ */
+    (0x1E0E, AF_ADJUST_DOWN), /* Ḏ */
+    (0x1E0F, AF_ADJUST_DOWN), /* ḏ */
+    (0x1E10, AF_ADJUST_DOWN), /* Ḑ */
+    (0x1E11, AF_ADJUST_DOWN), /* ḑ */
+    (0x1E12, AF_ADJUST_DOWN), /* Ḓ */
+    (0x1E13, AF_ADJUST_DOWN), /* ḓ */
+    (0x1E14, AF_ADJUST_UP2), /* Ḕ */
+    (0x1E15, AF_ADJUST_UP2), /* ḕ */
+    (0x1E16, AF_ADJUST_UP2), /* Ḗ */
+    (0x1E17, AF_ADJUST_UP2), /* ḗ */
+    (0x1E18, AF_ADJUST_DOWN), /* Ḙ */
+    (0x1E19, AF_ADJUST_DOWN), /* ḙ */
+    (0x1E1A, AF_ADJUST_DOWN | AF_ADJUST_TILDE_BOTTOM), /* Ḛ */
+    (0x1E1B, AF_ADJUST_DOWN | AF_ADJUST_TILDE_BOTTOM), /* ḛ */
+    (0x1E1C, AF_ADJUST_UP | AF_IGNORE_CAPITAL_BOTTOM), /* Ḝ */
+    (0x1E1D, AF_ADJUST_UP | AF_IGNORE_SMALL_BOTTOM), /* ḝ */
+    (0x1E1E, AF_ADJUST_UP), /* Ḟ */
+    (0x1E1F, AF_ADJUST_UP), /* ḟ */
+    (0x1E20, AF_ADJUST_UP), /* Ḡ */
+    (0x1E21, AF_ADJUST_UP), /* ḡ */
+    (0x1E22, AF_ADJUST_UP), /* Ḣ */
+    (0x1E23, AF_ADJUST_UP), /* ḣ */
+    (0x1E24, AF_ADJUST_DOWN), /* Ḥ */
+    (0x1E25, AF_ADJUST_DOWN), /* ḥ */
+    (0x1E26, AF_ADJUST_UP), /* Ḧ */
+    (0x1E27, AF_ADJUST_UP), /* ḧ */
+    (0x1E28, AF_IGNORE_CAPITAL_BOTTOM), /* Ḩ */
+    (0x1E29, AF_IGNORE_SMALL_BOTTOM), /* ḩ */
+    (0x1E2A, AF_ADJUST_DOWN), /* Ḫ */
+    (0x1E2B, AF_ADJUST_DOWN), /* ḫ */
+    (0x1E2C, AF_ADJUST_DOWN | AF_ADJUST_TILDE_BOTTOM), /* Ḭ */
+    (0x1E2D, AF_ADJUST_UP | AF_ADJUST_DOWN | AF_ADJUST_TILDE_BOTTOM), /* ḭ */
+    (0x1E2E, AF_ADJUST_UP2), /* Ḯ */
+    (0x1E2F, AF_ADJUST_UP2), /* ḯ */
+    (0x1E30, AF_ADJUST_UP), /* Ḱ */
+    (0x1E31, AF_ADJUST_UP), /* ḱ */
+    (0x1E32, AF_ADJUST_DOWN), /* Ḳ */
+    (0x1E33, AF_ADJUST_DOWN), /* ḳ */
+    (0x1E34, AF_ADJUST_DOWN), /* Ḵ */
+    (0x1E35, AF_ADJUST_DOWN), /* ḵ */
+    (0x1E36, AF_ADJUST_DOWN), /* Ḷ */
+    (0x1E37, AF_ADJUST_DOWN), /* ḷ */
+    (0x1E38, AF_ADJUST_UP | AF_ADJUST_DOWN), /* Ḹ */
+    (0x1E39, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ḹ */
+    (0x1E3A, AF_ADJUST_DOWN), /* Ḻ */
+    (0x1E3B, AF_ADJUST_DOWN), /* ḻ */
+    (0x1E3C, AF_ADJUST_DOWN), /* Ḽ */
+    (0x1E3D, AF_ADJUST_DOWN), /* ḽ */
+    (0x1E3E, AF_ADJUST_UP), /* Ḿ */
+    (0x1E3F, AF_ADJUST_UP), /* ḿ */
+    (0x1E40, AF_ADJUST_UP), /* Ṁ */
+    (0x1E41, AF_ADJUST_UP), /* ṁ */
+    (0x1E42, AF_ADJUST_DOWN), /* Ṃ */
+    (0x1E43, AF_ADJUST_DOWN), /* ṃ */
+    (0x1E44, AF_ADJUST_UP), /* Ṅ */
+    (0x1E45, AF_ADJUST_UP), /* ṅ */
+    (0x1E46, AF_ADJUST_DOWN), /* Ṇ */
+    (0x1E47, AF_ADJUST_DOWN), /* ṇ */
+    (0x1E48, AF_ADJUST_DOWN), /* Ṉ */
+    (0x1E49, AF_ADJUST_DOWN), /* ṉ */
+    (0x1E4A, AF_ADJUST_DOWN), /* Ṋ */
+    (0x1E4B, AF_ADJUST_DOWN), /* ṋ */
+    (0x1E4C, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP2), /* Ṍ */
+    (0x1E4D, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP2), /* ṍ */
+    (0x1E4E, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP2), /* Ṏ */
+    (0x1E4F, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP2), /* ṏ */
+    (0x1E50, AF_ADJUST_UP2), /* Ṑ */
+    (0x1E51, AF_ADJUST_UP2), /* ṑ */
+    (0x1E52, AF_ADJUST_UP2), /* Ṓ */
+    (0x1E53, AF_ADJUST_UP2), /* ṓ */
+    (0x1E54, AF_ADJUST_UP), /* Ṕ */
+    (0x1E55, AF_ADJUST_UP), /* ṕ */
+    (0x1E56, AF_ADJUST_UP), /* Ṗ */
+    (0x1E57, AF_ADJUST_UP), /* ṗ */
+    (0x1E58, AF_ADJUST_UP), /* Ṙ */
+    (0x1E59, AF_ADJUST_UP), /* ṙ */
+    (0x1E5A, AF_ADJUST_DOWN), /* Ṛ */
+    (0x1E5B, AF_ADJUST_DOWN), /* ṛ */
+    (0x1E5C, AF_ADJUST_UP | AF_ADJUST_DOWN), /* Ṝ */
+    (0x1E5D, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ṝ */
+    (0x1E5E, AF_ADJUST_DOWN), /* Ṟ */
+    (0x1E5F, AF_ADJUST_DOWN), /* ṟ */
+    (0x1E60, AF_ADJUST_UP), /* Ṡ */
+    (0x1E61, AF_ADJUST_UP), /* ṡ */
+    (0x1E62, AF_ADJUST_DOWN), /* Ṣ */
+    (0x1E63, AF_ADJUST_DOWN), /* ṣ */
+    (0x1E64, AF_ADJUST_UP), /* Ṥ */
+    (0x1E65, AF_ADJUST_UP), /* ṥ */
+    (0x1E66, AF_ADJUST_UP), /* Ṧ */
+    (0x1E67, AF_ADJUST_UP), /* ṧ */
+    (0x1E68, AF_ADJUST_UP | AF_ADJUST_DOWN), /* Ṩ */
+    (0x1E69, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ṩ */
+    (0x1E6A, AF_ADJUST_UP), /* Ṫ */
+    (0x1E6B, AF_ADJUST_UP), /* ṫ */
+    (0x1E6C, AF_ADJUST_DOWN), /* Ṭ */
+    (0x1E6D, AF_ADJUST_DOWN), /* ṭ */
+    (0x1E6E, AF_ADJUST_DOWN), /* Ṯ */
+    (0x1E6F, AF_ADJUST_DOWN), /* ṯ */
+    (0x1E70, AF_ADJUST_DOWN), /* Ṱ */
+    (0x1E71, AF_ADJUST_DOWN), /* ṱ */
+    (0x1E72, AF_ADJUST_DOWN), /* Ṳ */
+    (0x1E73, AF_ADJUST_DOWN), /* ṳ */
+    (0x1E74, AF_ADJUST_DOWN | AF_ADJUST_TILDE_BOTTOM), /* Ṵ */
+    (0x1E75, AF_ADJUST_DOWN | AF_ADJUST_TILDE_BOTTOM), /* ṵ */
+    (0x1E76, AF_ADJUST_DOWN), /* Ṷ */
+    (0x1E77, AF_ADJUST_DOWN), /* ṷ */
+    (0x1E78, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP2), /* Ṹ */
+    (0x1E79, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP2), /* ṹ */
+    (0x1E7A, AF_ADJUST_UP2), /* Ṻ */
+    (0x1E7B, AF_ADJUST_UP2), /* ṻ */
+    (0x1E7C, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* Ṽ */
+    (0x1E7D, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* ṽ */
+    (0x1E7E, AF_ADJUST_DOWN), /* Ṿ */
+    (0x1E7F, AF_ADJUST_DOWN), /* ṿ */
+    (0x1E80, AF_ADJUST_UP), /* Ẁ */
+    (0x1E81, AF_ADJUST_UP), /* ẁ */
+    (0x1E82, AF_ADJUST_UP), /* Ẃ */
+    (0x1E83, AF_ADJUST_UP), /* ẃ */
+    (0x1E84, AF_ADJUST_UP), /* Ẅ */
+    (0x1E85, AF_ADJUST_UP), /* ẅ */
+    (0x1E86, AF_ADJUST_UP), /* Ẇ */
+    (0x1E87, AF_ADJUST_UP), /* ẇ */
+    (0x1E88, AF_ADJUST_DOWN), /* Ẉ */
+    (0x1E89, AF_ADJUST_DOWN), /* ẉ */
+    (0x1E8A, AF_ADJUST_UP), /* Ẋ */
+    (0x1E8B, AF_ADJUST_UP), /* ẋ */
+    (0x1E8C, AF_ADJUST_UP), /* Ẍ */
+    (0x1E8D, AF_ADJUST_UP), /* ẍ */
+    (0x1E8E, AF_ADJUST_UP), /* Ẏ */
+    (0x1E8F, AF_ADJUST_UP), /* ẏ */
+    (0x1E90, AF_ADJUST_UP), /* Ẑ */
+    (0x1E91, AF_ADJUST_UP), /* ẑ */
+    (0x1E92, AF_ADJUST_DOWN), /* Ẓ */
+    (0x1E93, AF_ADJUST_DOWN), /* ẓ */
+    (0x1E94, AF_ADJUST_DOWN), /* Ẕ */
+    (0x1E95, AF_ADJUST_DOWN), /* ẕ */
+    (0x1E96, AF_ADJUST_DOWN), /* ẖ */
+    (0x1E97, AF_ADJUST_UP), /* ẗ */
+    (0x1E98, AF_ADJUST_UP), /* ẘ */
+    (0x1E99, AF_ADJUST_UP), /* ẙ */
+    (0x1E9A, AF_ADJUST_UP), /* ẚ */
+    (0x1E9B, AF_ADJUST_UP), /* ẛ */
+    (0x1EA0, AF_ADJUST_DOWN), /* Ạ */
+    (0x1EA1, AF_ADJUST_DOWN), /* ạ */
+    (0x1EA2, AF_ADJUST_UP), /* Ả */
+    (0x1EA3, AF_ADJUST_UP), /* ả */
+    (0x1EA4, AF_ADJUST_UP2), /* Ấ */
+    (0x1EA5, AF_ADJUST_UP2), /* ấ */
+    (0x1EA6, AF_ADJUST_UP2), /* Ầ */
+    (0x1EA7, AF_ADJUST_UP2), /* ầ */
+    (0x1EA8, AF_ADJUST_UP2), /* Ẩ */
+    (0x1EA9, AF_ADJUST_UP2), /* ẩ */
+    (0x1EAA, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* Ẫ */
+    (0x1EAB, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ẫ */
+    (0x1EAC, AF_ADJUST_UP | AF_ADJUST_DOWN), /* Ậ */
+    (0x1EAD, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ậ */
+    (0x1EAE, AF_ADJUST_UP2), /* Ắ */
+    (0x1EAF, AF_ADJUST_UP2), /* ắ */
+    (0x1EB0, AF_ADJUST_UP2), /* Ằ */
+    (0x1EB1, AF_ADJUST_UP2), /* ằ */
+    (0x1EB2, AF_ADJUST_UP2), /* Ẳ */
+    (0x1EB3, AF_ADJUST_UP2), /* ẳ */
+    (0x1EB4, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* Ẵ */
+    (0x1EB5, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ẵ */
+    (0x1EB6, AF_ADJUST_UP | AF_ADJUST_DOWN), /* Ặ */
+    (0x1EB7, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ặ */
+    (0x1EB8, AF_ADJUST_DOWN), /* Ẹ */
+    (0x1EB9, AF_ADJUST_DOWN), /* ẹ */
+    (0x1EBA, AF_ADJUST_UP), /* Ẻ */
+    (0x1EBB, AF_ADJUST_UP), /* ẻ */
+    (0x1EBC, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* Ẽ */
+    (0x1EBD, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* ẽ */
+    (0x1EBE, AF_ADJUST_UP2), /* Ế */
+    (0x1EBF, AF_ADJUST_UP2), /* ế */
+    (0x1EC0, AF_ADJUST_UP2), /* Ề */
+    (0x1EC1, AF_ADJUST_UP2), /* ề */
+    (0x1EC2, AF_ADJUST_UP2), /* Ể */
+    (0x1EC3, AF_ADJUST_UP2), /* ể */
+    (0x1EC4, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* Ễ */
+    (0x1EC5, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ễ */
+    (0x1EC6, AF_ADJUST_UP | AF_ADJUST_DOWN), /* Ệ */
+    (0x1EC7, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ệ */
+    (0x1EC8, AF_ADJUST_UP), /* Ỉ */
+    (0x1EC9, AF_ADJUST_UP), /* ỉ */
+    (0x1ECA, AF_ADJUST_DOWN), /* Ị */
+    (0x1ECB, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ị */
+    (0x1ECC, AF_ADJUST_DOWN), /* Ọ */
+    (0x1ECD, AF_ADJUST_DOWN), /* ọ */
+    (0x1ECE, AF_ADJUST_UP), /* Ỏ */
+    (0x1ECF, AF_ADJUST_UP), /* ỏ */
+    (0x1ED0, AF_ADJUST_UP2), /* Ố */
+    (0x1ED1, AF_ADJUST_UP2), /* ố */
+    (0x1ED2, AF_ADJUST_UP2), /* Ồ */
+    (0x1ED3, AF_ADJUST_UP2), /* ồ */
+    (0x1ED4, AF_ADJUST_UP2), /* Ổ */
+    (0x1ED5, AF_ADJUST_UP2), /* ổ */
+    (0x1ED6, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* Ỗ */
+    (0x1ED7, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ỗ */
+    (0x1ED8, AF_ADJUST_UP | AF_ADJUST_DOWN), /* Ộ */
+    (0x1ED9, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ộ */
+    (0x1EDA, AF_ADJUST_UP | AF_IGNORE_CAPITAL_TOP), /* Ớ */
+    (0x1EDB, AF_ADJUST_UP | AF_IGNORE_SMALL_TOP), /* ớ */
+    (0x1EDC, AF_ADJUST_UP | AF_IGNORE_CAPITAL_TOP), /* Ờ */
+    (0x1EDD, AF_ADJUST_UP | AF_IGNORE_SMALL_TOP), /* ờ */
+    (0x1EDE, AF_ADJUST_UP | AF_IGNORE_CAPITAL_TOP), /* Ở */
+    (0x1EDF, AF_ADJUST_UP | AF_IGNORE_SMALL_TOP), /* ở */
+    (0x1EE0, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP | AF_IGNORE_CAPITAL_TOP), /* Ỡ */
+    (0x1EE1, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP | AF_IGNORE_SMALL_TOP), /* ỡ */
+    (0x1EE2, AF_ADJUST_DOWN | AF_IGNORE_CAPITAL_TOP), /* Ợ */
+    (0x1EE3, AF_ADJUST_DOWN | AF_IGNORE_SMALL_TOP), /* ợ */
+    (0x1EE4, AF_ADJUST_DOWN), /* Ụ */
+    (0x1EE5, AF_ADJUST_DOWN), /* ụ */
+    (0x1EE6, AF_ADJUST_UP), /* Ủ */
+    (0x1EE7, AF_ADJUST_UP), /* ủ */
+    (0x1EE8, AF_ADJUST_UP | AF_IGNORE_CAPITAL_TOP), /* Ứ */
+    (0x1EE9, AF_ADJUST_UP | AF_IGNORE_SMALL_TOP), /* ứ */
+    (0x1EEA, AF_ADJUST_UP | AF_IGNORE_CAPITAL_TOP), /* Ừ */
+    (0x1EEB, AF_ADJUST_UP | AF_IGNORE_SMALL_TOP), /* ừ */
+    (0x1EEC, AF_ADJUST_UP | AF_IGNORE_CAPITAL_TOP), /* Ử */
+    (0x1EED, AF_ADJUST_UP | AF_IGNORE_SMALL_TOP), /* ử */
+    (0x1EEE, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP | AF_IGNORE_CAPITAL_TOP), /* Ữ */
+    (0x1EEF, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP | AF_IGNORE_SMALL_TOP), /* ữ */
+    (0x1EF0, AF_ADJUST_DOWN | AF_IGNORE_CAPITAL_TOP), /* Ự */
+    (0x1EF1, AF_ADJUST_DOWN | AF_IGNORE_SMALL_TOP), /* ự */
+    (0x1EF2, AF_ADJUST_UP), /* Ỳ */
+    (0x1EF3, AF_ADJUST_UP), /* ỳ */
+    (0x1EF4, AF_ADJUST_DOWN), /* Ỵ */
+    (0x1EF5, AF_ADJUST_DOWN), /* ỵ */
+    (0x1EF6, AF_ADJUST_UP), /* Ỷ */
+    (0x1EF7, AF_ADJUST_UP), /* ỷ */
+    (0x1EF8, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* Ỹ */
+    (0x1EF9, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* ỹ */
+    (0x1F00, AF_ADJUST_UP), /* ἀ */
+    (0x1F01, AF_ADJUST_UP), /* ἁ */
+    (0x1F02, AF_ADJUST_UP), /* ἂ */
+    (0x1F03, AF_ADJUST_UP), /* ἃ */
+    (0x1F04, AF_ADJUST_UP), /* ἄ */
+    (0x1F05, AF_ADJUST_UP), /* ἅ */
+    (0x1F06, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ἆ */
+    (0x1F07, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ἇ */
+    (0x1F10, AF_ADJUST_UP), /* ἐ */
+    (0x1F11, AF_ADJUST_UP), /* ἑ */
+    (0x1F12, AF_ADJUST_UP), /* ἒ */
+    (0x1F13, AF_ADJUST_UP), /* ἓ */
+    (0x1F14, AF_ADJUST_UP), /* ἔ */
+    (0x1F15, AF_ADJUST_UP), /* ἕ */
+    (0x1F20, AF_ADJUST_UP), /* ἠ */
+    (0x1F21, AF_ADJUST_UP), /* ἡ */
+    (0x1F22, AF_ADJUST_UP), /* ἢ */
+    (0x1F23, AF_ADJUST_UP), /* ἣ */
+    (0x1F24, AF_ADJUST_UP), /* ἤ */
+    (0x1F25, AF_ADJUST_UP), /* ἥ */
+    (0x1F26, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ἦ */
+    (0x1F27, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ἧ */
+    (0x1F30, AF_ADJUST_UP), /* ἰ */
+    (0x1F31, AF_ADJUST_UP), /* ἱ */
+    (0x1F32, AF_ADJUST_UP), /* ἲ */
+    (0x1F33, AF_ADJUST_UP), /* ἳ */
+    (0x1F34, AF_ADJUST_UP), /* ἴ */
+    (0x1F35, AF_ADJUST_UP), /* ἵ */
+    (0x1F36, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ἶ */
+    (0x1F37, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ἷ */
+    (0x1F40, AF_ADJUST_UP), /* ὀ */
+    (0x1F41, AF_ADJUST_UP), /* ὁ */
+    (0x1F42, AF_ADJUST_UP), /* ὂ */
+    (0x1F43, AF_ADJUST_UP), /* ὃ */
+    (0x1F44, AF_ADJUST_UP), /* ὄ */
+    (0x1F45, AF_ADJUST_UP), /* ὅ */
+    (0x1F50, AF_ADJUST_UP), /* ὐ */
+    (0x1F51, AF_ADJUST_UP), /* ὑ */
+    (0x1F52, AF_ADJUST_UP), /* ὒ */
+    (0x1F53, AF_ADJUST_UP), /* ὓ */
+    (0x1F54, AF_ADJUST_UP), /* ὔ */
+    (0x1F55, AF_ADJUST_UP), /* ὕ */
+    (0x1F56, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ὖ */
+    (0x1F57, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ὗ */
+    (0x1F60, AF_ADJUST_UP), /* ὠ */
+    (0x1F61, AF_ADJUST_UP), /* ὡ */
+    (0x1F62, AF_ADJUST_UP), /* ὢ */
+    (0x1F63, AF_ADJUST_UP), /* ὣ */
+    (0x1F64, AF_ADJUST_UP), /* ὤ */
+    (0x1F65, AF_ADJUST_UP), /* ὥ */
+    (0x1F66, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ὦ */
+    (0x1F67, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ὧ */
+    (0x1F70, AF_ADJUST_UP), /* ὰ */
+    (0x1F71, AF_ADJUST_UP), /* ά */
+    (0x1F72, AF_ADJUST_UP), /* ὲ */
+    (0x1F73, AF_ADJUST_UP), /* έ */
+    (0x1F74, AF_ADJUST_UP), /* ὴ */
+    (0x1F75, AF_ADJUST_UP), /* ή */
+    (0x1F76, AF_ADJUST_UP), /* ὶ */
+    (0x1F77, AF_ADJUST_UP), /* ί */
+    (0x1F78, AF_ADJUST_UP), /* ὸ */
+    (0x1F79, AF_ADJUST_UP), /* ό */
+    (0x1F7A, AF_ADJUST_UP), /* ὺ */
+    (0x1F7B, AF_ADJUST_UP), /* ύ */
+    (0x1F7C, AF_ADJUST_UP), /* ὼ */
+    (0x1F7D, AF_ADJUST_UP), /* ώ */
+    (0x1F80, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾀ */
+    (0x1F81, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾁ */
+    (0x1F82, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾂ */
+    (0x1F83, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾃ */
+    (0x1F84, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾄ */
+    (0x1F85, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾅ */
+    (0x1F86, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP | AF_ADJUST_DOWN), /* ᾆ */
+    (0x1F87, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP | AF_ADJUST_DOWN), /* ᾇ */
+    (0x1F88, AF_ADJUST_DOWN), /* ᾈ */
+    (0x1F89, AF_ADJUST_DOWN), /* ᾉ */
+    (0x1F8A, AF_ADJUST_DOWN), /* ᾊ */
+    (0x1F8B, AF_ADJUST_DOWN), /* ᾋ */
+    (0x1F8C, AF_ADJUST_DOWN), /* ᾌ */
+    (0x1F8D, AF_ADJUST_DOWN), /* ᾍ */
+    (0x1F8E, AF_ADJUST_DOWN), /* ᾎ */
+    (0x1F8F, AF_ADJUST_DOWN), /* ᾏ */
+    (0x1F90, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾐ */
+    (0x1F91, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾑ */
+    (0x1F92, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾒ */
+    (0x1F93, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾓ */
+    (0x1F94, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾔ */
+    (0x1F95, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾕ */
+    (0x1F96, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP | AF_ADJUST_DOWN), /* ᾖ */
+    (0x1F97, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP | AF_ADJUST_DOWN), /* ᾗ */
+    (0x1F98, AF_ADJUST_DOWN), /* ᾘ */
+    (0x1F99, AF_ADJUST_DOWN), /* ᾙ */
+    (0x1F9A, AF_ADJUST_DOWN), /* ᾚ */
+    (0x1F9B, AF_ADJUST_DOWN), /* ᾛ */
+    (0x1F9C, AF_ADJUST_DOWN), /* ᾜ */
+    (0x1F9D, AF_ADJUST_DOWN), /* ᾝ */
+    (0x1F9E, AF_ADJUST_DOWN), /* ᾞ */
+    (0x1F9F, AF_ADJUST_DOWN), /* ᾟ */
+    (0x1FA0, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾠ */
+    (0x1FA1, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾡ */
+    (0x1FA2, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾢ */
+    (0x1FA3, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾣ */
+    (0x1FA4, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾤ */
+    (0x1FA5, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾥ */
+    (0x1FA6, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP | AF_ADJUST_DOWN), /* ᾦ */
+    (0x1FA7, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP | AF_ADJUST_DOWN), /* ᾧ */
+    (0x1FA8, AF_ADJUST_DOWN), /* ᾨ */
+    (0x1FA9, AF_ADJUST_DOWN), /* ᾩ */
+    (0x1FAA, AF_ADJUST_DOWN), /* ᾪ */
+    (0x1FAB, AF_ADJUST_DOWN), /* ᾫ */
+    (0x1FAC, AF_ADJUST_DOWN), /* ᾬ */
+    (0x1FAD, AF_ADJUST_DOWN), /* ᾭ */
+    (0x1FAE, AF_ADJUST_DOWN), /* ᾮ */
+    (0x1FAF, AF_ADJUST_DOWN), /* ᾯ */
+    (0x1FB0, AF_ADJUST_UP), /* ᾰ */
+    (0x1FB1, AF_ADJUST_UP), /* ᾱ */
+    (0x1FB2, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾲ */
+    (0x1FB3, AF_ADJUST_DOWN), /* ᾳ */
+    (0x1FB4, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ᾴ */
+    (0x1FB6, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* ᾶ */
+    (0x1FB7, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP | AF_ADJUST_DOWN), /* ᾷ */
+    (0x1FB8, AF_ADJUST_UP), /* Ᾰ */
+    (0x1FB9, AF_ADJUST_UP), /* Ᾱ */
+    (0x1FBC, AF_ADJUST_DOWN), /* ᾼ */
+    (0x1FC2, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ῂ */
+    (0x1FC3, AF_ADJUST_DOWN), /* ῃ */
+    (0x1FC4, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ῄ */
+    (0x1FC6, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* ῆ */
+    (0x1FC7, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP | AF_ADJUST_DOWN), /* ῇ */
+    (0x1FCC, AF_ADJUST_DOWN), /* ῌ */
+    (0x1FD0, AF_ADJUST_UP), /* ῐ */
+    (0x1FD1, AF_ADJUST_UP), /* ῑ */
+    (0x1FD2, AF_ADJUST_UP2), /* ῒ */
+    (0x1FD3, AF_ADJUST_UP2), /* ΐ */
+    (0x1FD6, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* ῖ */
+    (0x1FD7, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ῗ */
+    (0x1FD8, AF_ADJUST_UP), /* Ῐ */
+    (0x1FD9, AF_ADJUST_UP), /* Ῑ */
+    (0x1FE0, AF_ADJUST_UP), /* ῠ */
+    (0x1FE1, AF_ADJUST_UP), /* ῡ */
+    (0x1FE2, AF_ADJUST_UP2), /* ῢ */
+    (0x1FE3, AF_ADJUST_UP2), /* ΰ */
+    (0x1FE4, AF_ADJUST_UP), /* ῤ */
+    (0x1FE5, AF_ADJUST_UP), /* ῥ */
+    (0x1FE6, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* ῦ */
+    (0x1FE7, AF_ADJUST_UP2 | AF_ADJUST_TILDE_TOP), /* ῧ */
+    (0x1FE8, AF_ADJUST_UP), /* Ῠ */
+    (0x1FE9, AF_ADJUST_UP), /* Ῡ */
+    (0x1FF2, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ῲ */
+    (0x1FF3, AF_ADJUST_DOWN), /* ῳ */
+    (0x1FF4, AF_ADJUST_UP | AF_ADJUST_DOWN), /* ῴ */
+    (0x1FF6, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP), /* ῶ */
+    (0x1FF7, AF_ADJUST_UP | AF_ADJUST_TILDE_TOP | AF_ADJUST_DOWN), /* ῷ */
+    (0x1FFC, AF_ADJUST_DOWN), /* ῼ */
+    (0x203C, AF_ADJUST_UP | AF_ADJUST_NO_HEIGHT_CHECK), /* ‼ */
+    (0x203D, AF_ADJUST_UP | AF_ADJUST_NO_HEIGHT_CHECK), /* ‽ */
+    (0x2047, AF_ADJUST_UP | AF_ADJUST_NO_HEIGHT_CHECK), /* ⁇ */
+    (0x2048, AF_ADJUST_UP | AF_ADJUST_NO_HEIGHT_CHECK), /* ⁈ */
+    (0x2049, AF_ADJUST_UP | AF_ADJUST_NO_HEIGHT_CHECK), /* ⁉ */
+    (0x2071, AF_ADJUST_UP), /* ⁱ */
+    (0x20AB, AF_ADJUST_DOWN), /* ₫ */
+    (0x20C0, AF_ADJUST_DOWN), /* ⃀ */
+    (0x2170, AF_ADJUST_UP), /* ⅰ */
+    (0x2171, AF_ADJUST_UP), /* ⅱ */
+    (0x2172, AF_ADJUST_UP), /* ⅲ */
+    (0x2173, AF_ADJUST_UP), /* ⅳ */
+    (0x2175, AF_ADJUST_UP), /* ⅵ */
+    (0x2176, AF_ADJUST_UP), /* ⅶ */
+    (0x2177, AF_ADJUST_UP), /* ⅷ */
+    (0x2178, AF_ADJUST_UP), /* ⅸ */
+    (0x217A, AF_ADJUST_UP), /* ⅺ */
+    (0x217B, AF_ADJUST_UP), /* ⅻ */
+    (0x2C64, AF_IGNORE_CAPITAL_BOTTOM), /* Ɽ */
+    (0x2C67, AF_IGNORE_CAPITAL_BOTTOM), /* Ⱨ */
+    (0x2C68, AF_IGNORE_SMALL_BOTTOM), /* ⱨ */
+    (0x2C69, AF_IGNORE_CAPITAL_BOTTOM), /* Ⱪ */
+    (0x2C6A, AF_IGNORE_SMALL_BOTTOM), /* ⱪ */
+    (0x2C6B, AF_IGNORE_CAPITAL_BOTTOM), /* Ⱬ */
+    (0x2C6C, AF_IGNORE_SMALL_BOTTOM), /* ⱬ */
+    (0x2C6E, AF_IGNORE_CAPITAL_BOTTOM), /* Ɱ */
+    (0x2C7C, AF_ADJUST_UP), /* ⱼ */
+    (0x2C7E, AF_IGNORE_CAPITAL_BOTTOM), /* Ȿ */
+    (0x2C7F, AF_IGNORE_CAPITAL_BOTTOM), /* Ɀ */
+    (0x2CC2, AF_ADJUST_UP), /* Ⳃ */
+    (0x2CC3, AF_ADJUST_UP), /* ⳃ */
+    (0x2E18, AF_ADJUST_UP), /* ⸘ */
+    (0x2E2E, AF_ADJUST_UP | AF_ADJUST_NO_HEIGHT_CHECK), /* ⸮ */
+    (0xA640, AF_IGNORE_CAPITAL_BOTTOM), /* Ꙁ */
+    (0xA641, AF_IGNORE_SMALL_BOTTOM), /* ꙁ */
+    (0xA642, AF_IGNORE_CAPITAL_BOTTOM), /* Ꙃ */
+    (0xA643, AF_IGNORE_SMALL_BOTTOM), /* ꙃ */
+    (0xA680, AF_IGNORE_CAPITAL_TOP), /* Ꚁ */
+    (0xA681, AF_IGNORE_SMALL_TOP), /* ꚁ */
+    (0xA688, AF_IGNORE_CAPITAL_BOTTOM), /* Ꚉ */
+    (0xA689, AF_IGNORE_SMALL_BOTTOM), /* ꚉ */
+    (0xA68A, AF_IGNORE_CAPITAL_BOTTOM), /* Ꚋ */
+    (0xA68B, AF_IGNORE_SMALL_BOTTOM), /* ꚋ */
+    (0xA68E, AF_IGNORE_CAPITAL_BOTTOM), /* Ꚏ */
+    (0xA68F, AF_IGNORE_SMALL_BOTTOM), /* ꚏ */
+    (0xA690, AF_IGNORE_CAPITAL_BOTTOM), /* Ꚑ */
+    (0xA691, AF_IGNORE_SMALL_BOTTOM), /* ꚑ */
+    (0xA696, AF_IGNORE_CAPITAL_BOTTOM), /* Ꚗ */
+    (0xA697, AF_IGNORE_SMALL_BOTTOM), /* ꚗ */
+    (0xA726, AF_IGNORE_CAPITAL_BOTTOM), /* Ꜧ */
+    (0xA727, AF_IGNORE_SMALL_BOTTOM), /* ꜧ */
+    (0xA756, AF_IGNORE_CAPITAL_BOTTOM), /* Ꝗ */
+    (0xA758, AF_IGNORE_CAPITAL_BOTTOM), /* Ꝙ */
+    (0xA771, AF_IGNORE_SMALL_BOTTOM), /* ꝱ */
+    (0xA772, AF_IGNORE_SMALL_BOTTOM), /* ꝲ */
+    (0xA773, AF_IGNORE_SMALL_BOTTOM), /* ꝳ */
+    (0xA774, AF_IGNORE_SMALL_BOTTOM), /* ꝴ */
+    (0xA776, AF_IGNORE_SMALL_BOTTOM), /* ꝶ */
+    (0xA790, AF_IGNORE_CAPITAL_BOTTOM), /* Ꞑ */
+    (0xA791, AF_IGNORE_SMALL_BOTTOM), /* ꞑ */
+    (0xA794, AF_IGNORE_SMALL_BOTTOM), /* ꞔ */
+    (0xA795, AF_IGNORE_SMALL_BOTTOM), /* ꞕ */
+    (0xA7C0, AF_IGNORE_CAPITAL_TOP | AF_IGNORE_CAPITAL_BOTTOM), /* Ꟁ */
+    (0xA7C1, AF_IGNORE_SMALL_TOP | AF_IGNORE_SMALL_BOTTOM), /* ꟁ */
+    (0xA7C4, AF_IGNORE_CAPITAL_BOTTOM), /* Ꞔ */
+    (0xA7C5, AF_IGNORE_CAPITAL_BOTTOM), /* Ʂ */
+    (0xA7C6, AF_IGNORE_CAPITAL_BOTTOM), /* Ᶎ */
+    (0xA7CC, AF_IGNORE_CAPITAL_TOP | AF_IGNORE_CAPITAL_BOTTOM), /* Ꟍ */
+    (0xA7CD, AF_IGNORE_SMALL_TOP | AF_IGNORE_SMALL_BOTTOM), /* ꟍ */
+    (0xAB3C, AF_IGNORE_SMALL_BOTTOM), /* ꬼ */
+    (0xAB46, AF_IGNORE_SMALL_BOTTOM), /* ꭆ */
+    (0xAB5C, AF_IGNORE_SMALL_BOTTOM), /* ꭜ */
+    (0xAB66, AF_IGNORE_SMALL_BOTTOM), /* ꭦ */
+    (0xAB67, AF_IGNORE_SMALL_BOTTOM), /* ꭧ */
 ];
 
 use super::loader;
@@ -546,7 +1460,8 @@ pub fn metrics_init_blues_impl(
                         || !points[usize_from_i32(best_seg_last)].on_curve;
                 }
                 trace!(target: "autohint::pipeline", "[BLUE_ROUND] ch={ch} round={round} best_x={best_x} best_y={best_y} on_first={} on_last={} seg_first={} seg_last={} on_curve={}",
-                    points[usize_from_i32(best_on_first)].on_curve, points[usize_from_i32(best_on_last)].on_curve,
+                    best_on_first >= 0 && points[usize_from_i32(best_on_first)].on_curve,
+                    best_on_last >= 0 && points[usize_from_i32(best_on_last)].on_curve,
                     best_seg_first, best_seg_last,
                     points[usize_from_i32(best_seg_first)].on_curve);
 
@@ -698,52 +1613,57 @@ pub fn metrics_init_blues_impl(
         axis.blue_count += 1;
     }
 
-    // Sort blues bottom→top and resolve overlaps (aflatin.c:988-1039).
+    // Resolve blue-zone overlaps in bottom-to-top order without changing the
+    // stored blue order.  C sorts a temporary pointer array here; later
+    // lookups such as `af_latin_get_base_glyph_blues` still depend on the
+    // original script-string order (aflatin.c:988-1039, 3069-3099).
     if axis.blue_count > 1 {
-        // insertion sort by effective position
-        // C: for TOP zones compares ref.org, for BOTTOM zones compares shoot.org
-        let blues = &mut axis.blues;
-        for i in 1..blues.len() {
+        let mut sorted: Vec<usize> = (0..axis.blues.len()).collect();
+        for i in 1..sorted.len() {
             let mut j = i;
             while j > 0 {
-                let a_pos = if blues[j - 1].flags & (AF_LATIN_BLUE_TOP | AF_LATIN_BLUE_SUB_TOP) != 0
-                {
-                    blues[j - 1].ref_width.org
+                let a = &axis.blues[sorted[j - 1]];
+                let b = &axis.blues[sorted[j]];
+                let a_pos = if a.flags & (AF_LATIN_BLUE_TOP | AF_LATIN_BLUE_SUB_TOP) != 0 {
+                    a.ref_width.org
                 } else {
-                    blues[j - 1].shoot_width.org
+                    a.shoot_width.org
                 };
-                let b_pos = if blues[j].flags & (AF_LATIN_BLUE_TOP | AF_LATIN_BLUE_SUB_TOP) != 0 {
-                    blues[j].ref_width.org
+                let b_pos = if b.flags & (AF_LATIN_BLUE_TOP | AF_LATIN_BLUE_SUB_TOP) != 0 {
+                    b.ref_width.org
                 } else {
-                    blues[j].shoot_width.org
+                    b.shoot_width.org
                 };
                 if b_pos >= a_pos {
                     break;
                 }
-                blues.swap(j - 1, j);
+                sorted.swap(j - 1, j);
                 j -= 1;
             }
         }
-        // resolve overlaps: clamp upper zone's effective top to lower zone's bottom
-        for i in 0..blues.len() - 1 {
-            let use_shoot_a = blues[i].flags & (AF_LATIN_BLUE_TOP | AF_LATIN_BLUE_SUB_TOP) != 0;
-            let use_shoot_b = blues[i + 1].flags & (AF_LATIN_BLUE_TOP | AF_LATIN_BLUE_SUB_TOP) != 0;
+
+        for pair in sorted.windows(2) {
+            let a_idx = pair[0];
+            let b_idx = pair[1];
+            let use_shoot_a =
+                axis.blues[a_idx].flags & (AF_LATIN_BLUE_TOP | AF_LATIN_BLUE_SUB_TOP) != 0;
+            let use_shoot_b =
+                axis.blues[b_idx].flags & (AF_LATIN_BLUE_TOP | AF_LATIN_BLUE_SUB_TOP) != 0;
             let a_org = if use_shoot_a {
-                blues[i].shoot_width.org
+                axis.blues[a_idx].shoot_width.org
             } else {
-                blues[i].ref_width.org
+                axis.blues[a_idx].ref_width.org
             };
             let b_org = if use_shoot_b {
-                blues[i + 1].shoot_width.org
+                axis.blues[b_idx].shoot_width.org
             } else {
-                blues[i + 1].ref_width.org
+                axis.blues[b_idx].ref_width.org
             };
             if a_org > b_org {
-                // *a = *b  (rare; clamp to avoid inversion)
                 if use_shoot_a {
-                    blues[i].shoot_width.org = b_org;
+                    axis.blues[a_idx].shoot_width.org = b_org;
                 } else {
-                    blues[i].ref_width.org = b_org;
+                    axis.blues[a_idx].ref_width.org = b_org;
                 }
             }
         }
@@ -949,6 +1869,102 @@ fn compute_blue_edges(hints: &mut GlyphHints) {
     }
 }
 
+fn base_glyph_blues(
+    hints: &GlyphHints,
+    is_capital: bool,
+) -> (Option<AfLatinBlue>, Option<AfLatinBlue>) {
+    let Some(metrics) = hints.metrics.as_ref() else {
+        return (None, None);
+    };
+    let axis = &metrics.axis[Dimension::Vert as usize];
+
+    let top_flag = (if is_capital {
+        AF_LATIN_BLUE_TOP
+    } else {
+        AF_LATIN_BLUE_ADJUSTMENT
+    }) | AF_LATIN_BLUE_ACTIVE;
+    let bottom_flag = (if is_capital {
+        AF_LATIN_BLUE_BOTTOM
+    } else {
+        AF_LATIN_BLUE_BOTTOM_SMALL
+    }) | AF_LATIN_BLUE_ACTIVE;
+
+    let top = axis
+        .blues
+        .iter()
+        .find(|blue| (blue.flags & top_flag) == top_flag)
+        .copied();
+    let bottom = axis
+        .blues
+        .iter()
+        .find(|blue| (blue.flags & bottom_flag) == bottom_flag)
+        .copied();
+    (top, bottom)
+}
+
+fn prevent_top_blue_alignment(hints: &mut GlyphHints, pos: i32) {
+    for edge in &mut hints.axis[Dimension::Vert as usize].edges {
+        if edge.pos > pos {
+            edge.flags |= AF_EDGE_NO_BLUE;
+        }
+    }
+}
+
+fn prevent_bottom_blue_alignment(hints: &mut GlyphHints, pos: i32) {
+    for edge in &mut hints.axis[Dimension::Vert as usize].edges {
+        if edge.pos < pos {
+            edge.flags |= AF_EDGE_NO_BLUE;
+        }
+    }
+}
+
+fn ignore_top_blue_alignment(hints: &mut GlyphHints, top: AfLatinBlue, bottom: AfLatinBlue) {
+    let base_height = top.shoot_width.cur - bottom.shoot_width.cur;
+    let limit = top.shoot_width.cur + base_height / 7 + 16;
+    prevent_top_blue_alignment(hints, limit);
+}
+
+fn ignore_bottom_blue_alignment(hints: &mut GlyphHints, top: AfLatinBlue, bottom: AfLatinBlue) {
+    let base_height = top.shoot_width.cur - bottom.shoot_width.cur;
+    let limit = bottom.shoot_width.cur - base_height / 7 - 16;
+    prevent_bottom_blue_alignment(hints, limit);
+}
+
+fn apply_blue_zone_ignore_adjustments(hints: &mut GlyphHints, adj_type: u32) {
+    if adj_type == 0 {
+        return;
+    }
+
+    let ignore_capital_top = (adj_type & AF_IGNORE_CAPITAL_TOP) != 0;
+    let ignore_capital_bottom = (adj_type & AF_IGNORE_CAPITAL_BOTTOM) != 0;
+    let ignore_small_top = (adj_type & AF_IGNORE_SMALL_TOP) != 0;
+    let ignore_small_bottom = (adj_type & AF_IGNORE_SMALL_BOTTOM) != 0;
+
+    if ignore_capital_top || ignore_capital_bottom {
+        let (top, bottom) = base_glyph_blues(hints, true);
+        if let (Some(top), Some(bottom)) = (top, bottom) {
+            if ignore_capital_top {
+                ignore_top_blue_alignment(hints, top, bottom);
+            }
+            if ignore_capital_bottom {
+                ignore_bottom_blue_alignment(hints, top, bottom);
+            }
+        }
+    }
+
+    if ignore_small_top || ignore_small_bottom {
+        let (top, bottom) = base_glyph_blues(hints, false);
+        if let (Some(top), Some(bottom)) = (top, bottom) {
+            if ignore_small_top {
+                ignore_top_blue_alignment(hints, top, bottom);
+            }
+            if ignore_small_bottom {
+                ignore_bottom_blue_alignment(hints, top, bottom);
+            }
+        }
+    }
+}
+
 /// Helper: FT_PIX_ROUND(x) = (x + 32) & !63  (26.6 → 6-bit rounding).
 #[inline]
 fn ft_pix_round(x: i32) -> i32 {
@@ -994,6 +2010,457 @@ fn adjustment_database_lookup(codepoint: u32) -> u32 {
     0
 }
 
+fn recompute_vertical_extrema(hints: &mut GlyphHints) {
+    let mut new_minima = vec![0; hints.contours.len()];
+    let mut new_maxima = vec![0; hints.contours.len()];
+    for ci in 0..hints.contours.len() {
+        let (min_y, max_y) = contour_y_bounds(hints, ci);
+        new_minima[ci] = min_y;
+        new_maxima[ci] = max_y;
+    }
+    hints.contour_y_minima = new_minima;
+    hints.contour_y_maxima = new_maxima;
+}
+
+fn contour_y_bounds(hints: &GlyphHints, contour: usize) -> (i32, i32) {
+    let c_start = hints.contours[contour];
+    if contour_is_dimensionless(hints, contour) {
+        return (i32::MAX, i32::MIN);
+    }
+    let mut y_min = i32::MAX;
+    let mut y_max = i32::MIN;
+    let mut idx = c_start;
+    loop {
+        let pt = &hints.points[idx];
+        y_min = y_min.min(pt.y);
+        y_max = y_max.max(pt.y);
+        let next = pt.next;
+        if next == c_start {
+            break;
+        }
+        idx = next;
+    }
+    (y_min, y_max)
+}
+
+fn contour_is_dimensionless(hints: &GlyphHints, contour: usize) -> bool {
+    let first = hints.contours[contour];
+    hints.points[hints.points[first].next].next == first
+}
+
+fn move_contour_vertically(hints: &mut GlyphHints, contour: usize, delta: i32) {
+    let c_start = hints.contours[contour];
+    let mut idx = c_start;
+    loop {
+        hints.points[idx].y += delta;
+        let next = hints.points[idx].next;
+        if next == c_start {
+            break;
+        }
+        idx = next;
+    }
+}
+
+fn touch_contour(hints: &mut GlyphHints, contour: usize) {
+    let c_start = hints.contours[contour];
+    let mut idx = hints.points[c_start].next;
+    loop {
+        hints.points[idx].flags |= AF_FLAG_IGNORE;
+        if hints.points[idx].flags & AF_FLAG_CONTROL == 0 {
+            hints.points[idx].flags |= AF_FLAG_TOUCH_Y;
+        }
+        if idx == c_start {
+            break;
+        }
+        idx = hints.points[idx].next;
+    }
+}
+
+fn touch_top_contours(hints: &mut GlyphHints, limit_contour: usize) {
+    let limit = hints.contour_y_minima[limit_contour];
+    for ci in 0..hints.contours.len() {
+        let min_y = hints.contour_y_minima[ci];
+        let max_y = hints.contour_y_maxima[ci];
+        if min_y < max_y && min_y >= limit {
+            touch_contour(hints, ci);
+        }
+    }
+}
+
+fn touch_bottom_contours(hints: &mut GlyphHints, limit_contour: usize) {
+    let limit = hints.contour_y_minima[limit_contour];
+    for ci in 0..hints.contours.len() {
+        let min_y = hints.contour_y_minima[ci];
+        let max_y = hints.contour_y_maxima[ci];
+        if min_y < max_y && max_y <= limit {
+            touch_contour(hints, ci);
+        }
+    }
+}
+
+fn move_contours_up(hints: &mut GlyphHints, limit: i32, delta: i32) {
+    for ci in 0..hints.contours.len() {
+        let min_y = hints.contour_y_minima[ci];
+        let max_y = hints.contour_y_maxima[ci];
+        if min_y < max_y && min_y > limit {
+            move_contour_vertically(hints, ci, delta);
+        }
+    }
+}
+
+fn move_contours_down(hints: &mut GlyphHints, limit: i32, delta: i32) {
+    for ci in 0..hints.contours.len() {
+        let min_y = hints.contour_y_minima[ci];
+        let max_y = hints.contour_y_maxima[ci];
+        if min_y < max_y && max_y < limit {
+            move_contour_vertically(hints, ci, -delta);
+        }
+    }
+}
+
+fn find_highest_contour(hints: &GlyphHints) -> usize {
+    let mut highest_contour = 0;
+    let mut highest_min_y = i32::MAX;
+    let mut highest_max_y = i32::MIN;
+    for ci in 0..hints.contours.len() {
+        let current_min_y = hints.contour_y_minima[ci];
+        let current_max_y = hints.contour_y_maxima[ci];
+        if current_max_y > highest_max_y
+            || (current_max_y == highest_max_y && current_min_y > highest_min_y)
+        {
+            highest_min_y = current_min_y;
+            highest_max_y = current_max_y;
+            highest_contour = ci;
+        }
+    }
+    highest_contour
+}
+
+fn find_second_highest_contour(hints: &GlyphHints) -> usize {
+    if hints.contours.len() < 3 {
+        return 0;
+    }
+    let highest = find_highest_contour(hints);
+    let highest_min_y = hints.contour_y_minima[highest];
+    let mut second = 0;
+    let mut second_max_y = i32::MIN;
+    for ci in 0..hints.contours.len() {
+        if ci == highest {
+            continue;
+        }
+        let current_min_y = hints.contour_y_minima[ci];
+        let current_max_y = hints.contour_y_maxima[ci];
+        if current_max_y > second_max_y && current_min_y < highest_min_y {
+            second_max_y = current_max_y;
+            second = ci;
+        }
+    }
+    second
+}
+
+fn find_lowest_contour(hints: &GlyphHints) -> usize {
+    let mut lowest_contour = 0;
+    let mut lowest_min_y = i32::MAX;
+    let mut lowest_max_y = i32::MIN;
+    for ci in 0..hints.contours.len() {
+        let current_min_y = hints.contour_y_minima[ci];
+        let current_max_y = hints.contour_y_maxima[ci];
+        if current_min_y < lowest_min_y
+            || (current_min_y == lowest_min_y && current_max_y < lowest_max_y)
+        {
+            lowest_min_y = current_min_y;
+            lowest_max_y = current_max_y;
+            lowest_contour = ci;
+        }
+    }
+    lowest_contour
+}
+
+fn find_second_lowest_contour(hints: &GlyphHints) -> usize {
+    if hints.contours.len() < 3 {
+        return 0;
+    }
+    let lowest = find_lowest_contour(hints);
+    let lowest_max_y = hints.contour_y_maxima[lowest];
+    let mut second = 0;
+    let mut second_min_y = i32::MAX;
+    for ci in 0..hints.contours.len() {
+        if ci == lowest {
+            continue;
+        }
+        let current_min_y = hints.contour_y_minima[ci];
+        let current_max_y = hints.contour_y_maxima[ci];
+        if current_min_y < second_min_y && current_max_y > lowest_max_y {
+            second_min_y = current_min_y;
+            second = ci;
+        }
+    }
+    second
+}
+
+fn contour_horizontal_overlap(hints: &GlyphHints, contour_index: usize) -> bool {
+    let mut contour_min_x = i32::MAX;
+    let mut contour_max_x = i32::MIN;
+    let mut others_min_x = i32::MAX;
+    let mut others_max_x = i32::MIN;
+
+    for ci in 0..hints.contours.len() {
+        if contour_is_dimensionless(hints, ci) {
+            continue;
+        }
+        let first = hints.contours[ci];
+        let mut idx = hints.points[first].next;
+        loop {
+            let x = hints.points[idx].x;
+            if ci == contour_index {
+                contour_min_x = contour_min_x.min(x);
+                contour_max_x = contour_max_x.max(x);
+            } else {
+                others_min_x = others_min_x.min(x);
+                others_max_x = others_max_x.max(x);
+            }
+            if idx == first {
+                break;
+            }
+            idx = hints.points[idx].next;
+        }
+    }
+
+    if contour_min_x == i32::MAX || others_min_x == i32::MAX {
+        return false;
+    }
+    (others_min_x <= contour_max_x && contour_max_x <= others_max_x)
+        || (others_min_x <= contour_min_x && contour_min_x <= others_max_x)
+        || (contour_max_x >= others_max_x && contour_min_x <= others_min_x)
+}
+
+fn stretch_top_tilde(hints: &mut GlyphHints, contour: usize) -> i32 {
+    let first = hints.contours[contour];
+    let min_y = hints.contour_y_minima[contour];
+    let max_y = hints.contour_y_maxima[contour];
+    if min_y == max_y {
+        return 0;
+    }
+
+    let height = max_y - min_y;
+    let extremum_threshold = height / 8;
+    let mut min_measurement = i32::MAX;
+    let mut measurement_taken = false;
+    let mut idx = hints.points[first].next;
+    loop {
+        let pt = hints.points[idx];
+        if pt.flags & AF_FLAG_CONTROL == 0
+            && hints.points[pt.prev].y == pt.y
+            && hints.points[pt.next].y == pt.y
+            && pt.y != min_y
+            && pt.y != max_y
+            && hints.points[pt.prev].flags & AF_FLAG_CONTROL != 0
+            && hints.points[pt.next].flags & AF_FLAG_CONTROL != 0
+        {
+            let mut prev_on = pt.prev;
+            let mut next_on = pt.next;
+            while hints.points[prev_on].flags & AF_FLAG_CONTROL != 0 {
+                prev_on = hints.points[prev_on].prev;
+            }
+            while hints.points[next_on].flags & AF_FLAG_CONTROL != 0 {
+                next_on = hints.points[next_on].next;
+            }
+            let measurement = if hints.points[next_on].y > pt.y && hints.points[prev_on].y > pt.y {
+                pt.y - min_y
+            } else if hints.points[next_on].y < pt.y && hints.points[prev_on].y < pt.y {
+                max_y - pt.y
+            } else {
+                0
+            };
+            if measurement >= extremum_threshold && measurement != 0 {
+                measurement_taken = true;
+                min_measurement = min_measurement.min(measurement);
+            }
+        }
+        if idx == first {
+            break;
+        }
+        idx = hints.points[idx].next;
+    }
+
+    if !measurement_taken {
+        min_measurement = 0;
+    }
+    touch_top_contours(hints, contour);
+    let target_height = min_measurement + 64;
+    if height >= target_height {
+        return 0;
+    }
+
+    let mut idx = first;
+    loop {
+        let y = hints.points[idx].y;
+        hints.points[idx].y =
+            (((y - min_y) as i64 * target_height as i64) / height as i64) as i32 + min_y;
+        let next = hints.points[idx].next;
+        if next == first {
+            break;
+        }
+        idx = next;
+    }
+    target_height - height
+}
+
+fn stretch_bottom_tilde(hints: &mut GlyphHints, contour: usize) -> i32 {
+    let first = hints.contours[contour];
+    let min_y = hints.contour_y_minima[contour];
+    let max_y = hints.contour_y_maxima[contour];
+    if min_y == max_y {
+        return 0;
+    }
+
+    let height = max_y - min_y;
+    let extremum_threshold = height / 8;
+    let mut min_measurement = i32::MAX;
+    let mut measurement_taken = false;
+    let mut idx = hints.points[first].next;
+    loop {
+        let pt = hints.points[idx];
+        if pt.flags & AF_FLAG_CONTROL == 0
+            && hints.points[pt.prev].y == pt.y
+            && hints.points[pt.next].y == pt.y
+            && pt.y != min_y
+            && pt.y != max_y
+            && hints.points[pt.prev].flags & AF_FLAG_CONTROL != 0
+            && hints.points[pt.next].flags & AF_FLAG_CONTROL != 0
+        {
+            let mut prev_on = pt.prev;
+            let mut next_on = pt.next;
+            while hints.points[prev_on].flags & AF_FLAG_CONTROL != 0 {
+                prev_on = hints.points[prev_on].prev;
+            }
+            while hints.points[next_on].flags & AF_FLAG_CONTROL != 0 {
+                next_on = hints.points[next_on].next;
+            }
+            let measurement = if hints.points[next_on].y > pt.y && hints.points[prev_on].y > pt.y {
+                pt.y - min_y
+            } else if hints.points[next_on].y < pt.y && hints.points[prev_on].y < pt.y {
+                max_y - pt.y
+            } else {
+                0
+            };
+            if measurement >= extremum_threshold && measurement != 0 {
+                measurement_taken = true;
+                min_measurement = min_measurement.min(measurement);
+            }
+        }
+        if idx == first {
+            break;
+        }
+        idx = hints.points[idx].next;
+    }
+
+    if !measurement_taken {
+        min_measurement = 0;
+    }
+    touch_bottom_contours(hints, contour);
+    let target_height = min_measurement + 64;
+    if height >= target_height {
+        return 0;
+    }
+
+    let mut idx = first;
+    loop {
+        let y = hints.points[idx].y;
+        hints.points[idx].y =
+            (((y - max_y) as i64 * target_height as i64) / height as i64) as i32 + max_y;
+        let next = hints.points[idx].next;
+        if next == first {
+            break;
+        }
+        idx = next;
+    }
+    target_height - height
+}
+
+fn align_top_tilde(hints: &mut GlyphHints, contour: usize) -> i32 {
+    let (min_y, max_y) = contour_y_bounds(hints, contour);
+    let height = max_y - min_y;
+    let mut delta = ft_pix_round(min_y) - min_y;
+    if height < 3 * 64 {
+        delta += (ft_pix_round(height) - height) / 2;
+    }
+    move_contour_vertically(hints, contour, delta);
+    delta
+}
+
+fn align_bottom_tilde(hints: &mut GlyphHints, contour: usize) -> i32 {
+    let (min_y, max_y) = contour_y_bounds(hints, contour);
+    let height = max_y - min_y;
+    let mut delta = ft_pix_round(max_y) - max_y;
+    if height < 3 * 64 {
+        delta -= (ft_pix_round(height) - height) / 2;
+    }
+    move_contour_vertically(hints, contour, delta);
+    delta
+}
+
+fn apply_tilde_stretch_alignment(hints: &mut GlyphHints, adj_type: u32) {
+    let is_top_tilde = (adj_type & AF_ADJUST_TILDE_TOP) != 0;
+    let is_bottom_tilde = (adj_type & AF_ADJUST_TILDE_BOTTOM) != 0;
+    let is_below_top_tilde = (adj_type & AF_ADJUST_TILDE_TOP2) != 0;
+    let is_above_bottom_tilde = (adj_type & AF_ADJUST_TILDE_BOTTOM2) != 0;
+    if !(is_top_tilde || is_bottom_tilde || is_below_top_tilde || is_above_bottom_tilde) {
+        return;
+    }
+
+    recompute_vertical_extrema(hints);
+    if is_below_top_tilde {
+        let contour = find_second_highest_contour(hints);
+        let y_offset = stretch_top_tilde(hints, contour) + align_top_tilde(hints, contour);
+        recompute_vertical_extrema(hints);
+        let limit = hints.contour_y_minima[contour];
+        move_contours_up(hints, limit, y_offset);
+        recompute_vertical_extrema(hints);
+    }
+    if is_above_bottom_tilde {
+        let contour = find_second_lowest_contour(hints);
+        let y_offset = stretch_bottom_tilde(hints, contour) - align_bottom_tilde(hints, contour);
+        recompute_vertical_extrema(hints);
+        let limit = hints.contour_y_maxima[contour];
+        move_contours_down(hints, limit, y_offset);
+        recompute_vertical_extrema(hints);
+    }
+    if is_top_tilde {
+        let contour = find_highest_contour(hints);
+        stretch_top_tilde(hints, contour);
+        align_top_tilde(hints, contour);
+        recompute_vertical_extrema(hints);
+    }
+    if is_bottom_tilde {
+        let contour = find_lowest_contour(hints);
+        stretch_bottom_tilde(hints, contour);
+        align_bottom_tilde(hints, contour);
+        recompute_vertical_extrema(hints);
+    }
+}
+
+fn vertical_separation_accent_height_limit(hints: &GlyphHints, adj_type: u32) -> i32 {
+    if adj_type == 0 || (adj_type & AF_ADJUST_NO_HEIGHT_CHECK) != 0 {
+        return 0;
+    }
+
+    let (small_top, small_bottom) = base_glyph_blues(hints, false);
+    if let (Some(top), Some(bottom)) = (small_top, small_bottom) {
+        return 2 * (top.shoot_width.cur - bottom.shoot_width.cur) / 3;
+    }
+
+    let (capital_top, capital_bottom) = base_glyph_blues(hints, true);
+    if let (Some(top), Some(bottom)) = (capital_top, capital_bottom) {
+        return (top.shoot_width.cur - bottom.shoot_width.cur) / 2;
+    }
+
+    hints.metrics.as_ref().map_or(0, |metrics| {
+        let scale = metrics.axis[Dimension::Vert as usize].scale;
+        ft_mul_fix(metrics.units_per_em * 4 / 10, scale)
+    })
+}
+
 fn vertical_separation_adjustments(
     hints: &mut GlyphHints,
     glyph_index: u16,
@@ -1023,91 +2490,167 @@ fn vertical_separation_adjustments(
         return;
     }
 
-    // Recompute vertical extrema from hinted y values (C: af_compute_vertical_extrema)
-    let mut new_minima: Vec<i32> = vec![0; hints.contours.len()];
-    let mut new_maxima: Vec<i32> = vec![0; hints.contours.len()];
-    for (ci, &c_start) in hints.contours.iter().enumerate() {
-        let mut y_min = i32::MAX;
-        let mut y_max = i32::MIN;
-        let mut idx = c_start;
-        loop {
-            let pt = &hints.points[idx];
-            y_min = y_min.min(pt.y);
-            y_max = y_max.max(pt.y);
-            let next = pt.next;
-            if next == c_start {
-                break;
+    recompute_vertical_extrema(hints);
+    // C: `af_latin_hints_apply` leaves `accent_height_limit` at zero for
+    // `AF_ADJUST_NO_HEIGHT_CHECK`, then the later contour-height guard skips
+    // this adjustment.  A fixed limit incorrectly moves punctuation stems.
+    let accent_height_limit = vertical_separation_accent_height_limit(hints, adj_type);
+
+    if (adjust_top && hints.contours.len() >= 2) || (adjust_below_top && hints.contours.len() >= 3)
+    {
+        let high_contour = if adjust_below_top {
+            find_second_highest_contour(hints)
+        } else {
+            find_highest_contour(hints)
+        };
+        if !contour_horizontal_overlap(hints, high_contour) {
+            return;
+        }
+
+        let high_min_y = hints.contour_y_minima[high_contour];
+        let high_max_y = hints.contour_y_maxima[high_contour];
+        let high_height = high_max_y - high_min_y;
+        if high_height > accent_height_limit {
+            return;
+        }
+
+        let mut min_distance = 64;
+        for ci in 0..hints.contours.len() {
+            if ci == high_contour {
+                continue;
             }
-            idx = next;
-        }
-        new_minima[ci] = y_min;
-        new_maxima[ci] = y_max;
-    }
-    hints.contour_y_minima = new_minima.clone();
-    hints.contour_y_maxima = new_maxima.clone();
-
-    // Find highest contour (largest y_min) — for 'i' this is the body
-    let high_contour = {
-        let mut best = 0;
-        let mut best_min = i32::MIN;
-        for (ci, &min_val) in new_minima.iter().enumerate() {
-            if min_val > best_min {
-                best_min = min_val;
-                best = ci;
+            let min_y = hints.contour_y_minima[ci];
+            let max_y = hints.contour_y_maxima[ci];
+            let distance = high_min_y - max_y;
+            if distance < 64 && distance < min_distance && min_y < high_min_y {
+                min_distance = distance;
             }
         }
-        best
-    };
 
-    let high_min_y = new_minima[high_contour];
-    let high_max_y = new_maxima[high_contour];
-    let high_height = high_max_y - high_min_y;
-
-    // Find min gap between high contour bottom and nearest other contour top
-    let mut min_distance: i32 = 256;
-    for ci in 0..hints.contours.len() {
-        if ci == high_contour {
-            continue;
-        }
-        let other_max = new_maxima[ci];
-        let other_min = new_minima[ci];
-        let dist = high_min_y - other_max;
-        if dist < min_distance && other_min < high_min_y {
-            min_distance = dist;
-        }
-    }
-
-    // Only adjust if gap is small (< 1px = 64 26.6 units).
-    // C uses `if (min_distance < 64)` which allows negative values
-    // (occurs when a contour slightly overlaps another).
-    if min_distance >= 64 {
-        return;
-    }
-
-    let adjustment = 64 - min_distance;
-    // C: calculated_amount >= -2 && (calculated_amount <= 66 || adjustment_amount <= 66)
-    // (aflatin.c:3807). We don't have calculated_amount (no tilde centering),
-    // so the check simplifies to adjustment <= 66.
-    if adjustment <= -3 || adjustment > 66 {
-        return;
-    }
-
-    // C: af_move_contours_up(hints, limit, delta)
-    // Moves ENTIRE CONTOURS where y_min > limit, i.e. contours above limit
-    let limit = high_min_y - high_height / 8; // heuristic from C
-    for ci in 0..hints.contours.len() {
-        let c_start = hints.contours[ci];
-        if new_minima[ci] <= new_maxima[ci] && new_minima[ci] > limit {
-            // Move entire contour up by delta
-            let mut idx = c_start;
-            loop {
-                hints.points[idx].y += adjustment;
-                let next = hints.points[idx].next;
-                if next == c_start {
-                    break;
-                }
-                idx = next;
+        let adjustment_amount = 64 - min_distance;
+        let is_top_tilde = (adj_type & AF_ADJUST_TILDE_TOP) != 0;
+        let is_below_top_tilde = (adj_type & AF_ADJUST_TILDE_TOP2) != 0;
+        let mut centering_adjustment = 0;
+        if is_top_tilde || is_below_top_tilde {
+            let tilde_contour = if adjust_top {
+                high_contour
+            } else if is_below_top_tilde {
+                high_contour
+            } else {
+                find_highest_contour(hints)
+            };
+            let tilde_height =
+                hints.contour_y_maxima[tilde_contour] - hints.contour_y_minima[tilde_contour];
+            let mut pos = high_min_y + adjustment_amount;
+            if adjust_below_top && is_top_tilde {
+                pos += high_height;
             }
+            if pos % 64 == 0 && tilde_height < 3 * 64 {
+                centering_adjustment = (ft_pix_round(tilde_height) - tilde_height) / 2;
+            }
+        }
+
+        let calculated_amount =
+            if (adjust_top && is_top_tilde) || (adjust_below_top && is_below_top_tilde) {
+                adjustment_amount + centering_adjustment
+            } else {
+                adjustment_amount
+            };
+        if calculated_amount != 0
+            && calculated_amount >= -2
+            && (calculated_amount <= 66 || adjustment_amount <= 66)
+        {
+            let min_y_limit = high_min_y - high_height / 8;
+            // C uses `calculated_amount` only for the range check above.  The
+            // main contour move uses raw `adjustment_amount`; any tilde
+            // centering is applied only by the secondary below-top move.
+            // See `aflatin.c` in
+            // `af_glyph_hints_apply_vertical_separation_adjustments`.
+            move_contours_up(hints, min_y_limit, adjustment_amount);
+            if adjust_below_top && is_top_tilde {
+                move_contours_up(hints, min_y_limit + high_height, centering_adjustment);
+            }
+            recompute_vertical_extrema(hints);
+        }
+    }
+
+    if (adjust_bottom && hints.contours.len() >= 2)
+        || (adjust_above_bottom && hints.contours.len() >= 3)
+    {
+        let low_contour = if adjust_above_bottom {
+            find_second_lowest_contour(hints)
+        } else {
+            find_lowest_contour(hints)
+        };
+        if !contour_horizontal_overlap(hints, low_contour) {
+            return;
+        }
+
+        let low_min_y = hints.contour_y_minima[low_contour];
+        let low_max_y = hints.contour_y_maxima[low_contour];
+        let low_height = low_max_y - low_min_y;
+        if low_height > accent_height_limit {
+            return;
+        }
+
+        let mut min_distance = 64;
+        for ci in 0..hints.contours.len() {
+            if ci == low_contour {
+                continue;
+            }
+            let min_y = hints.contour_y_minima[ci];
+            let max_y = hints.contour_y_maxima[ci];
+            let distance = min_y - low_max_y;
+            if distance < 64 && distance < min_distance && max_y > low_max_y {
+                min_distance = distance;
+            }
+        }
+
+        let adjustment_amount = 64 - min_distance;
+        let is_bottom_tilde = (adj_type & AF_ADJUST_TILDE_BOTTOM) != 0;
+        let is_above_bottom_tilde = (adj_type & AF_ADJUST_TILDE_BOTTOM2) != 0;
+        let mut centering_adjustment = 0;
+        if is_bottom_tilde || is_above_bottom_tilde {
+            let tilde_contour = if adjust_bottom {
+                low_contour
+            } else if is_above_bottom_tilde {
+                low_contour
+            } else {
+                find_lowest_contour(hints)
+            };
+            let tilde_height =
+                hints.contour_y_maxima[tilde_contour] - hints.contour_y_minima[tilde_contour];
+            let mut pos = low_max_y - adjustment_amount;
+            if adjust_above_bottom && is_bottom_tilde {
+                pos -= low_height;
+            }
+            if pos % 64 == 0 && tilde_height < 3 * 64 {
+                centering_adjustment = (ft_pix_round(tilde_height) - tilde_height) / 2;
+            }
+        }
+
+        let calculated_amount = if (adjust_bottom && is_bottom_tilde)
+            || (adjust_above_bottom && is_above_bottom_tilde)
+        {
+            adjustment_amount + centering_adjustment
+        } else {
+            adjustment_amount
+        };
+
+        if calculated_amount != 0
+            && calculated_amount >= -2
+            && (calculated_amount <= 66 || adjustment_amount <= 66)
+        {
+            let max_y_limit = low_max_y + low_height / 8;
+            // FreeType's `af_glyph_hints_apply_vertical_separation_adjustments`
+            // uses the raw separation amount for the main bottom-contour move;
+            // tilde centering is only applied to the secondary below-contour path.
+            // See `aflatin.c` around the `af_move_contours_down` calls.
+            move_contours_down(hints, max_y_limit, adjustment_amount);
+            if adjust_above_bottom && is_bottom_tilde {
+                move_contours_down(hints, max_y_limit - low_height, centering_adjustment);
+            }
+            recompute_vertical_extrema(hints);
         }
     }
 }
@@ -1156,7 +2699,7 @@ pub fn apply_hints(
     // Our pipeline with blue_count==0 produces different results than
     // C's NONE_DFLT path. Match C by skipping hinting entirely when
     // the VERT axis has no blue zones.
-    if metrics.is_none_or(|m| m.axis[1].blue_count == 0) {
+    if metrics.is_none_or(|m| !m.no_advance_hinting && m.axis[1].blue_count == 0) {
         return output;
     }
     // Match FreeType's af_latin_hints_init target table:
@@ -1212,13 +2755,30 @@ pub fn apply_hints(
         {
             let (wc, widths) = extract_widths(&hints, Dimension::Horz);
             horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
-            link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
+            if use_cjk_edges {
+                // FreeType 2.14.3's `af_cjk_hints_compute_segments` snapshots
+                // the segment limit before `af_latin_hints_compute_segments`.
+                // `af_glyph_hints_reload` has just reset that count to zero,
+                // so the CJK roundness cleanup is skipped and the Latin segment
+                // roundness flags are preserved for CJK/Hani parity.
+                super::cjk::cjk_link_segments(&mut hints, Dimension::Horz);
+            } else {
+                link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
+            }
         }
         if use_cjk_edges {
             super::cjk::cjk_compute_edges(&mut hints, Dimension::Horz, false);
+            super::cjk::cjk_compute_blue_edges(&mut hints, Dimension::Horz);
         } else {
             compute_edges(&mut hints, Dimension::Horz);
         }
+    }
+
+    if let Some(data) = font_data {
+        let adj_type = reverse_cmap_lookup(data, glyph_index).map_or(0, adjustment_database_lookup);
+        // C applies tilde stretching/alignment before vertical feature
+        // detection (aflatin.c:4938-4980), after horizontal detection.
+        apply_tilde_stretch_alignment(&mut hints, adj_type);
     }
 
     // Phase B: detect_features for VERT (segs → link → edges) + blue zones.
@@ -1228,20 +2788,30 @@ pub fn apply_hints(
     {
         let (wc, widths) = extract_widths(&hints, Dimension::Vert);
         vert_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
-        link_segments_inner(&mut hints, Dimension::Vert, wc, &widths);
+        if use_cjk_edges {
+            // Keep Latin segment roundness flags for CJK; see the horizontal
+            // phase comment above for the FreeType 2.14.3 control-flow detail.
+            super::cjk::cjk_link_segments(&mut hints, Dimension::Vert);
+        } else {
+            link_segments_inner(&mut hints, Dimension::Vert, wc, &widths);
+        }
     }
     if use_cjk_edges {
         super::cjk::cjk_compute_edges(&mut hints, Dimension::Vert, false);
+        super::cjk::cjk_compute_blue_edges(&mut hints, Dimension::Vert);
     } else {
         compute_edges(&mut hints, Dimension::Vert);
+    }
+    if let Some(data) = font_data {
+        let adj_type = reverse_cmap_lookup(data, glyph_index).map_or(0, adjustment_database_lookup);
+        apply_blue_zone_ignore_adjustments(&mut hints, adj_type);
     }
     let is_nonbase = hints.metrics.as_ref().is_some_and(|m| {
         (glyph_index as usize) < m.non_base_glyphs.len() && m.non_base_glyphs[glyph_index as usize]
     });
-    if !is_nonbase {
+    if !use_cjk_edges && !is_nonbase {
         compute_blue_edges(&mut hints);
     }
-
     // Phase C: grid-fit the outline — for-loop over both dims (aflatin.c:5169-5177).
     for dim_i in 0..2 {
         let dim = if dim_i == 0 {
@@ -1267,11 +2837,13 @@ pub fn apply_hints(
         }
         align_strong_points(&mut hints, dim);
         align_weak_points(&mut hints, dim);
-        vertical_separation_adjustments(
-            &mut hints,
-            glyph_index,
-            font_data.unwrap_or_else(|| unreachable!()),
-        );
+        if dim == Dimension::Vert {
+            vertical_separation_adjustments(
+                &mut hints,
+                glyph_index,
+                font_data.unwrap_or_else(|| unreachable!()),
+            );
+        }
     }
 
     // ── Post-hinting phantom-point adjustment (afloader.c:419-530) ──────
@@ -1284,6 +2856,16 @@ pub fn apply_hints(
         let advance_width = font_data.map_or(0, |data| {
             ft_mul_fix(data.hmtx.get(glyph_index).advance_width as i32, x_scale)
         });
+        let target_light = no_horizontal_hinting && !stem_adjust && !horz_snap && !vert_snap;
+        let preserve_original_advance = !target_light
+            && metrics.is_some_and(|m| {
+                m.fixed_width
+                    || (m.digits_have_same_width
+                        && m.digit_glyphs
+                            .get(glyph_index as usize)
+                            .copied()
+                            .unwrap_or(false))
+            });
         #[cfg(debug_assertions)]
         if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
             log::trace!(target: "autohint::pipeline", "[PHANTOM_PRE] gi={glyph_index} num_horz_edges={num_horz_edges}");
@@ -1351,6 +2933,12 @@ pub fn apply_hints(
             if advance_width != 0 {
                 output.advance_width = Some((advance_width + 32) & !63);
             }
+        }
+        if preserve_original_advance {
+            // C: afloader.c:543-554 keeps the rounded original advance for
+            // fixed-width faces and for ASCII digits when all digits share one
+            // width, after outline positioning has already used pp1/pp2.
+            output.advance_width = Some((advance_width + 32) & !63);
         }
     }
 
