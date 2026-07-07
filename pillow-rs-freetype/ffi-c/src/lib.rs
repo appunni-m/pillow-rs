@@ -367,6 +367,67 @@ pub extern "C" fn FT_Load_Glyph(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Advance(
+    face: FT_Face,
+    glyph_index: FT_UInt,
+    load_flags: FT_Int32,
+    padvance: *mut FT_Fixed,
+) -> FT_Error {
+    let Some(out) = non_null_mut(padvance) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(state) = face_state(face) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    match rust_ffi::FT_Get_Advance(&state.inner, glyph_index, load_flags) {
+        Ok(advance) => {
+            // SAFETY: `out` is a valid out pointer checked above.
+            unsafe { *out.as_ptr() = advance };
+            rust_ffi::FT_Err_Ok
+        }
+        Err(error) => error,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Advances(
+    face: FT_Face,
+    start: FT_UInt,
+    count: FT_UInt,
+    load_flags: FT_Int32,
+    padvances: *mut FT_Fixed,
+) -> FT_Error {
+    let Some(state) = face_state(face) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Ok(out_len) = usize::try_from(count) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let out = if out_len == 0 {
+        None
+    } else {
+        let Some(out) = non_null_mut(padvances) else {
+            return rust_ffi::FT_Err_Invalid_Argument;
+        };
+        Some(out)
+    };
+    match rust_ffi::FT_Get_Advances(&state.inner, start, count, load_flags) {
+        Ok(advances) => {
+            if advances.len() != out_len {
+                return rust_ffi::FT_Err_Invalid_Argument;
+            }
+            if let Some(out) = out {
+                // SAFETY: `out` is non-null and caller promises at least `count` writable entries.
+                let out = unsafe { slice::from_raw_parts_mut(out.as_ptr(), out_len) };
+                out.copy_from_slice(&advances);
+            }
+            rust_ffi::FT_Err_Ok
+        }
+        Err(error) => error,
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Render_Glyph(slot: FT_GlyphSlot, render_mode: FT_Render_Mode) -> FT_Error {
     let Some(slot_ptr) = non_null_mut(slot) else {
         return rust_ffi::FT_Err_Invalid_Argument;

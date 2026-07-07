@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <freetype/ftcache.h>
+#include <freetype/ftadvanc.h>
 #include <freetype/ftcolor.h>
 #include <freetype/ftdriver.h>
 #include <freetype/ftglyph.h>
@@ -1291,6 +1292,21 @@ static void print_size_metrics(FT_Size_Metrics metrics) {
     printf("}");
 }
 
+static void print_advance(FT_Fixed advance) {
+    printf("\"output\":{\"advance\":%ld}", (long)advance);
+}
+
+static void print_advances(const FT_Fixed* advances, FT_UInt count) {
+    printf("\"output\":{\"advances\":[");
+    for (FT_UInt i = 0; i < count; i++) {
+        if (i) {
+            printf(",");
+        }
+        printf("%ld", (long)advances[i]);
+    }
+    printf("]}");
+}
+
 static int emit_face_or_slot(int argc, char** argv) {
     const char* command = argv[1];
     const char* source_kind = argv[2];
@@ -1365,6 +1381,53 @@ static int emit_face_or_slot(int argc, char** argv) {
         FT_ULong char_code = strtoul(argv[7], NULL, 10);
         print_status(0);
         printf(",\"output\":{\"value\":%u}}\n", FT_Get_Char_Index(face, char_code));
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-advance")) {
+        FT_UInt glyph_index = (FT_UInt)strtoul(argv[7], NULL, 10);
+        FT_Int32 load_flags = (FT_Int32)strtol(argv[8], NULL, 10);
+        FT_Fixed advance = 0;
+        err = FT_Get_Advance(face, glyph_index, load_flags, &advance);
+        print_status(err);
+        if (err) {
+            printf(",\"output\":null}\n");
+        } else {
+            printf(",");
+            print_advance(advance);
+            printf("}\n");
+        }
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-advances")) {
+        FT_UInt start = (FT_UInt)strtoul(argv[7], NULL, 10);
+        FT_UInt count = (FT_UInt)strtoul(argv[8], NULL, 10);
+        FT_Int32 load_flags = (FT_Int32)strtol(argv[9], NULL, 10);
+        size_t alloc_count = count ? (size_t)count : 1;
+        FT_Fixed* advances = (FT_Fixed*)calloc(alloc_count, sizeof(FT_Fixed));
+        if (!advances) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        err = FT_Get_Advances(face, start, count, load_flags, advances);
+        print_status(err);
+        if (err) {
+            printf(",\"output\":null}\n");
+        } else {
+            printf(",");
+            print_advances(advances, count);
+            printf("}\n");
+        }
+        free(advances);
         FT_Done_Face(face);
         FT_Done_FreeType(library);
         free(data);
@@ -1490,10 +1553,16 @@ static int dispatch(int argc, char** argv) {
     if (argc == 9 && (streq(argv[1], "--load-char") || streq(argv[1], "--load-glyph"))) {
         return emit_face_or_slot(argc, argv);
     }
+    if (argc == 9 && streq(argv[1], "--get-advance")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 10 && streq(argv[1], "--get-advances")) {
+        return emit_face_or_slot(argc, argv);
+    }
     if (argc == 10 && (streq(argv[1], "--render-glyph") || streq(argv[1], "--render-glyph-index"))) {
         return emit_face_or_slot(argc, argv);
     }
-    fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | --layout RECORD | --type-probe SYMBOL | --function-probe SYMBOL | --macro-eval CASE_ID | --new-memory-face SRC_KIND SRC FACE_INDEX PX PY | --set-pixel-sizes SRC_KIND SRC FACE_INDEX PX PY | --set-char-size SRC_KIND SRC FACE_INDEX WIDTH HEIGHT HR VR | --size-metrics SRC_KIND SRC FACE_INDEX PX PY | --get-char-index SRC_KIND SRC FACE_INDEX PX PY CHAR | --load-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --render-glyph SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS MODE | --render-glyph-index SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE\n");
+    fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | --layout RECORD | --type-probe SYMBOL | --function-probe SYMBOL | --macro-eval CASE_ID | --new-memory-face SRC_KIND SRC FACE_INDEX PX PY | --set-pixel-sizes SRC_KIND SRC FACE_INDEX PX PY | --set-char-size SRC_KIND SRC FACE_INDEX WIDTH HEIGHT HR VR | --size-metrics SRC_KIND SRC FACE_INDEX PX PY | --get-char-index SRC_KIND SRC FACE_INDEX PX PY CHAR | --load-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --get-advance SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --get-advances SRC_KIND SRC FACE_INDEX PX PY START COUNT FLAGS | --render-glyph SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS MODE | --render-glyph-index SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE\n");
     return 2;
 }
 

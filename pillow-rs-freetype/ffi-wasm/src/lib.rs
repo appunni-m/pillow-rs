@@ -10,6 +10,7 @@ use std::slice;
 use fontdone::ffi as rust_ffi;
 
 pub type FT_Error = i32;
+pub type FT_Fixed = i64;
 pub type FT_Int32 = i32;
 pub type FT_Long = i64;
 pub type FT_ULong = u64;
@@ -245,6 +246,66 @@ pub extern "C" fn fontdone_wasm_load_glyph(
     match rust_ffi::FT_Load_Glyph(&face.face, glyph_index, load_flags) {
         Ok(slot) => {
             face.slot = Some(slot);
+            rust_ffi::FT_Err_Ok
+        }
+        Err(error) => error,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_advance(
+    handle: usize,
+    glyph_index: FT_UInt,
+    load_flags: FT_Int32,
+    padvance: *mut FT_Fixed,
+) -> FT_Error {
+    if padvance.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    match rust_ffi::FT_Get_Advance(&face.face, glyph_index, load_flags) {
+        Ok(advance) => {
+            // SAFETY: `padvance` is non-null and caller provides writable storage.
+            unsafe { *padvance = advance };
+            rust_ffi::FT_Err_Ok
+        }
+        Err(error) => error,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_advances(
+    handle: usize,
+    start: FT_UInt,
+    count: FT_UInt,
+    load_flags: FT_Int32,
+    padvances: *mut FT_Fixed,
+) -> FT_Error {
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Ok(out_len) = usize::try_from(count) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let out = if out_len == 0 {
+        None
+    } else if padvances.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    } else {
+        Some(padvances)
+    };
+    match rust_ffi::FT_Get_Advances(&face.face, start, count, load_flags) {
+        Ok(advances) => {
+            if advances.len() != out_len {
+                return rust_ffi::FT_Err_Invalid_Argument;
+            }
+            if let Some(out) = out {
+                // SAFETY: `out` is non-null and caller promises at least `count` writable entries.
+                let out = unsafe { slice::from_raw_parts_mut(out, out_len) };
+                out.copy_from_slice(&advances);
+            }
             rust_ffi::FT_Err_Ok
         }
         Err(error) => error,
