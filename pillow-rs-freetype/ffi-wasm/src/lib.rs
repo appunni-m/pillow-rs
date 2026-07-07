@@ -10,11 +10,22 @@ use std::slice;
 use fontdone::ffi as rust_ffi;
 
 pub type FT_Error = i32;
+pub type FT_Bool = u8;
+pub type FT_F2Dot14 = i16;
 pub type FT_Fixed = i64;
+pub type FT_Angle = FT_Fixed;
+pub type FT_Int = i32;
 pub type FT_Int32 = i32;
 pub type FT_Long = i64;
 pub type FT_ULong = u64;
 pub type FT_UInt = u32;
+pub type FT_Sfnt_Tag = u32;
+pub type FT_Short = i16;
+pub type FT_UShort = u16;
+pub type FT_Size_Request_Type = i32;
+pub type FT_Encoding = i32;
+pub type FT_LcdFilter = i32;
+pub type FT_TrueTypeEngineType = i32;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -28,6 +39,22 @@ pub struct FontdoneWasmStatus {
 pub struct FontdoneWasmVector {
     pub x: i64,
     pub y: i64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmMatrix {
+    pub xx: i64,
+    pub xy: i64,
+    pub yx: i64,
+    pub yy: i64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FT_UnitVector {
+    pub x: FT_F2Dot14,
+    pub y: FT_F2Dot14,
 }
 
 #[repr(C)]
@@ -80,6 +107,80 @@ pub struct FontdoneWasmSizeMetrics {
     pub max_advance: i64,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmSfntName {
+    pub platform_id: u16,
+    pub encoding_id: u16,
+    pub language_id: u16,
+    pub name_id: u16,
+    pub string: *const c_uchar,
+    pub string_len: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmCharmap {
+    pub index: FT_UInt,
+    pub encoding: FT_Encoding,
+    pub platform_id: FT_UShort,
+    pub encoding_id: FT_UShort,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmOs2 {
+    pub version: FT_UShort,
+    pub xAvgCharWidth: FT_Short,
+    pub usWeightClass: FT_UShort,
+    pub usWidthClass: FT_UShort,
+    pub fsType: FT_UShort,
+    pub ySubscriptXSize: FT_Short,
+    pub ySubscriptYSize: FT_Short,
+    pub ySubscriptXOffset: FT_Short,
+    pub ySubscriptYOffset: FT_Short,
+    pub ySuperscriptXSize: FT_Short,
+    pub ySuperscriptYSize: FT_Short,
+    pub ySuperscriptXOffset: FT_Short,
+    pub ySuperscriptYOffset: FT_Short,
+    pub yStrikeoutSize: FT_Short,
+    pub yStrikeoutPosition: FT_Short,
+    pub sFamilyClass: FT_Short,
+    pub panose: [u8; 10],
+    pub ulUnicodeRange1: FT_ULong,
+    pub ulUnicodeRange2: FT_ULong,
+    pub ulUnicodeRange3: FT_ULong,
+    pub ulUnicodeRange4: FT_ULong,
+    pub achVendID: [i8; 4],
+    pub fsSelection: FT_UShort,
+    pub usFirstCharIndex: FT_UShort,
+    pub usLastCharIndex: FT_UShort,
+    pub sTypoAscender: FT_Short,
+    pub sTypoDescender: FT_Short,
+    pub sTypoLineGap: FT_Short,
+    pub usWinAscent: FT_UShort,
+    pub usWinDescent: FT_UShort,
+    pub ulCodePageRange1: FT_ULong,
+    pub ulCodePageRange2: FT_ULong,
+    pub sxHeight: FT_Short,
+    pub sCapHeight: FT_Short,
+    pub usDefaultChar: FT_UShort,
+    pub usBreakChar: FT_UShort,
+    pub usMaxContext: FT_UShort,
+    pub usLowerOpticalPointSize: FT_UShort,
+    pub usUpperOpticalPointSize: FT_UShort,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmSizeRequest {
+    pub type_: FT_Size_Request_Type,
+    pub width: FT_Long,
+    pub height: FT_Long,
+    pub horiResolution: FT_UInt,
+    pub vertResolution: FT_UInt,
+}
+
 struct WasmFaceState {
     face: rust_ffi::FT_Face,
     slot: Option<rust_ffi::FT_GlyphSlot>,
@@ -92,7 +193,19 @@ pub struct AbiSlotSnapshot {
     pub metrics: FontdoneWasmGlyphMetrics,
     pub advance: FontdoneWasmVector,
     pub format: i32,
+    pub outline_cbox: AbiBBoxSnapshot,
+    pub outline_bbox: AbiBBoxSnapshot,
+    pub outline: Option<rust_ffi::FT_OutlineSnapshot>,
     pub bitmap: Option<AbiBitmapSnapshot>,
+}
+
+#[cfg(feature = "abi-test-support")]
+#[derive(Clone)]
+pub struct AbiBBoxSnapshot {
+    pub xMin: i64,
+    pub yMin: i64,
+    pub xMax: i64,
+    pub yMax: i64,
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -109,11 +222,18 @@ pub struct AbiBitmapSnapshot {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_face_info(handle: usize) -> Option<rust_ffi::FT_FaceRecPublic> {
+    let face = face_ref(handle)?;
+    Some(rust_ffi::FT_Face_Info(&face.face))
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_slot_snapshot(handle: usize) -> Option<AbiSlotSnapshot> {
     let mut slot = FontdoneWasmGlyphSlot::default();
     if fontdone_wasm_get_slot(handle, &mut slot) != rust_ffi::FT_Err_Ok {
         return None;
     }
+    let rust_slot = face_ref(handle)?.slot.as_ref()?;
     let bitmap = if slot.bitmap.buffer.is_null() || slot.bitmap.buffer_len == 0 {
         None
     } else {
@@ -135,8 +255,21 @@ pub fn abi_slot_snapshot(handle: usize) -> Option<AbiSlotSnapshot> {
         metrics: slot.metrics,
         advance: slot.advance,
         format: slot.format,
+        outline_cbox: wasm_bbox_snapshot(rust_slot.outline_cbox),
+        outline_bbox: wasm_bbox_snapshot(rust_slot.outline_bbox),
+        outline: rust_slot.outline.clone(),
         bitmap,
     })
+}
+
+#[cfg(feature = "abi-test-support")]
+fn wasm_bbox_snapshot(bbox: rust_ffi::FT_BBox) -> AbiBBoxSnapshot {
+    AbiBBoxSnapshot {
+        xMin: bbox.xMin,
+        yMin: bbox.yMin,
+        xMax: bbox.xMax,
+        yMax: bbox.yMax,
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -188,12 +321,378 @@ pub extern "C" fn fontdone_wasm_open_face(
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_done_face(handle: usize) -> FT_Error {
     if handle == 0 {
-        return rust_ffi::FT_Err_Invalid_Argument;
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     }
     let ptr = ptr::with_exposed_provenance_mut::<WasmFaceState>(handle);
     // SAFETY: `handle` must come from `fontdone_wasm_open_face` and is consumed here.
     unsafe { drop(Box::from_raw(ptr)) };
     rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_done_freetype(library_present: i32) -> FT_Error {
+    let library = if library_present != 0 {
+        Some(rust_ffi::FT_Init_FreeType())
+    } else {
+        None
+    };
+    rust_ffi::FT_Done_FreeType(library)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_face_check_truetype_patents(handle: usize) -> FT_Bool {
+    rust_ffi::FT_Face_CheckTrueTypePatents(face_ref(handle).map(|state| &state.face))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_face_set_unpatented_hinting(
+    handle: usize,
+    value: FT_Bool,
+) -> FT_Bool {
+    rust_ffi::FT_Face_SetUnpatentedHinting(face_mut(handle).map(|state| &mut state.face), value)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_library_set_lcd_filter(filter: FT_LcdFilter) -> FT_Error {
+    rust_ffi::FT_Library_SetLcdFilter(None, filter)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_library_set_lcd_filter_weights(
+    weights: *mut c_uchar,
+) -> FT_Error {
+    rust_ffi::FT_Library_SetLcdFilterWeights(None, weights)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_library_set_lcd_geometry(
+    library_present: i32,
+    sub: *const FontdoneWasmVector,
+) -> FT_Error {
+    let mut library = if library_present != 0 {
+        Some(rust_ffi::FT_Init_FreeType())
+    } else {
+        None
+    };
+    let rust_sub = if sub.is_null() {
+        None
+    } else {
+        let mut vectors = [rust_ffi::FT_Vector::default(); 3];
+        for (index, vector) in vectors.iter_mut().enumerate() {
+            // SAFETY: `sub` is non-null and the wasm ABI mirrors the C API's
+            // three-vector array contract.
+            let source = unsafe { &*sub.add(index) };
+            *vector = rust_ffi::FT_Vector {
+                x: source.x,
+                y: source.y,
+            };
+        }
+        Some(vectors)
+    };
+    rust_ffi::FT_Library_SetLcdGeometry(
+        library.as_mut(),
+        rust_sub,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_truetype_engine_type(
+    library_present: i32,
+) -> FT_TrueTypeEngineType {
+    let library = if library_present != 0 {
+        Some(rust_ffi::FT_Init_FreeType())
+    } else {
+        None
+    };
+    rust_ffi::FT_Get_TrueType_Engine_Type(library.as_ref())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_mul_div(a: FT_Long, b: FT_Long, c: FT_Long) -> FT_Long {
+    rust_ffi::FT_MulDiv(a, b, c)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_mul_fix(a: FT_Long, b: FT_Long) -> FT_Long {
+    rust_ffi::FT_MulFix(a, b)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_div_fix(a: FT_Long, b: FT_Long) -> FT_Long {
+    rust_ffi::FT_DivFix(a, b)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_round_fix(a: FT_Fixed) -> FT_Fixed {
+    rust_ffi::FT_RoundFix(a)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_ceil_fix(a: FT_Fixed) -> FT_Fixed {
+    rust_ffi::FT_CeilFix(a)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_floor_fix(a: FT_Fixed) -> FT_Fixed {
+    rust_ffi::FT_FloorFix(a)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_sin(angle: FT_Angle) -> FT_Fixed {
+    rust_ffi::FT_Sin(angle)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_cos(angle: FT_Angle) -> FT_Fixed {
+    rust_ffi::FT_Cos(angle)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_tan(angle: FT_Angle) -> FT_Fixed {
+    rust_ffi::FT_Tan(angle)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_atan2(dx: FT_Fixed, dy: FT_Fixed) -> FT_Angle {
+    rust_ffi::FT_Atan2(dx, dy)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_angle_diff(angle1: FT_Angle, angle2: FT_Angle) -> FT_Angle {
+    rust_ffi::FT_Angle_Diff(angle1, angle2)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_vector_unit(vector: *mut FontdoneWasmVector, angle: FT_Angle) {
+    let mut rust_vector = if vector.is_null() {
+        None
+    } else {
+        // SAFETY: `vector` is non-null and points to a wasm ABI vector.
+        let vector = unsafe { &*vector };
+        Some(rust_ffi::FT_Vector {
+            x: vector.x,
+            y: vector.y,
+        })
+    };
+    rust_ffi::FT_Vector_Unit(rust_vector.as_mut(), angle);
+    if let Some(rust_vector) = rust_vector {
+        // SAFETY: `vector` is non-null in the branch that created `rust_vector`.
+        unsafe {
+            (*vector).x = rust_vector.x;
+            (*vector).y = rust_vector.y;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_vector_rotate(vector: *mut FontdoneWasmVector, angle: FT_Angle) {
+    let mut rust_vector = if vector.is_null() {
+        None
+    } else {
+        // SAFETY: `vector` is non-null and points to a wasm ABI vector.
+        let vector = unsafe { &*vector };
+        Some(rust_ffi::FT_Vector {
+            x: vector.x,
+            y: vector.y,
+        })
+    };
+    rust_ffi::FT_Vector_Rotate(rust_vector.as_mut(), angle);
+    if let Some(rust_vector) = rust_vector {
+        // SAFETY: `vector` is non-null in the branch that created `rust_vector`.
+        unsafe {
+            (*vector).x = rust_vector.x;
+            (*vector).y = rust_vector.y;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_vector_length(vector: *const FontdoneWasmVector) -> FT_Fixed {
+    let rust_vector = if vector.is_null() {
+        None
+    } else {
+        // SAFETY: `vector` is non-null and points to a wasm ABI vector.
+        let vector = unsafe { &*vector };
+        Some(rust_ffi::FT_Vector {
+            x: vector.x,
+            y: vector.y,
+        })
+    };
+    rust_ffi::FT_Vector_Length(rust_vector.as_ref())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_vector_polarize(
+    vector: *const FontdoneWasmVector,
+    length: *mut FT_Fixed,
+    angle: *mut FT_Angle,
+) {
+    let rust_vector = if vector.is_null() {
+        None
+    } else {
+        // SAFETY: `vector` is non-null and points to a wasm ABI vector.
+        let vector = unsafe { &*vector };
+        Some(rust_ffi::FT_Vector {
+            x: vector.x,
+            y: vector.y,
+        })
+    };
+    let mut rust_length = if length.is_null() {
+        None
+    } else {
+        // SAFETY: `length` is non-null and points to a wasm ABI `FT_Fixed`.
+        Some(unsafe { *length })
+    };
+    let mut rust_angle = if angle.is_null() {
+        None
+    } else {
+        // SAFETY: `angle` is non-null and points to a wasm ABI `FT_Angle`.
+        Some(unsafe { *angle })
+    };
+    rust_ffi::FT_Vector_Polarize(
+        rust_vector.as_ref(),
+        rust_length.as_mut(),
+        rust_angle.as_mut(),
+    );
+    if let Some(value) = rust_length {
+        // SAFETY: `length` is non-null in the branch that created `rust_length`.
+        unsafe { *length = value };
+    }
+    if let Some(value) = rust_angle {
+        // SAFETY: `angle` is non-null in the branch that created `rust_angle`.
+        unsafe { *angle = value };
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_vector_from_polar(
+    vector: *mut FontdoneWasmVector,
+    length: FT_Fixed,
+    angle: FT_Angle,
+) {
+    let mut rust_vector = if vector.is_null() {
+        None
+    } else {
+        // SAFETY: `vector` is non-null and points to a wasm ABI vector.
+        let vector = unsafe { &*vector };
+        Some(rust_ffi::FT_Vector {
+            x: vector.x,
+            y: vector.y,
+        })
+    };
+    rust_ffi::FT_Vector_From_Polar(rust_vector.as_mut(), length, angle);
+    if let Some(rust_vector) = rust_vector {
+        // SAFETY: `vector` is non-null in the branch that created `rust_vector`.
+        unsafe {
+            (*vector).x = rust_vector.x;
+            (*vector).y = rust_vector.y;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_vector_transform(
+    vector: *mut FontdoneWasmVector,
+    matrix: *const FontdoneWasmMatrix,
+) {
+    let mut rust_vector = if vector.is_null() {
+        None
+    } else {
+        // SAFETY: `vector` is non-null and points to a wasm ABI vector.
+        let vector = unsafe { &*vector };
+        Some(rust_ffi::FT_Vector {
+            x: vector.x,
+            y: vector.y,
+        })
+    };
+    let rust_matrix = if matrix.is_null() {
+        None
+    } else {
+        // SAFETY: `matrix` is non-null and points to a wasm ABI matrix.
+        let matrix = unsafe { &*matrix };
+        Some(rust_ffi::FT_Matrix {
+            xx: matrix.xx,
+            xy: matrix.xy,
+            yx: matrix.yx,
+            yy: matrix.yy,
+        })
+    };
+    rust_ffi::FT_Vector_Transform(rust_vector.as_mut(), rust_matrix.as_ref());
+    if let Some(rust_vector) = rust_vector {
+        // SAFETY: `vector` is non-null in the branch that created `rust_vector`.
+        unsafe {
+            (*vector).x = rust_vector.x;
+            (*vector).y = rust_vector.y;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_matrix_multiply(
+    a: *const FontdoneWasmMatrix,
+    b: *mut FontdoneWasmMatrix,
+) {
+    let rust_a = if a.is_null() {
+        None
+    } else {
+        // SAFETY: `a` is non-null and points to a wasm ABI matrix.
+        let a = unsafe { &*a };
+        Some(rust_ffi::FT_Matrix {
+            xx: a.xx,
+            xy: a.xy,
+            yx: a.yx,
+            yy: a.yy,
+        })
+    };
+    let mut rust_b = if b.is_null() {
+        None
+    } else {
+        // SAFETY: `b` is non-null and points to a wasm ABI matrix.
+        let b = unsafe { &*b };
+        Some(rust_ffi::FT_Matrix {
+            xx: b.xx,
+            xy: b.xy,
+            yx: b.yx,
+            yy: b.yy,
+        })
+    };
+    rust_ffi::FT_Matrix_Multiply(rust_a.as_ref(), rust_b.as_mut());
+    if let Some(rust_b) = rust_b {
+        // SAFETY: `b` is non-null in the branch that created `rust_b`.
+        unsafe {
+            (*b).xx = rust_b.xx;
+            (*b).xy = rust_b.xy;
+            (*b).yx = rust_b.yx;
+            (*b).yy = rust_b.yy;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_matrix_invert(matrix: *mut FontdoneWasmMatrix) -> FT_Error {
+    let mut rust_matrix = if matrix.is_null() {
+        None
+    } else {
+        // SAFETY: `matrix` is non-null and points to a wasm ABI matrix.
+        let matrix = unsafe { &*matrix };
+        Some(rust_ffi::FT_Matrix {
+            xx: matrix.xx,
+            xy: matrix.xy,
+            yx: matrix.yx,
+            yy: matrix.yy,
+        })
+    };
+    let err = rust_ffi::FT_Matrix_Invert(rust_matrix.as_mut());
+    if let Some(rust_matrix) = rust_matrix {
+        // SAFETY: `matrix` is non-null in the branch that created `rust_matrix`.
+        unsafe {
+            (*matrix).xx = rust_matrix.xx;
+            (*matrix).xy = rust_matrix.xy;
+            (*matrix).yx = rust_matrix.yx;
+            (*matrix).yy = rust_matrix.yy;
+        }
+    }
+    err
 }
 
 #[unsafe(no_mangle)]
@@ -209,11 +708,336 @@ pub extern "C" fn fontdone_wasm_set_pixel_sizes(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_set_char_size(
+    handle: usize,
+    char_width: FT_Long,
+    char_height: FT_Long,
+    horz_resolution: FT_UInt,
+    vert_resolution: FT_UInt,
+) -> FT_Error {
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    rust_ffi::FT_Set_Char_Size(
+        &mut face.face,
+        char_width,
+        char_height,
+        horz_resolution,
+        vert_resolution,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_request_size(
+    handle: usize,
+    req: *const FontdoneWasmSizeRequest,
+) -> FT_Error {
+    let request = if req.is_null() {
+        None
+    } else {
+        // SAFETY: `req` is non-null and copied by value only.
+        let req = unsafe { *req };
+        Some(rust_ffi::FT_Size_RequestRec {
+            type_: req.type_,
+            width: req.width,
+            height: req.height,
+            horiResolution: req.horiResolution,
+            vertResolution: req.vertResolution,
+        })
+    };
+    rust_ffi::FT_Request_Size(
+        face_mut(handle).map(|face| &mut face.face),
+        request.as_ref(),
+    )
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_char_index(handle: usize, char_code: FT_ULong) -> FT_UInt {
     let Some(face) = face_ref(handle) else {
         return 0;
     };
     rust_ffi::FT_Get_Char_Index(&face.face, char_code)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_kerning(
+    handle: usize,
+    left_glyph: FT_UInt,
+    right_glyph: FT_UInt,
+    kern_mode: FT_UInt,
+    out: *mut FontdoneWasmVector,
+) -> FT_Error {
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    if out.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument as FT_Error;
+    }
+    let mut vector = rust_ffi::FT_Vector::default();
+    let err = rust_ffi::FT_Get_Kerning(
+        Some(&face.face),
+        left_glyph,
+        right_glyph,
+        kern_mode,
+        Some(&mut vector),
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        // SAFETY: `out` is non-null and caller provides writable storage.
+        unsafe {
+            *out = FontdoneWasmVector {
+                x: vector.x,
+                y: vector.y,
+            };
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_select_charmap(
+    handle: usize,
+    encoding: FT_Encoding,
+) -> FT_Error {
+    rust_ffi::FT_Select_Charmap(
+        face_mut(handle).map(|face| &mut face.face),
+        encoding,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_charmap_count(handle: usize) -> FT_UInt {
+    face_ref(handle)
+        .map(|face| rust_ffi::FT_Face_Charmap_Count(&face.face))
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_active_charmap_index(handle: usize) -> FT_Int {
+    face_ref(handle)
+        .map(|face| rust_ffi::FT_Face_Active_Charmap_Index(&face.face))
+        .unwrap_or(-1)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_charmap(
+    handle: usize,
+    index: FT_UInt,
+    out: *mut FontdoneWasmCharmap,
+) -> FT_Error {
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(info) = rust_ffi::FT_Face_Charmap_Info(&face.face, index) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    if out.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    // SAFETY: `out` is non-null and caller provides writable storage.
+    unsafe {
+        *out = FontdoneWasmCharmap {
+            index,
+            encoding: info.encoding,
+            platform_id: info.platform_id,
+            encoding_id: info.encoding_id,
+        };
+    }
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_set_charmap(handle: usize, index: FT_UInt) -> FT_Error {
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let charmap = rust_ffi::FT_Face_Charmap(&face.face, index);
+    rust_ffi::FT_Set_Charmap(Some(&mut face.face), charmap)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_set_charmap_from_face(
+    handle: usize,
+    charmap_face_handle: usize,
+    index: FT_UInt,
+) -> FT_Error {
+    let charmap = {
+        let Some(charmap_face) = face_ref(charmap_face_handle) else {
+            return rust_ffi::FT_Err_Invalid_CharMap_Handle as FT_Error;
+        };
+        rust_ffi::FT_Face_Charmap(&charmap_face.face, index)
+    };
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    rust_ffi::FT_Set_Charmap(Some(&mut face.face), charmap)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_fstype_flags(handle: usize) -> FT_UShort {
+    rust_ffi::FT_Get_FSType_Flags(face_ref(handle).map(|face| &face.face))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_sfnt_name_count(handle: usize) -> FT_UInt {
+    rust_ffi::FT_Get_Sfnt_Name_Count(face_ref(handle).map(|face| &face.face))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_sfnt_name(
+    handle: usize,
+    idx: FT_UInt,
+    out: *mut FontdoneWasmSfntName,
+) -> FT_Error {
+    if out.is_null() {
+        return rust_ffi::FT_Get_Sfnt_Name(face_ref(handle).map(|face| &face.face), idx, None);
+    }
+    let mut name = rust_ffi::FT_SfntName::default();
+    let error = rust_ffi::FT_Get_Sfnt_Name(
+        face_ref(handle).map(|face| &face.face),
+        idx,
+        Some(&mut name),
+    );
+    if error == rust_ffi::FT_Err_Ok {
+        // SAFETY: `out` is non-null and caller provides writable storage.
+        unsafe {
+            *out = FontdoneWasmSfntName {
+                platform_id: name.platform_id,
+                encoding_id: name.encoding_id,
+                language_id: name.language_id,
+                name_id: name.name_id,
+                string: name.string.cast_const(),
+                string_len: name.string_len,
+            };
+        }
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_sfnt_os2(
+    handle: usize,
+    tag: FT_Sfnt_Tag,
+    out: *mut FontdoneWasmOs2,
+) -> FT_Error {
+    if out.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let table = rust_ffi::FT_Get_Sfnt_Table(&face.face, tag);
+    if table.is_null() {
+        return rust_ffi::FT_Err_Invalid_Table as FT_Error;
+    }
+    // SAFETY: `FT_Get_Sfnt_Table` returns a live face-owned `TT_OS2` pointer for this tag.
+    let os2 = unsafe { &*table.cast::<rust_ffi::TT_OS2>() };
+    // SAFETY: `out` is non-null and caller provides writable storage.
+    unsafe {
+        *out = FontdoneWasmOs2 {
+            version: os2.version,
+            xAvgCharWidth: os2.xAvgCharWidth,
+            usWeightClass: os2.usWeightClass,
+            usWidthClass: os2.usWidthClass,
+            fsType: os2.fsType,
+            ySubscriptXSize: os2.ySubscriptXSize,
+            ySubscriptYSize: os2.ySubscriptYSize,
+            ySubscriptXOffset: os2.ySubscriptXOffset,
+            ySubscriptYOffset: os2.ySubscriptYOffset,
+            ySuperscriptXSize: os2.ySuperscriptXSize,
+            ySuperscriptYSize: os2.ySuperscriptYSize,
+            ySuperscriptXOffset: os2.ySuperscriptXOffset,
+            ySuperscriptYOffset: os2.ySuperscriptYOffset,
+            yStrikeoutSize: os2.yStrikeoutSize,
+            yStrikeoutPosition: os2.yStrikeoutPosition,
+            sFamilyClass: os2.sFamilyClass,
+            panose: os2.panose,
+            ulUnicodeRange1: os2.ulUnicodeRange1,
+            ulUnicodeRange2: os2.ulUnicodeRange2,
+            ulUnicodeRange3: os2.ulUnicodeRange3,
+            ulUnicodeRange4: os2.ulUnicodeRange4,
+            achVendID: os2.achVendID,
+            fsSelection: os2.fsSelection,
+            usFirstCharIndex: os2.usFirstCharIndex,
+            usLastCharIndex: os2.usLastCharIndex,
+            sTypoAscender: os2.sTypoAscender,
+            sTypoDescender: os2.sTypoDescender,
+            sTypoLineGap: os2.sTypoLineGap,
+            usWinAscent: os2.usWinAscent,
+            usWinDescent: os2.usWinDescent,
+            ulCodePageRange1: os2.ulCodePageRange1,
+            ulCodePageRange2: os2.ulCodePageRange2,
+            sxHeight: os2.sxHeight,
+            sCapHeight: os2.sCapHeight,
+            usDefaultChar: os2.usDefaultChar,
+            usBreakChar: os2.usBreakChar,
+            usMaxContext: os2.usMaxContext,
+            usLowerOpticalPointSize: os2.usLowerOpticalPointSize,
+            usUpperOpticalPointSize: os2.usUpperOpticalPointSize,
+        };
+    }
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_first_char(handle: usize, agindex: *mut FT_UInt) -> FT_ULong {
+    let mut glyph_index = 0;
+    let char_code =
+        rust_ffi::FT_Get_First_Char(face_ref(handle).map(|face| &face.face), Some(&mut glyph_index));
+    if !agindex.is_null() {
+        // SAFETY: `agindex` is non-null and caller provides writable storage.
+        unsafe { *agindex = glyph_index };
+    }
+    char_code
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_next_char(
+    handle: usize,
+    char_code: FT_ULong,
+    agindex: *mut FT_UInt,
+) -> FT_ULong {
+    let mut glyph_index = 0;
+    let next_char = rust_ffi::FT_Get_Next_Char(
+        face_ref(handle).map(|face| &face.face),
+        char_code,
+        Some(&mut glyph_index),
+    );
+    if !agindex.is_null() {
+        // SAFETY: `agindex` is non-null and caller provides writable storage.
+        unsafe { *agindex = glyph_index };
+    }
+    next_char
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_library_version(
+    library_present: i32,
+    amajor: *mut i32,
+    aminor: *mut i32,
+    apatch: *mut i32,
+) {
+    let library = rust_ffi::FT_Init_FreeType();
+    let library = if library_present != 0 {
+        Some(&library)
+    } else {
+        None
+    };
+    let mut major = 0;
+    let mut minor = 0;
+    let mut patch = 0;
+    rust_ffi::FT_Library_Version(library, Some(&mut major), Some(&mut minor), Some(&mut patch));
+    if !amajor.is_null() {
+        // SAFETY: `amajor` is non-null and caller provides writable storage.
+        unsafe { *amajor = major };
+    }
+    if !aminor.is_null() {
+        // SAFETY: `aminor` is non-null and caller provides writable storage.
+        unsafe { *aminor = minor };
+    }
+    if !apatch.is_null() {
+        // SAFETY: `apatch` is non-null and caller provides writable storage.
+        unsafe { *apatch = patch };
+    }
 }
 
 #[unsafe(no_mangle)]

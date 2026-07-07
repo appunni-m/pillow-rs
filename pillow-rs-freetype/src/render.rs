@@ -283,46 +283,66 @@ impl Font {
         mode: RenderMode,
     ) -> Result<RenderedBitmap, FontError> {
         let scaled = self.scale_glyph_for_load_mode(glyph)?;
-        if scaled.outline.n_contours == 0 {
-            if mode == RenderMode::Mono {
-                return Ok(RenderedBitmap {
-                    width: 1,
-                    rows: 1,
-                    pitch: 2,
-                    pixel_mode: PixelMode::Mono,
-                    num_grays: PixelMode::Mono.num_grays(),
-                    left: 0,
-                    top: 1,
-                    buffer: vec![0, 0],
-                });
-            }
-            let pixel_mode = match mode {
-                RenderMode::Mono => PixelMode::Mono,
-                RenderMode::Lcd => PixelMode::Lcd,
-                RenderMode::LcdV => PixelMode::LcdV,
-                RenderMode::Sdf => PixelMode::Gray,
-                RenderMode::Normal => PixelMode::Gray,
-            };
-            return Ok(RenderedBitmap {
-                width: 0,
-                rows: 0,
-                pitch: 0,
-                pixel_mode,
-                num_grays: pixel_mode.num_grays(),
-                left: 0,
-                top: 0,
-                buffer: Vec::new(),
-            });
-        }
-
-        match mode {
-            RenderMode::Normal => render_scaled_normal(scaled),
-            RenderMode::Mono => render_scaled_mono(scaled),
-            RenderMode::Lcd => render_scaled_lcd(scaled),
-            RenderMode::LcdV => render_scaled_lcd_v(scaled),
-            RenderMode::Sdf => render_scaled_sdf(scaled),
-        }
+        render_loaded_outline(
+            scaled.outline,
+            scaled.bbox_x_min,
+            scaled.bbox_y_min,
+            scaled.bbox_y_max,
+            mode,
+        )
     }
+}
+
+pub(crate) fn render_loaded_outline(
+    outline: Outline,
+    left: i32,
+    bottom: i32,
+    top: i32,
+    mode: RenderMode,
+) -> Result<RenderedBitmap, FontError> {
+    if outline.is_empty() {
+        return render_empty_loaded_outline(mode);
+    }
+
+    match mode {
+        RenderMode::Normal => render_normal(outline, left, top),
+        RenderMode::Mono => render_mono(outline, left, bottom),
+        RenderMode::Lcd => render_lcd(outline, left, top),
+        RenderMode::LcdV => render_lcd_v(outline, left, top),
+        RenderMode::Sdf => render_sdf(outline, left, top, SDF_SPREAD),
+    }
+}
+
+fn render_empty_loaded_outline(mode: RenderMode) -> Result<RenderedBitmap, FontError> {
+    if mode == RenderMode::Mono {
+        return Ok(RenderedBitmap {
+            width: 1,
+            rows: 1,
+            pitch: 2,
+            pixel_mode: PixelMode::Mono,
+            num_grays: PixelMode::Mono.num_grays(),
+            left: 0,
+            top: 1,
+            buffer: vec![0, 0],
+        });
+    }
+    let pixel_mode = match mode {
+        RenderMode::Mono => PixelMode::Mono,
+        RenderMode::Lcd => PixelMode::Lcd,
+        RenderMode::LcdV => PixelMode::LcdV,
+        RenderMode::Sdf => PixelMode::Gray,
+        RenderMode::Normal => PixelMode::Gray,
+    };
+    Ok(RenderedBitmap {
+        width: 0,
+        rows: 0,
+        pitch: 0,
+        pixel_mode,
+        num_grays: pixel_mode.num_grays(),
+        left: 0,
+        top: 0,
+        buffer: Vec::new(),
+    })
 }
 
 fn render_scaled_normal(scaled: scaler::ScaledGlyph) -> Result<RenderedBitmap, FontError> {

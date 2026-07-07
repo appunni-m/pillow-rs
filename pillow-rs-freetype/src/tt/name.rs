@@ -13,6 +13,18 @@ pub struct NameTable {
     pub subfamily: String,
     /// PostScript name (nameID 6), when present.
     pub postscript_name: Option<String>,
+    /// Raw SFNT name records exposed by `FT_Get_Sfnt_Name`.
+    pub records: Vec<SfntNameRecord>,
+}
+
+/// Raw SFNT name record with string bytes copied from the name table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SfntNameRecord {
+    pub platform_id: u16,
+    pub encoding_id: u16,
+    pub language_id: u16,
+    pub name_id: u16,
+    pub string: Vec<u8>,
 }
 
 /// nameID constants we read.
@@ -26,6 +38,7 @@ const NAME_ID_TYPO_SUBFAMILY: u16 = 17;
 struct NameRecord {
     platform_id: u16,
     encoding_id: u16,
+    language_id: u16,
     name_id: u16,
     offset: u16,
     length: u16,
@@ -53,11 +66,16 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
         records.push(NameRecord {
             platform_id: u16::from_be_bytes([data[off], data[off + 1]]),
             encoding_id: u16::from_be_bytes([data[off + 2], data[off + 3]]),
+            language_id: u16::from_be_bytes([data[off + 4], data[off + 5]]),
             name_id: u16::from_be_bytes([data[off + 6], data[off + 7]]),
             length: u16::from_be_bytes([data[off + 8], data[off + 9]]),
             offset: u16::from_be_bytes([data[off + 10], data[off + 11]]),
         });
     }
+    let raw_records = records
+        .iter()
+        .filter_map(|record| raw_record(data, string_offset, record))
+        .collect();
 
     // Prefer typographic family/subfamily (nameID 16/17) over legacy (1/2).
     // FreeType 2.14.3 uses typographic names when available via face->family_name
@@ -74,6 +92,23 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
         family,
         subfamily,
         postscript_name,
+        records: raw_records,
+    })
+}
+
+fn raw_record(data: &[u8], string_base: usize, record: &NameRecord) -> Option<SfntNameRecord> {
+    if record.length == 0 {
+        return None;
+    }
+    let start = string_base.checked_add(record.offset as usize)?;
+    let end = start.checked_add(record.length as usize)?;
+    let bytes = data.get(start..end)?;
+    Some(SfntNameRecord {
+        platform_id: record.platform_id,
+        encoding_id: record.encoding_id,
+        language_id: record.language_id,
+        name_id: record.name_id,
+        string: bytes.to_vec(),
     })
 }
 

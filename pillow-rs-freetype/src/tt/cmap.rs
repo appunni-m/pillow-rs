@@ -16,6 +16,8 @@ pub struct CmapTable {
     pub charmaps: Vec<CharmapRecord>,
     /// Format 4 subtables (BMP, U+0000–U+FFFF).
     pub format4: Vec<Format4Subtable>,
+    /// Format 6 subtables (trimmed 16-bit code range, often Macintosh encodings).
+    pub format6: Vec<Format6Subtable>,
     /// Format 12 subtables (full Unicode, U+0000–U+10FFFF).
     pub format12: Vec<Format12Subtable>,
 }
@@ -32,7 +34,9 @@ pub struct CharmapRecord {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CharmapKind {
     Format4(usize),
+    Format6(usize),
     Format12(usize),
+    Unsupported,
 }
 
 /// Format 4: Segment mapping for the Unicode BMP.
@@ -45,6 +49,15 @@ pub struct Format4Subtable {
     pub id_deltas: Vec<i16>,
     pub id_range_offsets: Vec<u16>,
     /// Indexed via range offsets relative to the idRangeOffset slot itself.
+    pub glyph_id_array: Vec<u16>,
+}
+
+/// Format 6: Trimmed table mapping a contiguous 16-bit code range to glyph IDs.
+#[derive(Debug, Clone)]
+pub struct Format6Subtable {
+    pub platform_id: u16,
+    pub encoding_id: u16,
+    pub first_code: u16,
     pub glyph_id_array: Vec<u16>,
 }
 
@@ -89,7 +102,15 @@ impl CmapTable {
                     None
                 }
             }
+            CharmapKind::Format6(index) => {
+                if codepoint <= 0xFFFF {
+                    self.format6[index].char_index(u16_from_u32(codepoint))
+                } else {
+                    None
+                }
+            }
             CharmapKind::Format12(index) => self.format12[index].char_index(codepoint),
+            CharmapKind::Unsupported => None,
         }
     }
 
@@ -103,7 +124,42 @@ impl CmapTable {
         let record = self.charmaps.get(charmap_index)?;
         match record.kind {
             CharmapKind::Format4(index) => self.format4[index].next_char(after),
+            CharmapKind::Format6(index) => self.format6[index].next_char(after),
             CharmapKind::Format12(index) => self.format12[index].next_char(after),
+            CharmapKind::Unsupported => None,
+        }
+    }
+}
+
+impl Format6Subtable {
+    fn char_index(&self, char_code: u16) -> Option<u16> {
+        let offset = char_code.checked_sub(self.first_code)? as usize;
+        self.glyph_id_array
+            .get(offset)
+            .copied()
+            .filter(|glyph| *glyph != 0)
+    }
+
+    fn next_char(&self, after: u32) -> Option<(u32, u16)> {
+        let start = after.saturating_add(1).max(u32::from(self.first_code));
+        if start > u16::MAX as u32 {
+            return None;
+        }
+        let mut char_code = u16_from_u32(start);
+        loop {
+            let Some(offset) = char_code.checked_sub(self.first_code) else {
+                return None;
+            };
+            let Some(&glyph) = self.glyph_id_array.get(offset as usize) else {
+                return None;
+            };
+            if glyph != 0 {
+                return Some((u32::from(char_code), glyph));
+            }
+            if char_code == u16::MAX {
+                return None;
+            }
+            char_code = char_code.wrapping_add(1);
         }
     }
 }
@@ -235,6 +291,19 @@ pub fn parse_cmap(data: &[u8]) -> Result<CmapTable, FontError> {
                 }
                 Err(e) => warn!("[cmap] format 4 parse failed: {e}"),
             },
+            6 => match parse_format6(data, sub_off, *platform_id, *encoding_id) {
+                Ok(sub) => {
+                    let index = table.format6.len();
+                    table.format6.push(sub);
+                    table.charmaps.push(CharmapRecord {
+                        platform_id: *platform_id,
+                        encoding_id: *encoding_id,
+                        format,
+                        kind: CharmapKind::Format6(index),
+                    });
+                }
+                Err(e) => warn!("[cmap] format 6 parse failed: {e}"),
+            },
             12 => match parse_format12(data, sub_off, *platform_id, *encoding_id) {
                 Ok(sub) => {
                     let index = table.format12.len();
@@ -248,7 +317,15 @@ pub fn parse_cmap(data: &[u8]) -> Result<CmapTable, FontError> {
                 }
                 Err(e) => warn!("[cmap] format 12 parse failed: {e}"),
             },
-            other => warn!("[cmap] unsupported format {other}: skipping"),
+            other => {
+                warn!("[cmap] unsupported format {other}: preserving charmap record without lookup");
+                table.charmaps.push(CharmapRecord {
+                    platform_id: *platform_id,
+                    encoding_id: *encoding_id,
+                    format,
+                    kind: CharmapKind::Unsupported,
+                });
+            }
         }
     }
 
@@ -321,6 +398,46 @@ fn parse_format4(
         start_codes,
         id_deltas,
         id_range_offsets,
+        glyph_id_array,
+    })
+}
+
+fn parse_format6(
+    data: &[u8],
+    offset: usize,
+    platform_id: u16,
+    encoding_id: u16,
+) -> Result<Format6Subtable, FontError> {
+    let b = data.get(offset..).ok_or_else(|| {
+        FontError::InvalidFont("cmap format 6: subtable offset out of range".into())
+    })?;
+    if b.len() < 10 {
+        return Err(FontError::InvalidFont("cmap format 6: too short".into()));
+    }
+    let length = u16::from_be_bytes([b[2], b[3]]) as usize;
+    let body = data
+        .get(offset..offset + length)
+        .ok_or_else(|| FontError::InvalidFont("cmap format 6: length exceeds data".into()))?;
+    if body.len() < 10 {
+        return Err(FontError::InvalidFont("cmap format 6: length too short".into()));
+    }
+    let first_code = u16::from_be_bytes([body[6], body[7]]);
+    let entry_count = u16::from_be_bytes([body[8], body[9]]) as usize;
+    if 10 + entry_count * 2 > body.len() {
+        return Err(FontError::InvalidFont(
+            "cmap format 6: glyph array exceeds length".into(),
+        ));
+    }
+    let mut glyph_id_array = Vec::with_capacity(entry_count);
+    for i in 0..entry_count {
+        let off = 10 + i * 2;
+        glyph_id_array.push(u16::from_be_bytes([body[off], body[off + 1]]));
+    }
+
+    Ok(Format6Subtable {
+        platform_id,
+        encoding_id,
+        first_code,
         glyph_id_array,
     })
 }

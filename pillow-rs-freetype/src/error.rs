@@ -24,6 +24,10 @@ pub enum FontError {
     #[error("Invalid glyph outline: {0}")]
     InvalidOutline(String),
 
+    /// The loaded glyph slot format cannot be rendered.
+    #[error("Cannot render glyph: {0}")]
+    CannotRenderGlyph(String),
+
     /// The requested FreeType-style load flag combination is not implemented.
     #[error("Unsupported load flags: {0}")]
     UnsupportedLoadFlags(String),
@@ -55,6 +59,12 @@ mod tests {
     fn invalid_outline_displays_message() {
         let err = FontError::InvalidOutline("bad contour".into());
         assert_eq!(err.to_string(), "Invalid glyph outline: bad contour");
+    }
+
+    #[test]
+    fn cannot_render_glyph_displays_message() {
+        let err = FontError::CannotRenderGlyph("composite slot".into());
+        assert_eq!(err.to_string(), "Cannot render glyph: composite slot");
     }
 
     #[test]

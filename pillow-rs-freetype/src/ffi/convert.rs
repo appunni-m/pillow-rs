@@ -85,20 +85,24 @@ pub fn load_flags_to_core(flags: FT_Int32) -> Result<api::LoadFlags, FT_Error> {
 
     let mut core = api::LoadFlags::DEFAULT;
     // FreeType resolves this dependency in `FT_Load_Glyph` before driver load:
-    // `FT_LOAD_NO_SCALE` implies no hinting/no bitmap and clears
-    // `FT_LOAD_RENDER` (`src/base/ftobjs.c`).
-    if flags & FT_LOAD_NO_SCALE != 0 {
+    // `FT_LOAD_NO_RECURSE` first implies `FT_LOAD_NO_SCALE`; no-scale then
+    // implies no hinting/no bitmap and clears `FT_LOAD_RENDER`
+    // (`src/base/ftobjs.c`).
+    if flags & (FT_LOAD_NO_SCALE | FT_LOAD_NO_RECURSE) != 0 {
         core |= api::LoadFlags::NO_SCALE;
+    }
+    if flags & FT_LOAD_NO_RECURSE != 0 {
+        core |= api::LoadFlags::NO_RECURSE;
     }
     // FreeType resolves this dependency in `FT_Load_Glyph` before driver load:
     // `FT_LOAD_BITMAP_METRICS_ONLY` clears `FT_LOAD_RENDER`.
     if flags & FT_LOAD_RENDER != 0
-        && flags & FT_LOAD_NO_SCALE == 0
+        && flags & (FT_LOAD_NO_SCALE | FT_LOAD_NO_RECURSE) == 0
         && flags & FT_LOAD_BITMAP_METRICS_ONLY == 0
     {
         core |= api::LoadFlags::RENDER;
     }
-    if flags & FT_LOAD_NO_HINTING != 0 || flags & FT_LOAD_NO_SCALE != 0 {
+    if flags & FT_LOAD_NO_HINTING != 0 || flags & (FT_LOAD_NO_SCALE | FT_LOAD_NO_RECURSE) != 0 {
         core |= api::LoadFlags::NO_HINTING;
     }
     if flags & FT_LOAD_FORCE_AUTOHINT != 0 {
@@ -158,6 +162,7 @@ pub fn glyph_format_from_core(format: api::GlyphFormat) -> FT_Glyph_Format {
     match format {
         api::GlyphFormat::None => FT_GLYPH_FORMAT_NONE,
         api::GlyphFormat::Outline => FT_GLYPH_FORMAT_OUTLINE,
+        api::GlyphFormat::Composite => FT_GLYPH_FORMAT_COMPOSITE,
         api::GlyphFormat::Bitmap => FT_GLYPH_FORMAT_BITMAP,
     }
 }
@@ -174,10 +179,17 @@ pub(super) fn load_flag_for_render_mode(mode: RenderMode) -> api::LoadFlags {
 
 pub(super) fn error_to_ft(error: FontError) -> FT_Error {
     match error {
+        FontError::InvalidFont(message) if message.starts_with("data too short") => {
+            FT_Err_Invalid_Stream_Operation as FT_Error
+        }
+        FontError::InvalidFont(message) if message.starts_with("face index ") => {
+            FT_Err_Invalid_Argument
+        }
         FontError::InvalidFont(_) => FT_Err_Invalid_File_Format,
         FontError::UnsupportedCmapFormat(_) => FT_Err_Invalid_CharMap_Format,
         FontError::RasterOverflow => FT_Err_Raster_Overflow,
         FontError::InvalidOutline(_) => FT_Err_Invalid_Outline,
+        FontError::CannotRenderGlyph(_) => FT_Err_Cannot_Render_Glyph,
         FontError::UnsupportedLoadFlags(_) => FT_Err_Unimplemented_Feature,
     }
 }

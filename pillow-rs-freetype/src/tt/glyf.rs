@@ -37,6 +37,8 @@ pub struct OutlinePoint {
     pub y: i32,
     /// `true` for on-curve points, `false` for off-curve (control) points.
     pub on_curve: bool,
+    /// Original TrueType point flag byte reused by FreeType as outline tag.
+    pub tag: u8,
 }
 
 /// A glyph outline as a flattened list of contours.
@@ -272,6 +274,7 @@ fn load_glyph_inner(
                     x: pt.x + dx,
                     y: pt.y + dy,
                     on_curve: pt.on_curve,
+                    tag: pt.tag,
                 });
             }
             for &ep in &sub.end_pts_of_contours {
@@ -420,6 +423,7 @@ fn transform_point(pt: OutlinePoint, comp: &CompositeComponent, dx: i32, dy: i32
         x: x + dx,
         y: y + dy,
         on_curve: pt.on_curve,
+        tag: pt.tag,
     }
 }
 
@@ -437,6 +441,7 @@ fn transform_scaled_point(
         x: x + dx,
         y: y + dy,
         on_curve: pt.on_curve,
+        tag: pt.tag,
     }
 }
 
@@ -518,6 +523,7 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
             x,
             y: 0,
             on_curve: false,
+            tag: flag,
         });
     }
     // Decode Y coordinates.

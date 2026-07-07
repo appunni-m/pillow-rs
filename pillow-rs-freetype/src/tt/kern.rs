@@ -21,6 +21,11 @@ struct KernPair {
 }
 
 impl KernTable {
+    /// Return whether the table contains no usable horizontal pairs.
+    pub fn is_empty(&self) -> bool {
+        self.pairs.is_empty()
+    }
+
     /// Return the unscaled kerning value in font units.
     pub fn get(&self, left: u16, right: u16) -> i16 {
         self.pairs

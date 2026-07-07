@@ -2,30 +2,41 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(non_camel_case_types, non_snake_case)]
 
-use std::ffi::{c_int, c_long, c_uchar, c_uint, c_ulong, c_ushort, c_void};
+use std::ffi::{c_int, c_long, c_short, c_uchar, c_uint, c_ulong, c_ushort, c_void};
 use std::ptr::{self, NonNull};
 use std::slice;
 
 use fontdone::ffi as rust_ffi;
 
 pub type FT_Error = c_int;
+pub type FT_Bool = c_uchar;
 pub type FT_Int = c_int;
 pub type FT_UInt = c_uint;
 pub type FT_Int32 = i32;
+pub type FT_Byte = c_uchar;
 pub type FT_Long = c_long;
 pub type FT_ULong = c_ulong;
 pub type FT_Pos = c_long;
 pub type FT_Fixed = c_long;
+pub type FT_Angle = FT_Fixed;
 pub type FT_F26Dot6 = c_long;
+pub type FT_F2Dot14 = c_short;
+pub type FT_Short = c_short;
 pub type FT_UShort = c_ushort;
 pub type FT_Render_Mode = c_int;
 pub type FT_Pixel_Mode = c_int;
 pub type FT_Glyph_Format = c_int;
+pub type FT_Size_Request_Type = c_int;
+pub type FT_Encoding = c_int;
+pub type FT_Sfnt_Tag = c_uint;
+pub type FT_LcdFilter = c_int;
+pub type FT_TrueTypeEngineType = c_int;
 
 pub type FT_Library = *mut FT_LibraryRec;
 pub type FT_Face = *mut FT_FaceRec;
 pub type FT_Size = *mut FT_SizeRec;
 pub type FT_GlyphSlot = *mut FT_GlyphSlotRec;
+pub type FT_CharMap = *mut FT_CharMapRec;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -36,11 +47,27 @@ pub struct FT_Vector {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FT_Matrix {
+    pub xx: FT_Fixed,
+    pub xy: FT_Fixed,
+    pub yx: FT_Fixed,
+    pub yy: FT_Fixed,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FT_BBox {
     pub xMin: FT_Pos,
     pub yMin: FT_Pos,
     pub xMax: FT_Pos,
     pub yMax: FT_Pos,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FT_UnitVector {
+    pub x: FT_F2Dot14,
+    pub y: FT_F2Dot14,
 }
 
 #[repr(C)]
@@ -71,6 +98,16 @@ pub struct FT_Size_Metrics {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FT_Size_RequestRec {
+    pub type_: FT_Size_Request_Type,
+    pub width: FT_Long,
+    pub height: FT_Long,
+    pub horiResolution: FT_UInt,
+    pub vertResolution: FT_UInt,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FT_Bitmap {
     pub rows: u32,
     pub width: u32,
@@ -78,6 +115,70 @@ pub struct FT_Bitmap {
     pub buffer: *mut c_uchar,
     pub num_grays: FT_UShort,
     pub pixel_mode: FT_Pixel_Mode,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FT_SfntName {
+    pub platform_id: FT_UShort,
+    pub encoding_id: FT_UShort,
+    pub language_id: FT_UShort,
+    pub name_id: FT_UShort,
+    pub string: *mut FT_Byte,
+    pub string_len: FT_UInt,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FT_CharMapRec {
+    pub face: FT_Face,
+    pub encoding: FT_Encoding,
+    pub platform_id: FT_UShort,
+    pub encoding_id: FT_UShort,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct TT_OS2 {
+    pub version: FT_UShort,
+    pub xAvgCharWidth: FT_Short,
+    pub usWeightClass: FT_UShort,
+    pub usWidthClass: FT_UShort,
+    pub fsType: FT_UShort,
+    pub ySubscriptXSize: FT_Short,
+    pub ySubscriptYSize: FT_Short,
+    pub ySubscriptXOffset: FT_Short,
+    pub ySubscriptYOffset: FT_Short,
+    pub ySuperscriptXSize: FT_Short,
+    pub ySuperscriptYSize: FT_Short,
+    pub ySuperscriptXOffset: FT_Short,
+    pub ySuperscriptYOffset: FT_Short,
+    pub yStrikeoutSize: FT_Short,
+    pub yStrikeoutPosition: FT_Short,
+    pub sFamilyClass: FT_Short,
+    pub panose: [FT_Byte; 10],
+    pub ulUnicodeRange1: FT_ULong,
+    pub ulUnicodeRange2: FT_ULong,
+    pub ulUnicodeRange3: FT_ULong,
+    pub ulUnicodeRange4: FT_ULong,
+    pub achVendID: [i8; 4],
+    pub fsSelection: FT_UShort,
+    pub usFirstCharIndex: FT_UShort,
+    pub usLastCharIndex: FT_UShort,
+    pub sTypoAscender: FT_Short,
+    pub sTypoDescender: FT_Short,
+    pub sTypoLineGap: FT_Short,
+    pub usWinAscent: FT_UShort,
+    pub usWinDescent: FT_UShort,
+    pub ulCodePageRange1: FT_ULong,
+    pub ulCodePageRange2: FT_ULong,
+    pub sxHeight: FT_Short,
+    pub sCapHeight: FT_Short,
+    pub usDefaultChar: FT_UShort,
+    pub usBreakChar: FT_UShort,
+    pub usMaxContext: FT_UShort,
+    pub usLowerOpticalPointSize: FT_UShort,
+    pub usUpperOpticalPointSize: FT_UShort,
 }
 
 #[repr(C)]
@@ -115,6 +216,58 @@ pub struct FT_LibraryRec {
 
 struct FaceState {
     inner: rust_ffi::FT_Face,
+    charmaps: Box<[FT_CharMapRec]>,
+    charmap_ptrs: Box<[FT_CharMap]>,
+}
+
+impl FaceState {
+    fn new(inner: rust_ffi::FT_Face) -> Self {
+        Self {
+            inner,
+            charmaps: Box::new([]),
+            charmap_ptrs: Box::new([]),
+        }
+    }
+
+    fn refresh_charmaps(&mut self, face: FT_Face) {
+        let count = usize::try_from(rust_ffi::FT_Face_Charmap_Count(&self.inner)).unwrap_or(0);
+        let mut records = Vec::with_capacity(count);
+        for index in 0..count {
+            let Ok(index_u32) = FT_UInt::try_from(index) else {
+                continue;
+            };
+            if let Some(info) = rust_ffi::FT_Face_Charmap_Info(&self.inner, index_u32) {
+                records.push(FT_CharMapRec {
+                    face,
+                    encoding: info.encoding,
+                    platform_id: info.platform_id,
+                    encoding_id: info.encoding_id,
+                });
+            }
+        }
+        let mut charmaps = records.into_boxed_slice();
+        let charmap_ptrs = charmaps
+            .iter_mut()
+            .map(|record| record as *mut FT_CharMapRec)
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        self.charmaps = charmaps;
+        self.charmap_ptrs = charmap_ptrs;
+    }
+
+    fn charmap_index(&self, charmap: FT_CharMap) -> Option<usize> {
+        if charmap.is_null() {
+            return None;
+        }
+        self.charmaps
+            .iter()
+            .position(|record| ptr::eq(record as *const FT_CharMapRec, charmap.cast_const()))
+    }
+
+    fn charmap_by_index(&self, index: FT_UInt) -> Option<FT_CharMap> {
+        let index = usize::try_from(index).ok()?;
+        self.charmap_ptrs.get(index).copied()
+    }
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -124,6 +277,9 @@ pub struct AbiSlotSnapshot {
     pub metrics: FT_Glyph_Metrics,
     pub advance: FT_Vector,
     pub format: FT_Glyph_Format,
+    pub outline_cbox: FT_BBox,
+    pub outline_bbox: FT_BBox,
+    pub outline: Option<rust_ffi::FT_OutlineSnapshot>,
     pub bitmap: Option<AbiBitmapSnapshot>,
 }
 
@@ -138,6 +294,51 @@ pub struct AbiBitmapSnapshot {
     pub left: FT_Int,
     pub top: FT_Int,
     pub buffer: Vec<u8>,
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_byte_slice(ptr: *const FT_Byte, len: FT_UInt) -> Vec<u8> {
+    if ptr.is_null() || len == 0 {
+        return Vec::new();
+    }
+    let len = usize::try_from(len).unwrap_or(0);
+    // SAFETY: test callers pass live FreeType-shaped output pointers with
+    // `len` bytes valid for the duration of the snapshot copy.
+    unsafe { slice::from_raw_parts(ptr, len).to_vec() }
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_face_info(face: FT_Face) -> Option<rust_ffi::FT_FaceRecPublic> {
+    let face = NonNull::new(face)?;
+    // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
+    let internal = unsafe { (*face.as_ptr()).internal };
+    let state = NonNull::new(internal.cast::<FaceState>())?;
+    // SAFETY: `state` is owned by the live face for the duration of this scalar copy.
+    Some(rust_ffi::FT_Face_Info(&unsafe { state.as_ref() }.inner))
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_charmap_count(face: FT_Face) -> Option<FT_UInt> {
+    let state = face_state(face)?;
+    FT_UInt::try_from(state.charmaps.len()).ok()
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_charmap_by_index(face: FT_Face, index: FT_UInt) -> Option<FT_CharMap> {
+    face_state(face)?.charmap_by_index(index)
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_charmap_info_by_index(face: FT_Face, index: FT_UInt) -> Option<FT_CharMapRec> {
+    let state = face_state(face)?;
+    let index = usize::try_from(index).ok()?;
+    state.charmaps.get(index).copied()
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_active_charmap_index(face: FT_Face) -> Option<FT_Int> {
+    let state = face_state(face)?;
+    Some(rust_ffi::FT_Face_Active_Charmap_Index(&state.inner))
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -169,8 +370,21 @@ pub fn abi_slot_snapshot(face: FT_Face) -> Option<AbiSlotSnapshot> {
         metrics: slot.metrics,
         advance: slot.advance,
         format: slot.format,
+        outline_cbox: rust_bbox_to_abi(slot.rust_slot.outline_cbox),
+        outline_bbox: rust_bbox_to_abi(slot.rust_slot.outline_bbox),
+        outline: slot.rust_slot.outline.clone(),
         bitmap,
     })
+}
+
+#[cfg(feature = "abi-test-support")]
+fn rust_bbox_to_abi(bbox: rust_ffi::FT_BBox) -> FT_BBox {
+    FT_BBox {
+        xMin: bbox.xMin,
+        yMin: bbox.yMin,
+        xMax: bbox.xMax,
+        yMax: bbox.yMax,
+    }
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -189,6 +403,55 @@ pub fn abi_size_metrics(face: FT_Face) -> Option<FT_Size_Metrics> {
     let size = NonNull::new(size)?;
     // SAFETY: `size` is owned by the live face for the duration of this copy.
     Some(unsafe { size.as_ref().metrics })
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_sfnt_os2(face: FT_Face) -> Option<TT_OS2> {
+    let table = FT_Get_Sfnt_Table(face, rust_ffi::FT_SFNT_OS2 as FT_Sfnt_Tag);
+    let table = NonNull::new(table.cast::<rust_ffi::TT_OS2>())?;
+    // SAFETY: `FT_Get_Sfnt_Table` returned a live face-owned `TT_OS2` pointer.
+    let os2 = unsafe { table.as_ref() };
+    Some(TT_OS2 {
+        version: os2.version,
+        xAvgCharWidth: os2.xAvgCharWidth,
+        usWeightClass: os2.usWeightClass,
+        usWidthClass: os2.usWidthClass,
+        fsType: os2.fsType,
+        ySubscriptXSize: os2.ySubscriptXSize,
+        ySubscriptYSize: os2.ySubscriptYSize,
+        ySubscriptXOffset: os2.ySubscriptXOffset,
+        ySubscriptYOffset: os2.ySubscriptYOffset,
+        ySuperscriptXSize: os2.ySuperscriptXSize,
+        ySuperscriptYSize: os2.ySuperscriptYSize,
+        ySuperscriptXOffset: os2.ySuperscriptXOffset,
+        ySuperscriptYOffset: os2.ySuperscriptYOffset,
+        yStrikeoutSize: os2.yStrikeoutSize,
+        yStrikeoutPosition: os2.yStrikeoutPosition,
+        sFamilyClass: os2.sFamilyClass,
+        panose: os2.panose,
+        ulUnicodeRange1: os2.ulUnicodeRange1,
+        ulUnicodeRange2: os2.ulUnicodeRange2,
+        ulUnicodeRange3: os2.ulUnicodeRange3,
+        ulUnicodeRange4: os2.ulUnicodeRange4,
+        achVendID: os2.achVendID,
+        fsSelection: os2.fsSelection,
+        usFirstCharIndex: os2.usFirstCharIndex,
+        usLastCharIndex: os2.usLastCharIndex,
+        sTypoAscender: os2.sTypoAscender,
+        sTypoDescender: os2.sTypoDescender,
+        sTypoLineGap: os2.sTypoLineGap,
+        usWinAscent: os2.usWinAscent,
+        usWinDescent: os2.usWinDescent,
+        ulCodePageRange1: os2.ulCodePageRange1,
+        ulCodePageRange2: os2.ulCodePageRange2,
+        sxHeight: os2.sxHeight,
+        sCapHeight: os2.sCapHeight,
+        usDefaultChar: os2.usDefaultChar,
+        usBreakChar: os2.usBreakChar,
+        usMaxContext: os2.usMaxContext,
+        usLowerOpticalPointSize: os2.usLowerOpticalPointSize,
+        usUpperOpticalPointSize: os2.usUpperOpticalPointSize,
+    })
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -214,7 +477,7 @@ pub extern "C" fn FT_Init_FreeType(alibrary: *mut FT_Library) -> FT_Error {
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Done_FreeType(library: FT_Library) -> FT_Error {
     let Some(library) = non_null_mut(library) else {
-        return rust_ffi::FT_Err_Invalid_Argument;
+        return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
     };
     // SAFETY: `library` must be a live handle returned by `FT_Init_FreeType`.
     unsafe {
@@ -226,6 +489,324 @@ pub extern "C" fn FT_Done_FreeType(library: FT_Library) -> FT_Error {
         }
     }
     rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Library_SetLcdFilter(
+    _library: FT_Library,
+    filter: FT_LcdFilter,
+) -> FT_Error {
+    rust_ffi::FT_Library_SetLcdFilter(None, filter)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Library_SetLcdFilterWeights(
+    _library: FT_Library,
+    weights: *mut FT_Byte,
+) -> FT_Error {
+    rust_ffi::FT_Library_SetLcdFilterWeights(None, weights)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Library_SetLcdGeometry(
+    library: FT_Library,
+    sub: *const FT_Vector,
+) -> FT_Error {
+    let rust_sub = if sub.is_null() {
+        None
+    } else {
+        let mut vectors = [rust_ffi::FT_Vector::default(); 3];
+        for (index, vector) in vectors.iter_mut().enumerate() {
+            // SAFETY: `sub` is non-null and the C API requires three vectors.
+            let source = unsafe { &*sub.add(index) };
+            *vector = rust_ffi::FT_Vector {
+                x: source.x,
+                y: source.y,
+            };
+        }
+        Some(vectors)
+    };
+    rust_ffi::FT_Library_SetLcdGeometry(
+        library_mut(library),
+        rust_sub,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_TrueType_Engine_Type(
+    library: FT_Library,
+) -> FT_TrueTypeEngineType {
+    rust_ffi::FT_Get_TrueType_Engine_Type(library_ref(library))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_MulDiv(a: FT_Long, b: FT_Long, c: FT_Long) -> FT_Long {
+    rust_ffi::FT_MulDiv(a, b, c)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_MulFix(a: FT_Long, b: FT_Long) -> FT_Long {
+    rust_ffi::FT_MulFix(a, b)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_DivFix(a: FT_Long, b: FT_Long) -> FT_Long {
+    rust_ffi::FT_DivFix(a, b)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_RoundFix(a: FT_Fixed) -> FT_Fixed {
+    rust_ffi::FT_RoundFix(a)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_CeilFix(a: FT_Fixed) -> FT_Fixed {
+    rust_ffi::FT_CeilFix(a)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_FloorFix(a: FT_Fixed) -> FT_Fixed {
+    rust_ffi::FT_FloorFix(a)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Sin(angle: FT_Angle) -> FT_Fixed {
+    rust_ffi::FT_Sin(angle)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Cos(angle: FT_Angle) -> FT_Fixed {
+    rust_ffi::FT_Cos(angle)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Tan(angle: FT_Angle) -> FT_Fixed {
+    rust_ffi::FT_Tan(angle)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Atan2(dx: FT_Fixed, dy: FT_Fixed) -> FT_Angle {
+    rust_ffi::FT_Atan2(dx, dy)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Angle_Diff(angle1: FT_Angle, angle2: FT_Angle) -> FT_Angle {
+    rust_ffi::FT_Angle_Diff(angle1, angle2)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Vector_Unit(vector: *mut FT_Vector, angle: FT_Angle) {
+    let vector = non_null_mut(vector);
+    let mut rust_vector = vector.map(|vector| {
+        // SAFETY: `vector` is non-null and points to a C ABI `FT_Vector`.
+        let vector = unsafe { vector.as_ref() };
+        rust_ffi::FT_Vector {
+            x: vector.x,
+            y: vector.y,
+        }
+    });
+    rust_ffi::FT_Vector_Unit(rust_vector.as_mut(), angle);
+    if let (Some(vector), Some(rust_vector)) = (vector, rust_vector) {
+        // SAFETY: `vector` is a valid mutable pointer checked above.
+        unsafe {
+            (*vector.as_ptr()).x = rust_vector.x;
+            (*vector.as_ptr()).y = rust_vector.y;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Vector_Rotate(vector: *mut FT_Vector, angle: FT_Angle) {
+    let vector = non_null_mut(vector);
+    let mut rust_vector = vector.map(|vector| {
+        // SAFETY: `vector` is non-null and points to a C ABI `FT_Vector`.
+        let vector = unsafe { vector.as_ref() };
+        rust_ffi::FT_Vector {
+            x: vector.x,
+            y: vector.y,
+        }
+    });
+    rust_ffi::FT_Vector_Rotate(rust_vector.as_mut(), angle);
+    if let (Some(vector), Some(rust_vector)) = (vector, rust_vector) {
+        // SAFETY: `vector` is a valid mutable pointer checked above.
+        unsafe {
+            (*vector.as_ptr()).x = rust_vector.x;
+            (*vector.as_ptr()).y = rust_vector.y;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Vector_Length(vector: *mut FT_Vector) -> FT_Fixed {
+    let vector = non_null(vector);
+    let rust_vector = vector.map(|vector| {
+        // SAFETY: `vector` is non-null and points to a C ABI `FT_Vector`.
+        let vector = unsafe { vector.as_ref() };
+        rust_ffi::FT_Vector {
+            x: vector.x,
+            y: vector.y,
+        }
+    });
+    rust_ffi::FT_Vector_Length(rust_vector.as_ref())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Vector_Polarize(
+    vector: *mut FT_Vector,
+    length: *mut FT_Fixed,
+    angle: *mut FT_Angle,
+) {
+    let vector = non_null(vector);
+    let length_ptr = non_null_mut(length);
+    let angle_ptr = non_null_mut(angle);
+    let mut rust_length = length_ptr.map(|length| {
+        // SAFETY: `length` is non-null and points to a C ABI `FT_Fixed`.
+        unsafe { *length.as_ptr() }
+    });
+    let mut rust_angle = angle_ptr.map(|angle| {
+        // SAFETY: `angle` is non-null and points to a C ABI `FT_Angle`.
+        unsafe { *angle.as_ptr() }
+    });
+    let rust_vector = vector.map(|vector| {
+        // SAFETY: `vector` is non-null and points to a C ABI `FT_Vector`.
+        let vector = unsafe { vector.as_ref() };
+        rust_ffi::FT_Vector {
+            x: vector.x,
+            y: vector.y,
+        }
+    });
+    rust_ffi::FT_Vector_Polarize(
+        rust_vector.as_ref(),
+        rust_length.as_mut(),
+        rust_angle.as_mut(),
+    );
+    if let (Some(length_ptr), Some(value)) = (length_ptr, rust_length) {
+        // SAFETY: `length_ptr` is a valid mutable pointer checked above.
+        unsafe { *length_ptr.as_ptr() = value };
+    }
+    if let (Some(angle_ptr), Some(value)) = (angle_ptr, rust_angle) {
+        // SAFETY: `angle_ptr` is a valid mutable pointer checked above.
+        unsafe { *angle_ptr.as_ptr() = value };
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Vector_From_Polar(
+    vector: *mut FT_Vector,
+    length: FT_Fixed,
+    angle: FT_Angle,
+) {
+    let vector = non_null_mut(vector);
+    let mut rust_vector = vector.map(|vector| {
+        // SAFETY: `vector` is non-null and points to a C ABI `FT_Vector`.
+        let vector = unsafe { vector.as_ref() };
+        rust_ffi::FT_Vector {
+            x: vector.x,
+            y: vector.y,
+        }
+    });
+    rust_ffi::FT_Vector_From_Polar(rust_vector.as_mut(), length, angle);
+    if let (Some(vector), Some(rust_vector)) = (vector, rust_vector) {
+        // SAFETY: `vector` is a valid mutable pointer checked above.
+        unsafe {
+            (*vector.as_ptr()).x = rust_vector.x;
+            (*vector.as_ptr()).y = rust_vector.y;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Vector_Transform(vector: *mut FT_Vector, matrix: *const FT_Matrix) {
+    let vector = non_null_mut(vector);
+    let matrix = non_null(matrix);
+    let mut rust_vector = vector.map(|vector| {
+        // SAFETY: `vector` is non-null and points to a C ABI `FT_Vector`.
+        let vector = unsafe { vector.as_ref() };
+        rust_ffi::FT_Vector {
+            x: vector.x,
+            y: vector.y,
+        }
+    });
+    let rust_matrix = matrix.map(|matrix| {
+        // SAFETY: `matrix` is non-null and points to a C ABI `FT_Matrix`.
+        let matrix = unsafe { matrix.as_ref() };
+        rust_ffi::FT_Matrix {
+            xx: matrix.xx,
+            xy: matrix.xy,
+            yx: matrix.yx,
+            yy: matrix.yy,
+        }
+    });
+    rust_ffi::FT_Vector_Transform(rust_vector.as_mut(), rust_matrix.as_ref());
+    if let (Some(vector), Some(rust_vector)) = (vector, rust_vector) {
+        // SAFETY: `vector` is a valid mutable pointer checked above.
+        unsafe {
+            (*vector.as_ptr()).x = rust_vector.x;
+            (*vector.as_ptr()).y = rust_vector.y;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Matrix_Multiply(a: *const FT_Matrix, b: *mut FT_Matrix) {
+    let a = non_null(a);
+    let b = non_null_mut(b);
+    let rust_a = a.map(|a| {
+        // SAFETY: `a` is non-null and points to a C ABI `FT_Matrix`.
+        let a = unsafe { a.as_ref() };
+        rust_ffi::FT_Matrix {
+            xx: a.xx,
+            xy: a.xy,
+            yx: a.yx,
+            yy: a.yy,
+        }
+    });
+    let mut rust_b = b.map(|b| {
+        // SAFETY: `b` is non-null and points to a C ABI `FT_Matrix`.
+        let b = unsafe { b.as_ref() };
+        rust_ffi::FT_Matrix {
+            xx: b.xx,
+            xy: b.xy,
+            yx: b.yx,
+            yy: b.yy,
+        }
+    });
+    rust_ffi::FT_Matrix_Multiply(rust_a.as_ref(), rust_b.as_mut());
+    if let (Some(b), Some(rust_b)) = (b, rust_b) {
+        // SAFETY: `b` is a valid mutable pointer checked above.
+        unsafe {
+            (*b.as_ptr()).xx = rust_b.xx;
+            (*b.as_ptr()).xy = rust_b.xy;
+            (*b.as_ptr()).yx = rust_b.yx;
+            (*b.as_ptr()).yy = rust_b.yy;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Matrix_Invert(matrix: *mut FT_Matrix) -> FT_Error {
+    let matrix = non_null_mut(matrix);
+    let mut rust_matrix = matrix.map(|matrix| {
+        // SAFETY: `matrix` is non-null and points to a C ABI `FT_Matrix`.
+        let matrix = unsafe { matrix.as_ref() };
+        rust_ffi::FT_Matrix {
+            xx: matrix.xx,
+            xy: matrix.xy,
+            yx: matrix.yx,
+            yy: matrix.yy,
+        }
+    });
+    let err = rust_ffi::FT_Matrix_Invert(rust_matrix.as_mut());
+    if let (Some(matrix), Some(rust_matrix)) = (matrix, rust_matrix) {
+        // SAFETY: `matrix` is a valid mutable pointer checked above.
+        unsafe {
+            (*matrix.as_ptr()).xx = rust_matrix.xx;
+            (*matrix.as_ptr()).xy = rust_matrix.xy;
+            (*matrix.as_ptr()).yx = rust_matrix.yx;
+            (*matrix.as_ptr()).yy = rust_matrix.yy;
+        }
+    }
+    err
 }
 
 #[unsafe(no_mangle)]
@@ -255,14 +836,18 @@ pub extern "C" fn FT_New_Memory_Face(
     match rust_ffi::FT_New_Memory_Face(rust_library, data, face_index, 20.0) {
         Ok(inner) => {
             let metrics = rust_size_metrics_to_abi(rust_ffi::FT_Size_Metrics(&inner));
-            let face = Box::new(FT_FaceRec {
+            let mut face = Box::new(FT_FaceRec {
                 glyph: ptr::null_mut(),
                 size: Box::into_raw(Box::new(FT_SizeRec {
                     metrics,
                     internal: ptr::null_mut(),
                 })),
-                internal: Box::into_raw(Box::new(FaceState { inner })).cast::<c_void>(),
+                internal: ptr::null_mut(),
             });
+            let face_ptr = (&mut *face) as *mut FT_FaceRec;
+            let mut state = Box::new(FaceState::new(inner));
+            state.refresh_charmaps(face_ptr);
+            face.internal = Box::into_raw(state).cast::<c_void>();
             // SAFETY: `out` is a valid out pointer checked above.
             unsafe { *out.as_ptr() = Box::into_raw(face) };
             rust_ffi::FT_Err_Ok
@@ -274,7 +859,7 @@ pub extern "C" fn FT_New_Memory_Face(
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Done_Face(face: FT_Face) -> FT_Error {
     let Some(face) = non_null_mut(face) else {
-        return rust_ffi::FT_Err_Invalid_Argument;
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
     // SAFETY: `face` must be a live handle returned by `FT_New_Memory_Face`.
     unsafe {
@@ -286,6 +871,19 @@ pub extern "C" fn FT_Done_Face(face: FT_Face) -> FT_Error {
         }
     }
     rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Face_CheckTrueTypePatents(face: FT_Face) -> FT_Bool {
+    rust_ffi::FT_Face_CheckTrueTypePatents(face_state(face).map(|state| &state.inner))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Face_SetUnpatentedHinting(face: FT_Face, value: FT_Bool) -> FT_Bool {
+    rust_ffi::FT_Face_SetUnpatentedHinting(
+        face_state_mut(face).map(|state| &mut state.inner),
+        value,
+    )
 }
 
 #[unsafe(no_mangle)]
@@ -329,11 +927,222 @@ pub extern "C" fn FT_Set_Pixel_Sizes(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Request_Size(face: FT_Face, req: *const FT_Size_RequestRec) -> FT_Error {
+    let Some(state) = face_state_mut(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let request = if req.is_null() {
+        None
+    } else {
+        // SAFETY: `req` was checked for null and is only copied by value.
+        let req = unsafe { *req };
+        Some(rust_ffi::FT_Size_RequestRec {
+            type_: req.type_,
+            width: req.width,
+            height: req.height,
+            horiResolution: req.horiResolution,
+            vertResolution: req.vertResolution,
+        })
+    };
+    let error = rust_ffi::FT_Request_Size(Some(&mut state.inner), request.as_ref());
+    if error == rust_ffi::FT_Err_Ok {
+        update_size_metrics(face, &state.inner);
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_Char_Index(face: FT_Face, char_code: FT_ULong) -> FT_UInt {
     let Some(state) = face_state(face) else {
         return 0;
     };
     rust_ffi::FT_Get_Char_Index(&state.inner, char_code)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Kerning(
+    face: FT_Face,
+    left_glyph: FT_UInt,
+    right_glyph: FT_UInt,
+    kern_mode: FT_UInt,
+    akerning: *mut FT_Vector,
+) -> FT_Error {
+    let Some(state) = face_state(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(out) = NonNull::new(akerning) else {
+        return rust_ffi::FT_Err_Invalid_Argument as FT_Error;
+    };
+    let mut vector = rust_ffi::FT_Vector::default();
+    let err = rust_ffi::FT_Get_Kerning(
+        Some(&state.inner),
+        left_glyph,
+        right_glyph,
+        kern_mode,
+        Some(&mut vector),
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        // SAFETY: `out` is non-null and caller provides writable storage.
+        unsafe {
+            *out.as_ptr() = FT_Vector {
+                x: vector.x,
+                y: vector.y,
+            };
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Select_Charmap(face: FT_Face, encoding: FT_Encoding) -> FT_Error {
+    let Some(state) = face_state_mut(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    rust_ffi::FT_Select_Charmap(Some(&mut state.inner), encoding)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Set_Charmap(face: FT_Face, charmap: FT_CharMap) -> FT_Error {
+    let Some(state) = face_state_mut(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    if state.charmaps.is_empty() || charmap.is_null() {
+        return rust_ffi::FT_Err_Invalid_CharMap_Handle as FT_Error;
+    }
+    let Some(index) = state.charmap_index(charmap) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(rust_charmap) = FT_UInt::try_from(index)
+        .ok()
+        .map(|index| rust_ffi::FT_Face_Charmap(&state.inner, index))
+    else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    rust_ffi::FT_Set_Charmap(Some(&mut state.inner), rust_charmap)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Charmap_Index(charmap: FT_CharMap) -> FT_Int {
+    let Some(charmap) = NonNull::new(charmap) else {
+        return -1;
+    };
+    // SAFETY: `charmap` is non-null and callers must pass either a live
+    // `FT_CharMap` from this crate or accept C-like invalid-handle behavior.
+    let face = unsafe { charmap.as_ref().face };
+    let Some(state) = face_state(face) else {
+        return -1;
+    };
+    state
+        .charmap_index(charmap.as_ptr())
+        .and_then(|index| FT_Int::try_from(index).ok())
+        .unwrap_or(-1)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_FSType_Flags(face: FT_Face) -> FT_UShort {
+    rust_ffi::FT_Get_FSType_Flags(face_state(face).map(|state| &state.inner))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Sfnt_Name_Count(face: FT_Face) -> FT_UInt {
+    rust_ffi::FT_Get_Sfnt_Name_Count(face_state(face).map(|state| &state.inner))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Sfnt_Name(
+    face: FT_Face,
+    idx: FT_UInt,
+    aname: *mut FT_SfntName,
+) -> FT_Error {
+    let Some(out) = non_null_mut(aname) else {
+        return rust_ffi::FT_Get_Sfnt_Name(face_state(face).map(|state| &state.inner), idx, None);
+    };
+    let mut name = rust_ffi::FT_SfntName::default();
+    let error =
+        rust_ffi::FT_Get_Sfnt_Name(face_state(face).map(|state| &state.inner), idx, Some(&mut name));
+    if error == rust_ffi::FT_Err_Ok {
+        // SAFETY: `out` is non-null and caller provides writable storage.
+        unsafe {
+            *out.as_ptr() = FT_SfntName {
+                platform_id: name.platform_id,
+                encoding_id: name.encoding_id,
+                language_id: name.language_id,
+                name_id: name.name_id,
+                string: name.string,
+                string_len: name.string_len,
+            };
+        }
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Sfnt_Table(face: FT_Face, tag: FT_Sfnt_Tag) -> *mut c_void {
+    let Some(state) = face_state(face) else {
+        return ptr::null_mut();
+    };
+    rust_ffi::FT_Get_Sfnt_Table(&state.inner, tag)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_First_Char(face: FT_Face, agindex: *mut FT_UInt) -> FT_ULong {
+    let mut glyph_index = 0;
+    let char_code =
+        rust_ffi::FT_Get_First_Char(face_state(face).map(|state| &state.inner), Some(&mut glyph_index));
+    if let Some(out) = non_null_mut(agindex) {
+        // SAFETY: `out` is non-null and caller provides writable storage.
+        unsafe { *out.as_ptr() = glyph_index };
+    }
+    char_code
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Next_Char(
+    face: FT_Face,
+    char_code: FT_ULong,
+    agindex: *mut FT_UInt,
+) -> FT_ULong {
+    let mut glyph_index = 0;
+    let next_char = rust_ffi::FT_Get_Next_Char(
+        face_state(face).map(|state| &state.inner),
+        char_code,
+        Some(&mut glyph_index),
+    );
+    if let Some(out) = non_null_mut(agindex) {
+        // SAFETY: `out` is non-null and caller provides writable storage.
+        unsafe { *out.as_ptr() = glyph_index };
+    }
+    next_char
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Library_Version(
+    library: FT_Library,
+    amajor: *mut FT_Int,
+    aminor: *mut FT_Int,
+    apatch: *mut FT_Int,
+) {
+    let mut major = 0;
+    let mut minor = 0;
+    let mut patch = 0;
+    rust_ffi::FT_Library_Version(
+        library_ref(library),
+        Some(&mut major),
+        Some(&mut minor),
+        Some(&mut patch),
+    );
+    if let Some(out) = non_null_mut(amajor) {
+        // SAFETY: `out` is non-null and caller provides writable storage.
+        unsafe { *out.as_ptr() = major };
+    }
+    if let Some(out) = non_null_mut(aminor) {
+        // SAFETY: `out` is non-null and caller provides writable storage.
+        unsafe { *out.as_ptr() = minor };
+    }
+    if let Some(out) = non_null_mut(apatch) {
+        // SAFETY: `out` is non-null and caller provides writable storage.
+        unsafe { *out.as_ptr() = patch };
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -555,6 +1364,34 @@ fn face_state_mut(face: FT_Face) -> Option<&'static mut FaceState> {
     let mut state = NonNull::new(internal.cast::<FaceState>())?;
     // SAFETY: `internal` points to a `FaceState` allocated by this crate.
     Some(unsafe { state.as_mut() })
+}
+
+fn library_ref(library: FT_Library) -> Option<&'static rust_ffi::FT_Library> {
+    let library = non_null_mut(library)?;
+    // SAFETY: `library` is non-null and must have been allocated by `FT_Init_FreeType`.
+    let internal = unsafe { (*library.as_ptr()).internal };
+    if internal.is_null() {
+        None
+    } else {
+        // SAFETY: `internal` points to a `rust_ffi::FT_Library` allocated by this crate.
+        Some(unsafe { &*internal.cast::<rust_ffi::FT_Library>() })
+    }
+}
+
+fn library_mut(library: FT_Library) -> Option<&'static mut rust_ffi::FT_Library> {
+    let library = non_null_mut(library)?;
+    // SAFETY: `library` is non-null and must have been allocated by `FT_Init_FreeType`.
+    let internal = unsafe { (*library.as_ptr()).internal };
+    if internal.is_null() {
+        None
+    } else {
+        // SAFETY: `internal` points to a uniquely borrowed `rust_ffi::FT_Library`.
+        Some(unsafe { &mut *internal.cast::<rust_ffi::FT_Library>() })
+    }
+}
+
+fn non_null<T>(ptr: *const T) -> Option<NonNull<T>> {
+    NonNull::new(ptr.cast_mut())
 }
 
 fn non_null_mut<T>(ptr: *mut T) -> Option<NonNull<T>> {

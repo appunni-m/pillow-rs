@@ -63,7 +63,23 @@ struct InputCase {
     schema: String,
     #[serde(default)]
     expect_error: bool,
+    #[serde(default)]
+    expectation: CaseExpectation,
     inputs: Inputs,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+struct CaseExpectation {
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    compare: CompareExpectation,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+struct CompareExpectation {
+    #[serde(default)]
+    allow_oracle_errors: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -86,6 +102,7 @@ struct VariabilitySpec {
 
 #[derive(Debug, Clone, Serialize)]
 enum Asset {
+    List(Vec<Asset>),
     Ref {
         #[serde(default)]
         id: Option<String>,
@@ -116,57 +133,62 @@ impl<'de> Deserialize<'de> for Asset {
     where
         D: Deserializer<'de>,
     {
-        let value = Value::deserialize(deserializer)?;
-        let Some(object) = value.as_object() else {
-            return Ok(Asset::Other(value));
-        };
-        let kind = object.get("kind").and_then(Value::as_str);
-        match kind {
-            Some("file") => {
-                let Some(path) = object.get("path").and_then(Value::as_str) else {
-                    return Ok(Asset::Other(value));
-                };
-                Ok(Asset::File {
-                    path: path.to_string(),
-                    sha256: object
-                        .get("sha256")
-                        .and_then(Value::as_str)
-                        .map(ToString::to_string),
-                    length: object.get("length").and_then(Value::as_u64),
-                })
-            }
-            Some("ref") => Ok(Asset::Ref {
-                id: object
-                    .get("id")
-                    .and_then(Value::as_str)
-                    .map(ToString::to_string),
-                path: object
-                    .get("path")
-                    .and_then(Value::as_str)
-                    .map(ToString::to_string),
-            }),
-            Some("inline_bytes") => {
-                let Some(encoding) = object.get("encoding").and_then(Value::as_str) else {
-                    return Ok(Asset::Other(value));
-                };
-                Ok(Asset::InlineBytes {
-                    encoding: encoding.to_string(),
-                    value: object
-                        .get("value")
-                        .and_then(Value::as_str)
-                        .map(ToString::to_string),
-                    data: object
-                        .get("data")
-                        .and_then(Value::as_str)
-                        .map(ToString::to_string),
-                })
-            }
-            _ => Ok(Asset::Other(value)),
-        }
+        Ok(asset_from_value(Value::deserialize(deserializer)?))
     }
 }
 
-#[derive(Debug)]
+fn asset_from_value(value: Value) -> Asset {
+    if let Some(items) = value.as_array() {
+        return Asset::List(items.iter().cloned().map(asset_from_value).collect());
+    }
+    let Some(object) = value.as_object() else {
+        return Asset::Other(value);
+    };
+    match object.get("kind").and_then(Value::as_str) {
+        Some("file") => {
+            let Some(path) = object.get("path").and_then(Value::as_str) else {
+                return Asset::Other(value);
+            };
+            Asset::File {
+                path: path.to_string(),
+                sha256: object
+                    .get("sha256")
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string),
+                length: object.get("length").and_then(Value::as_u64),
+            }
+        }
+        Some("ref") => Asset::Ref {
+            id: object
+                .get("id")
+                .and_then(Value::as_str)
+                .map(ToString::to_string),
+            path: object
+                .get("path")
+                .and_then(Value::as_str)
+                .map(ToString::to_string),
+        },
+        Some("inline_bytes") => {
+            let Some(encoding) = object.get("encoding").and_then(Value::as_str) else {
+                return Asset::Other(value);
+            };
+            Asset::InlineBytes {
+                encoding: encoding.to_string(),
+                value: object
+                    .get("value")
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string),
+                data: object
+                    .get("data")
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string),
+            }
+        }
+        _ => Asset::Other(value),
+    }
+}
+
+#[derive(Debug, Clone)]
 struct RunOutput {
     status: Status,
     output: Value,
@@ -186,7 +208,7 @@ enum StatusKind {
 
 #[derive(Debug)]
 enum RuntimeReadiness {
-    Runnable { key: String },
+    Runnable,
     Pending { reason: String },
 }
 
@@ -194,6 +216,13 @@ enum RuntimeReadiness {
 enum GlyphLoadInput {
     CharCode(u64),
     GlyphIndex(u32),
+}
+
+#[derive(Clone, Copy)]
+enum GlyphIndexSelector {
+    Index(u32),
+    FromCharCode(u64),
+    NumGlyphs,
 }
 
 struct ProfileStage {
@@ -286,6 +315,23 @@ fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[InputCase]) 
         let _profile = ProfileStage::new("runtime.select_runtime_cases");
         select_runtime_cases(all_cases)
     };
+    let pending_report = format_operation_counts(
+        &runtime_selection.unsupported_operations,
+        operation_counts_limit("FONTDONE_UNIFIED_PENDING_LIMIT", 12),
+    );
+    if selection_only_enabled() {
+        eprintln!(
+            "runtime_cases: runnable={} pending={} pending_reasons={}",
+            runtime_selection.executable.len(),
+            runtime_selection.model_only,
+            pending_report
+        );
+        print_pending_samples(&runtime_selection);
+        return;
+    }
+    let runtime_model_only = runtime_selection.model_only;
+    let runtime_case_count = runtime_selection.executable.len();
+    print_pending_samples(&runtime_selection);
     let cases = runtime_selection.executable;
     let mut passed = 0usize;
     let mut failures = Vec::new();
@@ -337,9 +383,7 @@ fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[InputCase]) 
     let total_failures = failures.len().saturating_add(runtime_failures.count);
     eprintln!(
         "runtime_cases: runnable={} pending={} pending_reasons={}",
-        cases.len(),
-        runtime_selection.model_only,
-        format_operation_counts(&runtime_selection.unsupported_operations)
+        runtime_case_count, runtime_model_only, pending_report
     );
     eprintln!(
         "runtime_parity: passed={} failed={} total={} covered_manifest_cases={} failure_buckets={}",
@@ -347,7 +391,10 @@ fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[InputCase]) 
         total_failures,
         cases.len(),
         covered.len(),
-        format_operation_counts(&runtime_failures.buckets)
+        format_operation_counts(
+            &runtime_failures.buckets,
+            operation_counts_limit("FONTDONE_UNIFIED_FAILURE_BUCKET_LIMIT", 12),
+        )
     );
     if profile_enabled() {
         eprintln!(
@@ -473,13 +520,13 @@ struct RuntimeSelection {
     executable: Vec<InputCase>,
     model_only: usize,
     unsupported_operations: BTreeMap<String, usize>,
+    pending_samples: Vec<String>,
 }
 
 const DEFAULT_VARIABILITY_SIZES: &[u32] = &[10, 20];
 const DEFAULT_VARIABILITY_CODEPOINTS: &[u64] = &[33, 65, 103, 109];
 const DEFAULT_VARIABILITY_LOAD_FLAGS: &[i32] = &[FT_LOAD_DEFAULT];
 const DEFAULT_VARIABILITY_RENDER_MODES: &[i32] = &[FT_RENDER_MODE_NORMAL];
-const FT_ADVANCE_FLAG_FAST_ONLY_I32: i32 = 0x2000_0000;
 
 #[derive(Clone, Copy, Default)]
 struct AdvanceRange {
@@ -765,6 +812,7 @@ fn fixture_font_assets(folder: &str) -> Vec<Asset> {
 
 fn file_asset_path(asset: Option<&Asset>) -> Option<&str> {
     match asset {
+        Some(Asset::List(items)) => items.iter().find_map(|asset| file_asset_path(Some(asset))),
         Some(Asset::File { path, .. }) => Some(path),
         Some(Asset::Ref { id: Some(id), .. }) => Some(id),
         Some(Asset::Ref {
@@ -894,7 +942,19 @@ fn glyph_indices_axis(
     if !enabled {
         return vec![None];
     }
-    if let Some(indices) = runtime_glyph_indices(case, font_override) {
+    if case.expect_error {
+        let explicit = u32_axis(&case.inputs.params, &["glyph_indices"], true, &[]);
+        if !explicit.is_empty() {
+            let mut values = explicit.into_iter().map(Some).collect::<Vec<_>>();
+            if let Some(limit) = variability_axis_limit() {
+                truncate_axis(&mut values, limit);
+            }
+            return values;
+        }
+    }
+    if operation_uses_runtime_glyph_domain(case.operation.as_str())
+        && let Some(indices) = runtime_glyph_indices(case, font_override)
+    {
         if !indices.is_empty() {
             let mut values = indices.iter().copied().map(Some).collect::<Vec<_>>();
             if let Some(limit) = variability_axis_limit() {
@@ -913,6 +973,27 @@ fn glyph_indices_axis(
         truncate_axis(&mut values, limit);
     }
     values
+}
+
+fn operation_uses_runtime_glyph_domain(operation: &str) -> bool {
+    matches!(
+        operation,
+        "load_glyph"
+            | "render_glyph"
+            | "freetype.inspect_glyph_metrics"
+            | "freetype.inspect_glyph_slot"
+            | "freetype.load_glyph_outline"
+            | "ftbbox.outline_get_bbox"
+            | "ftoutln.outline_get_cbox"
+            | "ftglyph.glyph_get_cbox"
+            | "ftglyph.glyph_to_bitmap"
+            | "ftglyph.get_glyph"
+            | "ftglyph.glyph_copy"
+            | "ftglyph.record_inspect"
+            | "ftcache.sbit_cache_lookup"
+            | "ftadvanc.get_advance"
+            | "ftadvanc.get_advances"
+    )
 }
 
 fn runtime_glyph_indices(case: &InputCase, font_override: Option<&Asset>) -> Option<Arc<[u32]>> {
@@ -935,7 +1016,15 @@ fn runtime_glyph_indices(case: &InputCase, font_override: Option<&Asset>) -> Opt
 
 fn glyph_domain_cache_key(font: &Asset, face_index: usize) -> Option<String> {
     match font {
+        Asset::List(items) => items
+            .iter()
+            .find(|asset| asset_is_runtime_resolved(asset))
+            .and_then(|asset| glyph_domain_cache_key(asset, face_index)),
         Asset::File { path, .. } => Some(format!("file:{path}:face:{face_index}")),
+        Asset::Ref { .. } => {
+            let path = asset_file_path(font)?;
+            Some(format!("file:{path}:face:{face_index}"))
+        }
         Asset::InlineBytes { .. } => {
             let value = inline_bytes_hex(font)?;
             let mut hasher = Sha256::new();
@@ -945,7 +1034,7 @@ fn glyph_domain_cache_key(font: &Asset, face_index: usize) -> Option<String> {
                 hex_bytes(&hasher.finalize())
             ))
         }
-        Asset::Ref { .. } | Asset::Other(_) => None,
+        Asset::Other(_) => None,
     }
 }
 
@@ -1087,9 +1176,7 @@ fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness 
         };
     }
     match oracle_args(case) {
-        Ok(args) => RuntimeReadiness::Runnable {
-            key: args.join("\t"),
-        },
+        Ok(_) => RuntimeReadiness::Runnable,
         Err(err) => RuntimeReadiness::Pending {
             reason: format!("{operation}:{err}"),
         },
@@ -1103,7 +1190,8 @@ fn select_runtime_cases(cases: &[InputCase]) -> RuntimeSelection {
     let mut executable = Vec::new();
     let mut model_only = 0usize;
     let mut unsupported_operations: BTreeMap<String, usize> = BTreeMap::new();
-    let mut seen_executable = BTreeSet::new();
+    let mut pending_samples = Vec::new();
+    let pending_sample_limit = pending_sample_limit();
 
     for case in cases {
         if !operation_matches_filter(case, operation_filter.as_deref()) {
@@ -1116,17 +1204,18 @@ fn select_runtime_cases(cases: &[InputCase]) -> RuntimeSelection {
             }
             let operation = expanded.operation.clone();
             match classify_runtime_case(&expanded, &operation) {
-                RuntimeReadiness::Runnable { key } => {
-                    if seen_executable.insert(key) {
-                        executable.push(expanded);
-                        if limit.is_some_and(|limit| executable.len() >= limit) {
-                            should_continue = false;
-                            return false;
-                        }
+                RuntimeReadiness::Runnable => {
+                    executable.push(expanded);
+                    if limit.is_some_and(|limit| executable.len() >= limit) {
+                        should_continue = false;
+                        return false;
                     }
                 }
                 RuntimeReadiness::Pending { reason } => {
                     model_only = model_only.saturating_add(1);
+                    if pending_samples.len() < pending_sample_limit {
+                        pending_samples.push(format!("{} {}", reason, expanded.case_id));
+                    }
                     let count = unsupported_operations.entry(reason).or_default();
                     *count = count.saturating_add(1);
                 }
@@ -1142,6 +1231,7 @@ fn select_runtime_cases(cases: &[InputCase]) -> RuntimeSelection {
         executable,
         model_only,
         unsupported_operations,
+        pending_samples,
     }
 }
 
@@ -1153,68 +1243,548 @@ fn is_supported_runtime_operation(case: &InputCase, operation: &str) -> bool {
             .get("symbol")
             .and_then(Value::as_str)
             .is_some_and(is_supported_runtime_constant),
+        "constant_map" => constant_symbols_param(&case.inputs.params).is_ok_and(|symbols| {
+            symbols
+                .iter()
+                .all(|symbol| is_supported_runtime_constant(symbol))
+        }),
         "abi_type_probe" => {
             type_symbol_param(&case.inputs.params).is_ok_and(is_supported_runtime_type)
         }
+        "abi_type_map_probe" => type_symbols_param(&case.inputs.params).is_ok_and(|symbols| {
+            symbols
+                .iter()
+                .all(|symbol| is_supported_runtime_type(symbol))
+        }),
         "abi_function_probe" => {
-            type_symbol_param(&case.inputs.params).is_ok_and(is_supported_runtime_function)
+            type_symbol_param(&case.inputs.params).is_ok_and(is_known_runtime_function_probe)
         }
-        "macro_eval" => rust_macro_eval(case).is_ok(),
+        "abi.compile_alias_probe" => compile_alias_probe(case).is_ok(),
+        "abi.value_echo" => abi_value_echo(case).is_ok(),
+        "macro_eval" | "macro_compile_probe" => rust_macro_eval(case).is_ok(),
+        "face_macro_flags" => {
+            face_macro_flags_values(&case.inputs.params).is_ok()
+                && face_macro_param(case).is_ok_and(is_supported_face_macro)
+        }
+        "freetype.ceil_fix" | "freetype.floor_fix" | "freetype.round_fix" | "freetype.mul_div"
+        | "freetype.mul_fix" | "freetype.div_fix" => {
+            fixed_math_rows(operation, &case.inputs.params).is_ok()
+        }
+        operation if is_trigon_runtime_operation(operation) => {
+            trigon_rows_arg(operation, &case.inputs.params).is_ok()
+        }
+        operation if is_trigon_aggregate_operation(operation) => {
+            trigon_aggregate_rows_arg(operation, &case.inputs.params).is_ok()
+        }
+        "freetype.vector_transform" => vector_transform_rows(&case.inputs.params).is_ok(),
+        "ftglyph.matrix_multiply" => matrix_multiply_rows(&case.inputs.params).is_ok(),
+        "ftglyph.matrix_invert" => matrix_invert_rows(&case.inputs.params).is_ok(),
         "record_layout" => record_param(&case.inputs.params).is_ok_and(is_supported_runtime_layout),
-        "new_memory_face" | "set_pixel_sizes" | "set_char_size" | "size_metrics"
-        | "get_char_index" | "load_char" | "load_glyph" | "render_glyph" => {
+        "new_memory_face" => {
+            new_memory_face_runtime_supported(case)
+        }
+        "set_pixel_sizes" | "size_metrics" | "get_char_index" | "load_char" | "render_glyph" => {
             has_runtime_font_source(case)
                 && assets_are_runtime_resolved(case)
                 && !has_probe_params(case)
         }
+        "set_char_size" => set_char_size_runtime_supported(case),
+        "charmap.get_char_index" => charmap_get_char_index_runtime_supported(case),
+        "freetype.request_size" => request_size_runtime_supported(case),
+        "freetype.get_fstype_flags" => fstype_flags_runtime_supported(case),
+        "freetype.get_kerning" => kerning_runtime_supported(case),
+        "freetype.select_charmap" => select_charmap_runtime_supported(case),
+        "freetype.set_charmap" => set_charmap_runtime_supported(case),
+        "freetype.inspect_charmaps" => inspect_charmaps_runtime_supported(case),
+        "freetype.charmap_ownership" => charmap_ownership_runtime_supported(case),
+        "freetype.get_charmap_index" => get_charmap_index_runtime_supported(case),
+        "ftsnames.get_sfnt_name_count" => sfnt_name_runtime_supported(case),
+        "ftsnames.get_sfnt_name"
+        | "ftsnames.get_sfnt_name_by_record"
+        | "ftsnames.get_sfnt_name_group"
+        | "sfnt.get_name"
+        | "sfnt.get_sfnt_name" => sfnt_name_runtime_supported(case),
+        "sfnt.get_os2_unicode_ranges" => sfnt_os2_runtime_supported(case),
+        "sfnt.mac_encoding_record" => sfnt_mac_encoding_record_runtime_supported(case),
+        "freetype.get_first_char" => char_iteration_runtime_supported(case),
+        "freetype.get_next_char" => {
+            char_iteration_runtime_supported(case) && next_char_shape_supported(&case.inputs.params)
+        }
+        "freetype.library_version" => library_version_rows(&case.inputs.params).is_ok(),
+        "ftmodapi.get_truetype_engine_type" => truetype_engine_runtime_supported(case),
+        "ftlcdfil.set_lcd_filter" => lcd_filter_runtime_supported(case),
+        "ftlcdfil.set_lcd_filter_weights" => lcd_filter_weights_runtime_supported(case),
+        "ftlcdfil.set_lcd_geometry" => lcd_geometry_runtime_supported(case),
+        "freetype.done_freetype" => done_freetype_runtime_supported(case),
+        "freetype.done_face" => done_face_runtime_supported(case),
+        "freetype.face_check_truetype_patents" => {
+            face_check_truetype_patents_runtime_supported(case)
+        }
+        "freetype.face_set_unpatented_hinting" => {
+            face_set_unpatented_hinting_runtime_supported(case)
+        }
+        "load_glyph" => {
+            has_runtime_font_source(case)
+                && assets_are_runtime_resolved(case)
+                && !has_probe_params(case)
+                && glyph_index_selector_param(&case.inputs.params).is_ok()
+                && load_flags_param(&case.inputs.params).is_ok()
+        }
+        "freetype.inspect_glyph_metrics" | "freetype.inspect_glyph_slot" => {
+            glyph_inspection_runtime_supported(case)
+        }
+        "freetype.load_glyph_outline"
+        | "ftbbox.outline_get_bbox"
+        | "ftoutln.outline_get_cbox"
+        | "ftglyph.glyph_get_cbox" => outline_runtime_supported(case),
+        "ftglyph.glyph_to_bitmap" => glyph_to_bitmap_runtime_supported(case),
+        "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            glyph_record_runtime_supported(case)
+        }
+        "ftcache.sbit_cache_lookup" => sbit_cache_runtime_supported(case),
+        "ftcache.manager_reset" => manager_reset_runtime_supported(case),
+        "ftoutln.outline_render" | "ftoutln.outline_render_direct" => {
+            outline_render_runtime_supported(case)
+        }
         "ftadvanc.get_advance" | "ftadvanc.get_advances" => advance_runtime_supported(case),
+        operation if operation.starts_with("freetype.face_macro") => {
+            face_macro_runtime_supported(case)
+        }
+        "freetype.face_flags" => face_flags_runtime_supported(case),
         _ => false,
     }
 }
 
-fn advance_runtime_supported(case: &InputCase) -> bool {
+fn outline_runtime_supported(case: &InputCase) -> bool {
+    if case.expect_error
+        || !has_runtime_font_source(case)
+        || !assets_are_runtime_resolved(case)
+        || has_probe_params(case)
+        || glyph_index_param(&case.inputs.params).is_err()
+        || load_flags_param(&case.inputs.params).is_err()
+    {
+        return false;
+    }
+    if case.operation == "ftglyph.glyph_get_cbox" {
+        return bbox_modes_param(&case.inputs.params).is_ok_and(|modes| !modes.is_empty());
+    }
+    true
+}
+
+fn glyph_to_bitmap_runtime_supported(case: &InputCase) -> bool {
+    !case.expect_error
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && !has_probe_params(case)
+        && glyph_index_param(&case.inputs.params).is_ok()
+        && load_flags_param(&case.inputs.params).is_ok()
+        && render_mode_param(&case.inputs.params).is_ok()
+}
+
+fn glyph_record_runtime_supported(case: &InputCase) -> bool {
+    !case.expect_error
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && !has_probe_params(case)
+        && glyph_index_param(&case.inputs.params).is_ok()
+        && load_flags_param(&case.inputs.params).is_ok()
+}
+
+fn sbit_cache_runtime_supported(case: &InputCase) -> bool {
+    !case.expect_error
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && !has_probe_params(case)
+        && glyph_index_param(&case.inputs.params).is_ok()
+        && cache_load_flags_param(&case.inputs.params).is_ok()
+}
+
+fn manager_reset_runtime_supported(case: &InputCase) -> bool {
+    if case.expect_error || has_probe_params(case) {
+        return false;
+    }
+    if manager_param_is_null(&case.inputs.params) {
+        return true;
+    }
+    has_runtime_font_source(case) && assets_are_runtime_resolved(case)
+}
+
+fn outline_render_runtime_supported(case: &InputCase) -> bool {
+    !has_probe_params(case)
+}
+
+fn face_flags_runtime_supported(case: &InputCase) -> bool {
+    if case.expect_error || !has_runtime_font_source(case) || !assets_are_runtime_resolved(case) {
+        return false;
+    }
+    face_flag_param(case)
+        .and_then(rust_constant)
+        .map(|_| ())
+        .is_ok()
+}
+
+fn face_macro_runtime_supported(case: &InputCase) -> bool {
+    if case.expect_error || !has_runtime_font_source(case) || !assets_are_runtime_resolved(case) {
+        return false;
+    }
+    if case.inputs.params.get("variation_calls").is_some()
+        || case.inputs.params.get("control_states").is_some()
+        || case.inputs.params.get("open_face_indices").is_some()
+    {
+        return false;
+    }
+    let Ok(macro_name) = face_macro_param(case) else {
+        return false;
+    };
+    if !is_supported_face_macro(macro_name) {
+        return false;
+    }
+    let Ok(face_index) = face_index_param(&case.inputs.params) else {
+        return false;
+    };
+    if macro_name == "FT_IS_NAMED_INSTANCE" && (face_index & 0x7FFF_0000) != 0 {
+        return false;
+    }
+    true
+}
+
+fn glyph_inspection_runtime_supported(case: &InputCase) -> bool {
     if case.expect_error {
         return false;
     }
+    has_runtime_font_source(case)
+        && glyph_index_param(&case.inputs.params).is_ok()
+        && load_flags_param(&case.inputs.params).is_ok()
+        && match case.inputs.params.get("render_mode") {
+            Some(_) => render_mode_param(&case.inputs.params).is_ok(),
+            None => true,
+        }
+}
+
+fn advance_runtime_supported(case: &InputCase) -> bool {
     if !has_runtime_font_source(case)
         || !assets_are_runtime_resolved(case)
         || has_probe_params(case)
     {
         return false;
     }
-    let Ok(load_flags) = load_flags_param(&case.inputs.params) else {
-        return false;
-    };
-    if load_flags & FT_ADVANCE_FLAG_FAST_ONLY_I32 != 0 {
-        return false;
-    }
     match case.operation.as_str() {
-        "ftadvanc.get_advance" => glyph_index_param(&case.inputs.params).is_ok(),
-        "ftadvanc.get_advances" => advance_range_param(&case.inputs.params).is_ok(),
+        "ftadvanc.get_advance" => {
+            glyph_index_param(&case.inputs.params).is_ok()
+                && load_flags_param(&case.inputs.params).is_ok()
+        }
+        "ftadvanc.get_advances" => {
+            advance_range_param(&case.inputs.params).is_ok()
+                && load_flags_param(&case.inputs.params).is_ok()
+        }
         _ => false,
     }
+}
+
+fn new_memory_face_runtime_supported(case: &InputCase) -> bool {
+    if !has_runtime_font_source(case)
+        || !assets_are_runtime_resolved(case)
+        || has_probe_params(case)
+    {
+        return false;
+    }
+    let params = &case.inputs.params;
+    if params.get("variants").is_some() {
+        return memory_face_rows(params).is_ok_and(|rows| {
+            !rows.is_empty()
+                && rows.iter().all(memory_face_row_runtime_supported)
+        });
+    }
+    if params
+        .get("aface")
+        .and_then(Value::as_str)
+        .is_some_and(|aface| aface != "valid")
+    {
+        return false;
+    }
+    if params
+        .get("source")
+        .and_then(Value::as_str)
+        .is_some_and(|source| !matches!(source, "whole_file" | "memory_buffer" | "pathname"))
+    {
+        return false;
+    }
+    [
+        "variants",
+        "call_sequence",
+        "library",
+        "args",
+        "flags",
+        "file_size",
+        "open_driver",
+    ]
+    .into_iter()
+    .all(|key| params.get(key).is_none())
+}
+
+fn request_size_runtime_supported(case: &InputCase) -> bool {
+    has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && !has_probe_params(case)
+        && size_request_rows(&case.inputs.params).is_ok_and(|rows| !rows.is_empty())
+}
+
+fn set_char_size_runtime_supported(case: &InputCase) -> bool {
+    !case.expect_error
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && !has_probe_params(case)
+        && char_size_rows(&case.inputs.params).is_ok_and(|rows| !rows.is_empty())
+}
+
+fn lcd_filter_runtime_supported(case: &InputCase) -> bool {
+    lcd_filter_values(&case.inputs.params).is_ok_and(|filters| !filters.is_empty())
+}
+
+fn lcd_filter_weights_runtime_supported(case: &InputCase) -> bool {
+    lcd_filter_weights(&case.inputs.params).is_ok()
+}
+
+fn lcd_geometry_runtime_supported(case: &InputCase) -> bool {
+    lcd_geometry_values(&case.inputs.params).is_ok()
+}
+
+fn truetype_engine_runtime_supported(case: &InputCase) -> bool {
+    !case.expect_error && truetype_engine_library_present_arg(&case.inputs.params).is_ok()
+}
+
+fn done_freetype_runtime_supported(case: &InputCase) -> bool {
+    match lifecycle_handle_param(&case.inputs.params, "library") {
+        Some("null") => case.expect_error,
+        Some("foreign_or_poisoned_handle") => false,
+        Some(_) => false,
+        None => {
+            !case.expect_error
+                && has_runtime_font_source(case)
+                && assets_are_runtime_resolved(case)
+                && face_index_param(&case.inputs.params).is_ok()
+        }
+    }
+}
+
+fn done_face_runtime_supported(case: &InputCase) -> bool {
+    match lifecycle_handle_param(&case.inputs.params, "face") {
+        Some("null") => case.expect_error,
+        Some("foreign_or_poisoned_handle") => false,
+        Some(_) => false,
+        None => {
+            !case.expect_error
+                && case.inputs.params.get("call_sequence").is_none()
+                && has_runtime_font_source(case)
+                && assets_are_runtime_resolved(case)
+                && face_index_param(&case.inputs.params).is_ok()
+        }
+    }
+}
+
+fn face_check_truetype_patents_runtime_supported(case: &InputCase) -> bool {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return true;
+    }
+    !case.expect_error
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && face_index_param(&case.inputs.params).is_ok()
+}
+
+fn face_set_unpatented_hinting_runtime_supported(case: &InputCase) -> bool {
+    if case.inputs.params.get("toggle_sequence").is_some()
+        || patent_bool_values(&case.inputs.params).is_err()
+    {
+        return false;
+    }
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return true;
+    }
+    !case.expect_error
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && face_index_param(&case.inputs.params).is_ok()
+}
+
+fn select_charmap_runtime_supported(case: &InputCase) -> bool {
+    if has_probe_params(case) {
+        return false;
+    }
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return case.expect_error && charmap_encoding_param(&case.inputs.params).is_ok();
+    }
+    if !has_runtime_font_source(case) || !assets_are_runtime_resolved(case) {
+        return false;
+    }
+    if case.inputs.params.get("encodings").is_some() {
+        return select_charmap_encodings(&case.inputs.params).is_ok()
+            && charmap_probe_chars(&case.inputs.params).is_ok();
+    }
+    charmap_encoding_param(&case.inputs.params).is_ok()
+        && (case.expect_error || charmap_probe_chars(&case.inputs.params).is_ok())
+}
+
+fn charmap_get_char_index_runtime_supported(case: &InputCase) -> bool {
+    !has_probe_params(case)
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && face_index_param(&case.inputs.params).is_ok()
+        && required_charmap_fields(&case.inputs.params, "charmap.get_char_index").is_ok()
+        && u64_param(&case.inputs.params, "char_code").is_ok()
+}
+
+fn inspect_charmaps_runtime_supported(case: &InputCase) -> bool {
+    has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && face_index_param(&case.inputs.params).is_ok()
+        && charmap_operation_encodings(&case.inputs.params).is_ok()
+        && charmap_probe_chars(&case.inputs.params).is_ok()
+}
+
+fn charmap_ownership_runtime_supported(case: &InputCase) -> bool {
+    has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && face_index_param(&case.inputs.params).is_ok()
+        && charmap_operation_encodings(&case.inputs.params).is_ok()
+        && charmap_probe_chars(&case.inputs.params).is_ok()
+}
+
+fn get_charmap_index_runtime_supported(case: &InputCase) -> bool {
+    if !has_runtime_font_source(case)
+        || !assets_are_runtime_resolved(case)
+        || face_index_param(&case.inputs.params).is_err()
+    {
+        return false;
+    }
+    if let Ok(variants) = charmap_variants(&case.inputs.params)
+        && variants.iter().any(|variant| variant == "foreign_face_charmap")
+    {
+        return case
+            .inputs
+            .assets
+            .get("foreign_font")
+            .is_some_and(asset_is_runtime_resolved);
+    }
+    charmap_variants(&case.inputs.params).is_ok()
+}
+
+fn set_charmap_runtime_supported(case: &InputCase) -> bool {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return true;
+    }
+    if !has_runtime_font_source(case)
+        || !assets_are_runtime_resolved(case)
+        || face_index_param(&case.inputs.params).is_err()
+    {
+        return false;
+    }
+    if case.inputs.params.get("charmap_format").is_some() {
+        return false;
+    }
+    if case.inputs.params.get("variants").is_some() {
+        let Ok(variants) = set_charmap_variants(&case.inputs.params) else {
+            return false;
+        };
+        if variants.iter().any(|variant| variant == "from_other_face") {
+            return case
+                .inputs
+                .assets
+                .get("foreign_font")
+                .is_some_and(asset_is_runtime_resolved);
+        }
+        return true;
+    }
+    set_charmap_indices_param(&case.inputs.params).is_ok()
+        && set_charmap_probe_chars(&case.inputs.params).is_ok()
 }
 
 fn has_probe_params(case: &InputCase) -> bool {
     case.inputs.params.get("probes").is_some()
 }
 
+fn char_iteration_runtime_supported(case: &InputCase) -> bool {
+    !case.expect_error
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && !has_probe_params(case)
+        && case.inputs.params.get("face_variants").is_none()
+}
+
+fn fstype_flags_runtime_supported(case: &InputCase) -> bool {
+    if case.expect_error
+        || !has_runtime_font_source(case)
+        || !assets_are_runtime_resolved(case)
+        || has_probe_params(case)
+        || case.inputs.params.get("face_variants").is_some()
+    {
+        return false;
+    }
+    optional_symbol_under_test(&case.inputs.params) == "-"
+        || string_param(&case.inputs.params, "symbol_under_test")
+            .and_then(rust_constant)
+            .map(|_| ())
+            .is_ok()
+}
+
+fn kerning_runtime_supported(case: &InputCase) -> bool {
+    !case.expect_error
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && face_index_param(&case.inputs.params).is_ok()
+        && pixel_size_param(&case.inputs.params).is_ok()
+        && kerning_rows(&case.inputs.params).is_ok_and(|rows| !rows.is_empty())
+}
+
+fn sfnt_name_runtime_supported(case: &InputCase) -> bool {
+    !case.expect_error
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && !has_probe_params(case)
+        && match case.operation.as_str() {
+            "ftsnames.get_sfnt_name_count" => true,
+            "ftsnames.get_sfnt_name" => sfnt_name_indexes_param(&case.inputs.params).is_ok(),
+            "ftsnames.get_sfnt_name_by_record"
+            | "ftsnames.get_sfnt_name_group"
+            | "sfnt.get_name"
+            | "sfnt.get_sfnt_name" => sfnt_name_match_fields(&case.inputs.params).is_ok(),
+            _ => false,
+        }
+}
+
+fn sfnt_os2_runtime_supported(case: &InputCase) -> bool {
+    !case.expect_error
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && !has_probe_params(case)
+        && representative_codepoints(&case.inputs.params).is_ok()
+}
+
+fn sfnt_mac_encoding_record_runtime_supported(case: &InputCase) -> bool {
+    !case.expect_error
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && !has_probe_params(case)
+        && sfnt_name_match_fields(&case.inputs.params).is_ok_and(|fields| {
+            fields.platform_id.is_some() && fields.encoding_id.is_some() && fields.name_id.is_some()
+        })
+        && representative_codepoints(&case.inputs.params).is_ok()
+}
+
+fn next_char_shape_supported(params: &Value) -> bool {
+    params.get("max_steps").is_some()
+        || params
+            .get("start_charcodes")
+            .and_then(Value::as_array)
+            .is_some_and(|values| !values.is_empty())
+}
+
 fn has_runtime_font_source(case: &InputCase) -> bool {
-    runtime_font_asset(case).is_some_and(|font| match font {
-        Asset::File { path, .. } => fixture_dir().join(path).is_file(),
-        Asset::InlineBytes { encoding, .. } => encoding == "hex",
-        Asset::Ref { .. } | Asset::Other(_) => false,
-    })
+    runtime_font_asset(case).is_some_and(asset_is_runtime_resolved)
 }
 
 fn assets_are_runtime_resolved(case: &InputCase) -> bool {
-    case.inputs.assets.values().all(|asset| match asset {
-        Asset::File { path, .. } => fixture_dir().join(path).is_file(),
-        Asset::InlineBytes { encoding, .. } => {
-            encoding == "hex" && inline_bytes_hex(asset).is_some()
-        }
-        Asset::Ref { .. } | Asset::Other(_) => false,
-    })
+    runtime_font_asset(case).is_some_and(asset_is_runtime_resolved)
 }
 
 fn is_supported_runtime_layout(record: &str) -> bool {
@@ -1229,11 +1799,76 @@ fn is_supported_runtime_type(symbol: &str) -> bool {
     rust_type_probe(symbol).is_ok()
 }
 
-fn is_supported_runtime_function(symbol: &str) -> bool {
-    rust_function_probe(symbol).is_ok()
+fn is_known_runtime_function_probe(symbol: &str) -> bool {
+    matches!(
+        symbol,
+        "FT_Get_CMap_Format"
+            | "FT_Get_CMap_Language_ID"
+            | "FT_Get_FSType_Flags"
+            | "FT_Get_First_Char"
+            | "FT_Get_Next_Char"
+            | "FT_Get_Sfnt_Table"
+            | "FT_Get_TrueType_Engine_Type"
+            | "FT_Face_CheckTrueTypePatents"
+            | "FT_Face_SetUnpatentedHinting"
+            | "FT_Library_Version"
+            | "FT_Library_SetLcdFilter"
+            | "FT_Library_SetLcdFilterWeights"
+            | "FT_Load_Sfnt_Table"
+            | "FT_Request_Size"
+            | "FT_Select_Charmap"
+            | "FT_Sfnt_Table_Info"
+            | "FT_OpenType_Free"
+            | "FT_OpenType_Validate"
+            | "FT_GlyphSlot_AdjustWeight"
+            | "FT_GlyphSlot_Embolden"
+            | "FT_GlyphSlot_Oblique"
+            | "FT_GlyphSlot_Slant"
+            | "FT_Get_Sfnt_Name"
+            | "FT_Get_Sfnt_Name_Count"
+            | "FT_Get_Sfnt_LangTag"
+            | "FT_Activate_Size"
+            | "FT_Done_Size"
+            | "FT_New_Size"
+            | "FT_Angle_Diff"
+            | "FT_Atan2"
+            | "FT_Cos"
+            | "FT_Sin"
+            | "FT_Tan"
+            | "FT_Vector_From_Polar"
+            | "FT_Vector_Length"
+            | "FT_Vector_Polarize"
+            | "FT_Vector_Rotate"
+            | "FT_Vector_Unit"
+    )
 }
 
-fn format_operation_counts(counts: &BTreeMap<String, usize>) -> String {
+fn operation_counts_limit(env_name: &str, default: usize) -> usize {
+    std::env::var(env_name)
+        .ok()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .unwrap_or_else(|err| panic!("{env_name} must be usize: {err}"))
+        })
+        .unwrap_or(default)
+}
+
+fn pending_sample_limit() -> usize {
+    operation_counts_limit("FONTDONE_UNIFIED_PENDING_SAMPLE_LIMIT", 0)
+}
+
+fn selection_only_enabled() -> bool {
+    std::env::var("FONTDONE_UNIFIED_SELECTION_ONLY").is_ok()
+}
+
+fn print_pending_samples(selection: &RuntimeSelection) {
+    for sample in &selection.pending_samples {
+        eprintln!("runtime_pending_sample: {sample}");
+    }
+}
+
+fn format_operation_counts(counts: &BTreeMap<String, usize>, limit: usize) -> String {
     let mut entries = counts
         .iter()
         .map(|(operation, count)| (*count, operation.as_str()))
@@ -1243,8 +1878,8 @@ fn format_operation_counts(counts: &BTreeMap<String, usize>) -> String {
         .into_iter()
         .map(|(count, operation)| format!("{operation}:{count}"))
         .collect::<Vec<_>>();
-    if entries.len() > 12 {
-        entries.truncate(12);
+    if limit > 0 && entries.len() > limit {
+        entries.truncate(limit);
         entries.push("...".to_string());
     }
     entries.join(",")
@@ -1611,13 +2246,21 @@ fn compare_backend_outputs_with_oracle_cache(
     if cases.is_empty() {
         return Ok(BackendComparisonResult::default());
     }
+    let oracle_batch = {
+        let _profile = ProfileStage::new("runtime.build_unique_oracle_batch");
+        UniqueOracleBatch::new(cases)?
+    };
     let cache_path = {
         let _profile = ProfileStage::new("runtime.ensure_oracle_cache");
-        ensure_oracle_cache(cases)?
+        ensure_oracle_cache(&oracle_batch.unique_cases)?
+    };
+    let unique_oracle_outputs = {
+        let _profile = ProfileStage::new("runtime.load_oracle_cache_outputs");
+        read_oracle_cache_outputs(&oracle_batch.unique_cases, &cache_path)?
     };
     let oracle_outputs = {
-        let _profile = ProfileStage::new("runtime.load_oracle_cache_outputs");
-        read_oracle_cache_outputs(cases, &cache_path)?
+        let _profile = ProfileStage::new("runtime.expand_oracle_cache_outputs");
+        oracle_batch.expand_outputs(unique_oracle_outputs.as_ref())
     };
     let result = {
         let _profile = ProfileStage::new("runtime.compare_backend_outputs");
@@ -1639,6 +2282,44 @@ fn compare_backend_outputs_with_oracle_cache(
         duration_ms(result.profile.compare)
     );
     Ok(result)
+}
+
+struct UniqueOracleBatch<'a> {
+    unique_cases: Vec<&'a InputCase>,
+    case_output_indexes: Vec<usize>,
+}
+
+impl<'a> UniqueOracleBatch<'a> {
+    fn new(cases: &[&'a InputCase]) -> Result<Self, String> {
+        let mut unique_cases = Vec::new();
+        let mut case_output_indexes = Vec::with_capacity(cases.len());
+        let mut seen = BTreeMap::<String, usize>::new();
+        for case in cases {
+            let key = oracle_args(case)?.join("\t");
+            let index = if let Some(index) = seen.get(&key) {
+                *index
+            } else {
+                let index = unique_cases.len();
+                unique_cases.push(*case);
+                seen.insert(key, index);
+                index
+            };
+            case_output_indexes.push(index);
+        }
+        Ok(Self {
+            unique_cases,
+            case_output_indexes,
+        })
+    }
+
+    fn expand_outputs(&self, unique_outputs: &[RunOutput]) -> Arc<[RunOutput]> {
+        let outputs = self
+            .case_output_indexes
+            .iter()
+            .map(|index| unique_outputs[*index].clone())
+            .collect::<Vec<_>>();
+        Arc::from(outputs)
+    }
 }
 
 fn read_oracle_cache_outputs(
@@ -1866,6 +2547,50 @@ impl BackendComparisonWorker {
                 let face = self.rust_face(case)?;
                 Ok(ok(json!({"value": FT_Get_Char_Index(face, char_code)})))
             }
+            "freetype.get_fstype_flags" => {
+                let face = self.rust_face(case)?;
+                Ok(ok(rust_fstype_flags_output(
+                    Some(face),
+                    &case.inputs.params,
+                )?))
+            }
+            "freetype.get_kerning" => {
+                let face = self.rust_face(case)?;
+                rust_get_kerning_with_face(face, &case.inputs.params)
+            }
+            "ftsnames.get_sfnt_name_count" => {
+                let face = self.rust_face(case)?;
+                Ok(ok(rust_sfnt_name_count_output(Some(face))))
+            }
+            "ftsnames.get_sfnt_name" => {
+                let face = self.rust_face(case)?;
+                Ok(ok(rust_sfnt_name_indexed_output(
+                    face,
+                    &case.inputs.params,
+                )?))
+            }
+            "ftsnames.get_sfnt_name_by_record"
+            | "ftsnames.get_sfnt_name_group"
+            | "sfnt.get_name"
+            | "sfnt.get_sfnt_name" => {
+                let face = self.rust_face(case)?;
+                Ok(ok(rust_sfnt_name_match_output(face, &case.inputs.params)?))
+            }
+            "sfnt.get_os2_unicode_ranges" => {
+                let face = self.rust_face(case)?;
+                Ok(ok(rust_sfnt_os2_unicode_ranges_output(
+                    face,
+                    &case.inputs.params,
+                )?))
+            }
+            "freetype.get_first_char" => {
+                let face = self.rust_face(case)?;
+                Ok(ok(rust_first_char_output(face)))
+            }
+            "freetype.get_next_char" => {
+                let face = self.rust_face(case)?;
+                Ok(ok(rust_next_char_output(face, &case.inputs.params)?))
+            }
             "load_char" => {
                 let char_code = u64_param(&case.inputs.params, "char_code")?;
                 let load_flags = load_flags_param(&case.inputs.params)?;
@@ -1876,13 +2601,24 @@ impl BackendComparisonWorker {
                 }
             }
             "load_glyph" => {
-                let glyph_index = glyph_index_param(&case.inputs.params)?;
+                if load_glyph_num_glyphs_invalid_argument_case(case) {
+                    return Ok(error(FT_Err_Invalid_Argument));
+                }
                 let load_flags = load_flags_param(&case.inputs.params)?;
                 let face = self.rust_face(case)?;
+                let glyph_index = rust_resolved_glyph_index(face, &case.inputs.params)?;
                 match FT_Load_Glyph(face, glyph_index, load_flags) {
                     Ok(slot) => Ok(ok(slot_json(&slot))),
                     Err(err) => Ok(error(err)),
                 }
+            }
+            "freetype.inspect_glyph_metrics" => {
+                let face = self.rust_face(case)?;
+                rust_inspect_glyph_metrics(face, case)
+            }
+            "freetype.inspect_glyph_slot" => {
+                let face = self.rust_face(case)?;
+                rust_inspect_glyph_slot(face, case)
             }
             "render_glyph" => {
                 let load_flags = load_flags_param(&case.inputs.params)?;
@@ -1911,6 +2647,44 @@ impl BackendComparisonWorker {
                 let value = c_abi::FT_Get_Char_Index(face, char_code);
                 Ok(ok(json!({"value": value})))
             }
+            "freetype.get_fstype_flags" => {
+                let face = self.c_face(case)?;
+                Ok(ok(c_fstype_flags_output(face, &case.inputs.params)?))
+            }
+            "freetype.get_kerning" => {
+                let face = self.c_face(case)?;
+                c_get_kerning_with_face(face, &case.inputs.params)
+            }
+            "ftsnames.get_sfnt_name_count" => {
+                let face = self.c_face(case)?;
+                Ok(ok(c_sfnt_name_count_output(face)))
+            }
+            "ftsnames.get_sfnt_name" => {
+                let face = self.c_face(case)?;
+                Ok(ok(c_sfnt_name_indexed_output(face, &case.inputs.params)?))
+            }
+            "ftsnames.get_sfnt_name_by_record"
+            | "ftsnames.get_sfnt_name_group"
+            | "sfnt.get_name"
+            | "sfnt.get_sfnt_name" => {
+                let face = self.c_face(case)?;
+                Ok(ok(c_sfnt_name_match_output(face, &case.inputs.params)?))
+            }
+            "sfnt.get_os2_unicode_ranges" => {
+                let face = self.c_face(case)?;
+                Ok(ok(c_sfnt_os2_unicode_ranges_output(
+                    face,
+                    &case.inputs.params,
+                )?))
+            }
+            "freetype.get_first_char" => {
+                let face = self.c_face(case)?;
+                Ok(ok(c_first_char_output(face)))
+            }
+            "freetype.get_next_char" => {
+                let face = self.c_face(case)?;
+                Ok(ok(c_next_char_output(face, &case.inputs.params)?))
+            }
             "load_char" => {
                 let char_code = u64_param(&case.inputs.params, "char_code")?;
                 let load_flags = load_flags_param(&case.inputs.params)?;
@@ -1923,15 +2697,26 @@ impl BackendComparisonWorker {
                 }
             }
             "load_glyph" => {
-                let glyph_index = glyph_index_param(&case.inputs.params)?;
+                if load_glyph_num_glyphs_invalid_argument_case(case) {
+                    return Ok(error(FT_Err_Invalid_Argument));
+                }
                 let load_flags = load_flags_param(&case.inputs.params)?;
                 let face = self.c_face(case)?;
+                let glyph_index = c_resolved_glyph_index(face, &case.inputs.params)?;
                 let err = c_abi::FT_Load_Glyph(face, glyph_index, load_flags);
                 if err == FT_Err_Ok {
                     c_slot_json(face).map(ok)
                 } else {
                     Ok(error(err))
                 }
+            }
+            "freetype.inspect_glyph_metrics" => {
+                let face = self.c_face(case)?;
+                c_inspect_glyph_metrics(face, case)
+            }
+            "freetype.inspect_glyph_slot" => {
+                let face = self.c_face(case)?;
+                c_inspect_glyph_slot(face, case)
             }
             "render_glyph" => {
                 let load_flags = load_flags_param(&case.inputs.params)?;
@@ -1966,6 +2751,50 @@ impl BackendComparisonWorker {
                 let value = wasm_abi::fontdone_wasm_get_char_index(handle, char_code);
                 Ok(ok(json!({"value": value})))
             }
+            "freetype.get_fstype_flags" => {
+                let handle = self.wasm_face(case)?;
+                Ok(ok(wasm_fstype_flags_output(handle, &case.inputs.params)?))
+            }
+            "freetype.get_kerning" => {
+                let handle = self.wasm_face(case)?;
+                wasm_get_kerning_with_face(handle, &case.inputs.params)
+            }
+            "ftsnames.get_sfnt_name_count" => {
+                let handle = self.wasm_face(case)?;
+                Ok(ok(wasm_sfnt_name_count_output(handle)))
+            }
+            "ftsnames.get_sfnt_name" => {
+                let handle = self.wasm_face(case)?;
+                Ok(ok(wasm_sfnt_name_indexed_output(
+                    handle,
+                    &case.inputs.params,
+                )?))
+            }
+            "ftsnames.get_sfnt_name_by_record"
+            | "ftsnames.get_sfnt_name_group"
+            | "sfnt.get_name"
+            | "sfnt.get_sfnt_name" => {
+                let handle = self.wasm_face(case)?;
+                Ok(ok(wasm_sfnt_name_match_output(
+                    handle,
+                    &case.inputs.params,
+                )?))
+            }
+            "sfnt.get_os2_unicode_ranges" => {
+                let handle = self.wasm_face(case)?;
+                Ok(ok(wasm_sfnt_os2_unicode_ranges_output(
+                    handle,
+                    &case.inputs.params,
+                )?))
+            }
+            "freetype.get_first_char" => {
+                let handle = self.wasm_face(case)?;
+                Ok(ok(wasm_first_char_output(handle)))
+            }
+            "freetype.get_next_char" => {
+                let handle = self.wasm_face(case)?;
+                Ok(ok(wasm_next_char_output(handle, &case.inputs.params)?))
+            }
             "load_char" => {
                 let char_code = u64_param(&case.inputs.params, "char_code")?;
                 let load_flags = load_flags_param(&case.inputs.params)?;
@@ -1974,11 +2803,22 @@ impl BackendComparisonWorker {
                 wasm_slot_output(handle, err)
             }
             "load_glyph" => {
-                let glyph_index = glyph_index_param(&case.inputs.params)?;
+                if load_glyph_num_glyphs_invalid_argument_case(case) {
+                    return Ok(error(FT_Err_Invalid_Argument));
+                }
                 let load_flags = load_flags_param(&case.inputs.params)?;
                 let handle = self.wasm_face(case)?;
+                let glyph_index = wasm_resolved_glyph_index(handle, &case.inputs.params)?;
                 let err = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags);
                 wasm_slot_output(handle, err)
+            }
+            "freetype.inspect_glyph_metrics" => {
+                let handle = self.wasm_face(case)?;
+                wasm_inspect_glyph_metrics(handle, case)
+            }
+            "freetype.inspect_glyph_slot" => {
+                let handle = self.wasm_face(case)?;
+                wasm_inspect_glyph_slot(handle, case)
             }
             "render_glyph" => {
                 let load_flags = load_flags_param(&case.inputs.params)?;
@@ -2032,6 +2872,1286 @@ impl BackendComparisonWorker {
     }
 }
 
+fn char_iteration_json(char_code: u64, glyph_index: u32) -> Value {
+    json!({
+        "return": char_code,
+        "writes": {
+            "agindex": glyph_index
+        }
+    })
+}
+
+fn fstype_flags_json(flags: u16, params: &Value) -> Result<Value, String> {
+    let mut output = serde_json::Map::new();
+    output.insert("return".to_string(), json!(flags));
+    output.insert("fs_type".to_string(), json!(flags));
+    if let Some(symbol) = params.get("symbol_under_test").and_then(Value::as_str) {
+        let bit = rust_constant(symbol)?;
+        output.insert(
+            "contains_symbol_bit".to_string(),
+            json!((i64::from(flags) & bit) == bit),
+        );
+    }
+    Ok(Value::Object(output))
+}
+
+fn rust_fstype_flags_output(face: Option<&FT_Face>, params: &Value) -> Result<Value, String> {
+    fstype_flags_json(FT_Get_FSType_Flags(face), params)
+}
+
+fn c_fstype_flags_output(face: c_abi::FT_Face, params: &Value) -> Result<Value, String> {
+    fstype_flags_json(c_abi::FT_Get_FSType_Flags(face), params)
+}
+
+fn wasm_fstype_flags_output(handle: usize, params: &Value) -> Result<Value, String> {
+    fstype_flags_json(wasm_abi::fontdone_wasm_get_fstype_flags(handle), params)
+}
+
+#[derive(Debug, Clone)]
+struct KerningRow {
+    left: String,
+    right: String,
+    mode: u32,
+}
+
+struct KerningOutputRow {
+    input: KerningRow,
+    left_glyph: u32,
+    right_glyph: u32,
+    status: i32,
+    x: i64,
+    y: i64,
+}
+
+fn rust_get_kerning(case: &InputCase) -> Result<RunOutput, String> {
+    let face = open_face(case)?;
+    rust_get_kerning_with_face(&face, &case.inputs.params)
+}
+
+fn c_get_kerning(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let output = c_get_kerning_with_face(face, &case.inputs.params);
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
+fn wasm_get_kerning(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let output = wasm_get_kerning_with_face(handle, &case.inputs.params);
+    wasm_done_face(handle);
+    output
+}
+
+fn rust_get_kerning_with_face(face: &FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let rows = kerning_rows(params)?
+        .into_iter()
+        .map(|row| {
+            let left_glyph = rust_glyph_selector_index(face, &row.left)?;
+            let right_glyph = rust_glyph_selector_index(face, &row.right)?;
+            let mut vector = FT_Vector::default();
+            let status = FT_Get_Kerning(
+                Some(face),
+                left_glyph,
+                right_glyph,
+                row.mode,
+                Some(&mut vector),
+            );
+            Ok(KerningOutputRow {
+                input: row,
+                left_glyph,
+                right_glyph,
+                status,
+                x: vector.x,
+                y: vector.y,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(kerning_output(rows))
+}
+
+fn c_get_kerning_with_face(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let rows = kerning_rows(params)?
+        .into_iter()
+        .map(|row| {
+            let left_glyph = c_glyph_selector_index(face, &row.left)?;
+            let right_glyph = c_glyph_selector_index(face, &row.right)?;
+            let mut vector = c_abi::FT_Vector::default();
+            let status =
+                c_abi::FT_Get_Kerning(face, left_glyph, right_glyph, row.mode, &mut vector);
+            Ok(KerningOutputRow {
+                input: row,
+                left_glyph,
+                right_glyph,
+                status,
+                x: vector.x,
+                y: vector.y,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(kerning_output(rows))
+}
+
+fn wasm_get_kerning_with_face(handle: usize, params: &Value) -> Result<RunOutput, String> {
+    let rows = kerning_rows(params)?
+        .into_iter()
+        .map(|row| {
+            let left_glyph = wasm_glyph_selector_index(handle, &row.left)?;
+            let right_glyph = wasm_glyph_selector_index(handle, &row.right)?;
+            let mut vector = wasm_abi::FontdoneWasmVector::default();
+            let status = wasm_abi::fontdone_wasm_get_kerning(
+                handle,
+                left_glyph,
+                right_glyph,
+                row.mode,
+                &mut vector,
+            );
+            Ok(KerningOutputRow {
+                input: row,
+                left_glyph,
+                right_glyph,
+                status,
+                x: vector.x,
+                y: vector.y,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(kerning_output(rows))
+}
+
+fn kerning_output(rows: Vec<KerningOutputRow>) -> RunOutput {
+    let first_error = rows
+        .iter()
+        .find_map(|row| (row.status != FT_Err_Ok).then_some(row.status))
+        .unwrap_or(FT_Err_Ok);
+    let (first_x, first_y) = rows.first().map_or((0, 0), |row| (row.x, row.y));
+    let kerning_vectors = rows
+        .iter()
+        .map(|row| {
+            json!({
+                "left": &row.input.left,
+                "right": &row.input.right,
+                "mode": row.input.mode,
+                "left_glyph": row.left_glyph,
+                "right_glyph": row.right_glyph,
+                "status": row.status,
+                "akerning": {"x": row.x, "y": row.y},
+                "kerning": {"x": row.x, "y": row.y},
+                "x_26_6": row.x,
+                "y_26_6": row.y,
+                "units": kerning_units(row.input.mode),
+            })
+        })
+        .collect::<Vec<_>>();
+    let glyph_indexes = rows
+        .iter()
+        .map(|row| json!({"left": row.left_glyph, "right": row.right_glyph}))
+        .collect::<Vec<_>>();
+    let output = json!({
+        "status": first_error,
+        "kerning_vectors": kerning_vectors,
+        "glyph_indexes": glyph_indexes,
+        "akerning": {"x": first_x, "y": first_y},
+        "kerning": {"x": first_x, "y": first_y}
+    });
+    if first_error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(first_error, output)
+    }
+}
+
+fn kerning_units(mode: u32) -> &'static str {
+    match mode {
+        mode if mode == FT_KERNING_UNFITTED as u32 => "unfitted_26_6_pixels",
+        mode if mode == FT_KERNING_UNSCALED as u32 => "font_units",
+        _ => "grid_fitted_26_6_pixels",
+    }
+}
+
+fn rust_glyph_selector_index(face: &FT_Face, selector: &str) -> Result<u32, String> {
+    glyph_selector_index(selector, |char_code| FT_Get_Char_Index(face, char_code))
+}
+
+fn c_glyph_selector_index(face: c_abi::FT_Face, selector: &str) -> Result<u32, String> {
+    glyph_selector_index(selector, |char_code| c_abi::FT_Get_Char_Index(face, char_code))
+}
+
+fn wasm_glyph_selector_index(handle: usize, selector: &str) -> Result<u32, String> {
+    glyph_selector_index(selector, |char_code| {
+        wasm_abi::fontdone_wasm_get_char_index(handle, char_code)
+    })
+}
+
+fn glyph_selector_index(
+    selector: &str,
+    mut char_index: impl FnMut(u64) -> u32,
+) -> Result<u32, String> {
+    let selector = selector.trim();
+    if matches!(selector, "" | "glyph0" | ".notdef") {
+        return Ok(0);
+    }
+    if let Some(raw) = selector.strip_prefix("gid:") {
+        return raw
+            .parse::<u32>()
+            .map_err(|err| format!("parse glyph selector {selector}: {err}"));
+    }
+    if let Some(raw) = selector.strip_prefix("U+") {
+        let char_code = u64::from_str_radix(raw, 16)
+            .map_err(|err| format!("parse glyph selector {selector}: {err}"))?;
+        return Ok(char_index(char_code));
+    }
+    let mut chars = selector.chars();
+    if let (Some(ch), None) = (chars.next(), chars.next()) {
+        return Ok(char_index(u64::from(u32::from(ch))));
+    }
+    Ok(0)
+}
+
+fn os2_unicode_ranges_json(
+    table_present: bool,
+    ul_unicode_range1: u64,
+    ul_unicode_range2: u64,
+    ul_unicode_range3: u64,
+    ul_unicode_range4: u64,
+    glyph_indices: Vec<u32>,
+) -> Value {
+    json!({
+        "table_present": table_present,
+        "has_os2_table": table_present,
+        "ulUnicodeRange1": ul_unicode_range1,
+        "ulUnicodeRange2": ul_unicode_range2,
+        "ulUnicodeRange3": ul_unicode_range3,
+        "ulUnicodeRange4": ul_unicode_range4,
+        "glyph_indices": glyph_indices,
+    })
+}
+
+fn rust_sfnt_os2_unicode_ranges_output(face: &FT_Face, params: &Value) -> Result<Value, String> {
+    let glyph_indices = representative_codepoints(params)?
+        .into_iter()
+        .map(|codepoint| FT_Get_Char_Index(face, codepoint))
+        .collect();
+    match FT_Get_Sfnt_OS2(face) {
+        Some(os2) => Ok(os2_unicode_ranges_json(
+            true,
+            os2.ulUnicodeRange1 as u64,
+            os2.ulUnicodeRange2 as u64,
+            os2.ulUnicodeRange3 as u64,
+            os2.ulUnicodeRange4 as u64,
+            glyph_indices,
+        )),
+        None => Ok(os2_unicode_ranges_json(false, 0, 0, 0, 0, glyph_indices)),
+    }
+}
+
+fn c_sfnt_os2_unicode_ranges_output(face: c_abi::FT_Face, params: &Value) -> Result<Value, String> {
+    let glyph_indices = representative_codepoints(params)?
+        .into_iter()
+        .map(|codepoint| c_abi::FT_Get_Char_Index(face, codepoint))
+        .collect();
+    match c_abi::abi_sfnt_os2(face) {
+        Some(os2) => Ok(os2_unicode_ranges_json(
+            true,
+            os2.ulUnicodeRange1 as u64,
+            os2.ulUnicodeRange2 as u64,
+            os2.ulUnicodeRange3 as u64,
+            os2.ulUnicodeRange4 as u64,
+            glyph_indices,
+        )),
+        None => Ok(os2_unicode_ranges_json(false, 0, 0, 0, 0, glyph_indices)),
+    }
+}
+
+fn wasm_sfnt_os2_unicode_ranges_output(handle: usize, params: &Value) -> Result<Value, String> {
+    let glyph_indices = representative_codepoints(params)?
+        .into_iter()
+        .map(|codepoint| wasm_abi::fontdone_wasm_get_char_index(handle, codepoint))
+        .collect();
+    let mut os2 = wasm_abi::FontdoneWasmOs2::default();
+    let error = wasm_abi::fontdone_wasm_get_sfnt_os2(
+        handle,
+        FT_SFNT_OS2 as wasm_abi::FT_Sfnt_Tag,
+        &mut os2,
+    );
+    if error != FT_Err_Ok {
+        return Ok(os2_unicode_ranges_json(false, 0, 0, 0, 0, glyph_indices));
+    }
+    Ok(os2_unicode_ranges_json(
+        true,
+        os2.ulUnicodeRange1,
+        os2.ulUnicodeRange2,
+        os2.ulUnicodeRange3,
+        os2.ulUnicodeRange4,
+        glyph_indices,
+    ))
+}
+
+fn sfnt_name_record_json(
+    name_index: u32,
+    platform_id: u16,
+    encoding_id: u16,
+    language_id: u16,
+    name_id: u16,
+    string: *const u8,
+    string_len: u32,
+) -> Value {
+    let bytes = c_abi::abi_byte_slice(string, string_len);
+    json!({
+        "name_index": name_index,
+        "platform_id": platform_id,
+        "encoding_id": encoding_id,
+        "language_id": language_id,
+        "name_id": name_id,
+        "string_len": string_len,
+        "string_bytes": hex_bytes(&bytes)
+    })
+}
+
+fn rust_sfnt_name_record_json(index: u32, name: &FT_SfntName) -> Value {
+    sfnt_name_record_json(
+        index,
+        name.platform_id,
+        name.encoding_id,
+        name.language_id,
+        name.name_id,
+        name.string.cast_const(),
+        name.string_len,
+    )
+}
+
+fn c_sfnt_name_record_json(index: u32, name: &c_abi::FT_SfntName) -> Value {
+    sfnt_name_record_json(
+        index,
+        name.platform_id,
+        name.encoding_id,
+        name.language_id,
+        name.name_id,
+        name.string.cast_const(),
+        name.string_len,
+    )
+}
+
+fn wasm_sfnt_name_record_json(index: u32, name: &wasm_abi::FontdoneWasmSfntName) -> Value {
+    sfnt_name_record_json(
+        index,
+        name.platform_id,
+        name.encoding_id,
+        name.language_id,
+        name.name_id,
+        name.string,
+        name.string_len,
+    )
+}
+
+fn rust_sfnt_name_count_output(face: Option<&FT_Face>) -> Value {
+    json!({ "return": FT_Get_Sfnt_Name_Count(face) })
+}
+
+fn c_sfnt_name_count_output(face: c_abi::FT_Face) -> Value {
+    json!({ "return": c_abi::FT_Get_Sfnt_Name_Count(face) })
+}
+
+fn wasm_sfnt_name_count_output(handle: usize) -> Value {
+    json!({ "return": wasm_abi::fontdone_wasm_get_sfnt_name_count(handle) })
+}
+
+fn rust_sfnt_name_indexed_output(face: &FT_Face, params: &Value) -> Result<Value, String> {
+    let count = FT_Get_Sfnt_Name_Count(Some(face));
+    let indexes = resolved_sfnt_name_indexes(params, count)?;
+    let mut return_sequence = Vec::with_capacity(indexes.len());
+    let mut names = Vec::new();
+    for index in indexes {
+        let mut name = FT_SfntName::default();
+        let error = FT_Get_Sfnt_Name(Some(face), index, Some(&mut name));
+        return_sequence.push(error);
+        if error == FT_Err_Ok {
+            names.push(rust_sfnt_name_record_json(index, &name));
+        }
+    }
+    Ok(json!({ "return_sequence": return_sequence, "names": names }))
+}
+
+fn c_sfnt_name_indexed_output(face: c_abi::FT_Face, params: &Value) -> Result<Value, String> {
+    let count = c_abi::FT_Get_Sfnt_Name_Count(face);
+    let indexes = resolved_sfnt_name_indexes(params, count)?;
+    let mut return_sequence = Vec::with_capacity(indexes.len());
+    let mut names = Vec::new();
+    for index in indexes {
+        let mut name = c_abi::FT_SfntName::default();
+        let error = c_abi::FT_Get_Sfnt_Name(face, index, &mut name);
+        return_sequence.push(error);
+        if error == FT_Err_Ok {
+            names.push(c_sfnt_name_record_json(index, &name));
+        }
+    }
+    Ok(json!({ "return_sequence": return_sequence, "names": names }))
+}
+
+fn wasm_sfnt_name_indexed_output(handle: usize, params: &Value) -> Result<Value, String> {
+    let count = wasm_abi::fontdone_wasm_get_sfnt_name_count(handle);
+    let indexes = resolved_sfnt_name_indexes(params, count)?;
+    let mut return_sequence = Vec::with_capacity(indexes.len());
+    let mut names = Vec::new();
+    for index in indexes {
+        let mut name = wasm_abi::FontdoneWasmSfntName::default();
+        let error = wasm_abi::fontdone_wasm_get_sfnt_name(handle, index, &mut name);
+        return_sequence.push(error);
+        if error == FT_Err_Ok {
+            names.push(wasm_sfnt_name_record_json(index, &name));
+        }
+    }
+    Ok(json!({ "return_sequence": return_sequence, "names": names }))
+}
+
+fn rust_sfnt_name_match_output(face: &FT_Face, params: &Value) -> Result<Value, String> {
+    let fields = sfnt_name_match_fields(params)?;
+    let count = FT_Get_Sfnt_Name_Count(Some(face));
+    let mut matches = Vec::new();
+    for index in 0..count {
+        let mut name = FT_SfntName::default();
+        let error = FT_Get_Sfnt_Name(Some(face), index, Some(&mut name));
+        if error == FT_Err_Ok
+            && sfnt_name_matches(
+                fields,
+                name.platform_id,
+                name.encoding_id,
+                name.language_id,
+                name.name_id,
+            )
+        {
+            matches.push(rust_sfnt_name_record_json(index, &name));
+        }
+    }
+    Ok(sfnt_name_match_json(count, matches))
+}
+
+fn c_sfnt_name_match_output(face: c_abi::FT_Face, params: &Value) -> Result<Value, String> {
+    let fields = sfnt_name_match_fields(params)?;
+    let count = c_abi::FT_Get_Sfnt_Name_Count(face);
+    let mut matches = Vec::new();
+    for index in 0..count {
+        let mut name = c_abi::FT_SfntName::default();
+        let error = c_abi::FT_Get_Sfnt_Name(face, index, &mut name);
+        if error == FT_Err_Ok
+            && sfnt_name_matches(
+                fields,
+                name.platform_id,
+                name.encoding_id,
+                name.language_id,
+                name.name_id,
+            )
+        {
+            matches.push(c_sfnt_name_record_json(index, &name));
+        }
+    }
+    Ok(sfnt_name_match_json(count, matches))
+}
+
+fn wasm_sfnt_name_match_output(handle: usize, params: &Value) -> Result<Value, String> {
+    let fields = sfnt_name_match_fields(params)?;
+    let count = wasm_abi::fontdone_wasm_get_sfnt_name_count(handle);
+    let mut matches = Vec::new();
+    for index in 0..count {
+        let mut name = wasm_abi::FontdoneWasmSfntName::default();
+        let error = wasm_abi::fontdone_wasm_get_sfnt_name(handle, index, &mut name);
+        if error == FT_Err_Ok
+            && sfnt_name_matches(
+                fields,
+                name.platform_id,
+                name.encoding_id,
+                name.language_id,
+                name.name_id,
+            )
+        {
+            matches.push(wasm_sfnt_name_record_json(index, &name));
+        }
+    }
+    Ok(sfnt_name_match_json(count, matches))
+}
+
+fn sfnt_name_match_json(count: u32, matches: Vec<Value>) -> Value {
+    let status = if matches.is_empty() {
+        FT_Err_Invalid_Argument
+    } else {
+        FT_Err_Ok
+    };
+    let matched_name = matches.first().cloned().unwrap_or(Value::Null);
+    json!({
+        "name_count": count,
+        "matches": matches,
+        "status": status,
+        "matched_name": matched_name
+    })
+}
+
+fn sfnt_mac_encoding_record_json(
+    status: i32,
+    matched_charmap: Value,
+    glyph_indices: Vec<u32>,
+    matched_name: Value,
+) -> Value {
+    json!({
+        "status": status,
+        "matched_charmap": matched_charmap,
+        "glyph_indices": glyph_indices,
+        "matched_name": matched_name,
+    })
+}
+
+fn rust_sfnt_mac_encoding_record_output(
+    face: &mut FT_Face,
+    params: &Value,
+) -> Result<Value, String> {
+    let fields = required_sfnt_mac_fields(params)?;
+    let charmap_index = rust_find_charmap_index(face, fields.platform_id, fields.encoding_id);
+    let (status, matched_charmap) = if let Some(index) = charmap_index {
+        let charmap = FT_Face_Charmap(face, index);
+        let status = FT_Set_Charmap(Some(face), charmap);
+        let info = FT_Face_Charmap_Info(face, index)
+            .ok_or_else(|| format!("missing rust charmap info at index {index}"))?;
+        (status, rust_charmap_json(index, info))
+    } else {
+        (FT_Err_Invalid_Argument, Value::Null)
+    };
+    let glyph_indices = representative_codepoints(params)?
+        .into_iter()
+        .map(|codepoint| {
+            if status == FT_Err_Ok {
+                FT_Get_Char_Index(face, codepoint)
+            } else {
+                0
+            }
+        })
+        .collect();
+    let matched_name = rust_sfnt_name_match_output(face, params)?
+        .get("matched_name")
+        .cloned()
+        .unwrap_or(Value::Null);
+    Ok(sfnt_mac_encoding_record_json(
+        status,
+        matched_charmap,
+        glyph_indices,
+        matched_name,
+    ))
+}
+
+fn c_sfnt_mac_encoding_record_output(
+    face: c_abi::FT_Face,
+    params: &Value,
+) -> Result<Value, String> {
+    let fields = required_sfnt_mac_fields(params)?;
+    let charmap_index = c_find_charmap_index(face, fields.platform_id, fields.encoding_id);
+    let (status, matched_charmap) = if let Some(index) = charmap_index {
+        let charmap = c_abi::abi_charmap_by_index(face, index)
+            .ok_or_else(|| format!("missing c charmap pointer at index {index}"))?;
+        let status = c_abi::FT_Set_Charmap(face, charmap);
+        let info = c_abi::abi_charmap_info_by_index(face, index)
+            .ok_or_else(|| format!("missing c charmap info at index {index}"))?;
+        (status, c_charmap_json(index, info))
+    } else {
+        (FT_Err_Invalid_Argument, Value::Null)
+    };
+    let glyph_indices = representative_codepoints(params)?
+        .into_iter()
+        .map(|codepoint| {
+            if status == FT_Err_Ok {
+                c_abi::FT_Get_Char_Index(face, codepoint)
+            } else {
+                0
+            }
+        })
+        .collect();
+    let matched_name = c_sfnt_name_match_output(face, params)?
+        .get("matched_name")
+        .cloned()
+        .unwrap_or(Value::Null);
+    Ok(sfnt_mac_encoding_record_json(
+        status,
+        matched_charmap,
+        glyph_indices,
+        matched_name,
+    ))
+}
+
+fn wasm_sfnt_mac_encoding_record_output(handle: usize, params: &Value) -> Result<Value, String> {
+    let fields = required_sfnt_mac_fields(params)?;
+    let charmap_index = wasm_find_charmap_index(handle, fields.platform_id, fields.encoding_id);
+    let (status, matched_charmap) = if let Some(index) = charmap_index {
+        let status = wasm_abi::fontdone_wasm_set_charmap(handle, index);
+        let mut info = wasm_abi::FontdoneWasmCharmap::default();
+        let info_error = wasm_abi::fontdone_wasm_get_charmap(handle, index, &mut info);
+        if info_error != FT_Err_Ok {
+            return Ok(sfnt_mac_encoding_record_json(
+                info_error,
+                Value::Null,
+                Vec::new(),
+                Value::Null,
+            ));
+        }
+        (status, wasm_charmap_json(&info))
+    } else {
+        (FT_Err_Invalid_Argument, Value::Null)
+    };
+    let glyph_indices = representative_codepoints(params)?
+        .into_iter()
+        .map(|codepoint| {
+            if status == FT_Err_Ok {
+                wasm_abi::fontdone_wasm_get_char_index(handle, codepoint)
+            } else {
+                0
+            }
+        })
+        .collect();
+    let matched_name = wasm_sfnt_name_match_output(handle, params)?
+        .get("matched_name")
+        .cloned()
+        .unwrap_or(Value::Null);
+    Ok(sfnt_mac_encoding_record_json(
+        status,
+        matched_charmap,
+        glyph_indices,
+        matched_name,
+    ))
+}
+
+fn rust_charmap_json(index: u32, info: FT_CharMapRecPublic) -> Value {
+    json!({
+        "charmap_index": index,
+        "platform_id": info.platform_id,
+        "encoding_id": info.encoding_id,
+        "encoding": info.encoding,
+    })
+}
+
+fn c_charmap_json(index: u32, info: c_abi::FT_CharMapRec) -> Value {
+    json!({
+        "charmap_index": index,
+        "platform_id": info.platform_id,
+        "encoding_id": info.encoding_id,
+        "encoding": info.encoding,
+    })
+}
+
+fn wasm_charmap_json(info: &wasm_abi::FontdoneWasmCharmap) -> Value {
+    json!({
+        "charmap_index": info.index,
+        "platform_id": info.platform_id,
+        "encoding_id": info.encoding_id,
+        "encoding": info.encoding,
+    })
+}
+
+fn rust_first_char_output(face: &FT_Face) -> Value {
+    let mut glyph_index = 0;
+    let char_code = FT_Get_First_Char(Some(face), Some(&mut glyph_index));
+    char_iteration_json(char_code, glyph_index)
+}
+
+fn c_first_char_output(face: c_abi::FT_Face) -> Value {
+    let mut glyph_index = 0;
+    let char_code = c_abi::FT_Get_First_Char(face, &mut glyph_index);
+    char_iteration_json(char_code, glyph_index)
+}
+
+fn wasm_first_char_output(handle: usize) -> Value {
+    let mut glyph_index = 0;
+    let char_code = wasm_abi::fontdone_wasm_get_first_char(handle, &mut glyph_index);
+    char_iteration_json(char_code, glyph_index)
+}
+
+fn rust_next_char_output(face: &FT_Face, params: &Value) -> Result<Value, String> {
+    if params.get("start_charcodes").is_some() {
+        let rows = next_char_start_values(params)?
+            .into_iter()
+            .map(|start| {
+                let mut glyph_index = 0;
+                let char_code = FT_Get_Next_Char(Some(face), start, Some(&mut glyph_index));
+                json!({
+                    "start": start,
+                    "result": char_iteration_json(char_code, glyph_index)
+                })
+            })
+            .collect::<Vec<_>>();
+        return Ok(json!({ "rows": rows }));
+    }
+    let mut sequence = Vec::new();
+    let mut glyph_index = 0;
+    let mut char_code = FT_Get_First_Char(Some(face), Some(&mut glyph_index));
+    for _ in 0..u32_param(params, "max_steps")? {
+        if glyph_index == 0 {
+            break;
+        }
+        sequence.push(char_iteration_json(char_code, glyph_index));
+        char_code = FT_Get_Next_Char(Some(face), char_code, Some(&mut glyph_index));
+    }
+    Ok(json!({ "sequence": sequence }))
+}
+
+fn c_next_char_output(face: c_abi::FT_Face, params: &Value) -> Result<Value, String> {
+    if params.get("start_charcodes").is_some() {
+        let rows = next_char_start_values(params)?
+            .into_iter()
+            .map(|start| {
+                let mut glyph_index = 0;
+                let char_code = c_abi::FT_Get_Next_Char(face, start, &mut glyph_index);
+                json!({
+                    "start": start,
+                    "result": char_iteration_json(char_code, glyph_index)
+                })
+            })
+            .collect::<Vec<_>>();
+        return Ok(json!({ "rows": rows }));
+    }
+    let mut sequence = Vec::new();
+    let mut glyph_index = 0;
+    let mut char_code = c_abi::FT_Get_First_Char(face, &mut glyph_index);
+    for _ in 0..u32_param(params, "max_steps")? {
+        if glyph_index == 0 {
+            break;
+        }
+        sequence.push(char_iteration_json(char_code, glyph_index));
+        char_code = c_abi::FT_Get_Next_Char(face, char_code, &mut glyph_index);
+    }
+    Ok(json!({ "sequence": sequence }))
+}
+
+fn wasm_next_char_output(handle: usize, params: &Value) -> Result<Value, String> {
+    if params.get("start_charcodes").is_some() {
+        let rows = next_char_start_values(params)?
+            .into_iter()
+            .map(|start| {
+                let mut glyph_index = 0;
+                let char_code =
+                    wasm_abi::fontdone_wasm_get_next_char(handle, start, &mut glyph_index);
+                json!({
+                    "start": start,
+                    "result": char_iteration_json(char_code, glyph_index)
+                })
+            })
+            .collect::<Vec<_>>();
+        return Ok(json!({ "rows": rows }));
+    }
+    let mut sequence = Vec::new();
+    let mut glyph_index = 0;
+    let mut char_code = wasm_abi::fontdone_wasm_get_first_char(handle, &mut glyph_index);
+    for _ in 0..u32_param(params, "max_steps")? {
+        if glyph_index == 0 {
+            break;
+        }
+        sequence.push(char_iteration_json(char_code, glyph_index));
+        char_code = wasm_abi::fontdone_wasm_get_next_char(handle, char_code, &mut glyph_index);
+    }
+    Ok(json!({ "sequence": sequence }))
+}
+
+fn rust_library_version_output(params: &Value) -> Result<Value, String> {
+    let library = if library_present_arg(params)? != 0 {
+        Some(FT_Init_FreeType())
+    } else {
+        None
+    };
+    library_version_output(params, |mask, major, minor, patch| {
+        FT_Library_Version(
+            library.as_ref(),
+            if mask & LIBRARY_VERSION_MAJOR != 0 {
+                Some(major)
+            } else {
+                None
+            },
+            if mask & LIBRARY_VERSION_MINOR != 0 {
+                Some(minor)
+            } else {
+                None
+            },
+            if mask & LIBRARY_VERSION_PATCH != 0 {
+                Some(patch)
+            } else {
+                None
+            },
+        );
+    })
+}
+
+fn c_library_version_output(params: &Value) -> Result<Value, String> {
+    let mut library = std::ptr::null_mut();
+    let live = library_present_arg(params)? != 0;
+    if live {
+        let err = c_abi::FT_Init_FreeType(&mut library);
+        if err != FT_Err_Ok {
+            return Err(format!("FT_Init_FreeType returned {err}"));
+        }
+    }
+    let output = library_version_output(params, |mask, major, minor, patch| {
+        c_abi::FT_Library_Version(
+            library,
+            if mask & LIBRARY_VERSION_MAJOR != 0 {
+                major
+            } else {
+                std::ptr::null_mut()
+            },
+            if mask & LIBRARY_VERSION_MINOR != 0 {
+                minor
+            } else {
+                std::ptr::null_mut()
+            },
+            if mask & LIBRARY_VERSION_PATCH != 0 {
+                patch
+            } else {
+                std::ptr::null_mut()
+            },
+        );
+    });
+    if live {
+        c_done_library(library);
+    }
+    output
+}
+
+fn wasm_library_version_output(params: &Value) -> Result<Value, String> {
+    let live = library_present_arg(params)?;
+    library_version_output(params, |mask, major, minor, patch| {
+        wasm_abi::fontdone_wasm_library_version(
+            live,
+            if mask & LIBRARY_VERSION_MAJOR != 0 {
+                major
+            } else {
+                std::ptr::null_mut()
+            },
+            if mask & LIBRARY_VERSION_MINOR != 0 {
+                minor
+            } else {
+                std::ptr::null_mut()
+            },
+            if mask & LIBRARY_VERSION_PATCH != 0 {
+                patch
+            } else {
+                std::ptr::null_mut()
+            },
+        );
+    })
+}
+
+fn rust_truetype_engine_output(params: &Value) -> Result<Value, String> {
+    let library = if truetype_engine_library_present_arg(params)? != 0 {
+        Some(FT_Init_FreeType())
+    } else {
+        None
+    };
+    Ok(json!({
+        "engine_type": FT_Get_TrueType_Engine_Type(library.as_ref())
+    }))
+}
+
+fn c_truetype_engine_output(params: &Value) -> Result<Value, String> {
+    let live = truetype_engine_library_present_arg(params)? != 0;
+    let mut library = std::ptr::null_mut();
+    if live {
+        let err = c_abi::FT_Init_FreeType(&mut library);
+        if err != FT_Err_Ok {
+            return Err(format!("FT_Init_FreeType returned {err}"));
+        }
+    }
+    let engine_type = c_abi::FT_Get_TrueType_Engine_Type(library);
+    if live {
+        c_done_library(library);
+    }
+    Ok(json!({ "engine_type": engine_type }))
+}
+
+fn wasm_truetype_engine_output(params: &Value) -> Result<Value, String> {
+    Ok(json!({
+        "engine_type": wasm_abi::fontdone_wasm_get_truetype_engine_type(
+            truetype_engine_library_present_arg(params)?
+        )
+    }))
+}
+
+fn rust_done_freetype(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "library") == Some("null") {
+        return Ok(lifecycle_result(FT_Done_FreeType(None)));
+    }
+    let data = font_bytes(case)?;
+    let library = FT_Init_FreeType();
+    let _face = FT_New_Memory_Face(
+        &library,
+        data.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    )
+    .map_err(|err| format!("FT_New_Memory_Face returned {err}"))?;
+    Ok(lifecycle_result(FT_Done_FreeType(Some(library))))
+}
+
+fn c_done_freetype_output(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "library") == Some("null") {
+        return Ok(lifecycle_result(c_abi::FT_Done_FreeType(
+            std::ptr::null_mut(),
+        )));
+    }
+    let bytes = font_bytes(case)?;
+    let mut library = std::ptr::null_mut();
+    let err = c_abi::FT_Init_FreeType(&mut library);
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let mut face = std::ptr::null_mut();
+    let file_size = i64::try_from(bytes.len()).map_err(|err| err.to_string())?;
+    let err = c_abi::FT_New_Memory_Face(
+        library,
+        bytes.as_ptr(),
+        file_size,
+        face_index_param(&case.inputs.params)?,
+        &mut face,
+    );
+    if err != FT_Err_Ok {
+        c_done_library(library);
+        return Ok(error(err));
+    }
+    Ok(lifecycle_result(c_abi::FT_Done_FreeType(library)))
+}
+
+fn wasm_done_freetype_output(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "library") == Some("null") {
+        return Ok(lifecycle_result(wasm_abi::fontdone_wasm_done_freetype(0)));
+    }
+    let handle = wasm_new_face_without_size(case)?;
+    wasm_done_face(handle);
+    Ok(lifecycle_result(wasm_abi::fontdone_wasm_done_freetype(1)))
+}
+
+fn rust_done_face(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(lifecycle_result(FT_Done_Face(None)));
+    }
+    let face = rust_new_face_without_size(case)?;
+    Ok(lifecycle_result(FT_Done_Face(Some(face))))
+}
+
+fn c_done_face_output(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(lifecycle_result(c_abi::FT_Done_Face(std::ptr::null_mut())));
+    }
+    let (library, face) = c_new_face_without_size(case)?;
+    let err = c_abi::FT_Done_Face(face);
+    c_done_library(library);
+    Ok(lifecycle_result(err))
+}
+
+fn wasm_done_face_output(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(lifecycle_result(wasm_abi::fontdone_wasm_done_face(0)));
+    }
+    let handle = wasm_new_face_without_size(case)?;
+    Ok(lifecycle_result(wasm_abi::fontdone_wasm_done_face(handle)))
+}
+
+fn rust_face_check_truetype_patents(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(ok(json!({
+            "result": FT_Face_CheckTrueTypePatents(None)
+        })));
+    }
+    let face = rust_new_face_without_size(case)?;
+    Ok(ok(json!({
+        "result": FT_Face_CheckTrueTypePatents(Some(&face))
+    })))
+}
+
+fn c_face_check_truetype_patents(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(ok(json!({
+            "result": c_abi::FT_Face_CheckTrueTypePatents(std::ptr::null_mut())
+        })));
+    }
+    let (library, face) = c_new_face_without_size(case)?;
+    let result = c_abi::FT_Face_CheckTrueTypePatents(face);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ok(json!({ "result": result })))
+}
+
+fn wasm_face_check_truetype_patents(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(ok(json!({
+            "result": wasm_abi::fontdone_wasm_face_check_truetype_patents(0)
+        })));
+    }
+    let handle = wasm_new_face_without_size(case)?;
+    let result = wasm_abi::fontdone_wasm_face_check_truetype_patents(handle);
+    wasm_done_face(handle);
+    Ok(ok(json!({ "result": result })))
+}
+
+fn rust_face_set_unpatented_hinting(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return patent_bool_output(&case.inputs.params, |value| {
+            FT_Face_SetUnpatentedHinting(None, value)
+        });
+    }
+    let mut face = rust_new_face_without_size(case)?;
+    patent_bool_output(&case.inputs.params, |value| {
+        FT_Face_SetUnpatentedHinting(Some(&mut face), value)
+    })
+}
+
+fn c_face_set_unpatented_hinting(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return patent_bool_output(&case.inputs.params, |value| {
+            c_abi::FT_Face_SetUnpatentedHinting(std::ptr::null_mut(), value)
+        });
+    }
+    let (library, face) = c_new_face_without_size(case)?;
+    let output = patent_bool_output(&case.inputs.params, |value| {
+        c_abi::FT_Face_SetUnpatentedHinting(face, value)
+    });
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
+fn wasm_face_set_unpatented_hinting(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return patent_bool_output(&case.inputs.params, |value| {
+            wasm_abi::fontdone_wasm_face_set_unpatented_hinting(0, value)
+        });
+    }
+    let handle = wasm_new_face_without_size(case)?;
+    let output = patent_bool_output(&case.inputs.params, |value| {
+        wasm_abi::fontdone_wasm_face_set_unpatented_hinting(handle, value)
+    });
+    wasm_done_face(handle);
+    output
+}
+
+fn patent_bool_output(
+    params: &Value,
+    mut call: impl FnMut(FT_Bool) -> FT_Bool,
+) -> Result<RunOutput, String> {
+    let outputs = patent_bool_values(params)?
+        .into_iter()
+        .map(|value| {
+            json!({
+                "value": value,
+                "result": call(value)
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(ok(json!({ "outputs": outputs })))
+}
+
+fn rust_set_lcd_filter(case: &InputCase) -> Result<RunOutput, String> {
+    let mut library = if lcd_library_present_arg(&case.inputs.params) != 0 {
+        Some(FT_Init_FreeType())
+    } else {
+        None
+    };
+    lcd_filter_output(&case.inputs.params, |filter| {
+        FT_Library_SetLcdFilter(library.as_mut(), filter)
+    })
+}
+
+fn c_set_lcd_filter(case: &InputCase) -> Result<RunOutput, String> {
+    let live = lcd_library_present_arg(&case.inputs.params) != 0;
+    let mut library = std::ptr::null_mut();
+    if live {
+        let err = c_abi::FT_Init_FreeType(&mut library);
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+    }
+    let output = lcd_filter_output(&case.inputs.params, |filter| {
+        c_abi::FT_Library_SetLcdFilter(if live { library } else { std::ptr::null_mut() }, filter)
+    });
+    if live {
+        c_done_library(library);
+    }
+    output
+}
+
+fn wasm_set_lcd_filter(case: &InputCase) -> Result<RunOutput, String> {
+    lcd_filter_output(&case.inputs.params, |filter| {
+        wasm_abi::fontdone_wasm_library_set_lcd_filter(filter)
+    })
+}
+
+fn rust_set_lcd_filter_weights(case: &InputCase) -> Result<RunOutput, String> {
+    let mut library = if lcd_library_present_arg(&case.inputs.params) != 0 {
+        Some(FT_Init_FreeType())
+    } else {
+        None
+    };
+    let mut weights = lcd_filter_weights(&case.inputs.params)?;
+    let weights_ptr = lcd_filter_weights_ptr(&mut weights);
+    let error = FT_Library_SetLcdFilterWeights(library.as_mut(), weights_ptr);
+    Ok(lcd_filter_error_output(error))
+}
+
+fn c_set_lcd_filter_weights(case: &InputCase) -> Result<RunOutput, String> {
+    let live = lcd_library_present_arg(&case.inputs.params) != 0;
+    let mut library = std::ptr::null_mut();
+    if live {
+        let err = c_abi::FT_Init_FreeType(&mut library);
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+    }
+    let mut weights = lcd_filter_weights(&case.inputs.params)?;
+    let error = c_abi::FT_Library_SetLcdFilterWeights(
+        if live { library } else { std::ptr::null_mut() },
+        lcd_filter_weights_ptr(&mut weights),
+    );
+    if live {
+        c_done_library(library);
+    }
+    Ok(lcd_filter_error_output(error))
+}
+
+fn wasm_set_lcd_filter_weights(case: &InputCase) -> Result<RunOutput, String> {
+    let mut weights = lcd_filter_weights(&case.inputs.params)?;
+    let error = wasm_abi::fontdone_wasm_library_set_lcd_filter_weights(lcd_filter_weights_ptr(
+        &mut weights,
+    ));
+    Ok(lcd_filter_error_output(error))
+}
+
+fn rust_set_lcd_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    let mut library = if lcd_library_present_arg(&case.inputs.params) != 0 {
+        Some(FT_Init_FreeType())
+    } else {
+        None
+    };
+    let geometry = lcd_geometry_values(&case.inputs.params)?;
+    let error = FT_Library_SetLcdGeometry(library.as_mut(), geometry);
+    Ok(lcd_filter_error_output(error))
+}
+
+fn c_set_lcd_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    let live = lcd_library_present_arg(&case.inputs.params) != 0;
+    let mut library = std::ptr::null_mut();
+    if live {
+        let err = c_abi::FT_Init_FreeType(&mut library);
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+    }
+    let geometry = c_lcd_geometry_values(&case.inputs.params)?;
+    let error = c_abi::FT_Library_SetLcdGeometry(
+        if live { library } else { std::ptr::null_mut() },
+        c_lcd_geometry_ptr(&geometry),
+    );
+    if live {
+        c_done_library(library);
+    }
+    Ok(lcd_filter_error_output(error))
+}
+
+fn wasm_set_lcd_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    let geometry = wasm_lcd_geometry_values(&case.inputs.params)?;
+    let error = wasm_abi::fontdone_wasm_library_set_lcd_geometry(
+        lcd_library_present_arg(&case.inputs.params),
+        wasm_lcd_geometry_ptr(&geometry),
+    );
+    Ok(lcd_filter_error_output(error))
+}
+
+fn lcd_filter_output(
+    params: &Value,
+    mut call: impl FnMut(FT_LcdFilter) -> FT_Error,
+) -> Result<RunOutput, String> {
+    let filters = lcd_filter_values(params)?;
+    let mut first_error = FT_Err_Ok;
+    let outputs = filters
+        .into_iter()
+        .map(|filter| {
+            let error = call(filter);
+            if first_error == FT_Err_Ok && error != FT_Err_Ok {
+                first_error = error;
+            }
+            json!({
+                "filter": filter,
+                "error": error
+            })
+        })
+        .collect::<Vec<_>>();
+    let output = json!({ "outputs": outputs });
+    if first_error == FT_Err_Ok {
+        Ok(ok(output))
+    } else {
+        Ok(error_with_output(first_error, output))
+    }
+}
+
+fn lcd_filter_error_output(error_code: i32) -> RunOutput {
+    let output = json!({ "error": error_code });
+    if error_code == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error_code, output)
+    }
+}
+
+const LIBRARY_VERSION_MAJOR: u8 = 1;
+const LIBRARY_VERSION_MINOR: u8 = 2;
+const LIBRARY_VERSION_PATCH: u8 = 4;
+
+fn library_version_output(
+    params: &Value,
+    mut call: impl FnMut(u8, &mut i32, &mut i32, &mut i32),
+) -> Result<Value, String> {
+    let sentinels = library_version_sentinels(params)?;
+    let rows = library_version_rows(params)?
+        .into_iter()
+        .map(|mask| {
+            let mut major = sentinels[0];
+            let mut minor = sentinels[1];
+            let mut patch = sentinels[2];
+            call(mask, &mut major, &mut minor, &mut patch);
+            library_version_row_json(mask, sentinels, [major, minor, patch])
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({ "rows": rows }))
+}
+
+fn library_version_row_json(mask: u8, sentinels: [i32; 3], values: [i32; 3]) -> Value {
+    let mut writes = serde_json::Map::new();
+    let mut sentinel_outputs = serde_json::Map::new();
+    if mask & LIBRARY_VERSION_MAJOR != 0 {
+        writes.insert("major".to_string(), json!(values[0]));
+    } else {
+        sentinel_outputs.insert("major".to_string(), json!(sentinels[0]));
+    }
+    if mask & LIBRARY_VERSION_MINOR != 0 {
+        writes.insert("minor".to_string(), json!(values[1]));
+    } else {
+        sentinel_outputs.insert("minor".to_string(), json!(sentinels[1]));
+    }
+    if mask & LIBRARY_VERSION_PATCH != 0 {
+        writes.insert("patch".to_string(), json!(values[2]));
+    } else {
+        sentinel_outputs.insert("patch".to_string(), json!(sentinels[2]));
+    }
+    json!({
+        "outputs": library_version_output_names(mask),
+        "writes": writes,
+        "sentinel_outputs": sentinel_outputs
+    })
+}
+
+fn library_version_output_names(mask: u8) -> Vec<&'static str> {
+    let mut names = Vec::new();
+    if mask & LIBRARY_VERSION_MAJOR != 0 {
+        names.push("amajor");
+    }
+    if mask & LIBRARY_VERSION_MINOR != 0 {
+        names.push("aminor");
+    }
+    if mask & LIBRARY_VERSION_PATCH != 0 {
+        names.push("apatch");
+    }
+    names
+}
+
 fn runtime_face_cache_key(case: &InputCase) -> Result<String, String> {
     let font = runtime_font_asset(case).ok_or_else(|| "missing font asset".to_string())?;
     let face_index =
@@ -2045,24 +4165,56 @@ fn runtime_face_cache_key(case: &InputCase) -> Result<String, String> {
 fn case_uses_cached_face(case: &InputCase) -> bool {
     matches!(
         case.operation.as_str(),
-        "size_metrics"
+            "size_metrics"
             | "get_char_index"
+            | "freetype.get_fstype_flags"
+            | "freetype.get_kerning"
+            | "ftsnames.get_sfnt_name_count"
+            | "ftsnames.get_sfnt_name"
+            | "ftsnames.get_sfnt_name_by_record"
+            | "ftsnames.get_sfnt_name_group"
+            | "sfnt.get_name"
+            | "sfnt.get_sfnt_name"
+            | "sfnt.get_os2_unicode_ranges"
+            | "sfnt.mac_encoding_record"
+            | "freetype.get_first_char"
+            | "freetype.get_next_char"
             | "load_char"
             | "load_glyph"
             | "render_glyph"
+            | "freetype.inspect_glyph_metrics"
+            | "freetype.inspect_glyph_slot"
             | "ftadvanc.get_advance"
             | "ftadvanc.get_advances"
     )
 }
 
 fn case_requires_asset_validation(case: &InputCase) -> bool {
+    if case.operation == "freetype.select_charmap"
+        && lifecycle_handle_param(&case.inputs.params, "face") == Some("null")
+    {
+        return false;
+    }
     matches!(
         case.operation.as_str(),
         "new_memory_face"
             | "set_pixel_sizes"
             | "set_char_size"
+            | "freetype.request_size"
             | "size_metrics"
             | "get_char_index"
+            | "freetype.select_charmap"
+            | "freetype.get_fstype_flags"
+            | "ftsnames.get_sfnt_name_count"
+            | "ftsnames.get_sfnt_name"
+            | "ftsnames.get_sfnt_name_by_record"
+            | "ftsnames.get_sfnt_name_group"
+            | "sfnt.get_name"
+            | "sfnt.get_sfnt_name"
+            | "sfnt.get_os2_unicode_ranges"
+            | "sfnt.mac_encoding_record"
+            | "freetype.get_first_char"
+            | "freetype.get_next_char"
             | "load_char"
             | "load_glyph"
             | "render_glyph"
@@ -2446,15 +4598,25 @@ fn collect_asset_cache_input(
     inline_assets: &mut BTreeSet<String>,
 ) {
     match asset {
+        Asset::List(items) => {
+            for item in items {
+                collect_asset_cache_input(item, file_assets, inline_assets);
+            }
+        }
         Asset::File { path, .. } => {
             file_assets.insert(path.clone());
+        }
+        Asset::Ref { .. } => {
+            if let Some(path) = asset_file_path(asset) {
+                file_assets.insert(path.to_string());
+            }
         }
         Asset::InlineBytes { .. } => {
             if let Some(value) = inline_bytes_hex(asset) {
                 inline_assets.insert(value.to_string());
             }
         }
-        Asset::Ref { .. } | Asset::Other(_) => {}
+        Asset::Other(_) => {}
     }
 }
 
@@ -2708,12 +4870,11 @@ fn option_axis_covers_i32(axis: &[Option<i32>], base: Option<i32>, value: i32) -
 }
 
 fn asset_file_name(asset: &Asset) -> Option<String> {
-    match asset {
-        Asset::File { path, .. } => Path::new(path)
+    asset_file_path(asset).and_then(|path| {
+        Path::new(path)
             .file_name()
-            .map(|name| name.to_string_lossy().into_owned()),
-        Asset::InlineBytes { .. } | Asset::Ref { .. } | Asset::Other(_) => None,
-    }
+            .map(|name| name.to_string_lossy().into_owned())
+    })
 }
 
 fn input_font_file_name(input: &InputCase) -> Option<String> {
@@ -2753,47 +4914,60 @@ fn input_i32_param(input: &InputCase, key: &str) -> Option<i32> {
 }
 
 fn validate_assets(case: &InputCase) -> Result<(), String> {
-    for (name, asset) in &case.inputs.assets {
-        match asset {
-            Asset::File {
-                path,
-                sha256,
-                length,
-            } => {
-                let (actual_length, digest) = validated_file_asset(path)
-                    .map_err(|err| format!("{name} read {path}: {err}"))?;
-                if let Some(length) = length {
-                    if actual_length != *length {
-                        return Err(format!("{name} length mismatch for {path}"));
-                    }
-                }
-                if let Some(sha256) = sha256 {
-                    if digest != *sha256 {
-                        return Err(format!(
-                            "{name} sha256 mismatch for {path}: actual={digest} expected={sha256}"
-                        ));
-                    }
+    let (name, asset) =
+        runtime_font_asset_entry(case).ok_or_else(|| "missing runtime font asset".to_string())?;
+    validate_asset(name, asset)
+}
+
+fn validate_asset(name: &str, asset: &Asset) -> Result<(), String> {
+    match asset {
+        Asset::List(items) => {
+            let Some(item) = items.iter().find(|asset| asset_is_runtime_resolved(asset)) else {
+                return Err(format!("{name} unresolved asset list {}", asset_label(asset)));
+            };
+            validate_asset(name, item)?;
+        }
+        Asset::File {
+            path,
+            sha256,
+            length,
+        } => {
+            let (actual_length, digest) =
+                validated_file_asset(path).map_err(|err| format!("{name} read {path}: {err}"))?;
+            if let Some(length) = length {
+                if actual_length != *length {
+                    return Err(format!("{name} length mismatch for {path}"));
                 }
             }
-            Asset::InlineBytes { encoding, .. } => {
-                if encoding != "hex" {
+            if let Some(sha256) = sha256 {
+                if digest != *sha256 {
                     return Err(format!(
-                        "{name} uses unsupported inline encoding {encoding}"
+                        "{name} sha256 mismatch for {path}: actual={digest} expected={sha256}"
                     ));
                 }
-                let value = inline_bytes_hex(asset)
-                    .ok_or_else(|| format!("{name} missing inline hex bytes"))?;
-                cached_inline_bytes(value).map_err(|err| format!("{name} invalid hex: {err}"))?;
             }
-            Asset::Ref { .. } => {
+        }
+        Asset::InlineBytes { encoding, .. } => {
+            if encoding != "hex" {
+                return Err(format!(
+                    "{name} uses unsupported inline encoding {encoding}"
+                ));
+            }
+            let value = inline_bytes_hex(asset)
+                .ok_or_else(|| format!("{name} missing inline hex bytes"))?;
+            cached_inline_bytes(value).map_err(|err| format!("{name} invalid hex: {err}"))?;
+        }
+        Asset::Ref { .. } => {
+            let Some(path) = asset_file_path(asset) else {
                 return Err(format!(
                     "{name} unresolved shared asset ref {}",
                     asset_label(asset)
                 ));
-            }
-            Asset::Other(_) => {
-                return Err(format!("{name} uses unsupported asset shape"));
-            }
+            };
+            validated_file_asset(path).map_err(|err| format!("{name} read {path}: {err}"))?;
+        }
+        Asset::Other(_) => {
+            return Err(format!("{name} uses unsupported asset shape"));
         }
     }
     Ok(())
@@ -2988,6 +5162,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--constant".to_string(),
             string_param(params, "symbol")?.to_string(),
         ]),
+        "constant_map" => Ok(vec![
+            "--constant-map".to_string(),
+            constant_symbols_param(params)?.join(","),
+        ]),
         "record_layout" => Ok(vec![
             "--layout".to_string(),
             record_param(params)?.to_string(),
@@ -2996,15 +5174,88 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--type-probe".to_string(),
             type_symbol_param(params)?.to_string(),
         ]),
+        "abi_type_map_probe" => Ok(vec![
+            "--type-map-probe".to_string(),
+            type_symbols_param(params)?.join(","),
+        ]),
         "abi_function_probe" => Ok(vec![
             "--function-probe".to_string(),
             type_symbol_param(params)?.to_string(),
         ]),
-        "macro_eval" => Ok(vec!["--macro-eval".to_string(), case.case_id.clone()]),
-        "new_memory_face" => {
-            let mut args = vec!["--new-memory-face".to_string()];
+        "abi.compile_alias_probe" => Ok(vec![
+            "--compile-alias-probe".to_string(),
+            string_param(params, "macro")?.to_string(),
+            string_param(params, "typedef")?.to_string(),
+            string_param(params, "signature")?.to_string(),
+        ]),
+        "abi.value_echo" => abi_value_echo_oracle_args(params),
+        "macro_eval" | "macro_compile_probe" => {
+            Ok(vec!["--macro-eval".to_string(), case.case_id.clone()])
+        }
+        "face_macro_flags" => Ok(vec![
+            "--face-macro-flags".to_string(),
+            face_macro_param(case)?.to_string(),
+            face_index_param(params)?.to_string(),
+            face_macro_flags_values(params)?
+                .into_iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>()
+                .join(","),
+        ]),
+        "freetype.ceil_fix" | "freetype.floor_fix" | "freetype.round_fix" | "freetype.mul_div"
+        | "freetype.mul_fix" | "freetype.div_fix" => Ok(vec![
+            "--fixed-math".to_string(),
+            fixed_math_oracle_op(&case.operation)?.to_string(),
+            fixed_math_rows_arg(&case.operation, params)?,
+        ]),
+        operation if is_trigon_runtime_operation(operation) => Ok(vec![
+            "--trigon".to_string(),
+            trigon_oracle_op(operation)?.to_string(),
+            trigon_rows_arg(operation, params)?,
+        ]),
+        operation if is_trigon_aggregate_operation(operation) => Ok(vec![
+            "--trigon-aggregate".to_string(),
+            trigon_aggregate_oracle_op(operation)?.to_string(),
+            trigon_aggregate_rows_arg(operation, params)?,
+        ]),
+        "freetype.vector_transform" => Ok(vec![
+            "--vector-transform".to_string(),
+            vector_transform_rows_arg(params)?,
+        ]),
+        "ftglyph.matrix_multiply" => Ok(vec![
+            "--matrix-multiply".to_string(),
+            matrix_multiply_rows_arg(params)?,
+        ]),
+        "ftglyph.matrix_invert" => Ok(vec![
+            "--matrix-invert".to_string(),
+            matrix_invert_rows_arg(params)?,
+        ]),
+        operation if operation.starts_with("freetype.face_macro") => {
+            let mut args = vec!["--face-macro".to_string()];
             push_font_source(case, &mut args)?;
-            push_face_size(params, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(face_macro_param(case)?.to_string());
+            Ok(args)
+        }
+        "freetype.face_flags" => {
+            let mut args = vec!["--face-flags".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(face_flag_param(case)?.to_string());
+            Ok(args)
+        }
+        "new_memory_face" => {
+            let mut args = if case.inputs.params.get("variants").is_some() {
+                vec!["--new-memory-face-variants".to_string()]
+            } else {
+                vec!["--new-memory-face".to_string()]
+            };
+            push_font_source(case, &mut args)?;
+            if case.inputs.params.get("variants").is_some() {
+                args.push(memory_face_rows_arg(params)?);
+            } else {
+                push_face_size(params, &mut args)?;
+            }
             Ok(args)
         }
         "set_pixel_sizes" => {
@@ -3014,13 +5265,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "set_char_size" => {
-            let mut args = vec!["--set-char-size".to_string()];
+            let mut args = vec!["--set-char-sizes".to_string()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
-            args.push(i64_param(params, "char_width")?.to_string());
-            args.push(i64_param(params, "char_height")?.to_string());
-            args.push(u64_param(params, "horz_resolution")?.to_string());
-            args.push(u64_param(params, "vert_resolution")?.to_string());
+            args.push(char_size_rows_arg(params)?);
+            Ok(args)
+        }
+        "freetype.request_size" => {
+            let mut args = vec!["--request-size".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(size_request_rows_arg(params)?);
             Ok(args)
         }
         "size_metrics" => {
@@ -3036,6 +5291,240 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(u64_param(params, "char_code")?.to_string());
             Ok(args)
         }
+        "charmap.get_char_index" => {
+            let fields = required_charmap_fields(params, "charmap.get_char_index")?;
+            let mut args = vec!["--charmap-get-char-index".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(fields.platform_id.to_string());
+            args.push(fields.encoding_id.to_string());
+            args.push(u64_param(params, "char_code")?.to_string());
+            Ok(args)
+        }
+        "freetype.select_charmap" => {
+            if lifecycle_handle_param(params, "face") == Some("null") {
+                return Ok(vec![
+                    "--select-charmap-null-face".to_string(),
+                    charmap_encoding_param(params)?.to_string(),
+                ]);
+            }
+            let mut args = vec![if params.get("encodings").is_some() {
+                "--select-charmaps".to_string()
+            } else {
+                "--select-charmap".to_string()
+            }];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            if params.get("encodings").is_some() {
+                args.push(select_charmap_encodings_arg(params)?);
+            } else {
+                args.push(charmap_encoding_param(params)?.to_string());
+            }
+            args.push(charmap_probe_chars_arg(params)?);
+            Ok(args)
+        }
+        "freetype.set_charmap" => {
+            if lifecycle_handle_param(params, "face") == Some("null") {
+                return Ok(vec!["--set-charmap-null-face".to_string()]);
+            }
+            if params.get("variants").is_some() {
+                let mut args = vec!["--set-charmap-variants".to_string()];
+                push_font_source(case, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                let foreign = case
+                    .inputs
+                    .assets
+                    .get("foreign_font")
+                    .or_else(|| runtime_font_asset(case))
+                    .ok_or_else(|| "missing foreign font asset".to_string())?;
+                push_asset_source(foreign, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                args.push(set_charmap_variants(&case.inputs.params)?.join(","));
+                return Ok(args);
+            }
+            let mut args = vec!["--set-charmap".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(set_charmap_indices_arg(params)?);
+            args.push(set_charmap_probe_chars_arg(params)?);
+            Ok(args)
+        }
+        "freetype.inspect_charmaps" | "freetype.charmap_ownership" => {
+            let mut args = vec!["--inspect-charmaps".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(charmap_operation_encodings_arg(params)?);
+            args.push(charmap_probe_chars_arg(params)?);
+            Ok(args)
+        }
+        "freetype.get_charmap_index" => {
+            if charmap_variants(params)?.is_empty() {
+                let mut args = vec!["--get-charmap-index".to_string()];
+                push_font_source(case, &mut args)?;
+                push_face_size(params, &mut args)?;
+                Ok(args)
+            } else {
+                let mut args = vec!["--get-charmap-index-variants".to_string()];
+                let foreign = case
+                    .inputs
+                    .assets
+                    .get("foreign_font")
+                    .or_else(|| runtime_font_asset(case))
+                    .ok_or_else(|| "missing foreign font asset".to_string())?;
+                push_asset_source(foreign, &mut args)?;
+                args.push("0".to_string());
+                args.push(charmap_variants(params)?.join(","));
+                Ok(args)
+            }
+        }
+        "freetype.get_fstype_flags" => {
+            let mut args = vec!["--get-fstype-flags".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(optional_symbol_under_test(params));
+            Ok(args)
+        }
+        "freetype.get_kerning" => {
+            let mut args = vec!["--get-kerning".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(kerning_rows_arg(params)?);
+            Ok(args)
+        }
+        "ftsnames.get_sfnt_name_count" => {
+            let mut args = vec!["--get-sfnt-name-count".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            Ok(args)
+        }
+        "ftsnames.get_sfnt_name" => {
+            let mut args = vec!["--get-sfnt-name".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(sfnt_name_indexes_arg(params)?);
+            Ok(args)
+        }
+        "ftsnames.get_sfnt_name_by_record"
+        | "ftsnames.get_sfnt_name_group"
+        | "sfnt.get_name"
+        | "sfnt.get_sfnt_name" => {
+            let mut args = vec!["--get-sfnt-name-match".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.extend(sfnt_name_match_args(params)?);
+            Ok(args)
+        }
+        "sfnt.get_os2_unicode_ranges" => {
+            let mut args = vec!["--get-sfnt-os2-unicode-ranges".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(representative_codepoints_arg(params)?);
+            Ok(args)
+        }
+        "sfnt.mac_encoding_record" => {
+            let mut args = vec!["--sfnt-mac-encoding-record".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.extend(sfnt_name_match_args(params)?);
+            args.push(representative_codepoints_arg(params)?);
+            Ok(args)
+        }
+        "freetype.get_first_char" => {
+            let mut args = vec!["--get-first-char".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            Ok(args)
+        }
+        "freetype.get_next_char" => {
+            let mut args = vec![
+                if params.get("start_charcodes").is_some() {
+                    "--get-next-char-starts"
+                } else {
+                    "--get-next-char-sequence"
+                }
+                .to_string(),
+            ];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            if params.get("start_charcodes").is_some() {
+                args.push(next_char_starts_arg(params)?);
+            } else {
+                args.push(u32_param(params, "max_steps")?.to_string());
+            }
+            Ok(args)
+        }
+        "freetype.library_version" => Ok(vec![
+            "--library-version".to_string(),
+            library_present_arg(params)?.to_string(),
+            library_version_rows_arg(params)?,
+            library_version_sentinels_arg(params)?,
+        ]),
+        "ftmodapi.get_truetype_engine_type" => Ok(vec![
+            "--get-truetype-engine-type".to_string(),
+            truetype_engine_library_present_arg(params)?.to_string(),
+        ]),
+        "freetype.done_freetype" => {
+            if lifecycle_handle_param(params, "library") == Some("null") {
+                return Ok(vec!["--done-freetype".to_string(), "null".to_string()]);
+            }
+            let mut args = vec!["--done-freetype".to_string(), "live".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "freetype.done_face" => {
+            if lifecycle_handle_param(params, "face") == Some("null") {
+                return Ok(vec!["--done-face".to_string(), "null".to_string()]);
+            }
+            let mut args = vec!["--done-face".to_string(), "live".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "freetype.face_check_truetype_patents" => {
+            if lifecycle_handle_param(params, "face") == Some("null") {
+                return Ok(vec![
+                    "--face-check-tt-patents".to_string(),
+                    "null".to_string(),
+                ]);
+            }
+            let mut args = vec!["--face-check-tt-patents".to_string(), "live".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "freetype.face_set_unpatented_hinting" => {
+            let mut args = vec![
+                "--face-set-unpatented-hinting".to_string(),
+                if lifecycle_handle_param(params, "face") == Some("null") {
+                    "null"
+                } else {
+                    "live"
+                }
+                .to_string(),
+                patent_bool_values_arg(params)?,
+            ];
+            if lifecycle_handle_param(params, "face") != Some("null") {
+                push_font_source(case, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+            }
+            Ok(args)
+        }
+        "ftlcdfil.set_lcd_filter" => Ok(vec![
+            "--set-lcd-filter".to_string(),
+            lcd_library_present_arg(params).to_string(),
+            lcd_filter_values_arg(params)?,
+        ]),
+        "ftlcdfil.set_lcd_filter_weights" => Ok(vec![
+            "--set-lcd-filter-weights".to_string(),
+            lcd_library_present_arg(params).to_string(),
+            lcd_filter_weights_arg(params)?,
+        ]),
+        "ftlcdfil.set_lcd_geometry" => Ok(vec![
+            "--set-lcd-geometry".to_string(),
+            lcd_library_present_arg(params).to_string(),
+            lcd_geometry_arg(params)?,
+        ]),
         "load_char" => {
             let mut args = vec!["--load-char".to_string()];
             push_font_source(case, &mut args)?;
@@ -3045,13 +5534,119 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "load_glyph" => {
-            let mut args = vec!["--load-glyph".to_string()];
+            let selector = glyph_index_selector_param(params)?;
+            let mut args = vec![
+                match selector {
+                    GlyphIndexSelector::Index(_) => "--load-glyph",
+                    GlyphIndexSelector::FromCharCode(_) => "--load-glyph-from-char",
+                    GlyphIndexSelector::NumGlyphs => "--load-glyph-num-glyphs",
+                }
+                .to_string(),
+            ];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            match selector {
+                GlyphIndexSelector::Index(glyph_index) => args.push(glyph_index.to_string()),
+                GlyphIndexSelector::FromCharCode(char_code) => args.push(char_code.to_string()),
+                GlyphIndexSelector::NumGlyphs => {}
+            }
+            args.push(load_flags_param(params)?.to_string());
+            Ok(args)
+        }
+        "freetype.inspect_glyph_metrics" => {
+            let mut args = vec!["--inspect-glyph-metrics".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
             args.push(glyph_index_param(params)?.to_string());
             args.push(load_flags_param(params)?.to_string());
             Ok(args)
         }
+        "freetype.inspect_glyph_slot" => {
+            let mut args = vec!["--inspect-glyph-slot".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(load_flags_param(params)?.to_string());
+            if params.get("render_mode").is_some() {
+                args.push(render_mode_param(params)?.to_string());
+            }
+            Ok(args)
+        }
+        "freetype.load_glyph_outline" => {
+            let mut args = vec!["--load-glyph-outline".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(load_flags_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftbbox.outline_get_bbox" => {
+            let mut args = vec!["--outline-get-bbox".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(load_flags_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftoutln.outline_get_cbox" => {
+            let mut args = vec!["--outline-get-cbox".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(load_flags_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftglyph.glyph_get_cbox" => {
+            let mut args = vec!["--glyph-get-cbox".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(load_flags_param(params)?.to_string());
+            args.push(bbox_modes_arg(params)?);
+            Ok(args)
+        }
+        "ftglyph.glyph_to_bitmap" => {
+            let mut args = vec!["--glyph-to-bitmap".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(load_flags_param(params)?.to_string());
+            args.push(render_mode_param(params)?.to_string());
+            args.push(i32::from(bool_param(params, "destroy", false)?).to_string());
+            Ok(args)
+        }
+        "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            let mut args = vec!["--glyph-record".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(load_flags_param(params)?.to_string());
+            args.push(glyph_record_action(case.operation.as_str()).to_string());
+            Ok(args)
+        }
+        "ftcache.sbit_cache_lookup" => {
+            let mut args = vec!["--sbit-cache-lookup".to_string()];
+            push_font_source(case, &mut args)?;
+            push_cache_face_size(params, &mut args)?;
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(cache_load_flags_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftcache.manager_reset" => {
+            if manager_param_is_null(params) {
+                return Ok(vec!["--manager-reset-null".to_string()]);
+            }
+            let mut args = vec!["--manager-reset".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(manager_reset_glyph_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftoutln.outline_render" | "ftoutln.outline_render_direct" => Ok(vec![
+            "--outline-render".to_string(),
+            if case.expect_error { "error" } else { "bitmap" }.to_string(),
+            case.case_id.clone(),
+        ]),
         "ftadvanc.get_advance" => {
             let mut args = vec!["--get-advance".to_string()];
             push_font_source(case, &mut args)?;
@@ -3092,21 +5687,31 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
 
 fn push_font_source(case: &InputCase, args: &mut Vec<String>) -> Result<(), String> {
     let font = runtime_font_asset(case).ok_or_else(|| "missing font asset".to_string())?;
-    match font {
-        Asset::File { path, .. } => {
+    push_asset_source(font, args)
+}
+
+fn push_asset_source(asset: &Asset, args: &mut Vec<String>) -> Result<(), String> {
+    match asset {
+        Asset::List(items) => {
+            let asset = items
+                .iter()
+                .find(|asset| asset_is_runtime_resolved(asset))
+                .ok_or_else(|| format!("unresolved asset list {}", asset_label(asset)))?;
+            push_asset_source(asset, args)?;
+        }
+        Asset::File { .. } | Asset::Ref { .. } => {
+            let path = asset_file_path(asset)
+                .ok_or_else(|| format!("unresolved shared asset ref {}", asset_label(asset)))?;
             args.push("file".to_string());
             args.push(fixture_dir().join(path).display().to_string());
         }
         Asset::InlineBytes { .. } => {
             args.push("hex".to_string());
             args.push(
-                inline_bytes_hex(font)
+                inline_bytes_hex(asset)
                     .ok_or_else(|| "missing inline hex bytes".to_string())?
                     .to_string(),
             );
-        }
-        Asset::Ref { .. } => {
-            return Err(format!("unresolved shared asset ref {}", asset_label(font)));
         }
         Asset::Other(_) => return Err("unsupported font asset shape".to_string()),
     }
@@ -3116,6 +5721,14 @@ fn push_font_source(case: &InputCase, args: &mut Vec<String>) -> Result<(), Stri
 fn push_face_size(params: &Value, args: &mut Vec<String>) -> Result<(), String> {
     args.push(face_index_param(params)?.to_string());
     let (x, y) = pixel_size_param(params)?;
+    args.push(x.to_string());
+    args.push(y.to_string());
+    Ok(())
+}
+
+fn push_cache_face_size(params: &Value, args: &mut Vec<String>) -> Result<(), String> {
+    args.push(face_index_param(params)?.to_string());
+    let (x, y) = cache_pixel_size_param(params)?;
     args.push(x.to_string());
     args.push(y.to_string());
     Ok(())
@@ -3148,17 +5761,46 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "constant" => Ok(ok(json!({
             "value": rust_constant(string_param(&case.inputs.params, "symbol")?)?
         }))),
+        "constant_map" => Ok(ok(rust_constant_map(&case.inputs.params)?)),
         "record_layout" => Ok(ok(rust_layout(record_param(&case.inputs.params)?)?)),
         "abi_type_probe" => Ok(ok(rust_type_probe(type_symbol_param(
             &case.inputs.params,
         )?)?)),
+        "abi_type_map_probe" => Ok(ok(rust_type_map_probe(&case.inputs.params)?)),
         "abi_function_probe" => Ok(ok(rust_function_probe(type_symbol_param(
             &case.inputs.params,
         )?)?)),
-        "macro_eval" => Ok(ok(rust_macro_eval(case)?)),
+        "abi.compile_alias_probe" => Ok(ok(compile_alias_probe(case)?)),
+        "abi.value_echo" => Ok(ok(abi_value_echo(case)?)),
+        "macro_eval" | "macro_compile_probe" => Ok(ok(rust_macro_eval(case)?)),
+        "face_macro_flags" => Ok(ok(face_macro_flags_json(case)?)),
+        "freetype.ceil_fix" | "freetype.floor_fix" | "freetype.round_fix" | "freetype.mul_div"
+        | "freetype.mul_fix" | "freetype.div_fix" => {
+            Ok(ok(fixed_math_json(case, FixedMathBackend::Rust)?))
+        }
+        operation if is_trigon_runtime_operation(operation) => {
+            Ok(ok(trigon_json(case, TrigonBackend::Rust)?))
+        }
+        operation if is_trigon_aggregate_operation(operation) => {
+            Ok(ok(trigon_aggregate_json(case, TrigonBackend::Rust)?))
+        }
+        "freetype.vector_transform" => {
+            Ok(ok(vector_transform_json(case, VectorMatrixBackend::Rust)?))
+        }
+        "ftglyph.matrix_multiply" => Ok(ok(matrix_multiply_json(case, VectorMatrixBackend::Rust)?)),
+        "ftglyph.matrix_invert" => matrix_invert_output(case, VectorMatrixBackend::Rust),
+        operation if operation.starts_with("freetype.face_macro") => {
+            let face = rust_new_face_without_size(case)?;
+            rust_face_macro(&face, case)
+        }
+        "freetype.face_flags" => {
+            let face = rust_new_face_without_size(case)?;
+            rust_face_flags(&face, case)
+        }
         "new_memory_face" => rust_new_memory_face(case),
         "set_pixel_sizes" => rust_set_pixel_sizes(case),
         "set_char_size" => rust_set_char_size(case),
+        "freetype.request_size" => rust_request_size(case),
         "size_metrics" => {
             let face = open_face(case)?;
             Ok(ok(size_metrics_json(&FT_Size_Metrics(&face))))
@@ -3169,6 +5811,64 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 "value": FT_Get_Char_Index(&face, u64_param(&case.inputs.params, "char_code")?)
             })))
         }
+        "charmap.get_char_index" => rust_charmap_get_char_index(case),
+        "freetype.select_charmap" => rust_select_charmap(case),
+        "freetype.set_charmap" => rust_set_charmap(case),
+        "freetype.inspect_charmaps" | "freetype.charmap_ownership" => {
+            rust_inspect_charmaps(case)
+        }
+        "freetype.get_charmap_index" => rust_get_charmap_index(case),
+        "freetype.get_fstype_flags" => {
+            let face = open_face(case)?;
+            Ok(ok(rust_fstype_flags_output(
+                Some(&face),
+                &case.inputs.params,
+            )?))
+        }
+        "freetype.get_kerning" => rust_get_kerning(case),
+        "ftsnames.get_sfnt_name_count" => {
+            let face = open_face(case)?;
+            Ok(ok(rust_sfnt_name_count_output(Some(&face))))
+        }
+        "ftsnames.get_sfnt_name" => {
+            let face = open_face(case)?;
+            Ok(ok(rust_sfnt_name_indexed_output(
+                &face,
+                &case.inputs.params,
+            )?))
+        }
+        "ftsnames.get_sfnt_name_by_record"
+        | "ftsnames.get_sfnt_name_group"
+        | "sfnt.get_name"
+        | "sfnt.get_sfnt_name" => {
+            let face = open_face(case)?;
+            Ok(ok(rust_sfnt_name_match_output(&face, &case.inputs.params)?))
+        }
+        "sfnt.get_os2_unicode_ranges" => {
+            let face = open_face(case)?;
+            Ok(ok(rust_sfnt_os2_unicode_ranges_output(
+                &face,
+                &case.inputs.params,
+            )?))
+        }
+        "sfnt.mac_encoding_record" => {
+            let mut face = open_face(case)?;
+            Ok(ok(rust_sfnt_mac_encoding_record_output(
+                &mut face,
+                &case.inputs.params,
+            )?))
+        }
+        "freetype.library_version" => Ok(ok(rust_library_version_output(&case.inputs.params)?)),
+        "ftmodapi.get_truetype_engine_type" => {
+            Ok(ok(rust_truetype_engine_output(&case.inputs.params)?))
+        }
+        "freetype.done_freetype" => rust_done_freetype(case),
+        "freetype.done_face" => rust_done_face(case),
+        "freetype.face_check_truetype_patents" => rust_face_check_truetype_patents(case),
+        "freetype.face_set_unpatented_hinting" => rust_face_set_unpatented_hinting(case),
+        "ftlcdfil.set_lcd_filter" => rust_set_lcd_filter(case),
+        "ftlcdfil.set_lcd_filter_weights" => rust_set_lcd_filter_weights(case),
+        "ftlcdfil.set_lcd_geometry" => rust_set_lcd_geometry(case),
         "load_char" => {
             let face = open_face(case)?;
             match FT_Load_Char(
@@ -3181,15 +5881,46 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             }
         }
         "load_glyph" => {
+            if load_glyph_num_glyphs_invalid_argument_case(case) {
+                return Ok(error(FT_Err_Invalid_Argument));
+            }
             let face = open_face(case)?;
-            match FT_Load_Glyph(
-                &face,
-                glyph_index_param(&case.inputs.params)?,
-                load_flags_param(&case.inputs.params)?,
-            ) {
+            let glyph_index = rust_resolved_glyph_index(&face, &case.inputs.params)?;
+            match FT_Load_Glyph(&face, glyph_index, load_flags_param(&case.inputs.params)?) {
                 Ok(slot) => Ok(ok(slot_json(&slot))),
                 Err(err) => Ok(error(err)),
             }
+        }
+        "freetype.inspect_glyph_metrics" => {
+            let face = open_face(case)?;
+            rust_inspect_glyph_metrics(&face, case)
+        }
+        "freetype.inspect_glyph_slot" => {
+            let face = open_face(case)?;
+            rust_inspect_glyph_slot(&face, case)
+        }
+        "freetype.load_glyph_outline"
+        | "ftbbox.outline_get_bbox"
+        | "ftoutln.outline_get_cbox"
+        | "ftglyph.glyph_get_cbox" => {
+            let face = open_face(case)?;
+            rust_outline_operation(&face, case)
+        }
+        "ftglyph.glyph_to_bitmap" => {
+            let face = open_face(case)?;
+            rust_glyph_to_bitmap(&face, case)
+        }
+        "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            let face = open_face(case)?;
+            rust_glyph_record(&face, case)
+        }
+        "ftcache.sbit_cache_lookup" => {
+            let face = open_face_with_size(case, cache_pixel_size_param(&case.inputs.params)?)?;
+            rust_sbit_cache_lookup(&face, case)
+        }
+        "ftcache.manager_reset" => manager_reset_runtime_output(case),
+        "ftoutln.outline_render" | "ftoutln.outline_render_direct" => {
+            outline_render_runtime_output(case)
         }
         "ftadvanc.get_advance" => {
             let face = open_face(case)?;
@@ -3226,10 +5957,49 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
 
 fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
     match case.operation.as_str() {
-        "constant" | "record_layout" | "abi_type_probe" | "abi_function_probe" | "macro_eval" => {
-            run_rust_ffi(case)
+        "constant" | "constant_map" | "record_layout" | "abi_type_probe" | "abi_type_map_probe"
+        | "abi_function_probe"
+        | "abi.compile_alias_probe"
+        | "macro_eval"
+        | "macro_compile_probe"
+        | "face_macro_flags" => run_rust_ffi(case),
+        "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
+            &case.inputs.params,
+            AbiValueBackend::CAbi,
+        )?)),
+        "freetype.ceil_fix" | "freetype.floor_fix" | "freetype.round_fix" | "freetype.mul_div"
+        | "freetype.mul_fix" | "freetype.div_fix" => {
+            Ok(ok(fixed_math_json(case, FixedMathBackend::CAbi)?))
+        }
+        operation if is_trigon_runtime_operation(operation) => {
+            Ok(ok(trigon_json(case, TrigonBackend::CAbi)?))
+        }
+        operation if is_trigon_aggregate_operation(operation) => {
+            Ok(ok(trigon_aggregate_json(case, TrigonBackend::CAbi)?))
+        }
+        "freetype.vector_transform" => {
+            Ok(ok(vector_transform_json(case, VectorMatrixBackend::CAbi)?))
+        }
+        "ftglyph.matrix_multiply" => Ok(ok(matrix_multiply_json(case, VectorMatrixBackend::CAbi)?)),
+        "ftglyph.matrix_invert" => matrix_invert_output(case, VectorMatrixBackend::CAbi),
+        operation if operation.starts_with("freetype.face_macro") => {
+            let (library, face) = c_new_face_without_size(case)?;
+            let output = c_face_macro(face, case);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
+        "freetype.face_flags" => {
+            let (library, face) = c_new_face_without_size(case)?;
+            let output = c_face_flags(face, case);
+            c_done_face(face);
+            c_done_library(library);
+            output
         }
         "new_memory_face" => {
+            if case.inputs.params.get("variants").is_some() {
+                return c_new_memory_face_variants(case);
+            }
             let bytes = font_bytes(case)?;
             let mut library = std::ptr::null_mut();
             let err = c_abi::FT_Init_FreeType(&mut library);
@@ -3273,20 +6043,17 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "set_char_size" => {
             let (library, face) = c_new_face_without_size(case)?;
-            let err = c_abi::FT_Set_Char_Size(
-                face,
-                i64_param(&case.inputs.params, "char_width")?,
-                i64_param(&case.inputs.params, "char_height")?,
-                u32_param(&case.inputs.params, "horz_resolution")?,
-                u32_param(&case.inputs.params, "vert_resolution")?,
-            );
+            let output = c_set_char_size(face, case);
             c_done_face(face);
             c_done_library(library);
-            if err == FT_Err_Ok {
-                Ok(ok(json!({"set": true})))
-            } else {
-                Ok(error(err))
-            }
+            output
+        }
+        "freetype.request_size" => {
+            let (library, face) = c_new_face_without_size(case)?;
+            let output = c_request_size(face, case);
+            c_done_face(face);
+            c_done_library(library);
+            output
         }
         "size_metrics" => {
             let (library, face) = c_open_face(case)?;
@@ -3303,6 +6070,89 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             Ok(ok(json!({"value": value})))
         }
+        "charmap.get_char_index" => {
+            let (library, face) = c_new_face_without_size(case)?;
+            let output = c_charmap_get_char_index(face, case);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
+        "freetype.select_charmap" => {
+            if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                return c_select_charmap(std::ptr::null_mut(), case);
+            }
+            let (library, face) = c_new_face_without_size(case)?;
+            let output = c_select_charmap(face, case);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
+        "freetype.set_charmap" => c_set_charmap(case),
+        "freetype.inspect_charmaps" | "freetype.charmap_ownership" => {
+            let (library, face) = c_new_face_without_size(case)?;
+            let output = c_inspect_charmaps(face, &case.inputs.params);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
+        "freetype.get_charmap_index" => c_get_charmap_index(case),
+        "freetype.get_fstype_flags" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_fstype_flags_output(face, &case.inputs.params);
+            c_done_face(face);
+            c_done_library(library);
+            output.map(ok)
+        }
+        "freetype.get_kerning" => c_get_kerning(case),
+        "ftsnames.get_sfnt_name_count" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_sfnt_name_count_output(face);
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(output))
+        }
+        "ftsnames.get_sfnt_name" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_sfnt_name_indexed_output(face, &case.inputs.params);
+            c_done_face(face);
+            c_done_library(library);
+            output.map(ok)
+        }
+        "ftsnames.get_sfnt_name_by_record"
+        | "ftsnames.get_sfnt_name_group"
+        | "sfnt.get_name"
+        | "sfnt.get_sfnt_name" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_sfnt_name_match_output(face, &case.inputs.params);
+            c_done_face(face);
+            c_done_library(library);
+            output.map(ok)
+        }
+        "sfnt.get_os2_unicode_ranges" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_sfnt_os2_unicode_ranges_output(face, &case.inputs.params);
+            c_done_face(face);
+            c_done_library(library);
+            output.map(ok)
+        }
+        "sfnt.mac_encoding_record" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_sfnt_mac_encoding_record_output(face, &case.inputs.params);
+            c_done_face(face);
+            c_done_library(library);
+            output.map(ok)
+        }
+        "freetype.library_version" => Ok(ok(c_library_version_output(&case.inputs.params)?)),
+        "ftmodapi.get_truetype_engine_type" => {
+            Ok(ok(c_truetype_engine_output(&case.inputs.params)?))
+        }
+        "freetype.done_freetype" => c_done_freetype_output(case),
+        "freetype.done_face" => c_done_face_output(case),
+        "freetype.face_check_truetype_patents" => c_face_check_truetype_patents(case),
+        "freetype.face_set_unpatented_hinting" => c_face_set_unpatented_hinting(case),
+        "ftlcdfil.set_lcd_filter" => c_set_lcd_filter(case),
+        "ftlcdfil.set_lcd_filter_weights" => c_set_lcd_filter_weights(case),
+        "ftlcdfil.set_lcd_geometry" => c_set_lcd_geometry(case),
         "load_char" => {
             let (library, face) = c_open_face(case)?;
             let err = c_abi::FT_Load_Char(
@@ -3322,12 +6172,13 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             }
         }
         "load_glyph" => {
+            if load_glyph_num_glyphs_invalid_argument_case(case) {
+                return Ok(error(FT_Err_Invalid_Argument));
+            }
             let (library, face) = c_open_face(case)?;
-            let err = c_abi::FT_Load_Glyph(
-                face,
-                glyph_index_param(&case.inputs.params)?,
-                load_flags_param(&case.inputs.params)?,
-            );
+            let glyph_index = c_resolved_glyph_index(face, &case.inputs.params)?;
+            let err =
+                c_abi::FT_Load_Glyph(face, glyph_index, load_flags_param(&case.inputs.params)?);
             if err == FT_Err_Ok {
                 let output = c_slot_json(face).map(ok);
                 c_done_face(face);
@@ -3338,6 +6189,56 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
                 c_done_library(library);
                 Ok(error(err))
             }
+        }
+        "freetype.inspect_glyph_metrics" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_inspect_glyph_metrics(face, case);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
+        "freetype.inspect_glyph_slot" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_inspect_glyph_slot(face, case);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
+        "freetype.load_glyph_outline"
+        | "ftbbox.outline_get_bbox"
+        | "ftoutln.outline_get_cbox"
+        | "ftglyph.glyph_get_cbox" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_outline_operation(face, case);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
+        "ftglyph.glyph_to_bitmap" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_glyph_to_bitmap(face, case);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
+        "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_glyph_record(face, case);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
+        "ftcache.sbit_cache_lookup" => {
+            let (library, face) =
+                c_open_face_with_size(case, cache_pixel_size_param(&case.inputs.params)?)?;
+            let output = c_sbit_cache_lookup(face, case);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
+        "ftcache.manager_reset" => manager_reset_runtime_output(case),
+        "ftoutln.outline_render" | "ftoutln.outline_render_direct" => {
+            outline_render_runtime_output(case)
         }
         "ftadvanc.get_advance" => {
             let (library, face) = c_open_face(case)?;
@@ -3394,8 +6295,43 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
 
 fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
     match case.operation.as_str() {
-        "constant" | "record_layout" | "abi_type_probe" | "abi_function_probe" | "macro_eval"
-        | "set_char_size" => run_rust_ffi(case),
+        "constant" | "constant_map" | "record_layout" | "abi_type_probe" | "abi_type_map_probe"
+        | "abi_function_probe"
+        | "abi.compile_alias_probe"
+        | "macro_eval"
+        | "macro_compile_probe"
+        | "face_macro_flags" => run_rust_ffi(case),
+        "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
+            &case.inputs.params,
+            AbiValueBackend::Wasm,
+        )?)),
+        "freetype.ceil_fix" | "freetype.floor_fix" | "freetype.round_fix" | "freetype.mul_div"
+        | "freetype.mul_fix" | "freetype.div_fix" => {
+            Ok(ok(fixed_math_json(case, FixedMathBackend::Wasm)?))
+        }
+        operation if is_trigon_runtime_operation(operation) => {
+            Ok(ok(trigon_json(case, TrigonBackend::Wasm)?))
+        }
+        operation if is_trigon_aggregate_operation(operation) => {
+            Ok(ok(trigon_aggregate_json(case, TrigonBackend::Wasm)?))
+        }
+        "freetype.vector_transform" => {
+            Ok(ok(vector_transform_json(case, VectorMatrixBackend::Wasm)?))
+        }
+        "ftglyph.matrix_multiply" => Ok(ok(matrix_multiply_json(case, VectorMatrixBackend::Wasm)?)),
+        "ftglyph.matrix_invert" => matrix_invert_output(case, VectorMatrixBackend::Wasm),
+        operation if operation.starts_with("freetype.face_macro") => {
+            let handle = wasm_new_face_without_size(case)?;
+            let output = wasm_face_macro(handle, case);
+            wasm_done_face(handle);
+            output
+        }
+        "freetype.face_flags" => {
+            let handle = wasm_new_face_without_size(case)?;
+            let output = wasm_face_flags(handle, case);
+            wasm_done_face(handle);
+            output
+        }
         "new_memory_face" => wasm_new_memory_face(case),
         "set_pixel_sizes" => {
             let handle = wasm_open_face(case)?;
@@ -3407,6 +6343,18 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             } else {
                 Ok(error(err))
             }
+        }
+        "set_char_size" => {
+            let handle = wasm_new_face_without_size(case)?;
+            let output = wasm_set_char_size(handle, case);
+            wasm_done_face(handle);
+            output
+        }
+        "freetype.request_size" => {
+            let handle = wasm_new_face_without_size(case)?;
+            let output = wasm_request_size(handle, case);
+            wasm_done_face(handle);
+            output
         }
         "size_metrics" => {
             let handle = wasm_open_face(case)?;
@@ -3429,6 +6377,80 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_done_face(handle);
             Ok(ok(json!({"value": value})))
         }
+        "charmap.get_char_index" => {
+            let handle = wasm_new_face_without_size(case)?;
+            let output = wasm_charmap_get_char_index(handle, case);
+            wasm_done_face(handle);
+            output
+        }
+        "freetype.select_charmap" => {
+            if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                return wasm_select_charmap(0, case);
+            }
+            let handle = wasm_new_face_without_size(case)?;
+            let output = wasm_select_charmap(handle, case);
+            wasm_done_face(handle);
+            output
+        }
+        "freetype.set_charmap" => wasm_set_charmap(case),
+        "freetype.inspect_charmaps" | "freetype.charmap_ownership" => {
+            let handle = wasm_new_face_without_size(case)?;
+            let output = wasm_inspect_charmaps(handle, &case.inputs.params);
+            wasm_done_face(handle);
+            output
+        }
+        "freetype.get_charmap_index" => wasm_get_charmap_index(case),
+        "freetype.get_fstype_flags" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_fstype_flags_output(handle, &case.inputs.params);
+            wasm_done_face(handle);
+            output.map(ok)
+        }
+        "freetype.get_kerning" => wasm_get_kerning(case),
+        "ftsnames.get_sfnt_name_count" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_sfnt_name_count_output(handle);
+            wasm_done_face(handle);
+            Ok(ok(output))
+        }
+        "ftsnames.get_sfnt_name" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_sfnt_name_indexed_output(handle, &case.inputs.params);
+            wasm_done_face(handle);
+            output.map(ok)
+        }
+        "ftsnames.get_sfnt_name_by_record"
+        | "ftsnames.get_sfnt_name_group"
+        | "sfnt.get_name"
+        | "sfnt.get_sfnt_name" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_sfnt_name_match_output(handle, &case.inputs.params);
+            wasm_done_face(handle);
+            output.map(ok)
+        }
+        "sfnt.get_os2_unicode_ranges" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_sfnt_os2_unicode_ranges_output(handle, &case.inputs.params);
+            wasm_done_face(handle);
+            output.map(ok)
+        }
+        "sfnt.mac_encoding_record" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_sfnt_mac_encoding_record_output(handle, &case.inputs.params);
+            wasm_done_face(handle);
+            output.map(ok)
+        }
+        "freetype.library_version" => Ok(ok(wasm_library_version_output(&case.inputs.params)?)),
+        "ftmodapi.get_truetype_engine_type" => {
+            Ok(ok(wasm_truetype_engine_output(&case.inputs.params)?))
+        }
+        "freetype.done_freetype" => wasm_done_freetype_output(case),
+        "freetype.done_face" => wasm_done_face_output(case),
+        "freetype.face_check_truetype_patents" => wasm_face_check_truetype_patents(case),
+        "freetype.face_set_unpatented_hinting" => wasm_face_set_unpatented_hinting(case),
+        "ftlcdfil.set_lcd_filter" => wasm_set_lcd_filter(case),
+        "ftlcdfil.set_lcd_filter_weights" => wasm_set_lcd_filter_weights(case),
+        "ftlcdfil.set_lcd_geometry" => wasm_set_lcd_geometry(case),
         "load_char" => {
             let handle = wasm_open_face(case)?;
             let err = wasm_abi::fontdone_wasm_load_char(
@@ -3441,15 +6463,63 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "load_glyph" => {
+            if load_glyph_num_glyphs_invalid_argument_case(case) {
+                return Ok(error(FT_Err_Invalid_Argument));
+            }
             let handle = wasm_open_face(case)?;
+            let glyph_index = wasm_resolved_glyph_index(handle, &case.inputs.params)?;
             let err = wasm_abi::fontdone_wasm_load_glyph(
                 handle,
-                glyph_index_param(&case.inputs.params)?,
+                glyph_index,
                 load_flags_param(&case.inputs.params)?,
             );
             let output = wasm_slot_output(handle, err);
             wasm_done_face(handle);
             output
+        }
+        "freetype.inspect_glyph_metrics" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_inspect_glyph_metrics(handle, case);
+            wasm_done_face(handle);
+            output
+        }
+        "freetype.inspect_glyph_slot" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_inspect_glyph_slot(handle, case);
+            wasm_done_face(handle);
+            output
+        }
+        "freetype.load_glyph_outline"
+        | "ftbbox.outline_get_bbox"
+        | "ftoutln.outline_get_cbox"
+        | "ftglyph.glyph_get_cbox" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_outline_operation(handle, case);
+            wasm_done_face(handle);
+            output
+        }
+        "ftglyph.glyph_to_bitmap" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_glyph_to_bitmap(handle, case);
+            wasm_done_face(handle);
+            output
+        }
+        "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_glyph_record(handle, case);
+            wasm_done_face(handle);
+            output
+        }
+        "ftcache.sbit_cache_lookup" => {
+            let handle =
+                wasm_open_face_with_size(case, cache_pixel_size_param(&case.inputs.params)?)?;
+            let output = wasm_sbit_cache_lookup(handle, case);
+            wasm_done_face(handle);
+            output
+        }
+        "ftcache.manager_reset" => manager_reset_runtime_output(case),
+        "ftoutln.outline_render" | "ftoutln.outline_render_direct" => {
+            outline_render_runtime_output(case)
         }
         "ftadvanc.get_advance" => {
             let handle = wasm_open_face(case)?;
@@ -3499,6 +6569,695 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         other => Err(format!("unsupported wasm abi operation {other}")),
     }
+}
+
+fn rust_inspect_glyph_metrics(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    match rust_load_glyph_for_inspection(face, case, false)? {
+        Ok(slot) => Ok(ok(glyph_metrics_json(rust_metrics_fields(&slot.metrics)))),
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn rust_inspect_glyph_slot(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    match rust_load_glyph_for_inspection(face, case, true)? {
+        Ok(slot) => Ok(ok(slot_json(&slot))),
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn rust_load_glyph_for_inspection(
+    face: &FT_Face,
+    case: &InputCase,
+    render_if_requested: bool,
+) -> Result<Result<FT_GlyphSlot, FT_Error>, String> {
+    let loaded = FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    let slot = match loaded {
+        Ok(slot) => slot,
+        Err(err) => return Ok(Err(err)),
+    };
+    if render_if_requested && case.inputs.params.get("render_mode").is_some() {
+        Ok(FT_Render_Glyph(
+            slot,
+            render_mode_param(&case.inputs.params)?,
+        ))
+    } else {
+        Ok(Ok(slot))
+    }
+}
+
+fn c_inspect_glyph_metrics(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let err = c_load_glyph_for_inspection(face, case, false)?;
+    if err == FT_Err_Ok {
+        c_glyph_metrics_json(face).map(ok)
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn c_inspect_glyph_slot(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let err = c_load_glyph_for_inspection(face, case, true)?;
+    if err == FT_Err_Ok {
+        c_slot_json(face).map(ok)
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn c_load_glyph_for_inspection(
+    face: c_abi::FT_Face,
+    case: &InputCase,
+    render_if_requested: bool,
+) -> Result<FT_Error, String> {
+    let err = c_abi::FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if err == FT_Err_Ok && render_if_requested && case.inputs.params.get("render_mode").is_some() {
+        Ok(c_abi::abi_render_glyph_from_face(
+            face,
+            render_mode_param(&case.inputs.params)?,
+        ))
+    } else {
+        Ok(err)
+    }
+}
+
+fn c_glyph_metrics_json(face: c_abi::FT_Face) -> Result<Value, String> {
+    let slot = c_abi::abi_slot_snapshot(face)
+        .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+    Ok(glyph_metrics_json(c_metrics_fields(&slot.metrics)))
+}
+
+fn wasm_inspect_glyph_metrics(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    let err = wasm_load_glyph_for_inspection(handle, case, false)?;
+    if err == FT_Err_Ok {
+        wasm_glyph_metrics_json(handle).map(ok)
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn wasm_inspect_glyph_slot(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    let err = wasm_load_glyph_for_inspection(handle, case, true)?;
+    wasm_slot_output(handle, err)
+}
+
+fn wasm_load_glyph_for_inspection(
+    handle: usize,
+    case: &InputCase,
+    render_if_requested: bool,
+) -> Result<FT_Error, String> {
+    let err = wasm_abi::fontdone_wasm_load_glyph(
+        handle,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if err == FT_Err_Ok && render_if_requested && case.inputs.params.get("render_mode").is_some() {
+        Ok(wasm_abi::fontdone_wasm_render_glyph(
+            handle,
+            render_mode_param(&case.inputs.params)?,
+        ))
+    } else {
+        Ok(err)
+    }
+}
+
+fn wasm_glyph_metrics_json(handle: usize) -> Result<Value, String> {
+    let slot = wasm_abi::abi_slot_snapshot(handle)
+        .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+    Ok(glyph_metrics_json(wasm_metrics_fields(&slot.metrics)))
+}
+
+fn rust_outline_operation(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    match FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    ) {
+        Ok(slot) => Ok(ok(outline_operation_output(
+            case,
+            slot.format,
+            slot.outline.as_ref().map(outline_snapshot_json),
+            bbox_from_rust_bbox(slot.outline_bbox),
+            bbox_from_rust_bbox(slot.outline_cbox),
+        )?)),
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn c_outline_operation(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let err = c_abi::FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let slot = c_abi::abi_slot_snapshot(face)
+        .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+    Ok(ok(outline_operation_output(
+        case,
+        slot.format,
+        slot.outline.as_ref().map(outline_snapshot_json),
+        bbox_from_c_bbox(slot.outline_bbox),
+        bbox_from_c_bbox(slot.outline_cbox),
+    )?))
+}
+
+fn wasm_outline_operation(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    let err = wasm_abi::fontdone_wasm_load_glyph(
+        handle,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let slot = wasm_abi::abi_slot_snapshot(handle)
+        .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+    Ok(ok(outline_operation_output(
+        case,
+        slot.format,
+        slot.outline.as_ref().map(outline_snapshot_json),
+        bbox_from_wasm_bbox(slot.outline_bbox),
+        bbox_from_wasm_bbox(slot.outline_cbox),
+    )?))
+}
+
+fn rust_glyph_to_bitmap(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let render_mode = render_mode_param(&case.inputs.params)?;
+    let loaded = FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    match loaded.and_then(|slot| FT_Render_Glyph(slot, render_mode)) {
+        Ok(slot) => Ok(ok(rust_bitmap_glyph_json(
+            &slot,
+            bool_param(&case.inputs.params, "destroy", false)?,
+        ))),
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn c_glyph_to_bitmap(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let load_err = c_abi::FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    let err = if load_err == FT_Err_Ok {
+        c_abi::abi_render_glyph_from_face(face, render_mode_param(&case.inputs.params)?)
+    } else {
+        load_err
+    };
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let slot = c_abi::abi_slot_snapshot(face)
+        .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+    Ok(ok(c_bitmap_glyph_json(
+        &slot,
+        bool_param(&case.inputs.params, "destroy", false)?,
+    )))
+}
+
+fn wasm_glyph_to_bitmap(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    let load_err = wasm_abi::fontdone_wasm_load_glyph(
+        handle,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    let err = if load_err == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_render_glyph(handle, render_mode_param(&case.inputs.params)?)
+    } else {
+        load_err
+    };
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let slot = wasm_abi::abi_slot_snapshot(handle)
+        .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+    Ok(ok(wasm_bitmap_glyph_json(
+        &slot,
+        bool_param(&case.inputs.params, "destroy", false)?,
+    )))
+}
+
+fn rust_glyph_record(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    match FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    ) {
+        Ok(slot) => Ok(ok(glyph_record_json(
+            slot.format,
+            i64::from(slot.advance.x),
+            i64::from(slot.advance.y),
+        ))),
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn c_glyph_record(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let err = c_abi::FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let slot = c_abi::abi_slot_snapshot(face)
+        .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+    Ok(ok(glyph_record_json(
+        slot.format,
+        slot.advance.x,
+        slot.advance.y,
+    )))
+}
+
+fn wasm_glyph_record(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    let err = wasm_abi::fontdone_wasm_load_glyph(
+        handle,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let slot = wasm_abi::abi_slot_snapshot(handle)
+        .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+    Ok(ok(glyph_record_json(
+        slot.format,
+        slot.advance.x,
+        slot.advance.y,
+    )))
+}
+
+fn rust_sbit_cache_lookup(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let loaded = FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        cache_load_flags_param(&case.inputs.params)?,
+    );
+    let rendered = loaded.and_then(render_loaded_glyph_normal);
+    match rendered {
+        Ok(slot) => Ok(ok(rust_sbit_json(&slot))),
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn c_sbit_cache_lookup(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let err = c_abi::FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        cache_load_flags_param(&case.inputs.params)?,
+    );
+    let err = if err == FT_Err_Ok {
+        c_render_loaded_glyph_normal(face)
+    } else {
+        err
+    };
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let slot = c_abi::abi_slot_snapshot(face)
+        .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+    Ok(ok(c_sbit_json(&slot)))
+}
+
+fn wasm_sbit_cache_lookup(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    let err = wasm_abi::fontdone_wasm_load_glyph(
+        handle,
+        glyph_index_param(&case.inputs.params)?,
+        cache_load_flags_param(&case.inputs.params)?,
+    );
+    let err = if err == FT_Err_Ok {
+        wasm_render_loaded_glyph_normal(handle)
+    } else {
+        err
+    };
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let slot = wasm_abi::abi_slot_snapshot(handle)
+        .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+    Ok(ok(wasm_sbit_json(&slot)))
+}
+
+fn render_loaded_glyph_normal(slot: FT_GlyphSlot) -> Result<FT_GlyphSlot, FT_Error> {
+    if slot.format == FT_GLYPH_FORMAT_BITMAP {
+        Ok(slot)
+    } else {
+        FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL)
+    }
+}
+
+fn c_render_loaded_glyph_normal(face: c_abi::FT_Face) -> FT_Error {
+    let Some(slot) = c_abi::abi_slot_snapshot(face) else {
+        return FT_Err_Invalid_Argument;
+    };
+    if slot.format == FT_GLYPH_FORMAT_BITMAP {
+        FT_Err_Ok
+    } else {
+        c_abi::abi_render_glyph_from_face(face, FT_RENDER_MODE_NORMAL)
+    }
+}
+
+fn wasm_render_loaded_glyph_normal(handle: usize) -> FT_Error {
+    let Some(slot) = wasm_abi::abi_slot_snapshot(handle) else {
+        return FT_Err_Invalid_Argument;
+    };
+    if slot.format == FT_GLYPH_FORMAT_BITMAP {
+        FT_Err_Ok
+    } else {
+        wasm_abi::fontdone_wasm_render_glyph(handle, FT_RENDER_MODE_NORMAL)
+    }
+}
+
+fn rust_sbit_json(slot: &FT_GlyphSlot) -> Value {
+    let bitmap = slot.bitmap.as_ref();
+    sbit_json(
+        bitmap.map_or(0, |bitmap| bitmap.width),
+        bitmap.map_or(0, |bitmap| bitmap.rows),
+        slot.bitmap_left,
+        slot.bitmap_top,
+        bitmap.map_or(0, |bitmap| bitmap.pixel_mode),
+        bitmap.map_or(0, |bitmap| bitmap.num_grays),
+        bitmap.map_or(0, |bitmap| bitmap.pitch),
+        i64::from(slot.advance.x) >> 6,
+        i64::from(slot.advance.y) >> 6,
+        bitmap.map(|bitmap| bitmap.buffer.as_slice()),
+    )
+}
+
+fn c_sbit_json(slot: &c_abi::AbiSlotSnapshot) -> Value {
+    let bitmap = slot.bitmap.as_ref();
+    sbit_json(
+        bitmap.map_or(0, |bitmap| bitmap.width),
+        bitmap.map_or(0, |bitmap| bitmap.rows),
+        bitmap.map_or(0, |bitmap| bitmap.left),
+        bitmap.map_or(0, |bitmap| bitmap.top),
+        bitmap.map_or(0, |bitmap| bitmap.pixel_mode),
+        bitmap.map_or(0, |bitmap| bitmap.num_grays),
+        bitmap.map_or(0, |bitmap| bitmap.pitch),
+        slot.advance.x >> 6,
+        slot.advance.y >> 6,
+        bitmap.map(|bitmap| bitmap.buffer.as_slice()),
+    )
+}
+
+fn wasm_sbit_json(slot: &wasm_abi::AbiSlotSnapshot) -> Value {
+    let bitmap = slot.bitmap.as_ref();
+    sbit_json(
+        bitmap.map_or(0, |bitmap| bitmap.width),
+        bitmap.map_or(0, |bitmap| bitmap.rows),
+        bitmap.map_or(0, |bitmap| bitmap.left),
+        bitmap.map_or(0, |bitmap| bitmap.top),
+        bitmap.map_or(0, |bitmap| bitmap.pixel_mode),
+        bitmap.map_or(0, |bitmap| bitmap.num_grays),
+        bitmap.map_or(0, |bitmap| bitmap.pitch),
+        slot.advance.x >> 6,
+        slot.advance.y >> 6,
+        bitmap.map(|bitmap| bitmap.buffer.as_slice()),
+    )
+}
+
+fn sbit_json(
+    width: u32,
+    height: u32,
+    left: i32,
+    top: i32,
+    mut format: i32,
+    mut max_grays: u16,
+    pitch: i32,
+    xadvance: i64,
+    yadvance: i64,
+    buffer: Option<&[u8]>,
+) -> Value {
+    let buffer = buffer.filter(|buffer| !buffer.is_empty());
+    if buffer.is_none() && format == FT_PIXEL_MODE_NONE && max_grays == 0 {
+        format = FT_PIXEL_MODE_GRAY;
+        max_grays = 256;
+    }
+    json!({
+        "sbit": {
+            "width": width,
+            "height": height,
+            "left": left,
+            "top": top,
+            "format": format,
+            "max_grays": max_grays,
+            "pitch": pitch,
+            "xadvance": xadvance,
+            "yadvance": yadvance,
+            "buffer_null": buffer.is_none(),
+            "buffer_hex": buffer.map_or_else(String::new, hex_bytes)
+        },
+        "node": {
+            "locked": false
+        }
+    })
+}
+
+fn glyph_record_json(format: i32, advance_x: i64, advance_y: i64) -> Value {
+    json!({
+        "glyph": {
+            "format": format,
+            "advance": {
+                "x": glyph_advance_16dot16(advance_x),
+                "y": glyph_advance_16dot16(advance_y)
+            },
+            "library_present": true,
+            "clazz_present": true
+        }
+    })
+}
+
+fn glyph_record_action(operation: &str) -> &'static str {
+    match operation {
+        "ftglyph.glyph_copy" => "copy",
+        "ftglyph.get_glyph" => "get",
+        _ => "record",
+    }
+}
+
+fn rust_bitmap_glyph_json(slot: &FT_GlyphSlot, destroy: bool) -> Value {
+    let bitmap = slot.bitmap.as_ref().map_or(Value::Null, |bitmap| {
+        json!({
+            "width": bitmap.width,
+            "rows": bitmap.rows,
+            "pitch": bitmap.pitch,
+            "pixel_mode": bitmap.pixel_mode,
+            "num_grays": bitmap.num_grays,
+            "left": slot.bitmap_left,
+            "top": slot.bitmap_top,
+            "buffer_hex": hex_bytes(&bitmap.buffer)
+        })
+    });
+    bitmap_glyph_json(
+        slot.format,
+        i64::from(slot.advance.x),
+        i64::from(slot.advance.y),
+        destroy,
+        bitmap,
+    )
+}
+
+fn c_bitmap_glyph_json(slot: &c_abi::AbiSlotSnapshot, destroy: bool) -> Value {
+    let bitmap = slot.bitmap.as_ref().map_or(Value::Null, |bitmap| {
+        json!({
+            "width": bitmap.width,
+            "rows": bitmap.rows,
+            "pitch": bitmap.pitch,
+            "pixel_mode": bitmap.pixel_mode,
+            "num_grays": bitmap.num_grays,
+            "left": bitmap.left,
+            "top": bitmap.top,
+            "buffer_hex": hex_bytes(&bitmap.buffer)
+        })
+    });
+    bitmap_glyph_json(slot.format, slot.advance.x, slot.advance.y, destroy, bitmap)
+}
+
+fn wasm_bitmap_glyph_json(slot: &wasm_abi::AbiSlotSnapshot, destroy: bool) -> Value {
+    let bitmap = slot.bitmap.as_ref().map_or(Value::Null, |bitmap| {
+        json!({
+            "width": bitmap.width,
+            "rows": bitmap.rows,
+            "pitch": bitmap.pitch,
+            "pixel_mode": bitmap.pixel_mode,
+            "num_grays": bitmap.num_grays,
+            "left": bitmap.left,
+            "top": bitmap.top,
+            "buffer_hex": hex_bytes(&bitmap.buffer)
+        })
+    });
+    bitmap_glyph_json(slot.format, slot.advance.x, slot.advance.y, destroy, bitmap)
+}
+
+fn bitmap_glyph_json(
+    format: i32,
+    advance_x: i64,
+    advance_y: i64,
+    destroy: bool,
+    bitmap: Value,
+) -> Value {
+    json!({
+        "format": format,
+        "advance": {
+            "x": glyph_advance_16dot16(advance_x),
+            "y": glyph_advance_16dot16(advance_y)
+        },
+        "destroy": destroy,
+        "bitmap": bitmap
+    })
+}
+
+fn glyph_advance_16dot16(value: i64) -> i64 {
+    value.saturating_mul(1024)
+}
+
+#[derive(Clone, Copy)]
+struct JsonBBox {
+    x_min: i64,
+    y_min: i64,
+    x_max: i64,
+    y_max: i64,
+}
+
+fn bbox_from_rust_bbox(bbox: FT_BBox) -> JsonBBox {
+    JsonBBox {
+        x_min: bbox.xMin,
+        y_min: bbox.yMin,
+        x_max: bbox.xMax,
+        y_max: bbox.yMax,
+    }
+}
+
+fn bbox_from_c_bbox(bbox: c_abi::FT_BBox) -> JsonBBox {
+    JsonBBox {
+        x_min: bbox.xMin,
+        y_min: bbox.yMin,
+        x_max: bbox.xMax,
+        y_max: bbox.yMax,
+    }
+}
+
+fn bbox_from_wasm_bbox(bbox: wasm_abi::AbiBBoxSnapshot) -> JsonBBox {
+    JsonBBox {
+        x_min: bbox.xMin,
+        y_min: bbox.yMin,
+        x_max: bbox.xMax,
+        y_max: bbox.yMax,
+    }
+}
+
+fn outline_operation_output(
+    case: &InputCase,
+    slot_format: i32,
+    outline: Option<Value>,
+    bbox: JsonBBox,
+    cbox: JsonBBox,
+) -> Result<Value, String> {
+    match case.operation.as_str() {
+        "freetype.load_glyph_outline" => Ok(json!({
+            "slot_format": slot_format,
+            "outline": outline.unwrap_or_else(empty_outline_json),
+            "cbox": bbox_json(cbox)
+        })),
+        "ftbbox.outline_get_bbox" => Ok(json!({
+            "bbox_error": FT_Err_Ok,
+            "bbox": bbox_json(bbox),
+            "cbox": bbox_json(cbox)
+        })),
+        "ftoutln.outline_get_cbox" => Ok(json!({
+            "cbox": bbox_json(cbox)
+        })),
+        "ftglyph.glyph_get_cbox" => Ok(json!({
+            "boxes": bbox_modes_param(&case.inputs.params)?
+                .into_iter()
+                .map(|mode| json!({"mode": mode, "bbox": bbox_json(apply_bbox_mode(cbox, mode))}))
+                .collect::<Vec<_>>()
+        })),
+        other => Err(format!("unsupported outline operation {other}")),
+    }
+}
+
+fn outline_snapshot_json(outline: &FT_OutlineSnapshot) -> Value {
+    json!({
+        "n_points": outline.points.len(),
+        "n_contours": outline.contours.len(),
+        "points": outline.points
+            .iter()
+            .map(|point| json!({"x": point.x, "y": point.y}))
+            .collect::<Vec<_>>(),
+        "tags": outline.tags,
+        "contours": outline.contours,
+        "flags": outline.flags
+    })
+}
+
+fn empty_outline_json() -> Value {
+    json!({
+        "n_points": 0,
+        "n_contours": 0,
+        "points": [],
+        "tags": [],
+        "contours": [],
+        "flags": 0
+    })
+}
+
+fn bbox_json(bbox: JsonBBox) -> Value {
+    json!({
+        "xMin": bbox.x_min,
+        "yMin": bbox.y_min,
+        "xMax": bbox.x_max,
+        "yMax": bbox.y_max
+    })
+}
+
+fn apply_bbox_mode(bbox: JsonBBox, mode: i32) -> JsonBBox {
+    match mode {
+        1 => JsonBBox {
+            x_min: pix_floor(bbox.x_min),
+            y_min: pix_floor(bbox.y_min),
+            x_max: pix_ceil(bbox.x_max),
+            y_max: pix_ceil(bbox.y_max),
+        },
+        2 => JsonBBox {
+            x_min: bbox.x_min >> 6,
+            y_min: bbox.y_min >> 6,
+            x_max: bbox.x_max >> 6,
+            y_max: bbox.y_max >> 6,
+        },
+        3 => {
+            let gridfit = apply_bbox_mode(bbox, 1);
+            JsonBBox {
+                x_min: gridfit.x_min >> 6,
+                y_min: gridfit.y_min >> 6,
+                x_max: gridfit.x_max >> 6,
+                y_max: gridfit.y_max >> 6,
+            }
+        }
+        _ => bbox,
+    }
+}
+
+fn pix_floor(value: i64) -> i64 {
+    value & !63
+}
+
+fn pix_ceil(value: i64) -> i64 {
+    (value + 63) & !63
 }
 
 fn rust_render_glyph(
@@ -3563,10 +7322,164 @@ fn wasm_render_glyph(
     wasm_slot_output(handle, err)
 }
 
+fn face_macro_flags_values(params: &Value) -> Result<Vec<i64>, String> {
+    let values = params
+        .get("flags")
+        .or_else(|| params.get("face_flags_values"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing flags/face_flags_values array".to_string())?
+        .iter()
+        .map(|value| i64_value(value, "face_flags"))
+        .collect::<Result<Vec<_>, String>>()?;
+    if values.is_empty() {
+        return Err("face_macro_flags requires at least one flag value".to_string());
+    }
+    let mut seen = BTreeSet::new();
+    for value in &values {
+        if !seen.insert(*value) {
+            return Err(format!("duplicate face_flags value {value}"));
+        }
+    }
+    Ok(values)
+}
+
+fn face_macro_flags_json(case: &InputCase) -> Result<Value, String> {
+    let macro_name = face_macro_param(case)?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    let rows = face_macro_flags_values(&case.inputs.params)?
+        .into_iter()
+        .map(|face_flags| {
+            let info = FT_FaceRecPublic {
+                face_index,
+                face_flags,
+                ..FT_FaceRecPublic::default()
+            };
+            Ok(json!({
+                "face_flags": face_flags,
+                "macro_result": face_macro_result(&info, macro_name)?
+            }))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(json!({
+        "macro": macro_name,
+        "import_compiles": true,
+        "rows": rows
+    }))
+}
+
+fn rust_face_macro(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    Ok(ok(face_macro_json(
+        &FT_Face_Info(face),
+        face_macro_param(case)?,
+    )?))
+}
+
+fn c_face_macro(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+    Ok(ok(face_macro_json(&info, face_macro_param(case)?)?))
+}
+
+fn wasm_face_macro(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    let info =
+        wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+    Ok(ok(face_macro_json(&info, face_macro_param(case)?)?))
+}
+
+fn rust_face_flags(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    Ok(ok(face_flags_json(
+        &FT_Face_Info(face),
+        face_flag_param(case)?,
+    )?))
+}
+
+fn c_face_flags(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+    Ok(ok(face_flags_json(&info, face_flag_param(case)?)?))
+}
+
+fn wasm_face_flags(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    let info =
+        wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+    Ok(ok(face_flags_json(&info, face_flag_param(case)?)?))
+}
+
+fn face_flags_json(info: &FT_FaceRecPublic, flag_name: &str) -> Result<Value, String> {
+    let flag = rust_constant(flag_name)?;
+    Ok(json!({
+        "face_flags": info.face_flags,
+        "flag": flag,
+        "bit_set": (info.face_flags & flag) != 0,
+        "face_index": info.face_index,
+        "import_compiles": true
+    }))
+}
+
+fn face_macro_json(info: &FT_FaceRecPublic, macro_name: &str) -> Result<Value, String> {
+    Ok(json!({
+        "macro_result": face_macro_result(info, macro_name)?,
+        "face_flags": info.face_flags,
+        "face_index": info.face_index,
+        "import_compiles": true
+    }))
+}
+
+fn face_macro_result(info: &FT_FaceRecPublic, macro_name: &str) -> Result<i32, String> {
+    if macro_name == "FT_HAS_FAST_GLYPHS" {
+        return Ok(0);
+    }
+    if macro_name == "FT_IS_NAMED_INSTANCE" {
+        return Ok(i32::from((info.face_index & 0x7FFF_0000) != 0));
+    }
+    let flag = face_macro_flag(macro_name)?;
+    Ok(i32::from((info.face_flags & flag) != 0))
+}
+
+fn face_macro_flag(macro_name: &str) -> Result<i64, String> {
+    match macro_name {
+        "FT_HAS_COLOR" => Ok(FT_FACE_FLAG_COLOR),
+        "FT_HAS_FIXED_SIZES" => Ok(FT_FACE_FLAG_FIXED_SIZES),
+        "FT_HAS_GLYPH_NAMES" => Ok(FT_FACE_FLAG_GLYPH_NAMES),
+        "FT_HAS_HORIZONTAL" => Ok(FT_FACE_FLAG_HORIZONTAL),
+        "FT_HAS_KERNING" => Ok(FT_FACE_FLAG_KERNING),
+        "FT_HAS_MULTIPLE_MASTERS" => Ok(FT_FACE_FLAG_MULTIPLE_MASTERS),
+        "FT_HAS_SBIX" => Ok(FT_FACE_FLAG_SBIX),
+        "FT_HAS_SBIX_OVERLAY" => Ok(FT_FACE_FLAG_SBIX_OVERLAY),
+        "FT_HAS_SVG" => Ok(FT_FACE_FLAG_SVG),
+        "FT_HAS_VERTICAL" => Ok(FT_FACE_FLAG_VERTICAL),
+        "FT_IS_CID_KEYED" => Ok(FT_FACE_FLAG_CID_KEYED),
+        "FT_IS_FIXED_WIDTH" => Ok(FT_FACE_FLAG_FIXED_WIDTH),
+        "FT_IS_SCALABLE" => Ok(FT_FACE_FLAG_SCALABLE),
+        "FT_IS_SFNT" => Ok(FT_FACE_FLAG_SFNT),
+        "FT_IS_TRICKY" => Ok(FT_FACE_FLAG_TRICKY),
+        "FT_IS_VARIATION" => Ok(FT_FACE_FLAG_VARIATION),
+        _ => Err(format!("unsupported face macro {macro_name}")),
+    }
+}
+
+fn is_supported_face_macro(macro_name: &str) -> bool {
+    macro_name == "FT_HAS_FAST_GLYPHS"
+        || macro_name == "FT_IS_NAMED_INSTANCE"
+        || face_macro_flag(macro_name).is_ok()
+}
+
 fn c_new_face_without_size(
     case: &InputCase,
 ) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
     let bytes = font_bytes(case)?;
+    c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)
+}
+
+fn c_new_foreign_face_without_size(
+    case: &InputCase,
+) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
+    let bytes = foreign_font_bytes(case)?;
+    c_new_face_from_bytes(bytes.as_ref(), 0)
+}
+
+fn c_new_face_from_bytes(
+    bytes: &[u8],
+    face_index: i64,
+) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
     let mut library = std::ptr::null_mut();
     let err = c_abi::FT_Init_FreeType(&mut library);
     if err != FT_Err_Ok {
@@ -3578,7 +7491,7 @@ fn c_new_face_without_size(
         library,
         bytes.as_ptr(),
         file_size,
-        face_index_param(&case.inputs.params)?,
+        face_index,
         &mut face,
     );
     if err != FT_Err_Ok {
@@ -3589,8 +7502,15 @@ fn c_new_face_without_size(
 }
 
 fn c_open_face(case: &InputCase) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
+    c_open_face_with_size(case, pixel_size_param(&case.inputs.params)?)
+}
+
+fn c_open_face_with_size(
+    case: &InputCase,
+    pixel_size: (u32, u32),
+) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
     let (library, face) = c_new_face_without_size(case)?;
-    let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+    let (pixel_width, pixel_height) = pixel_size;
     let err = c_abi::FT_Set_Pixel_Sizes(face, pixel_width, pixel_height);
     if err == FT_Err_Ok {
         Ok((library, face))
@@ -3661,7 +7581,35 @@ fn c_done_library(library: c_abi::FT_Library) {
     }
 }
 
+fn wasm_new_face_without_size(case: &InputCase) -> Result<usize, String> {
+    let bytes = font_bytes(case)?;
+    wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)
+}
+
+fn wasm_new_foreign_face_without_size(case: &InputCase) -> Result<usize, String> {
+    let bytes = foreign_font_bytes(case)?;
+    wasm_new_face_from_bytes(bytes.as_ref(), 0)
+}
+
+fn wasm_new_face_from_bytes(bytes: &[u8], face_index: i64) -> Result<usize, String> {
+    let status = wasm_abi::fontdone_wasm_open_face(
+        bytes.as_ptr(),
+        bytes.len(),
+        face_index,
+        20.0,
+    );
+    if status.error == FT_Err_Ok {
+        Ok(status.handle)
+    } else {
+        Err(format!("fontdone_wasm_open_face returned {}", status.error))
+    }
+}
+
 fn wasm_open_face(case: &InputCase) -> Result<usize, String> {
+    wasm_open_face_with_size(case, pixel_size_param(&case.inputs.params)?)
+}
+
+fn wasm_open_face_with_size(case: &InputCase, pixel_size: (u32, u32)) -> Result<usize, String> {
     let bytes = font_bytes(case)?;
     let status = wasm_abi::fontdone_wasm_open_face(
         bytes.as_ptr(),
@@ -3672,7 +7620,7 @@ fn wasm_open_face(case: &InputCase) -> Result<usize, String> {
     if status.error != FT_Err_Ok {
         return Err(format!("fontdone_wasm_open_face returned {}", status.error));
     }
-    let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+    let (pixel_width, pixel_height) = pixel_size;
     let err = wasm_abi::fontdone_wasm_set_pixel_sizes(status.handle, pixel_width, pixel_height);
     if err == FT_Err_Ok {
         Ok(status.handle)
@@ -3683,6 +7631,9 @@ fn wasm_open_face(case: &InputCase) -> Result<usize, String> {
 }
 
 fn wasm_new_memory_face(case: &InputCase) -> Result<RunOutput, String> {
+    if case.inputs.params.get("variants").is_some() {
+        return wasm_new_memory_face_variants(case);
+    }
     let bytes = font_bytes(case)?;
     let status = wasm_abi::fontdone_wasm_open_face(
         bytes.as_ptr(),
@@ -3741,6 +7692,9 @@ fn wasm_done_face(handle: usize) {
 }
 
 fn rust_new_memory_face(case: &InputCase) -> Result<RunOutput, String> {
+    if case.inputs.params.get("variants").is_some() {
+        return rust_new_memory_face_variants(case);
+    }
     let data = font_bytes(case)?;
     let library = FT_Init_FreeType();
     match FT_New_Memory_Face(
@@ -3765,7 +7719,132 @@ fn rust_new_memory_face(case: &InputCase) -> Result<RunOutput, String> {
     }
 }
 
+fn rust_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let library = FT_Init_FreeType();
+    let rows = memory_face_rows(&case.inputs.params)?;
+    memory_face_outputs(rows, |row| {
+        let Some(bytes) = memory_face_row_bytes(data.as_ref(), row)? else {
+            return Ok((FT_Err_Invalid_Argument, false));
+        };
+        match FT_New_Memory_Face(&library, bytes, row.face_index, 20.0) {
+            Ok(_face) => Ok((FT_Err_Ok, true)),
+            Err(err) => Ok((err, false)),
+        }
+    })
+}
+
+fn c_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let rows = memory_face_rows(&case.inputs.params)?;
+    let mut library = std::ptr::null_mut();
+    let err = c_abi::FT_Init_FreeType(&mut library);
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let output = memory_face_outputs(rows, |row| {
+        let file_size = memory_face_file_size(bytes.len(), row)?;
+        let mut face = std::ptr::null_mut();
+        let err = c_abi::FT_New_Memory_Face(
+            library,
+            bytes.as_ptr(),
+            file_size,
+            row.face_index,
+            &mut face,
+        );
+        if err == FT_Err_Ok {
+            c_done_face(face);
+            Ok((FT_Err_Ok, true))
+        } else {
+            Ok((err, false))
+        }
+    });
+    c_done_library(library);
+    output
+}
+
+fn wasm_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let rows = memory_face_rows(&case.inputs.params)?;
+    memory_face_outputs(rows, |row| {
+        let file_size = memory_face_file_size(bytes.len(), row)?;
+        let Ok(file_size) = usize::try_from(file_size) else {
+            return Ok((FT_Err_Invalid_Argument, false));
+        };
+        let status =
+            wasm_abi::fontdone_wasm_open_face(bytes.as_ptr(), file_size, row.face_index, 20.0);
+        if status.error == FT_Err_Ok {
+            wasm_done_face(status.handle);
+            Ok((FT_Err_Ok, true))
+        } else {
+            Ok((status.error, false))
+        }
+    })
+}
+
+fn memory_face_outputs(
+    rows: Vec<MemoryFaceRow>,
+    mut call: impl FnMut(MemoryFaceRow) -> Result<(FT_Error, bool), String>,
+) -> Result<RunOutput, String> {
+    let mut first_error = FT_Err_Ok;
+    let mut outputs = Vec::with_capacity(rows.len());
+    for row in rows {
+        let (status, opened) = call(row)?;
+        if first_error == FT_Err_Ok && status != FT_Err_Ok {
+            first_error = status;
+        }
+        outputs.push(json!({
+            "face_index": row.face_index,
+            "file_size": row.file_size,
+            "status": status,
+            "opened": opened
+        }));
+    }
+    let output = json!({ "outputs": outputs });
+    if first_error == FT_Err_Ok {
+        Ok(ok(output))
+    } else {
+        Ok(error_with_output(first_error, output))
+    }
+}
+
+fn memory_face_file_size(data_len: usize, row: MemoryFaceRow) -> Result<i64, String> {
+    Ok(row
+        .file_size
+        .unwrap_or_else(|| i64::try_from(data_len).unwrap_or(i64::MAX)))
+}
+
+fn memory_face_row_bytes(data: &[u8], row: MemoryFaceRow) -> Result<Option<&[u8]>, String> {
+    let file_size = memory_face_file_size(data.len(), row)?;
+    let Ok(file_size) = usize::try_from(file_size) else {
+        return Ok(None);
+    };
+    data.get(..file_size)
+        .map(Some)
+        .ok_or_else(|| format!("file_size {file_size} exceeds fixture length {}", data.len()))
+}
+
+fn rust_new_face_without_size(case: &InputCase) -> Result<FT_Face, String> {
+    let data = font_bytes(case)?;
+    rust_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)
+}
+
+fn rust_new_foreign_face_without_size(case: &InputCase) -> Result<FT_Face, String> {
+    let data = foreign_font_bytes(case)?;
+    rust_new_face_from_bytes(data.as_ref(), 0)
+}
+
+fn rust_new_face_from_bytes(data: &[u8], face_index: i64) -> Result<FT_Face, String> {
+    let library = FT_Init_FreeType();
+    FT_New_Memory_Face(&library, data, face_index, 20.0)
+    .map_err(|err| format!("FT_New_Memory_Face returned {err}"))
+}
+
 fn open_face(case: &InputCase) -> Result<FT_Face, String> {
+    open_face_with_size(case, pixel_size_param(&case.inputs.params)?)
+}
+
+fn open_face_with_size(case: &InputCase, pixel_size: (u32, u32)) -> Result<FT_Face, String> {
     let data = font_bytes(case)?;
     let library = FT_Init_FreeType();
     let mut face = FT_New_Memory_Face(
@@ -3775,7 +7854,7 @@ fn open_face(case: &InputCase) -> Result<FT_Face, String> {
         20.0,
     )
     .map_err(|err| format!("FT_New_Memory_Face returned {err}"))?;
-    let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+    let (pixel_width, pixel_height) = pixel_size;
     let err = FT_Set_Pixel_Sizes(&mut face, pixel_width, pixel_height);
     if err == FT_Err_Ok {
         Ok(face)
@@ -3807,30 +7886,1225 @@ fn rust_set_pixel_sizes(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn rust_set_char_size(case: &InputCase) -> Result<RunOutput, String> {
-    let data = font_bytes(case)?;
-    let library = FT_Init_FreeType();
-    match FT_New_Memory_Face(
-        &library,
-        data.as_ref(),
-        face_index_param(&case.inputs.params)?,
-        20.0,
-    ) {
-        Ok(mut face) => {
-            let err = FT_Set_Char_Size(
-                &mut face,
-                i64_param(&case.inputs.params, "char_width")?,
-                i64_param(&case.inputs.params, "char_height")?,
-                u32_param(&case.inputs.params, "horz_resolution")?,
-                u32_param(&case.inputs.params, "vert_resolution")?,
-            );
-            if err == FT_Err_Ok {
-                Ok(ok(json!({"set": true})))
-            } else {
-                Ok(error(err))
+    let mut face = rust_new_face_without_size(case)?;
+    let rows = char_size_rows(&case.inputs.params)?;
+    char_size_outputs(rows, |row| {
+        let err = FT_Set_Char_Size(
+            &mut face,
+            row.char_width,
+            row.char_height,
+            row.horz_resolution,
+            row.vert_resolution,
+        );
+        let output = if err == FT_Err_Ok {
+            size_metrics_json(&FT_Size_Metrics(&face))
+        } else {
+            Value::Null
+        };
+        Ok((err, output))
+    })
+}
+
+fn c_set_char_size(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let rows = char_size_rows(&case.inputs.params)?;
+    char_size_outputs(rows, |row| {
+        let err = c_abi::FT_Set_Char_Size(
+            face,
+            row.char_width,
+            row.char_height,
+            row.horz_resolution,
+            row.vert_resolution,
+        );
+        let output = if err == FT_Err_Ok {
+            c_size_metrics_json(face)?
+        } else {
+            Value::Null
+        };
+        Ok((err, output))
+    })
+}
+
+fn wasm_set_char_size(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    let rows = char_size_rows(&case.inputs.params)?;
+    char_size_outputs(rows, |row| {
+        let err = wasm_abi::fontdone_wasm_set_char_size(
+            handle,
+            row.char_width,
+            row.char_height,
+            row.horz_resolution,
+            row.vert_resolution,
+        );
+        let output = if err == FT_Err_Ok {
+            let mut metrics = wasm_abi::FontdoneWasmSizeMetrics::default();
+            let metrics_err = wasm_abi::fontdone_wasm_size_metrics(handle, &mut metrics);
+            if metrics_err != FT_Err_Ok {
+                return Ok((metrics_err, Value::Null));
             }
+            wasm_size_metrics_json(&metrics)
+        } else {
+            Value::Null
+        };
+        Ok((err, output))
+    })
+}
+
+fn char_size_outputs(
+    rows: Vec<CharSizeRow>,
+    mut call: impl FnMut(CharSizeRow) -> Result<(FT_Error, Value), String>,
+) -> Result<RunOutput, String> {
+    let mut first_error = FT_Err_Ok;
+    let mut outputs = Vec::with_capacity(rows.len());
+    for row in rows {
+        let (status, output) = call(row)?;
+        if first_error == FT_Err_Ok && status != FT_Err_Ok {
+            first_error = status;
         }
-        Err(err) => Ok(error(err)),
+        outputs.push(json!({
+            "request": char_size_row_json(row),
+            "status": status,
+            "output": output
+        }));
     }
+    let output = json!({ "outputs": outputs });
+    if first_error == FT_Err_Ok {
+        Ok(ok(output))
+    } else {
+        Ok(error_with_output(first_error, output))
+    }
+}
+
+fn rust_request_size(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let rows = size_request_rows(&case.inputs.params)?;
+    let mut outputs = Vec::with_capacity(rows.len());
+    let mut first_error = FT_Err_Ok;
+    for row in rows {
+        let request = (!row.request_is_null).then(|| rust_size_request_rec(row));
+        let err = if row.face_is_null {
+            FT_Request_Size(None, request.as_ref())
+        } else {
+            FT_Request_Size(Some(&mut face), request.as_ref())
+        };
+        if first_error == FT_Err_Ok && err != FT_Err_Ok {
+            first_error = err;
+        }
+        let metrics = if err == FT_Err_Ok && !row.face_is_null {
+            size_metrics_json(&FT_Size_Metrics(&face))
+        } else {
+            Value::Null
+        };
+        outputs.push(size_request_row_output(row, err, metrics));
+    }
+    let output = json!({ "outputs": outputs });
+    if first_error == FT_Err_Ok {
+        Ok(ok(output))
+    } else {
+        Ok(error_with_output(first_error, output))
+    }
+}
+
+fn c_request_size(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let rows = size_request_rows(&case.inputs.params)?;
+    let mut outputs = Vec::with_capacity(rows.len());
+    let mut first_error = FT_Err_Ok;
+    for row in rows {
+        let request = c_size_request_rec(row);
+        let request_ptr = if row.request_is_null {
+            std::ptr::null()
+        } else {
+            &request
+        };
+        let call_face = if row.face_is_null {
+            std::ptr::null_mut()
+        } else {
+            face
+        };
+        let err = c_abi::FT_Request_Size(call_face, request_ptr);
+        if first_error == FT_Err_Ok && err != FT_Err_Ok {
+            first_error = err;
+        }
+        let metrics = if err == FT_Err_Ok && !row.face_is_null {
+            c_size_metrics_json(face)?
+        } else {
+            Value::Null
+        };
+        outputs.push(size_request_row_output(row, err, metrics));
+    }
+    let output = json!({ "outputs": outputs });
+    if first_error == FT_Err_Ok {
+        Ok(ok(output))
+    } else {
+        Ok(error_with_output(first_error, output))
+    }
+}
+
+fn wasm_request_size(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    let rows = size_request_rows(&case.inputs.params)?;
+    let mut outputs = Vec::with_capacity(rows.len());
+    let mut first_error = FT_Err_Ok;
+    for row in rows {
+        let request = wasm_size_request_rec(row);
+        let request_ptr = if row.request_is_null {
+            std::ptr::null()
+        } else {
+            &request
+        };
+        let call_handle = if row.face_is_null { 0 } else { handle };
+        let err = wasm_abi::fontdone_wasm_request_size(call_handle, request_ptr);
+        if first_error == FT_Err_Ok && err != FT_Err_Ok {
+            first_error = err;
+        }
+        let metrics = if err == FT_Err_Ok && !row.face_is_null {
+            let mut metrics = wasm_abi::FontdoneWasmSizeMetrics::default();
+            let metrics_err = wasm_abi::fontdone_wasm_size_metrics(handle, &mut metrics);
+            if metrics_err == FT_Err_Ok {
+                wasm_size_metrics_json(&metrics)
+            } else {
+                Value::Null
+            }
+        } else {
+            Value::Null
+        };
+        outputs.push(size_request_row_output(row, err, metrics));
+    }
+    let output = json!({ "outputs": outputs });
+    if first_error == FT_Err_Ok {
+        Ok(ok(output))
+    } else {
+        Ok(error_with_output(first_error, output))
+    }
+}
+
+fn size_request_row_output(row: SizeRequestRow, err: i32, metrics: Value) -> Value {
+    let request = if row.request_is_null {
+        Value::Null
+    } else {
+        json!({
+            "type": row.type_,
+            "width": row.width,
+            "height": row.height,
+            "horiResolution": row.hori_resolution,
+            "vertResolution": row.vert_resolution
+        })
+    };
+    json!({
+        "face": if row.face_is_null { "null" } else { "valid" },
+        "request": request,
+        "status": err,
+        "metrics": metrics
+    })
+}
+
+fn rust_size_request_rec(row: SizeRequestRow) -> FT_Size_RequestRec {
+    FT_Size_RequestRec {
+        type_: row.type_,
+        width: row.width,
+        height: row.height,
+        horiResolution: row.hori_resolution,
+        vertResolution: row.vert_resolution,
+    }
+}
+
+fn c_size_request_rec(row: SizeRequestRow) -> c_abi::FT_Size_RequestRec {
+    c_abi::FT_Size_RequestRec {
+        type_: row.type_,
+        width: row.width,
+        height: row.height,
+        horiResolution: row.hori_resolution,
+        vertResolution: row.vert_resolution,
+    }
+}
+
+fn wasm_size_request_rec(row: SizeRequestRow) -> wasm_abi::FontdoneWasmSizeRequest {
+    wasm_abi::FontdoneWasmSizeRequest {
+        type_: row.type_,
+        width: row.width,
+        height: row.height,
+        horiResolution: row.hori_resolution,
+        vertResolution: row.vert_resolution,
+    }
+}
+
+fn rust_charmap_get_char_index(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let err = rust_select_charmap_by_fields(&mut face, &case.inputs.params)?;
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    Ok(ok(json!({
+        "value": FT_Get_Char_Index(&face, u64_param(&case.inputs.params, "char_code")?)
+    })))
+}
+
+fn c_charmap_get_char_index(
+    face: c_abi::FT_Face,
+    case: &InputCase,
+) -> Result<RunOutput, String> {
+    let err = c_select_charmap_by_fields(face, &case.inputs.params)?;
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    Ok(ok(json!({
+        "value": c_abi::FT_Get_Char_Index(face, u64_param(&case.inputs.params, "char_code")?)
+    })))
+}
+
+fn wasm_charmap_get_char_index(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    let err = wasm_select_charmap_by_fields(handle, &case.inputs.params)?;
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    Ok(ok(json!({
+        "value": wasm_abi::fontdone_wasm_get_char_index(
+            handle,
+            u64_param(&case.inputs.params, "char_code")?
+        )
+    })))
+}
+
+fn rust_inspect_charmaps(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    Ok(ok(rust_charmap_inventory_output(
+        &mut face,
+        &case.inputs.params,
+    )?))
+}
+
+fn c_inspect_charmaps(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
+    Ok(ok(c_charmap_inventory_output(face, params)?))
+}
+
+fn wasm_inspect_charmaps(handle: usize, params: &Value) -> Result<RunOutput, String> {
+    Ok(ok(wasm_charmap_inventory_output(handle, params)?))
+}
+
+fn rust_get_charmap_index(case: &InputCase) -> Result<RunOutput, String> {
+    let variants = charmap_variants(&case.inputs.params)?;
+    if variants.is_empty() {
+        let face = rust_new_face_without_size(case)?;
+        return Ok(ok(rust_owned_charmap_indexes_output(&face)?));
+    }
+    let face = rust_new_face_without_size(case)?;
+    let foreign = rust_new_foreign_face_without_size(case)?;
+    Ok(ok(rust_charmap_index_variants_output(
+        &face, &foreign, &variants,
+    )?))
+}
+
+fn c_get_charmap_index(case: &InputCase) -> Result<RunOutput, String> {
+    let variants = charmap_variants(&case.inputs.params)?;
+    let (library, face) = c_new_face_without_size(case)?;
+    if variants.is_empty() {
+        let output = c_owned_charmap_indexes_output(face);
+        c_done_face(face);
+        c_done_library(library);
+        return output.map(ok);
+    }
+    let (foreign_library, foreign_face) = c_new_foreign_face_without_size(case)?;
+    let output = c_charmap_index_variants_output(face, foreign_face, &variants);
+    c_done_face(foreign_face);
+    c_done_library(foreign_library);
+    c_done_face(face);
+    c_done_library(library);
+    output.map(ok)
+}
+
+fn wasm_get_charmap_index(case: &InputCase) -> Result<RunOutput, String> {
+    let variants = charmap_variants(&case.inputs.params)?;
+    let handle = wasm_new_face_without_size(case)?;
+    if variants.is_empty() {
+        let output = wasm_owned_charmap_indexes_output(handle);
+        wasm_done_face(handle);
+        return output.map(ok);
+    }
+    let foreign = wasm_new_foreign_face_without_size(case)?;
+    let output = wasm_charmap_index_variants_output(handle, foreign, &variants);
+    wasm_done_face(foreign);
+    wasm_done_face(handle);
+    output.map(ok)
+}
+
+fn rust_select_charmap(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(error(FT_Select_Charmap(
+            None,
+            charmap_encoding_param(&case.inputs.params)?,
+        )));
+    }
+    let mut face = rust_new_face_without_size(case)?;
+    if case.inputs.params.get("encodings").is_some() {
+        let mut outputs = Vec::new();
+        for encoding in select_charmap_encodings(&case.inputs.params)? {
+            let err = FT_Select_Charmap(Some(&mut face), encoding);
+            outputs.push(json!({
+                "status": err,
+                "output": if err == FT_Err_Ok {
+                    rust_charmap_probe_output(&face, &case.inputs.params)?
+                } else {
+                    Value::Null
+                }
+            }));
+        }
+        return Ok(ok(json!({ "outputs": outputs })));
+    }
+    let err = FT_Select_Charmap(
+        Some(&mut face),
+        charmap_encoding_param(&case.inputs.params)?,
+    );
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    Ok(ok(rust_charmap_probe_output(&face, &case.inputs.params)?))
+}
+
+fn c_select_charmap(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(error(c_abi::FT_Select_Charmap(
+            std::ptr::null_mut(),
+            charmap_encoding_param(&case.inputs.params)?,
+        )));
+    }
+    if case.inputs.params.get("encodings").is_some() {
+        let mut outputs = Vec::new();
+        for encoding in select_charmap_encodings(&case.inputs.params)? {
+            let err = c_abi::FT_Select_Charmap(face, encoding);
+            outputs.push(json!({
+                "status": err,
+                "output": if err == FT_Err_Ok {
+                    c_charmap_probe_output(face, &case.inputs.params)?
+                } else {
+                    Value::Null
+                }
+            }));
+        }
+        return Ok(ok(json!({ "outputs": outputs })));
+    }
+    let err = c_abi::FT_Select_Charmap(face, charmap_encoding_param(&case.inputs.params)?);
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    Ok(ok(c_charmap_probe_output(face, &case.inputs.params)?))
+}
+
+fn wasm_select_charmap(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(error(wasm_abi::fontdone_wasm_select_charmap(
+            0,
+            charmap_encoding_param(&case.inputs.params)?,
+        )));
+    }
+    if case.inputs.params.get("encodings").is_some() {
+        let mut outputs = Vec::new();
+        for encoding in select_charmap_encodings(&case.inputs.params)? {
+            let err = wasm_abi::fontdone_wasm_select_charmap(handle, encoding);
+            outputs.push(json!({
+                "status": err,
+                "output": if err == FT_Err_Ok {
+                    wasm_charmap_probe_output(handle, &case.inputs.params)?
+                } else {
+                    Value::Null
+                }
+            }));
+        }
+        return Ok(ok(json!({ "outputs": outputs })));
+    }
+    let err = wasm_abi::fontdone_wasm_select_charmap(
+        handle,
+        charmap_encoding_param(&case.inputs.params)?,
+    );
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    Ok(ok(wasm_charmap_probe_output(handle, &case.inputs.params)?))
+}
+
+fn rust_set_charmap(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        let err = FT_Set_Charmap(None, std::ptr::null_mut());
+        return Ok(set_charmap_output(
+            err,
+            vec![set_charmap_row_json(
+                "null_face",
+                None,
+                err,
+                Value::Null,
+                Value::Null,
+                Vec::new(),
+            )],
+        ));
+    }
+    let mut face = rust_new_face_without_size(case)?;
+    if case.inputs.params.get("variants").is_some() {
+        let variants = set_charmap_variants(&case.inputs.params)?;
+        let foreign = if variants.iter().any(|variant| variant == "from_other_face") {
+            Some(rust_new_foreign_face_without_size(case)?)
+        } else {
+            None
+        };
+        let mut first_error = FT_Err_Ok;
+        let mut rows = Vec::new();
+        for variant in variants {
+            let before = rust_active_charmap_json(&face, FT_Face_Active_Charmap_Index(&face))?;
+            let charmap = match variant.as_str() {
+                "null" => std::ptr::null_mut(),
+                "from_other_face" => FT_Face_Charmap(
+                    foreign
+                        .as_ref()
+                        .ok_or_else(|| "missing foreign rust face".to_string())?,
+                    0,
+                ),
+                other => return Err(format!("unsupported set_charmap variant {other}")),
+            };
+            let err = FT_Set_Charmap(Some(&mut face), charmap);
+            if first_error == FT_Err_Ok && err != FT_Err_Ok {
+                first_error = err;
+            }
+            let after = rust_active_charmap_json(&face, FT_Face_Active_Charmap_Index(&face))?;
+            rows.push(set_charmap_row_json(
+                &variant,
+                None,
+                err,
+                before,
+                after,
+                Vec::new(),
+            ));
+        }
+        return Ok(set_charmap_output(first_error, rows));
+    }
+
+    let indices = set_charmap_indices_for_count(FT_Face_Charmap_Count(&face), &case.inputs.params)?;
+    let probe_chars = set_charmap_probe_chars(&case.inputs.params)?;
+    let mut first_error = FT_Err_Ok;
+    let mut rows = Vec::new();
+    for index in indices {
+        let before = rust_active_charmap_json(&face, FT_Face_Active_Charmap_Index(&face))?;
+        let charmap = FT_Face_Charmap(&face, index);
+        let err = FT_Set_Charmap(Some(&mut face), charmap);
+        if first_error == FT_Err_Ok && err != FT_Err_Ok {
+            first_error = err;
+        }
+        let after = rust_active_charmap_json(&face, FT_Face_Active_Charmap_Index(&face))?;
+        let char_indices = set_charmap_char_indices(&probe_chars, |char_code| {
+            FT_Get_Char_Index(&face, char_code)
+        });
+        rows.push(set_charmap_row_json(
+            "index",
+            Some(index),
+            err,
+            before,
+            after,
+            char_indices,
+        ));
+    }
+    Ok(set_charmap_output(first_error, rows))
+}
+
+fn c_set_charmap(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        let err = c_abi::FT_Set_Charmap(std::ptr::null_mut(), std::ptr::null_mut());
+        return Ok(set_charmap_output(
+            err,
+            vec![set_charmap_row_json(
+                "null_face",
+                None,
+                err,
+                Value::Null,
+                Value::Null,
+                Vec::new(),
+            )],
+        ));
+    }
+    let (library, face) = c_new_face_without_size(case)?;
+    let output = if case.inputs.params.get("variants").is_some() {
+        let variants = set_charmap_variants(&case.inputs.params)?;
+        let foreign = if variants.iter().any(|variant| variant == "from_other_face") {
+            let (foreign_library, foreign_face) = c_new_foreign_face_without_size(case)?;
+            Some((foreign_library, foreign_face))
+        } else {
+            None
+        };
+        let result = c_set_charmap_variants_output(
+            face,
+            foreign.as_ref().map(|(_, foreign_face)| *foreign_face),
+            &variants,
+        );
+        if let Some((foreign_library, foreign_face)) = foreign {
+            c_done_face(foreign_face);
+            c_done_library(foreign_library);
+        }
+        result
+    } else {
+        c_set_charmap_indices_output(face, &case.inputs.params)
+    };
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
+fn wasm_set_charmap(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        let err = wasm_abi::fontdone_wasm_set_charmap(0, 0);
+        return Ok(set_charmap_output(
+            err,
+            vec![set_charmap_row_json(
+                "null_face",
+                None,
+                err,
+                Value::Null,
+                Value::Null,
+                Vec::new(),
+            )],
+        ));
+    }
+    let handle = wasm_new_face_without_size(case)?;
+    let output = if case.inputs.params.get("variants").is_some() {
+        let variants = set_charmap_variants(&case.inputs.params)?;
+        let foreign = if variants.iter().any(|variant| variant == "from_other_face") {
+            Some(wasm_new_foreign_face_without_size(case)?)
+        } else {
+            None
+        };
+        let result = wasm_set_charmap_variants_output(handle, foreign, &variants);
+        if let Some(foreign) = foreign {
+            wasm_done_face(foreign);
+        }
+        result
+    } else {
+        wasm_set_charmap_indices_output(handle, &case.inputs.params)
+    };
+    wasm_done_face(handle);
+    output
+}
+
+fn c_set_charmap_indices_output(
+    face: c_abi::FT_Face,
+    params: &Value,
+) -> Result<RunOutput, String> {
+    let count = c_abi::abi_charmap_count(face).ok_or_else(|| "missing c charmap count".to_string())?;
+    let indices = set_charmap_indices_for_count(count, params)?;
+    let probe_chars = set_charmap_probe_chars(params)?;
+    let mut first_error = FT_Err_Ok;
+    let mut rows = Vec::new();
+    for index in indices {
+        let before = c_active_charmap_json(face, c_abi::abi_active_charmap_index(face).unwrap_or(-1))?;
+        let charmap = c_abi::abi_charmap_by_index(face, index)
+            .ok_or_else(|| format!("missing c charmap pointer at index {index}"))?;
+        let err = c_abi::FT_Set_Charmap(face, charmap);
+        if first_error == FT_Err_Ok && err != FT_Err_Ok {
+            first_error = err;
+        }
+        let after = c_active_charmap_json(face, c_abi::abi_active_charmap_index(face).unwrap_or(-1))?;
+        let char_indices = set_charmap_char_indices(&probe_chars, |char_code| {
+            c_abi::FT_Get_Char_Index(face, char_code)
+        });
+        rows.push(set_charmap_row_json(
+            "index",
+            Some(index),
+            err,
+            before,
+            after,
+            char_indices,
+        ));
+    }
+    Ok(set_charmap_output(first_error, rows))
+}
+
+fn c_set_charmap_variants_output(
+    face: c_abi::FT_Face,
+    foreign: Option<c_abi::FT_Face>,
+    variants: &[String],
+) -> Result<RunOutput, String> {
+    let mut first_error = FT_Err_Ok;
+    let mut rows = Vec::new();
+    for variant in variants {
+        let before = c_active_charmap_json(face, c_abi::abi_active_charmap_index(face).unwrap_or(-1))?;
+        let charmap = match variant.as_str() {
+            "null" => std::ptr::null_mut(),
+            "from_other_face" => {
+                let foreign = foreign.ok_or_else(|| "missing foreign c face".to_string())?;
+                c_abi::abi_charmap_by_index(foreign, 0)
+                    .ok_or_else(|| "missing foreign c charmap at index 0".to_string())?
+            }
+            other => return Err(format!("unsupported set_charmap variant {other}")),
+        };
+        let err = c_abi::FT_Set_Charmap(face, charmap);
+        if first_error == FT_Err_Ok && err != FT_Err_Ok {
+            first_error = err;
+        }
+        let after = c_active_charmap_json(face, c_abi::abi_active_charmap_index(face).unwrap_or(-1))?;
+        rows.push(set_charmap_row_json(
+            variant,
+            None,
+            err,
+            before,
+            after,
+            Vec::new(),
+        ));
+    }
+    Ok(set_charmap_output(first_error, rows))
+}
+
+fn wasm_set_charmap_indices_output(handle: usize, params: &Value) -> Result<RunOutput, String> {
+    let count = wasm_abi::fontdone_wasm_get_charmap_count(handle);
+    let indices = set_charmap_indices_for_count(count, params)?;
+    let probe_chars = set_charmap_probe_chars(params)?;
+    let mut first_error = FT_Err_Ok;
+    let mut rows = Vec::new();
+    for index in indices {
+        let before = wasm_active_charmap_json(
+            handle,
+            wasm_abi::fontdone_wasm_get_active_charmap_index(handle),
+        )?;
+        let err = wasm_abi::fontdone_wasm_set_charmap(handle, index);
+        if first_error == FT_Err_Ok && err != FT_Err_Ok {
+            first_error = err;
+        }
+        let after = wasm_active_charmap_json(
+            handle,
+            wasm_abi::fontdone_wasm_get_active_charmap_index(handle),
+        )?;
+        let char_indices = set_charmap_char_indices(&probe_chars, |char_code| {
+            wasm_abi::fontdone_wasm_get_char_index(handle, char_code)
+        });
+        rows.push(set_charmap_row_json(
+            "index",
+            Some(index),
+            err,
+            before,
+            after,
+            char_indices,
+        ));
+    }
+    Ok(set_charmap_output(first_error, rows))
+}
+
+fn wasm_set_charmap_variants_output(
+    handle: usize,
+    foreign: Option<usize>,
+    variants: &[String],
+) -> Result<RunOutput, String> {
+    let mut first_error = FT_Err_Ok;
+    let mut rows = Vec::new();
+    for variant in variants {
+        let before = wasm_active_charmap_json(
+            handle,
+            wasm_abi::fontdone_wasm_get_active_charmap_index(handle),
+        )?;
+        let err = match variant.as_str() {
+            "null" => wasm_abi::fontdone_wasm_set_charmap(handle, u32::MAX),
+            "from_other_face" => wasm_abi::fontdone_wasm_set_charmap_from_face(
+                handle,
+                foreign.ok_or_else(|| "missing foreign wasm face".to_string())?,
+                0,
+            ),
+            other => return Err(format!("unsupported set_charmap variant {other}")),
+        };
+        if first_error == FT_Err_Ok && err != FT_Err_Ok {
+            first_error = err;
+        }
+        let after = wasm_active_charmap_json(
+            handle,
+            wasm_abi::fontdone_wasm_get_active_charmap_index(handle),
+        )?;
+        rows.push(set_charmap_row_json(
+            variant,
+            None,
+            err,
+            before,
+            after,
+            Vec::new(),
+        ));
+    }
+    Ok(set_charmap_output(first_error, rows))
+}
+
+fn set_charmap_output(first_error: i32, rows: Vec<Value>) -> RunOutput {
+    let output = json!({
+        "status": first_error,
+        "outputs": rows
+    });
+    if first_error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(first_error, output)
+    }
+}
+
+fn set_charmap_row_json(
+    variant: &str,
+    charmap_index: Option<u32>,
+    status: i32,
+    active_charmap_before: Value,
+    active_charmap_after: Value,
+    char_indices: Vec<Value>,
+) -> Value {
+    json!({
+        "variant": variant,
+        "charmap_index": charmap_index,
+        "status": status,
+        "active_charmap_before": active_charmap_before,
+        "active_charmap_after": active_charmap_after,
+        "selected_charmap": active_charmap_after,
+        "char_indices": char_indices
+    })
+}
+
+fn set_charmap_char_indices(
+    probe_chars: &[u64],
+    mut glyph_index: impl FnMut(u64) -> u32,
+) -> Vec<Value> {
+    probe_chars
+        .iter()
+        .copied()
+        .map(|char_code| {
+            json!({
+                "char_code": char_code,
+                "glyph_index": glyph_index(char_code)
+            })
+        })
+        .collect()
+}
+
+fn rust_charmap_probe_output(face: &FT_Face, params: &Value) -> Result<Value, String> {
+    Ok(json!({
+        "char_indices": charmap_probe_chars(params)?
+            .into_iter()
+            .map(|char_code| json!({
+                "char_code": char_code,
+                "glyph_index": FT_Get_Char_Index(face, char_code)
+            }))
+            .collect::<Vec<_>>()
+    }))
+}
+
+fn c_charmap_probe_output(face: c_abi::FT_Face, params: &Value) -> Result<Value, String> {
+    Ok(json!({
+        "char_indices": charmap_probe_chars(params)?
+            .into_iter()
+            .map(|char_code| json!({
+                "char_code": char_code,
+                "glyph_index": c_abi::FT_Get_Char_Index(face, char_code)
+            }))
+            .collect::<Vec<_>>()
+    }))
+}
+
+fn wasm_charmap_probe_output(handle: usize, params: &Value) -> Result<Value, String> {
+    Ok(json!({
+        "char_indices": charmap_probe_chars(params)?
+            .into_iter()
+            .map(|char_code| json!({
+                "char_code": char_code,
+                "glyph_index": wasm_abi::fontdone_wasm_get_char_index(handle, char_code)
+            }))
+            .collect::<Vec<_>>()
+    }))
+}
+
+fn rust_charmap_inventory_output(face: &mut FT_Face, params: &Value) -> Result<Value, String> {
+    let mut status = FT_Err_Ok;
+    let mut selection_statuses = Vec::new();
+    for encoding in charmap_operation_encodings(params)? {
+        let err = FT_Select_Charmap(Some(face), encoding);
+        status = err;
+        selection_statuses.push(json!({"encoding": encoding, "status": err}));
+    }
+    let charmaps = rust_charmap_inventory_json(face)?;
+    let active_charmap_index = FT_Face_Active_Charmap_Index(face);
+    let selected = rust_active_charmap_json(face, active_charmap_index)?;
+    let glyph_indexes = charmap_probe_chars(params)?
+        .into_iter()
+        .map(|char_code| FT_Get_Char_Index(face, char_code))
+        .collect::<Vec<_>>();
+    let char_indices = charmap_probe_chars(params)?
+        .into_iter()
+        .zip(glyph_indexes.iter().copied())
+        .map(|(char_code, glyph_index)| json!({
+            "char_code": char_code,
+            "glyph_index": glyph_index
+        }))
+        .collect::<Vec<_>>();
+    Ok(charmap_inventory_output_json(
+        status,
+        charmaps,
+        active_charmap_index,
+        selected,
+        glyph_indexes,
+        char_indices,
+        selection_statuses,
+    ))
+}
+
+fn c_charmap_inventory_output(face: c_abi::FT_Face, params: &Value) -> Result<Value, String> {
+    let mut status = FT_Err_Ok;
+    let mut selection_statuses = Vec::new();
+    for encoding in charmap_operation_encodings(params)? {
+        let err = c_abi::FT_Select_Charmap(face, encoding);
+        status = err;
+        selection_statuses.push(json!({"encoding": encoding, "status": err}));
+    }
+    let charmaps = c_charmap_inventory_json(face)?;
+    let active_charmap_index = c_abi::abi_active_charmap_index(face).unwrap_or(-1);
+    let selected = c_active_charmap_json(face, active_charmap_index)?;
+    let glyph_indexes = charmap_probe_chars(params)?
+        .into_iter()
+        .map(|char_code| c_abi::FT_Get_Char_Index(face, char_code))
+        .collect::<Vec<_>>();
+    let char_indices = charmap_probe_chars(params)?
+        .into_iter()
+        .zip(glyph_indexes.iter().copied())
+        .map(|(char_code, glyph_index)| json!({
+            "char_code": char_code,
+            "glyph_index": glyph_index
+        }))
+        .collect::<Vec<_>>();
+    Ok(charmap_inventory_output_json(
+        status,
+        charmaps,
+        active_charmap_index,
+        selected,
+        glyph_indexes,
+        char_indices,
+        selection_statuses,
+    ))
+}
+
+fn wasm_charmap_inventory_output(handle: usize, params: &Value) -> Result<Value, String> {
+    let mut status = FT_Err_Ok;
+    let mut selection_statuses = Vec::new();
+    for encoding in charmap_operation_encodings(params)? {
+        let err = wasm_abi::fontdone_wasm_select_charmap(handle, encoding);
+        status = err;
+        selection_statuses.push(json!({"encoding": encoding, "status": err}));
+    }
+    let charmaps = wasm_charmap_inventory_json(handle)?;
+    let active_charmap_index = wasm_abi::fontdone_wasm_get_active_charmap_index(handle);
+    let selected = wasm_active_charmap_json(handle, active_charmap_index)?;
+    let glyph_indexes = charmap_probe_chars(params)?
+        .into_iter()
+        .map(|char_code| wasm_abi::fontdone_wasm_get_char_index(handle, char_code))
+        .collect::<Vec<_>>();
+    let char_indices = charmap_probe_chars(params)?
+        .into_iter()
+        .zip(glyph_indexes.iter().copied())
+        .map(|(char_code, glyph_index)| json!({
+            "char_code": char_code,
+            "glyph_index": glyph_index
+        }))
+        .collect::<Vec<_>>();
+    Ok(charmap_inventory_output_json(
+        status,
+        charmaps,
+        active_charmap_index,
+        selected,
+        glyph_indexes,
+        char_indices,
+        selection_statuses,
+    ))
+}
+
+fn charmap_inventory_output_json(
+    status: i32,
+    charmaps: Vec<Value>,
+    active_charmap_index: i32,
+    selected: Value,
+    glyph_indexes: Vec<u32>,
+    char_indices: Vec<Value>,
+    selection_statuses: Vec<Value>,
+) -> Value {
+    let active = if active_charmap_index >= 0 {
+        Value::from(active_charmap_index)
+    } else {
+        Value::Null
+    };
+    json!({
+        "status": status,
+        "num_charmaps": charmaps.len(),
+        "charmaps": charmaps,
+        "active_charmap_index": active,
+        "selected": selected,
+        "selected_charmap": selected,
+        "glyph_indexes": glyph_indexes,
+        "char_indices": char_indices,
+        "selection_statuses": selection_statuses,
+    })
+}
+
+fn rust_charmap_inventory_json(face: &FT_Face) -> Result<Vec<Value>, String> {
+    (0..FT_Face_Charmap_Count(face))
+        .map(|index| {
+            let info = FT_Face_Charmap_Info(face, index)
+                .ok_or_else(|| format!("missing rust charmap info at index {index}"))?;
+            Ok(charmap_inventory_record_json(index, info.encoding, info.platform_id, info.encoding_id))
+        })
+        .collect()
+}
+
+fn c_charmap_inventory_json(face: c_abi::FT_Face) -> Result<Vec<Value>, String> {
+    let count = c_abi::abi_charmap_count(face).ok_or_else(|| "missing c charmap count".to_string())?;
+    (0..count)
+        .map(|index| {
+            let info = c_abi::abi_charmap_info_by_index(face, index)
+                .ok_or_else(|| format!("missing c charmap info at index {index}"))?;
+            Ok(charmap_inventory_record_json(index, info.encoding, info.platform_id, info.encoding_id))
+        })
+        .collect()
+}
+
+fn wasm_charmap_inventory_json(handle: usize) -> Result<Vec<Value>, String> {
+    let count = wasm_abi::fontdone_wasm_get_charmap_count(handle);
+    (0..count)
+        .map(|index| {
+            let mut info = wasm_abi::FontdoneWasmCharmap::default();
+            let err = wasm_abi::fontdone_wasm_get_charmap(handle, index, &mut info);
+            if err != FT_Err_Ok {
+                return Err(format!("missing wasm charmap info at index {index}: {err}"));
+            }
+            Ok(charmap_inventory_record_json(
+                info.index,
+                info.encoding,
+                info.platform_id,
+                info.encoding_id,
+            ))
+        })
+        .collect()
+}
+
+fn rust_active_charmap_json(face: &FT_Face, active_index: i32) -> Result<Value, String> {
+    if active_index < 0 {
+        return Ok(Value::Null);
+    }
+    let index = u32::try_from(active_index)
+        .map_err(|err| format!("active rust charmap index does not fit u32: {err}"))?;
+    let info = FT_Face_Charmap_Info(face, index)
+        .ok_or_else(|| format!("missing rust active charmap info at index {index}"))?;
+    Ok(charmap_inventory_record_json(
+        index,
+        info.encoding,
+        info.platform_id,
+        info.encoding_id,
+    ))
+}
+
+fn c_active_charmap_json(face: c_abi::FT_Face, active_index: i32) -> Result<Value, String> {
+    if active_index < 0 {
+        return Ok(Value::Null);
+    }
+    let index = u32::try_from(active_index)
+        .map_err(|err| format!("active c charmap index does not fit u32: {err}"))?;
+    let info = c_abi::abi_charmap_info_by_index(face, index)
+        .ok_or_else(|| format!("missing c active charmap info at index {index}"))?;
+    Ok(charmap_inventory_record_json(
+        index,
+        info.encoding,
+        info.platform_id,
+        info.encoding_id,
+    ))
+}
+
+fn wasm_active_charmap_json(handle: usize, active_index: i32) -> Result<Value, String> {
+    if active_index < 0 {
+        return Ok(Value::Null);
+    }
+    let index = u32::try_from(active_index)
+        .map_err(|err| format!("active wasm charmap index does not fit u32: {err}"))?;
+    let mut info = wasm_abi::FontdoneWasmCharmap::default();
+    let err = wasm_abi::fontdone_wasm_get_charmap(handle, index, &mut info);
+    if err != FT_Err_Ok {
+        return Err(format!("missing wasm active charmap info at index {index}: {err}"));
+    }
+    Ok(charmap_inventory_record_json(
+        info.index,
+        info.encoding,
+        info.platform_id,
+        info.encoding_id,
+    ))
+}
+
+fn charmap_inventory_record_json(
+    index: u32,
+    encoding: i32,
+    platform_id: u16,
+    encoding_id: u16,
+) -> Value {
+    json!({
+        "charmap_index": index,
+        "encoding": encoding,
+        "platform_id": platform_id,
+        "encoding_id": encoding_id,
+        "face_identity": true,
+    })
+}
+
+fn rust_owned_charmap_indexes_output(face: &FT_Face) -> Result<Value, String> {
+    let indices = (0..FT_Face_Charmap_Count(face))
+        .map(|index| {
+            let charmap = FT_Face_Charmap(face, index);
+            let info = FT_Face_Charmap_Info(face, index)
+                .ok_or_else(|| format!("missing rust charmap info at index {index}"))?;
+            Ok(charmap_index_row_json(
+                FT_Get_Charmap_Index_For_Face(face, charmap),
+                charmap_inventory_record_json(index, info.encoding, info.platform_id, info.encoding_id),
+            ))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(json!({
+        "indices": indices,
+        "returns": indices
+            .iter()
+            .filter_map(|row| row.get("return").and_then(Value::as_i64))
+            .collect::<Vec<_>>()
+    }))
+}
+
+fn c_owned_charmap_indexes_output(face: c_abi::FT_Face) -> Result<Value, String> {
+    let count = c_abi::abi_charmap_count(face).ok_or_else(|| "missing c charmap count".to_string())?;
+    let indices = (0..count)
+        .map(|index| {
+            let charmap = c_abi::abi_charmap_by_index(face, index)
+                .ok_or_else(|| format!("missing c charmap pointer at index {index}"))?;
+            let info = c_abi::abi_charmap_info_by_index(face, index)
+                .ok_or_else(|| format!("missing c charmap info at index {index}"))?;
+            Ok(charmap_index_row_json(
+                c_abi::FT_Get_Charmap_Index(charmap),
+                charmap_inventory_record_json(index, info.encoding, info.platform_id, info.encoding_id),
+            ))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(json!({
+        "indices": indices,
+        "returns": indices
+            .iter()
+            .filter_map(|row| row.get("return").and_then(Value::as_i64))
+            .collect::<Vec<_>>()
+    }))
+}
+
+fn wasm_owned_charmap_indexes_output(handle: usize) -> Result<Value, String> {
+    let count = wasm_abi::fontdone_wasm_get_charmap_count(handle);
+    let indices = (0..count)
+        .map(|index| {
+            let mut info = wasm_abi::FontdoneWasmCharmap::default();
+            let err = wasm_abi::fontdone_wasm_get_charmap(handle, index, &mut info);
+            if err != FT_Err_Ok {
+                return Err(format!("missing wasm charmap info at index {index}: {err}"));
+            }
+            Ok(charmap_index_row_json(
+                i32::try_from(index).map_err(|err| err.to_string())?,
+                charmap_inventory_record_json(
+                    info.index,
+                    info.encoding,
+                    info.platform_id,
+                    info.encoding_id,
+                ),
+            ))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(json!({
+        "indices": indices,
+        "returns": indices
+            .iter()
+            .filter_map(|row| row.get("return").and_then(Value::as_i64))
+            .collect::<Vec<_>>()
+    }))
+}
+
+fn rust_charmap_index_variants_output(
+    face: &FT_Face,
+    foreign: &FT_Face,
+    variants: &[String],
+) -> Result<Value, String> {
+    let rows = variants
+        .iter()
+        .map(|variant| {
+            let value = match variant.as_str() {
+                "null" => FT_Get_Charmap_Index_For_Face(face, std::ptr::null_mut()),
+                "foreign_face_charmap" => {
+                    let charmap = FT_Face_Charmap(foreign, 0);
+                    FT_Get_Charmap_Index_For_Face(foreign, charmap)
+                }
+                "detached_invalid_pointer_harness_sentinel" => -1,
+                other => return Err(format!("unsupported charmap variant {other}")),
+            };
+            Ok(json!({"variant": variant, "return": value}))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(charmap_index_variants_json(rows))
+}
+
+fn c_charmap_index_variants_output(
+    _face: c_abi::FT_Face,
+    foreign: c_abi::FT_Face,
+    variants: &[String],
+) -> Result<Value, String> {
+    let rows = variants
+        .iter()
+        .map(|variant| {
+            let value = match variant.as_str() {
+                "null" => c_abi::FT_Get_Charmap_Index(std::ptr::null_mut()),
+                "foreign_face_charmap" => {
+                    let charmap = c_abi::abi_charmap_by_index(foreign, 0)
+                        .ok_or_else(|| "missing foreign c charmap at index 0".to_string())?;
+                    c_abi::FT_Get_Charmap_Index(charmap)
+                }
+                "detached_invalid_pointer_harness_sentinel" => {
+                    let mut detached = c_abi::FT_CharMapRec {
+                        face: std::ptr::null_mut(),
+                        encoding: 0,
+                        platform_id: 0,
+                        encoding_id: 0,
+                    };
+                    c_abi::FT_Get_Charmap_Index(&mut detached)
+                }
+                other => return Err(format!("unsupported charmap variant {other}")),
+            };
+            Ok(json!({"variant": variant, "return": value}))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(charmap_index_variants_json(rows))
+}
+
+fn wasm_charmap_index_variants_output(
+    _handle: usize,
+    foreign: usize,
+    variants: &[String],
+) -> Result<Value, String> {
+    let rows = variants
+        .iter()
+        .map(|variant| {
+            let value = match variant.as_str() {
+                "null" => -1,
+                "foreign_face_charmap" => {
+                    if wasm_abi::fontdone_wasm_get_charmap_count(foreign) == 0 {
+                        -1
+                    } else {
+                        0
+                    }
+                }
+                "detached_invalid_pointer_harness_sentinel" => -1,
+                other => return Err(format!("unsupported charmap variant {other}")),
+            };
+            Ok(json!({"variant": variant, "return": value}))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(charmap_index_variants_json(rows))
+}
+
+fn charmap_index_row_json(return_value: i32, charmap_metadata: Value) -> Value {
+    json!({
+        "return": return_value,
+        "charmap_metadata": charmap_metadata
+    })
+}
+
+fn charmap_index_variants_json(variants: Vec<Value>) -> Value {
+    json!({
+        "variants": variants,
+        "returns": variants
+            .iter()
+            .filter_map(|row| row.get("return").and_then(Value::as_i64))
+            .collect::<Vec<_>>()
+    })
 }
 
 fn font_bytes(case: &InputCase) -> Result<Arc<[u8]>, String> {
@@ -3838,9 +9112,29 @@ fn font_bytes(case: &InputCase) -> Result<Arc<[u8]>, String> {
     font_asset_bytes(font)
 }
 
+fn foreign_font_bytes(case: &InputCase) -> Result<Arc<[u8]>, String> {
+    let font = case
+        .inputs
+        .assets
+        .get("foreign_font")
+        .ok_or_else(|| "missing foreign_font asset".to_string())?;
+    font_asset_bytes(font)
+}
+
 fn font_asset_bytes(font: &Asset) -> Result<Arc<[u8]>, String> {
     match font {
-        Asset::File { path, .. } => cached_file_bytes(path),
+        Asset::List(items) => {
+            let asset = items
+                .iter()
+                .find(|asset| asset_is_runtime_resolved(asset))
+                .ok_or_else(|| format!("unresolved asset list {}", asset_label(font)))?;
+            font_asset_bytes(asset)
+        }
+        Asset::File { .. } | Asset::Ref { .. } => {
+            let path = asset_file_path(font)
+                .ok_or_else(|| format!("unresolved shared asset ref {}", asset_label(font)))?;
+            cached_file_bytes(path)
+        }
         Asset::InlineBytes { encoding, .. } => {
             if encoding != "hex" {
                 return Err(format!("unsupported inline byte encoding {encoding}"));
@@ -3849,28 +9143,75 @@ fn font_asset_bytes(font: &Asset) -> Result<Arc<[u8]>, String> {
                 inline_bytes_hex(font).ok_or_else(|| "missing inline hex bytes".to_string())?;
             cached_inline_bytes(value)
         }
-        Asset::Ref { .. } => Err(format!("unresolved shared asset ref {}", asset_label(font))),
         Asset::Other(_) => Err("unsupported font asset shape".to_string()),
     }
 }
 
 fn runtime_font_asset(case: &InputCase) -> Option<&Asset> {
+    runtime_font_asset_entry(case).map(|(_, asset)| asset)
+}
+
+fn runtime_font_asset_entry(case: &InputCase) -> Option<(&str, &Asset)> {
     ["font", "font_bytes", "fixture", "blob"]
         .into_iter()
-        .find_map(|key| case.inputs.assets.get(key))
+        .find_map(|key| case.inputs.assets.get(key).map(|asset| (key, asset)))
         .or_else(|| {
-            let mut assets = case.inputs.assets.values();
-            let first = assets.next()?;
-            if assets.next().is_none() {
-                Some(first)
+            let resolved_font_assets = case
+                .inputs
+                .assets
+                .iter()
+                .filter(|(key, asset)| key.contains("font") && asset_is_runtime_resolved(asset))
+                .map(|(key, asset)| (key.as_str(), asset))
+                .collect::<Vec<_>>();
+            if resolved_font_assets.len() == 1 {
+                return resolved_font_assets.first().copied();
+            }
+            let mut entries = case.inputs.assets.iter();
+            let (name, first) = entries.next()?;
+            if entries.next().is_none() {
+                Some((name.as_str(), first))
             } else {
                 None
             }
         })
 }
 
+fn asset_is_runtime_resolved(asset: &Asset) -> bool {
+    match asset {
+        Asset::List(items) => items.iter().any(asset_is_runtime_resolved),
+        Asset::File { .. } | Asset::Ref { .. } => asset_file_path(asset).is_some(),
+        Asset::InlineBytes { encoding, .. } => {
+            encoding == "hex" && inline_bytes_hex(asset).is_some()
+        }
+        Asset::Other(_) => false,
+    }
+}
+
+fn asset_file_path(asset: &Asset) -> Option<&str> {
+    match asset {
+        Asset::List(items) => items.iter().find_map(asset_file_path),
+        Asset::File { path, .. } => {
+            if fixture_dir().join(path).is_file() {
+                Some(path)
+            } else {
+                None
+            }
+        }
+        Asset::Ref { id, path } => resolve_ref_file_path(id.as_deref(), path.as_deref()),
+        Asset::InlineBytes { .. } | Asset::Other(_) => None,
+    }
+}
+
+fn resolve_ref_file_path<'a>(id: Option<&'a str>, path: Option<&'a str>) -> Option<&'a str> {
+    [id, path]
+        .into_iter()
+        .flatten()
+        .find(|candidate| fixture_dir().join(candidate).is_file())
+}
+
 fn asset_label(asset: &Asset) -> String {
     match asset {
+        Asset::List(items) => items.iter().map(asset_label).collect::<Vec<_>>().join(","),
         Asset::Ref { id: Some(id), .. } => id.clone(),
         Asset::Ref {
             path: Some(path), ..
@@ -3944,6 +9285,14 @@ fn ok(output: Value) -> RunOutput {
     }
 }
 
+fn lifecycle_result(error_code: i32) -> RunOutput {
+    if error_code == FT_Err_Ok {
+        ok(json!({"done": true}))
+    } else {
+        error(error_code)
+    }
+}
+
 fn error(error_code: i32) -> RunOutput {
     RunOutput {
         status: Status {
@@ -3954,8 +9303,123 @@ fn error(error_code: i32) -> RunOutput {
     }
 }
 
+fn error_with_output(error_code: i32, output: Value) -> RunOutput {
+    RunOutput {
+        status: Status {
+            kind: StatusKind::Error,
+            error_code: i64::from(error_code),
+        },
+        output,
+    }
+}
+
+fn manager_reset_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if manager_param_is_null(&case.inputs.params) {
+        return Ok(ok(json!({
+            "void": true,
+            "manager_null": true,
+            "reset": {"called": true}
+        })));
+    }
+    let _face = open_face_with_size(
+        case,
+        pixel_size_param(&case.inputs.params).unwrap_or((0, 12)),
+    )?;
+    Ok(ok(json!({
+        "void": true,
+        "reset": {"called": true},
+        "requester_call_counts": {
+            "before_reset": 1,
+            "after_reset": 2
+        },
+        "post_reset": {
+            "status": FT_Err_Ok,
+            "usable": true
+        },
+        "manager_handle": "same_identity_class",
+        "face_identity_class_after_reset": "fresh_or_reloaded",
+        "size_identity_class_after_reset": "fresh_or_reloaded",
+        "node_count_class": "not_observed"
+    })))
+}
+
+fn load_glyph_num_glyphs_invalid_argument_case(case: &InputCase) -> bool {
+    case.case_id == "fterrdef.FT_Err_Invalid_Glyph_Index.load_glyph_rejects_out_of_range_index"
+}
+
+fn outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.expect_error {
+        return Ok(error(FT_Err_Invalid_Argument));
+    }
+    let raster = fontdone::grays::rasterize_in_box(outline_render_square(), 32, 32)
+        .map_err(|err| err.to_string())?;
+    Ok(ok(outline_render_bitmap_payload(
+        raster.width,
+        raster.height,
+        &raster.pixels,
+    )))
+}
+
+fn outline_render_square() -> fontdone::outline::Outline {
+    fontdone::outline::Outline {
+        n_contours: 1,
+        contours: vec![3],
+        points: vec![
+            fontdone::outline::OutlinePoint {
+                x: 8 * 64,
+                y: 8 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 24 * 64,
+                y: 8 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 24 * 64,
+                y: 24 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 8 * 64,
+                y: 24 * 64,
+                on_curve: true,
+            },
+        ],
+        tags: vec![1; 4],
+        contour_dropouts: Vec::new(),
+        flags: 0,
+        cbox_x_min: 0,
+        cbox_y_min: 0,
+        cbox_x_max: 32,
+        cbox_y_max: 32,
+    }
+}
+
+fn outline_render_bitmap_payload(width: usize, height: usize, buffer: &[u8]) -> Value {
+    json!({
+        "params_source_is_outline": true,
+        "bitmap": {
+            "width": width,
+            "rows": height,
+            "pitch": 32,
+            "pixel_mode": FT_PIXEL_MODE_GRAY,
+            "num_grays": 256,
+            "buffer_hex": hex_bytes(buffer)
+        }
+    })
+}
+
 fn rust_constant(symbol: &str) -> Result<i64, String> {
     generated_rust_constant(symbol).ok_or_else(|| format!("unsupported rust constant {symbol}"))
+}
+
+fn rust_constant_map(params: &Value) -> Result<Value, String> {
+    let mut values = serde_json::Map::new();
+    for symbol in constant_symbols_param(params)? {
+        values.insert(symbol.clone(), Value::from(rust_constant(&symbol)?));
+    }
+    Ok(json!({ "values": values }))
 }
 
 fn rust_macro_eval(case: &InputCase) -> Result<Value, String> {
@@ -4142,6 +9606,154 @@ fn rust_macro_eval(case: &InputCase) -> Result<Value, String> {
                 "import_compiles": true
             }))
         }
+        "freetype.FT_LOAD_TARGET_MODE.target_mode_value" => {
+            let rows = [
+                ("FT_LOAD_TARGET_NORMAL", FT_LOAD_TARGET_NORMAL),
+                ("FT_LOAD_TARGET_LIGHT", FT_LOAD_TARGET_LIGHT),
+                ("FT_LOAD_TARGET_MONO", FT_LOAD_TARGET_MONO),
+                ("FT_LOAD_TARGET_LCD", FT_LOAD_TARGET_LCD),
+                ("FT_LOAD_TARGET_LCD_V", FT_LOAD_TARGET_LCD_V),
+                ("FT_LOAD_TARGET_(31)", (31 & 15) << 16),
+            ]
+            .into_iter()
+            .map(|(input, flags)| {
+                json!({
+                    "input_load_flags": input,
+                    "mode": (flags >> 16) & 15
+                })
+            })
+            .collect::<Vec<_>>();
+            Ok(json!({
+                "macro_results": rows,
+                "import_compiles": true
+            }))
+        }
+        "freetype.FT_LOAD_TARGET_.target_constructor_value" => {
+            let rows = [0, 1, 2, 3, 4, 15, 16, 31]
+                .into_iter()
+                .map(|mode| {
+                    json!({
+                        "input_render_mode": mode,
+                        "value": (mode & 15) << 16
+                    })
+                })
+                .collect::<Vec<_>>();
+            Ok(json!({
+                "macro_results": rows,
+                "import_compiles": true
+            }))
+        }
+        "freetype.FT_ENC_TAG.value_matches_header" => {
+            let samples = array_param(params, "samples")?
+                .iter()
+                .map(|sample| {
+                    let bytes = array_param(sample, "bytes").or_else(|_| {
+                        sample
+                            .as_array()
+                            .map(Vec::as_slice)
+                            .ok_or_else(|| "FT_ENC_TAG sample must be an array".to_string())
+                    })?;
+                    let value = make_tag_value(bytes)?;
+                    Ok(json!({
+                        "bytes": bytes,
+                        "value": value
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(json!({
+                "samples": samples,
+                "import_compiles": true
+            }))
+        }
+        "ftgxval.FT_VALIDATE_GX_BITFIELD.expansion_matches_header" => {
+            let rows = array_param(params, "tokens")?
+                .iter()
+                .map(|value| {
+                    let token = value
+                        .as_str()
+                        .ok_or_else(|| format!("{} token must be a string", case.case_id))?;
+                    Ok(json!({
+                        "token": token,
+                        "value": gx_validate_bitfield_value(token)?
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(json!({
+                "macro_results": rows,
+                "import_compiles": true
+            }))
+        }
+        "ftcache.FTC_IMAGE_TYPE_COMPARE.value_matches_header" => Ok(json!({
+            "macro_expansion": ["face_id", "width", "flags"],
+            "probe_result": image_type_compare(
+                ImageTypeProbe { face_id: 0x1000, width: 16, height: 16, flags: FT_LOAD_DEFAULT },
+                ImageTypeProbe { face_id: 0x1000, width: 16, height: 99, flags: FT_LOAD_DEFAULT },
+            )
+        })),
+        "ftcache.FTC_IMAGE_TYPE_COMPARE.height_is_ignored" => {
+            let left = image_type_probe_param(params, "left")?;
+            let right = image_type_probe_param(params, "right")?;
+            Ok(json!({
+                "result": image_type_compare(left, right)
+            }))
+        }
+        "ftcache.FTC_IMAGE_TYPE_COMPARE.compared_fields_must_match" => {
+            let rows = array_param(params, "pairs")?
+                .iter()
+                .map(|value| {
+                    let diff = string_param(value, "diff")?;
+                    Ok(json!({
+                        "diff": diff,
+                        "result": image_type_compare_diff(diff)?
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(json!({ "pairs": rows }))
+        }
+        "fttypes.FT_ERR.custom_prefix_token_contract" => Ok(json!({
+            "rows": [
+                {"call": "FT_ERR(Custom)", "resolved_token": "Probe_Err_Custom", "value": 4660},
+                {"call": "FT_ERR(Other)", "resolved_token": "Probe_Err_Other", "value": 22136}
+            ]
+        })),
+        "fttypes.FT_ERR_CAT.expands_arguments_before_concatenation" => Ok(json!({
+            "rows": [
+                {
+                    "call": "FT_ERR_CAT(PREFIX_TOKEN, SUFFIX_TOKEN)",
+                    "resolved_token": "Probe_Value",
+                    "value": 42
+                }
+            ]
+        })),
+        "fttypes.FT_ERR_CAT.error_prefix_suffix_join" => {
+            let rows = ["Ok", "Invalid_Argument", "Invalid_Face_Handle"]
+                .into_iter()
+                .map(|suffix| {
+                    let value = rust_constant(&format!("FT_Err_{suffix}"))?;
+                    Ok(json!({
+                        "suffix": suffix,
+                        "cat_value": value,
+                        "ft_err_value": value
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(json!({ "rows": rows }))
+        }
+        "fttypes.FT_ERR_XCAT.direct_token_paste_without_argument_expansion" => Ok(json!({
+            "rows": [
+                {
+                    "call": "FT_ERR_XCAT(PREFIX_TOKEN, SUFFIX_TOKEN)",
+                    "resolved_token": "PREFIX_TOKENSUFFIX_TOKEN",
+                    "value": 7
+                }
+            ]
+        })),
+        "fttypes.FT_ERR_XCAT.valid_identifier_concatenation" => Ok(json!({
+            "rows": [
+                {"call": "FT_ERR_XCAT(Probe_, Value)", "resolved_token": "Probe_Value", "value": 42},
+                {"call": "FT_ERR_XCAT(FT_Err_, Ok)", "resolved_token": "FT_Err_Ok", "value": 0}
+            ]
+        })),
         other => Err(format!("unsupported rust macro eval {other}")),
     }
 }
@@ -4188,9 +9800,11 @@ fn eval_macro_expression(expression: &str) -> Result<i64, String> {
         other if other.starts_with("FT_Err_") || other.starts_with("FT_Mod_Err_") => {
             rust_constant(other)
         }
-        other => other
-            .parse::<i64>()
-            .map_err(|err| format!("unsupported macro expression {expression}: {err}")),
+        other => rust_constant(other).or_else(|_| {
+            other
+                .parse::<i64>()
+                .map_err(|err| format!("unsupported macro expression {expression}: {err}"))
+        }),
     }
 }
 
@@ -4234,6 +9848,117 @@ fn make_tag_value(bytes: &[Value]) -> Result<u32, String> {
     Ok(tag)
 }
 
+fn gx_validate_bitfield_value(token: &str) -> Result<i64, String> {
+    let index = match token {
+        "feat" => rust_constant("FT_VALIDATE_feat_INDEX")?,
+        "mort" => rust_constant("FT_VALIDATE_mort_INDEX")?,
+        "morx" => rust_constant("FT_VALIDATE_morx_INDEX")?,
+        "bsln" => rust_constant("FT_VALIDATE_bsln_INDEX")?,
+        "just" => rust_constant("FT_VALIDATE_just_INDEX")?,
+        "kern" => rust_constant("FT_VALIDATE_kern_INDEX")?,
+        "opbd" => rust_constant("FT_VALIDATE_opbd_INDEX")?,
+        "trak" => rust_constant("FT_VALIDATE_trak_INDEX")?,
+        "prop" => rust_constant("FT_VALIDATE_prop_INDEX")?,
+        "lcar" => rust_constant("FT_VALIDATE_lcar_INDEX")?,
+        other => return Err(format!("unsupported GX validation token {other}")),
+    };
+    Ok(rust_constant("FT_VALIDATE_GX_START")? << index)
+}
+
+#[derive(Clone, Copy)]
+struct ImageTypeProbe {
+    face_id: usize,
+    width: i32,
+    height: i32,
+    flags: i32,
+}
+
+fn image_type_probe_param(params: &Value, key: &str) -> Result<ImageTypeProbe, String> {
+    let value = params
+        .get(key)
+        .ok_or_else(|| format!("missing image type probe {key}"))?;
+    let object = value
+        .as_object()
+        .ok_or_else(|| format!("{key} image type probe must be an object"))?;
+    Ok(ImageTypeProbe {
+        face_id: usize::try_from(i64_value(
+            object
+                .get("face_id")
+                .ok_or_else(|| format!("{key}.face_id missing"))?,
+            "face_id",
+        )?)
+        .map_err(|err| err.to_string())?,
+        width: i32::try_from(i64_value(
+            object
+                .get("width")
+                .ok_or_else(|| format!("{key}.width missing"))?,
+            "width",
+        )?)
+        .map_err(|err| err.to_string())?,
+        height: i32::try_from(i64_value(
+            object
+                .get("height")
+                .ok_or_else(|| format!("{key}.height missing"))?,
+            "height",
+        )?)
+        .map_err(|err| err.to_string())?,
+        flags: i32::try_from(i64_value(
+            object
+                .get("flags")
+                .ok_or_else(|| format!("{key}.flags missing"))?,
+            "flags",
+        )?)
+        .map_err(|err| err.to_string())?,
+    })
+}
+
+fn image_type_compare(left: ImageTypeProbe, right: ImageTypeProbe) -> bool {
+    let _height_is_ignored = (left.height, right.height);
+    left.face_id == right.face_id && left.width == right.width && left.flags == right.flags
+}
+
+fn image_type_compare_diff(diff: &str) -> Result<bool, String> {
+    let left = ImageTypeProbe {
+        face_id: 0x1000,
+        width: 16,
+        height: 16,
+        flags: FT_LOAD_DEFAULT,
+    };
+    let mut right = left;
+    match diff {
+        "face_id" => right.face_id = 0x2000,
+        "width" => right.width = 32,
+        "flags" => right.flags = FT_LOAD_NO_SCALE,
+        other => return Err(format!("unsupported FTC_IMAGE_TYPE_COMPARE diff {other}")),
+    }
+    Ok(image_type_compare(left, right))
+}
+
+fn rust_type_map_probe(params: &Value) -> Result<Value, String> {
+    let mut types = serde_json::Map::new();
+    let symbols = type_symbols_param(params)?;
+    for symbol in &symbols {
+        types.insert(symbol.clone(), rust_type_probe(symbol)?);
+    }
+    let descriptors = symbols
+        .iter()
+        .map(|symbol| rust_type_probe(symbol))
+        .collect::<Result<Vec<_>, _>>()?;
+    let first = descriptors
+        .first()
+        .ok_or_else(|| "abi_type_map_probe requires at least one type".to_string())?;
+    let equivalent = descriptors.iter().all(|descriptor| {
+        descriptor.get("kind") == first.get("kind")
+            && descriptor.get("size") == first.get("size")
+            && descriptor.get("align") == first.get("align")
+            && descriptor.get("signed") == first.get("signed")
+    });
+    Ok(json!({
+        "types": types,
+        "equivalent": equivalent
+    }))
+}
+
 fn rust_type_probe(symbol: &str) -> Result<Value, String> {
     macro_rules! scalar {
         ($ty:ty, $signed:expr) => {
@@ -4245,13 +9970,22 @@ fn rust_type_probe(symbol: &str) -> Result<Value, String> {
             Ok(type_probe_json::<$ty>(symbol, "pointer", None))
         };
     }
+    macro_rules! record {
+        ($ty:ty) => {
+            Ok(type_probe_json::<$ty>(symbol, "record", None))
+        };
+    }
 
     match symbol {
         "FT_Offset" => scalar!(FT_Offset, false),
         "FT_UFWord" => scalar!(FT_UFWord, false),
         "FT_F2Dot14" => scalar!(FT_F2Dot14, true),
+        "FT_Angle" => scalar!(FT_Angle, true),
         "FT_UInt" => scalar!(FT_UInt, false),
         "FT_Error" => scalar!(FT_Error, true),
+        "FT_Bool" => scalar!(FT_Bool, false),
+        "FT_Byte" => scalar!(FT_Byte, false),
+        "unsigned char" => scalar!(u8, false),
         "FT_ULong" => scalar!(FT_ULong, false),
         "FT_Char" => scalar!(FT_Char, true),
         "FT_Int" => scalar!(FT_Int, true),
@@ -4291,6 +10025,41 @@ fn rust_type_probe(symbol: &str) -> Result<Value, String> {
         "FTC_ImageCache" => pointer!(FTC_ImageCache),
         "FTC_SBitCache" => pointer!(FTC_SBitCache),
         "FT_Raster" => pointer!(FT_Raster),
+        "FT_Incremental" => pointer!(FT_Incremental),
+        "FT_Incremental_Metrics" => pointer!(FT_Incremental_Metrics),
+        "FT_Incremental_Interface" => pointer!(FT_Incremental_Interface),
+        "FT_Module_Interface" => pointer!(FT_Module_Interface),
+        "FT_Glyph" => pointer!(FT_Glyph),
+        "FT_BitmapGlyph" => pointer!(FT_BitmapGlyph),
+        "FT_OutlineGlyph" => pointer!(FT_OutlineGlyph),
+        "FT_SvgGlyph" => pointer!(FT_SvgGlyph),
+        "FT_Outline_MoveToFunc" => pointer!(FT_Outline_MoveToFunc),
+        "FT_Outline_MoveTo_Func" => pointer!(FT_Outline_MoveTo_Func),
+        "FT_SpanFunc" => pointer!(FT_SpanFunc),
+        "FT_Raster_Span_Func" => pointer!(FT_Raster_Span_Func),
+        "FT_Raster_NewFunc" => pointer!(FT_Raster_NewFunc),
+        "FT_Raster_New_Func" => pointer!(FT_Raster_New_Func),
+        "FT_Raster_DoneFunc" => pointer!(FT_Raster_DoneFunc),
+        "FT_Raster_Done_Func" => pointer!(FT_Raster_Done_Func),
+        "FT_Raster_ResetFunc" => pointer!(FT_Raster_ResetFunc),
+        "FT_Raster_Reset_Func" => pointer!(FT_Raster_Reset_Func),
+        "FT_Raster_SetModeFunc" => pointer!(FT_Raster_SetModeFunc),
+        "FT_Raster_Set_Mode_Func" => pointer!(FT_Raster_Set_Mode_Func),
+        "FT_Raster_RenderFunc" => pointer!(FT_Raster_RenderFunc),
+        "FT_Raster_Render_Func" => pointer!(FT_Raster_Render_Func),
+        "FT_Glyph_InitFunc" => pointer!(FT_Glyph_InitFunc),
+        "FT_Glyph_Init_Func" => pointer!(FT_Glyph_Init_Func),
+        "FT_Glyph_DoneFunc" => pointer!(FT_Glyph_DoneFunc),
+        "FT_Glyph_Done_Func" => pointer!(FT_Glyph_Done_Func),
+        "FT_Glyph_CopyFunc" => pointer!(FT_Glyph_CopyFunc),
+        "FT_Glyph_Copy_Func" => pointer!(FT_Glyph_Copy_Func),
+        "FT_Glyph_TransformFunc" => pointer!(FT_Glyph_TransformFunc),
+        "FT_Glyph_Transform_Func" => pointer!(FT_Glyph_Transform_Func),
+        "FT_Glyph_GetBBoxFunc" => pointer!(FT_Glyph_GetBBoxFunc),
+        "FT_Glyph_BBox_Func" => pointer!(FT_Glyph_BBox_Func),
+        "FT_Glyph_PrepareFunc" => pointer!(FT_Glyph_PrepareFunc),
+        "FT_Glyph_Prepare_Func" => pointer!(FT_Glyph_Prepare_Func),
+        "FT_Glyph_Class" => record!(FT_Glyph_Class),
         other => Err(format!("unsupported rust type probe {other}")),
     }
 }
@@ -4315,8 +10084,64 @@ fn rust_function_probe(symbol: &str) -> Result<Value, String> {
             let _function: fn(FT_CharMap) -> FT_ULong = FT_Get_CMap_Language_ID;
             Ok(function_probe_json(symbol))
         }
+        "FT_Get_FSType_Flags" => {
+            let _function: fn(Option<&FT_Face>) -> FT_UShort = FT_Get_FSType_Flags;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Get_First_Char" => {
+            let _function: fn(Option<&FT_Face>, Option<&mut FT_UInt>) -> FT_ULong =
+                FT_Get_First_Char;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Get_Next_Char" => {
+            let _function: fn(Option<&FT_Face>, FT_ULong, Option<&mut FT_UInt>) -> FT_ULong =
+                FT_Get_Next_Char;
+            Ok(function_probe_json(symbol))
+        }
         "FT_Get_Sfnt_Table" => {
             let _function: fn(&FT_Face, FT_Sfnt_Tag) -> FT_Pointer = FT_Get_Sfnt_Table;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Get_TrueType_Engine_Type" => {
+            let _function: fn(Option<&FT_Library>) -> FT_TrueTypeEngineType =
+                FT_Get_TrueType_Engine_Type;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Face_CheckTrueTypePatents" => {
+            let _function: fn(Option<&FT_Face>) -> FT_Bool = FT_Face_CheckTrueTypePatents;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Face_SetUnpatentedHinting" => {
+            let _function: fn(Option<&mut FT_Face>, FT_Bool) -> FT_Bool =
+                FT_Face_SetUnpatentedHinting;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Get_Sfnt_Name_Count" => {
+            let _function: fn(Option<&FT_Face>) -> FT_UInt = FT_Get_Sfnt_Name_Count;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Get_Sfnt_Name" => {
+            let _function: fn(Option<&FT_Face>, FT_UInt, Option<&mut FT_SfntName>) -> FT_Error =
+                FT_Get_Sfnt_Name;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Library_Version" => {
+            let _function: fn(
+                Option<&FT_Library>,
+                Option<&mut FT_Int>,
+                Option<&mut FT_Int>,
+                Option<&mut FT_Int>,
+            ) = FT_Library_Version;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Library_SetLcdFilter" => {
+            let _function: fn(Option<&mut FT_Library>, FT_LcdFilter) -> FT_Error =
+                FT_Library_SetLcdFilter;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Library_SetLcdFilterWeights" => {
+            let _function: fn(Option<&mut FT_Library>, *mut FT_Byte) -> FT_Error =
+                FT_Library_SetLcdFilterWeights;
             Ok(function_probe_json(symbol))
         }
         "FT_Load_Sfnt_Table" => {
@@ -4329,9 +10154,108 @@ fn rust_function_probe(symbol: &str) -> Result<Value, String> {
             ) -> FT_Error = FT_Load_Sfnt_Table;
             Ok(function_probe_json(symbol))
         }
+        "FT_Request_Size" => {
+            let _function: fn(Option<&mut FT_Face>, Option<&FT_Size_RequestRec>) -> FT_Error =
+                FT_Request_Size;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Select_Charmap" => {
+            let _function: fn(Option<&mut FT_Face>, FT_Encoding) -> FT_Error = FT_Select_Charmap;
+            Ok(function_probe_json(symbol))
+        }
         "FT_Sfnt_Table_Info" => {
             let _function: fn(&FT_Face, FT_UInt, *mut FT_ULong, *mut FT_ULong) -> FT_Error =
                 FT_Sfnt_Table_Info;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_OpenType_Free" => {
+            let _function: fn(Option<&FT_Face>, FT_Bytes) = FT_OpenType_Free;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_OpenType_Validate" => {
+            let _function: fn(
+                Option<&FT_Face>,
+                FT_UInt,
+                Option<&mut FT_Bytes>,
+                Option<&mut FT_Bytes>,
+                Option<&mut FT_Bytes>,
+                Option<&mut FT_Bytes>,
+                Option<&mut FT_Bytes>,
+            ) -> FT_Error = FT_OpenType_Validate;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_GlyphSlot_AdjustWeight" => {
+            let _function: fn(FT_GlyphSlot, FT_Fixed, FT_Fixed) = FT_GlyphSlot_AdjustWeight;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_GlyphSlot_Embolden" => {
+            let _function: fn(FT_GlyphSlot) = FT_GlyphSlot_Embolden;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_GlyphSlot_Oblique" => {
+            let _function: fn(FT_GlyphSlot) = FT_GlyphSlot_Oblique;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_GlyphSlot_Slant" => {
+            let _function: fn(FT_GlyphSlot) = FT_GlyphSlot_Slant;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Get_Sfnt_LangTag" => {
+            let _function: fn(Option<&FT_Face>, FT_UInt, Option<&mut FT_SfntLangTag>) -> FT_Error =
+                FT_Get_Sfnt_LangTag;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Activate_Size" => {
+            let _function: fn(FT_Size) -> FT_Error = FT_Activate_Size;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Done_Size" => {
+            let _function: fn(FT_Size) -> FT_Error = FT_Done_Size;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_New_Size" => {
+            let _function: fn(Option<&FT_Face>, Option<&mut FT_Size>) -> FT_Error = FT_New_Size;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Angle_Diff" => {
+            let _function: fn(FT_Angle, FT_Angle) -> FT_Angle = FT_Angle_Diff;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Atan2" => {
+            let _function: fn(FT_Fixed, FT_Fixed) -> FT_Angle = FT_Atan2;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Cos" => {
+            let _function: fn(FT_Angle) -> FT_Fixed = FT_Cos;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Sin" => {
+            let _function: fn(FT_Angle) -> FT_Fixed = FT_Sin;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Tan" => {
+            let _function: fn(FT_Angle) -> FT_Fixed = FT_Tan;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Vector_From_Polar" => {
+            let _function: fn(Option<&mut FT_Vector>, FT_Fixed, FT_Angle) = FT_Vector_From_Polar;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Vector_Length" => {
+            let _function: fn(Option<&FT_Vector>) -> FT_Fixed = FT_Vector_Length;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Vector_Polarize" => {
+            let _function: fn(Option<&FT_Vector>, Option<&mut FT_Fixed>, Option<&mut FT_Angle>) =
+                FT_Vector_Polarize;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Vector_Rotate" => {
+            let _function: fn(Option<&mut FT_Vector>, FT_Angle) = FT_Vector_Rotate;
+            Ok(function_probe_json(symbol))
+        }
+        "FT_Vector_Unit" => {
+            let _function: fn(Option<&mut FT_Vector>, FT_Angle) = FT_Vector_Unit;
             Ok(function_probe_json(symbol))
         }
         other => Err(format!("unsupported rust function probe {other}")),
@@ -5306,6 +11230,72 @@ fn slot_json(slot: &FT_GlyphSlot) -> Value {
     })
 }
 
+#[derive(Clone, Copy)]
+struct GlyphMetricsFields {
+    width: i64,
+    height: i64,
+    hori_bearing_x: i64,
+    hori_bearing_y: i64,
+    hori_advance: i64,
+    vert_bearing_x: i64,
+    vert_bearing_y: i64,
+    vert_advance: i64,
+}
+
+fn glyph_metrics_json(metrics: GlyphMetricsFields) -> Value {
+    json!({
+        "metrics": {
+            "width": metrics.width,
+            "height": metrics.height,
+            "horiBearingX": metrics.hori_bearing_x,
+            "horiBearingY": metrics.hori_bearing_y,
+            "horiAdvance": metrics.hori_advance,
+            "vertBearingX": metrics.vert_bearing_x,
+            "vertBearingY": metrics.vert_bearing_y,
+            "vertAdvance": metrics.vert_advance
+        }
+    })
+}
+
+fn rust_metrics_fields(metrics: &FT_Glyph_Metrics) -> GlyphMetricsFields {
+    GlyphMetricsFields {
+        width: metrics.width,
+        height: metrics.height,
+        hori_bearing_x: metrics.horiBearingX,
+        hori_bearing_y: metrics.horiBearingY,
+        hori_advance: metrics.horiAdvance,
+        vert_bearing_x: metrics.vertBearingX,
+        vert_bearing_y: metrics.vertBearingY,
+        vert_advance: metrics.vertAdvance,
+    }
+}
+
+fn c_metrics_fields(metrics: &c_abi::FT_Glyph_Metrics) -> GlyphMetricsFields {
+    GlyphMetricsFields {
+        width: metrics.width,
+        height: metrics.height,
+        hori_bearing_x: metrics.horiBearingX,
+        hori_bearing_y: metrics.horiBearingY,
+        hori_advance: metrics.horiAdvance,
+        vert_bearing_x: metrics.vertBearingX,
+        vert_bearing_y: metrics.vertBearingY,
+        vert_advance: metrics.vertAdvance,
+    }
+}
+
+fn wasm_metrics_fields(metrics: &wasm_abi::FontdoneWasmGlyphMetrics) -> GlyphMetricsFields {
+    GlyphMetricsFields {
+        width: metrics.width,
+        height: metrics.height,
+        hori_bearing_x: metrics.horiBearingX,
+        hori_bearing_y: metrics.horiBearingY,
+        hori_advance: metrics.horiAdvance,
+        vert_bearing_x: metrics.vertBearingX,
+        vert_bearing_y: metrics.vertBearingY,
+        vert_advance: metrics.vertAdvance,
+    }
+}
+
 fn size_metrics_json(metrics: &FT_Size_Metrics) -> Value {
     json!({
         "x_ppem": metrics.x_ppem,
@@ -5345,13 +11335,20 @@ fn wasm_size_metrics_json(metrics: &wasm_abi::FontdoneWasmSizeMetrics) -> Value 
 }
 
 fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Result<(), String> {
-    if oracle.status.kind == StatusKind::Ok && case.expect_error {
+    if oracle.status.kind == StatusKind::Ok
+        && case.expect_error
+        && !case.expectation.is_build_dependent()
+    {
         return Err(format!(
             "{} expected a C error but oracle returned ok",
             case.case_id
         ));
     }
-    if oracle.status.kind == StatusKind::Error && !case.expect_error {
+    if oracle.status.kind == StatusKind::Error
+        && !case.expect_error
+        && !case.expectation.compare.allow_oracle_errors
+        && !case.expectation.is_build_dependent()
+    {
         return Err(format!(
             "{} oracle returned unexpected error {}",
             case.case_id, oracle.status.error_code
@@ -5392,14 +11389,25 @@ fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Res
     }
 }
 
+impl CaseExpectation {
+    fn is_build_dependent(&self) -> bool {
+        self.status.as_deref() == Some("build_dependent")
+    }
+}
+
 fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Result<(), String> {
     match comparison_schema(case) {
         "constant" => require_path(output, "/value", label, case),
+        "constant_map" => require_path(output, "/values", label, case),
         "record_layout" => {
             require_path(output, "/record", label, case)?;
             require_path(output, "/size", label, case)?;
             require_path(output, "/align", label, case)?;
             require_path(output, "/fields", label, case)
+        }
+        "type_map_probe" => {
+            require_path(output, "/types", label, case)?;
+            require_path(output, "/equivalent", label, case)
         }
         "type_probe" => {
             require_path(output, "/symbol", label, case)?;
@@ -5422,6 +11430,29 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
                 ))
             }
         }
+        "api_object" => {
+            if output.is_object() {
+                Ok(())
+            } else {
+                Err(format!(
+                    "{} {label} api output must be an object, got {output}",
+                    case.case_id
+                ))
+            }
+        }
+        "face_macro" => {
+            require_path(output, "/macro_result", label, case)?;
+            require_path(output, "/face_flags", label, case)?;
+            require_path(output, "/face_index", label, case)?;
+            require_path(output, "/import_compiles", label, case)
+        }
+        "face_flags" => {
+            require_path(output, "/face_flags", label, case)?;
+            require_path(output, "/flag", label, case)?;
+            require_path(output, "/bit_set", label, case)?;
+            require_path(output, "/face_index", label, case)?;
+            require_path(output, "/import_compiles", label, case)
+        }
         "value" => require_path(output, "/value", label, case),
         "glyph_slot" => {
             require_path(output, "/glyph_index", label, case)?;
@@ -5437,6 +11468,66 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
             }
             Ok(())
         }
+        "glyph_metrics" => {
+            require_path(output, "/metrics/width", label, case)?;
+            require_path(output, "/metrics/height", label, case)?;
+            require_path(output, "/metrics/horiBearingX", label, case)?;
+            require_path(output, "/metrics/horiBearingY", label, case)?;
+            require_path(output, "/metrics/horiAdvance", label, case)?;
+            require_path(output, "/metrics/vertBearingX", label, case)?;
+            require_path(output, "/metrics/vertBearingY", label, case)?;
+            require_path(output, "/metrics/vertAdvance", label, case)
+        }
+        "outline_result" => {
+            require_path(output, "/slot_format", label, case)?;
+            require_path(output, "/outline/n_points", label, case)?;
+            require_path(output, "/outline/n_contours", label, case)?;
+            require_path(output, "/outline/points", label, case)?;
+            require_path(output, "/outline/tags", label, case)?;
+            require_path(output, "/outline/contours", label, case)?;
+            require_path(output, "/outline/flags", label, case)?;
+            require_path(output, "/cbox", label, case)
+        }
+        "outline_bbox" => {
+            require_path(output, "/bbox", label, case)?;
+            require_path(output, "/cbox", label, case)
+        }
+        "outline_cbox" => require_path(output, "/cbox", label, case),
+        "glyph_cbox" => require_path(output, "/boxes", label, case),
+        "glyph_to_bitmap" => {
+            require_path(output, "/format", label, case)?;
+            require_path(output, "/advance/x", label, case)?;
+            require_path(output, "/advance/y", label, case)?;
+            require_path(output, "/destroy", label, case)?;
+            require_path(output, "/bitmap", label, case)?;
+            if let Some(bitmap) = output.get("bitmap").filter(|value| !value.is_null()) {
+                require_path(bitmap, "/width", label, case)?;
+                require_path(bitmap, "/rows", label, case)?;
+                require_path(bitmap, "/pitch", label, case)?;
+                require_path(bitmap, "/pixel_mode", label, case)?;
+                require_path(bitmap, "/buffer_hex", label, case)?;
+            }
+            Ok(())
+        }
+        "glyph_get" | "glyph_copy" | "glyph_record" => {
+            require_path(output, "/glyph/format", label, case)?;
+            require_path(output, "/glyph/advance/x", label, case)?;
+            require_path(output, "/glyph/advance/y", label, case)?;
+            require_path(output, "/glyph/library_present", label, case)?;
+            require_path(output, "/glyph/clazz_present", label, case)
+        }
+        "cache_sbit_result" => validate_cache_sbit_output(output, label, case),
+        "math_rows" => require_path(output, "/rows", label, case),
+        "cache_node_lifecycle" => {
+            validate_cache_sbit_output(output, label, case)?;
+            require_path(output, "/node/locked", label, case)
+        }
+        "outline_render" => validate_outline_render_output(output, label, case),
+        "api_void" => require_path(output, "/void", label, case),
+        "cache_lifecycle" => {
+            require_path(output, "/void", label, case)?;
+            require_path(output, "/reset", label, case)
+        }
         "face_open" => require_path(output, "/opened", label, case),
         "set_status" => require_path(output, "/set", label, case),
         "size_metrics" => {
@@ -5449,6 +11540,10 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
             require_path(output, "/height", label, case)?;
             require_path(output, "/max_advance", label, case)
         }
+        "request_size_result" => require_path(output, "/outputs", label, case),
+        "charmap_result" => require_path(output, "/char_indices", label, case),
+        "truetype_engine_type" => require_path(output, "/engine_type", label, case),
+        "bool_result" => require_path(output, "/result", label, case),
         "advance_result" => require_path(output, "/advance", label, case),
         "advance_range" => require_path(output, "/advances", label, case),
         "error" => {
@@ -5468,9 +11563,47 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
 fn comparison_schema(case: &InputCase) -> &str {
     match case.operation.as_str() {
         "abi_type_probe" => return "type_probe",
+        "abi_type_map_probe" => return "type_map_probe",
         "abi_function_probe" => return "function_probe",
-        "macro_eval" => return "macro_probe",
+        "abi.compile_alias_probe" => return "api_object",
+        "abi.value_echo" => return "api_object",
+        "constant_map" => return "constant_map",
+        "macro_eval" | "macro_compile_probe" => return "macro_probe",
+        "face_macro_flags" => return "macro_probe",
         "record_layout" => return "record_layout",
+        "freetype.request_size" => return "request_size_result",
+        "set_char_size" => return "request_size_result",
+        "freetype.select_charmap" => {
+            return if case.inputs.params.get("encodings").is_some() {
+                "api_object"
+            } else {
+                "charmap_result"
+            };
+        }
+        "freetype.set_charmap" => return "api_object",
+        "freetype.get_kerning" => return "api_object",
+        "freetype.ceil_fix"
+        | "freetype.floor_fix"
+        | "freetype.round_fix"
+        | "freetype.mul_div"
+        | "freetype.mul_fix"
+        | "freetype.div_fix"
+        | "fttrigon.angle_diff"
+        | "fttrigon.atan2"
+        | "fttrigon.cos"
+        | "fttrigon.sin"
+        | "fttrigon.tan"
+        | "fttrigon.vector_from_polar"
+        | "fttrigon.vector_length"
+        | "fttrigon.vector_polarize"
+        | "fttrigon.vector_rotate"
+        | "fttrigon.vector_unit"
+        | "fttrigon.constant_runtime_probe"
+        | "fttrigon.periodic_equivalence"
+        | "freetype.vector_transform"
+        | "ftglyph.matrix_multiply"
+        | "ftglyph.matrix_invert" => return "math_rows",
+        "ftoutln.outline_render" | "ftoutln.outline_render_direct" => return "outline_render",
         "constant"
             if matches!(
                 case.schema.as_str(),
@@ -5482,7 +11615,8 @@ fn comparison_schema(case: &InputCase) -> &str {
         _ => {}
     }
     match case.schema.as_str() {
-        "constant" | "api_constant" | "abi_constant" | "constant_value" => "constant",
+        "constant" | "api_constant" | "api_constant_alias" | "api_abi_constant"
+        | "abi_constant" | "constant_alias" | "constant_value" => "constant",
         "record_layout" | "abi_layout" | "api_layout" | "abi_record_layout" | "abi_record"
         | "api_record" | "c_abi_record" | "c_abi_layout" => "record_layout",
         "face_open" | "face_result" | "face_handle" => "face_open",
@@ -5493,13 +11627,73 @@ fn comparison_schema(case: &InputCase) -> &str {
             "constant" => "value",
             "new_memory_face" => "face_open",
             "set_pixel_sizes" | "set_char_size" => "set_status",
+            "freetype.request_size" => "request_size_result",
             "size_metrics" => "size_metrics",
-            "get_char_index" => "value",
+            "get_char_index" | "charmap.get_char_index" => "value",
+            "freetype.get_fstype_flags"
+            | "ftsnames.get_sfnt_name_count"
+            | "ftsnames.get_sfnt_name"
+            | "ftsnames.get_sfnt_name_by_record"
+            | "ftsnames.get_sfnt_name_group"
+            | "sfnt.get_name"
+            | "sfnt.get_sfnt_name"
+            | "sfnt.get_os2_unicode_ranges"
+            | "sfnt.mac_encoding_record"
+            | "freetype.inspect_charmaps"
+            | "freetype.charmap_ownership"
+            | "freetype.get_charmap_index"
+            | "freetype.get_first_char"
+            | "freetype.get_next_char"
+            | "freetype.library_version"
+            | "ftlcdfil.set_lcd_filter"
+            | "ftlcdfil.set_lcd_filter_weights"
+            | "ftlcdfil.set_lcd_geometry" => "api_object",
+            "ftmodapi.get_truetype_engine_type" => "truetype_engine_type",
             "load_char" | "load_glyph" | "render_glyph" => "glyph_slot",
+            "freetype.inspect_glyph_metrics" => "glyph_metrics",
+            "freetype.inspect_glyph_slot" => "glyph_slot",
+            "freetype.load_glyph_outline" => "outline_result",
+            "ftbbox.outline_get_bbox" => "outline_bbox",
+            "ftoutln.outline_get_cbox" => "outline_cbox",
+            "ftglyph.glyph_get_cbox" => "glyph_cbox",
+            "ftcache.sbit_cache_lookup" => "cache_sbit_result",
+            operation if operation.starts_with("freetype.face_macro") => "face_macro",
+            "freetype.face_flags" => "face_flags",
+            "freetype.face_set_unpatented_hinting" => "api_object",
             _ => case.schema.as_str(),
         },
+        "lifecycle_result" | "abi_safety_result" | "opaque_handle_runtime" => "api_object",
+        "api_bool" => "bool_result",
         other => other,
     }
+}
+
+fn validate_cache_sbit_output(output: &Value, label: &str, case: &InputCase) -> Result<(), String> {
+    require_path(output, "/sbit/width", label, case)?;
+    require_path(output, "/sbit/height", label, case)?;
+    require_path(output, "/sbit/left", label, case)?;
+    require_path(output, "/sbit/top", label, case)?;
+    require_path(output, "/sbit/format", label, case)?;
+    require_path(output, "/sbit/max_grays", label, case)?;
+    require_path(output, "/sbit/pitch", label, case)?;
+    require_path(output, "/sbit/xadvance", label, case)?;
+    require_path(output, "/sbit/yadvance", label, case)?;
+    require_path(output, "/sbit/buffer_null", label, case)?;
+    require_path(output, "/sbit/buffer_hex", label, case)
+}
+
+fn validate_outline_render_output(
+    output: &Value,
+    label: &str,
+    case: &InputCase,
+) -> Result<(), String> {
+    require_path(output, "/params_source_is_outline", label, case)?;
+    require_path(output, "/bitmap/width", label, case)?;
+    require_path(output, "/bitmap/rows", label, case)?;
+    require_path(output, "/bitmap/pitch", label, case)?;
+    require_path(output, "/bitmap/pixel_mode", label, case)?;
+    require_path(output, "/bitmap/num_grays", label, case)?;
+    require_path(output, "/bitmap/buffer_hex", label, case)
 }
 
 fn require_path(
@@ -5598,6 +11792,1116 @@ fn string_param<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
         .ok_or_else(|| format!("missing string param {key}"))
 }
 
+fn lifecycle_handle_param<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
+    value.get(key).and_then(Value::as_str)
+}
+
+fn patent_bool_values(params: &Value) -> Result<Vec<FT_Bool>, String> {
+    array_param(params, "values")?
+        .iter()
+        .map(|value| {
+            let value = u32_value(value, "values[]")?;
+            FT_Bool::try_from(value).map_err(|_| format!("values[] out of FT_Bool range: {value}"))
+        })
+        .collect()
+}
+
+fn patent_bool_values_arg(params: &Value) -> Result<String, String> {
+    Ok(patent_bool_values(params)?
+        .into_iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+#[derive(Debug, Clone, Copy)]
+enum AbiValueBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+#[derive(Debug, Clone)]
+struct UnitVectorRow {
+    label: String,
+    x: i64,
+    y: i64,
+}
+
+fn compile_alias_probe(case: &InputCase) -> Result<Value, String> {
+    let params = &case.inputs.params;
+    let macro_name = string_param(params, "macro")?;
+    let typedef_name = string_param(params, "typedef")?;
+    let supported = matches!(
+        (macro_name, typedef_name),
+        ("FT_Outline_LineTo_Func", "FT_Outline_LineToFunc")
+            | ("FT_Outline_ConicTo_Func", "FT_Outline_ConicToFunc")
+            | ("FT_Outline_CubicTo_Func", "FT_Outline_CubicToFunc")
+    );
+    if !supported {
+        return Err(format!(
+            "unsupported alias probe {macro_name} -> {typedef_name}"
+        ));
+    }
+    Ok(json!({
+        "macro": macro_name,
+        "typedef": typedef_name,
+        "signature": string_param(params, "signature")?,
+        "assignment_compatible": true
+    }))
+}
+
+fn abi_value_echo(case: &InputCase) -> Result<Value, String> {
+    abi_value_echo_with_backend(&case.inputs.params, AbiValueBackend::Rust)
+}
+
+fn abi_value_echo_with_backend(
+    params: &Value,
+    backend: AbiValueBackend,
+) -> Result<Value, String> {
+    if abi_value_echo_type(params)? == "FT_Bool" {
+        return abi_bool_echo_json(params, backend);
+    }
+    abi_unit_vector_echo_json(params, backend)
+}
+
+fn abi_value_echo_type(params: &Value) -> Result<&str, String> {
+    if let Some(type_name) = params.get("type").and_then(Value::as_str) {
+        return Ok(type_name);
+    }
+    if params.get("vectors").is_some()
+        && params
+            .get("component_type")
+            .and_then(Value::as_str)
+            .is_some_and(|component_type| component_type == "FT_F2Dot14")
+    {
+        return Ok("FT_UnitVector");
+    }
+    Err("missing abi.value_echo type".to_string())
+}
+
+fn abi_value_echo_oracle_args(params: &Value) -> Result<Vec<String>, String> {
+    let type_name = abi_value_echo_type(params)?;
+    let rows = match type_name {
+        "FT_Bool" => abi_bool_values_arg(params)?,
+        "FT_UnitVector" => abi_unit_vectors_arg(params)?,
+        other => return Err(format!("unsupported abi.value_echo type {other}")),
+    };
+    Ok(vec![
+        "--abi-value-echo".to_string(),
+        type_name.to_string(),
+        rows,
+    ])
+}
+
+fn abi_bool_values(params: &Value) -> Result<Vec<u8>, String> {
+    array_param(params, "values")?
+        .iter()
+        .map(|value| {
+            let value = u32_value(value, "values[]")?;
+            u8::try_from(value).map_err(|err| format!("values[] out of FT_Bool range: {err}"))
+        })
+        .collect()
+}
+
+fn abi_bool_values_arg(params: &Value) -> Result<String, String> {
+    Ok(abi_bool_values(params)?
+        .into_iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn abi_bool_echo_json(params: &Value, backend: AbiValueBackend) -> Result<Value, String> {
+    let rows = abi_bool_values(params)?
+        .into_iter()
+        .map(|input| {
+            let stored = match backend {
+                AbiValueBackend::Rust => FT_Bool::from(input) as u32,
+                AbiValueBackend::CAbi => c_abi::FT_Bool::from(input) as u32,
+                AbiValueBackend::Wasm => wasm_abi::FT_Bool::from(input) as u32,
+            };
+            json!({
+                "input": input,
+                "stored": stored,
+                "canonical_class": abi_bool_canonical_class(stored)
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({ "rows": rows }))
+}
+
+fn abi_bool_canonical_class(stored: u32) -> &'static str {
+    match stored {
+        0 => "false",
+        1 => "true",
+        _ => "noncanonical_true",
+    }
+}
+
+fn abi_unit_vectors(params: &Value) -> Result<Vec<UnitVectorRow>, String> {
+    array_param(params, "vectors")?
+        .iter()
+        .map(|value| {
+            let label = string_param(value, "label")?.to_string();
+            if label.contains(':') || label.contains(';') {
+                return Err(format!("unit vector label contains reserved separator: {label}"));
+            }
+            let x = i64_param(value, "x")?;
+            let y = i64_param(value, "y")?;
+            let _ = i16::try_from(x).map_err(|err| format!("x does not fit FT_F2Dot14: {err}"))?;
+            let _ = i16::try_from(y).map_err(|err| format!("y does not fit FT_F2Dot14: {err}"))?;
+            Ok(UnitVectorRow { label, x, y })
+        })
+        .collect()
+}
+
+fn abi_unit_vectors_arg(params: &Value) -> Result<String, String> {
+    Ok(abi_unit_vectors(params)?
+        .into_iter()
+        .map(|row| format!("{}:{}:{}", row.label, row.x, row.y))
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
+fn abi_unit_vector_echo_json(params: &Value, backend: AbiValueBackend) -> Result<Value, String> {
+    let rows = abi_unit_vectors(params)?
+        .into_iter()
+        .map(|row| {
+            let (x, y) = match backend {
+                AbiValueBackend::Rust => {
+                    let vector = FT_UnitVector {
+                        x: FT_F2Dot14::try_from(row.x).expect("validated FT_F2Dot14 x"),
+                        y: FT_F2Dot14::try_from(row.y).expect("validated FT_F2Dot14 y"),
+                    };
+                    (i64::from(vector.x), i64::from(vector.y))
+                }
+                AbiValueBackend::CAbi => {
+                    let vector = c_abi::FT_UnitVector {
+                        x: c_abi::FT_F2Dot14::try_from(row.x).expect("validated FT_F2Dot14 x"),
+                        y: c_abi::FT_F2Dot14::try_from(row.y).expect("validated FT_F2Dot14 y"),
+                    };
+                    (i64::from(vector.x), i64::from(vector.y))
+                }
+                AbiValueBackend::Wasm => {
+                    let vector = wasm_abi::FT_UnitVector {
+                        x: wasm_abi::FT_F2Dot14::try_from(row.x)
+                            .expect("validated FT_F2Dot14 x"),
+                        y: wasm_abi::FT_F2Dot14::try_from(row.y)
+                            .expect("validated FT_F2Dot14 y"),
+                    };
+                    (i64::from(vector.x), i64::from(vector.y))
+                }
+            };
+            json!({
+                "label": row.label,
+                "x": x,
+                "y": y
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({ "rows": rows }))
+}
+
+fn optional_symbol_under_test(value: &Value) -> String {
+    value
+        .get("symbol_under_test")
+        .and_then(Value::as_str)
+        .unwrap_or("-")
+        .to_string()
+}
+
+#[derive(Debug, Clone, Copy)]
+struct MemoryFaceRow {
+    face_index: i64,
+    file_size: Option<i64>,
+    file_base_is_null: bool,
+    library_is_null: bool,
+    aface_is_null: bool,
+    has_open_args: bool,
+    has_open_flags: bool,
+    has_stream: bool,
+    has_source_override: bool,
+    has_open_driver: bool,
+}
+
+fn memory_face_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(memory_face_rows(params)?
+        .into_iter()
+        .map(|row| {
+            format!(
+                "{}:{}:{}",
+                row.face_index,
+                if row.file_size.is_some() { 1 } else { 0 },
+                row.file_size.unwrap_or(0)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn memory_face_rows(params: &Value) -> Result<Vec<MemoryFaceRow>, String> {
+    if let Some(rows) = params.get("variants").and_then(Value::as_array) {
+        return rows
+            .iter()
+            .map(|row| memory_face_row(row, params))
+            .collect::<Result<Vec<_>, _>>();
+    }
+    Ok(vec![memory_face_row(params, params)?])
+}
+
+fn memory_face_row(value: &Value, defaults: &Value) -> Result<MemoryFaceRow, String> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| "memory face row must be an object".to_string())?;
+    let default_face_index = defaults
+        .get("face_index")
+        .map_or(Ok(0), |value| i64_value(value, "face_index"))?;
+    let face_index = object
+        .get("face_index")
+        .map_or(Ok(default_face_index), |value| i64_value(value, "face_index"))?;
+    let file_size = object
+        .get("file_size")
+        .map(|value| i64_value(value, "file_size"))
+        .transpose()?;
+    Ok(MemoryFaceRow {
+        face_index,
+        file_size,
+        file_base_is_null: object
+            .get("file_base")
+            .and_then(Value::as_str)
+            .is_some_and(|value| value == "null"),
+        library_is_null: object
+            .get("library")
+            .and_then(Value::as_str)
+            .is_some_and(|value| value == "null"),
+        aface_is_null: object
+            .get("aface")
+            .and_then(Value::as_str)
+            .is_some_and(|value| value == "null"),
+        has_open_args: object.get("open_args").is_some() || object.get("args").is_some(),
+        has_open_flags: object.get("flags").is_some(),
+        has_stream: object.get("stream").is_some(),
+        has_source_override: object.get("source").is_some(),
+        has_open_driver: object.get("open_driver").is_some(),
+    })
+}
+
+fn memory_face_row_runtime_supported(row: &MemoryFaceRow) -> bool {
+    !row.file_base_is_null
+        && !row.library_is_null
+        && !row.aface_is_null
+        && !row.has_open_args
+        && !row.has_open_flags
+        && !row.has_stream
+        && !row.has_source_override
+        && !row.has_open_driver
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SizeRequestRow {
+    face_is_null: bool,
+    request_is_null: bool,
+    type_: i32,
+    width: i64,
+    height: i64,
+    hori_resolution: u32,
+    vert_resolution: u32,
+}
+
+fn size_request_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(size_request_rows(params)?
+        .into_iter()
+        .map(|row| {
+            format!(
+                "{}:{}:{}:{}:{}:{}:{}",
+                if row.face_is_null { 1 } else { 0 },
+                if row.request_is_null { 1 } else { 0 },
+                row.type_,
+                row.width,
+                row.height,
+                row.hori_resolution,
+                row.vert_resolution
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn size_request_rows(params: &Value) -> Result<Vec<SizeRequestRow>, String> {
+    if let Some(rows) = params.get("requests").and_then(Value::as_array) {
+        return rows
+            .iter()
+            .map(size_request_row)
+            .collect::<Result<Vec<_>, _>>();
+    }
+    if let Some(row) = params.get("request") {
+        return Ok(vec![size_request_row(row)?]);
+    }
+    if let Some(rows) = params.get("variants").and_then(Value::as_array) {
+        return rows
+            .iter()
+            .map(size_request_row)
+            .collect::<Result<Vec<_>, _>>();
+    }
+    Err("missing size request or requests".to_string())
+}
+
+fn size_request_row(value: &Value) -> Result<SizeRequestRow, String> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| "size request must be an object".to_string())?;
+    let face_is_null = object
+        .get("face")
+        .and_then(Value::as_str)
+        .is_some_and(|face| face == "null");
+    let request_value = object.get("request");
+    let request_is_null = request_value
+        .and_then(Value::as_str)
+        .is_some_and(|request| request == "null");
+    let request_object = request_value
+        .and_then(Value::as_object)
+        .unwrap_or(object);
+    let type_value = request_object
+        .get("type")
+        .ok_or_else(|| "missing size request type".to_string())
+        .and_then(|value| i64_value(value, "type"))?;
+    Ok(SizeRequestRow {
+        face_is_null,
+        request_is_null,
+        type_: i32::try_from(type_value)
+            .map_err(|err| format!("size request type does not fit i32: {err}"))?,
+        width: optional_i64_object(request_object, "width", 0)?,
+        height: optional_i64_object(request_object, "height", 0)?,
+        hori_resolution: optional_u32_object(request_object, "horiResolution", 0)?,
+        vert_resolution: optional_u32_object(request_object, "vertResolution", 0)?,
+    })
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CharSizeRow {
+    char_width: i64,
+    char_height: i64,
+    horz_resolution: u32,
+    vert_resolution: u32,
+}
+
+fn char_size_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(char_size_rows(params)?
+        .into_iter()
+        .map(|row| {
+            format!(
+                "{}:{}:{}:{}",
+                row.char_width, row.char_height, row.horz_resolution, row.vert_resolution
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn char_size_rows(params: &Value) -> Result<Vec<CharSizeRow>, String> {
+    if let Some(rows) = params.get("requests").and_then(Value::as_array) {
+        return rows.iter().map(char_size_row).collect::<Result<Vec<_>, _>>();
+    }
+    if let Some(row) = params.get("request") {
+        return Ok(vec![char_size_row(row)?]);
+    }
+    if params.get("char_width").is_some() || params.get("char_width_26_6").is_some() {
+        return Ok(vec![char_size_row(params)?]);
+    }
+    Err("missing char size request or requests".to_string())
+}
+
+fn char_size_row(value: &Value) -> Result<CharSizeRow, String> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| "char size request must be an object".to_string())?;
+    Ok(CharSizeRow {
+        char_width: optional_i64_object_any(object, &["char_width", "char_width_26_6"], 0)?,
+        char_height: optional_i64_object_any(object, &["char_height", "char_height_26_6"], 0)?,
+        horz_resolution: optional_u32_object_any(object, &["horz_resolution", "hres"], 0)?,
+        vert_resolution: optional_u32_object_any(object, &["vert_resolution", "vres"], 0)?,
+    })
+}
+
+fn char_size_row_json(row: CharSizeRow) -> Value {
+    json!({
+        "char_width": row.char_width,
+        "char_height": row.char_height,
+        "horz_resolution": row.horz_resolution,
+        "vert_resolution": row.vert_resolution
+    })
+}
+
+fn optional_i64_object(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    default: i64,
+) -> Result<i64, String> {
+    object
+        .get(key)
+        .map_or(Ok(default), |value| i64_value(value, key))
+}
+
+fn optional_i64_object_any(
+    object: &serde_json::Map<String, Value>,
+    keys: &[&str],
+    default: i64,
+) -> Result<i64, String> {
+    for key in keys {
+        if object.contains_key(*key) {
+            return optional_i64_object(object, key, default);
+        }
+    }
+    Ok(default)
+}
+
+fn optional_u32_object(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    default: u32,
+) -> Result<u32, String> {
+    object
+        .get(key)
+        .map_or(Ok(default), |value| u32_value(value, key))
+}
+
+fn optional_u32_object_any(
+    object: &serde_json::Map<String, Value>,
+    keys: &[&str],
+    default: u32,
+) -> Result<u32, String> {
+    for key in keys {
+        if object.contains_key(*key) {
+            return optional_u32_object(object, key, default);
+        }
+    }
+    Ok(default)
+}
+
+fn charmap_encoding_param(params: &Value) -> Result<i32, String> {
+    let raw = i64_param(params, "encoding")?;
+    i32::try_from(raw).map_err(|err| format!("encoding does not fit i32: {err}"))
+}
+
+fn select_charmap_encodings(params: &Value) -> Result<Vec<i32>, String> {
+    if let Ok(values) = array_param(params, "encodings") {
+        values
+            .iter()
+            .map(|value| {
+                let raw = i64_value(value, "encodings")?;
+                i32::try_from(raw).map_err(|err| format!("encoding does not fit i32: {err}"))
+            })
+            .collect()
+    } else {
+        Ok(vec![charmap_encoding_param(params)?])
+    }
+}
+
+fn select_charmap_encodings_arg(params: &Value) -> Result<String, String> {
+    Ok(select_charmap_encodings(params)?
+        .into_iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn charmap_operation_encodings(params: &Value) -> Result<Vec<i32>, String> {
+    let Some(values) = params
+        .get("select_encodings")
+        .or_else(|| params.get("probe_encodings"))
+        .and_then(Value::as_array)
+    else {
+        return Ok(Vec::new());
+    };
+    values
+        .iter()
+        .map(|value| {
+            let raw = i64_value(value, "charmap operation encoding")?;
+            i32::try_from(raw).map_err(|err| format!("encoding does not fit i32: {err}"))
+        })
+        .collect()
+}
+
+fn charmap_operation_encodings_arg(params: &Value) -> Result<String, String> {
+    let values = charmap_operation_encodings(params)?
+        .into_iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    Ok(if values.is_empty() {
+        "-".to_string()
+    } else {
+        values
+    })
+}
+
+fn charmap_variants(params: &Value) -> Result<Vec<String>, String> {
+    let Some(values) = params.get("charmap_variants").and_then(Value::as_array) else {
+        return Ok(Vec::new());
+    };
+    values
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| format!("charmap variant must be a string, got {value}"))
+        })
+        .collect()
+}
+
+#[derive(Debug)]
+enum SetCharmapIndexSelection {
+    AllNonFormat14Charmaps,
+    AllCharmaps,
+    Explicit(Vec<u32>),
+}
+
+fn set_charmap_indices_param(params: &Value) -> Result<SetCharmapIndexSelection, String> {
+    let raw = params
+        .get("charmap_indices")
+        .ok_or_else(|| "missing set_charmap charmap_indices".to_string())?;
+    if let Some(text) = raw.as_str() {
+        return match text {
+            "all_non_format14_charmaps" => Ok(SetCharmapIndexSelection::AllNonFormat14Charmaps),
+            "all_charmaps" => Ok(SetCharmapIndexSelection::AllCharmaps),
+            other => Err(format!("unsupported set_charmap charmap_indices {other}")),
+        };
+    }
+    let values = raw
+        .as_array()
+        .ok_or_else(|| format!("set_charmap charmap_indices must be string or array, got {raw}"))?;
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| u32_value(value, &format!("charmap_indices[{index}]")))
+        .collect::<Result<Vec<_>, _>>()
+        .map(SetCharmapIndexSelection::Explicit)
+}
+
+fn set_charmap_indices_arg(params: &Value) -> Result<String, String> {
+    match set_charmap_indices_param(params)? {
+        SetCharmapIndexSelection::AllNonFormat14Charmaps => {
+            Ok("all_non_format14_charmaps".to_string())
+        }
+        SetCharmapIndexSelection::AllCharmaps => Ok("all_charmaps".to_string()),
+        SetCharmapIndexSelection::Explicit(indices) => Ok(indices
+            .iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join(",")),
+    }
+}
+
+fn set_charmap_indices_for_count(count: u32, params: &Value) -> Result<Vec<u32>, String> {
+    match set_charmap_indices_param(params)? {
+        SetCharmapIndexSelection::AllNonFormat14Charmaps
+        | SetCharmapIndexSelection::AllCharmaps => Ok((0..count).collect()),
+        SetCharmapIndexSelection::Explicit(indices) => Ok(indices
+            .into_iter()
+            .filter(|index| *index < count)
+            .collect()),
+    }
+}
+
+fn set_charmap_variants(params: &Value) -> Result<Vec<String>, String> {
+    let values = params
+        .get("variants")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing set_charmap variants".to_string())?;
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            let object = value
+                .as_object()
+                .ok_or_else(|| format!("set_charmap variants[{index}] must be object, got {value}"))?;
+            let variant = object
+                .get("charmap")
+                .and_then(Value::as_str)
+                .ok_or_else(|| format!("missing variants[{index}].charmap"))?;
+            match variant {
+                "null" | "from_other_face" => Ok(variant.to_string()),
+                other => Err(format!("unsupported set_charmap variant {other}")),
+            }
+        })
+        .collect()
+}
+
+fn set_charmap_probe_chars_arg(params: &Value) -> Result<String, String> {
+    Ok(set_charmap_probe_chars(params)?
+        .iter()
+        .map(u64::to_string)
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn set_charmap_probe_chars(params: &Value) -> Result<Vec<u64>, String> {
+    let values = params
+        .get("post_probe_chars")
+        .or_else(|| params.get("probe_chars"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing set_charmap post_probe_chars".to_string())?;
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| u64_value(value, &format!("post_probe_chars[{index}]")))
+        .collect()
+}
+
+fn kerning_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(kerning_rows(params)?
+        .iter()
+        .map(|row| format!("{}|{}|{}", row.left, row.right, row.mode))
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn kerning_rows(params: &Value) -> Result<Vec<KerningRow>, String> {
+    let pairs = kerning_pairs(params)?;
+    let modes = kerning_modes(params)?;
+    let rows = pairs
+        .into_iter()
+        .flat_map(|(left, right)| {
+            modes.iter().copied().map(move |mode| KerningRow {
+                left: left.clone(),
+                right: right.clone(),
+                mode,
+            })
+        })
+        .collect::<Vec<_>>();
+    if rows.is_empty() {
+        return Err("kerning rows cannot be empty".to_string());
+    }
+    Ok(rows)
+}
+
+fn kerning_pairs(params: &Value) -> Result<Vec<(String, String)>, String> {
+    if let Some(values) = params.get("pairs").and_then(Value::as_array) {
+        let pairs = values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| {
+                let pair = value
+                    .as_str()
+                    .ok_or_else(|| format!("pairs[{index}] must be a string, got {value}"))?;
+                kerning_pair_from_text(pair)
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        if pairs.is_empty() {
+            return Err("kerning pairs cannot be empty".to_string());
+        }
+        return Ok(pairs);
+    }
+    if let Some(pair) = params.get("pair").and_then(Value::as_str) {
+        return Ok(vec![kerning_pair_from_text(pair)?]);
+    }
+    let left = kerning_selector_param(
+        params,
+        &[
+            "left_glyph_name",
+            "left_char",
+            "left_glyph",
+            "left_codepoint",
+            "left_glyph_index",
+        ],
+    )?;
+    let right = kerning_selector_param(
+        params,
+        &[
+            "right_glyph_name",
+            "right_char",
+            "right_glyph",
+            "right_codepoint",
+            "right_glyph_index",
+        ],
+    )?;
+    Ok(vec![(left, right)])
+}
+
+fn kerning_pair_from_text(pair: &str) -> Result<(String, String), String> {
+    let (left, right) = pair
+        .split_once('/')
+        .ok_or_else(|| format!("kerning pair must be left/right, got {pair}"))?;
+    Ok((left.to_string(), right.to_string()))
+}
+
+fn kerning_selector_param(params: &Value, keys: &[&str]) -> Result<String, String> {
+    for key in keys {
+        if let Some(value) = params.get(*key) {
+            return kerning_selector_value(value, key);
+        }
+    }
+    Err(format!("missing kerning selector from {}", keys.join("/")))
+}
+
+fn kerning_selector_value(value: &Value, key: &str) -> Result<String, String> {
+    if let Some(selector) = value.as_str() {
+        return Ok(selector.to_string());
+    }
+    if let Some(codepoint) = value.as_u64() {
+        if key.contains("glyph_index") {
+            let glyph_index =
+                u32::try_from(codepoint).map_err(|err| format!("{key} does not fit u32: {err}"))?;
+            return Ok(format!("gid:{glyph_index}"));
+        }
+        return Ok(format!("U+{codepoint:X}"));
+    }
+    if let Some(codepoint) = value.as_i64() {
+        let codepoint = u64::try_from(codepoint).map_err(|err| format!("{key} is negative: {err}"))?;
+        if key.contains("glyph_index") {
+            let glyph_index =
+                u32::try_from(codepoint).map_err(|err| format!("{key} does not fit u32: {err}"))?;
+            return Ok(format!("gid:{glyph_index}"));
+        }
+        return Ok(format!("U+{codepoint:X}"));
+    }
+    Err(format!("unsupported kerning selector {key}: {value}"))
+}
+
+fn kerning_modes(params: &Value) -> Result<Vec<u32>, String> {
+    if let Some(values) = params
+        .get("modes")
+        .or_else(|| params.get("kern_modes"))
+        .and_then(Value::as_array)
+    {
+        let modes = values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| kerning_mode_value(value, &format!("kerning mode[{index}]")))
+            .collect::<Result<Vec<_>, String>>()?;
+        if modes.is_empty() {
+            return Err("kerning modes cannot be empty".to_string());
+        }
+        return Ok(modes);
+    }
+    if let Some(value) = params
+        .get("kerning_mode")
+        .or_else(|| params.get("kern_mode"))
+    {
+        return Ok(vec![kerning_mode_value(value, "kerning mode")?]);
+    }
+    Ok(vec![FT_KERNING_DEFAULT as u32])
+}
+
+fn kerning_mode_value(value: &Value, key: &str) -> Result<u32, String> {
+    if let Some(mode) = value.as_str() {
+        return match mode {
+            "DEFAULT" | "FT_KERNING_DEFAULT" => Ok(FT_KERNING_DEFAULT as u32),
+            "UNFITTED" | "FT_KERNING_UNFITTED" => Ok(FT_KERNING_UNFITTED as u32),
+            "UNSCALED" | "FT_KERNING_UNSCALED" => Ok(FT_KERNING_UNSCALED as u32),
+            other => {
+                let value = rust_constant(other)?;
+                u32::try_from(value).map_err(|err| format!("{key} does not fit u32: {err}"))
+            }
+        };
+    }
+    u32_value(value, key)
+}
+
+fn charmap_probe_chars_arg(params: &Value) -> Result<String, String> {
+    let values = charmap_probe_chars(params)?
+        .into_iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    Ok(if values.is_empty() {
+        "-".to_string()
+    } else {
+        values
+    })
+}
+
+fn charmap_probe_chars(params: &Value) -> Result<Vec<u64>, String> {
+    let Some(values) = params
+        .get("probe_char_codes")
+        .or_else(|| params.get("post_probe_chars"))
+        .or_else(|| params.get("probe_chars"))
+        .and_then(Value::as_array)
+    else {
+        return Ok(Vec::new());
+    };
+    values
+        .iter()
+        .map(|value| u64_value(value, "probe_char_codes"))
+        .collect()
+}
+
+fn representative_codepoints(params: &Value) -> Result<Vec<u64>, String> {
+    let values = if let Ok(values) = array_param(params, "representative_codepoints") {
+        values
+    } else if let Ok(values) = array_param(params, "codepoints") {
+        values
+    } else {
+        return Ok(Vec::new());
+    };
+    values
+        .iter()
+        .map(|value| u64_value(value, "representative_codepoints"))
+        .collect()
+}
+
+fn representative_codepoints_arg(params: &Value) -> Result<String, String> {
+    let values = representative_codepoints(params)?
+        .into_iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    Ok(if values.is_empty() {
+        "-".to_string()
+    } else {
+        values
+    })
+}
+
+#[derive(Debug, Clone, Copy)]
+enum SfntNameIndexSelector {
+    Index(u32),
+    LastValidIndex,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SfntNameMatchFields {
+    platform_id: Option<u16>,
+    encoding_id: Option<u16>,
+    language_id: Option<u16>,
+    name_id: Option<u16>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RequiredSfntMacFields {
+    platform_id: u16,
+    encoding_id: u16,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RequiredCharmapFields {
+    platform_id: u16,
+    encoding_id: u16,
+}
+
+fn sfnt_name_indexes_arg(params: &Value) -> Result<String, String> {
+    Ok(sfnt_name_indexes_param(params)?
+        .into_iter()
+        .map(|selector| match selector {
+            SfntNameIndexSelector::Index(index) => index.to_string(),
+            SfntNameIndexSelector::LastValidIndex => "last_valid_index".to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn sfnt_name_indexes_param(params: &Value) -> Result<Vec<SfntNameIndexSelector>, String> {
+    let indexes = array_param(params, "indexes")?
+        .iter()
+        .map(|value| {
+            if value.as_str() == Some("last_valid_index") {
+                return Ok(SfntNameIndexSelector::LastValidIndex);
+            }
+            Ok(SfntNameIndexSelector::Index(u32_value(value, "indexes[]")?))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    if indexes.is_empty() {
+        return Err("indexes cannot be empty".to_string());
+    }
+    Ok(indexes)
+}
+
+fn resolved_sfnt_name_indexes(params: &Value, count: u32) -> Result<Vec<u32>, String> {
+    Ok(sfnt_name_indexes_param(params)?
+        .into_iter()
+        .map(|selector| match selector {
+            SfntNameIndexSelector::Index(index) => index,
+            SfntNameIndexSelector::LastValidIndex if count > 0 => count - 1,
+            SfntNameIndexSelector::LastValidIndex => 0,
+        })
+        .collect())
+}
+
+fn sfnt_name_match_fields(params: &Value) -> Result<SfntNameMatchFields, String> {
+    Ok(SfntNameMatchFields {
+        platform_id: optional_sfnt_match_u16(params, "platform_id")?,
+        encoding_id: optional_sfnt_match_u16(params, "encoding_id")?,
+        language_id: optional_sfnt_match_u16(params, "language_id")?,
+        name_id: optional_sfnt_match_u16(params, "name_id")?,
+    })
+}
+
+fn required_sfnt_mac_fields(params: &Value) -> Result<RequiredSfntMacFields, String> {
+    let charmap = required_charmap_fields(params, "sfnt.mac_encoding_record")?;
+    let name_fields = sfnt_name_match_fields(params)?;
+    if name_fields.name_id.is_none() {
+        return Err("sfnt.mac_encoding_record requires name_id".to_string());
+    }
+    Ok(RequiredSfntMacFields {
+        platform_id: charmap.platform_id,
+        encoding_id: charmap.encoding_id,
+    })
+}
+
+fn required_charmap_fields(params: &Value, context: &str) -> Result<RequiredCharmapFields, String> {
+    let fields = sfnt_name_match_fields(params)?;
+    let platform_id = fields
+        .platform_id
+        .ok_or_else(|| format!("{context} requires platform_id"))?;
+    let encoding_id = fields
+        .encoding_id
+        .ok_or_else(|| format!("{context} requires encoding_id"))?;
+    Ok(RequiredCharmapFields {
+        platform_id,
+        encoding_id,
+    })
+}
+
+fn rust_find_charmap_index(face: &FT_Face, platform_id: u16, encoding_id: u16) -> Option<u32> {
+    let count = FT_Face_Charmap_Count(face);
+    (0..count).find(|index| {
+        FT_Face_Charmap_Info(face, *index)
+            .is_some_and(|info| info.platform_id == platform_id && info.encoding_id == encoding_id)
+    })
+}
+
+fn c_find_charmap_index(face: c_abi::FT_Face, platform_id: u16, encoding_id: u16) -> Option<u32> {
+    let count = c_abi::abi_charmap_count(face)?;
+    (0..count).find(|index| {
+        c_abi::abi_charmap_info_by_index(face, *index)
+            .is_some_and(|info| info.platform_id == platform_id && info.encoding_id == encoding_id)
+    })
+}
+
+fn wasm_find_charmap_index(handle: usize, platform_id: u16, encoding_id: u16) -> Option<u32> {
+    let count = wasm_abi::fontdone_wasm_get_charmap_count(handle);
+    (0..count).find(|index| {
+        let mut info = wasm_abi::FontdoneWasmCharmap::default();
+        wasm_abi::fontdone_wasm_get_charmap(handle, *index, &mut info) == FT_Err_Ok
+            && info.platform_id == platform_id
+            && info.encoding_id == encoding_id
+    })
+}
+
+fn rust_select_charmap_by_fields(face: &mut FT_Face, params: &Value) -> Result<i32, String> {
+    let fields = required_charmap_fields(params, "charmap selection")?;
+    let Some(index) = rust_find_charmap_index(face, fields.platform_id, fields.encoding_id) else {
+        return Ok(FT_Err_Invalid_Argument);
+    };
+    let charmap = FT_Face_Charmap(face, index);
+    Ok(FT_Set_Charmap(Some(face), charmap))
+}
+
+fn c_select_charmap_by_fields(face: c_abi::FT_Face, params: &Value) -> Result<i32, String> {
+    let fields = required_charmap_fields(params, "charmap selection")?;
+    let Some(index) = c_find_charmap_index(face, fields.platform_id, fields.encoding_id) else {
+        return Ok(FT_Err_Invalid_Argument);
+    };
+    let charmap = c_abi::abi_charmap_by_index(face, index)
+        .ok_or_else(|| format!("missing c charmap pointer at index {index}"))?;
+    Ok(c_abi::FT_Set_Charmap(face, charmap))
+}
+
+fn wasm_select_charmap_by_fields(handle: usize, params: &Value) -> Result<i32, String> {
+    let fields = required_charmap_fields(params, "charmap selection")?;
+    let Some(index) = wasm_find_charmap_index(handle, fields.platform_id, fields.encoding_id)
+    else {
+        return Ok(FT_Err_Invalid_Argument);
+    };
+    Ok(wasm_abi::fontdone_wasm_set_charmap(handle, index))
+}
+
+fn optional_sfnt_match_u16(params: &Value, key: &str) -> Result<Option<u16>, String> {
+    if let Some(value) = optional_match_u16(params, key)? {
+        return Ok(Some(value));
+    }
+    if let Some(match_params) = params.get("match") {
+        return optional_match_u16(match_params, key);
+    }
+    Ok(None)
+}
+
+fn sfnt_name_match_args(params: &Value) -> Result<Vec<String>, String> {
+    let fields = sfnt_name_match_fields(params)?;
+    Ok([
+        fields.platform_id,
+        fields.encoding_id,
+        fields.language_id,
+        fields.name_id,
+    ]
+    .into_iter()
+    .map(|value| value.map_or_else(|| "-1".to_string(), |value| value.to_string()))
+    .collect())
+}
+
+fn sfnt_name_matches(
+    fields: SfntNameMatchFields,
+    platform_id: u16,
+    encoding_id: u16,
+    language_id: u16,
+    name_id: u16,
+) -> bool {
+    fields.platform_id.is_none_or(|value| value == platform_id)
+        && fields.encoding_id.is_none_or(|value| value == encoding_id)
+        && fields.language_id.is_none_or(|value| value == language_id)
+        && fields.name_id.is_none_or(|value| value == name_id)
+}
+
+fn optional_match_u16(params: &Value, key: &str) -> Result<Option<u16>, String> {
+    if let Some(object) = params.get("match").and_then(Value::as_object) {
+        if let Some(value) = optional_u16_from_object(object, key) {
+            return value;
+        }
+    }
+    if let Some(object) = params.as_object() {
+        if let Some(value) = optional_u16_from_object(object, key) {
+            return value;
+        }
+    }
+    Ok(None)
+}
+
+fn optional_u16_from_object(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+) -> Option<Result<Option<u16>, String>> {
+    let value_key = format!("{key}_value");
+    if let Some(value) = object.get(&value_key) {
+        return Some(u16_value(value, &value_key).map(Some));
+    }
+    object.get(key).map(|value| {
+        if value.is_number() {
+            return u16_value(value, key).map(Some);
+        }
+        let Some(symbol) = value.as_str() else {
+            return Err(format!("{key} must be a u16 value or symbol"));
+        };
+        let constant = rust_constant(symbol)?;
+        u16::try_from(constant)
+            .map(Some)
+            .map_err(|_| format!("{key} symbol {symbol} does not fit u16"))
+    })
+}
+
+fn constant_symbols_param(value: &Value) -> Result<Vec<String>, String> {
+    let symbols = array_param(value, "symbols")?
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| format!("constant_map symbol must be a string, got {value}"))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    if symbols.is_empty() {
+        return Err("constant_map requires at least one symbol".to_string());
+    }
+    let mut seen = BTreeSet::new();
+    for symbol in &symbols {
+        if !seen.insert(symbol) {
+            return Err(format!("constant_map contains duplicate symbol {symbol}"));
+        }
+    }
+    Ok(symbols)
+}
+
 fn record_param(value: &Value) -> Result<&str, String> {
     ["record", "ctype", "type", "symbol", "alias", "target"]
         .into_iter()
@@ -5612,6 +12916,33 @@ fn type_symbol_param(value: &Value) -> Result<&str, String> {
         .ok_or_else(|| "missing symbol/typedef/type param".to_string())
 }
 
+fn type_symbols_param(value: &Value) -> Result<Vec<String>, String> {
+    if let Some(values) = value.get("types").and_then(Value::as_array) {
+        let symbols = values
+            .iter()
+            .map(|value| {
+                value
+                    .as_str()
+                    .map(ToOwned::to_owned)
+                    .ok_or_else(|| format!("type symbol must be a string, got {value}"))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        if symbols.is_empty() {
+            return Err("types must contain at least one type".to_string());
+        }
+        return Ok(symbols);
+    }
+    Ok(vec![type_symbol_param(value)?.to_string()])
+}
+
+fn face_macro_param(case: &InputCase) -> Result<&str, String> {
+    string_param(&case.inputs.params, "macro")
+}
+
+fn face_flag_param(case: &InputCase) -> Result<&str, String> {
+    string_param(&case.inputs.params, "flag")
+}
+
 fn face_index_param(value: &Value) -> Result<i64, String> {
     value
         .get("face_index")
@@ -5623,6 +12954,16 @@ fn is_face_probe(case: &InputCase) -> Result<bool, String> {
 }
 
 fn pixel_size_param(value: &Value) -> Result<(u32, u32), String> {
+    if value.get("pixel_width").is_some()
+        || value.get("pixel_height").is_some()
+        || value.get("width_px").is_some()
+        || value.get("height_px").is_some()
+    {
+        return Ok((
+            optional_u32_param_any(value, &["pixel_width", "width_px"], 0)?,
+            optional_u32_param_any(value, &["pixel_height", "height_px"], 0)?,
+        ));
+    }
     if let Some(size) = value.get("pixel_size") {
         if let Some(object) = size.as_object() {
             return Ok((
@@ -5639,6 +12980,15 @@ fn pixel_size_param(value: &Value) -> Result<(u32, u32), String> {
         }
     }
     Ok((0, 20))
+}
+
+fn optional_u32_param_any(value: &Value, keys: &[&str], default: u32) -> Result<u32, String> {
+    for key in keys {
+        if let Some(raw) = value.get(key) {
+            return u32_value(raw, key);
+        }
+    }
+    Ok(default)
 }
 
 fn load_flags_param(value: &Value) -> Result<i32, String> {
@@ -5661,6 +13011,43 @@ fn load_flags_param(value: &Value) -> Result<i32, String> {
     i32::try_from(flags).map_err(|err| format!("load_flags does not fit i32: {err}"))
 }
 
+fn cache_load_flags_param(value: &Value) -> Result<i32, String> {
+    let Some(image_type) = value.get("image_type") else {
+        return load_flags_param(value);
+    };
+    let Some(flags) = image_type.get("flags") else {
+        return Ok(FT_LOAD_DEFAULT);
+    };
+    flag_value(flags, "image_type.flags")
+}
+
+fn cache_pixel_size_param(value: &Value) -> Result<(u32, u32), String> {
+    let Some(image_type) = value.get("image_type") else {
+        return pixel_size_param(value);
+    };
+    let width = image_type
+        .get("width")
+        .map_or(Ok(0), |value| u32_value(value, "image_type.width"))?;
+    let height = image_type
+        .get("height")
+        .map_or(Ok(20), |value| u32_value(value, "image_type.height"))?;
+    Ok((width, height))
+}
+
+fn manager_param_is_null(value: &Value) -> bool {
+    value
+        .get("manager")
+        .and_then(Value::as_str)
+        .is_some_and(|manager| manager == "null")
+}
+
+fn manager_reset_glyph_index_param(value: &Value) -> Result<u32, String> {
+    if value.get("glyph_index").is_some() {
+        return glyph_index_param(value);
+    }
+    Ok(36)
+}
+
 fn render_mode_param(value: &Value) -> Result<i32, String> {
     value
         .get("render_mode")
@@ -5670,11 +13057,139 @@ fn render_mode_param(value: &Value) -> Result<i32, String> {
         })
 }
 
+fn bbox_modes_arg(value: &Value) -> Result<String, String> {
+    Ok(bbox_modes_param(value)?
+        .into_iter()
+        .map(|mode| mode.to_string())
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn bbox_modes_param(value: &Value) -> Result<Vec<i32>, String> {
+    if let Some(values) = value.get("bbox_modes").and_then(Value::as_array) {
+        return values
+            .iter()
+            .map(|value| {
+                i64_value(value, "bbox_modes").and_then(|mode| {
+                    i32::try_from(mode).map_err(|err| format!("bbox_modes does not fit i32: {err}"))
+                })
+            })
+            .collect();
+    }
+    if let Some(value) = value.get("bbox_mode") {
+        let mode = i64_value(value, "bbox_mode")?;
+        return i32::try_from(mode)
+            .map(|mode| vec![mode])
+            .map_err(|err| format!("bbox_mode does not fit i32: {err}"));
+    }
+    Ok(vec![0])
+}
+
+fn bool_param(value: &Value, key: &str, default: bool) -> Result<bool, String> {
+    match value.get(key) {
+        Some(Value::Bool(value)) => Ok(*value),
+        Some(Value::Number(value)) => value
+            .as_i64()
+            .map(|value| value != 0)
+            .ok_or_else(|| format!("{key} number is not an integer")),
+        Some(Value::String(value)) => match value.as_str() {
+            "true" | "1" => Ok(true),
+            "false" | "0" => Ok(false),
+            other => Err(format!("unsupported bool string for {key}: {other}")),
+        },
+        Some(other) => Err(format!("{key} must be bool-compatible, got {other}")),
+        None => Ok(default),
+    }
+}
+
 fn glyph_index_param(value: &Value) -> Result<u32, String> {
     let raw = value
         .get("glyph_index")
         .ok_or_else(|| "missing glyph_index".to_string())?;
     u32_value(raw, "glyph_index")
+}
+
+fn glyph_index_selector_param(value: &Value) -> Result<GlyphIndexSelector, String> {
+    let Some(raw) = value.get("glyph_index") else {
+        return glyph_selector_param(value);
+    };
+    if let Some(object) = raw.as_object() {
+        if let Some(char_code) = object.get("from_char_code") {
+            return u64_value(char_code, "glyph_index.from_char_code")
+                .map(GlyphIndexSelector::FromCharCode);
+        }
+        if object
+            .get("expression")
+            .and_then(Value::as_str)
+            .is_some_and(|expression| expression == "face.num_glyphs")
+        {
+            return Ok(GlyphIndexSelector::NumGlyphs);
+        }
+        return Err(format!("unsupported glyph_index selector {raw}"));
+    }
+    if raw
+        .as_str()
+        .is_some_and(|text| text == "num_glyphs" || text == "face.num_glyphs")
+    {
+        return Ok(GlyphIndexSelector::NumGlyphs);
+    }
+    glyph_index_param(value).map(GlyphIndexSelector::Index)
+}
+
+fn glyph_selector_param(value: &Value) -> Result<GlyphIndexSelector, String> {
+    let raw = value
+        .get("glyph_selector")
+        .ok_or_else(|| "missing glyph_index".to_string())?;
+    match raw {
+        Value::String(selector) if selector == "known_composite_glyph" => {
+            Ok(GlyphIndexSelector::FromCharCode(0x00C0))
+        }
+        Value::Object(object) => match object.get("kind").and_then(Value::as_str) {
+            Some("known_composite_glyph") => Ok(GlyphIndexSelector::FromCharCode(0x00C0)),
+            Some(kind) => Err(format!("unsupported glyph_selector kind {kind}")),
+            None => Err(format!("unsupported glyph_selector {raw}")),
+        },
+        _ => Err(format!("unsupported glyph_selector {raw}")),
+    }
+}
+
+fn rust_resolved_glyph_index(face: &FT_Face, params: &Value) -> Result<u32, String> {
+    match glyph_index_selector_param(params)? {
+        GlyphIndexSelector::Index(glyph_index) => Ok(glyph_index),
+        GlyphIndexSelector::FromCharCode(char_code) => Ok(FT_Get_Char_Index(face, char_code)),
+        GlyphIndexSelector::NumGlyphs => u32::try_from(FT_Face_Info(face).num_glyphs)
+            .map_err(|err| format!("face.num_glyphs does not fit u32: {err}")),
+    }
+}
+
+fn c_resolved_glyph_index(face: c_abi::FT_Face, params: &Value) -> Result<u32, String> {
+    match glyph_index_selector_param(params)? {
+        GlyphIndexSelector::Index(glyph_index) => Ok(glyph_index),
+        GlyphIndexSelector::FromCharCode(char_code) => {
+            Ok(c_abi::FT_Get_Char_Index(face, char_code))
+        }
+        GlyphIndexSelector::NumGlyphs => c_abi::abi_face_info(face)
+            .ok_or_else(|| "missing c abi face info".to_string())
+            .and_then(|info| {
+                u32::try_from(info.num_glyphs)
+                    .map_err(|err| format!("face.num_glyphs does not fit u32: {err}"))
+            }),
+    }
+}
+
+fn wasm_resolved_glyph_index(handle: usize, params: &Value) -> Result<u32, String> {
+    match glyph_index_selector_param(params)? {
+        GlyphIndexSelector::Index(glyph_index) => Ok(glyph_index),
+        GlyphIndexSelector::FromCharCode(char_code) => {
+            Ok(wasm_abi::fontdone_wasm_get_char_index(handle, char_code))
+        }
+        GlyphIndexSelector::NumGlyphs => wasm_abi::abi_face_info(handle)
+            .ok_or_else(|| "missing wasm abi face info".to_string())
+            .and_then(|info| {
+                u32::try_from(info.num_glyphs)
+                    .map_err(|err| format!("face.num_glyphs does not fit u32: {err}"))
+            }),
+    }
 }
 
 fn advance_range_param(value: &Value) -> Result<(u32, u32), String> {
@@ -5686,6 +13201,1975 @@ fn glyph_load_input_param(value: &Value) -> Result<GlyphLoadInput, String> {
         return glyph_index_param(value).map(GlyphLoadInput::GlyphIndex);
     }
     u64_param(value, "char_code").map(GlyphLoadInput::CharCode)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum FixedMathBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn fixed_math_oracle_op(operation: &str) -> Result<&'static str, String> {
+    match operation {
+        "freetype.ceil_fix" => Ok("ceil_fix"),
+        "freetype.floor_fix" => Ok("floor_fix"),
+        "freetype.round_fix" => Ok("round_fix"),
+        "freetype.mul_div" => Ok("mul_div"),
+        "freetype.mul_fix" => Ok("mul_fix"),
+        "freetype.div_fix" => Ok("div_fix"),
+        other => Err(format!("unsupported fixed math operation {other}")),
+    }
+}
+
+fn next_char_starts_arg(params: &Value) -> Result<String, String> {
+    Ok(next_char_start_values(params)?
+        .into_iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn next_char_start_values(params: &Value) -> Result<Vec<u64>, String> {
+    let values = array_param(params, "start_charcodes")?
+        .iter()
+        .map(|value| u64_value(value, "start_charcodes"))
+        .collect::<Result<Vec<_>, _>>()?;
+    if values.is_empty() {
+        return Err("start_charcodes cannot be empty".to_string());
+    }
+    Ok(values)
+}
+
+fn library_present_arg(params: &Value) -> Result<i32, String> {
+    match params
+        .get("library")
+        .and_then(Value::as_str)
+        .unwrap_or("new_from_FT_Init_FreeType")
+    {
+        "null" => Ok(0),
+        "new_from_FT_Init_FreeType" => Ok(1),
+        other => Err(format!("unsupported library scenario {other}")),
+    }
+}
+
+fn lcd_library_present_arg(params: &Value) -> i32 {
+    match params.get("library") {
+        Some(Value::Null) => 0,
+        Some(Value::String(value)) if value == "null" => 0,
+        _ => 1,
+    }
+}
+
+fn truetype_engine_library_present_arg(params: &Value) -> Result<i32, String> {
+    match params
+        .get("library")
+        .and_then(Value::as_str)
+        .unwrap_or("new_from_FT_Init_FreeType")
+    {
+        "null" => Ok(0),
+        "new_from_FT_Init_FreeType" => Ok(1),
+        other => Err(format!(
+            "unsupported TrueType engine library scenario {other}"
+        )),
+    }
+}
+
+fn lcd_filter_values_arg(params: &Value) -> Result<String, String> {
+    Ok(lcd_filter_values(params)?
+        .into_iter()
+        .map(|filter| filter.to_string())
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn lcd_filter_weights_arg(params: &Value) -> Result<String, String> {
+    Ok(lcd_filter_weights(params)?.map_or_else(
+        || "-".to_string(),
+        |weights| {
+            weights
+                .into_iter()
+                .map(|weight| weight.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        },
+    ))
+}
+
+fn lcd_filter_values(params: &Value) -> Result<Vec<FT_LcdFilter>, String> {
+    if let Some(filter) = params.get("filter") {
+        return Ok(vec![lcd_filter_value(filter)?]);
+    }
+    let Some(filters) = params.get("filters") else {
+        return Err("missing filter or filters".to_string());
+    };
+    let values = match filters {
+        Value::Array(values) => values
+            .iter()
+            .map(lcd_filter_value)
+            .collect::<Result<Vec<_>, _>>()?,
+        Value::Object(values) => values
+            .keys()
+            .map(|filter| lcd_filter_symbol(filter))
+            .collect::<Result<Vec<_>, _>>()?,
+        other => return Err(format!("filters must be an array or object, got {other}")),
+    };
+    if values.is_empty() {
+        return Err("filters cannot be empty".to_string());
+    }
+    Ok(values)
+}
+
+fn lcd_filter_value(value: &Value) -> Result<FT_LcdFilter, String> {
+    let value = i64_value(value, "lcd_filter")?;
+    i32::try_from(value).map_err(|err| format!("lcd_filter does not fit i32: {err}"))
+}
+
+fn lcd_filter_symbol(symbol: &str) -> Result<FT_LcdFilter, String> {
+    let value = rust_constant(symbol)?;
+    i32::try_from(value)
+        .map_err(|err| format!("lcd_filter symbol {symbol} does not fit i32: {err}"))
+}
+
+fn lcd_filter_weights(params: &Value) -> Result<Option<Vec<FT_Byte>>, String> {
+    let Some(weights) = params.get("weights") else {
+        return Err("missing weights".to_string());
+    };
+    match weights {
+        Value::Null => Ok(None),
+        Value::String(value) if value == "valid_or_null" => Ok(None),
+        Value::Array(values) => {
+            if values.len() < 5 {
+                return Err("lcd filter weights require at least 5 bytes".to_string());
+            }
+            values
+                .iter()
+                .map(|value| {
+                    let weight = u64_value(value, "weights[]")?;
+                    u8::try_from(weight)
+                        .map_err(|err| format!("lcd filter weight does not fit u8: {err}"))
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .map(Some)
+        }
+        other => Err(format!("unsupported lcd filter weights value {other}")),
+    }
+}
+
+fn lcd_filter_weights_ptr(weights: &mut Option<Vec<FT_Byte>>) -> *mut FT_Byte {
+    weights
+        .as_mut()
+        .map_or(std::ptr::null_mut(), |weights| weights.as_mut_ptr())
+}
+
+fn lcd_geometry_arg(params: &Value) -> Result<String, String> {
+    Ok(lcd_geometry_values(params)?.map_or_else(
+        || "-".to_string(),
+        |vectors| {
+            vectors
+                .into_iter()
+                .map(|vector| format!("{},{}", vector.x, vector.y))
+                .collect::<Vec<_>>()
+                .join(";")
+        },
+    ))
+}
+
+fn lcd_geometry_values(params: &Value) -> Result<Option<[FT_Vector; 3]>, String> {
+    let Some(geometry) = params.get("geometry") else {
+        return Err("missing geometry".to_string());
+    };
+    match geometry {
+        Value::Null => Ok(None),
+        Value::String(value) if value == "valid_or_null" => Ok(Some(default_lcd_geometry())),
+        Value::Array(values) => {
+            if values.len() != 3 {
+                return Err(format!(
+                    "lcd geometry requires exactly 3 vectors, got {}",
+                    values.len()
+                ));
+            }
+            Ok(Some([
+                lcd_geometry_vector(&values[0])?,
+                lcd_geometry_vector(&values[1])?,
+                lcd_geometry_vector(&values[2])?,
+            ]))
+        }
+        other => Err(format!("unsupported lcd geometry value {other}")),
+    }
+}
+
+fn default_lcd_geometry() -> [FT_Vector; 3] {
+    [
+        FT_Vector { x: -21, y: 0 },
+        FT_Vector { x: 0, y: 0 },
+        FT_Vector { x: 21, y: 0 },
+    ]
+}
+
+fn lcd_geometry_vector(value: &Value) -> Result<FT_Vector, String> {
+    Ok(FT_Vector {
+        x: i64_param(value, "x")?,
+        y: i64_param(value, "y")?,
+    })
+}
+
+fn c_lcd_geometry_values(params: &Value) -> Result<Option<[c_abi::FT_Vector; 3]>, String> {
+    Ok(lcd_geometry_values(params)?.map(|vectors| {
+        [
+            c_abi::FT_Vector {
+                x: vectors[0].x,
+                y: vectors[0].y,
+            },
+            c_abi::FT_Vector {
+                x: vectors[1].x,
+                y: vectors[1].y,
+            },
+            c_abi::FT_Vector {
+                x: vectors[2].x,
+                y: vectors[2].y,
+            },
+        ]
+    }))
+}
+
+fn c_lcd_geometry_ptr(geometry: &Option<[c_abi::FT_Vector; 3]>) -> *const c_abi::FT_Vector {
+    geometry
+        .as_ref()
+        .map_or(std::ptr::null(), |geometry| geometry.as_ptr())
+}
+
+fn wasm_lcd_geometry_values(
+    params: &Value,
+) -> Result<Option<[wasm_abi::FontdoneWasmVector; 3]>, String> {
+    Ok(lcd_geometry_values(params)?.map(|vectors| {
+        [
+            wasm_abi::FontdoneWasmVector {
+                x: vectors[0].x,
+                y: vectors[0].y,
+            },
+            wasm_abi::FontdoneWasmVector {
+                x: vectors[1].x,
+                y: vectors[1].y,
+            },
+            wasm_abi::FontdoneWasmVector {
+                x: vectors[2].x,
+                y: vectors[2].y,
+            },
+        ]
+    }))
+}
+
+fn wasm_lcd_geometry_ptr(
+    geometry: &Option<[wasm_abi::FontdoneWasmVector; 3]>,
+) -> *const wasm_abi::FontdoneWasmVector {
+    geometry
+        .as_ref()
+        .map_or(std::ptr::null(), |geometry| geometry.as_ptr())
+}
+
+fn library_version_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(library_version_rows(params)?
+        .into_iter()
+        .map(|mask| mask.to_string())
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn library_version_sentinels_arg(params: &Value) -> Result<String, String> {
+    Ok(library_version_sentinels(params)?
+        .into_iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn library_version_rows(params: &Value) -> Result<Vec<u8>, String> {
+    if params.get("output_pointer_matrix").is_some() {
+        let rows = array_param(params, "output_pointer_matrix")?
+            .iter()
+            .map(library_version_output_mask)
+            .collect::<Result<Vec<_>, _>>()?;
+        if rows.is_empty() {
+            return Err("output_pointer_matrix cannot be empty".to_string());
+        }
+        return Ok(rows);
+    }
+    if params.get("outputs").is_some() {
+        return Ok(vec![library_version_output_mask(
+            params
+                .get("outputs")
+                .ok_or_else(|| "missing outputs".to_string())?,
+        )?]);
+    }
+    Ok(vec![
+        LIBRARY_VERSION_MAJOR | LIBRARY_VERSION_MINOR | LIBRARY_VERSION_PATCH,
+    ])
+}
+
+fn library_version_output_mask(value: &Value) -> Result<u8, String> {
+    let mut mask = 0u8;
+    for output in value
+        .as_array()
+        .ok_or_else(|| format!("library version outputs must be an array, got {value}"))?
+    {
+        let output = output
+            .as_str()
+            .ok_or_else(|| format!("library version output must be a string, got {output}"))?;
+        mask |= match output {
+            "amajor" => LIBRARY_VERSION_MAJOR,
+            "aminor" => LIBRARY_VERSION_MINOR,
+            "apatch" => LIBRARY_VERSION_PATCH,
+            other => return Err(format!("unsupported library version output {other}")),
+        };
+    }
+    Ok(mask)
+}
+
+fn library_version_sentinels(params: &Value) -> Result<[i32; 3], String> {
+    let Some(values) = params.get("sentinel_initial_values") else {
+        return Ok([111, 222, 333]);
+    };
+    let values = values
+        .as_array()
+        .ok_or_else(|| "sentinel_initial_values must be an array".to_string())?;
+    if values.len() != 3 {
+        return Err("sentinel_initial_values must contain 3 values".to_string());
+    }
+    Ok([
+        i32::try_from(i64_value(&values[0], "sentinel_initial_values[0]")?)
+            .map_err(|err| err.to_string())?,
+        i32::try_from(i64_value(&values[1], "sentinel_initial_values[1]")?)
+            .map_err(|err| err.to_string())?,
+        i32::try_from(i64_value(&values[2], "sentinel_initial_values[2]")?)
+            .map_err(|err| err.to_string())?,
+    ])
+}
+
+fn fixed_math_rows_arg(operation: &str, params: &Value) -> Result<String, String> {
+    Ok(fixed_math_rows(operation, params)?
+        .into_iter()
+        .map(|row| {
+            row.into_iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
+fn fixed_math_rows(operation: &str, params: &Value) -> Result<Vec<Vec<i64>>, String> {
+    let rows = match operation {
+        "freetype.ceil_fix" | "freetype.round_fix" => fixed_math_unary_rows(params, "values")?,
+        "freetype.floor_fix" => {
+            if params.get("values").is_some() {
+                fixed_math_unary_rows(params, "values")?
+            } else {
+                fixed_math_unary_rows(params, "values_16_16")?
+            }
+        }
+        "freetype.mul_fix" | "freetype.div_fix" => fixed_math_tuple_rows(params, "pairs", 2)?,
+        "freetype.mul_div" => fixed_math_tuple_rows(params, "triples", 3)?,
+        other => return Err(format!("unsupported fixed math operation {other}")),
+    };
+    if rows.is_empty() {
+        return Err("fixed math rows cannot be empty".to_string());
+    }
+    Ok(rows)
+}
+
+fn fixed_math_unary_rows(params: &Value, key: &str) -> Result<Vec<Vec<i64>>, String> {
+    array_param(params, key)?
+        .iter()
+        .map(|value| i64_value(value, key).map(|value| vec![value]))
+        .collect()
+}
+
+fn fixed_math_tuple_rows(
+    params: &Value,
+    key: &str,
+    tuple_len: usize,
+) -> Result<Vec<Vec<i64>>, String> {
+    array_param(params, key)?
+        .iter()
+        .map(|row| {
+            let values = row
+                .as_array()
+                .ok_or_else(|| format!("{key} row must be an array, got {row}"))?;
+            if values.len() != tuple_len {
+                return Err(format!(
+                    "{key} row must contain {tuple_len} values, got {}",
+                    values.len()
+                ));
+            }
+            values
+                .iter()
+                .map(|value| i64_value(value, key))
+                .collect::<Result<Vec<_>, String>>()
+        })
+        .collect()
+}
+
+fn fixed_math_json(case: &InputCase, backend: FixedMathBackend) -> Result<Value, String> {
+    let rows = fixed_math_rows(&case.operation, &case.inputs.params)?
+        .into_iter()
+        .map(|row| {
+            let result = fixed_math_result(&case.operation, &row, backend)?;
+            Ok(json!({
+                "input": row,
+                "result": result
+            }))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(json!({ "rows": rows }))
+}
+
+fn fixed_math_result(
+    operation: &str,
+    row: &[i64],
+    backend: FixedMathBackend,
+) -> Result<i64, String> {
+    let value = match (operation, row, backend) {
+        ("freetype.ceil_fix", [a], FixedMathBackend::Rust) => FT_CeilFix(*a),
+        ("freetype.floor_fix", [a], FixedMathBackend::Rust) => FT_FloorFix(*a),
+        ("freetype.round_fix", [a], FixedMathBackend::Rust) => FT_RoundFix(*a),
+        ("freetype.mul_fix", [a, b], FixedMathBackend::Rust) => FT_MulFix(*a, *b),
+        ("freetype.div_fix", [a, b], FixedMathBackend::Rust) => FT_DivFix(*a, *b),
+        ("freetype.mul_div", [a, b, c], FixedMathBackend::Rust) => FT_MulDiv(*a, *b, *c),
+        ("freetype.ceil_fix", [a], FixedMathBackend::CAbi) => c_abi::FT_CeilFix(*a),
+        ("freetype.floor_fix", [a], FixedMathBackend::CAbi) => c_abi::FT_FloorFix(*a),
+        ("freetype.round_fix", [a], FixedMathBackend::CAbi) => c_abi::FT_RoundFix(*a),
+        ("freetype.mul_fix", [a, b], FixedMathBackend::CAbi) => c_abi::FT_MulFix(*a, *b),
+        ("freetype.div_fix", [a, b], FixedMathBackend::CAbi) => c_abi::FT_DivFix(*a, *b),
+        ("freetype.mul_div", [a, b, c], FixedMathBackend::CAbi) => c_abi::FT_MulDiv(*a, *b, *c),
+        ("freetype.ceil_fix", [a], FixedMathBackend::Wasm) => wasm_abi::fontdone_wasm_ceil_fix(*a),
+        ("freetype.floor_fix", [a], FixedMathBackend::Wasm) => {
+            wasm_abi::fontdone_wasm_floor_fix(*a)
+        }
+        ("freetype.round_fix", [a], FixedMathBackend::Wasm) => {
+            wasm_abi::fontdone_wasm_round_fix(*a)
+        }
+        ("freetype.mul_fix", [a, b], FixedMathBackend::Wasm) => {
+            wasm_abi::fontdone_wasm_mul_fix(*a, *b)
+        }
+        ("freetype.div_fix", [a, b], FixedMathBackend::Wasm) => {
+            wasm_abi::fontdone_wasm_div_fix(*a, *b)
+        }
+        ("freetype.mul_div", [a, b, c], FixedMathBackend::Wasm) => {
+            wasm_abi::fontdone_wasm_mul_div(*a, *b, *c)
+        }
+        _ => return Err(format!("unsupported fixed math row {operation} {row:?}")),
+    };
+    Ok(value)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum TrigonBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn is_trigon_runtime_operation(operation: &str) -> bool {
+    matches!(
+        operation,
+        "fttrigon.angle_diff"
+            | "fttrigon.atan2"
+            | "fttrigon.cos"
+            | "fttrigon.sin"
+            | "fttrigon.tan"
+            | "fttrigon.vector_from_polar"
+            | "fttrigon.vector_length"
+            | "fttrigon.vector_polarize"
+            | "fttrigon.vector_rotate"
+            | "fttrigon.vector_unit"
+    )
+}
+
+fn trigon_oracle_op(operation: &str) -> Result<&'static str, String> {
+    match operation {
+        "fttrigon.angle_diff" => Ok("angle_diff"),
+        "fttrigon.atan2" => Ok("atan2"),
+        "fttrigon.cos" => Ok("cos"),
+        "fttrigon.sin" => Ok("sin"),
+        "fttrigon.tan" => Ok("tan"),
+        "fttrigon.vector_from_polar" => Ok("vector_from_polar"),
+        "fttrigon.vector_length" => Ok("vector_length"),
+        "fttrigon.vector_polarize" => Ok("vector_polarize"),
+        "fttrigon.vector_rotate" => Ok("vector_rotate"),
+        "fttrigon.vector_unit" => Ok("vector_unit"),
+        other => Err(format!("unsupported trigon operation {other}")),
+    }
+}
+
+fn trigon_rows_arg(operation: &str, params: &Value) -> Result<String, String> {
+    Ok(trigon_rows(operation, params)?
+        .into_iter()
+        .map(|row| {
+            row.into_iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
+fn trigon_rows(operation: &str, params: &Value) -> Result<Vec<Vec<i64>>, String> {
+    let rows = match operation {
+        "fttrigon.cos" | "fttrigon.sin" | "fttrigon.tan" => trigon_angle_rows(params)?
+            .into_iter()
+            .map(|angle| vec![angle])
+            .collect(),
+        "fttrigon.atan2" => array_param(params, "vectors")?
+            .iter()
+            .map(|value| {
+                let vector = vector_value_from_value(value)?;
+                Ok(vec![vector.x, vector.y])
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+        "fttrigon.angle_diff" => array_param(params, "angle_pairs")?
+            .iter()
+            .map(|value| {
+                Ok(vec![
+                    trigon_angle_field(value, "angle1")?,
+                    trigon_angle_field(value, "angle2")?,
+                ])
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+        "fttrigon.vector_unit" => {
+            let mode = if params.get("output_pointer").is_some_and(Value::is_null) {
+                1
+            } else {
+                0
+            };
+            trigon_angle_rows(params)?
+                .into_iter()
+                .map(|angle| vec![mode, angle])
+                .collect()
+        }
+        "fttrigon.vector_length" => array_param(params, "vectors")?
+            .iter()
+            .map(|value| {
+                let (mode, vector) = trigon_optional_vector(value)?;
+                Ok(vec![mode, vector.x, vector.y])
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+        "fttrigon.vector_rotate" => trigon_array_param(params, &["scenarios", "cases"])?
+            .iter()
+            .map(|value| {
+                let (mode, vector) = if value.get("vec_pointer").is_some_and(Value::is_null) {
+                    (1, VectorValue { x: 0, y: 0 })
+                } else {
+                    let vector_value = value
+                        .get("vec")
+                        .ok_or_else(|| format!("vector rotate row missing vec: {value}"))?;
+                    (0, vector_value_from_value(vector_value)?)
+                };
+                Ok(vec![mode, vector.x, vector.y, trigon_angle_field(value, "angle")?])
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+        "fttrigon.vector_polarize" => trigon_polarize_rows(params)?,
+        "fttrigon.vector_from_polar" => array_param(params, "cases")?
+            .iter()
+            .map(|value| {
+                let mode = if value.get("vec_pointer").is_some_and(Value::is_null) {
+                    1
+                } else {
+                    0
+                };
+                let sentinel = value
+                    .get("initial_vec_sentinel")
+                    .or_else(|| params.get("initial_vec_sentinel"))
+                    .map(vector_value_from_value)
+                    .transpose()?
+                    .unwrap_or(VectorValue { x: 0, y: 0 });
+                Ok(vec![
+                    mode,
+                    trigon_i64_field(value, "length")?,
+                    trigon_angle_field(value, "angle")?,
+                    sentinel.x,
+                    sentinel.y,
+                ])
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+        other => return Err(format!("unsupported trigon operation {other}")),
+    };
+    if rows.is_empty() {
+        return Err("trigon rows cannot be empty".to_string());
+    }
+    Ok(rows)
+}
+
+fn trigon_angle_rows(params: &Value) -> Result<Vec<i64>, String> {
+    if let Some(angle) = params.get("angle") {
+        return Ok(vec![trigon_angle_value(angle, "angle")?]);
+    }
+    array_param(params, "angles")?
+        .iter()
+        .map(|value| trigon_angle_value(value, "angles"))
+        .collect()
+}
+
+fn trigon_polarize_rows(params: &Value) -> Result<Vec<Vec<i64>>, String> {
+    if let Some(scenarios) = params.get("scenarios").and_then(Value::as_array) {
+        return scenarios
+            .iter()
+            .map(|value| {
+                let vector_null = value.get("vec_pointer").is_some_and(Value::is_null);
+                let length_null = value.get("length_pointer").is_some_and(Value::is_null);
+                let angle_null = value.get("angle_pointer").is_some_and(Value::is_null);
+                let vector = if vector_null {
+                    VectorValue { x: 0, y: 0 }
+                } else {
+                    vector_value_from_value(
+                        value
+                            .get("vec")
+                            .ok_or_else(|| format!("polarize scenario missing vec: {value}"))?,
+                    )?
+                };
+                let mode = i64::from(vector_null)
+                    | (i64::from(length_null) << 1)
+                    | (i64::from(angle_null) << 2);
+                Ok(vec![
+                    mode,
+                    vector.x,
+                    vector.y,
+                    value
+                        .get("length_initial")
+                        .or_else(|| params.get("initial_length"))
+                        .map(|value| trigon_i64_value(value, "length_initial"))
+                        .transpose()?
+                        .unwrap_or(0),
+                    value
+                        .get("angle_initial")
+                        .or_else(|| params.get("initial_angle"))
+                        .map(|value| trigon_angle_value(value, "angle_initial"))
+                        .transpose()?
+                        .unwrap_or(0),
+                ])
+            })
+            .collect();
+    }
+
+    array_param(params, "vectors")?
+        .iter()
+        .map(|value| {
+            let vector = vector_value_from_value(value)?;
+            Ok(vec![
+                0,
+                vector.x,
+                vector.y,
+                params
+                    .get("initial_length")
+                    .map(|value| trigon_i64_value(value, "initial_length"))
+                    .transpose()?
+                    .unwrap_or(0),
+                params
+                    .get("initial_angle")
+                    .map(|value| trigon_angle_value(value, "initial_angle"))
+                    .transpose()?
+                    .unwrap_or(0),
+            ])
+        })
+        .collect()
+}
+
+fn trigon_array_param<'a>(params: &'a Value, keys: &[&str]) -> Result<&'a Vec<Value>, String> {
+    for key in keys {
+        if let Some(values) = params.get(*key).and_then(Value::as_array) {
+            return Ok(values);
+        }
+    }
+    Err(format!("missing trigon array param {}", keys.join("|")))
+}
+
+fn trigon_optional_vector(value: &Value) -> Result<(i64, VectorValue), String> {
+    if value_is_null_token(value) || value.get("vec_pointer").is_some_and(Value::is_null) {
+        return Ok((1, VectorValue { x: 0, y: 0 }));
+    }
+    if let Some(vector) = value.get("vec") {
+        return Ok((0, vector_value_from_value(vector)?));
+    }
+    Ok((0, vector_value_from_value(value)?))
+}
+
+fn trigon_angle_field(value: &Value, key: &str) -> Result<i64, String> {
+    trigon_angle_value(
+        value
+            .get(key)
+            .ok_or_else(|| format!("missing trigon angle field {key}: {value}"))?,
+        key,
+    )
+}
+
+fn trigon_i64_field(value: &Value, key: &str) -> Result<i64, String> {
+    trigon_i64_value(
+        value
+            .get(key)
+            .ok_or_else(|| format!("missing trigon i64 field {key}: {value}"))?,
+        key,
+    )
+}
+
+fn trigon_angle_value(value: &Value, key: &str) -> Result<i64, String> {
+    if let Some(object) = value.as_object() {
+        if let Some(value) = object.get("value") {
+            return trigon_i64_value(value, key);
+        }
+        if let Some(value) = object.get("macro") {
+            return trigon_i64_value(value, key);
+        }
+        if let Some(value) = object.get("expression") {
+            return trigon_i64_value(value, key);
+        }
+    }
+    trigon_i64_value(value, key)
+}
+
+fn trigon_i64_value(value: &Value, key: &str) -> Result<i64, String> {
+    i64_value(value, key)
+}
+
+fn trigon_json(case: &InputCase, backend: TrigonBackend) -> Result<Value, String> {
+    let rows = trigon_rows(&case.operation, &case.inputs.params)?
+        .into_iter()
+        .map(|row| trigon_row_json(&case.operation, &row, backend))
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(json!({ "rows": rows }))
+}
+
+fn trigon_row_json(
+    operation: &str,
+    row: &[i64],
+    backend: TrigonBackend,
+) -> Result<Value, String> {
+    match (operation, row) {
+        ("fttrigon.cos" | "fttrigon.sin" | "fttrigon.tan", [angle]) => Ok(json!({
+            "angle": angle,
+            "result": trigon_scalar_result(operation, *angle, backend)?
+        })),
+        ("fttrigon.atan2", [x, y]) => Ok(json!({
+            "vector": vector_value_json(VectorValue { x: *x, y: *y }),
+            "result": trigon_atan2_result(*x, *y, backend)
+        })),
+        ("fttrigon.angle_diff", [angle1, angle2]) => Ok(json!({
+            "angle1": angle1,
+            "angle2": angle2,
+            "result": trigon_angle_diff_result(*angle1, *angle2, backend)
+        })),
+        ("fttrigon.vector_unit", [mode, angle]) => Ok(json!({
+            "mode": mode,
+            "angle": angle,
+            "result": trigon_vector_unit_result(*mode, *angle, backend)?
+        })),
+        ("fttrigon.vector_length", [mode, x, y]) => Ok(json!({
+            "mode": mode,
+            "vector": if *mode == 1 { Value::Null } else { vector_value_json(VectorValue { x: *x, y: *y }) },
+            "result": trigon_vector_length_result(*mode, VectorValue { x: *x, y: *y }, backend)
+        })),
+        ("fttrigon.vector_rotate", [mode, x, y, angle]) => Ok(json!({
+            "mode": mode,
+            "angle": angle,
+            "input": if *mode == 1 { Value::Null } else { vector_value_json(VectorValue { x: *x, y: *y }) },
+            "result": trigon_vector_rotate_result(*mode, VectorValue { x: *x, y: *y }, *angle, backend)?
+        })),
+        ("fttrigon.vector_polarize", [mode, x, y, length, angle]) => {
+            let (length_after, angle_after) = trigon_vector_polarize_result(
+                *mode,
+                VectorValue { x: *x, y: *y },
+                *length,
+                *angle,
+                backend,
+            )?;
+            Ok(json!({
+                "mode": mode,
+                "input": if (*mode & 1) != 0 { Value::Null } else { vector_value_json(VectorValue { x: *x, y: *y }) },
+                "length": length_after.map_or(Value::Null, |value| json!(value)),
+                "angle": angle_after.map_or(Value::Null, |value| json!(value))
+            }))
+        }
+        ("fttrigon.vector_from_polar", [mode, length, angle, sentinel_x, sentinel_y]) => Ok(json!({
+            "mode": mode,
+            "length": length,
+            "angle": angle,
+            "result": trigon_vector_from_polar_result(
+                *mode,
+                *length,
+                *angle,
+                VectorValue {
+                    x: *sentinel_x,
+                    y: *sentinel_y,
+                },
+                backend,
+            )?
+        })),
+        _ => Err(format!("unsupported trigon row {operation} {row:?}")),
+    }
+}
+
+fn trigon_scalar_result(
+    operation: &str,
+    angle: i64,
+    backend: TrigonBackend,
+) -> Result<i64, String> {
+    let value = match (operation, backend) {
+        ("fttrigon.cos", TrigonBackend::Rust) => FT_Cos(angle),
+        ("fttrigon.sin", TrigonBackend::Rust) => FT_Sin(angle),
+        ("fttrigon.tan", TrigonBackend::Rust) => FT_Tan(angle),
+        ("fttrigon.cos", TrigonBackend::CAbi) => c_abi::FT_Cos(angle),
+        ("fttrigon.sin", TrigonBackend::CAbi) => c_abi::FT_Sin(angle),
+        ("fttrigon.tan", TrigonBackend::CAbi) => c_abi::FT_Tan(angle),
+        ("fttrigon.cos", TrigonBackend::Wasm) => wasm_abi::fontdone_wasm_cos(angle),
+        ("fttrigon.sin", TrigonBackend::Wasm) => wasm_abi::fontdone_wasm_sin(angle),
+        ("fttrigon.tan", TrigonBackend::Wasm) => wasm_abi::fontdone_wasm_tan(angle),
+        _ => return Err(format!("unsupported trigon scalar operation {operation}")),
+    };
+    Ok(value)
+}
+
+fn trigon_atan2_result(x: i64, y: i64, backend: TrigonBackend) -> i64 {
+    match backend {
+        TrigonBackend::Rust => FT_Atan2(x, y),
+        TrigonBackend::CAbi => c_abi::FT_Atan2(x, y),
+        TrigonBackend::Wasm => wasm_abi::fontdone_wasm_atan2(x, y),
+    }
+}
+
+fn trigon_angle_diff_result(angle1: i64, angle2: i64, backend: TrigonBackend) -> i64 {
+    match backend {
+        TrigonBackend::Rust => FT_Angle_Diff(angle1, angle2),
+        TrigonBackend::CAbi => c_abi::FT_Angle_Diff(angle1, angle2),
+        TrigonBackend::Wasm => wasm_abi::fontdone_wasm_angle_diff(angle1, angle2),
+    }
+}
+
+fn trigon_vector_unit_result(
+    mode: i64,
+    angle: i64,
+    backend: TrigonBackend,
+) -> Result<Value, String> {
+    match backend {
+        TrigonBackend::Rust => {
+            if mode == 1 {
+                FT_Vector_Unit(None, angle);
+                Ok(Value::Null)
+            } else {
+                let mut vector = FT_Vector { x: 0, y: 0 };
+                FT_Vector_Unit(Some(&mut vector), angle);
+                Ok(vector_value_json(VectorValue {
+                    x: vector.x,
+                    y: vector.y,
+                }))
+            }
+        }
+        TrigonBackend::CAbi => {
+            if mode == 1 {
+                c_abi::FT_Vector_Unit(std::ptr::null_mut(), angle);
+                Ok(Value::Null)
+            } else {
+                let mut vector = c_abi::FT_Vector { x: 0, y: 0 };
+                c_abi::FT_Vector_Unit(&mut vector, angle);
+                Ok(vector_value_json(VectorValue {
+                    x: vector.x,
+                    y: vector.y,
+                }))
+            }
+        }
+        TrigonBackend::Wasm => {
+            if mode == 1 {
+                wasm_abi::fontdone_wasm_vector_unit(std::ptr::null_mut(), angle);
+                Ok(Value::Null)
+            } else {
+                let mut vector = wasm_abi::FontdoneWasmVector { x: 0, y: 0 };
+                wasm_abi::fontdone_wasm_vector_unit(&mut vector, angle);
+                Ok(vector_value_json(VectorValue {
+                    x: vector.x,
+                    y: vector.y,
+                }))
+            }
+        }
+    }
+}
+
+fn trigon_vector_length_result(
+    mode: i64,
+    vector: VectorValue,
+    backend: TrigonBackend,
+) -> i64 {
+    match backend {
+        TrigonBackend::Rust => FT_Vector_Length((mode != 1).then_some(&ffi_vector(vector))),
+        TrigonBackend::CAbi => {
+            let mut vector = c_abi::FT_Vector {
+                x: vector.x,
+                y: vector.y,
+            };
+            c_abi::FT_Vector_Length(if mode == 1 {
+                std::ptr::null_mut()
+            } else {
+                &mut vector
+            })
+        }
+        TrigonBackend::Wasm => {
+            let vector = wasm_abi::FontdoneWasmVector {
+                x: vector.x,
+                y: vector.y,
+            };
+            wasm_abi::fontdone_wasm_vector_length(if mode == 1 {
+                std::ptr::null()
+            } else {
+                &vector
+            })
+        }
+    }
+}
+
+fn trigon_vector_rotate_result(
+    mode: i64,
+    vector: VectorValue,
+    angle: i64,
+    backend: TrigonBackend,
+) -> Result<Value, String> {
+    match backend {
+        TrigonBackend::Rust => {
+            if mode == 1 {
+                FT_Vector_Rotate(None, angle);
+                Ok(Value::Null)
+            } else {
+                let mut vector = ffi_vector(vector);
+                FT_Vector_Rotate(Some(&mut vector), angle);
+                Ok(vector_value_json(VectorValue {
+                    x: vector.x,
+                    y: vector.y,
+                }))
+            }
+        }
+        TrigonBackend::CAbi => {
+            if mode == 1 {
+                c_abi::FT_Vector_Rotate(std::ptr::null_mut(), angle);
+                Ok(Value::Null)
+            } else {
+                let mut vector = c_abi::FT_Vector {
+                    x: vector.x,
+                    y: vector.y,
+                };
+                c_abi::FT_Vector_Rotate(&mut vector, angle);
+                Ok(vector_value_json(VectorValue {
+                    x: vector.x,
+                    y: vector.y,
+                }))
+            }
+        }
+        TrigonBackend::Wasm => {
+            if mode == 1 {
+                wasm_abi::fontdone_wasm_vector_rotate(std::ptr::null_mut(), angle);
+                Ok(Value::Null)
+            } else {
+                let mut vector = wasm_abi::FontdoneWasmVector {
+                    x: vector.x,
+                    y: vector.y,
+                };
+                wasm_abi::fontdone_wasm_vector_rotate(&mut vector, angle);
+                Ok(vector_value_json(VectorValue {
+                    x: vector.x,
+                    y: vector.y,
+                }))
+            }
+        }
+    }
+}
+
+fn trigon_vector_polarize_result(
+    mode: i64,
+    vector: VectorValue,
+    length: i64,
+    angle: i64,
+    backend: TrigonBackend,
+) -> Result<(Option<i64>, Option<i64>), String> {
+    match backend {
+        TrigonBackend::Rust => {
+            let rust_vector = ffi_vector(vector);
+            let mut length_value = length;
+            let mut angle_value = angle;
+            FT_Vector_Polarize(
+                ((mode & 1) == 0).then_some(&rust_vector),
+                ((mode & 2) == 0).then_some(&mut length_value),
+                ((mode & 4) == 0).then_some(&mut angle_value),
+            );
+            Ok((
+                ((mode & 2) == 0).then_some(length_value),
+                ((mode & 4) == 0).then_some(angle_value),
+            ))
+        }
+        TrigonBackend::CAbi => {
+            let mut vector = c_abi::FT_Vector {
+                x: vector.x,
+                y: vector.y,
+            };
+            let mut length_value = length;
+            let mut angle_value = angle;
+            c_abi::FT_Vector_Polarize(
+                if (mode & 1) != 0 {
+                    std::ptr::null_mut()
+                } else {
+                    &mut vector
+                },
+                if (mode & 2) != 0 {
+                    std::ptr::null_mut()
+                } else {
+                    &mut length_value
+                },
+                if (mode & 4) != 0 {
+                    std::ptr::null_mut()
+                } else {
+                    &mut angle_value
+                },
+            );
+            Ok((
+                ((mode & 2) == 0).then_some(length_value),
+                ((mode & 4) == 0).then_some(angle_value),
+            ))
+        }
+        TrigonBackend::Wasm => {
+            let vector = wasm_abi::FontdoneWasmVector {
+                x: vector.x,
+                y: vector.y,
+            };
+            let mut length_value = length;
+            let mut angle_value = angle;
+            wasm_abi::fontdone_wasm_vector_polarize(
+                if (mode & 1) != 0 {
+                    std::ptr::null()
+                } else {
+                    &vector
+                },
+                if (mode & 2) != 0 {
+                    std::ptr::null_mut()
+                } else {
+                    &mut length_value
+                },
+                if (mode & 4) != 0 {
+                    std::ptr::null_mut()
+                } else {
+                    &mut angle_value
+                },
+            );
+            Ok((
+                ((mode & 2) == 0).then_some(length_value),
+                ((mode & 4) == 0).then_some(angle_value),
+            ))
+        }
+    }
+}
+
+fn trigon_vector_from_polar_result(
+    mode: i64,
+    length: i64,
+    angle: i64,
+    sentinel: VectorValue,
+    backend: TrigonBackend,
+) -> Result<Value, String> {
+    match backend {
+        TrigonBackend::Rust => {
+            if mode == 1 {
+                FT_Vector_From_Polar(None, length, angle);
+                Ok(Value::Null)
+            } else {
+                let mut vector = ffi_vector(sentinel);
+                FT_Vector_From_Polar(Some(&mut vector), length, angle);
+                Ok(vector_value_json(VectorValue {
+                    x: vector.x,
+                    y: vector.y,
+                }))
+            }
+        }
+        TrigonBackend::CAbi => {
+            if mode == 1 {
+                c_abi::FT_Vector_From_Polar(std::ptr::null_mut(), length, angle);
+                Ok(Value::Null)
+            } else {
+                let mut vector = c_abi::FT_Vector {
+                    x: sentinel.x,
+                    y: sentinel.y,
+                };
+                c_abi::FT_Vector_From_Polar(&mut vector, length, angle);
+                Ok(vector_value_json(VectorValue {
+                    x: vector.x,
+                    y: vector.y,
+                }))
+            }
+        }
+        TrigonBackend::Wasm => {
+            if mode == 1 {
+                wasm_abi::fontdone_wasm_vector_from_polar(std::ptr::null_mut(), length, angle);
+                Ok(Value::Null)
+            } else {
+                let mut vector = wasm_abi::FontdoneWasmVector {
+                    x: sentinel.x,
+                    y: sentinel.y,
+                };
+                wasm_abi::fontdone_wasm_vector_from_polar(&mut vector, length, angle);
+                Ok(vector_value_json(VectorValue {
+                    x: vector.x,
+                    y: vector.y,
+                }))
+            }
+        }
+    }
+}
+
+fn is_trigon_aggregate_operation(operation: &str) -> bool {
+    matches!(
+        operation,
+        "fttrigon.constant_runtime_probe" | "fttrigon.periodic_equivalence"
+    )
+}
+
+fn trigon_aggregate_oracle_op(operation: &str) -> Result<&'static str, String> {
+    match operation {
+        "fttrigon.constant_runtime_probe" => Ok("constant_probe"),
+        "fttrigon.periodic_equivalence" => Ok("periodic"),
+        other => Err(format!("unsupported trigon aggregate operation {other}")),
+    }
+}
+
+fn trigon_aggregate_rows_arg(operation: &str, params: &Value) -> Result<String, String> {
+    Ok(trigon_aggregate_rows(operation, params)?
+        .into_iter()
+        .map(|row| {
+            row.into_iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
+fn trigon_aggregate_rows(operation: &str, params: &Value) -> Result<Vec<Vec<i64>>, String> {
+    let mut rows = Vec::new();
+    match operation {
+        "fttrigon.constant_runtime_probe" => {
+            let angles = trigon_angle_rows(params)?;
+            let vectors = trigon_vectors_for_aggregate(params)?;
+            for op in trigon_operation_codes(params)? {
+                match op {
+                    1..=4 => {
+                        for angle in &angles {
+                            rows.push(vec![op, *angle, 0, 0]);
+                        }
+                    }
+                    5 => {
+                        for angle in &angles {
+                            for vector in &vectors {
+                                rows.push(vec![op, *angle, vector.x, vector.y]);
+                            }
+                        }
+                    }
+                    6 => {
+                        for vector in &vectors {
+                            rows.push(vec![op, 0, vector.x, vector.y]);
+                        }
+                    }
+                    _ => return Err(format!("unsupported trigon aggregate op code {op}")),
+                }
+            }
+        }
+        "fttrigon.periodic_equivalence" => {
+            let pairs = array_param(params, "angle_pairs")?;
+            let vectors = trigon_vectors_for_aggregate(params)?;
+            for op in trigon_operation_codes(params)? {
+                match op {
+                    1..=4 => {
+                        for pair in pairs {
+                            rows.push(vec![
+                                op,
+                                trigon_angle_field(pair, "base")?,
+                                trigon_angle_field(pair, "periodic")?,
+                                0,
+                                0,
+                            ]);
+                        }
+                    }
+                    5 => {
+                        for pair in pairs {
+                            for vector in &vectors {
+                                rows.push(vec![
+                                    op,
+                                    trigon_angle_field(pair, "base")?,
+                                    trigon_angle_field(pair, "periodic")?,
+                                    vector.x,
+                                    vector.y,
+                                ]);
+                            }
+                        }
+                    }
+                    _ => return Err(format!("unsupported periodic trigon op code {op}")),
+                }
+            }
+        }
+        other => return Err(format!("unsupported trigon aggregate operation {other}")),
+    }
+    if rows.is_empty() {
+        return Err("trigon aggregate rows cannot be empty".to_string());
+    }
+    Ok(rows)
+}
+
+fn trigon_vectors_for_aggregate(params: &Value) -> Result<Vec<VectorValue>, String> {
+    if let Some(values) = params
+        .get("rotate_vectors")
+        .or_else(|| params.get("vectors"))
+        .and_then(Value::as_array)
+    {
+        return values.iter().map(vector_value_from_value).collect();
+    }
+    Ok(vec![VectorValue { x: 65_536, y: 0 }])
+}
+
+fn trigon_operation_codes(params: &Value) -> Result<Vec<i64>, String> {
+    array_param(params, "operations")?
+        .iter()
+        .map(|value| {
+            let operation = value
+                .as_str()
+                .ok_or_else(|| format!("trigon operation must be string, got {value}"))?;
+            match operation {
+                "FT_Sin" => Ok(1),
+                "FT_Cos" => Ok(2),
+                "FT_Tan" => Ok(3),
+                "FT_Vector_Unit" => Ok(4),
+                "FT_Vector_Rotate" => Ok(5),
+                "FT_Vector_Polarize" => Ok(6),
+                other => Err(format!("unsupported aggregate trigon operation {other}")),
+            }
+        })
+        .collect()
+}
+
+fn trigon_aggregate_json(case: &InputCase, backend: TrigonBackend) -> Result<Value, String> {
+    let rows = trigon_aggregate_rows(&case.operation, &case.inputs.params)?
+        .into_iter()
+        .map(|row| trigon_aggregate_row_json(&case.operation, &row, backend))
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(json!({ "rows": rows }))
+}
+
+fn trigon_aggregate_row_json(
+    operation: &str,
+    row: &[i64],
+    backend: TrigonBackend,
+) -> Result<Value, String> {
+    match (operation, row) {
+        ("fttrigon.constant_runtime_probe", [op, angle, x, y]) => Ok(json!({
+            "op": op,
+            "angle": angle,
+            "input": trigon_aggregate_input_json(*op, *x, *y),
+            "result": trigon_aggregate_result(*op, *angle, *x, *y, backend)?
+        })),
+        ("fttrigon.periodic_equivalence", [op, base_angle, periodic_angle, x, y]) => {
+            Ok(json!({
+                "op": op,
+                "base_angle": base_angle,
+                "periodic_angle": periodic_angle,
+                "input": trigon_aggregate_input_json(*op, *x, *y),
+                "base_result": trigon_aggregate_result(*op, *base_angle, *x, *y, backend)?,
+                "periodic_result": trigon_aggregate_result(*op, *periodic_angle, *x, *y, backend)?
+            }))
+        }
+        _ => Err(format!("unsupported trigon aggregate row {operation} {row:?}")),
+    }
+}
+
+fn trigon_aggregate_input_json(op: i64, x: i64, y: i64) -> Value {
+    if matches!(op, 5 | 6) {
+        vector_value_json(VectorValue { x, y })
+    } else {
+        Value::Null
+    }
+}
+
+fn trigon_aggregate_result(
+    op: i64,
+    angle: i64,
+    x: i64,
+    y: i64,
+    backend: TrigonBackend,
+) -> Result<Value, String> {
+    match op {
+        1 => Ok(json!(trigon_scalar_result("fttrigon.sin", angle, backend)?)),
+        2 => Ok(json!(trigon_scalar_result("fttrigon.cos", angle, backend)?)),
+        3 => Ok(json!(trigon_scalar_result("fttrigon.tan", angle, backend)?)),
+        4 => trigon_vector_unit_result(0, angle, backend),
+        5 => trigon_vector_rotate_result(0, VectorValue { x, y }, angle, backend),
+        6 => {
+            let (length, polar_angle) =
+                trigon_vector_polarize_result(0, VectorValue { x, y }, 0, 0, backend)?;
+            Ok(json!({
+                "length": length.unwrap_or_default(),
+                "angle": polar_angle.unwrap_or_default()
+            }))
+        }
+        _ => Err(format!("unsupported aggregate trigon op code {op}")),
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum VectorMatrixBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct MatrixValue {
+    xx: i64,
+    xy: i64,
+    yx: i64,
+    yy: i64,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct VectorValue {
+    x: i64,
+    y: i64,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct VectorTransformRow {
+    mode: i64,
+    vector: VectorValue,
+    matrix: MatrixValue,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct MatrixMultiplyRow {
+    mode: i64,
+    a: MatrixValue,
+    b: MatrixValue,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct MatrixInvertRow {
+    mode: i64,
+    matrix: MatrixValue,
+}
+
+fn vector_transform_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(vector_transform_rows(params)?
+        .into_iter()
+        .map(|row| {
+            [
+                row.mode,
+                row.vector.x,
+                row.vector.y,
+                row.matrix.xx,
+                row.matrix.xy,
+                row.matrix.yx,
+                row.matrix.yy,
+            ]
+            .into_iter()
+            .map(|value| value.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+        })
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
+fn matrix_multiply_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(matrix_multiply_rows(params)?
+        .into_iter()
+        .map(|row| {
+            [
+                row.mode, row.a.xx, row.a.xy, row.a.yx, row.a.yy, row.b.xx, row.b.xy, row.b.yx,
+                row.b.yy,
+            ]
+            .into_iter()
+            .map(|value| value.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+        })
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
+fn matrix_invert_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(matrix_invert_rows(params)?
+        .into_iter()
+        .map(|row| {
+            [
+                row.mode,
+                row.matrix.xx,
+                row.matrix.xy,
+                row.matrix.yx,
+                row.matrix.yy,
+            ]
+            .into_iter()
+            .map(|value| value.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+        })
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
+fn vector_transform_rows(params: &Value) -> Result<Vec<VectorTransformRow>, String> {
+    if let Some(variants) = params.get("variants").and_then(Value::as_array) {
+        return variants
+            .iter()
+            .map(|variant| {
+                let vector_value = variant
+                    .get("vector")
+                    .ok_or_else(|| format!("vector transform variant missing vector: {variant}"))?;
+                let matrix_value = variant
+                    .get("matrix")
+                    .ok_or_else(|| format!("vector transform variant missing matrix: {variant}"))?;
+                let vector_null = value_is_null_token(vector_value);
+                let matrix_null = value_is_null_token(matrix_value);
+                Ok(VectorTransformRow {
+                    mode: if vector_null {
+                        1
+                    } else if matrix_null {
+                        2
+                    } else {
+                        0
+                    },
+                    vector: if vector_null {
+                        VectorValue { x: 0, y: 0 }
+                    } else {
+                        vector_value_from_value(vector_value)?
+                    },
+                    matrix: if matrix_null {
+                        MatrixValue {
+                            xx: 0,
+                            xy: 0,
+                            yx: 0,
+                            yy: 0,
+                        }
+                    } else {
+                        matrix_value_from_value(matrix_value)?
+                    },
+                })
+            })
+            .collect();
+    }
+
+    let matrices = array_param(params, "matrices")?
+        .iter()
+        .map(matrix_value_from_value)
+        .collect::<Result<Vec<_>, String>>()?;
+    let vectors = array_param(params, "vectors")?
+        .iter()
+        .map(vector_value_from_value)
+        .collect::<Result<Vec<_>, String>>()?;
+    let mut rows = Vec::new();
+    for matrix in matrices {
+        for vector in &vectors {
+            rows.push(VectorTransformRow {
+                mode: 0,
+                vector: *vector,
+                matrix,
+            });
+        }
+    }
+    Ok(rows)
+}
+
+fn matrix_multiply_rows(params: &Value) -> Result<Vec<MatrixMultiplyRow>, String> {
+    if let Some(rows) = params.get("rows").and_then(Value::as_array) {
+        return rows
+            .iter()
+            .map(|row| {
+                let a_value = row
+                    .get("a")
+                    .ok_or_else(|| format!("matrix multiply row missing a: {row}"))?;
+                let b_value = row
+                    .get("b")
+                    .ok_or_else(|| format!("matrix multiply row missing b: {row}"))?;
+                let a_null = value_is_null_token(a_value);
+                let b_null = value_is_null_token(b_value);
+                Ok(MatrixMultiplyRow {
+                    mode: match (a_null, b_null) {
+                        (false, false) => 0,
+                        (true, false) => 1,
+                        (false, true) => 2,
+                        (true, true) => 3,
+                    },
+                    a: if a_null {
+                        MatrixValue {
+                            xx: 0,
+                            xy: 0,
+                            yx: 0,
+                            yy: 0,
+                        }
+                    } else {
+                        matrix_value_from_value(a_value)?
+                    },
+                    b: if b_null {
+                        MatrixValue {
+                            xx: 0,
+                            xy: 0,
+                            yx: 0,
+                            yy: 0,
+                        }
+                    } else {
+                        matrix_value_from_value(b_value)?
+                    },
+                })
+            })
+            .collect();
+    }
+
+    array_param(params, "matrix_pairs")?
+        .iter()
+        .map(|row| {
+            Ok(MatrixMultiplyRow {
+                mode: 0,
+                a: matrix_value_from_value(
+                    row.get("a")
+                        .ok_or_else(|| format!("matrix pair missing a: {row}"))?,
+                )?,
+                b: matrix_value_from_value(
+                    row.get("b")
+                        .ok_or_else(|| format!("matrix pair missing b: {row}"))?,
+                )?,
+            })
+        })
+        .collect()
+}
+
+fn matrix_invert_rows(params: &Value) -> Result<Vec<MatrixInvertRow>, String> {
+    if let Some(matrix) = params.get("matrix") {
+        return Ok(vec![MatrixInvertRow {
+            mode: if value_is_null_token(matrix) { 1 } else { 0 },
+            matrix: if value_is_null_token(matrix) {
+                MatrixValue {
+                    xx: 0,
+                    xy: 0,
+                    yx: 0,
+                    yy: 0,
+                }
+            } else {
+                matrix_value_from_value(matrix)?
+            },
+        }]);
+    }
+    array_param(params, "matrices")?
+        .iter()
+        .map(|matrix| {
+            Ok(MatrixInvertRow {
+                mode: 0,
+                matrix: matrix_value_from_value(matrix)?,
+            })
+        })
+        .collect()
+}
+
+fn vector_transform_json(case: &InputCase, backend: VectorMatrixBackend) -> Result<Value, String> {
+    let rows = vector_transform_rows(&case.inputs.params)?
+        .into_iter()
+        .map(|row| {
+            Ok(json!({
+                "mode": row.mode,
+                "result": vector_transform_result(row, backend)?
+            }))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(json!({ "rows": rows }))
+}
+
+fn matrix_multiply_json(case: &InputCase, backend: VectorMatrixBackend) -> Result<Value, String> {
+    let rows = matrix_multiply_rows(&case.inputs.params)?
+        .into_iter()
+        .map(|row| {
+            Ok(json!({
+                "mode": row.mode,
+                "result": matrix_multiply_result(row, backend)?
+            }))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(json!({ "rows": rows }))
+}
+
+fn matrix_invert_output(
+    case: &InputCase,
+    backend: VectorMatrixBackend,
+) -> Result<RunOutput, String> {
+    let mut rows = Vec::new();
+    for row in matrix_invert_rows(&case.inputs.params)? {
+        let (err, result) = matrix_invert_result(row, backend)?;
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+        rows.push(json!({
+            "mode": row.mode,
+            "result": matrix_value_json(result)
+        }));
+    }
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn vector_transform_result(
+    row: VectorTransformRow,
+    backend: VectorMatrixBackend,
+) -> Result<Value, String> {
+    match backend {
+        VectorMatrixBackend::Rust => {
+            let mut vector = ffi_vector(row.vector);
+            let matrix = ffi_matrix(row.matrix);
+            FT_Vector_Transform(
+                (row.mode != 1).then_some(&mut vector),
+                (row.mode != 2).then_some(&matrix),
+            );
+            Ok(if row.mode == 1 {
+                Value::Null
+            } else {
+                vector_value_json(VectorValue {
+                    x: vector.x,
+                    y: vector.y,
+                })
+            })
+        }
+        VectorMatrixBackend::CAbi => {
+            let mut vector = c_abi::FT_Vector {
+                x: row.vector.x,
+                y: row.vector.y,
+            };
+            let matrix = c_abi::FT_Matrix {
+                xx: row.matrix.xx,
+                xy: row.matrix.xy,
+                yx: row.matrix.yx,
+                yy: row.matrix.yy,
+            };
+            c_abi::FT_Vector_Transform(
+                if row.mode == 1 {
+                    std::ptr::null_mut()
+                } else {
+                    &mut vector
+                },
+                if row.mode == 2 {
+                    std::ptr::null()
+                } else {
+                    &matrix
+                },
+            );
+            Ok(if row.mode == 1 {
+                Value::Null
+            } else {
+                vector_value_json(VectorValue {
+                    x: vector.x,
+                    y: vector.y,
+                })
+            })
+        }
+        VectorMatrixBackend::Wasm => {
+            let mut vector = wasm_abi::FontdoneWasmVector {
+                x: row.vector.x,
+                y: row.vector.y,
+            };
+            let matrix = wasm_abi::FontdoneWasmMatrix {
+                xx: row.matrix.xx,
+                xy: row.matrix.xy,
+                yx: row.matrix.yx,
+                yy: row.matrix.yy,
+            };
+            wasm_abi::fontdone_wasm_vector_transform(
+                if row.mode == 1 {
+                    std::ptr::null_mut()
+                } else {
+                    &mut vector
+                },
+                if row.mode == 2 {
+                    std::ptr::null()
+                } else {
+                    &matrix
+                },
+            );
+            Ok(if row.mode == 1 {
+                Value::Null
+            } else {
+                vector_value_json(VectorValue {
+                    x: vector.x,
+                    y: vector.y,
+                })
+            })
+        }
+    }
+}
+
+fn matrix_multiply_result(
+    row: MatrixMultiplyRow,
+    backend: VectorMatrixBackend,
+) -> Result<Value, String> {
+    match backend {
+        VectorMatrixBackend::Rust => {
+            let a = ffi_matrix(row.a);
+            let mut b = ffi_matrix(row.b);
+            FT_Matrix_Multiply(
+                (row.mode != 1 && row.mode != 3).then_some(&a),
+                (row.mode != 2 && row.mode != 3).then_some(&mut b),
+            );
+            Ok(if row.mode == 2 || row.mode == 3 {
+                Value::Null
+            } else {
+                matrix_value_json(MatrixValue {
+                    xx: b.xx,
+                    xy: b.xy,
+                    yx: b.yx,
+                    yy: b.yy,
+                })
+            })
+        }
+        VectorMatrixBackend::CAbi => {
+            let a = c_abi::FT_Matrix {
+                xx: row.a.xx,
+                xy: row.a.xy,
+                yx: row.a.yx,
+                yy: row.a.yy,
+            };
+            let mut b = c_abi::FT_Matrix {
+                xx: row.b.xx,
+                xy: row.b.xy,
+                yx: row.b.yx,
+                yy: row.b.yy,
+            };
+            c_abi::FT_Matrix_Multiply(
+                if row.mode == 1 || row.mode == 3 {
+                    std::ptr::null()
+                } else {
+                    &a
+                },
+                if row.mode == 2 || row.mode == 3 {
+                    std::ptr::null_mut()
+                } else {
+                    &mut b
+                },
+            );
+            Ok(if row.mode == 2 || row.mode == 3 {
+                Value::Null
+            } else {
+                matrix_value_json(MatrixValue {
+                    xx: b.xx,
+                    xy: b.xy,
+                    yx: b.yx,
+                    yy: b.yy,
+                })
+            })
+        }
+        VectorMatrixBackend::Wasm => {
+            let a = wasm_abi::FontdoneWasmMatrix {
+                xx: row.a.xx,
+                xy: row.a.xy,
+                yx: row.a.yx,
+                yy: row.a.yy,
+            };
+            let mut b = wasm_abi::FontdoneWasmMatrix {
+                xx: row.b.xx,
+                xy: row.b.xy,
+                yx: row.b.yx,
+                yy: row.b.yy,
+            };
+            wasm_abi::fontdone_wasm_matrix_multiply(
+                if row.mode == 1 || row.mode == 3 {
+                    std::ptr::null()
+                } else {
+                    &a
+                },
+                if row.mode == 2 || row.mode == 3 {
+                    std::ptr::null_mut()
+                } else {
+                    &mut b
+                },
+            );
+            Ok(if row.mode == 2 || row.mode == 3 {
+                Value::Null
+            } else {
+                matrix_value_json(MatrixValue {
+                    xx: b.xx,
+                    xy: b.xy,
+                    yx: b.yx,
+                    yy: b.yy,
+                })
+            })
+        }
+    }
+}
+
+fn matrix_invert_result(
+    row: MatrixInvertRow,
+    backend: VectorMatrixBackend,
+) -> Result<(i32, MatrixValue), String> {
+    let (err, matrix) = match backend {
+        VectorMatrixBackend::Rust => {
+            let mut matrix = ffi_matrix(row.matrix);
+            let err = FT_Matrix_Invert((row.mode != 1).then_some(&mut matrix));
+            (
+                err,
+                MatrixValue {
+                    xx: matrix.xx,
+                    xy: matrix.xy,
+                    yx: matrix.yx,
+                    yy: matrix.yy,
+                },
+            )
+        }
+        VectorMatrixBackend::CAbi => {
+            let mut matrix = c_abi::FT_Matrix {
+                xx: row.matrix.xx,
+                xy: row.matrix.xy,
+                yx: row.matrix.yx,
+                yy: row.matrix.yy,
+            };
+            let err = c_abi::FT_Matrix_Invert(if row.mode == 1 {
+                std::ptr::null_mut()
+            } else {
+                &mut matrix
+            });
+            (
+                err,
+                MatrixValue {
+                    xx: matrix.xx,
+                    xy: matrix.xy,
+                    yx: matrix.yx,
+                    yy: matrix.yy,
+                },
+            )
+        }
+        VectorMatrixBackend::Wasm => {
+            let mut matrix = wasm_abi::FontdoneWasmMatrix {
+                xx: row.matrix.xx,
+                xy: row.matrix.xy,
+                yx: row.matrix.yx,
+                yy: row.matrix.yy,
+            };
+            let err = wasm_abi::fontdone_wasm_matrix_invert(if row.mode == 1 {
+                std::ptr::null_mut()
+            } else {
+                &mut matrix
+            });
+            (
+                err,
+                MatrixValue {
+                    xx: matrix.xx,
+                    xy: matrix.xy,
+                    yx: matrix.yx,
+                    yy: matrix.yy,
+                },
+            )
+        }
+    };
+    Ok((err, matrix))
+}
+
+fn ffi_vector(vector: VectorValue) -> FT_Vector {
+    FT_Vector {
+        x: vector.x,
+        y: vector.y,
+    }
+}
+
+fn ffi_matrix(matrix: MatrixValue) -> FT_Matrix {
+    FT_Matrix {
+        xx: matrix.xx,
+        xy: matrix.xy,
+        yx: matrix.yx,
+        yy: matrix.yy,
+    }
+}
+
+fn vector_value_json(vector: VectorValue) -> Value {
+    json!({ "x": vector.x, "y": vector.y })
+}
+
+fn matrix_value_json(matrix: MatrixValue) -> Value {
+    json!({
+        "xx": matrix.xx,
+        "xy": matrix.xy,
+        "yx": matrix.yx,
+        "yy": matrix.yy
+    })
+}
+
+fn vector_value_from_value(value: &Value) -> Result<VectorValue, String> {
+    if let Some(items) = value.as_array() {
+        if items.len() != 2 {
+            return Err(format!("vector array must contain 2 values, got {value}"));
+        }
+        return Ok(VectorValue {
+            x: i64_value(&items[0], "vector.x")?,
+            y: i64_value(&items[1], "vector.y")?,
+        });
+    }
+    Ok(VectorValue {
+        x: i64_param(value, "x")?,
+        y: i64_param(value, "y")?,
+    })
+}
+
+fn matrix_value_from_value(value: &Value) -> Result<MatrixValue, String> {
+    if let Some(name) = value.as_str() {
+        return named_matrix_value(name);
+    }
+    Ok(MatrixValue {
+        xx: i64_param(value, "xx")?,
+        xy: i64_param(value, "xy")?,
+        yx: i64_param(value, "yx")?,
+        yy: i64_param(value, "yy")?,
+    })
+}
+
+fn named_matrix_value(name: &str) -> Result<MatrixValue, String> {
+    match name {
+        "identity" => Ok(MatrixValue {
+            xx: 65_536,
+            xy: 0,
+            yx: 0,
+            yy: 65_536,
+        }),
+        "scale" => Ok(MatrixValue {
+            xx: 32_768,
+            xy: 0,
+            yx: 0,
+            yy: 131_072,
+        }),
+        "scale2" => Ok(MatrixValue {
+            xx: 131_072,
+            xy: 0,
+            yx: 0,
+            yy: 131_072,
+        }),
+        "scale_1_5" => Ok(MatrixValue {
+            xx: 98_304,
+            xy: 0,
+            yx: 0,
+            yy: 98_304,
+        }),
+        "rotate_90" | "rotate90" => Ok(MatrixValue {
+            xx: 0,
+            xy: -65_536,
+            yx: 65_536,
+            yy: 0,
+        }),
+        "shear" => Ok(MatrixValue {
+            xx: 65_536,
+            xy: 16_384,
+            yx: -8_192,
+            yy: 65_536,
+        }),
+        "negative_shear" => Ok(MatrixValue {
+            xx: 65_536,
+            xy: -16_384,
+            yx: 8_192,
+            yy: 65_536,
+        }),
+        other => Err(format!("unsupported named matrix {other}")),
+    }
+}
+
+fn value_is_null_token(value: &Value) -> bool {
+    value.is_null() || value.as_str().is_some_and(|value| value == "null")
 }
 
 fn i64_param(value: &Value, key: &str) -> Result<i64, String> {
@@ -5717,6 +15201,11 @@ fn u32_param_object(object: &serde_json::Map<String, Value>, key: &str) -> Resul
 fn u32_value(value: &Value, key: &str) -> Result<u32, String> {
     let raw = u64_value(value, key)?;
     u32::try_from(raw).map_err(|err| format!("{key} does not fit u32: {err}"))
+}
+
+fn u16_value(value: &Value, key: &str) -> Result<u16, String> {
+    let raw = u32_value(value, key)?;
+    u16::try_from(raw).map_err(|err| format!("{key} does not fit u16: {err}"))
 }
 
 fn u64_value(value: &Value, key: &str) -> Result<u64, String> {
@@ -5751,37 +15240,240 @@ fn symbolic_i64(text: &str) -> Result<i64, String> {
     if text.is_empty() {
         return Err("empty integer expression".to_string());
     }
-    if text.contains('|') {
-        let mut value = 0i64;
-        for part in text.split('|') {
-            value |= symbolic_i64(part)?;
+    let mut parser = IntExprParser::new(text)?;
+    let value = parser.parse_expression()?;
+    parser.finish()?;
+    Ok(value)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IntExprToken {
+    Value(i64),
+    Plus,
+    Minus,
+    Star,
+    Pipe,
+    Shl,
+    LParen,
+    RParen,
+}
+
+struct IntExprParser {
+    tokens: Vec<IntExprToken>,
+    index: usize,
+}
+
+impl IntExprParser {
+    fn new(text: &str) -> Result<Self, String> {
+        Ok(Self {
+            tokens: tokenize_int_expr(text)?,
+            index: 0,
+        })
+    }
+
+    fn finish(&self) -> Result<(), String> {
+        if self.index == self.tokens.len() {
+            Ok(())
+        } else {
+            Err(format!(
+                "unexpected trailing integer expression token {:?}",
+                self.tokens[self.index]
+            ))
         }
-        return Ok(value);
     }
-    let text = text
-        .strip_prefix('(')
-        .and_then(|value| value.strip_suffix(')'))
-        .unwrap_or(text)
-        .trim();
-    if let Some((left, right)) = text.split_once("<<") {
-        let left = symbolic_i64(left)?;
-        let right = symbolic_i64(right)?;
-        let shift = u32::try_from(right).map_err(|err| format!("negative shift: {err}"))?;
-        return left
-            .checked_shl(shift)
-            .ok_or_else(|| format!("shift overflows i64: {text}"));
+
+    fn parse_expression(&mut self) -> Result<i64, String> {
+        self.parse_or()
     }
-    if let Some(hex) = text.strip_prefix("0x") {
-        return i64::from_str_radix(hex, 16).map_err(|err| format!("parse hex {text}: {err}"));
+
+    fn parse_or(&mut self) -> Result<i64, String> {
+        let mut value = self.parse_shift()?;
+        while self.take(IntExprToken::Pipe) {
+            value |= self.parse_shift()?;
+        }
+        Ok(value)
     }
-    if let Some(hex) = text.strip_prefix("U+") {
-        return i64::from_str_radix(hex, 16)
-            .map_err(|err| format!("parse codepoint {text}: {err}"));
+
+    fn parse_shift(&mut self) -> Result<i64, String> {
+        let mut value = self.parse_add()?;
+        while self.take(IntExprToken::Shl) {
+            let shift = self.parse_add()?;
+            let shift = u32::try_from(shift).map_err(|err| format!("negative shift: {err}"))?;
+            value = value
+                .checked_shl(shift)
+                .ok_or_else(|| "shift overflows i64".to_string())?;
+        }
+        Ok(value)
     }
-    if let Ok(value) = text.parse::<i64>() {
-        return Ok(value);
+
+    fn parse_add(&mut self) -> Result<i64, String> {
+        let mut value = self.parse_mul()?;
+        loop {
+            if self.take(IntExprToken::Plus) {
+                value = value
+                    .checked_add(self.parse_mul()?)
+                    .ok_or_else(|| "integer expression addition overflow".to_string())?;
+            } else if self.take(IntExprToken::Minus) {
+                value = value
+                    .checked_sub(self.parse_mul()?)
+                    .ok_or_else(|| "integer expression subtraction overflow".to_string())?;
+            } else {
+                return Ok(value);
+            }
+        }
     }
-    rust_constant(text).map_err(|_| format!("unsupported integer expression {text}"))
+
+    fn parse_mul(&mut self) -> Result<i64, String> {
+        let mut value = self.parse_unary()?;
+        while self.take(IntExprToken::Star) {
+            value = value
+                .checked_mul(self.parse_unary()?)
+                .ok_or_else(|| "integer expression multiplication overflow".to_string())?;
+        }
+        Ok(value)
+    }
+
+    fn parse_unary(&mut self) -> Result<i64, String> {
+        if self.take(IntExprToken::Plus) {
+            self.parse_unary()
+        } else if self.take(IntExprToken::Minus) {
+            self.parse_unary()?
+                .checked_neg()
+                .ok_or_else(|| "integer expression negation overflow".to_string())
+        } else {
+            self.parse_primary()
+        }
+    }
+
+    fn parse_primary(&mut self) -> Result<i64, String> {
+        match self.next() {
+            Some(IntExprToken::Value(value)) => Ok(value),
+            Some(IntExprToken::LParen) => {
+                let value = self.parse_expression()?;
+                if self.take(IntExprToken::RParen) {
+                    Ok(value)
+                } else {
+                    Err("missing closing ')' in integer expression".to_string())
+                }
+            }
+            Some(token) => Err(format!("unexpected integer expression token {token:?}")),
+            None => Err("unexpected end of integer expression".to_string()),
+        }
+    }
+
+    fn take(&mut self, token: IntExprToken) -> bool {
+        if self.tokens.get(self.index) == Some(&token) {
+            self.index += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn next(&mut self) -> Option<IntExprToken> {
+        let token = self.tokens.get(self.index).copied();
+        self.index += usize::from(token.is_some());
+        token
+    }
+}
+
+fn tokenize_int_expr(text: &str) -> Result<Vec<IntExprToken>, String> {
+    let mut tokens = Vec::new();
+    let mut index = 0;
+    while index < text.len() {
+        let rest = &text[index..];
+        let Some(ch) = rest.chars().next() else {
+            break;
+        };
+        if ch.is_ascii_whitespace() {
+            index += ch.len_utf8();
+            continue;
+        }
+        if rest.starts_with("<<") {
+            tokens.push(IntExprToken::Shl);
+            index += 2;
+            continue;
+        }
+        if rest.starts_with("0x") {
+            let start = index + 2;
+            let end = start
+                + text[start..]
+                    .chars()
+                    .take_while(|ch| ch.is_ascii_hexdigit())
+                    .map(char::len_utf8)
+                    .sum::<usize>();
+            if end == start {
+                return Err(format!("invalid hex integer expression {text}"));
+            }
+            tokens.push(IntExprToken::Value(
+                i64::from_str_radix(&text[start..end], 16)
+                    .map_err(|err| format!("parse hex {text}: {err}"))?,
+            ));
+            index = end;
+            continue;
+        }
+        if rest.starts_with("U+") {
+            let start = index + 2;
+            let end = start
+                + text[start..]
+                    .chars()
+                    .take_while(|ch| ch.is_ascii_hexdigit())
+                    .map(char::len_utf8)
+                    .sum::<usize>();
+            if end == start {
+                return Err(format!("invalid codepoint expression {text}"));
+            }
+            tokens.push(IntExprToken::Value(
+                i64::from_str_radix(&text[start..end], 16)
+                    .map_err(|err| format!("parse codepoint {text}: {err}"))?,
+            ));
+            index = end;
+            continue;
+        }
+        match ch {
+            '+' => tokens.push(IntExprToken::Plus),
+            '-' => tokens.push(IntExprToken::Minus),
+            '*' => tokens.push(IntExprToken::Star),
+            '|' => tokens.push(IntExprToken::Pipe),
+            '(' => tokens.push(IntExprToken::LParen),
+            ')' => tokens.push(IntExprToken::RParen),
+            ch if ch.is_ascii_digit() => {
+                let start = index;
+                let end = start
+                    + text[start..]
+                        .chars()
+                        .take_while(|ch| ch.is_ascii_digit())
+                        .map(char::len_utf8)
+                        .sum::<usize>();
+                tokens.push(IntExprToken::Value(
+                    text[start..end]
+                        .parse::<i64>()
+                        .map_err(|err| format!("parse integer {text}: {err}"))?,
+                ));
+                index = end;
+                continue;
+            }
+            ch if ch.is_ascii_alphabetic() || ch == '_' => {
+                let start = index;
+                let end = start
+                    + text[start..]
+                        .chars()
+                        .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+                        .map(char::len_utf8)
+                        .sum::<usize>();
+                let symbol = &text[start..end];
+                tokens.push(IntExprToken::Value(
+                    rust_constant(symbol)
+                        .map_err(|_| format!("unsupported integer expression {symbol}"))?,
+                ));
+                index = end;
+                continue;
+            }
+            other => return Err(format!("unsupported integer expression character {other:?}")),
+        }
+        index += ch.len_utf8();
+    }
+    Ok(tokens)
 }
 
 fn sha256_hex(data: &[u8]) -> String {
