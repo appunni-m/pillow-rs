@@ -6,13 +6,16 @@ use crate::api;
 
 use super::constants::*;
 use super::convert::{
-    error_to_ft, glyph_format_from_core, load_flags_to_core, render_mode_to_core,
+    FT_LOAD_TARGET_MODE, error_to_ft, glyph_format_from_core, load_flags_to_core,
+    render_mode_to_core,
 };
 use super::types::{
-    FT_Bitmap, FT_Byte, FT_CharMap, FT_Error, FT_F26Dot6, FT_Glyph_Format, FT_Glyph_Metrics,
-    FT_Int, FT_Int32, FT_Long, FT_Pointer, FT_Render_Mode, FT_Sfnt_Tag,
+    FT_Bitmap, FT_Byte, FT_CharMap, FT_Error, FT_F26Dot6, FT_Fixed, FT_Glyph_Format,
+    FT_Glyph_Metrics, FT_Int, FT_Int32, FT_Long, FT_Pointer, FT_Render_Mode, FT_Sfnt_Tag,
     FT_Size_Metrics as FT_Size_MetricsRec, FT_UInt, FT_ULong, FT_Vector,
 };
+
+const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FT_Library {
@@ -122,6 +125,61 @@ pub fn FT_Load_Glyph(
         .map_err(error_to_ft)
 }
 
+pub fn FT_Get_Advance(
+    face: &FT_Face,
+    glyph_index: FT_UInt,
+    load_flags: FT_Int32,
+) -> Result<FT_Fixed, FT_Error> {
+    if face.probe_only {
+        return Err(FT_Err_Invalid_Size_Handle);
+    }
+    let fast_only = load_flags & FT_ADVANCE_FLAG_FAST_ONLY_I32 != 0;
+    let load_flags = load_flags & !FT_ADVANCE_FLAG_FAST_ONLY_I32;
+    if fast_only && !advance_fast_path_supported(load_flags) {
+        return Err(FT_Err_Unimplemented_Feature);
+    }
+    let glyph_index = u16::try_from(glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
+    let flags = load_flags_to_core(load_flags)?;
+    if use_fast_horizontal_advance(flags) {
+        // C `tt_get_advances` returns raw hmtx advances; `ft_face_scale_advances_`
+        // scales them directly to 16.16 with `FT_MulFix(1024 * advance, x_scale)`.
+        return Ok(FT_Fixed::from(
+            face.inner.glyph_hori_advance_16dot16(glyph_index),
+        ));
+    }
+    let slot = face
+        .inner
+        .load_glyph(glyph_index, flags)
+        .map_err(error_to_ft)?;
+    let advance = if flags.contains(api::LoadFlags::VERTICAL_LAYOUT) {
+        slot.advance.y
+    } else {
+        slot.advance.x
+    };
+    if flags.contains(api::LoadFlags::NO_SCALE) {
+        Ok(FT_Fixed::from(advance))
+    } else {
+        Ok(FT_Fixed::from(advance) << 10)
+    }
+}
+
+pub fn FT_Get_Advances(
+    face: &FT_Face,
+    start: FT_UInt,
+    count: FT_UInt,
+    load_flags: FT_Int32,
+) -> Result<Vec<FT_Fixed>, FT_Error> {
+    let count_usize = usize::try_from(count).map_err(|_| FT_Err_Invalid_Argument)?;
+    let mut advances = Vec::with_capacity(count_usize);
+    for offset in 0..count {
+        let glyph_index = start
+            .checked_add(offset)
+            .ok_or(FT_Err_Invalid_Glyph_Index)?;
+        advances.push(FT_Get_Advance(face, glyph_index, load_flags)?);
+    }
+    Ok(advances)
+}
+
 pub fn FT_Render_Glyph(
     slot: FT_GlyphSlot,
     render_mode: FT_Render_Mode,
@@ -190,6 +248,19 @@ fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags)
         source_face: face.inner.clone(),
         load_flags,
     }
+}
+
+fn advance_fast_path_supported(load_flags: FT_Int32) -> bool {
+    load_flags & FT_LOAD_NO_SCALE != 0
+        || load_flags & FT_LOAD_NO_HINTING != 0
+        || FT_LOAD_TARGET_MODE(load_flags) == FT_RENDER_MODE_LIGHT
+}
+
+fn use_fast_horizontal_advance(flags: api::LoadFlags) -> bool {
+    !flags.contains(api::LoadFlags::VERTICAL_LAYOUT)
+        && !flags.contains(api::LoadFlags::NO_SCALE)
+        && (flags.contains(api::LoadFlags::NO_HINTING)
+            || flags.contains(api::LoadFlags::TARGET_LIGHT))
 }
 
 fn c_face_index_to_core(face_index: FT_Long) -> Result<(usize, bool), FT_Error> {

@@ -479,6 +479,23 @@ const DEFAULT_VARIABILITY_SIZES: &[u32] = &[10, 20];
 const DEFAULT_VARIABILITY_CODEPOINTS: &[u64] = &[33, 65, 103, 109];
 const DEFAULT_VARIABILITY_LOAD_FLAGS: &[i32] = &[FT_LOAD_DEFAULT];
 const DEFAULT_VARIABILITY_RENDER_MODES: &[i32] = &[FT_RENDER_MODE_NORMAL];
+const FT_ADVANCE_FLAG_FAST_ONLY_I32: i32 = 0x2000_0000;
+
+#[derive(Clone, Copy, Default)]
+struct AdvanceRange {
+    start: u32,
+    count: u32,
+}
+
+struct AppliedAxes {
+    font: Option<Asset>,
+    size: Option<u32>,
+    codepoint: Option<u64>,
+    glyph_index: Option<u32>,
+    load_flags: Option<i32>,
+    render_mode: Option<i32>,
+    range: Option<AdvanceRange>,
+}
 
 #[derive(Clone, Default)]
 struct ExpansionPlan {
@@ -488,6 +505,7 @@ struct ExpansionPlan {
     glyph_indices_enabled: bool,
     load_flags: Vec<Option<i32>>,
     render_modes: Vec<Option<i32>>,
+    ranges: Vec<Option<AdvanceRange>>,
 }
 
 impl ExpansionPlan {
@@ -503,6 +521,8 @@ impl ExpansionPlan {
             && self.load_flags[0].is_none()
             && self.render_modes.len() == 1
             && self.render_modes[0].is_none()
+            && self.ranges.len() == 1
+            && self.ranges[0].is_none()
     }
 }
 
@@ -522,18 +542,23 @@ fn for_each_expanded_input_case(
                 for glyph_index in &glyph_indices {
                     for load_flags in &plan.load_flags {
                         for render_mode in &plan.render_modes {
-                            let mut case = case.clone();
-                            apply_expansion_axes(
-                                &mut case,
-                                font.clone(),
-                                *size,
-                                *codepoint,
-                                *glyph_index,
-                                *load_flags,
-                                *render_mode,
-                            );
-                            if !visit(case) {
-                                return false;
+                            for range in &plan.ranges {
+                                let mut case = case.clone();
+                                apply_expansion_axes(
+                                    &mut case,
+                                    AppliedAxes {
+                                        font: font.clone(),
+                                        size: *size,
+                                        codepoint: *codepoint,
+                                        glyph_index: *glyph_index,
+                                        load_flags: *load_flags,
+                                        render_mode: *render_mode,
+                                        range: *range,
+                                    },
+                                );
+                                if !visit(case) {
+                                    return false;
+                                }
                             }
                         }
                     }
@@ -580,6 +605,7 @@ fn expansion_plan(case: &InputCase) -> ExpansionPlan {
         .into_iter()
         .map(Some)
         .collect(),
+        ranges: range_axis(params).into_iter().map(Some).collect(),
     };
     normalize_empty_axes(&mut plan);
     apply_variability_axis_limit(&mut plan);
@@ -593,7 +619,8 @@ fn expansion_count(case: &InputCase) -> usize {
         .len()
         .saturating_mul(plan.codepoints.len())
         .saturating_mul(plan.load_flags.len())
-        .saturating_mul(plan.render_modes.len());
+        .saturating_mul(plan.render_modes.len())
+        .saturating_mul(plan.ranges.len());
     if !plan.glyph_indices_enabled {
         return plan.fonts.len().saturating_mul(other_axes);
     }
@@ -619,6 +646,9 @@ fn normalize_empty_axes(plan: &mut ExpansionPlan) {
     }
     if plan.render_modes.is_empty() {
         plan.render_modes.push(None);
+    }
+    if plan.ranges.is_empty() {
+        plan.ranges.push(None);
     }
 }
 
@@ -972,17 +1002,28 @@ fn render_mode_value(value: &Value) -> Result<i32, String> {
     i32::try_from(raw).map_err(|err| format!("render_modes does not fit i32: {err}"))
 }
 
-fn apply_expansion_axes(
-    case: &mut InputCase,
-    font: Option<Asset>,
-    size: Option<u32>,
-    codepoint: Option<u64>,
-    glyph_index: Option<u32>,
-    load_flags: Option<i32>,
-    render_mode: Option<i32>,
-) {
+fn range_axis(params: &Value) -> Vec<AdvanceRange> {
+    let Some(values) = params.get("ranges").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    values
+        .iter()
+        .map(|value| {
+            let object = value
+                .as_object()
+                .ok_or_else(|| "range entry must be an object".to_string())?;
+            Ok::<AdvanceRange, String>(AdvanceRange {
+                start: u32_param_object(object, "start")?,
+                count: u32_param_object(object, "count")?,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap_or_default()
+}
+
+fn apply_expansion_axes(case: &mut InputCase, axes: AppliedAxes) {
     let mut suffix = Vec::new();
-    if let Some(font) = font {
+    if let Some(font) = axes.font {
         suffix.push(format!("font={}", asset_label(&font)));
         case.inputs.assets.insert("font".to_string(), font);
         case.inputs.assets.remove("font_folder");
@@ -993,25 +1034,30 @@ fn apply_expansion_axes(
         .as_object_mut()
         .expect("fixture input params must be a JSON object");
     remove_aggregate_params(params);
-    if let Some(size) = size {
+    if let Some(size) = axes.size {
         suffix.push(format!("size={size}"));
         params.insert("pixel_size".to_string(), json!({"x": 0, "y": size}));
     }
-    if let Some(codepoint) = codepoint {
+    if let Some(codepoint) = axes.codepoint {
         suffix.push(format!("cp={codepoint}"));
         params.insert("char_code".to_string(), Value::from(codepoint));
     }
-    if let Some(glyph_index) = glyph_index {
+    if let Some(glyph_index) = axes.glyph_index {
         suffix.push(format!("gid={glyph_index}"));
         params.insert("glyph_index".to_string(), Value::from(glyph_index));
     }
-    if let Some(load_flags) = load_flags {
+    if let Some(load_flags) = axes.load_flags {
         suffix.push(format!("flags={load_flags}"));
         params.insert("load_flags".to_string(), Value::from(load_flags));
     }
-    if let Some(render_mode) = render_mode {
+    if let Some(render_mode) = axes.render_mode {
         suffix.push(format!("mode={render_mode}"));
         params.insert("render_mode".to_string(), Value::from(render_mode));
+    }
+    if let Some(range) = axes.range {
+        suffix.push(format!("range={}+{}", range.start, range.count));
+        params.insert("start".to_string(), Value::from(range.start));
+        params.insert("count".to_string(), Value::from(range.count));
     }
     if !suffix.is_empty() {
         case.case_id = format!("{}#{}", case.case_id, suffix.join(";"));
@@ -1026,6 +1072,7 @@ fn remove_aggregate_params(params: &mut serde_json::Map<String, Value>) {
         "char_codes",
         "glyph_indices",
         "load_flag_sets",
+        "ranges",
         "render_modes",
         "target_modes",
     ] {
@@ -1116,10 +1163,40 @@ fn is_supported_runtime_operation(case: &InputCase, operation: &str) -> bool {
         "record_layout" => record_param(&case.inputs.params).is_ok_and(is_supported_runtime_layout),
         "new_memory_face" | "set_pixel_sizes" | "set_char_size" | "size_metrics"
         | "get_char_index" | "load_char" | "load_glyph" | "render_glyph" => {
-            has_runtime_font_source(case) && assets_are_runtime_resolved(case)
+            has_runtime_font_source(case)
+                && assets_are_runtime_resolved(case)
+                && !has_probe_params(case)
         }
+        "ftadvanc.get_advance" | "ftadvanc.get_advances" => advance_runtime_supported(case),
         _ => false,
     }
+}
+
+fn advance_runtime_supported(case: &InputCase) -> bool {
+    if case.expect_error {
+        return false;
+    }
+    if !has_runtime_font_source(case)
+        || !assets_are_runtime_resolved(case)
+        || has_probe_params(case)
+    {
+        return false;
+    }
+    let Ok(load_flags) = load_flags_param(&case.inputs.params) else {
+        return false;
+    };
+    if load_flags & FT_ADVANCE_FLAG_FAST_ONLY_I32 != 0 {
+        return false;
+    }
+    match case.operation.as_str() {
+        "ftadvanc.get_advance" => glyph_index_param(&case.inputs.params).is_ok(),
+        "ftadvanc.get_advances" => advance_range_param(&case.inputs.params).is_ok(),
+        _ => false,
+    }
+}
+
+fn has_probe_params(case: &InputCase) -> bool {
+    case.inputs.params.get("probes").is_some()
 }
 
 fn has_runtime_font_source(case: &InputCase) -> bool {
@@ -1968,7 +2045,13 @@ fn runtime_face_cache_key(case: &InputCase) -> Result<String, String> {
 fn case_uses_cached_face(case: &InputCase) -> bool {
     matches!(
         case.operation.as_str(),
-        "size_metrics" | "get_char_index" | "load_char" | "load_glyph" | "render_glyph"
+        "size_metrics"
+            | "get_char_index"
+            | "load_char"
+            | "load_glyph"
+            | "render_glyph"
+            | "ftadvanc.get_advance"
+            | "ftadvanc.get_advances"
     )
 }
 
@@ -1983,6 +2066,8 @@ fn case_requires_asset_validation(case: &InputCase) -> bool {
             | "load_char"
             | "load_glyph"
             | "render_glyph"
+            | "ftadvanc.get_advance"
+            | "ftadvanc.get_advances"
     )
 }
 
@@ -2967,6 +3052,24 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(load_flags_param(params)?.to_string());
             Ok(args)
         }
+        "ftadvanc.get_advance" => {
+            let mut args = vec!["--get-advance".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(load_flags_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftadvanc.get_advances" => {
+            let (start, count) = advance_range_param(params)?;
+            let mut args = vec!["--get-advances".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(start.to_string());
+            args.push(count.to_string());
+            args.push(load_flags_param(params)?.to_string());
+            Ok(args)
+        }
         "render_glyph" => {
             let glyph_input = glyph_load_input_param(params)?;
             let mut args = vec![match glyph_input {
@@ -3085,6 +3188,25 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 load_flags_param(&case.inputs.params)?,
             ) {
                 Ok(slot) => Ok(ok(slot_json(&slot))),
+                Err(err) => Ok(error(err)),
+            }
+        }
+        "ftadvanc.get_advance" => {
+            let face = open_face(case)?;
+            match FT_Get_Advance(
+                &face,
+                glyph_index_param(&case.inputs.params)?,
+                load_flags_param(&case.inputs.params)?,
+            ) {
+                Ok(advance) => Ok(ok(advance_json(advance))),
+                Err(err) => Ok(error(err)),
+            }
+        }
+        "ftadvanc.get_advances" => {
+            let face = open_face(case)?;
+            let (start, count) = advance_range_param(&case.inputs.params)?;
+            match FT_Get_Advances(&face, start, count, load_flags_param(&case.inputs.params)?) {
+                Ok(advances) => Ok(ok(advances_json(&advances))),
                 Err(err) => Ok(error(err)),
             }
         }
@@ -3217,6 +3339,43 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
                 Ok(error(err))
             }
         }
+        "ftadvanc.get_advance" => {
+            let (library, face) = c_open_face(case)?;
+            let mut advance = 0;
+            let err = c_abi::FT_Get_Advance(
+                face,
+                glyph_index_param(&case.inputs.params)?,
+                load_flags_param(&case.inputs.params)?,
+                &mut advance,
+            );
+            c_done_face(face);
+            c_done_library(library);
+            if err == FT_Err_Ok {
+                Ok(ok(advance_json(advance)))
+            } else {
+                Ok(error(err))
+            }
+        }
+        "ftadvanc.get_advances" => {
+            let (library, face) = c_open_face(case)?;
+            let (start, count) = advance_range_param(&case.inputs.params)?;
+            let out_len = usize::try_from(count).map_err(|err| err.to_string())?;
+            let mut advances = vec![0; out_len];
+            let err = c_abi::FT_Get_Advances(
+                face,
+                start,
+                count,
+                load_flags_param(&case.inputs.params)?,
+                advances.as_mut_ptr(),
+            );
+            c_done_face(face);
+            c_done_library(library);
+            if err == FT_Err_Ok {
+                Ok(ok(advances_json(&advances)))
+            } else {
+                Ok(error(err))
+            }
+        }
         "render_glyph" => {
             let (library, face) = c_open_face(case)?;
             let output = c_render_glyph(
@@ -3291,6 +3450,41 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             let output = wasm_slot_output(handle, err);
             wasm_done_face(handle);
             output
+        }
+        "ftadvanc.get_advance" => {
+            let handle = wasm_open_face(case)?;
+            let mut advance = 0;
+            let err = wasm_abi::fontdone_wasm_get_advance(
+                handle,
+                glyph_index_param(&case.inputs.params)?,
+                load_flags_param(&case.inputs.params)?,
+                &mut advance,
+            );
+            wasm_done_face(handle);
+            if err == FT_Err_Ok {
+                Ok(ok(advance_json(advance)))
+            } else {
+                Ok(error(err))
+            }
+        }
+        "ftadvanc.get_advances" => {
+            let handle = wasm_open_face(case)?;
+            let (start, count) = advance_range_param(&case.inputs.params)?;
+            let out_len = usize::try_from(count).map_err(|err| err.to_string())?;
+            let mut advances = vec![0; out_len];
+            let err = wasm_abi::fontdone_wasm_get_advances(
+                handle,
+                start,
+                count,
+                load_flags_param(&case.inputs.params)?,
+                advances.as_mut_ptr(),
+            );
+            wasm_done_face(handle);
+            if err == FT_Err_Ok {
+                Ok(ok(advances_json(&advances)))
+            } else {
+                Ok(error(err))
+            }
         }
         "render_glyph" => {
             let handle = wasm_open_face(case)?;
@@ -5125,6 +5319,18 @@ fn size_metrics_json(metrics: &FT_Size_Metrics) -> Value {
     })
 }
 
+fn advance_json(advance: i64) -> Value {
+    json!({
+        "advance": advance
+    })
+}
+
+fn advances_json(advances: &[i64]) -> Value {
+    json!({
+        "advances": advances
+    })
+}
+
 fn wasm_size_metrics_json(metrics: &wasm_abi::FontdoneWasmSizeMetrics) -> Value {
     json!({
         "x_ppem": metrics.x_ppem,
@@ -5243,6 +5449,8 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
             require_path(output, "/height", label, case)?;
             require_path(output, "/max_advance", label, case)
         }
+        "advance_result" => require_path(output, "/advance", label, case),
+        "advance_range" => require_path(output, "/advances", label, case),
         "error" => {
             if output.is_null() {
                 Ok(())
@@ -5279,6 +5487,8 @@ fn comparison_schema(case: &InputCase) -> &str {
         | "api_record" | "c_abi_record" | "c_abi_layout" => "record_layout",
         "face_open" | "face_result" | "face_handle" => "face_open",
         "glyph_slot" | "glyph_slot_bitmap" | "glyph_render" | "bitmap_result" => "glyph_slot",
+        "advance_result" => "advance_result",
+        "advance_range" => "advance_range",
         "api_result" => match case.operation.as_str() {
             "constant" => "value",
             "new_memory_face" => "face_open",
@@ -5465,6 +5675,10 @@ fn glyph_index_param(value: &Value) -> Result<u32, String> {
         .get("glyph_index")
         .ok_or_else(|| "missing glyph_index".to_string())?;
     u32_value(raw, "glyph_index")
+}
+
+fn advance_range_param(value: &Value) -> Result<(u32, u32), String> {
+    Ok((u32_param(value, "start")?, u32_param(value, "count")?))
 }
 
 fn glyph_load_input_param(value: &Value) -> Result<GlyphLoadInput, String> {

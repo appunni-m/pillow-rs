@@ -727,8 +727,17 @@ impl Font {
     /// [`Self::getkerning`] between adjacent glyphs.
     pub fn glyph_hori_advance_26dot6(&self, codepoint: u32) -> i32 {
         let glyph = self.char_index(codepoint);
-        let advance = self.data.hmtx.get(glyph).advance_width as i32;
+        self.glyph_index_hori_advance_26dot6(glyph)
+    }
+
+    pub(crate) fn glyph_index_hori_advance_26dot6(&self, glyph_index: u16) -> i32 {
+        let advance = self.data.hmtx.get(glyph_index).advance_width as i32;
         ft_mul_fix(advance, self.size_metrics.x_scale)
+    }
+
+    pub(crate) fn glyph_index_hori_advance_16dot16(&self, glyph_index: u16) -> i32 {
+        let advance = self.data.hmtx.get(glyph_index).advance_width as i32;
+        ft_mul_fix(advance * 1024, self.size_metrics.x_scale)
     }
 
     /// Return `FT_GlyphSlotRec::metrics` for a Unicode codepoint loaded with

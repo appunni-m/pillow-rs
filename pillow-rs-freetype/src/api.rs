@@ -269,6 +269,10 @@ impl Face {
         self.font.char_index(char_code)
     }
 
+    pub(crate) fn glyph_hori_advance_16dot16(&self, glyph_index: u16) -> i32 {
+        self.font.glyph_index_hori_advance_16dot16(glyph_index)
+    }
+
     /// Load a Unicode scalar value, equivalent to `FT_Load_Char`.
     pub fn load_char(&self, char_code: u32, flags: LoadFlags) -> Result<GlyphSlot, FontError> {
         self.load_glyph(self.get_char_index(char_code), flags)

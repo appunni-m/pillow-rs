@@ -215,7 +215,7 @@
               "count": 3
             }
           ],
-          "flag_sets": [
+          "load_flag_sets": [
             [
               "FT_LOAD_NO_SCALE",
               "FT_ADVANCE_FLAG_FAST_ONLY"
@@ -387,7 +387,7 @@
               "count": 4
             }
           ],
-          "flag_sets": [
+          "load_flag_sets": [
             [
               "FT_LOAD_DEFAULT"
             ],
