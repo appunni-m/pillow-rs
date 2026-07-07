@@ -11,7 +11,7 @@
       "case_id": "fterrdef.FT_Err_Invalid_Pixel_Size.value_matches_header",
       "subject": "fterrdef.FT_Err_Invalid_Pixel_Size",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -59,7 +59,7 @@
       "case_id": "fterrdef.FT_Err_Invalid_Pixel_Size.set_pixel_sizes_rejects_zero_dimensions",
       "subject": "fterrdef.FT_Err_Invalid_Pixel_Size",
       "case": "set_pixel_sizes_rejects_zero_dimensions",
-      "operation": "FT_Set_Pixel_Sizes",
+      "operation": "set_pixel_sizes",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

@@ -11,7 +11,7 @@
       "case_id": "ftmoderr.FT_Mod_Err_Winfonts.value_matches_configured_header",
       "subject": "ftmoderr.FT_Mod_Err_Winfonts",
       "case": "value_matches_configured_header",
-      "operation": "abi.constant_eval",
+      "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
       "inputs": {

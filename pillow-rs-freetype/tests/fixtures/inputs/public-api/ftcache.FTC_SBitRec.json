@@ -11,7 +11,7 @@
       "case_id": "ftcache.FTC_SBitRec.layout_matches_c",
       "subject": "ftcache.FTC_SBitRec",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "abi_layout",
       "expect_error": false,
       "inputs": {

@@ -11,7 +11,7 @@
       "case_id": "ftotval.FT_VALIDATE_OT.value_matches_header_expression",
       "subject": "ftotval.FT_VALIDATE_OT",
       "case": "value_matches_header_expression",
-      "operation": "abi.constant_eval",
+      "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
       "inputs": {

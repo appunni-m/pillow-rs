@@ -11,7 +11,7 @@
       "case_id": "ftcolor.FT_PaintSolid.layout_matches_c",
       "subject": "ftcolor.FT_PaintSolid",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "record_layout",
       "expect_error": false,
       "inputs": {

@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_LOAD_COMPUTE_METRICS.value_matches_header",
       "subject": "freetype.FT_LOAD_COMPUTE_METRICS",
       "case": "value_matches_header",
-      "operation": "abi.macro_value_and_import",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -53,7 +53,7 @@
       "case_id": "freetype.FT_LOAD_COMPUTE_METRICS.compute_metrics_load_behavior",
       "subject": "freetype.FT_LOAD_COMPUTE_METRICS",
       "case": "compute_metrics_load_behavior",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

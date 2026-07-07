@@ -10,7 +10,7 @@
       "case_id": "ttnameid.TT_MS_LANGID_CATALAN_CATALAN.value_matches_header",
       "subject": "ttnameid.TT_MS_LANGID_CATALAN_CATALAN",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -73,7 +73,7 @@
       "case_id": "ttnameid.TT_MS_LANGID_CATALAN_CATALAN.public_import_contract",
       "subject": "ttnameid.TT_MS_LANGID_CATALAN_CATALAN",
       "case": "public_import_contract",
-      "operation": "constant.import",
+      "operation": "constant",
       "schema": "api_import",
       "expect_error": false,
       "inputs": {

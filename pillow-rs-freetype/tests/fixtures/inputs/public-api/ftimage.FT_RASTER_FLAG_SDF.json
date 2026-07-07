@@ -55,7 +55,7 @@
       "case_id": "ftimage.FT_RASTER_FLAG_SDF.sdf_render_mode_sets_flag",
       "subject": "ftimage.FT_RASTER_FLAG_SDF",
       "case": "sdf_render_mode_sets_flag",
-      "operation": "freetype.render_glyph",
+      "operation": "render_glyph",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

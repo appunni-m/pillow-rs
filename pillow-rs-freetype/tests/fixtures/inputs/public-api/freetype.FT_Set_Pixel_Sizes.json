@@ -13,7 +13,7 @@
       "case_id": "freetype.FT_Set_Pixel_Sizes.set_pixel_size",
       "subject": "freetype.FT_Set_Pixel_Sizes",
       "case": "set_pixel_size",
-      "operation": "freetype.set_pixel_sizes",
+      "operation": "set_pixel_sizes",
       "schema": "size_metrics",
       "expect_error": false,
       "inputs": {
@@ -74,7 +74,7 @@
       "case_id": "freetype.FT_Set_Pixel_Sizes.success_zero_dimension_normalization",
       "subject": "freetype.FT_Set_Pixel_Sizes",
       "case": "success_zero_dimension_normalization",
-      "operation": "freetype.set_pixel_sizes",
+      "operation": "set_pixel_sizes",
       "schema": "size_metrics",
       "expect_error": false,
       "inputs": {
@@ -132,7 +132,7 @@
       "case_id": "freetype.FT_Set_Pixel_Sizes.success_large_dimension_clamp",
       "subject": "freetype.FT_Set_Pixel_Sizes",
       "case": "success_large_dimension_clamp",
-      "operation": "freetype.set_pixel_sizes",
+      "operation": "set_pixel_sizes",
       "schema": "size_metrics",
       "expect_error": false,
       "inputs": {
@@ -190,7 +190,7 @@
       "case_id": "freetype.FT_Set_Pixel_Sizes.error_null_face",
       "subject": "freetype.FT_Set_Pixel_Sizes",
       "case": "error_null_face",
-      "operation": "freetype.set_pixel_sizes",
+      "operation": "set_pixel_sizes",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -224,7 +224,7 @@
       "case_id": "freetype.FT_Set_Pixel_Sizes.error_invalid_or_unscalable_face",
       "subject": "freetype.FT_Set_Pixel_Sizes",
       "case": "error_invalid_or_unscalable_face",
-      "operation": "freetype.set_pixel_sizes",
+      "operation": "set_pixel_sizes",
       "schema": "size_metrics",
       "expect_error": true,
       "inputs": {

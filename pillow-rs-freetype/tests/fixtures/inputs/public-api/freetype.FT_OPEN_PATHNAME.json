@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_OPEN_PATHNAME.value_matches_header",
       "subject": "freetype.FT_OPEN_PATHNAME",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -52,7 +52,7 @@
       "case_id": "freetype.FT_OPEN_PATHNAME.open_pathname_source",
       "subject": "freetype.FT_OPEN_PATHNAME",
       "case": "open_pathname_source",
-      "operation": "freetype.open_face",
+      "operation": "new_memory_face",
       "schema": "face_open",
       "expect_error": false,
       "inputs": {

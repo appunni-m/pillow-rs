@@ -10,7 +10,7 @@
       "case_id": "ttnameid.TT_MS_LANGID_UIGHUR_PRC.value_matches_header",
       "subject": "ttnameid.TT_MS_LANGID_UIGHUR_PRC",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -80,7 +80,7 @@
       "case_id": "ttnameid.TT_MS_LANGID_UIGHUR_PRC.public_import_contract",
       "subject": "ttnameid.TT_MS_LANGID_UIGHUR_PRC",
       "case": "public_import_contract",
-      "operation": "constant.import",
+      "operation": "constant",
       "schema": "api_import",
       "expect_error": false,
       "inputs": {

@@ -10,7 +10,7 @@
       "case_id": "ttnameid.TT_MS_LANGID_OCCITAN_FRANCE.value_matches_header",
       "subject": "ttnameid.TT_MS_LANGID_OCCITAN_FRANCE",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -84,7 +84,7 @@
       "case_id": "ttnameid.TT_MS_LANGID_OCCITAN_FRANCE.public_import_contract",
       "subject": "ttnameid.TT_MS_LANGID_OCCITAN_FRANCE",
       "case": "public_import_contract",
-      "operation": "constant.import",
+      "operation": "constant",
       "schema": "api_import",
       "expect_error": false,
       "inputs": {

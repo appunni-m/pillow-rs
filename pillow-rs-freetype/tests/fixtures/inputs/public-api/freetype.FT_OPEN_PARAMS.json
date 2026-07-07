@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_OPEN_PARAMS.value_matches_header",
       "subject": "freetype.FT_OPEN_PARAMS",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -52,7 +52,7 @@
       "case_id": "freetype.FT_OPEN_PARAMS.open_parameter_tags",
       "subject": "freetype.FT_OPEN_PARAMS",
       "case": "open_parameter_tags",
-      "operation": "freetype.open_face",
+      "operation": "new_memory_face",
       "schema": "face_open",
       "expect_error": false,
       "inputs": {

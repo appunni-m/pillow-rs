@@ -9,7 +9,7 @@
       "case_id": "freetype.FT_SUBGLYPH_FLAG_USE_MY_METRICS.value_matches_header",
       "subject": "freetype.FT_SUBGLYPH_FLAG_USE_MY_METRICS",
       "case": "value_matches_header",
-      "operation": "public_api.constant_value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

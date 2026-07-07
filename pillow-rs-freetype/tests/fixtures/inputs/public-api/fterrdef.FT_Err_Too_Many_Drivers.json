@@ -10,7 +10,7 @@
       "case_id": "fterrdef.FT_Err_Too_Many_Drivers.value_matches_header",
       "subject": "fterrdef.FT_Err_Too_Many_Drivers",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

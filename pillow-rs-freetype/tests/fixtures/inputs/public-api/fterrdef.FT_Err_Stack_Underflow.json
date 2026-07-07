@@ -10,7 +10,7 @@
       "case_id": "fterrdef.FT_Err_Stack_Underflow.value_matches_header",
       "subject": "fterrdef.FT_Err_Stack_Underflow",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -55,7 +55,7 @@
       "case_id": "fterrdef.FT_Err_Stack_Underflow.cff_charstring_missing_operands",
       "subject": "fterrdef.FT_Err_Stack_Underflow",
       "case": "cff_charstring_missing_operands",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

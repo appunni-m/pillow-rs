@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_F2Dot14.alias_defined_as_signed_short",
       "subject": "fttypes.FT_F2Dot14",
       "case": "alias_defined_as_signed_short",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_F2Dot14", "c_definition": "typedef signed short FT_F2Dot14", "underlying_type": "signed short", "signedness": "signed", "fractional_bits": 14, "probes": ["include_compiles", "assignment_compiles"]}},

@@ -11,7 +11,7 @@
       "case_id": "freetype.FT_Size_Metrics.layout_matches_c",
       "subject": "freetype.FT_Size_Metrics",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "c_abi_layout",
       "expect_error": false,
       "inputs": {
@@ -64,7 +64,7 @@
       "case_id": "freetype.FT_Size_Metrics.returns_active_size_metrics",
       "subject": "freetype.FT_Size_Metrics",
       "case": "returns_active_size_metrics",
-      "operation": "freetype.size_metrics",
+      "operation": "size_metrics",
       "schema": "size_metrics",
       "expect_error": false,
       "inputs": {
@@ -136,7 +136,7 @@
       "case_id": "freetype.FT_Size_Metrics.matrix_active_size_metrics",
       "subject": "freetype.FT_Size_Metrics",
       "case": "matrix_active_size_metrics",
-      "operation": "freetype.size_metrics",
+      "operation": "size_metrics",
       "schema": "size_metrics",
       "expect_error": false,
       "inputs": {

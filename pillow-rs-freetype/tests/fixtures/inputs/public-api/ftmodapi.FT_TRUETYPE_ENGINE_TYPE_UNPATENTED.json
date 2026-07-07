@@ -10,7 +10,7 @@
       "case_id": "ftmodapi.FT_TRUETYPE_ENGINE_TYPE_UNPATENTED.value_matches_header",
       "subject": "ftmodapi.FT_TRUETYPE_ENGINE_TYPE_UNPATENTED",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -51,7 +51,7 @@
       "case_id": "ftmodapi.FT_TRUETYPE_ENGINE_TYPE_UNPATENTED.legacy_value_not_runtime_emitted",
       "subject": "ftmodapi.FT_TRUETYPE_ENGINE_TYPE_UNPATENTED",
       "case": "legacy_value_not_runtime_emitted",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

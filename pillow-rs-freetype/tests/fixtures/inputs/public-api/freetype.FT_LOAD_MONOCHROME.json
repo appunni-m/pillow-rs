@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_LOAD_MONOCHROME.value_matches_header",
       "subject": "freetype.FT_LOAD_MONOCHROME",
       "case": "value_matches_header",
-      "operation": "abi.macro_value_and_import",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -53,7 +53,7 @@
       "case_id": "freetype.FT_LOAD_MONOCHROME.render_monochrome_load_behavior",
       "subject": "freetype.FT_LOAD_MONOCHROME",
       "case": "render_monochrome_load_behavior",
-      "operation": "freetype.load_char",
+      "operation": "load_char",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

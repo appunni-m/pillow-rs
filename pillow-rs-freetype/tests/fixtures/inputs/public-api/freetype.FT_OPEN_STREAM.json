@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_OPEN_STREAM.value_matches_header",
       "subject": "freetype.FT_OPEN_STREAM",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -52,7 +52,7 @@
       "case_id": "freetype.FT_OPEN_STREAM.open_stream_source",
       "subject": "freetype.FT_OPEN_STREAM",
       "case": "open_stream_source",
-      "operation": "freetype.open_face",
+      "operation": "new_memory_face",
       "schema": "face_open",
       "expect_error": false,
       "inputs": {

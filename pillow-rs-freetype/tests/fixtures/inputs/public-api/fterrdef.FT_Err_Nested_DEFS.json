@@ -11,7 +11,7 @@
       "case_id": "fterrdef.FT_Err_Nested_DEFS.value_matches_header",
       "subject": "fterrdef.FT_Err_Nested_DEFS",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -59,7 +59,7 @@
       "case_id": "fterrdef.FT_Err_Nested_DEFS.truetype_nested_fdef",
       "subject": "fterrdef.FT_Err_Nested_DEFS",
       "case": "truetype_nested_fdef",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -117,7 +117,7 @@
       "case_id": "fterrdef.FT_Err_Nested_DEFS.truetype_nested_idef",
       "subject": "fterrdef.FT_Err_Nested_DEFS",
       "case": "truetype_nested_idef",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

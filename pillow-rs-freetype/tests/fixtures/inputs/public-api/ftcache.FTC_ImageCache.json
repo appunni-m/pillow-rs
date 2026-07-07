@@ -10,7 +10,7 @@
       "case_id": "ftcache.FTC_ImageCache.alias_defined",
       "subject": "ftcache.FTC_ImageCache",
       "case": "alias_defined",
-      "operation": "abi.type_alias",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {

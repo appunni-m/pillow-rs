@@ -11,7 +11,7 @@
       "case_id": "ftimage.FT_IMAGE_TAG.expansion_matches_header",
       "subject": "ftimage.FT_IMAGE_TAG",
       "case": "expansion_matches_header",
-      "operation": "constant_eval",
+      "operation": "macro_eval",
       "schema": "api_macro",
       "expect_error": false,
       "inputs": {
@@ -61,7 +61,7 @@
       "case_id": "ftimage.FT_IMAGE_TAG.glyph_format_values_match_c",
       "subject": "ftimage.FT_IMAGE_TAG",
       "case": "glyph_format_values_match_c",
-      "operation": "constant_eval",
+      "operation": "macro_eval",
       "schema": "api_constant_set",
       "expect_error": false,
       "inputs": {

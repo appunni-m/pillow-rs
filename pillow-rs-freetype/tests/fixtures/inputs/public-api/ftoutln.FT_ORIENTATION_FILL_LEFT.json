@@ -11,7 +11,7 @@
       "case_id": "ftoutln.FT_ORIENTATION_FILL_LEFT.value_matches_header",
       "subject": "ftoutln.FT_ORIENTATION_FILL_LEFT",
       "case": "value_matches_header",
-      "operation": "abi.enum_variant_value",
+      "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
       "inputs": {

@@ -7,7 +7,7 @@
       "case_id": "ttnameid.TT_MAC_LANGID_AYMARA.value_matches_header",
       "subject": "ttnameid.TT_MAC_LANGID_AYMARA",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"symbol": "TT_MAC_LANGID_AYMARA", "include": "<freetype/ttnameid.h>", "declared_type": "macro integer", "expected_value": 134, "header_source": "freetype/include/freetype/ttnameid.h:405"}},

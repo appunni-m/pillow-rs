@@ -11,7 +11,7 @@
       "case_id": "ftimage.FT_Vector.layout_matches_c",
       "subject": "ftimage.FT_Vector",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "abi_layout",
       "expect_error": false,
       "inputs": {
@@ -69,7 +69,7 @@
       "case_id": "ftimage.FT_Vector.outline_points_match_c",
       "subject": "ftimage.FT_Vector",
       "case": "outline_points_match_c",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

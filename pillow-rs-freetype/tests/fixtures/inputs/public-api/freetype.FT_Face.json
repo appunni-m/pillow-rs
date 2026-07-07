@@ -11,7 +11,7 @@
       "case_id": "freetype.FT_Face.valid_font_bytes",
       "subject": "freetype.FT_Face",
       "case": "valid_font_bytes",
-      "operation": "freetype.new_memory_face",
+      "operation": "new_memory_face",
       "schema": "face_handle",
       "expect_error": false,
       "inputs": {

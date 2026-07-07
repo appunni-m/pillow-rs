@@ -9,7 +9,7 @@
       "case_id": "ftgasp.FT_GASP_DO_GRAY.value_matches_header",
       "subject": "ftgasp.FT_GASP_DO_GRAY",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

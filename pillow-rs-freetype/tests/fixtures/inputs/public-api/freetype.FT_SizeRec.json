@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_SizeRec.layout_matches_c",
       "subject": "freetype.FT_SizeRec",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "c_abi_layout",
       "expect_error": false,
       "inputs": {

@@ -20,7 +20,7 @@
       "case_id": "ftstroke.FT_STROKER_LINECAP_BUTT.value_matches_header",
       "subject": "ftstroke.FT_STROKER_LINECAP_BUTT",
       "case": "value_matches_header",
-      "operation": "abi.enum_variant_value",
+      "operation": "constant",
       "schema": "abi_constant",
       "expect_error": false,
       "inputs": {

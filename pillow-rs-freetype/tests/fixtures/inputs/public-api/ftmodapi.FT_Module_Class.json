@@ -10,7 +10,7 @@
       "case_id": "ftmodapi.FT_Module_Class.layout_matches_c",
       "subject": "ftmodapi.FT_Module_Class",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "c_abi_record",
       "expect_error": false,
       "inputs": {

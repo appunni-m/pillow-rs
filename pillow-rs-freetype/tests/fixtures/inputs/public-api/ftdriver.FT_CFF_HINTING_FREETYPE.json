@@ -10,7 +10,7 @@
       "case_id": "ftdriver.FT_CFF_HINTING_FREETYPE.value_matches_header",
       "subject": "ftdriver.FT_CFF_HINTING_FREETYPE",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

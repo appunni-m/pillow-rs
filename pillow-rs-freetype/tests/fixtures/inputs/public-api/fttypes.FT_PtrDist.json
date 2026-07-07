@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_PtrDist.alias_defined_as_ft_ptrdiff_t",
       "subject": "fttypes.FT_PtrDist",
       "case": "alias_defined_as_ft_ptrdiff_t",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_PtrDist", "c_definition": "typedef ft_ptrdiff_t FT_PtrDist", "underlying_type": "ft_ptrdiff_t", "ft_ptrdiff_t_definition": "ptrdiff_t", "signedness": "signed", "probes": ["include_compiles", "assignment_compiles", "stddef_ptrdiff_t_available"]}},

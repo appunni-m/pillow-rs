@@ -10,7 +10,7 @@
       "case_id": "ftgxval.FT_VALIDATE_trak.value_matches_header",
       "subject": "ftgxval.FT_VALIDATE_trak",
       "case": "value_matches_header",
-      "operation": "constant_eval",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

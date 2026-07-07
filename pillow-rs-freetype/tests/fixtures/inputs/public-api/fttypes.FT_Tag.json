@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_Tag.alias_defined_as_uint32",
       "subject": "fttypes.FT_Tag",
       "case": "alias_defined_as_uint32",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Tag", "c_definition": "typedef FT_UInt32 FT_Tag", "underlying_type": "FT_UInt32", "signedness": "unsigned", "bit_width": 32, "probes": ["include_compiles", "assignment_compiles", "FT_UInt32_same_size"]}},

@@ -7,7 +7,7 @@
       "case_id": "ftmm.FT_Var_Axis.layout_matches_c",
       "subject": "ftmm.FT_Var_Axis",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "api_record",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/ftmm.h", "type": "FT_Var_Axis", "fields": ["name", "minimum", "def", "maximum", "tag", "strid"], "repr": "C"}},

@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_Pointer.alias_defined_as_void_pointer",
       "subject": "fttypes.FT_Pointer",
       "case": "alias_defined_as_void_pointer",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Pointer", "c_definition": "typedef void* FT_Pointer", "underlying_type": "void*", "pointer_depth": 1, "probes": ["include_compiles", "assignment_from_object_pointer", "assignment_to_void_pointer"]}},

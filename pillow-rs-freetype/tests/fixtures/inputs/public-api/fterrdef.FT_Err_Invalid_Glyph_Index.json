@@ -10,7 +10,7 @@
       "case_id": "fterrdef.FT_Err_Invalid_Glyph_Index.value_matches_header",
       "subject": "fterrdef.FT_Err_Invalid_Glyph_Index",
       "case": "value_matches_header",
-      "operation": "abi.error_code_value_and_import",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -62,7 +62,7 @@
       "case_id": "fterrdef.FT_Err_Invalid_Glyph_Index.load_glyph_rejects_out_of_range_index",
       "subject": "fterrdef.FT_Err_Invalid_Glyph_Index",
       "case": "load_glyph_rejects_out_of_range_index",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

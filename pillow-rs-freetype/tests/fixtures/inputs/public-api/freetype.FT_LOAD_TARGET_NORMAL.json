@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_LOAD_TARGET_NORMAL.value_matches_header",
       "subject": "freetype.FT_LOAD_TARGET_NORMAL",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -52,7 +52,7 @@
       "case_id": "freetype.FT_LOAD_TARGET_NORMAL.load_target_render_behavior",
       "subject": "freetype.FT_LOAD_TARGET_NORMAL",
       "case": "load_target_render_behavior",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "glyph_slot",
       "expect_error": false,
       "inputs": {

@@ -11,7 +11,7 @@
       "case_id": "ftdriver.TT_INTERPRETER_VERSION_35.value_matches_header",
       "subject": "ftdriver.TT_INTERPRETER_VERSION_35",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

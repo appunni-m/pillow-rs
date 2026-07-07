@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_Error.alias_defined_as_int",
       "subject": "fttypes.FT_Error",
       "case": "alias_defined_as_int",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Error", "c_definition": "typedef int FT_Error", "underlying_type": "int", "signedness": "signed", "probes": ["include_compiles", "assignment_compiles", "function_return_compiles"]}},

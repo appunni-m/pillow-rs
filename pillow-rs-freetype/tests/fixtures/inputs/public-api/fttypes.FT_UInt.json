@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_UInt.alias_defined_as_unsigned_int",
       "subject": "fttypes.FT_UInt",
       "case": "alias_defined_as_unsigned_int",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_UInt", "c_definition": "typedef unsigned int FT_UInt", "underlying_type": "unsigned int", "signedness": "unsigned", "probes": ["include_compiles", "assignment_compiles"]}},

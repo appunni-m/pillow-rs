@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_Offset.alias_defined_as_size_t",
       "subject": "fttypes.FT_Offset",
       "case": "alias_defined_as_size_t",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Offset", "c_definition": "typedef size_t FT_Offset", "underlying_type": "size_t", "signedness": "unsigned", "probes": ["include_compiles", "assignment_compiles", "stddef_size_t_available"]}},

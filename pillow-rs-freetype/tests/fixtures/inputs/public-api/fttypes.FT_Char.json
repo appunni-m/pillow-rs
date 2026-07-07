@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_Char.alias_defined_as_signed_char",
       "subject": "fttypes.FT_Char",
       "case": "alias_defined_as_signed_char",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Char", "c_definition": "typedef signed char FT_Char", "underlying_type": "signed char", "signedness": "signed", "probes": ["include_compiles", "assignment_compiles", "negative_literal_compiles"]}},

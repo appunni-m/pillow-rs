@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_Short.alias_defined_as_signed_short",
       "subject": "fttypes.FT_Short",
       "case": "alias_defined_as_signed_short",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Short", "c_definition": "typedef signed short FT_Short", "underlying_type": "signed short", "signedness": "signed", "probes": ["include_compiles", "assignment_compiles"]}},

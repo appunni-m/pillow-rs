@@ -11,7 +11,7 @@
       "case_id": "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.value_matches_header",
       "subject": "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

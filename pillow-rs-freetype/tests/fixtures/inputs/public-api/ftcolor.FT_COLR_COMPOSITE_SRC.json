@@ -10,7 +10,7 @@
       "case_id": "ftcolor.FT_COLR_COMPOSITE_SRC.value_matches_header",
       "subject": "ftcolor.FT_COLR_COMPOSITE_SRC",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

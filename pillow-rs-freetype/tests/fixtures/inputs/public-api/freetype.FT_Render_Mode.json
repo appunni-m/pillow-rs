@@ -60,7 +60,7 @@
       "case_id": "freetype.FT_Render_Mode.representative_runtime_observation",
       "subject": "freetype.FT_Render_Mode",
       "case": "representative_runtime_observation",
-      "operation": "freetype.render_glyph",
+      "operation": "render_glyph",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

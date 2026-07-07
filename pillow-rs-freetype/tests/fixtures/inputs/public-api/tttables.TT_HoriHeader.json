@@ -12,7 +12,7 @@
       "case_id": "tttables.TT_HoriHeader.public_import_contract",
       "subject": "tttables.TT_HoriHeader",
       "case": "public_import_contract",
-      "operation": "abi.header_import",
+      "operation": "record_layout",
       "schema": "api_import",
       "expect_error": false,
       "inputs": {
@@ -74,7 +74,7 @@
       "case_id": "tttables.TT_HoriHeader.abi_layout_matches_header",
       "subject": "tttables.TT_HoriHeader",
       "case": "abi_layout_matches_header",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "record_layout",
       "expect_error": false,
       "inputs": {

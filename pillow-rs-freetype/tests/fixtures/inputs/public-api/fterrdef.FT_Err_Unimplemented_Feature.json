@@ -11,7 +11,7 @@
       "case_id": "fterrdef.FT_Err_Unimplemented_Feature.value_matches_header",
       "subject": "fterrdef.FT_Err_Unimplemented_Feature",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -114,7 +114,7 @@
       "case_id": "fterrdef.FT_Err_Unimplemented_Feature.unsupported_font_feature",
       "subject": "fterrdef.FT_Err_Unimplemented_Feature",
       "case": "unsupported_font_feature",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

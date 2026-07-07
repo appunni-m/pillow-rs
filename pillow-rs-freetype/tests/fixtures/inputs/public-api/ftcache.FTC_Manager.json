@@ -11,7 +11,7 @@
       "case_id": "ftcache.FTC_Manager.alias_defined",
       "subject": "ftcache.FTC_Manager",
       "case": "alias_defined",
-      "operation": "abi.type_alias",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {

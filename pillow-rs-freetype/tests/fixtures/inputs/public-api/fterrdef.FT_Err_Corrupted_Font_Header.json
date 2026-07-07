@@ -11,7 +11,7 @@
       "case_id": "fterrdef.FT_Err_Corrupted_Font_Header.value_matches_header",
       "subject": "fterrdef.FT_Err_Corrupted_Font_Header",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -59,7 +59,7 @@
       "case_id": "fterrdef.FT_Err_Corrupted_Font_Header.bdf_header_parse_failure_returns_error",
       "subject": "fterrdef.FT_Err_Corrupted_Font_Header",
       "case": "bdf_header_parse_failure_returns_error",
-      "operation": "FT_New_Memory_Face",
+      "operation": "new_memory_face",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -113,7 +113,7 @@
       "case_id": "fterrdef.FT_Err_Corrupted_Font_Header.autohint_zero_units_per_em_returns_error",
       "subject": "fterrdef.FT_Err_Corrupted_Font_Header",
       "case": "autohint_zero_units_per_em_returns_error",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

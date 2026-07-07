@@ -11,7 +11,7 @@
       "case_id": "fterrdef.FT_Err_Missing_Bitmap.value_matches_header",
       "subject": "fterrdef.FT_Err_Missing_Bitmap",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -59,7 +59,7 @@
       "case_id": "fterrdef.FT_Err_Missing_Bitmap.sbit_glyph_without_image",
       "subject": "fterrdef.FT_Err_Missing_Bitmap",
       "case": "sbit_glyph_without_image",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -118,7 +118,7 @@
       "case_id": "fterrdef.FT_Err_Missing_Bitmap.composite_sbit_missing_subglyph",
       "subject": "fterrdef.FT_Err_Missing_Bitmap",
       "case": "composite_sbit_missing_subglyph",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

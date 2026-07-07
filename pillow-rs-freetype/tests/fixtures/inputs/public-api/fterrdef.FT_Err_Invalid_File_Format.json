@@ -10,7 +10,7 @@
       "case_id": "fterrdef.FT_Err_Invalid_File_Format.value_matches_header",
       "subject": "fterrdef.FT_Err_Invalid_File_Format",
       "case": "value_matches_header",
-      "operation": "abi.error_code_value_and_import",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -62,7 +62,7 @@
       "case_id": "fterrdef.FT_Err_Invalid_File_Format.new_memory_face_rejects_broken_sfnt",
       "subject": "fterrdef.FT_Err_Invalid_File_Format",
       "case": "new_memory_face_rejects_broken_sfnt",
-      "operation": "freetype.new_memory_face",
+      "operation": "new_memory_face",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

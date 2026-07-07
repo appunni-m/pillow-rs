@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_RENDER_MODE_MAX.value_matches_header",
       "subject": "freetype.FT_RENDER_MODE_MAX",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -46,7 +46,7 @@
       "case_id": "freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel",
       "subject": "freetype.FT_RENDER_MODE_MAX",
       "case": "render_glyph_rejects_sentinel",
-      "operation": "freetype.render_glyph",
+      "operation": "render_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

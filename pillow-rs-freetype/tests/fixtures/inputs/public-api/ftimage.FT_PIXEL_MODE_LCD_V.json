@@ -57,7 +57,7 @@
       "case_id": "ftimage.FT_PIXEL_MODE_LCD_V.render_mode_lcd_v_sets_bitmap_shape",
       "subject": "ftimage.FT_PIXEL_MODE_LCD_V",
       "case": "render_mode_lcd_v_sets_bitmap_shape",
-      "operation": "freetype.render_glyph",
+      "operation": "render_glyph",
       "schema": "glyph_slot_bitmap",
       "expect_error": false,
       "inputs": {

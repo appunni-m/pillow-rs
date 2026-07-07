@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_F26Dot6.alias_defined_as_signed_long",
       "subject": "fttypes.FT_F26Dot6",
       "case": "alias_defined_as_signed_long",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_F26Dot6", "c_definition": "typedef signed long FT_F26Dot6", "underlying_type": "signed long", "signedness": "signed", "fractional_bits": 6, "probes": ["include_compiles", "assignment_compiles"]}},

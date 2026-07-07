@@ -11,7 +11,7 @@
       "case_id": "fterrdef.FT_Err_Hmtx_Table_Missing.value_matches_header",
       "subject": "fterrdef.FT_Err_Hmtx_Table_Missing",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -59,7 +59,7 @@
       "case_id": "fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error",
       "subject": "fterrdef.FT_Err_Hmtx_Table_Missing",
       "case": "sfnt_missing_hmtx_returns_error",
-      "operation": "FT_New_Memory_Face",
+      "operation": "new_memory_face",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

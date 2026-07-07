@@ -53,7 +53,7 @@
       "case_id": "ftimage.FT_OUTLINE_POINTS_MAX.layout_limit_matches_record_field",
       "subject": "ftimage.FT_OUTLINE_POINTS_MAX",
       "case": "layout_limit_matches_record_field",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "c_abi_record",
       "expect_error": false,
       "inputs": {

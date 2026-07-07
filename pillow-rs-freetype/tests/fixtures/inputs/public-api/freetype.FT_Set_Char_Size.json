@@ -13,7 +13,7 @@
       "case_id": "freetype.FT_Set_Char_Size.set_size",
       "subject": "freetype.FT_Set_Char_Size",
       "case": "set_size",
-      "operation": "freetype.set_char_size",
+      "operation": "set_char_size",
       "schema": "size_metrics",
       "expect_error": false,
       "inputs": {
@@ -65,7 +65,7 @@
       "case_id": "freetype.FT_Set_Char_Size.success_zero_dimension_and_resolution_normalization",
       "subject": "freetype.FT_Set_Char_Size",
       "case": "success_zero_dimension_and_resolution_normalization",
-      "operation": "freetype.set_char_size",
+      "operation": "set_char_size",
       "schema": "size_metrics",
       "expect_error": false,
       "inputs": {
@@ -124,7 +124,7 @@
       "case_id": "freetype.FT_Set_Char_Size.success_fractional_point_size_rounding",
       "subject": "freetype.FT_Set_Char_Size",
       "case": "success_fractional_point_size_rounding",
-      "operation": "freetype.set_char_size",
+      "operation": "set_char_size",
       "schema": "size_metrics",
       "expect_error": false,
       "inputs": {
@@ -176,7 +176,7 @@
       "case_id": "freetype.FT_Set_Char_Size.error_null_face",
       "subject": "freetype.FT_Set_Char_Size",
       "case": "error_null_face",
-      "operation": "freetype.set_char_size",
+      "operation": "set_char_size",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -212,7 +212,7 @@
       "case_id": "freetype.FT_Set_Char_Size.error_invalid_or_unscalable_face",
       "subject": "freetype.FT_Set_Char_Size",
       "case": "error_invalid_or_unscalable_face",
-      "operation": "freetype.set_char_size",
+      "operation": "set_char_size",
       "schema": "size_metrics",
       "expect_error": true,
       "inputs": {

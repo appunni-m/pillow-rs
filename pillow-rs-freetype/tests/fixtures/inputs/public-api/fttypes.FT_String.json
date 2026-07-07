@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_String.alias_defined_as_plain_char",
       "subject": "fttypes.FT_String",
       "case": "alias_defined_as_plain_char",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_String", "c_definition": "typedef char FT_String", "underlying_type": "char", "signedness": "implementation-defined", "probes": ["include_compiles", "assignment_from_char_pointer", "not_forced_signed_char"]}},

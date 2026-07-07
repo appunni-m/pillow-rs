@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_RENDER_MODE_MONO.value_matches_header",
       "subject": "freetype.FT_RENDER_MODE_MONO",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -46,7 +46,7 @@
       "case_id": "freetype.FT_RENDER_MODE_MONO.render_glyph_mode_dispatch",
       "subject": "freetype.FT_RENDER_MODE_MONO",
       "case": "render_glyph_mode_dispatch",
-      "operation": "freetype.render_glyph",
+      "operation": "render_glyph",
       "schema": "glyph_slot",
       "expect_error": false,
       "inputs": {

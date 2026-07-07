@@ -10,7 +10,7 @@
       "case_id": "ftimage.FT_Curve_Tag_Touch_X.value_matches_header",
       "subject": "ftimage.FT_Curve_Tag_Touch_X",
       "case": "value_matches_header",
-      "operation": "constant_eval",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

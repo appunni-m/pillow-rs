@@ -11,7 +11,7 @@
       "case_id": "fterrdef.FT_Err_Code_Overflow.value_matches_header",
       "subject": "fterrdef.FT_Err_Code_Overflow",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -59,7 +59,7 @@
       "case_id": "fterrdef.FT_Err_Code_Overflow.bytecode_jump_past_range_returns_error",
       "subject": "fterrdef.FT_Err_Code_Overflow",
       "case": "bytecode_jump_past_range_returns_error",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -117,7 +117,7 @@
       "case_id": "fterrdef.FT_Err_Code_Overflow.push_instruction_truncation_returns_error",
       "subject": "fterrdef.FT_Err_Code_Overflow",
       "case": "push_instruction_truncation_returns_error",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

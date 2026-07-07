@@ -10,7 +10,7 @@
       "case_id": "ftimage.FT_CURVE_TAG_TOUCH_BOTH.value_matches_header",
       "subject": "ftimage.FT_CURVE_TAG_TOUCH_BOTH",
       "case": "value_matches_header",
-      "operation": "constant_eval",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -54,7 +54,7 @@
       "case_id": "ftimage.FT_CURVE_TAG_TOUCH_BOTH.hinted_outline_touch_bits_match_c",
       "subject": "ftimage.FT_CURVE_TAG_TOUCH_BOTH",
       "case": "hinted_outline_touch_bits_match_c",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

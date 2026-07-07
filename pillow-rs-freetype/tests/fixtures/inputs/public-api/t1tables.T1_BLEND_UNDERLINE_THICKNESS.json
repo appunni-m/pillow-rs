@@ -7,7 +7,7 @@
       "case_id": "t1tables.T1_BLEND_UNDERLINE_THICKNESS.value_matches_header",
       "subject": "t1tables.T1_BLEND_UNDERLINE_THICKNESS",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"symbol": "T1_BLEND_UNDERLINE_THICKNESS", "include": "<freetype/t1tables.h>", "declared_type": "T1_Blend_Flags", "expected_value": 1, "header_source": "freetype/include/freetype/t1tables.h:230"}},

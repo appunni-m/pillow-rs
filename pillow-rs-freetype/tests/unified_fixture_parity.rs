@@ -1033,10 +1033,10 @@ fn remove_aggregate_params(params: &mut serde_json::Map<String, Value>) {
     }
 }
 
-fn classify_runtime_case(case: &InputCase, canonical_operation: &str) -> RuntimeReadiness {
-    if !is_supported_runtime_operation(case, canonical_operation) {
+fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness {
+    if !is_supported_runtime_operation(case, operation) {
         return RuntimeReadiness::Pending {
-            reason: canonical_operation.to_string(),
+            reason: operation.to_string(),
         };
     }
     match oracle_args(case) {
@@ -1044,7 +1044,7 @@ fn classify_runtime_case(case: &InputCase, canonical_operation: &str) -> Runtime
             key: args.join("\t"),
         },
         Err(err) => RuntimeReadiness::Pending {
-            reason: format!("{canonical_operation}:{err}"),
+            reason: format!("{operation}:{err}"),
         },
     }
 }
@@ -1067,7 +1067,8 @@ fn select_runtime_cases(cases: &[InputCase]) -> RuntimeSelection {
             if !case_matches_filter(&expanded, filter.as_deref()) {
                 return true;
             }
-            match classify_runtime_case(&expanded, case_canonical_operation(&expanded)) {
+            let operation = expanded.operation.clone();
+            match classify_runtime_case(&expanded, &operation) {
                 RuntimeReadiness::Runnable { key } => {
                     if seen_executable.insert(key) {
                         executable.push(expanded);
@@ -1097,8 +1098,8 @@ fn select_runtime_cases(cases: &[InputCase]) -> RuntimeSelection {
     }
 }
 
-fn is_supported_runtime_operation(case: &InputCase, canonical_operation: &str) -> bool {
-    match canonical_operation {
+fn is_supported_runtime_operation(case: &InputCase, operation: &str) -> bool {
+    match operation {
         "constant" => case
             .inputs
             .params
@@ -1137,80 +1138,6 @@ fn assets_are_runtime_resolved(case: &InputCase) -> bool {
         }
         Asset::Ref { .. } | Asset::Other(_) => false,
     })
-}
-
-fn canonical_operation(operation: &str) -> &str {
-    match operation {
-        "constant"
-        | "constant.value"
-        | "constant.import"
-        | "constant_eval"
-        | "error_constant.value"
-        | "public_api.constant_value"
-        | "abi.constant_eval"
-        | "abi.constant_value"
-        | "abi.error_code_value_and_import"
-        | "abi.enum_variant_value"
-        | "abi.macro_value_and_import"
-        | "constant.alias_value" => "constant",
-        "abi.type_alias" | "abi.typedef_import" => "abi_type_probe",
-        "macro_eval" | "macro_type_probe" => "macro_eval",
-        "record_layout" | "abi.record_layout" | "abi.layout_probe" | "ftglyph.record_layout" => {
-            "record_layout"
-        }
-        "c_abi.type_alias_layout" => "record_layout",
-        "new_memory_face"
-        | "freetype.new_memory_face"
-        | "freetype.open_face"
-        | "FT_New_Memory_Face" => "new_memory_face",
-        "set_pixel_sizes" | "freetype.set_pixel_sizes" | "FT_Set_Pixel_Sizes" => "set_pixel_sizes",
-        "set_char_size" | "freetype.set_char_size" | "FT_Set_Char_Size" => "set_char_size",
-        "size_metrics" | "freetype.size_metrics" | "FT_Size_Metrics" => "size_metrics",
-        "get_char_index" | "freetype.get_char_index" | "FT_Get_Char_Index" => "get_char_index",
-        "load_char" | "freetype.load_char" | "FT_Load_Char" => "load_char",
-        "load_glyph" | "freetype.load_glyph" | "FT_Load_Glyph" => "load_glyph",
-        "render_glyph" | "freetype.render_glyph" | "FT_Render_Glyph" => "render_glyph",
-        _ => operation,
-    }
-}
-
-fn case_canonical_operation(case: &InputCase) -> &str {
-    if case.operation == "constant_eval"
-        && (case.inputs.params.get("macro").is_some()
-            || case.inputs.params.get("symbols").is_some())
-    {
-        return "macro_eval";
-    }
-    if matches!(case.operation.as_str(), "macro_eval" | "macro_type_probe") {
-        return "macro_eval";
-    }
-    if case.operation == "abi.layout_probe"
-        && let Ok(symbol) = type_symbol_param(&case.inputs.params)
-        && is_supported_runtime_type(symbol)
-        && !is_supported_runtime_layout(symbol)
-    {
-        return "abi_type_probe";
-    }
-    if matches!(
-        case.operation.as_str(),
-        "abi.header_import" | "abi.public_import"
-    ) {
-        if let Ok(symbol) = type_symbol_param(&case.inputs.params) {
-            if is_supported_runtime_constant(symbol) {
-                return "constant";
-            }
-            if is_supported_runtime_type(symbol) {
-                return "abi_type_probe";
-            }
-            if is_supported_runtime_layout(symbol) {
-                return "record_layout";
-            }
-            if is_supported_runtime_function(symbol) {
-                return "abi_function_probe";
-            }
-        }
-    }
-    canonical_operation(&case.operation)
 }
 
 fn is_supported_runtime_layout(record: &str) -> bool {
@@ -1392,7 +1319,7 @@ impl AxisProfileSummary {
         if !profile_enabled() {
             return;
         }
-        let operation = case_canonical_operation(case);
+        let operation = case.operation.as_str();
         let mut groups = vec![
             format!("operation={operation}"),
             format!("operation={operation}|subject={}", case.subject),
@@ -1838,7 +1765,7 @@ impl BackendComparisonWorker {
         if profile_enabled() {
             let sample = SlowCaseSample {
                 case_id: case.case_id.clone(),
-                operation: case_canonical_operation(case).to_string(),
+                operation: case.operation.clone(),
                 total: case_start.elapsed(),
                 rust_ffi: rust_duration,
                 c_abi: c_duration,
@@ -1852,7 +1779,7 @@ impl BackendComparisonWorker {
     }
 
     fn run_rust_ffi(&mut self, case: &InputCase) -> Result<RunOutput, String> {
-        match case_canonical_operation(case) {
+        match case.operation.as_str() {
             "size_metrics" => {
                 let face = self.rust_face(case)?;
                 Ok(ok(size_metrics_json(&FT_Size_Metrics(face))))
@@ -1896,7 +1823,7 @@ impl BackendComparisonWorker {
     }
 
     fn run_c_abi(&mut self, case: &InputCase) -> Result<RunOutput, String> {
-        match case_canonical_operation(case) {
+        match case.operation.as_str() {
             "size_metrics" => {
                 let face = self.c_face(case)?;
                 c_size_metrics_json(face).map(ok)
@@ -1945,7 +1872,7 @@ impl BackendComparisonWorker {
     }
 
     fn run_wasm_abi(&mut self, case: &InputCase) -> Result<RunOutput, String> {
-        match case_canonical_operation(case) {
+        match case.operation.as_str() {
             "size_metrics" => {
                 let handle = self.wasm_face(case)?;
                 let mut metrics = wasm_abi::FontdoneWasmSizeMetrics::default();
@@ -2040,14 +1967,14 @@ fn runtime_face_cache_key(case: &InputCase) -> Result<String, String> {
 
 fn case_uses_cached_face(case: &InputCase) -> bool {
     matches!(
-        case_canonical_operation(case),
+        case.operation.as_str(),
         "size_metrics" | "get_char_index" | "load_char" | "load_glyph" | "render_glyph"
     )
 }
 
 fn case_requires_asset_validation(case: &InputCase) -> bool {
     matches!(
-        case_canonical_operation(case),
+        case.operation.as_str(),
         "new_memory_face"
             | "set_pixel_sizes"
             | "set_char_size"
@@ -2084,9 +2011,7 @@ fn case_matches_filter(case: &InputCase, filter: Option<&str>) -> bool {
 }
 
 fn operation_matches_filter(case: &InputCase, filter: Option<&str>) -> bool {
-    filter.is_none_or(|needle| {
-        case_canonical_operation(case).contains(needle) || case.operation.contains(needle)
-    })
+    filter.is_none_or(|needle| case.operation.contains(needle))
 }
 
 fn assert_manifest_cases_cover_fixture_inputs(cases: &[InputCase]) {
@@ -2973,7 +2898,7 @@ fn oracle_bin() -> Result<PathBuf, String> {
 
 fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
     let params = &case.inputs.params;
-    match case_canonical_operation(case) {
+    match case.operation.as_str() {
         "constant" => Ok(vec![
             "--constant".to_string(),
             string_param(params, "symbol")?.to_string(),
@@ -3116,7 +3041,7 @@ fn parse_run_output(text: &str) -> Result<RunOutput, String> {
 }
 
 fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
-    match case_canonical_operation(case) {
+    match case.operation.as_str() {
         "constant" => Ok(ok(json!({
             "value": rust_constant(string_param(&case.inputs.params, "symbol")?)?
         }))),
@@ -3178,7 +3103,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
-    match case_canonical_operation(case) {
+    match case.operation.as_str() {
         "constant" | "record_layout" | "abi_type_probe" | "abi_function_probe" | "macro_eval" => {
             run_rust_ffi(case)
         }
@@ -3309,7 +3234,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
-    match case_canonical_operation(case) {
+    match case.operation.as_str() {
         "constant" | "record_layout" | "abi_type_probe" | "abi_function_probe" | "macro_eval"
         | "set_char_size" => run_rust_ffi(case),
         "new_memory_face" => wasm_new_memory_face(case),
@@ -5333,7 +5258,7 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
 }
 
 fn comparison_schema(case: &InputCase) -> &str {
-    match case_canonical_operation(case) {
+    match case.operation.as_str() {
         "abi_type_probe" => return "type_probe",
         "abi_function_probe" => return "function_probe",
         "macro_eval" => return "macro_probe",
@@ -5354,7 +5279,7 @@ fn comparison_schema(case: &InputCase) -> &str {
         | "api_record" | "c_abi_record" | "c_abi_layout" => "record_layout",
         "face_open" | "face_result" | "face_handle" => "face_open",
         "glyph_slot" | "glyph_slot_bitmap" | "glyph_render" | "bitmap_result" => "glyph_slot",
-        "api_result" => match case_canonical_operation(case) {
+        "api_result" => match case.operation.as_str() {
             "constant" => "value",
             "new_memory_face" => "face_open",
             "set_pixel_sizes" | "set_char_size" => "set_status",

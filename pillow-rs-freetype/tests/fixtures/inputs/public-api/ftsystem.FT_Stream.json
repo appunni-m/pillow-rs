@@ -26,7 +26,7 @@
       "case_id": "ftsystem.FT_Stream.alias_defined",
       "subject": "ftsystem.FT_Stream",
       "case": "alias_defined",
-      "operation": "abi.type_alias",
+      "operation": "abi_type_probe",
       "schema": "abi_layout",
       "expect_error": false,
       "inputs": {

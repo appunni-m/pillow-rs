@@ -7,7 +7,7 @@
       "case_id": "ftimage.FT_PIXEL_MODE_BGRA.value_matches_header",
       "subject": "ftimage.FT_PIXEL_MODE_BGRA",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"include": "<freetype/ftimage.h>", "symbol": "FT_PIXEL_MODE_BGRA", "enum": "FT_Pixel_Mode", "expected_value": 7}},

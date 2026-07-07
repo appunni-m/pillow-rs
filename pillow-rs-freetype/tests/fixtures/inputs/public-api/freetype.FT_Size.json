@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_Size.alias_defined",
       "subject": "freetype.FT_Size",
       "case": "alias_defined",
-      "operation": "abi.type_alias",
+      "operation": "abi_type_probe",
       "schema": "c_abi_type",
       "expect_error": false,
       "inputs": {

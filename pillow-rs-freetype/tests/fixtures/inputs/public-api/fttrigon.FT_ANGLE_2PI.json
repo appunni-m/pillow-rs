@@ -19,7 +19,7 @@
       "case_id": "fttrigon.FT_ANGLE_2PI.value_matches_header",
       "subject": "fttrigon.FT_ANGLE_2PI",
       "case": "value_matches_header",
-      "operation": "abi.constant_value",
+      "operation": "constant",
       "schema": "constant",
       "expect_error": false,
       "inputs": {

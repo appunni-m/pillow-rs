@@ -11,7 +11,7 @@
       "case_id": "ftglyph.FT_BitmapGlyphRec.layout_matches_c",
       "subject": "ftglyph.FT_BitmapGlyphRec",
       "case": "layout_matches_c",
-      "operation": "ftglyph.record_layout",
+      "operation": "record_layout",
       "schema": "api_abi_record_layout",
       "expect_error": false,
       "inputs": {

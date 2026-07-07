@@ -10,7 +10,7 @@
       "case_id": "ftmodapi.FT_TRUETYPE_ENGINE_TYPE_PATENTED.value_matches_header",
       "subject": "ftmodapi.FT_TRUETYPE_ENGINE_TYPE_PATENTED",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

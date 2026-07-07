@@ -10,7 +10,7 @@
       "case_id": "fterrdef.FT_Err_Corrupted_Font_Glyphs.value_matches_header",
       "subject": "fterrdef.FT_Err_Corrupted_Font_Glyphs",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -58,7 +58,7 @@
       "case_id": "fterrdef.FT_Err_Corrupted_Font_Glyphs.bdf_glyph_parse_failure_returns_error",
       "subject": "fterrdef.FT_Err_Corrupted_Font_Glyphs",
       "case": "bdf_glyph_parse_failure_returns_error",
-      "operation": "FT_New_Memory_Face",
+      "operation": "new_memory_face",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

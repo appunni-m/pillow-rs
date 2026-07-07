@@ -10,7 +10,7 @@
       "case_id": "fterrdef.FT_Err_Lower_Module_Version.value_matches_header",
       "subject": "fterrdef.FT_Err_Lower_Module_Version",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

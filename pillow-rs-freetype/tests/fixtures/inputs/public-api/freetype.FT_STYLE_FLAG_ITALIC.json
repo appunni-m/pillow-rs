@@ -9,7 +9,7 @@
       "case_id": "freetype.FT_STYLE_FLAG_ITALIC.value_matches_header",
       "subject": "freetype.FT_STYLE_FLAG_ITALIC",
       "case": "value_matches_header",
-      "operation": "public_api.constant_value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

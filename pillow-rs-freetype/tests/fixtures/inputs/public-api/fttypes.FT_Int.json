@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_Int.alias_defined_as_signed_int",
       "subject": "fttypes.FT_Int",
       "case": "alias_defined_as_signed_int",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Int", "c_definition": "typedef signed int FT_Int", "underlying_type": "signed int", "signedness": "signed", "probes": ["include_compiles", "assignment_compiles"]}},

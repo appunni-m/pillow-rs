@@ -10,7 +10,7 @@
       "case_id": "ftgxval.FT_VALIDATE_mort_INDEX.value_matches_header",
       "subject": "ftgxval.FT_VALIDATE_mort_INDEX",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

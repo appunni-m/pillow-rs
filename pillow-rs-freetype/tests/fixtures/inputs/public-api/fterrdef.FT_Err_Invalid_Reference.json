@@ -10,7 +10,7 @@
       "case_id": "fterrdef.FT_Err_Invalid_Reference.value_matches_header",
       "subject": "fterrdef.FT_Err_Invalid_Reference",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -58,7 +58,7 @@
       "case_id": "fterrdef.FT_Err_Invalid_Reference.tt_bytecode_invalid_point_reference",
       "subject": "fterrdef.FT_Err_Invalid_Reference",
       "case": "tt_bytecode_invalid_point_reference",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

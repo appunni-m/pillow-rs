@@ -9,7 +9,7 @@
       "case_id": "freetype.FT_ENCODING_MS_GB2312.value_matches_header",
       "subject": "freetype.FT_ENCODING_MS_GB2312",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "abi_constant",
       "expect_error": false,
       "inputs": {

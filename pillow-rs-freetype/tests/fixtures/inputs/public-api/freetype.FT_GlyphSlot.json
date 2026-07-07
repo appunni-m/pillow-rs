@@ -11,7 +11,7 @@
       "case_id": "freetype.FT_GlyphSlot.populated_from_load",
       "subject": "freetype.FT_GlyphSlot",
       "case": "populated_from_load",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "glyph_slot",
       "expect_error": false,
       "inputs": {
@@ -143,7 +143,7 @@
       "case_id": "freetype.FT_GlyphSlot.render_mutates_slot",
       "subject": "freetype.FT_GlyphSlot",
       "case": "render_mutates_slot",
-      "operation": "freetype.render_glyph",
+      "operation": "render_glyph",
       "schema": "glyph_slot",
       "expect_error": false,
       "inputs": {

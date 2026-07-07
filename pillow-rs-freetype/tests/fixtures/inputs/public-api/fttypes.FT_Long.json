@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_Long.alias_defined_as_signed_long",
       "subject": "fttypes.FT_Long",
       "case": "alias_defined_as_signed_long",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Long", "c_definition": "typedef signed long FT_Long", "underlying_type": "signed long", "signedness": "signed", "probes": ["include_compiles", "assignment_compiles"]}},

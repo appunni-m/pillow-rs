@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_FSTYPE_INSTALLABLE_EMBEDDING.value_matches_header",
       "subject": "freetype.FT_FSTYPE_INSTALLABLE_EMBEDDING",
       "case": "value_matches_header",
-      "operation": "abi.macro_value_and_import",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

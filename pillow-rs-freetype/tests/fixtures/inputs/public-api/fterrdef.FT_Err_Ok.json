@@ -11,7 +11,7 @@
       "case_id": "fterrdef.FT_Err_Ok.value_matches_header",
       "subject": "fterrdef.FT_Err_Ok",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

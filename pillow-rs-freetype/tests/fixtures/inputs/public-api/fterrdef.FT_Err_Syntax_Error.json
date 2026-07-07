@@ -10,7 +10,7 @@
       "case_id": "fterrdef.FT_Err_Syntax_Error.value_matches_header",
       "subject": "fterrdef.FT_Err_Syntax_Error",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -55,7 +55,7 @@
       "case_id": "fterrdef.FT_Err_Syntax_Error.charstring_or_afm_syntax_error",
       "subject": "fterrdef.FT_Err_Syntax_Error",
       "case": "charstring_or_afm_syntax_error",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

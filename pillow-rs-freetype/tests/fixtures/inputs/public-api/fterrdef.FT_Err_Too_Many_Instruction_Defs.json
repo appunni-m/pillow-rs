@@ -10,7 +10,7 @@
       "case_id": "fterrdef.FT_Err_Too_Many_Instruction_Defs.value_matches_header",
       "subject": "fterrdef.FT_Err_Too_Many_Instruction_Defs",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -55,7 +55,7 @@
       "case_id": "fterrdef.FT_Err_Too_Many_Instruction_Defs.tt_idef_limit_exceeded",
       "subject": "fterrdef.FT_Err_Too_Many_Instruction_Defs",
       "case": "tt_idef_limit_exceeded",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

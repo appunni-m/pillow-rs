@@ -7,7 +7,7 @@
       "case_id": "t1tables.T1_ENCODING_TYPE_NONE.value_matches_header",
       "subject": "t1tables.T1_ENCODING_TYPE_NONE",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"symbol": "T1_ENCODING_TYPE_NONE", "include": "<freetype/t1tables.h>", "declared_type": "T1_EncodingType", "expected_value": 0, "header_source": "freetype/include/freetype/t1tables.h:527"}},

@@ -11,7 +11,7 @@
       "case_id": "freetype.FT_LOAD_DEFAULT.value_matches_header",
       "subject": "freetype.FT_LOAD_DEFAULT",
       "case": "value_matches_header",
-      "operation": "abi.macro_value_and_import",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -54,7 +54,7 @@
       "case_id": "freetype.FT_LOAD_DEFAULT.load_char_default_slot",
       "subject": "freetype.FT_LOAD_DEFAULT",
       "case": "load_char_default_slot",
-      "operation": "freetype.load_char",
+      "operation": "load_char",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -125,7 +125,7 @@
       "case_id": "freetype.FT_LOAD_DEFAULT.load_glyph_default_slot",
       "subject": "freetype.FT_LOAD_DEFAULT",
       "case": "load_glyph_default_slot",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

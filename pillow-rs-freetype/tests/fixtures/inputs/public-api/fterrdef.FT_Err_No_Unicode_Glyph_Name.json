@@ -11,7 +11,7 @@
       "case_id": "fterrdef.FT_Err_No_Unicode_Glyph_Name.value_matches_header",
       "subject": "fterrdef.FT_Err_No_Unicode_Glyph_Name",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -59,7 +59,7 @@
       "case_id": "fterrdef.FT_Err_No_Unicode_Glyph_Name.postscript_names_without_unicode_mapping",
       "subject": "fterrdef.FT_Err_No_Unicode_Glyph_Name",
       "case": "postscript_names_without_unicode_mapping",
-      "operation": "FT_New_Memory_Face",
+      "operation": "new_memory_face",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -113,7 +113,7 @@
       "case_id": "fterrdef.FT_Err_No_Unicode_Glyph_Name.caller_ignores_nonfatal_mapping_failure",
       "subject": "fterrdef.FT_Err_No_Unicode_Glyph_Name",
       "case": "caller_ignores_nonfatal_mapping_failure",
-      "operation": "FT_New_Memory_Face",
+      "operation": "new_memory_face",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

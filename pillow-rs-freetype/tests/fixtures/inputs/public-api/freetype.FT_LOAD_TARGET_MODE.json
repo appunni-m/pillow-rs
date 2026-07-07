@@ -63,7 +63,7 @@
       "case_id": "freetype.FT_LOAD_TARGET_MODE.load_target_dispatch_behavior",
       "subject": "freetype.FT_LOAD_TARGET_MODE",
       "case": "load_target_dispatch_behavior",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "glyph_slot",
       "expect_error": false,
       "inputs": {

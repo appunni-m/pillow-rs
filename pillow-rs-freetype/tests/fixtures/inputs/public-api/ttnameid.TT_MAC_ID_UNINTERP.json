@@ -7,7 +7,7 @@
       "case_id": "ttnameid.TT_MAC_ID_UNINTERP.value_matches_header",
       "subject": "ttnameid.TT_MAC_ID_UNINTERP",
       "case": "value_matches_header",
-      "operation": "abi.constant_eval",
+      "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
       "inputs": {
@@ -49,7 +49,7 @@
       "case_id": "ttnameid.TT_MAC_ID_UNINTERP.public_import_contract",
       "subject": "ttnameid.TT_MAC_ID_UNINTERP",
       "case": "public_import_contract",
-      "operation": "abi.header_import",
+      "operation": "constant",
       "schema": "api_import",
       "expect_error": false,
       "inputs": {

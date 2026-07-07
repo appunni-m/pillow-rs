@@ -11,7 +11,7 @@
       "case_id": "fttypes.FT_UShort.alias_defined",
       "subject": "fttypes.FT_UShort",
       "case": "alias_defined",
-      "operation": "abi.type_alias",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {
@@ -53,7 +53,7 @@
       "case_id": "fttypes.FT_UShort.abi_width_alignment_matches_c",
       "subject": "fttypes.FT_UShort",
       "case": "abi_width_alignment_matches_c",
-      "operation": "abi.layout_probe",
+      "operation": "abi_type_probe",
       "schema": "abi_layout",
       "expect_error": false,
       "inputs": {

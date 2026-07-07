@@ -14,7 +14,7 @@
       "case_id": "freetype.FT_New_Memory_Face.valid_font_bytes",
       "subject": "freetype.FT_New_Memory_Face",
       "case": "valid_font_bytes",
-      "operation": "freetype.new_memory_face",
+      "operation": "new_memory_face",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -72,7 +72,7 @@
       "case_id": "freetype.FT_New_Memory_Face.success_negative_face_index_probe",
       "subject": "freetype.FT_New_Memory_Face",
       "case": "success_negative_face_index_probe",
-      "operation": "freetype.new_memory_face",
+      "operation": "new_memory_face",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -114,7 +114,7 @@
       "case_id": "freetype.FT_New_Memory_Face.success_named_instance_index",
       "subject": "freetype.FT_New_Memory_Face",
       "case": "success_named_instance_index",
-      "operation": "freetype.new_memory_face",
+      "operation": "new_memory_face",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -163,7 +163,7 @@
       "case_id": "freetype.FT_New_Memory_Face.error_null_file_base",
       "subject": "freetype.FT_New_Memory_Face",
       "case": "error_null_file_base",
-      "operation": "freetype.new_memory_face",
+      "operation": "new_memory_face",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -200,7 +200,7 @@
       "case_id": "freetype.FT_New_Memory_Face.error_null_library_or_aface",
       "subject": "freetype.FT_New_Memory_Face",
       "case": "error_null_library_or_aface",
-      "operation": "freetype.new_memory_face",
+      "operation": "new_memory_face",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -249,7 +249,7 @@
       "case_id": "freetype.FT_New_Memory_Face.error_bad_size_or_unknown_format",
       "subject": "freetype.FT_New_Memory_Face",
       "case": "error_bad_size_or_unknown_format",
-      "operation": "freetype.new_memory_face",
+      "operation": "new_memory_face",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

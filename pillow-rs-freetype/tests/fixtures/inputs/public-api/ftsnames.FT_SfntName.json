@@ -25,7 +25,7 @@
       "case_id": "ftsnames.FT_SfntName.layout_matches_c",
       "subject": "ftsnames.FT_SfntName",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "abi_layout",
       "expect_error": false,
       "inputs": {

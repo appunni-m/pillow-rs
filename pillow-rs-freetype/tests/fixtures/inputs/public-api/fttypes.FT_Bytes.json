@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_Bytes.alias_defined_as_const_byte_pointer",
       "subject": "fttypes.FT_Bytes",
       "case": "alias_defined_as_const_byte_pointer",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Bytes", "c_definition": "typedef const FT_Byte* FT_Bytes", "underlying_type": "const FT_Byte*", "pointer_depth": 1, "pointee_const": true, "probes": ["include_compiles", "assignment_from_const_ft_byte_pointer", "no_write_through_alias"]}},

@@ -12,7 +12,7 @@
       "case_id": "freetype.FT_Get_Char_Index.latin_capital_a",
       "subject": "freetype.FT_Get_Char_Index",
       "case": "latin_capital_a",
-      "operation": "freetype.get_char_index",
+      "operation": "get_char_index",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -58,7 +58,7 @@
       "case_id": "freetype.FT_Get_Char_Index.matrix_char_code",
       "subject": "freetype.FT_Get_Char_Index",
       "case": "matrix_char_code",
-      "operation": "freetype.get_char_index",
+      "operation": "get_char_index",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -119,7 +119,7 @@
       "case_id": "freetype.FT_Get_Char_Index.active_charmap_present_and_missing_codes",
       "subject": "freetype.FT_Get_Char_Index",
       "case": "active_charmap_present_and_missing_codes",
-      "operation": "freetype.get_char_index",
+      "operation": "get_char_index",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -181,7 +181,7 @@
       "case_id": "freetype.FT_Get_Char_Index.null_or_no_active_charmap_returns_zero",
       "subject": "freetype.FT_Get_Char_Index",
       "case": "null_or_no_active_charmap_returns_zero",
-      "operation": "freetype.get_char_index",
+      "operation": "get_char_index",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

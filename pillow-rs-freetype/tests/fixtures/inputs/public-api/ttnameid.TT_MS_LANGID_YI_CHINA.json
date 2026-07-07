@@ -12,7 +12,7 @@
       "case_id": "ttnameid.TT_MS_LANGID_YI_CHINA.value_matches_header",
       "subject": "ttnameid.TT_MS_LANGID_YI_CHINA",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -84,7 +84,7 @@
       "case_id": "ttnameid.TT_MS_LANGID_YI_CHINA.alias_matches_canonical",
       "subject": "ttnameid.TT_MS_LANGID_YI_CHINA",
       "case": "alias_matches_canonical",
-      "operation": "constant.alias_value",
+      "operation": "constant",
       "schema": "api_constant_alias",
       "expect_error": false,
       "inputs": {
@@ -142,7 +142,7 @@
       "case_id": "ttnameid.TT_MS_LANGID_YI_CHINA.public_import_contract",
       "subject": "ttnameid.TT_MS_LANGID_YI_CHINA",
       "case": "public_import_contract",
-      "operation": "constant.import",
+      "operation": "constant",
       "schema": "api_import",
       "expect_error": false,
       "inputs": {

@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_UFWord.alias_defined_as_unsigned_short",
       "subject": "fttypes.FT_UFWord",
       "case": "alias_defined_as_unsigned_short",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_UFWord", "c_definition": "typedef unsigned short FT_UFWord", "underlying_type": "unsigned short", "signedness": "unsigned", "probes": ["include_compiles", "assignment_compiles"]}},

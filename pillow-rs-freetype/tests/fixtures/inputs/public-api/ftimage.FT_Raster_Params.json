@@ -13,7 +13,7 @@
       "case_id": "ftimage.FT_Raster_Params.layout_matches_c",
       "subject": "ftimage.FT_Raster_Params",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "abi_layout",
       "expect_error": false,
       "inputs": {

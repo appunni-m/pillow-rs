@@ -7,7 +7,7 @@
       "case_id": "ftmodapi.FT_MODULE_FONT_DRIVER.value_matches_header",
       "subject": "ftmodapi.FT_MODULE_FONT_DRIVER",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"symbol": "FT_MODULE_FONT_DRIVER", "include": "<freetype/ftmodapi.h>", "expected_value": 1, "expected_value_expr": "1"}},

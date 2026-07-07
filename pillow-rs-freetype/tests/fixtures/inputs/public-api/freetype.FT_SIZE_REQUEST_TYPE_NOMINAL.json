@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_SIZE_REQUEST_TYPE_NOMINAL.value_matches_header",
       "subject": "freetype.FT_SIZE_REQUEST_TYPE_NOMINAL",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

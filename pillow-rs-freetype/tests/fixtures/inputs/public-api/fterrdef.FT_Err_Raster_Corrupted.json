@@ -12,7 +12,7 @@
       "case_id": "fterrdef.FT_Err_Raster_Corrupted.value_matches_header",
       "subject": "fterrdef.FT_Err_Raster_Corrupted",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -170,7 +170,7 @@
       "case_id": "fterrdef.FT_Err_Raster_Corrupted.normal_raster_success_control",
       "subject": "fterrdef.FT_Err_Raster_Corrupted",
       "case": "normal_raster_success_control",
-      "operation": "FT_Render_Glyph",
+      "operation": "render_glyph",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

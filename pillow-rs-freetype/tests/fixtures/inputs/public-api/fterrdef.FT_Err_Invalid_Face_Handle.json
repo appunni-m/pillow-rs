@@ -10,7 +10,7 @@
       "case_id": "fterrdef.FT_Err_Invalid_Face_Handle.value_matches_header",
       "subject": "fterrdef.FT_Err_Invalid_Face_Handle",
       "case": "value_matches_header",
-      "operation": "abi.error_code_value_and_import",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -62,7 +62,7 @@
       "case_id": "fterrdef.FT_Err_Invalid_Face_Handle.face_api_rejects_null_face",
       "subject": "fterrdef.FT_Err_Invalid_Face_Handle",
       "case": "face_api_rejects_null_face",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

@@ -10,7 +10,7 @@
       "case_id": "ftimage.FT_CURVE_TAG_HAS_SCANMODE.value_matches_header",
       "subject": "ftimage.FT_CURVE_TAG_HAS_SCANMODE",
       "case": "value_matches_header",
-      "operation": "constant_eval",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

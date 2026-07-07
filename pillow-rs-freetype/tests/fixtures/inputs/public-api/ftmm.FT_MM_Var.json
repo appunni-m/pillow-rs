@@ -7,7 +7,7 @@
       "case_id": "ftmm.FT_MM_Var.layout_matches_c",
       "subject": "ftmm.FT_MM_Var",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "api_record",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/ftmm.h", "type": "FT_MM_Var", "fields": ["num_axis", "num_designs", "num_namedstyles", "axis", "namedstyle"], "repr": "C"}},

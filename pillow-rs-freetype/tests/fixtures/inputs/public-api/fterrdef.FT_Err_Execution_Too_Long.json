@@ -11,7 +11,7 @@
       "case_id": "fterrdef.FT_Err_Execution_Too_Long.value_matches_header",
       "subject": "fterrdef.FT_Err_Execution_Too_Long",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -59,7 +59,7 @@
       "case_id": "fterrdef.FT_Err_Execution_Too_Long.opcode_counter_limit_returns_error",
       "subject": "fterrdef.FT_Err_Execution_Too_Long",
       "case": "opcode_counter_limit_returns_error",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -117,7 +117,7 @@
       "case_id": "fterrdef.FT_Err_Execution_Too_Long.negative_jump_limit_returns_error",
       "subject": "fterrdef.FT_Err_Execution_Too_Long",
       "case": "negative_jump_limit_returns_error",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

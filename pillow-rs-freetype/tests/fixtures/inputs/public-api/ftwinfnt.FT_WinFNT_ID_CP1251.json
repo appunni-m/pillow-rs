@@ -10,7 +10,7 @@
       "case_id": "ftwinfnt.FT_WinFNT_ID_CP1251.value_matches_header",
       "subject": "ftwinfnt.FT_WinFNT_ID_CP1251",
       "case": "value_matches_header",
-      "operation": "abi.constant_eval",
+      "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
       "inputs": {

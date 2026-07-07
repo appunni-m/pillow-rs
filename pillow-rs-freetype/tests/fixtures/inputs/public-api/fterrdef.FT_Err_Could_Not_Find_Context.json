@@ -10,7 +10,7 @@
       "case_id": "fterrdef.FT_Err_Could_Not_Find_Context.value_matches_header",
       "subject": "fterrdef.FT_Err_Could_Not_Find_Context",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -58,7 +58,7 @@
       "case_id": "fterrdef.FT_Err_Could_Not_Find_Context.truetype_context_allocation_failure_returns_error",
       "subject": "fterrdef.FT_Err_Could_Not_Find_Context",
       "case": "truetype_context_allocation_failure_returns_error",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

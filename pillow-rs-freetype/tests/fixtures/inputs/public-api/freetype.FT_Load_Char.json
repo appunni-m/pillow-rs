@@ -13,7 +13,7 @@
       "case_id": "freetype.FT_Load_Char.default_load",
       "subject": "freetype.FT_Load_Char",
       "case": "default_load",
-      "operation": "freetype.load_char",
+      "operation": "load_char",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -67,7 +67,7 @@
       "case_id": "freetype.FT_Load_Char.render_during_load",
       "subject": "freetype.FT_Load_Char",
       "case": "render_during_load",
-      "operation": "freetype.load_char",
+      "operation": "load_char",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -120,7 +120,7 @@
       "case_id": "freetype.FT_Load_Char.matrix_load",
       "subject": "freetype.FT_Load_Char",
       "case": "matrix_load",
-      "operation": "freetype.load_char",
+      "operation": "load_char",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -194,7 +194,7 @@
       "case_id": "freetype.FT_Load_Char.missing_char_loads_glyph_zero",
       "subject": "freetype.FT_Load_Char",
       "case": "missing_char_loads_glyph_zero",
-      "operation": "freetype.load_char",
+      "operation": "load_char",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -251,7 +251,7 @@
       "case_id": "freetype.FT_Load_Char.error_null_face_or_invalid_flags",
       "subject": "freetype.FT_Load_Char",
       "case": "error_null_face_or_invalid_flags",
-      "operation": "freetype.load_char",
+      "operation": "load_char",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

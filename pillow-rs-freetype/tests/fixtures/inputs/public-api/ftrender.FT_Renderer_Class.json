@@ -11,7 +11,7 @@
       "case_id": "ftrender.FT_Renderer_Class.layout_matches_header",
       "subject": "ftrender.FT_Renderer_Class",
       "case": "layout_matches_header",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "c_abi_record",
       "expect_error": false,
       "inputs": {

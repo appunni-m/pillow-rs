@@ -12,7 +12,7 @@
       "case_id": "ftdriver.FT_Prop_IncreaseXHeight.layout_matches_c",
       "subject": "ftdriver.FT_Prop_IncreaseXHeight",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "api_record",
       "expect_error": false,
       "inputs": {

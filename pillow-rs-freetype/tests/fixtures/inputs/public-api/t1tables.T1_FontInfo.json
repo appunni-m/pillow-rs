@@ -8,7 +8,7 @@
       "subject": "t1tables.T1_FontInfo",
       "case": "alias_defined",
       "covers_manifest_cases": ["alias_defined", "layout_alias_matches_ps_font_info", "import_contract"],
-      "operation": "c_abi.type_alias_layout",
+      "operation": "record_layout",
       "schema": "api_layout",
       "expect_error": false,
       "inputs": {"assets": {"font": {"kind": "ref", "role": "type1_or_cff_font", "id": "input/fonts/type1/fontinfo-populated.pfb", "requirements": "PostScript face with populated FontInfo for optional public-function decode alongside ABI layout."}}, "params": {"include": "<freetype/t1tables.h>", "alias": "T1_FontInfo", "target": "PS_FontInfoRec", "header_source": "freetype/include/freetype/t1tables.h:123", "declaration": "T1_FontInfo info;", "fields": ["version", "notice", "full_name", "family_name", "weight", "italic_angle", "is_fixed_pitch", "underline_position", "underline_thickness"]}},

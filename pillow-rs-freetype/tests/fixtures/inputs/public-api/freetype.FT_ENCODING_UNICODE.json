@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_ENCODING_UNICODE.value_matches_header",
       "subject": "freetype.FT_ENCODING_UNICODE",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

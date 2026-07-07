@@ -11,7 +11,7 @@
       "case_id": "fterrdef.FT_Err_Bad_Argument.value_matches_header",
       "subject": "fterrdef.FT_Err_Bad_Argument",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -59,7 +59,7 @@
       "case_id": "fterrdef.FT_Err_Bad_Argument.bytecode_invalid_jump_returns_error",
       "subject": "fterrdef.FT_Err_Bad_Argument",
       "case": "bytecode_invalid_jump_returns_error",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

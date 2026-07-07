@@ -11,7 +11,7 @@
       "case_id": "fterrdef.FT_Err_Missing_SVG_Hooks.value_matches_header",
       "subject": "fterrdef.FT_Err_Missing_SVG_Hooks",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -59,7 +59,7 @@
       "case_id": "fterrdef.FT_Err_Missing_SVG_Hooks.svg_render_without_hooks",
       "subject": "fterrdef.FT_Err_Missing_SVG_Hooks",
       "case": "svg_render_without_hooks",
-      "operation": "FT_Render_Glyph",
+      "operation": "render_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -115,7 +115,7 @@
       "case_id": "fterrdef.FT_Err_Missing_SVG_Hooks.svg_hooks_installed_success",
       "subject": "fterrdef.FT_Err_Missing_SVG_Hooks",
       "case": "svg_hooks_installed_success",
-      "operation": "FT_Render_Glyph",
+      "operation": "render_glyph",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

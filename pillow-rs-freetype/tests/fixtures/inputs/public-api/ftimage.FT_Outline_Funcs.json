@@ -12,7 +12,7 @@
       "case_id": "ftimage.FT_Outline_Funcs.layout_matches_c",
       "subject": "ftimage.FT_Outline_Funcs",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "abi_layout",
       "expect_error": false,
       "inputs": {

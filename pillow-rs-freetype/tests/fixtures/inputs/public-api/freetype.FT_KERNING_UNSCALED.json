@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_KERNING_UNSCALED.value_matches_header",
       "subject": "freetype.FT_KERNING_UNSCALED",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

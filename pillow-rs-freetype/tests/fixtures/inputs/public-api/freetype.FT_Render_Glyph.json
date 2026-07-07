@@ -13,7 +13,7 @@
       "case_id": "freetype.FT_Render_Glyph.supported_render_modes",
       "subject": "freetype.FT_Render_Glyph",
       "case": "supported_render_modes",
-      "operation": "freetype.render_glyph",
+      "operation": "render_glyph",
       "schema": "glyph_render",
       "expect_error": false,
       "inputs": {
@@ -84,7 +84,7 @@
       "case_id": "freetype.FT_Render_Glyph.invalid_render_mode",
       "subject": "freetype.FT_Render_Glyph",
       "case": "invalid_render_mode",
-      "operation": "freetype.render_glyph",
+      "operation": "render_glyph",
       "schema": "glyph_render",
       "expect_error": true,
       "inputs": {
@@ -132,7 +132,7 @@
       "case_id": "freetype.FT_Render_Glyph.matrix_render",
       "subject": "freetype.FT_Render_Glyph",
       "case": "matrix_render",
-      "operation": "freetype.render_glyph",
+      "operation": "render_glyph",
       "schema": "glyph_slot",
       "expect_error": false,
       "inputs": {
@@ -177,7 +177,7 @@
       "case_id": "freetype.FT_Render_Glyph.error_null_or_unowned_slot",
       "subject": "freetype.FT_Render_Glyph",
       "case": "error_null_or_unowned_slot",
-      "operation": "freetype.render_glyph",
+      "operation": "render_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -223,7 +223,7 @@
       "case_id": "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format",
       "subject": "freetype.FT_Render_Glyph",
       "case": "error_unloaded_or_unsupported_slot_format",
-      "operation": "freetype.render_glyph",
+      "operation": "render_glyph",
       "schema": "glyph_render",
       "expect_error": true,
       "inputs": {

@@ -10,7 +10,7 @@
       "case_id": "freetype.FT_Bitmap_Size.layout_matches_c",
       "subject": "freetype.FT_Bitmap_Size",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "abi_layout",
       "expect_error": false,
       "inputs": {

@@ -11,7 +11,7 @@
       "case_id": "ftimage.FT_Raster.alias_matches_c",
       "subject": "ftimage.FT_Raster",
       "case": "alias_matches_c",
-      "operation": "abi.type_alias",
+      "operation": "abi_type_probe",
       "schema": "abi_layout",
       "expect_error": false,
       "inputs": {

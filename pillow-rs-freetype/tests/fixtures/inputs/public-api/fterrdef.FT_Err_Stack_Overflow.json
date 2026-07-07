@@ -11,7 +11,7 @@
       "case_id": "fterrdef.FT_Err_Stack_Overflow.value_matches_header",
       "subject": "fterrdef.FT_Err_Stack_Overflow",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -56,7 +56,7 @@
       "case_id": "fterrdef.FT_Err_Stack_Overflow.tt_interpreter_stack_overflow",
       "subject": "fterrdef.FT_Err_Stack_Overflow",
       "case": "tt_interpreter_stack_overflow",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -114,7 +114,7 @@
       "case_id": "fterrdef.FT_Err_Stack_Overflow.cff_charstring_stack_overflow",
       "subject": "fterrdef.FT_Err_Stack_Overflow",
       "case": "cff_charstring_stack_overflow",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

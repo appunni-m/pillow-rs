@@ -7,7 +7,7 @@
       "case_id": "ftimage.FT_GLYPH_FORMAT_BITMAP.value_matches_header",
       "subject": "ftimage.FT_GLYPH_FORMAT_BITMAP",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"include": "<freetype/ftimage.h>", "symbol": "FT_GLYPH_FORMAT_BITMAP", "enum": "FT_Glyph_Format", "expected_value": 1651078259, "tag": "bits"}},

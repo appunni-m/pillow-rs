@@ -11,7 +11,7 @@
       "case_id": "ftparams.FT_PARAM_TAG_STEM_DARKENING.value_matches_header",
       "subject": "ftparams.FT_PARAM_TAG_STEM_DARKENING",
       "case": "value_matches_header",
-      "operation": "abi.constant_value",
+      "operation": "constant",
       "schema": "constant",
       "expect_error": false,
       "inputs": {

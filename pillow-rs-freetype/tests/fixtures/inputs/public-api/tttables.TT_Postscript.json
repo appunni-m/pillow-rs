@@ -13,7 +13,7 @@
       "case_id": "tttables.TT_Postscript.layout_matches_c",
       "subject": "tttables.TT_Postscript",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "abi_record",
       "expect_error": false,
       "inputs": {
@@ -150,7 +150,7 @@
       "case_id": "tttables.TT_Postscript.public_import_contract",
       "subject": "tttables.TT_Postscript",
       "case": "public_import_contract",
-      "operation": "abi.public_import",
+      "operation": "record_layout",
       "schema": "compile_probe",
       "expect_error": false,
       "inputs": {

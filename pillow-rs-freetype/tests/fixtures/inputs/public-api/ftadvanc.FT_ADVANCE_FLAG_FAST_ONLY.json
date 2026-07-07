@@ -10,7 +10,7 @@
       "case_id": "ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY.value_matches_header",
       "subject": "ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

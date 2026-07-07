@@ -11,7 +11,7 @@
       "case_id": "fterrdef.FT_Err_Too_Few_Arguments.value_matches_header",
       "subject": "fterrdef.FT_Err_Too_Few_Arguments",
       "case": "value_matches_header",
-      "operation": "error_constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -56,7 +56,7 @@
       "case_id": "fterrdef.FT_Err_Too_Few_Arguments.tt_interpreter_argument_underflow",
       "subject": "fterrdef.FT_Err_Too_Few_Arguments",
       "case": "tt_interpreter_argument_underflow",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -114,7 +114,7 @@
       "case_id": "fterrdef.FT_Err_Too_Few_Arguments.cff_decoder_underflow_translation",
       "subject": "fterrdef.FT_Err_Too_Few_Arguments",
       "case": "cff_decoder_underflow_translation",
-      "operation": "FT_Load_Glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

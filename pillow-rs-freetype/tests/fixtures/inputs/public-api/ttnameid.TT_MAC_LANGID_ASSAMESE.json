@@ -7,7 +7,7 @@
       "case_id": "ttnameid.TT_MAC_LANGID_ASSAMESE.value_matches_header",
       "subject": "ttnameid.TT_MAC_LANGID_ASSAMESE",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"symbol": "TT_MAC_LANGID_ASSAMESE", "include": "<freetype/ttnameid.h>", "declared_type": "macro integer", "expected_value": 68, "header_source": "freetype/include/freetype/ttnameid.h:372"}},

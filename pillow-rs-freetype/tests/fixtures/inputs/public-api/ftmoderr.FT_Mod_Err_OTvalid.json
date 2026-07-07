@@ -10,7 +10,7 @@
       "case_id": "ftmoderr.FT_Mod_Err_OTvalid.value_matches_header",
       "subject": "ftmoderr.FT_Mod_Err_OTvalid",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

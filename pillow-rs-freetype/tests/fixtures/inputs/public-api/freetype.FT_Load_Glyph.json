@@ -13,7 +13,7 @@
       "case_id": "freetype.FT_Load_Glyph.default_load",
       "subject": "freetype.FT_Load_Glyph",
       "case": "default_load",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -66,7 +66,7 @@
       "case_id": "freetype.FT_Load_Glyph.matrix_load",
       "subject": "freetype.FT_Load_Glyph",
       "case": "matrix_load",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -141,7 +141,7 @@
       "case_id": "freetype.FT_Load_Glyph.render_and_target_modes",
       "subject": "freetype.FT_Load_Glyph",
       "case": "render_and_target_modes",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -207,7 +207,7 @@
       "case_id": "freetype.FT_Load_Glyph.no_scale_no_hinting_and_vertical_flags",
       "subject": "freetype.FT_Load_Glyph",
       "case": "no_scale_no_hinting_and_vertical_flags",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -284,7 +284,7 @@
       "case_id": "freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags",
       "subject": "freetype.FT_Load_Glyph",
       "case": "error_out_of_range_null_face_or_invalid_flags",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

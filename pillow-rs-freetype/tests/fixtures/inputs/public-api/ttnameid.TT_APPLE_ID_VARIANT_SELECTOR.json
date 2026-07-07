@@ -11,7 +11,7 @@
       "case_id": "ttnameid.TT_APPLE_ID_VARIANT_SELECTOR.value_matches_header",
       "subject": "ttnameid.TT_APPLE_ID_VARIANT_SELECTOR",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {
@@ -69,7 +69,7 @@
       "case_id": "ttnameid.TT_APPLE_ID_VARIANT_SELECTOR.public_import_contract",
       "subject": "ttnameid.TT_APPLE_ID_VARIANT_SELECTOR",
       "case": "public_import_contract",
-      "operation": "constant.import",
+      "operation": "constant",
       "schema": "api_import",
       "expect_error": false,
       "inputs": {

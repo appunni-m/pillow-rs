@@ -7,7 +7,7 @@
       "case_id": "fttypes.FT_ULong.alias_defined_as_unsigned_long",
       "subject": "fttypes.FT_ULong",
       "case": "alias_defined_as_unsigned_long",
-      "operation": "abi.typedef_import",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_ULong", "c_definition": "typedef unsigned long FT_ULong", "underlying_type": "unsigned long", "signedness": "unsigned", "probes": ["include_compiles", "assignment_compiles"]}},

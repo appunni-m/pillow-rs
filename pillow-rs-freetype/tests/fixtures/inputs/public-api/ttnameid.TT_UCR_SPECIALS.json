@@ -10,7 +10,7 @@
       "case_id": "ttnameid.TT_UCR_SPECIALS.value_matches_header",
       "subject": "ttnameid.TT_UCR_SPECIALS",
       "case": "value_matches_header",
-      "operation": "abi.constant_eval",
+      "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
       "inputs": {
@@ -64,7 +64,7 @@
       "case_id": "ttnameid.TT_UCR_SPECIALS.import_contract",
       "subject": "ttnameid.TT_UCR_SPECIALS",
       "case": "import_contract",
-      "operation": "abi.header_import",
+      "operation": "constant",
       "schema": "api_import",
       "expect_error": false,
       "inputs": {

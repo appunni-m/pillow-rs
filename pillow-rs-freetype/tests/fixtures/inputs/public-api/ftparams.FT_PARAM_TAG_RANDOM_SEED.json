@@ -11,7 +11,7 @@
       "case_id": "ftparams.FT_PARAM_TAG_RANDOM_SEED.value_matches_header",
       "subject": "ftparams.FT_PARAM_TAG_RANDOM_SEED",
       "case": "value_matches_header",
-      "operation": "abi.constant_value",
+      "operation": "constant",
       "schema": "constant",
       "expect_error": false,
       "inputs": {

@@ -11,7 +11,7 @@
       "case_id": "ttnameid.TT_UCR_SYLOTI_NAGRI.value_matches_header",
       "subject": "ttnameid.TT_UCR_SYLOTI_NAGRI",
       "case": "value_matches_header",
-      "operation": "abi.constant_eval",
+      "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
       "inputs": {
@@ -65,7 +65,7 @@
       "case_id": "ttnameid.TT_UCR_SYLOTI_NAGRI.import_contract",
       "subject": "ttnameid.TT_UCR_SYLOTI_NAGRI",
       "case": "import_contract",
-      "operation": "abi.header_import",
+      "operation": "constant",
       "schema": "api_import",
       "expect_error": false,
       "inputs": {

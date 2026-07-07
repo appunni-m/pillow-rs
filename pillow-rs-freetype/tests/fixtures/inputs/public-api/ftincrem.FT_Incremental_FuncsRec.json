@@ -13,7 +13,7 @@
       "case_id": "ftincrem.FT_Incremental_FuncsRec.layout_matches_c",
       "subject": "ftincrem.FT_Incremental_FuncsRec",
       "case": "layout_matches_c",
-      "operation": "abi.record_layout",
+      "operation": "record_layout",
       "schema": "abi_layout",
       "expect_error": false,
       "inputs": {

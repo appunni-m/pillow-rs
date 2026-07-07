@@ -11,7 +11,7 @@
       "case_id": "freetype.FT_LOAD_BITMAP_METRICS_ONLY.value_matches_header",
       "subject": "freetype.FT_LOAD_BITMAP_METRICS_ONLY",
       "case": "value_matches_header",
-      "operation": "abi.macro_value_and_import",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -54,7 +54,7 @@
       "case_id": "freetype.FT_LOAD_BITMAP_METRICS_ONLY.bitmap_metrics_only_load_behavior",
       "subject": "freetype.FT_LOAD_BITMAP_METRICS_ONLY",
       "case": "bitmap_metrics_only_load_behavior",
-      "operation": "freetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -129,7 +129,7 @@
       "case_id": "freetype.FT_LOAD_BITMAP_METRICS_ONLY.outline_no_effect_or_error",
       "subject": "freetype.FT_LOAD_BITMAP_METRICS_ONLY",
       "case": "outline_no_effect_or_error",
-      "operation": "freetype.load_char",
+      "operation": "load_char",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

@@ -9,7 +9,7 @@
       "case_id": "freetype.FT_ENCODING_MS_SYMBOL.value_matches_header",
       "subject": "freetype.FT_ENCODING_MS_SYMBOL",
       "case": "value_matches_header",
-      "operation": "constant.value",
+      "operation": "constant",
       "schema": "abi_constant",
       "expect_error": false,
       "inputs": {
