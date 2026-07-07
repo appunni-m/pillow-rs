@@ -77,9 +77,9 @@
       "case_id": "ftmoderr.FT_Mod_Err_GXvalid.module_error_prefix_used",
       "subject": "ftmoderr.FT_Mod_Err_GXvalid",
       "case": "module_error_prefix_used",
-      "operation": "freetype.module_error_base_runtime",
-      "schema": "api_result",
-      "expect_error": true,
+      "operation": "constant_map",
+      "schema": "constant_map",
+      "expect_error": false,
       "inputs": {
         "assets": {
           "gx_font": {
@@ -126,6 +126,9 @@
             "freetype/src/gxvalid/gxverror.h:42-46",
             "freetype/include/freetype/ftmoderr.h:23-34",
             "freetype/include/freetype/ftmoderr.h:151-175"
+          ],
+          "symbols": [
+            "FT_Mod_Err_GXvalid"
           ]
         }
       },

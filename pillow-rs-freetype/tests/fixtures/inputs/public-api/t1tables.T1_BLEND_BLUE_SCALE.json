@@ -10,7 +10,7 @@
       "case_id": "t1tables.T1_BLEND_BLUE_SCALE.value_matches_header",
       "subject": "t1tables.T1_BLEND_BLUE_SCALE",
       "case": "value_matches_header",
-      "operation": "t1tables.t1_blend_flag_constant",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "abi": {
@@ -26,15 +26,29 @@
           "include_header": "freetype/t1tables.h",
           "constant": "T1_BLEND_BLUE_SCALE",
           "expected_value": 9,
-          "import_symbol": "T1_BLEND_BLUE_SCALE"
+          "import_symbol": "T1_BLEND_BLUE_SCALE",
+          "symbol": "T1_BLEND_BLUE_SCALE"
         }
       },
-      "classifiers": ["kind:enum_variant", "header:t1tables", "area:type1"],
+      "classifiers": [
+        "kind:enum_variant",
+        "header:t1tables",
+        "area:type1"
+      ],
       "expectation": {
         "status": "ok",
-        "output_shape": {"constant_value": "int"},
-        "compare": {"mode": "value", "paths": ["constant_value"]},
-        "source_refs": ["freetype/include/freetype/t1tables.h:226-245"]
+        "output_shape": {
+          "constant_value": "int"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "constant_value"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/t1tables.h:226-245"
+        ]
       }
     },
     {
@@ -52,22 +66,52 @@
       },
       "inputs": {
         "assets": {
-          "type1_mm_font": {"kind": "ref", "id": "fonts/type1/mm-blend-fontinfo-private.pfb", "asset_kind": "font", "status": "required_future_asset"}
+          "type1_mm_font": {
+            "kind": "ref",
+            "id": "fonts/type1/mm-blend-fontinfo-private.pfb",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
         },
         "params": {
           "face_source": "type1_mm_font",
-          "design_coordinates": ["default", "non_default"],
+          "design_coordinates": [
+            "default",
+            "non_default"
+          ],
           "constant": "T1_BLEND_BLUE_SCALE",
-          "private_fields": ["blue_scale"]
+          "private_fields": [
+            "blue_scale"
+          ]
         }
       },
-      "classifiers": ["kind:enum_variant", "header:t1tables", "area:type1-mm"],
+      "classifiers": [
+        "kind:enum_variant",
+        "header:t1tables",
+        "area:type1-mm"
+      ],
       "expectation": {
         "status": "ok",
-        "output_shape": {"constant_value": 9, "private_before_after": {"blue_scale": "FT_Fixed"}},
-        "compare": {"mode": "exact", "paths": ["constant_value", "private_before_after.blue_scale"]},
-        "source_refs": ["freetype/include/freetype/t1tables.h:137-139", "freetype/include/freetype/t1tables.h:226-245"],
-        "fixture_requirements": ["fonts/type1/mm-blend-fontinfo-private.pfb must contain differing BlueScale values across masters."]
+        "output_shape": {
+          "constant_value": 9,
+          "private_before_after": {
+            "blue_scale": "FT_Fixed"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "constant_value",
+            "private_before_after.blue_scale"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/t1tables.h:137-139",
+          "freetype/include/freetype/t1tables.h:226-245"
+        ],
+        "fixture_requirements": [
+          "fonts/type1/mm-blend-fontinfo-private.pfb must contain differing BlueScale values across masters."
+        ]
       }
     }
   ]

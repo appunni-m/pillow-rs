@@ -10,7 +10,7 @@
       "case_id": "ftmm.T1_MAX_MM_MAP_POINTS.value_matches_header",
       "subject": "ftmm.T1_MAX_MM_MAP_POINTS",
       "case": "value_matches_header",
-      "operation": "ftmm.constant_value",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "abi": {
@@ -23,7 +23,8 @@
       "inputs": {
         "assets": {},
         "params": {
-          "constant": "T1_MAX_MM_MAP_POINTS"
+          "constant": "T1_MAX_MM_MAP_POINTS",
+          "symbol": "T1_MAX_MM_MAP_POINTS"
         }
       },
       "classifiers": [

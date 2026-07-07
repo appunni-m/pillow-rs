@@ -18,7 +18,7 @@
       "case_id": "ttnameid.TT_NAME_ID_PREFERRED_SUBFAMILY.alias_matches_typographic_subfamily",
       "subject": "ttnameid.TT_NAME_ID_PREFERRED_SUBFAMILY",
       "case": "alias_matches_typographic_subfamily",
-      "operation": "constant.alias",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"include": "<freetype/ttnameid.h>", "symbol": "TT_NAME_ID_PREFERRED_SUBFAMILY", "target_symbol": "TT_NAME_ID_TYPOGRAPHIC_SUBFAMILY", "expected_equal": true, "expected_value_from_pinned_header": 17}},

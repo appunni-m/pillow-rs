@@ -10,7 +10,7 @@
       "case_id": "ftimage.FT_OUTLINE_HIGH_PRECISION.value_matches_header",
       "subject": "ftimage.FT_OUTLINE_HIGH_PRECISION",
       "case": "value_matches_header",
-      "operation": "ftimage.outline_flag_value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

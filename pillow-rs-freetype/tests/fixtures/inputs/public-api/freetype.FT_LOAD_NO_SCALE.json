@@ -70,9 +70,11 @@
             "y": 20
           },
           "glyph_index": 36,
-          "load_flags": [
-            "FT_LOAD_NO_SCALE",
-            "FT_LOAD_RENDER"
+          "load_flag_sets": [
+            [
+              "FT_LOAD_NO_SCALE",
+              "FT_LOAD_RENDER"
+            ]
           ]
         }
       },

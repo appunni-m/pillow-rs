@@ -104,8 +104,8 @@
       "case_id": "ftmoderr.FT_Mod_Err_SFNT.module_name_contract",
       "subject": "ftmoderr.FT_Mod_Err_SFNT",
       "case": "module_name_contract",
-      "operation": "abi.module_error_list",
-      "schema": "constant_metadata",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -114,7 +114,10 @@
           "symbol": "FT_Mod_Err_SFNT",
           "module_name": "SFNT module",
           "list_entry_order_after": "FT_Mod_Err_Raster",
-          "list_entry_order_before": "FT_Mod_Err_Smooth"
+          "list_entry_order_before": "FT_Mod_Err_Smooth",
+          "symbols": [
+            "FT_Mod_Err_SFNT"
+          ]
         }
       },
       "classifiers": [

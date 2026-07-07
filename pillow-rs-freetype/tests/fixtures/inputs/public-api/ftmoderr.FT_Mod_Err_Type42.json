@@ -101,8 +101,8 @@
       "case_id": "ftmoderr.FT_Mod_Err_Type42.module_name_contract",
       "subject": "ftmoderr.FT_Mod_Err_Type42",
       "case": "module_name_contract",
-      "operation": "abi.module_error_list",
-      "schema": "constant_metadata",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -111,7 +111,10 @@
           "symbol": "FT_Mod_Err_Type42",
           "module_name": "Type 42 module",
           "list_entry_order_after": "FT_Mod_Err_Type1",
-          "list_entry_order_before": "FT_Mod_Err_Winfonts"
+          "list_entry_order_before": "FT_Mod_Err_Winfonts",
+          "symbols": [
+            "FT_Mod_Err_Type42"
+          ]
         }
       },
       "classifiers": [

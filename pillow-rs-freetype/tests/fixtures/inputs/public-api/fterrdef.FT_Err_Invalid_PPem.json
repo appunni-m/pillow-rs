@@ -66,7 +66,7 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "id": "fonts/DejaVuSans.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "requirements": "Scalable TrueType font that reaches tt_size_reset after a public size request whose x_ppem or y_ppem rounds to zero."
           }
         },

@@ -10,8 +10,8 @@
       "case_id": "freetype.FT_LOAD_TARGET_MODE.target_mode_value",
       "subject": "freetype.FT_LOAD_TARGET_MODE",
       "case": "target_mode_value",
-      "operation": "macro.value",
-      "schema": "api_constant",
+      "operation": "macro_eval",
+      "schema": "api_macro",
       "expect_error": false,
       "inputs": {
         "assets": {},

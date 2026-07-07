@@ -1,19 +1,55 @@
 {
   "version": 1,
   "subject": "t1tables.T1_BLEND_FORCE_BOLD",
-  "manifest_cases": ["value_matches_header", "private_force_bold_runtime_value"],
+  "manifest_cases": [
+    "value_matches_header",
+    "private_force_bold_runtime_value"
+  ],
   "cases": [
     {
       "case_id": "t1tables.T1_BLEND_FORCE_BOLD.value_matches_header",
       "subject": "t1tables.T1_BLEND_FORCE_BOLD",
       "case": "value_matches_header",
-      "operation": "t1tables.t1_blend_flag_constant",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
-      "abi": {"header": "freetype/t1tables.h", "symbol": "T1_BLEND_FORCE_BOLD", "kind": "enum_variant", "enum": "T1_Blend_Flags", "value": 13},
-      "inputs": {"assets": {}, "params": {"include_header": "freetype/t1tables.h", "constant": "T1_BLEND_FORCE_BOLD", "expected_value": 13, "import_symbol": "T1_BLEND_FORCE_BOLD"}},
-      "classifiers": ["kind:enum_variant", "header:t1tables", "area:type1"],
-      "expectation": {"status": "ok", "output_shape": {"constant_value": "int"}, "compare": {"mode": "value", "paths": ["constant_value"]}, "source_refs": ["freetype/include/freetype/t1tables.h:226-245"]}
+      "abi": {
+        "header": "freetype/t1tables.h",
+        "symbol": "T1_BLEND_FORCE_BOLD",
+        "kind": "enum_variant",
+        "enum": "T1_Blend_Flags",
+        "value": 13
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include_header": "freetype/t1tables.h",
+          "constant": "T1_BLEND_FORCE_BOLD",
+          "expected_value": 13,
+          "import_symbol": "T1_BLEND_FORCE_BOLD",
+          "symbol": "T1_BLEND_FORCE_BOLD"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:t1tables",
+        "area:type1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "constant_value": "int"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "constant_value"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/t1tables.h:226-245"
+        ]
+      }
     },
     {
       "case_id": "t1tables.T1_BLEND_FORCE_BOLD.private_force_bold_runtime_value",
@@ -22,10 +58,74 @@
       "operation": "t1tables.get_ps_font_private_mm_blend",
       "schema": "api_result",
       "expect_error": false,
-      "abi": {"header": "freetype/t1tables.h", "symbol": "T1_BLEND_FORCE_BOLD", "record_field": "PS_PrivateRec.force_bold", "field_type": "FT_Bool"},
-      "inputs": {"assets": {"type1_mm_font": {"kind": "ref", "id": "fonts/type1/mm-blend-fontinfo-private.pfb", "asset_kind": "font", "status": "required_future_asset"}, "type1_non_mm_font": {"kind": "ref", "id": "fonts/type1/non-mm-force-bold.pfb", "asset_kind": "font", "status": "required_future_asset"}}, "params": {"rows": [{"face_source": "type1_mm_font", "design_coordinates": ["default", "non_default"]}, {"face_source": "type1_non_mm_font", "design_coordinates": null}], "constant": "T1_BLEND_FORCE_BOLD", "private_fields": ["force_bold"]}},
-      "classifiers": ["kind:enum_variant", "header:t1tables", "area:type1-mm"],
-      "expectation": {"status": "ok", "output_shape": {"constant_value": 13, "rows": "FT_Bool force_bold values for MM and non-MM Type1 faces"}, "compare": {"mode": "exact", "paths": ["constant_value", "rows[*].status", "rows[*].force_bold"]}, "source_refs": ["freetype/include/freetype/t1tables.h:160-165", "freetype/include/freetype/t1tables.h:226-245"], "fixture_requirements": ["Need MM and non-MM Type1 control fonts with observable ForceBold values."]}
+      "abi": {
+        "header": "freetype/t1tables.h",
+        "symbol": "T1_BLEND_FORCE_BOLD",
+        "record_field": "PS_PrivateRec.force_bold",
+        "field_type": "FT_Bool"
+      },
+      "inputs": {
+        "assets": {
+          "type1_mm_font": {
+            "kind": "ref",
+            "id": "fonts/type1/mm-blend-fontinfo-private.pfb",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          },
+          "type1_non_mm_font": {
+            "kind": "ref",
+            "id": "fonts/type1/non-mm-force-bold.pfb",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "rows": [
+            {
+              "face_source": "type1_mm_font",
+              "design_coordinates": [
+                "default",
+                "non_default"
+              ]
+            },
+            {
+              "face_source": "type1_non_mm_font",
+              "design_coordinates": null
+            }
+          ],
+          "constant": "T1_BLEND_FORCE_BOLD",
+          "private_fields": [
+            "force_bold"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:t1tables",
+        "area:type1-mm"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "constant_value": 13,
+          "rows": "FT_Bool force_bold values for MM and non-MM Type1 faces"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "constant_value",
+            "rows[*].status",
+            "rows[*].force_bold"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/t1tables.h:160-165",
+          "freetype/include/freetype/t1tables.h:226-245"
+        ],
+        "fixture_requirements": [
+          "Need MM and non-MM Type1 control fonts with observable ForceBold values."
+        ]
+      }
     }
   ]
 }

@@ -10,8 +10,8 @@
       "case_id": "ftcolor.FT_Color_Root_Transform.enum_variants_match_header",
       "subject": "ftcolor.FT_Color_Root_Transform",
       "case": "enum_variants_match_header",
-      "operation": "ftcolor.enum_values",
-      "schema": "enum_value_set",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -22,7 +22,12 @@
             "FT_COLOR_INCLUDE_ROOT_TRANSFORM": 0,
             "FT_COLOR_NO_ROOT_TRANSFORM": 1,
             "FT_COLOR_ROOT_TRANSFORM_MAX": 2
-          }
+          },
+          "symbols": [
+            "FT_COLOR_INCLUDE_ROOT_TRANSFORM",
+            "FT_COLOR_NO_ROOT_TRANSFORM",
+            "FT_COLOR_ROOT_TRANSFORM_MAX"
+          ]
         }
       },
       "classifiers": [

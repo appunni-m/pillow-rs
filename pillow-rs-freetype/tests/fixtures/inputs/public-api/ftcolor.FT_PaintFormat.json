@@ -10,8 +10,8 @@
       "case_id": "ftcolor.FT_PaintFormat.enum_variants_match_header",
       "subject": "ftcolor.FT_PaintFormat",
       "case": "enum_variants_match_header",
-      "operation": "ftcolor.enum_values",
-      "schema": "enum_value_set",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -34,7 +34,24 @@
             "COMPOSITE": 32,
             "MAX": 33,
             "UNSUPPORTED": 255
-          }
+          },
+          "symbols": [
+            "FT_COLR_PAINTFORMAT_COLR_GLYPH",
+            "FT_COLR_PAINTFORMAT_COLR_LAYERS",
+            "FT_COLR_PAINTFORMAT_COMPOSITE",
+            "FT_COLR_PAINTFORMAT_GLYPH",
+            "FT_COLR_PAINTFORMAT_LINEAR_GRADIENT",
+            "FT_COLR_PAINTFORMAT_RADIAL_GRADIENT",
+            "FT_COLR_PAINTFORMAT_ROTATE",
+            "FT_COLR_PAINTFORMAT_SCALE",
+            "FT_COLR_PAINTFORMAT_SKEW",
+            "FT_COLR_PAINTFORMAT_SOLID",
+            "FT_COLR_PAINTFORMAT_SWEEP_GRADIENT",
+            "FT_COLR_PAINTFORMAT_TRANSFORM",
+            "FT_COLR_PAINTFORMAT_TRANSLATE",
+            "FT_COLR_PAINTFORMAT_UNSUPPORTED",
+            "FT_COLR_PAINT_FORMAT_MAX"
+          ]
         }
       },
       "classifiers": [

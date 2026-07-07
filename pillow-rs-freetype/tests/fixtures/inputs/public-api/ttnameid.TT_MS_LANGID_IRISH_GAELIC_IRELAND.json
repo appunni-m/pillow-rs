@@ -1,1 +1,194 @@
-{"version":1,"subject":"ttnameid.TT_MS_LANGID_IRISH_GAELIC_IRELAND","manifest_cases":["value_matches_header","public_import_contract","legacy_inverted_value_contract"],"cases":[{"case_id":"ttnameid.TT_MS_LANGID_IRISH_GAELIC_IRELAND.value_matches_header","subject":"ttnameid.TT_MS_LANGID_IRISH_GAELIC_IRELAND","case":"value_matches_header","operation":"constant","schema":"api_constant","expect_error":false,"inputs":{"assets":{},"params":{"header":"freetype/ttnameid.h","include":"<freetype/ttnameid.h>","symbol":"TT_MS_LANGID_IRISH_GAELIC_IRELAND","declared_as":"preprocessor integer constant","expected_value_from_pinned_header":1084,"expected_value_hex":"0x043C","semantic_group":"microsoft-language-id","platform_group":{"platform_symbol":"TT_PLATFORM_MICROSOFT","platform_value":3,"encoding_symbol":"TT_MS_ID_UNICODE_CS","encoding_value":1,"sfnt_field":"FT_SfntName.language_id","language":"Irish Gaelic legacy","region":"Ireland"}}},"classifiers":["kind:constant","header:ttnameid","area:microsoft-language-id","area:constant-value","area:legacy-language-id","public-api-slice:1340-1359"],"metadata":{"abi":{"header":"freetype/ttnameid.h","symbol":"TT_MS_LANGID_IRISH_GAELIC_IRELAND","kind":"object_like_macro","result_type":"integer constant expression","assignable_to":"FT_UShort"},"source_behavior":"TT_MS_LANGID_IRISH_GAELIC_IRELAND expands to 0x043C (1084) in the pinned FreeType public header legacy block; the header notes the Irish Gaelic and Scottish Gaelic values are incorrectly inverted."},"expectation":{"status":"ok","output_shape":{"symbol":"string","value":"uint16","value_hex":"string","header":"string","semantic_group":"string"},"compare":{"mode":"value","paths":["symbol","value","value_hex","header","semantic_group"]},"sources_checked":["freetype/include/freetype/ttnameid.h:713-715"]}},{"case_id":"ttnameid.TT_MS_LANGID_IRISH_GAELIC_IRELAND.public_import_contract","subject":"ttnameid.TT_MS_LANGID_IRISH_GAELIC_IRELAND","case":"public_import_contract","operation":"constant","schema":"api_import","expect_error":false,"inputs":{"assets":{},"params":{"include":"<freetype/ttnameid.h>","symbol":"TT_MS_LANGID_IRISH_GAELIC_IRELAND","usage":"FT_UShort value = TT_MS_LANGID_IRISH_GAELIC_IRELAND;","expected_value_from_pinned_header":1084,"expected_value_hex":"0x043C","header":"freetype/ttnameid.h"}},"classifiers":["kind:constant","header:ttnameid","area:microsoft-language-id","area:public-import","area:legacy-language-id","public-api-slice:1340-1359"],"metadata":{"abi":{"header":"freetype/ttnameid.h","symbol":"TT_MS_LANGID_IRISH_GAELIC_IRELAND","visibility":"public C macro","compatible_ctype":"FT_UShort"}},"expectation":{"status":"ok","output_shape":{"compile_status":"ok","symbol":"string","ctype":"FT_UShort-compatible integer","value":"uint16"},"compare":{"mode":"exact","paths":["compile_status","symbol","ctype","value"]},"sources_checked":["freetype/include/freetype/ttnameid.h:714"]}},{"case_id":"ttnameid.TT_MS_LANGID_IRISH_GAELIC_IRELAND.legacy_inverted_value_contract","subject":"ttnameid.TT_MS_LANGID_IRISH_GAELIC_IRELAND","case":"legacy_inverted_value_contract","operation":"constant.distinct_values","schema":"api_constant_relation","expect_error":false,"inputs":{"assets":{},"params":{"include":"<freetype/ttnameid.h>","left_symbol":"TT_MS_LANGID_IRISH_GAELIC_IRELAND","left_expected_value_from_pinned_header":1084,"left_expected_value_hex":"0x043C","right_symbol":"TT_MS_LANGID_IRISH_IRELAND","right_expected_value_from_pinned_header":2108,"right_expected_value_hex":"0x083C","relation":"not_equal","header_note":"the next two values are incorrectly inverted"}},"classifiers":["kind:constant","header:ttnameid","area:microsoft-language-id","area:legacy-language-id","area:constant-relation","public-api-slice:1340-1359"],"metadata":{"source_behavior":"The pinned header keeps TT_MS_LANGID_IRISH_GAELIC_IRELAND at legacy value 0x043C and TT_MS_LANGID_IRISH_IRELAND at 0x083C; FreeType treats both as raw language_id scalars."},"expectation":{"status":"ok","output_shape":{"left_symbol":"string","left_value":"uint16","right_symbol":"string","right_value":"uint16","relation":"not_equal"},"compare":{"mode":"exact","paths":["left_symbol","left_value","right_symbol","right_value","relation"]},"sources_checked":["freetype/include/freetype/ttnameid.h:590","freetype/include/freetype/ttnameid.h:713-715"]}}]}
+{
+  "version": 1,
+  "subject": "ttnameid.TT_MS_LANGID_IRISH_GAELIC_IRELAND",
+  "manifest_cases": [
+    "value_matches_header",
+    "public_import_contract",
+    "legacy_inverted_value_contract"
+  ],
+  "cases": [
+    {
+      "case_id": "ttnameid.TT_MS_LANGID_IRISH_GAELIC_IRELAND.value_matches_header",
+      "subject": "ttnameid.TT_MS_LANGID_IRISH_GAELIC_IRELAND",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "api_constant",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ttnameid.h",
+          "include": "<freetype/ttnameid.h>",
+          "symbol": "TT_MS_LANGID_IRISH_GAELIC_IRELAND",
+          "declared_as": "preprocessor integer constant",
+          "expected_value_from_pinned_header": 1084,
+          "expected_value_hex": "0x043C",
+          "semantic_group": "microsoft-language-id",
+          "platform_group": {
+            "platform_symbol": "TT_PLATFORM_MICROSOFT",
+            "platform_value": 3,
+            "encoding_symbol": "TT_MS_ID_UNICODE_CS",
+            "encoding_value": 1,
+            "sfnt_field": "FT_SfntName.language_id",
+            "language": "Irish Gaelic legacy",
+            "region": "Ireland"
+          }
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "area:microsoft-language-id",
+        "area:constant-value",
+        "area:legacy-language-id",
+        "public-api-slice:1340-1359"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/ttnameid.h",
+          "symbol": "TT_MS_LANGID_IRISH_GAELIC_IRELAND",
+          "kind": "object_like_macro",
+          "result_type": "integer constant expression",
+          "assignable_to": "FT_UShort"
+        },
+        "source_behavior": "TT_MS_LANGID_IRISH_GAELIC_IRELAND expands to 0x043C (1084) in the pinned FreeType public header legacy block; the header notes the Irish Gaelic and Scottish Gaelic values are incorrectly inverted."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "value": "uint16",
+          "value_hex": "string",
+          "header": "string",
+          "semantic_group": "string"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "value",
+            "value_hex",
+            "header",
+            "semantic_group"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ttnameid.h:713-715"
+        ]
+      }
+    },
+    {
+      "case_id": "ttnameid.TT_MS_LANGID_IRISH_GAELIC_IRELAND.public_import_contract",
+      "subject": "ttnameid.TT_MS_LANGID_IRISH_GAELIC_IRELAND",
+      "case": "public_import_contract",
+      "operation": "constant",
+      "schema": "api_import",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ttnameid.h>",
+          "symbol": "TT_MS_LANGID_IRISH_GAELIC_IRELAND",
+          "usage": "FT_UShort value = TT_MS_LANGID_IRISH_GAELIC_IRELAND;",
+          "expected_value_from_pinned_header": 1084,
+          "expected_value_hex": "0x043C",
+          "header": "freetype/ttnameid.h"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "area:microsoft-language-id",
+        "area:public-import",
+        "area:legacy-language-id",
+        "public-api-slice:1340-1359"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/ttnameid.h",
+          "symbol": "TT_MS_LANGID_IRISH_GAELIC_IRELAND",
+          "visibility": "public C macro",
+          "compatible_ctype": "FT_UShort"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile_status": "ok",
+          "symbol": "string",
+          "ctype": "FT_UShort-compatible integer",
+          "value": "uint16"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "compile_status",
+            "symbol",
+            "ctype",
+            "value"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ttnameid.h:714"
+        ]
+      }
+    },
+    {
+      "case_id": "ttnameid.TT_MS_LANGID_IRISH_GAELIC_IRELAND.legacy_inverted_value_contract",
+      "subject": "ttnameid.TT_MS_LANGID_IRISH_GAELIC_IRELAND",
+      "case": "legacy_inverted_value_contract",
+      "operation": "constant_map",
+      "schema": "constant_map",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ttnameid.h>",
+          "left_symbol": "TT_MS_LANGID_IRISH_GAELIC_IRELAND",
+          "right_symbol": "TT_MS_LANGID_IRISH_IRELAND",
+          "relation": "not_equal",
+          "header_note": "the next two values are incorrectly inverted",
+          "symbols": [
+            "TT_MS_LANGID_IRISH_GAELIC_IRELAND",
+            "TT_MS_LANGID_IRISH_IRELAND"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "area:microsoft-language-id",
+        "area:legacy-language-id",
+        "area:constant-relation",
+        "public-api-slice:1340-1359"
+      ],
+      "metadata": {
+        "source_behavior": "The pinned header keeps TT_MS_LANGID_IRISH_GAELIC_IRELAND at legacy value 0x043C and TT_MS_LANGID_IRISH_IRELAND at 0x083C; FreeType treats both as raw language_id scalars."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "left_symbol": "string",
+          "left_value": "uint16",
+          "right_symbol": "string",
+          "right_value": "uint16",
+          "relation": "not_equal"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "left_symbol",
+            "left_value",
+            "right_symbol",
+            "right_value",
+            "relation"
+          ]
+        },
+        "sources_checked": [
+          "freetype/include/freetype/ttnameid.h:590",
+          "freetype/include/freetype/ttnameid.h:713-715"
+        ]
+      }
+    }
+  ]
+}

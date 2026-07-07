@@ -11,7 +11,7 @@
       "case_id": "ftgxval.FT_VALIDATE_APPLE.value_matches_header",
       "subject": "ftgxval.FT_VALIDATE_APPLE",
       "case": "value_matches_header",
-      "operation": "ftgxval.constant",
+      "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
       "inputs": {

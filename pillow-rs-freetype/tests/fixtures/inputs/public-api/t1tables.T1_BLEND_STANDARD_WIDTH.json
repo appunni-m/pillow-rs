@@ -1,19 +1,55 @@
 {
   "version": 1,
   "subject": "t1tables.T1_BLEND_STANDARD_WIDTH",
-  "manifest_cases": ["value_matches_header", "private_standard_width_runtime_value"],
+  "manifest_cases": [
+    "value_matches_header",
+    "private_standard_width_runtime_value"
+  ],
   "cases": [
     {
       "case_id": "t1tables.T1_BLEND_STANDARD_WIDTH.value_matches_header",
       "subject": "t1tables.T1_BLEND_STANDARD_WIDTH",
       "case": "value_matches_header",
-      "operation": "t1tables.t1_blend_flag_constant",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
-      "abi": {"header": "freetype/t1tables.h", "symbol": "T1_BLEND_STANDARD_WIDTH", "kind": "enum_variant", "enum": "T1_Blend_Flags", "value": 5},
-      "inputs": {"assets": {}, "params": {"include_header": "freetype/t1tables.h", "constant": "T1_BLEND_STANDARD_WIDTH", "expected_value": 5, "import_symbol": "T1_BLEND_STANDARD_WIDTH"}},
-      "classifiers": ["kind:enum_variant", "header:t1tables", "area:type1"],
-      "expectation": {"status": "ok", "output_shape": {"constant_value": "int"}, "compare": {"mode": "value", "paths": ["constant_value"]}, "source_refs": ["freetype/include/freetype/t1tables.h:226-245"]}
+      "abi": {
+        "header": "freetype/t1tables.h",
+        "symbol": "T1_BLEND_STANDARD_WIDTH",
+        "kind": "enum_variant",
+        "enum": "T1_Blend_Flags",
+        "value": 5
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include_header": "freetype/t1tables.h",
+          "constant": "T1_BLEND_STANDARD_WIDTH",
+          "expected_value": 5,
+          "import_symbol": "T1_BLEND_STANDARD_WIDTH",
+          "symbol": "T1_BLEND_STANDARD_WIDTH"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:t1tables",
+        "area:type1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "constant_value": "int"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "constant_value"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/t1tables.h:226-245"
+        ]
+      }
     },
     {
       "case_id": "t1tables.T1_BLEND_STANDARD_WIDTH.private_standard_width_runtime_value",
@@ -22,10 +58,59 @@
       "operation": "t1tables.get_ps_font_private_mm_blend",
       "schema": "api_result",
       "expect_error": false,
-      "abi": {"header": "freetype/t1tables.h", "symbol": "T1_BLEND_STANDARD_WIDTH", "record_field": "PS_PrivateRec.standard_width[0]", "field_type": "FT_UShort"},
-      "inputs": {"assets": {"type1_mm_font": {"kind": "ref", "id": "fonts/type1/mm-blend-fontinfo-private.pfb", "asset_kind": "font", "status": "required_future_asset"}}, "params": {"face_source": "type1_mm_font", "design_coordinates": ["default", "non_default"], "constant": "T1_BLEND_STANDARD_WIDTH", "private_fields": ["standard_width[0]"]}},
-      "classifiers": ["kind:enum_variant", "header:t1tables", "area:type1-mm"],
-      "expectation": {"status": "ok", "output_shape": {"constant_value": 5, "standard_width": "FT_UShort"}, "compare": {"mode": "exact", "paths": ["constant_value", "standard_width"]}, "source_refs": ["freetype/include/freetype/t1tables.h:143-144", "freetype/include/freetype/t1tables.h:226-245"], "fixture_requirements": ["fonts/type1/mm-blend-fontinfo-private.pfb must contain differing StdVW values across masters."]}
+      "abi": {
+        "header": "freetype/t1tables.h",
+        "symbol": "T1_BLEND_STANDARD_WIDTH",
+        "record_field": "PS_PrivateRec.standard_width[0]",
+        "field_type": "FT_UShort"
+      },
+      "inputs": {
+        "assets": {
+          "type1_mm_font": {
+            "kind": "ref",
+            "id": "fonts/type1/mm-blend-fontinfo-private.pfb",
+            "asset_kind": "font",
+            "status": "required_future_asset"
+          }
+        },
+        "params": {
+          "face_source": "type1_mm_font",
+          "design_coordinates": [
+            "default",
+            "non_default"
+          ],
+          "constant": "T1_BLEND_STANDARD_WIDTH",
+          "private_fields": [
+            "standard_width[0]"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:t1tables",
+        "area:type1-mm"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "constant_value": 5,
+          "standard_width": "FT_UShort"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "constant_value",
+            "standard_width"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/t1tables.h:143-144",
+          "freetype/include/freetype/t1tables.h:226-245"
+        ],
+        "fixture_requirements": [
+          "fonts/type1/mm-blend-fontinfo-private.pfb must contain differing StdVW values across masters."
+        ]
+      }
     }
   ]
 }

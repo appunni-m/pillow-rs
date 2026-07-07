@@ -7,7 +7,7 @@
       "case_id": "ftoutln.FT_ORIENTATION_FILL_RIGHT.value_matches_header",
       "subject": "ftoutln.FT_ORIENTATION_FILL_RIGHT",
       "case": "value_matches_header",
-      "operation": "ftoutln.constant",
+      "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
       "inputs": {"assets": {}, "params": {"symbol": "FT_ORIENTATION_FILL_RIGHT", "ctype": "FT_Orientation"}},

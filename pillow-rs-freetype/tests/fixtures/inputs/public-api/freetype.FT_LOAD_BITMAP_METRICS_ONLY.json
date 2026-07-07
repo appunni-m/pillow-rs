@@ -67,9 +67,11 @@
         "params": {
           "face_index": 0,
           "pixel_size": 20,
-          "load_flags": [
-            "FT_LOAD_BITMAP_METRICS_ONLY",
-            "FT_LOAD_RENDER"
+          "load_flag_sets": [
+            [
+              "FT_LOAD_BITMAP_METRICS_ONLY",
+              "FT_LOAD_RENDER"
+            ]
           ],
           "symbol_under_test": "FT_LOAD_BITMAP_METRICS_ONLY",
           "call_sequence": [
@@ -136,7 +138,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/DejaVuSans.ttf"
+            "id": "input/fonts/DejaVuSans.ttf"
           }
         },
         "params": {

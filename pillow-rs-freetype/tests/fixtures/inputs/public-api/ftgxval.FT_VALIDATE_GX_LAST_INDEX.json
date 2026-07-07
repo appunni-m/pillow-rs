@@ -50,8 +50,8 @@
       "case_id": "ftgxval.FT_VALIDATE_GX_LAST_INDEX.length_derives_from_last_index",
       "subject": "ftgxval.FT_VALIDATE_GX_LAST_INDEX",
       "case": "length_derives_from_last_index",
-      "operation": "constant.relation",
-      "schema": "api_constant",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -60,10 +60,7 @@
           "symbols": [
             "FT_VALIDATE_GX_LAST_INDEX",
             "FT_VALIDATE_GX_LENGTH"
-          ],
-          "expected_relation": "FT_VALIDATE_GX_LENGTH == FT_VALIDATE_GX_LAST_INDEX + 1",
-          "expected_last_index": 9,
-          "expected_length": 10
+          ]
         }
       },
       "classifiers": [

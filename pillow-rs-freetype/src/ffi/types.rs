@@ -15,6 +15,7 @@ pub type FT_Long = c_long;
 pub type FT_ULong = c_ulong;
 pub type FT_Pos = c_long;
 pub type FT_Fixed = c_long;
+pub type FT_Angle = FT_Fixed;
 pub type FT_F26Dot6 = c_long;
 pub type FT_UShort = c_ushort;
 pub type FT_FWord = c_short;
@@ -34,9 +35,51 @@ pub type FT_Glyph_Format = c_int;
 pub type FT_Sfnt_Tag = c_uint;
 pub type FT_Encoding = c_int;
 pub type FT_Size_Request_Type = c_int;
+pub type FT_LcdFilter = c_int;
+pub type FT_TrueTypeEngineType = c_int;
 pub type FT_PaintExtend = FT_Int;
 pub type FT_Composite_Mode = FT_Int;
 pub type FT_Incremental = FT_Pointer;
+pub type FT_Incremental_Metrics = *mut FT_Incremental_MetricsRec;
+pub type FT_Incremental_Interface = *mut FT_Incremental_InterfaceRec;
+pub type FT_Module_Interface = FT_Pointer;
+pub type FT_Outline_MoveToFunc =
+    Option<unsafe extern "C" fn(to: *const FT_Vector, user: FT_Pointer) -> c_int>;
+pub type FT_Outline_MoveTo_Func = FT_Outline_MoveToFunc;
+pub type FT_SpanFunc =
+    Option<unsafe extern "C" fn(y: c_int, count: c_int, spans: *const FT_Span, user: FT_Pointer)>;
+pub type FT_Raster_Span_Func = FT_SpanFunc;
+pub type FT_Raster_NewFunc =
+    Option<unsafe extern "C" fn(memory: FT_Pointer, raster: *mut FT_Raster) -> c_int>;
+pub type FT_Raster_New_Func = FT_Raster_NewFunc;
+pub type FT_Raster_DoneFunc = Option<unsafe extern "C" fn(raster: FT_Raster)>;
+pub type FT_Raster_Done_Func = FT_Raster_DoneFunc;
+pub type FT_Raster_ResetFunc =
+    Option<unsafe extern "C" fn(raster: FT_Raster, pool_base: *mut FT_Byte, pool_size: FT_ULong)>;
+pub type FT_Raster_Reset_Func = FT_Raster_ResetFunc;
+pub type FT_Raster_SetModeFunc =
+    Option<unsafe extern "C" fn(raster: FT_Raster, mode: FT_ULong, args: FT_Pointer) -> c_int>;
+pub type FT_Raster_Set_Mode_Func = FT_Raster_SetModeFunc;
+pub type FT_Raster_RenderFunc =
+    Option<unsafe extern "C" fn(raster: FT_Raster, params: *const FT_Raster_Params) -> c_int>;
+pub type FT_Raster_Render_Func = FT_Raster_RenderFunc;
+pub type FT_Glyph_InitFunc =
+    Option<unsafe extern "C" fn(glyph: FT_Glyph, slot: FT_Pointer) -> FT_Error>;
+pub type FT_Glyph_Init_Func = FT_Glyph_InitFunc;
+pub type FT_Glyph_DoneFunc = Option<unsafe extern "C" fn(glyph: FT_Glyph)>;
+pub type FT_Glyph_Done_Func = FT_Glyph_DoneFunc;
+pub type FT_Glyph_CopyFunc =
+    Option<unsafe extern "C" fn(source: FT_Glyph, target: FT_Glyph) -> FT_Error>;
+pub type FT_Glyph_Copy_Func = FT_Glyph_CopyFunc;
+pub type FT_Glyph_TransformFunc = Option<
+    unsafe extern "C" fn(glyph: FT_Glyph, matrix: *const FT_Matrix, delta: *const FT_Vector),
+>;
+pub type FT_Glyph_Transform_Func = FT_Glyph_TransformFunc;
+pub type FT_Glyph_GetBBoxFunc = Option<unsafe extern "C" fn(glyph: FT_Glyph, abbox: *mut FT_BBox)>;
+pub type FT_Glyph_BBox_Func = FT_Glyph_GetBBoxFunc;
+pub type FT_Glyph_PrepareFunc =
+    Option<unsafe extern "C" fn(glyph: FT_Glyph, slot: FT_Pointer) -> FT_Error>;
+pub type FT_Glyph_Prepare_Func = FT_Glyph_PrepareFunc;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -629,9 +672,25 @@ pub struct FT_Outline {
     pub flags: FT_Int,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct FT_OutlineSnapshot {
+    pub points: Vec<FT_Vector>,
+    pub tags: Vec<FT_Byte>,
+    pub contours: Vec<FT_UShort>,
+    pub flags: FT_Int,
+}
+
 #[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FT_Glyph_Class {
-    _private: [u8; 0],
+    pub glyph_size: FT_Long,
+    pub glyph_format: FT_Glyph_Format,
+    pub glyph_init: FT_Pointer,
+    pub glyph_done: FT_Pointer,
+    pub glyph_copy: FT_Pointer,
+    pub glyph_transform: FT_Pointer,
+    pub glyph_bbox: FT_Pointer,
+    pub glyph_prepare: FT_Pointer,
 }
 
 #[repr(C)]

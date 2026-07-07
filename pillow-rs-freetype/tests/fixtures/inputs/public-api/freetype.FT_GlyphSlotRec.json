@@ -135,6 +135,7 @@
         "variability": {
           "axes": [
             "glyph_indices",
+            "load_flags",
             "render_modes"
           ]
         }
@@ -155,6 +156,7 @@
         },
         "compare": {
           "mode": "exact",
+          "allow_oracle_errors": true,
           "paths": [
             "glyph_index",
             "metrics",

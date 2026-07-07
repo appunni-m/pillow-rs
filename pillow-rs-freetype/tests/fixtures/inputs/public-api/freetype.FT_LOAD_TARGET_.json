@@ -9,8 +9,8 @@
       "case_id": "freetype.FT_LOAD_TARGET_.target_constructor_value",
       "subject": "freetype.FT_LOAD_TARGET_",
       "case": "target_constructor_value",
-      "operation": "macro.value",
-      "schema": "api_constant",
+      "operation": "macro_eval",
+      "schema": "api_macro",
       "expect_error": false,
       "inputs": {
         "assets": {},

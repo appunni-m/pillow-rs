@@ -35,10 +35,19 @@
           "include": "freetype/ftsystem.h",
           "symbol": "FT_Stream",
           "expected_decl": "struct FT_StreamRec_*",
-          "probe": ["import_compiles", "is_pointer", "pointee_tag"]
+          "probe": [
+            "import_compiles",
+            "is_pointer",
+            "pointee_tag"
+          ]
         }
       },
-      "classifiers": ["kind:type", "header:ftsystem", "area:stream", "abi:opaque-pointer"],
+      "classifiers": [
+        "kind:type",
+        "header:ftsystem",
+        "area:stream",
+        "abi:opaque-pointer"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
@@ -48,7 +57,11 @@
         },
         "compare": {
           "mode": "layout",
-          "paths": ["import_compiles", "is_pointer", "pointee_tag"]
+          "paths": [
+            "import_compiles",
+            "is_pointer",
+            "pointee_tag"
+          ]
         }
       }
     },
@@ -56,7 +69,7 @@
       "case_id": "ftsystem.FT_Stream.pointer_abi_contract",
       "subject": "ftsystem.FT_Stream",
       "case": "pointer_abi_contract",
-      "operation": "abi.pointer_contract",
+      "operation": "abi_type_probe",
       "schema": "abi_layout",
       "expect_error": false,
       "inputs": {
@@ -65,10 +78,19 @@
           "include": "freetype/ftsystem.h",
           "symbol": "FT_Stream",
           "pointee_record": "FT_StreamRec",
-          "probe": ["sizeof_pointer", "alignof_pointer", "field_access_via_pointer"]
+          "probe": [
+            "sizeof_pointer",
+            "alignof_pointer",
+            "field_access_via_pointer"
+          ]
         }
       },
-      "classifiers": ["kind:type", "header:ftsystem", "area:stream", "abi:pointer"],
+      "classifiers": [
+        "kind:type",
+        "header:ftsystem",
+        "area:stream",
+        "abi:pointer"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
@@ -78,7 +100,11 @@
         },
         "compare": {
           "mode": "identity_class",
-          "paths": ["sizeof_pointer", "alignof_pointer", "field_access_via_pointer"]
+          "paths": [
+            "sizeof_pointer",
+            "alignof_pointer",
+            "field_access_via_pointer"
+          ]
         }
       }
     },
@@ -106,18 +132,34 @@
         },
         "params": {
           "open": "FT_Open_Face",
-          "open_flags": ["FT_OPEN_STREAM"],
+          "open_flags": [
+            "FT_OPEN_STREAM"
+          ],
           "face_index": 0,
           "stream_ownership": "caller_owned",
           "scenarios": [
-            {"name": "valid_stream", "read_plan": "font_bytes"},
-            {"name": "seek_failure", "read_plan": "malformed_stream_harness:seek-fails"},
-            {"name": "short_header", "read_plan": "malformed_stream_harness:short-header"}
+            {
+              "name": "valid_stream",
+              "read_plan": "font_bytes"
+            },
+            {
+              "name": "seek_failure",
+              "read_plan": "malformed_stream_harness:seek-fails"
+            },
+            {
+              "name": "short_header",
+              "read_plan": "malformed_stream_harness:short-header"
+            }
           ],
           "close_callback_present": true
         }
       },
-      "classifiers": ["kind:type", "header:ftsystem", "area:stream", "operation:external-stream"],
+      "classifiers": [
+        "kind:type",
+        "header:ftsystem",
+        "area:stream",
+        "operation:external-stream"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
@@ -125,16 +167,25 @@
             {
               "face_load_status": "FT_Error",
               "stream_pointer_identity": "bool",
-              "callback_events": ["read_or_close_event"],
+              "callback_events": [
+                "read_or_close_event"
+              ],
               "close_called": "bool"
             }
           ]
         },
         "compare": {
           "mode": "exact",
-          "paths": ["results[*].face_load_status", "results[*].stream_pointer_identity", "results[*].callback_events", "results[*].close_called"]
+          "paths": [
+            "results[*].face_load_status",
+            "results[*].stream_pointer_identity",
+            "results[*].callback_events",
+            "results[*].close_called"
+          ]
         },
-        "fixture_requirements": ["Add a reusable external stream harness that can model valid reads, seek failures, short reads, and close callback ownership observations."]
+        "fixture_requirements": [
+          "Add a reusable external stream harness that can model valid reads, seek failures, short reads, and close callback ownership observations."
+        ]
       }
     }
   ]

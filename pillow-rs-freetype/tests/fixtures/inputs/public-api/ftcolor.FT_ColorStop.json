@@ -57,7 +57,7 @@
       "case_id": "ftcolor.FT_ColorStop.field_order_matches_c",
       "subject": "ftcolor.FT_ColorStop",
       "case": "field_order_matches_c",
-      "operation": "abi.record_import",
+      "operation": "record_layout",
       "schema": "abi_record_fields",
       "expect_error": false,
       "inputs": {

@@ -77,7 +77,7 @@
       "case_id": "ttnameid.TT_MS_LANGID_CATALAN_SPAIN.alias_matches_catalan_catalan",
       "subject": "ttnameid.TT_MS_LANGID_CATALAN_SPAIN",
       "case": "alias_matches_catalan_catalan",
-      "operation": "constant.alias",
+      "operation": "constant",
       "schema": "api_constant_alias",
       "expect_error": false,
       "inputs": {

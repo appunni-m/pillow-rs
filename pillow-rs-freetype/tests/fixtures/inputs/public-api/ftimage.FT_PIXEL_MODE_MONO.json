@@ -11,7 +11,7 @@
       "case_id": "ftimage.FT_PIXEL_MODE_MONO.value_matches_header",
       "subject": "ftimage.FT_PIXEL_MODE_MONO",
       "case": "value_matches_header",
-      "operation": "ftimage.pixel_mode_value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

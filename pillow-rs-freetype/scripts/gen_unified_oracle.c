@@ -7,16 +7,24 @@
 #include <string.h>
 #include <freetype/ftcache.h>
 #include <freetype/ftadvanc.h>
+#include <freetype/ftbbox.h>
 #include <freetype/ftcolor.h>
 #include <freetype/ftdriver.h>
 #include <freetype/ftglyph.h>
+#include <freetype/ftgxval.h>
 #include <freetype/ftimage.h>
 #include <freetype/ftincrem.h>
+#include <freetype/ftlcdfil.h>
 #include <freetype/ftmm.h>
 #include <freetype/ftmodapi.h>
+#include <freetype/ftoutln.h>
 #include <freetype/ftrender.h>
 #include <freetype/ftsnames.h>
 #include <freetype/ftsystem.h>
+#include <freetype/ftsizes.h>
+#include <freetype/ftsynth.h>
+#include <freetype/ftotval.h>
+#include <freetype/fttrigon.h>
 #include <freetype/t1tables.h>
 #include <freetype/tttables.h>
 
@@ -27,6 +35,8 @@
 static int streq(const char* a, const char* b) {
     return strcmp(a, b) == 0;
 }
+
+static void print_json_bool(int value);
 
 #include "generated_constants.inc"
 
@@ -113,6 +123,551 @@ static int emit_constant(const char* symbol) {
     printf("{");
     print_status(0);
     printf(",\"output\":{\"value\":%lld}}\n", value);
+    return 0;
+}
+
+static int emit_constant_map(const char* symbols_csv) {
+    size_t symbols_len = strlen(symbols_csv);
+    char* symbols = (char*)malloc(symbols_len + 1);
+    if (!symbols) {
+        return 1;
+    }
+    memcpy(symbols, symbols_csv, symbols_len + 1);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"values\":{");
+    char* cursor = symbols;
+    int emitted = 0;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ',');
+        if (next) {
+            *next = '\0';
+        }
+        if (*cursor) {
+            long long value = 0;
+            if (!emit_generated_constant_value(cursor, &value)) {
+                fprintf(stderr, "unsupported constant: %s\n", cursor);
+                free(symbols);
+                return 2;
+            }
+            if (emitted) {
+                printf(",");
+            }
+            printf("\"%s\":%lld", cursor, value);
+            emitted = 1;
+        }
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("}}}\n");
+    free(symbols);
+    return 0;
+}
+
+static int split_fixed_math_row(char* row, long long* values, int max_values) {
+    int count = 0;
+    char* cursor = row;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ',');
+        if (next) {
+            *next = '\0';
+        }
+        if (count >= max_values) {
+            return -1;
+        }
+        values[count++] = strtoll(cursor, NULL, 10);
+        cursor = next ? next + 1 : NULL;
+    }
+    return count;
+}
+
+static long long fixed_math_result(const char* op, const long long* values, int count, int* ok) {
+    *ok = 1;
+    if (streq(op, "ceil_fix") && count == 1) {
+        return (long long)FT_CeilFix((FT_Fixed)values[0]);
+    }
+    if (streq(op, "floor_fix") && count == 1) {
+        return (long long)FT_FloorFix((FT_Fixed)values[0]);
+    }
+    if (streq(op, "round_fix") && count == 1) {
+        return (long long)FT_RoundFix((FT_Fixed)values[0]);
+    }
+    if (streq(op, "mul_fix") && count == 2) {
+        return (long long)FT_MulFix((FT_Long)values[0], (FT_Long)values[1]);
+    }
+    if (streq(op, "div_fix") && count == 2) {
+        return (long long)FT_DivFix((FT_Long)values[0], (FT_Long)values[1]);
+    }
+    if (streq(op, "mul_div") && count == 3) {
+        return (long long)FT_MulDiv((FT_Long)values[0], (FT_Long)values[1], (FT_Long)values[2]);
+    }
+    *ok = 0;
+    return 0;
+}
+
+static int emit_fixed_math(const char* op, const char* rows_csv) {
+    size_t rows_len = strlen(rows_csv);
+    char* rows = (char*)malloc(rows_len + 1);
+    if (!rows) {
+        return 1;
+    }
+    memcpy(rows, rows_csv, rows_len + 1);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    char* cursor = rows;
+    int emitted = 0;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ';');
+        if (next) {
+            *next = '\0';
+        }
+        long long values[3] = {0, 0, 0};
+        int value_count = split_fixed_math_row(cursor, values, 3);
+        int ok = 0;
+        long long result = fixed_math_result(op, values, value_count, &ok);
+        if (value_count <= 0 || !ok) {
+            fprintf(stderr, "unsupported fixed math row op=%s row=%s\n", op, cursor);
+            free(rows);
+            return 2;
+        }
+        if (emitted) {
+            printf(",");
+        }
+        printf("{\"input\":[");
+        for (int i = 0; i < value_count; i++) {
+            if (i) {
+                printf(",");
+            }
+            printf("%lld", values[i]);
+        }
+        printf("],\"result\":%lld}", result);
+        emitted = 1;
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("]}}\n");
+    free(rows);
+    return 0;
+}
+
+static void print_vector_object(FT_Vector vector) {
+    printf("{\"x\":%ld,\"y\":%ld}", vector.x, vector.y);
+}
+
+static void print_matrix_object(FT_Matrix matrix) {
+    printf("{\"xx\":%ld,\"xy\":%ld,\"yx\":%ld,\"yy\":%ld}",
+           matrix.xx, matrix.xy, matrix.yx, matrix.yy);
+}
+
+static int emit_vector_transform(const char* rows_csv) {
+    size_t rows_len = strlen(rows_csv);
+    char* rows = (char*)malloc(rows_len + 1);
+    if (!rows) {
+        return 1;
+    }
+    memcpy(rows, rows_csv, rows_len + 1);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    char* cursor = rows;
+    int emitted = 0;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ';');
+        if (next) {
+            *next = '\0';
+        }
+        long long values[7] = {0, 0, 0, 0, 0, 0, 0};
+        int value_count = split_fixed_math_row(cursor, values, 7);
+        if (value_count != 7) {
+            fprintf(stderr, "vector transform row must have 7 values: %s\n", cursor);
+            free(rows);
+            return 2;
+        }
+        int mode = (int)values[0];
+        FT_Vector vector = {(FT_Pos)values[1], (FT_Pos)values[2]};
+        FT_Matrix matrix = {
+            (FT_Fixed)values[3],
+            (FT_Fixed)values[4],
+            (FT_Fixed)values[5],
+            (FT_Fixed)values[6],
+        };
+        FT_Vector* vector_ptr = mode == 1 ? NULL : &vector;
+        FT_Matrix* matrix_ptr = mode == 2 ? NULL : &matrix;
+        FT_Vector_Transform(vector_ptr, matrix_ptr);
+        if (emitted) {
+            printf(",");
+        }
+        printf("{\"mode\":%d,\"result\":", mode);
+        if (vector_ptr) {
+            print_vector_object(vector);
+        } else {
+            printf("null");
+        }
+        printf("}");
+        emitted = 1;
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("]}}\n");
+    free(rows);
+    return 0;
+}
+
+static int emit_matrix_multiply(const char* rows_csv) {
+    size_t rows_len = strlen(rows_csv);
+    char* rows = (char*)malloc(rows_len + 1);
+    if (!rows) {
+        return 1;
+    }
+    memcpy(rows, rows_csv, rows_len + 1);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    char* cursor = rows;
+    int emitted = 0;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ';');
+        if (next) {
+            *next = '\0';
+        }
+        long long values[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+        int value_count = split_fixed_math_row(cursor, values, 9);
+        if (value_count != 9) {
+            fprintf(stderr, "matrix multiply row must have 9 values: %s\n", cursor);
+            free(rows);
+            return 2;
+        }
+        int mode = (int)values[0];
+        FT_Matrix a = {
+            (FT_Fixed)values[1],
+            (FT_Fixed)values[2],
+            (FT_Fixed)values[3],
+            (FT_Fixed)values[4],
+        };
+        FT_Matrix b = {
+            (FT_Fixed)values[5],
+            (FT_Fixed)values[6],
+            (FT_Fixed)values[7],
+            (FT_Fixed)values[8],
+        };
+        FT_Matrix* a_ptr = (mode == 1 || mode == 3) ? NULL : &a;
+        FT_Matrix* b_ptr = (mode == 2 || mode == 3) ? NULL : &b;
+        FT_Matrix_Multiply(a_ptr, b_ptr);
+        if (emitted) {
+            printf(",");
+        }
+        printf("{\"mode\":%d,\"result\":", mode);
+        if (b_ptr) {
+            print_matrix_object(b);
+        } else {
+            printf("null");
+        }
+        printf("}");
+        emitted = 1;
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("]}}\n");
+    free(rows);
+    return 0;
+}
+
+static int emit_matrix_invert(const char* rows_csv) {
+    size_t rows_len = strlen(rows_csv);
+    char* rows = (char*)malloc(rows_len + 1);
+    if (!rows) {
+        return 1;
+    }
+    memcpy(rows, rows_csv, rows_len + 1);
+
+    FT_Matrix results[64];
+    int modes[64];
+    int count = 0;
+    FT_Error err = 0;
+    char* cursor = rows;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ';');
+        if (next) {
+            *next = '\0';
+        }
+        long long values[5] = {0, 0, 0, 0, 0};
+        int value_count = split_fixed_math_row(cursor, values, 5);
+        if (value_count != 5 || count >= 64) {
+            fprintf(stderr, "matrix invert row must have 5 values: %s\n", cursor);
+            free(rows);
+            return 2;
+        }
+        int mode = (int)values[0];
+        FT_Matrix matrix = {
+            (FT_Fixed)values[1],
+            (FT_Fixed)values[2],
+            (FT_Fixed)values[3],
+            (FT_Fixed)values[4],
+        };
+        err = FT_Matrix_Invert(mode == 1 ? NULL : &matrix);
+        if (err) {
+            break;
+        }
+        modes[count] = mode;
+        results[count] = matrix;
+        count++;
+        cursor = next ? next + 1 : NULL;
+    }
+
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+        free(rows);
+        return 0;
+    }
+    printf(",\"output\":{\"rows\":[");
+    for (int i = 0; i < count; i++) {
+        if (i) {
+            printf(",");
+        }
+        printf("{\"mode\":%d,\"result\":", modes[i]);
+        print_matrix_object(results[i]);
+        printf("}");
+    }
+    printf("]}}\n");
+    free(rows);
+    return 0;
+}
+
+static int emit_trigon(const char* op, const char* rows_csv) {
+    size_t rows_len = strlen(rows_csv);
+    char* rows = (char*)malloc(rows_len + 1);
+    if (!rows) {
+        return 1;
+    }
+    memcpy(rows, rows_csv, rows_len + 1);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    char* cursor = rows;
+    int emitted = 0;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ';');
+        if (next) {
+            *next = '\0';
+        }
+        long long values[5] = {0, 0, 0, 0, 0};
+        int value_count = split_fixed_math_row(cursor, values, 5);
+        if (emitted) {
+            printf(",");
+        }
+
+        if ((streq(op, "sin") || streq(op, "cos") || streq(op, "tan")) && value_count == 1) {
+            FT_Angle angle = (FT_Angle)values[0];
+            FT_Fixed result = streq(op, "sin") ? FT_Sin(angle) : streq(op, "cos") ? FT_Cos(angle) : FT_Tan(angle);
+            printf("{\"angle\":%lld,\"result\":%ld}", values[0], result);
+        } else if (streq(op, "atan2") && value_count == 2) {
+            FT_Fixed x = (FT_Fixed)values[0];
+            FT_Fixed y = (FT_Fixed)values[1];
+            printf("{\"vector\":");
+            print_vector_object((FT_Vector){(FT_Pos)x, (FT_Pos)y});
+            printf(",\"result\":%ld}", FT_Atan2(x, y));
+        } else if (streq(op, "angle_diff") && value_count == 2) {
+            FT_Angle angle1 = (FT_Angle)values[0];
+            FT_Angle angle2 = (FT_Angle)values[1];
+            printf("{\"angle1\":%lld,\"angle2\":%lld,\"result\":%ld}", values[0], values[1], FT_Angle_Diff(angle1, angle2));
+        } else if (streq(op, "vector_unit") && value_count == 2) {
+            int mode = (int)values[0];
+            FT_Vector vector = {0, 0};
+            FT_Vector_Unit(mode == 1 ? NULL : &vector, (FT_Angle)values[1]);
+            printf("{\"mode\":%d,\"angle\":%lld,\"result\":", mode, values[1]);
+            if (mode == 1) {
+                printf("null");
+            } else {
+                print_vector_object(vector);
+            }
+            printf("}");
+        } else if (streq(op, "vector_length") && value_count == 3) {
+            int mode = (int)values[0];
+            FT_Vector vector = {(FT_Pos)values[1], (FT_Pos)values[2]};
+            printf("{\"mode\":%d,\"vector\":", mode);
+            if (mode == 1) {
+                printf("null");
+            } else {
+                print_vector_object(vector);
+            }
+            printf(",\"result\":%ld}", FT_Vector_Length(mode == 1 ? NULL : &vector));
+        } else if (streq(op, "vector_rotate") && value_count == 4) {
+            int mode = (int)values[0];
+            FT_Vector vector = {(FT_Pos)values[1], (FT_Pos)values[2]};
+            printf("{\"mode\":%d,\"angle\":%lld,\"input\":", mode, values[3]);
+            if (mode == 1) {
+                printf("null");
+            } else {
+                print_vector_object(vector);
+            }
+            FT_Vector_Rotate(mode == 1 ? NULL : &vector, (FT_Angle)values[3]);
+            printf(",\"result\":");
+            if (mode == 1) {
+                printf("null");
+            } else {
+                print_vector_object(vector);
+            }
+            printf("}");
+        } else if (streq(op, "vector_polarize") && value_count == 5) {
+            int mode = (int)values[0];
+            FT_Vector vector = {(FT_Pos)values[1], (FT_Pos)values[2]};
+            FT_Fixed length = (FT_Fixed)values[3];
+            FT_Angle angle = (FT_Angle)values[4];
+            FT_Vector_Polarize(
+                (mode & 1) ? NULL : &vector,
+                (mode & 2) ? NULL : &length,
+                (mode & 4) ? NULL : &angle);
+            printf("{\"mode\":%d,\"input\":", mode);
+            if (mode & 1) {
+                printf("null");
+            } else {
+                print_vector_object((FT_Vector){(FT_Pos)values[1], (FT_Pos)values[2]});
+            }
+            printf(",\"length\":");
+            if (mode & 2) {
+                printf("null");
+            } else {
+                printf("%ld", length);
+            }
+            printf(",\"angle\":");
+            if (mode & 4) {
+                printf("null");
+            } else {
+                printf("%ld", angle);
+            }
+            printf("}");
+        } else if (streq(op, "vector_from_polar") && value_count == 5) {
+            int mode = (int)values[0];
+            FT_Vector vector = {(FT_Pos)values[3], (FT_Pos)values[4]};
+            FT_Vector_From_Polar(mode == 1 ? NULL : &vector, (FT_Fixed)values[1], (FT_Angle)values[2]);
+            printf("{\"mode\":%d,\"length\":%lld,\"angle\":%lld,\"result\":", mode, values[1], values[2]);
+            if (mode == 1) {
+                printf("null");
+            } else {
+                print_vector_object(vector);
+            }
+            printf("}");
+        } else {
+            fprintf(stderr, "unsupported trigon row op=%s row=%s\n", op, cursor);
+            free(rows);
+            return 2;
+        }
+        emitted = 1;
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("]}}\n");
+    free(rows);
+    return 0;
+}
+
+static void print_trigon_aggregate_input(long long op, long long x, long long y) {
+    if (op == 5 || op == 6) {
+        print_vector_object((FT_Vector){(FT_Pos)x, (FT_Pos)y});
+    } else {
+        printf("null");
+    }
+}
+
+static int print_trigon_aggregate_result(long long op, long long angle, long long x, long long y) {
+    if (op == 1) {
+        printf("%ld", FT_Sin((FT_Angle)angle));
+        return 1;
+    }
+    if (op == 2) {
+        printf("%ld", FT_Cos((FT_Angle)angle));
+        return 1;
+    }
+    if (op == 3) {
+        printf("%ld", FT_Tan((FT_Angle)angle));
+        return 1;
+    }
+    if (op == 4) {
+        FT_Vector vector = {0, 0};
+        FT_Vector_Unit(&vector, (FT_Angle)angle);
+        print_vector_object(vector);
+        return 1;
+    }
+    if (op == 5) {
+        FT_Vector vector = {(FT_Pos)x, (FT_Pos)y};
+        FT_Vector_Rotate(&vector, (FT_Angle)angle);
+        print_vector_object(vector);
+        return 1;
+    }
+    if (op == 6) {
+        FT_Vector vector = {(FT_Pos)x, (FT_Pos)y};
+        FT_Fixed length = 0;
+        FT_Angle polar_angle = 0;
+        FT_Vector_Polarize(&vector, &length, &polar_angle);
+        printf("{\"length\":%ld,\"angle\":%ld}", length, polar_angle);
+        return 1;
+    }
+    return 0;
+}
+
+static int emit_trigon_aggregate(const char* op, const char* rows_csv) {
+    size_t rows_len = strlen(rows_csv);
+    char* rows = (char*)malloc(rows_len + 1);
+    if (!rows) {
+        return 1;
+    }
+    memcpy(rows, rows_csv, rows_len + 1);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    char* cursor = rows;
+    int emitted = 0;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ';');
+        if (next) {
+            *next = '\0';
+        }
+        long long values[5] = {0, 0, 0, 0, 0};
+        int value_count = split_fixed_math_row(cursor, values, 5);
+        if (emitted) {
+            printf(",");
+        }
+        if (streq(op, "constant_probe") && value_count == 4) {
+            printf("{\"op\":%lld,\"angle\":%lld,\"input\":", values[0], values[1]);
+            print_trigon_aggregate_input(values[0], values[2], values[3]);
+            printf(",\"result\":");
+            if (!print_trigon_aggregate_result(values[0], values[1], values[2], values[3])) {
+                fprintf(stderr, "unsupported trigon aggregate op=%lld\n", values[0]);
+                free(rows);
+                return 2;
+            }
+            printf("}");
+        } else if (streq(op, "periodic") && value_count == 5) {
+            printf("{\"op\":%lld,\"base_angle\":%lld,\"periodic_angle\":%lld,\"input\":",
+                   values[0], values[1], values[2]);
+            print_trigon_aggregate_input(values[0], values[3], values[4]);
+            printf(",\"base_result\":");
+            if (!print_trigon_aggregate_result(values[0], values[1], values[3], values[4])) {
+                fprintf(stderr, "unsupported trigon aggregate op=%lld\n", values[0]);
+                free(rows);
+                return 2;
+            }
+            printf(",\"periodic_result\":");
+            if (!print_trigon_aggregate_result(values[0], values[2], values[3], values[4])) {
+                fprintf(stderr, "unsupported trigon aggregate op=%lld\n", values[0]);
+                free(rows);
+                return 2;
+            }
+            printf("}");
+        } else {
+            fprintf(stderr, "unsupported trigon aggregate row op=%s row=%s\n", op, cursor);
+            free(rows);
+            return 2;
+        }
+        emitted = 1;
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("]}}\n");
+    free(rows);
     return 0;
 }
 
@@ -820,12 +1375,31 @@ static int emit_layout(const char* record) {
         return 0; \
     } else
 
+#define EMIT_RECORD_TYPE(name) \
+    if (streq(symbol, #name)) { \
+        printf("{"); \
+        print_status(0); \
+        printf(",\"output\":{\"symbol\":\"%s\",\"kind\":\"record\",\"size\":%zu,\"align\":%zu,\"signed\":null}}\n", \
+               #name, sizeof(name), _Alignof(name)); \
+        return 0; \
+    } else
+
 static int emit_type_probe(const char* symbol) {
+    if (streq(symbol, "unsigned char")) {
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"symbol\":\"unsigned char\",\"kind\":\"scalar\",\"size\":%zu,\"align\":%zu,\"signed\":false}}\n",
+               sizeof(unsigned char), _Alignof(unsigned char));
+        return 0;
+    }
     EMIT_SCALAR_TYPE(FT_Offset)
     EMIT_SCALAR_TYPE(FT_UFWord)
     EMIT_SCALAR_TYPE(FT_F2Dot14)
+    EMIT_SCALAR_TYPE(FT_Angle)
     EMIT_SCALAR_TYPE(FT_UInt)
     EMIT_SCALAR_TYPE(FT_Error)
+    EMIT_SCALAR_TYPE(FT_Bool)
+    EMIT_SCALAR_TYPE(FT_Byte)
     EMIT_SCALAR_TYPE(FT_ULong)
     EMIT_SCALAR_TYPE(FT_Char)
     EMIT_SCALAR_TYPE(FT_Int)
@@ -865,6 +1439,41 @@ static int emit_type_probe(const char* symbol) {
     EMIT_POINTER_TYPE(FTC_ImageCache)
     EMIT_POINTER_TYPE(FTC_SBitCache)
     EMIT_POINTER_TYPE(FT_Raster)
+    EMIT_POINTER_TYPE(FT_Incremental)
+    EMIT_POINTER_TYPE(FT_Incremental_Metrics)
+    EMIT_POINTER_TYPE(FT_Incremental_Interface)
+    EMIT_POINTER_TYPE(FT_Module_Interface)
+    EMIT_POINTER_TYPE(FT_Glyph)
+    EMIT_POINTER_TYPE(FT_BitmapGlyph)
+    EMIT_POINTER_TYPE(FT_OutlineGlyph)
+    EMIT_POINTER_TYPE(FT_SvgGlyph)
+    EMIT_POINTER_TYPE(FT_Outline_MoveToFunc)
+    EMIT_POINTER_TYPE(FT_Outline_MoveTo_Func)
+    EMIT_POINTER_TYPE(FT_SpanFunc)
+    EMIT_POINTER_TYPE(FT_Raster_Span_Func)
+    EMIT_POINTER_TYPE(FT_Raster_NewFunc)
+    EMIT_POINTER_TYPE(FT_Raster_New_Func)
+    EMIT_POINTER_TYPE(FT_Raster_DoneFunc)
+    EMIT_POINTER_TYPE(FT_Raster_Done_Func)
+    EMIT_POINTER_TYPE(FT_Raster_ResetFunc)
+    EMIT_POINTER_TYPE(FT_Raster_Reset_Func)
+    EMIT_POINTER_TYPE(FT_Raster_SetModeFunc)
+    EMIT_POINTER_TYPE(FT_Raster_Set_Mode_Func)
+    EMIT_POINTER_TYPE(FT_Raster_RenderFunc)
+    EMIT_POINTER_TYPE(FT_Raster_Render_Func)
+    EMIT_POINTER_TYPE(FT_Glyph_InitFunc)
+    EMIT_POINTER_TYPE(FT_Glyph_Init_Func)
+    EMIT_POINTER_TYPE(FT_Glyph_DoneFunc)
+    EMIT_POINTER_TYPE(FT_Glyph_Done_Func)
+    EMIT_POINTER_TYPE(FT_Glyph_CopyFunc)
+    EMIT_POINTER_TYPE(FT_Glyph_Copy_Func)
+    EMIT_POINTER_TYPE(FT_Glyph_TransformFunc)
+    EMIT_POINTER_TYPE(FT_Glyph_Transform_Func)
+    EMIT_POINTER_TYPE(FT_Glyph_GetBBoxFunc)
+    EMIT_POINTER_TYPE(FT_Glyph_BBox_Func)
+    EMIT_POINTER_TYPE(FT_Glyph_PrepareFunc)
+    EMIT_POINTER_TYPE(FT_Glyph_Prepare_Func)
+    EMIT_RECORD_TYPE(FT_Glyph_Class)
     {
         fprintf(stderr, "unsupported type probe: %s\n", symbol);
         return 2;
@@ -873,6 +1482,115 @@ static int emit_type_probe(const char* symbol) {
 
 #undef EMIT_SCALAR_TYPE
 #undef EMIT_POINTER_TYPE
+#undef EMIT_RECORD_TYPE
+
+typedef struct TypeDescriptor_ {
+    const char* symbol;
+    const char* kind;
+    size_t size;
+    size_t align;
+    int has_signedness;
+    int is_signed;
+} TypeDescriptor;
+
+#define TYPE_DESCRIPTOR_SCALAR(name) \
+    if (streq(symbol, #name)) { \
+        out->symbol = #name; \
+        out->kind = "scalar"; \
+        out->size = sizeof(name); \
+        out->align = _Alignof(name); \
+        out->has_signedness = 1; \
+        out->is_signed = (((name)-1) < (name)0); \
+        return 1; \
+    } else
+
+static int type_descriptor(const char* symbol, TypeDescriptor* out) {
+    if (streq(symbol, "unsigned char")) {
+        out->symbol = "unsigned char";
+        out->kind = "scalar";
+        out->size = sizeof(unsigned char);
+        out->align = _Alignof(unsigned char);
+        out->has_signedness = 1;
+        out->is_signed = 0;
+        return 1;
+    }
+    TYPE_DESCRIPTOR_SCALAR(FT_Angle)
+    TYPE_DESCRIPTOR_SCALAR(FT_Fixed)
+    TYPE_DESCRIPTOR_SCALAR(FT_Bool)
+    TYPE_DESCRIPTOR_SCALAR(FT_Byte)
+    {
+        return 0;
+    }
+}
+
+#undef TYPE_DESCRIPTOR_SCALAR
+
+static void print_type_descriptor_json(const TypeDescriptor* descriptor) {
+    printf("{\"symbol\":\"%s\",\"kind\":\"%s\",\"size\":%zu,\"align\":%zu,\"signed\":",
+           descriptor->symbol,
+           descriptor->kind,
+           descriptor->size,
+           descriptor->align);
+    if (descriptor->has_signedness) {
+        print_json_bool(descriptor->is_signed);
+    } else {
+        printf("null");
+    }
+    printf("}");
+}
+
+static int emit_type_map_probe(const char* symbols_csv) {
+    size_t symbols_len = strlen(symbols_csv);
+    char* symbols = (char*)malloc(symbols_len + 1);
+    if (!symbols) {
+        return 1;
+    }
+    memcpy(symbols, symbols_csv, symbols_len + 1);
+
+    TypeDescriptor first;
+    int have_first = 0;
+    int equivalent = 1;
+    int emitted = 0;
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"types\":{");
+    char* cursor = symbols;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ',');
+        if (next) {
+            *next = '\0';
+        }
+        TypeDescriptor descriptor;
+        if (!type_descriptor(cursor, &descriptor)) {
+            fprintf(stderr, "unsupported type map probe: %s\n", cursor);
+            free(symbols);
+            return 2;
+        }
+        if (!have_first) {
+            first = descriptor;
+            have_first = 1;
+        } else if (strcmp(first.kind, descriptor.kind) != 0 ||
+                   first.size != descriptor.size ||
+                   first.align != descriptor.align ||
+                   first.has_signedness != descriptor.has_signedness ||
+                   first.is_signed != descriptor.is_signed) {
+            equivalent = 0;
+        }
+        if (emitted) {
+            printf(",");
+        }
+        printf("\"%s\":", descriptor.symbol);
+        print_type_descriptor_json(&descriptor);
+        emitted = 1;
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("},\"equivalent\":");
+    print_json_bool(equivalent);
+    printf("}}\n");
+    free(symbols);
+    return 0;
+}
 
 static int emit_function_probe(const char* symbol) {
 #define EMIT_FUNCTION(name) \
@@ -886,9 +1604,42 @@ static int emit_function_probe(const char* symbol) {
 
     EMIT_FUNCTION(FT_Get_CMap_Format)
     EMIT_FUNCTION(FT_Get_CMap_Language_ID)
+    EMIT_FUNCTION(FT_Get_FSType_Flags)
+    EMIT_FUNCTION(FT_Get_First_Char)
+    EMIT_FUNCTION(FT_Get_Next_Char)
     EMIT_FUNCTION(FT_Get_Sfnt_Table)
+    EMIT_FUNCTION(FT_Library_Version)
+    EMIT_FUNCTION(FT_Library_SetLcdFilter)
+    EMIT_FUNCTION(FT_Library_SetLcdFilterWeights)
+    EMIT_FUNCTION(FT_Get_TrueType_Engine_Type)
+    EMIT_FUNCTION(FT_Face_CheckTrueTypePatents)
+    EMIT_FUNCTION(FT_Face_SetUnpatentedHinting)
     EMIT_FUNCTION(FT_Load_Sfnt_Table)
+    EMIT_FUNCTION(FT_Request_Size)
+    EMIT_FUNCTION(FT_Select_Charmap)
     EMIT_FUNCTION(FT_Sfnt_Table_Info)
+    EMIT_FUNCTION(FT_OpenType_Free)
+    EMIT_FUNCTION(FT_OpenType_Validate)
+    EMIT_FUNCTION(FT_GlyphSlot_AdjustWeight)
+    EMIT_FUNCTION(FT_GlyphSlot_Embolden)
+    EMIT_FUNCTION(FT_GlyphSlot_Oblique)
+    EMIT_FUNCTION(FT_GlyphSlot_Slant)
+    EMIT_FUNCTION(FT_Get_Sfnt_Name)
+    EMIT_FUNCTION(FT_Get_Sfnt_Name_Count)
+    EMIT_FUNCTION(FT_Get_Sfnt_LangTag)
+    EMIT_FUNCTION(FT_Activate_Size)
+    EMIT_FUNCTION(FT_Done_Size)
+    EMIT_FUNCTION(FT_New_Size)
+    EMIT_FUNCTION(FT_Angle_Diff)
+    EMIT_FUNCTION(FT_Atan2)
+    EMIT_FUNCTION(FT_Cos)
+    EMIT_FUNCTION(FT_Sin)
+    EMIT_FUNCTION(FT_Tan)
+    EMIT_FUNCTION(FT_Vector_From_Polar)
+    EMIT_FUNCTION(FT_Vector_Length)
+    EMIT_FUNCTION(FT_Vector_Polarize)
+    EMIT_FUNCTION(FT_Vector_Rotate)
+    EMIT_FUNCTION(FT_Vector_Unit)
     {
         fprintf(stderr, "unsupported function probe: %s\n", symbol);
         return 2;
@@ -899,6 +1650,107 @@ static int emit_function_probe(const char* symbol) {
 
 static void print_json_bool(int value) {
     printf(value ? "true" : "false");
+}
+
+static void print_fstype_flags_result(FT_UShort flags, const char* symbol_name) {
+    printf("{\"return\":%u,\"fs_type\":%u", (unsigned int)flags, (unsigned int)flags);
+    if (symbol_name && symbol_name[0] && !streq(symbol_name, "-")) {
+        long long symbol_value = 0;
+        if (emit_generated_constant_value(symbol_name, &symbol_value)) {
+            printf(",\"contains_symbol_bit\":");
+            print_json_bool(((long long)flags & symbol_value) == symbol_value);
+        }
+    }
+    printf("}");
+}
+
+static void print_sfnt_name_record(FT_UInt index, const FT_SfntName* name) {
+    printf("{\"name_index\":%u,\"platform_id\":%u,\"encoding_id\":%u,\"language_id\":%u,\"name_id\":%u,\"string_len\":%u,\"string_bytes\":\"",
+           index,
+           (unsigned int)name->platform_id,
+           (unsigned int)name->encoding_id,
+           (unsigned int)name->language_id,
+           (unsigned int)name->name_id,
+           (unsigned int)name->string_len);
+    if (name->string && name->string_len) {
+        print_hex_bytes(name->string, (long)name->string_len);
+    }
+    printf("\"}");
+}
+
+static void print_charmap_record(FT_CharMap charmap) {
+    if (!charmap) {
+        printf("null");
+        return;
+    }
+    printf("{\"charmap_index\":%d,\"platform_id\":%u,\"encoding_id\":%u,\"encoding\":%ld}",
+           FT_Get_Charmap_Index(charmap),
+           (unsigned int)charmap->platform_id,
+           (unsigned int)charmap->encoding_id,
+           (long)charmap->encoding);
+}
+
+static void print_charmap_inventory_record(FT_CharMap charmap) {
+    if (!charmap) {
+        printf("null");
+        return;
+    }
+    printf("{\"charmap_index\":%d,\"encoding\":%ld,\"platform_id\":%u,\"encoding_id\":%u,\"face_identity\":true}",
+           FT_Get_Charmap_Index(charmap),
+           (long)charmap->encoding,
+           (unsigned int)charmap->platform_id,
+           (unsigned int)charmap->encoding_id);
+}
+
+static FT_Int active_charmap_index(FT_Face face) {
+    if (!face || !face->charmap) {
+        return -1;
+    }
+    return FT_Get_Charmap_Index(face->charmap);
+}
+
+static void print_active_charmap(FT_Face face) {
+    FT_Int index = active_charmap_index(face);
+    if (!face || index < 0 || index >= face->num_charmaps || !face->charmaps) {
+        printf("null");
+        return;
+    }
+    print_charmap_inventory_record(face->charmaps[index]);
+}
+
+static void print_charmap_inventory_records(FT_Face face) {
+    printf("[");
+    if (face && face->charmaps) {
+        for (FT_Int i = 0; i < face->num_charmaps; i++) {
+            if (i) {
+                printf(",");
+            }
+            print_charmap_inventory_record(face->charmaps[i]);
+        }
+    }
+    printf("]");
+}
+
+static FT_CharMap find_charmap_by_ids(FT_Face face, long platform, long encoding) {
+    if (!face || !face->charmaps) {
+        return NULL;
+    }
+    for (FT_Int i = 0; i < face->num_charmaps; i++) {
+        FT_CharMap charmap = face->charmaps[i];
+        if (charmap &&
+            charmap->platform_id == (FT_UShort)platform &&
+            charmap->encoding_id == (FT_UShort)encoding) {
+            return charmap;
+        }
+    }
+    return NULL;
+}
+
+static int sfnt_name_matches(const FT_SfntName* name, long platform, long encoding, long language, long name_id) {
+    return (platform < 0 || name->platform_id == (FT_UShort)platform) &&
+           (encoding < 0 || name->encoding_id == (FT_UShort)encoding) &&
+           (language < 0 || name->language_id == (FT_UShort)language) &&
+           (name_id < 0 || name->name_id == (FT_UShort)name_id);
 }
 
 static void print_ok_output_prefix(void) {
@@ -917,6 +1769,12 @@ static void print_tag_row(const char* label, unsigned long tag) {
     printf("{\"label\":\"%s\",\"tag\":%lu,\"hex\":\"0x%08lx\"}", label, tag, tag);
 }
 
+static unsigned long enc_tag(unsigned int a, unsigned int b, unsigned int c, unsigned int d) {
+    FT_UInt32 tag = 0;
+    FT_ENC_TAG(tag, a, b, c, d);
+    return (unsigned long)tag;
+}
+
 static void print_error_base_row(long error) {
     printf("{\"error\":%ld,\"base\":%ld}", error, (long)FT_ERROR_BASE(error));
 }
@@ -933,6 +1791,122 @@ static void print_error_pair_row(long x, const char* e, int result) {
 
 static void print_bool_input_row(const char* input, FT_Bool result) {
     printf("{\"input\":\"%s\",\"result\":%u}", input, (unsigned int)result);
+}
+
+static const char* abi_bool_canonical_class(unsigned int stored) {
+    if (stored == 0) {
+        return "false";
+    }
+    if (stored == 1) {
+        return "true";
+    }
+    return "noncanonical_true";
+}
+
+static int emit_abi_value_echo_bool(const char* values_arg) {
+    char* values = (char*)malloc(strlen(values_arg) + 1);
+    if (!values) {
+        return 1;
+    }
+    strcpy(values, values_arg);
+
+    print_ok_output_prefix();
+    printf("{\"rows\":[");
+    char* token = strtok(values, ",");
+    size_t index = 0;
+    while (token) {
+        unsigned long input = strtoul(token, NULL, 10);
+        FT_Bool stored = (FT_Bool)input;
+        if (index) {
+            printf(",");
+        }
+        printf("{\"input\":%lu,\"stored\":%u,\"canonical_class\":\"%s\"}",
+               input,
+               (unsigned int)stored,
+               abi_bool_canonical_class((unsigned int)stored));
+        index++;
+        token = strtok(NULL, ",");
+    }
+    printf("]}}\n");
+    free(values);
+    return 0;
+}
+
+static int emit_abi_value_echo_unit_vector(const char* rows_arg) {
+    char* rows = (char*)malloc(strlen(rows_arg) + 1);
+    if (!rows) {
+        return 1;
+    }
+    strcpy(rows, rows_arg);
+
+    print_ok_output_prefix();
+    printf("{\"rows\":[");
+    char* token = strtok(rows, ";");
+    size_t index = 0;
+    while (token) {
+        char label[128];
+        long x;
+        long y;
+        if (sscanf(token, "%127[^:]:%ld:%ld", label, &x, &y) != 3) {
+            free(rows);
+            return 1;
+        }
+        FT_UnitVector vector;
+        vector.x = (FT_F2Dot14)x;
+        vector.y = (FT_F2Dot14)y;
+        if (index) {
+            printf(",");
+        }
+        printf("{\"label\":\"%s\",\"x\":%d,\"y\":%d}",
+               label,
+               (int)vector.x,
+               (int)vector.y);
+        index++;
+        token = strtok(NULL, ";");
+    }
+    printf("]}}\n");
+    free(rows);
+    return 0;
+}
+
+static int emit_abi_value_echo(const char* type_name, const char* rows_arg) {
+    if (streq(type_name, "FT_Bool")) {
+        return emit_abi_value_echo_bool(rows_arg);
+    }
+    if (streq(type_name, "FT_UnitVector")) {
+        return emit_abi_value_echo_unit_vector(rows_arg);
+    }
+    fprintf(stderr, "unsupported abi value echo type: %s\n", type_name);
+    return 1;
+}
+
+static int emit_compile_alias_probe(const char* macro_name, const char* typedef_name, const char* signature) {
+    if (streq(macro_name, "FT_Outline_LineTo_Func") && streq(typedef_name, "FT_Outline_LineToFunc")) {
+        FT_Outline_LineTo_Func macro_ptr = NULL;
+        FT_Outline_LineToFunc typedef_ptr = macro_ptr;
+        macro_ptr = typedef_ptr;
+        (void)macro_ptr;
+    } else if (streq(macro_name, "FT_Outline_ConicTo_Func") && streq(typedef_name, "FT_Outline_ConicToFunc")) {
+        FT_Outline_ConicTo_Func macro_ptr = NULL;
+        FT_Outline_ConicToFunc typedef_ptr = macro_ptr;
+        macro_ptr = typedef_ptr;
+        (void)macro_ptr;
+    } else if (streq(macro_name, "FT_Outline_CubicTo_Func") && streq(typedef_name, "FT_Outline_CubicToFunc")) {
+        FT_Outline_CubicTo_Func macro_ptr = NULL;
+        FT_Outline_CubicToFunc typedef_ptr = macro_ptr;
+        macro_ptr = typedef_ptr;
+        (void)macro_ptr;
+    } else {
+        fprintf(stderr, "unsupported compile alias probe: %s -> %s\n", macro_name, typedef_name);
+        return 1;
+    }
+
+    print_ok_output_prefix();
+    printf("{\"macro\":\"%s\",\"typedef\":\"%s\",\"signature\":\"%s\",\"assignment_compatible\":true}}\n",
+           macro_name,
+           typedef_name,
+           signature);
+    return 0;
 }
 
 static int emit_macro_eval(const char* case_id) {
@@ -1232,6 +2206,152 @@ static int emit_macro_eval(const char* case_id) {
         return 0;
     }
 
+    if (streq(case_id, "freetype.FT_LOAD_TARGET_MODE.target_mode_value")) {
+        print_ok_output_prefix();
+        printf("{\"macro_results\":[");
+        printf("{\"input_load_flags\":\"FT_LOAD_TARGET_NORMAL\",\"mode\":%d},", FT_LOAD_TARGET_MODE(FT_LOAD_TARGET_NORMAL));
+        printf("{\"input_load_flags\":\"FT_LOAD_TARGET_LIGHT\",\"mode\":%d},", FT_LOAD_TARGET_MODE(FT_LOAD_TARGET_LIGHT));
+        printf("{\"input_load_flags\":\"FT_LOAD_TARGET_MONO\",\"mode\":%d},", FT_LOAD_TARGET_MODE(FT_LOAD_TARGET_MONO));
+        printf("{\"input_load_flags\":\"FT_LOAD_TARGET_LCD\",\"mode\":%d},", FT_LOAD_TARGET_MODE(FT_LOAD_TARGET_LCD));
+        printf("{\"input_load_flags\":\"FT_LOAD_TARGET_LCD_V\",\"mode\":%d},", FT_LOAD_TARGET_MODE(FT_LOAD_TARGET_LCD_V));
+        printf("{\"input_load_flags\":\"FT_LOAD_TARGET_(31)\",\"mode\":%d}", FT_LOAD_TARGET_MODE(FT_LOAD_TARGET_(31)));
+        printf("],\"import_compiles\":true}}\n");
+        return 0;
+    }
+    if (streq(case_id, "freetype.FT_LOAD_TARGET_.target_constructor_value")) {
+        int modes[] = {0, 1, 2, 3, 4, 15, 16, 31};
+        print_ok_output_prefix();
+        printf("{\"macro_results\":[");
+        for (size_t i = 0; i < sizeof(modes) / sizeof(modes[0]); i++) {
+            if (i) printf(",");
+            printf("{\"input_render_mode\":%d,\"value\":%d}", modes[i], FT_LOAD_TARGET_(modes[i]));
+        }
+        printf("],\"import_compiles\":true}}\n");
+        return 0;
+    }
+    if (streq(case_id, "freetype.FT_ENC_TAG.value_matches_header")) {
+        print_ok_output_prefix();
+        printf("{\"samples\":[");
+        printf("{\"bytes\":[\"u\",\"n\",\"i\",\"c\"],\"value\":%lu},", enc_tag('u','n','i','c'));
+        printf("{\"bytes\":[\"s\",\"y\",\"m\",\"b\"],\"value\":%lu},", enc_tag('s','y','m','b'));
+        printf("{\"bytes\":[\"g\",\"b\",\" \",\" \"],\"value\":%lu},", enc_tag('g','b',' ',' '));
+        printf("{\"bytes\":[\"\\u0000\",\"\\u0000\",\"\\u0000\",\"\\u0000\"],\"value\":%lu},", enc_tag(0,0,0,0));
+        printf("{\"bytes\":[\"l\",\"a\",\"t\",\"2\"],\"value\":%lu}", enc_tag('l','a','t','2'));
+        printf("],\"import_compiles\":true}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftgxval.FT_VALIDATE_GX_BITFIELD.expansion_matches_header")) {
+        print_ok_output_prefix();
+        printf("{\"macro_results\":[");
+        printf("{\"token\":\"feat\",\"value\":%lu},", (unsigned long)FT_VALIDATE_GX_BITFIELD(feat));
+        printf("{\"token\":\"mort\",\"value\":%lu},", (unsigned long)FT_VALIDATE_GX_BITFIELD(mort));
+        printf("{\"token\":\"morx\",\"value\":%lu},", (unsigned long)FT_VALIDATE_GX_BITFIELD(morx));
+        printf("{\"token\":\"bsln\",\"value\":%lu},", (unsigned long)FT_VALIDATE_GX_BITFIELD(bsln));
+        printf("{\"token\":\"just\",\"value\":%lu},", (unsigned long)FT_VALIDATE_GX_BITFIELD(just));
+        printf("{\"token\":\"kern\",\"value\":%lu},", (unsigned long)FT_VALIDATE_GX_BITFIELD(kern));
+        printf("{\"token\":\"opbd\",\"value\":%lu},", (unsigned long)FT_VALIDATE_GX_BITFIELD(opbd));
+        printf("{\"token\":\"trak\",\"value\":%lu},", (unsigned long)FT_VALIDATE_GX_BITFIELD(trak));
+        printf("{\"token\":\"prop\",\"value\":%lu},", (unsigned long)FT_VALIDATE_GX_BITFIELD(prop));
+        printf("{\"token\":\"lcar\",\"value\":%lu}", (unsigned long)FT_VALIDATE_GX_BITFIELD(lcar));
+        printf("],\"import_compiles\":true}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcache.FTC_IMAGE_TYPE_COMPARE.value_matches_header")) {
+        FTC_ImageTypeRec left = { (FTC_FaceID)(size_t)0x1000, 16, 16, FT_LOAD_DEFAULT };
+        FTC_ImageTypeRec right = { (FTC_FaceID)(size_t)0x1000, 16, 99, FT_LOAD_DEFAULT };
+        print_ok_output_prefix();
+        printf("{\"macro_expansion\":[\"face_id\",\"width\",\"flags\"],\"probe_result\":");
+        print_json_bool(FTC_IMAGE_TYPE_COMPARE(&left, &right));
+        printf("}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcache.FTC_IMAGE_TYPE_COMPARE.height_is_ignored")) {
+        FTC_ImageTypeRec left = { (FTC_FaceID)(size_t)0x1000, 16, 16, FT_LOAD_DEFAULT };
+        FTC_ImageTypeRec right = { (FTC_FaceID)(size_t)0x1000, 16, 99, FT_LOAD_DEFAULT };
+        print_ok_output_prefix();
+        printf("{\"result\":");
+        print_json_bool(FTC_IMAGE_TYPE_COMPARE(&left, &right));
+        printf("}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcache.FTC_IMAGE_TYPE_COMPARE.compared_fields_must_match")) {
+        FTC_ImageTypeRec base = { (FTC_FaceID)(size_t)0x1000, 16, 16, FT_LOAD_DEFAULT };
+        FTC_ImageTypeRec diff_face = { (FTC_FaceID)(size_t)0x2000, 16, 16, FT_LOAD_DEFAULT };
+        FTC_ImageTypeRec diff_width = { (FTC_FaceID)(size_t)0x1000, 32, 16, FT_LOAD_DEFAULT };
+        FTC_ImageTypeRec diff_flags = { (FTC_FaceID)(size_t)0x1000, 16, 16, FT_LOAD_NO_SCALE };
+        print_ok_output_prefix();
+        printf("{\"pairs\":[");
+        printf("{\"diff\":\"face_id\",\"result\":");
+        print_json_bool(FTC_IMAGE_TYPE_COMPARE(&base, &diff_face));
+        printf("},");
+        printf("{\"diff\":\"width\",\"result\":");
+        print_json_bool(FTC_IMAGE_TYPE_COMPARE(&base, &diff_width));
+        printf("},");
+        printf("{\"diff\":\"flags\",\"result\":");
+        print_json_bool(FTC_IMAGE_TYPE_COMPARE(&base, &diff_flags));
+        printf("}");
+        printf("]}}\n");
+        return 0;
+    }
+    if (streq(case_id, "fttypes.FT_ERR.custom_prefix_token_contract")) {
+        enum { Probe_Err_Custom = 4660, Probe_Err_Other = 22136 };
+#undef FT_ERR_PREFIX
+#define FT_ERR_PREFIX Probe_Err_
+        print_ok_output_prefix();
+        printf("{\"rows\":[");
+        printf("{\"call\":\"FT_ERR(Custom)\",\"resolved_token\":\"Probe_Err_Custom\",\"value\":%d},", FT_ERR(Custom));
+        printf("{\"call\":\"FT_ERR(Other)\",\"resolved_token\":\"Probe_Err_Other\",\"value\":%d}", FT_ERR(Other));
+        printf("]}}\n");
+#undef FT_ERR_PREFIX
+#define FT_ERR_PREFIX FT_Err_
+        return 0;
+    }
+    if (streq(case_id, "fttypes.FT_ERR_CAT.expands_arguments_before_concatenation")) {
+        enum { Probe_Value = 42 };
+#define PREFIX_TOKEN Probe_
+#define SUFFIX_TOKEN Value
+        print_ok_output_prefix();
+        printf("{\"rows\":[{\"call\":\"FT_ERR_CAT(PREFIX_TOKEN, SUFFIX_TOKEN)\",\"resolved_token\":\"Probe_Value\",\"value\":%d}]}}\n",
+               FT_ERR_CAT(PREFIX_TOKEN, SUFFIX_TOKEN));
+#undef PREFIX_TOKEN
+#undef SUFFIX_TOKEN
+        return 0;
+    }
+    if (streq(case_id, "fttypes.FT_ERR_CAT.error_prefix_suffix_join")) {
+        print_ok_output_prefix();
+        printf("{\"rows\":[");
+        printf("{\"suffix\":\"Ok\",\"cat_value\":%d,\"ft_err_value\":%d},",
+               FT_ERR_CAT(FT_ERR_PREFIX, Ok), FT_ERR(Ok));
+        printf("{\"suffix\":\"Invalid_Argument\",\"cat_value\":%d,\"ft_err_value\":%d},",
+               FT_ERR_CAT(FT_ERR_PREFIX, Invalid_Argument), FT_ERR(Invalid_Argument));
+        printf("{\"suffix\":\"Invalid_Face_Handle\",\"cat_value\":%d,\"ft_err_value\":%d}",
+               FT_ERR_CAT(FT_ERR_PREFIX, Invalid_Face_Handle), FT_ERR(Invalid_Face_Handle));
+        printf("]}}\n");
+        return 0;
+    }
+    if (streq(case_id, "fttypes.FT_ERR_XCAT.direct_token_paste_without_argument_expansion")) {
+        enum { PREFIX_TOKENSUFFIX_TOKEN = 7, Probe_Value = 42 };
+#define PREFIX_TOKEN Probe_
+#define SUFFIX_TOKEN Value
+        print_ok_output_prefix();
+        printf("{\"rows\":[{\"call\":\"FT_ERR_XCAT(PREFIX_TOKEN, SUFFIX_TOKEN)\",\"resolved_token\":\"PREFIX_TOKENSUFFIX_TOKEN\",\"value\":%d}]}}\n",
+               FT_ERR_XCAT(PREFIX_TOKEN, SUFFIX_TOKEN));
+#undef PREFIX_TOKEN
+#undef SUFFIX_TOKEN
+        return 0;
+    }
+    if (streq(case_id, "fttypes.FT_ERR_XCAT.valid_identifier_concatenation")) {
+        enum { Probe_Value = 42 };
+        print_ok_output_prefix();
+        printf("{\"rows\":[");
+        printf("{\"call\":\"FT_ERR_XCAT(Probe_, Value)\",\"resolved_token\":\"Probe_Value\",\"value\":%d},",
+               FT_ERR_XCAT(Probe_, Value));
+        printf("{\"call\":\"FT_ERR_XCAT(FT_Err_, Ok)\",\"resolved_token\":\"FT_Err_Ok\",\"value\":%d}",
+               FT_ERR_XCAT(FT_Err_, Ok));
+        printf("]}}\n");
+        return 0;
+    }
+
     fprintf(stderr, "unsupported macro eval: %s\n", case_id);
     return 2;
 }
@@ -1278,8 +2398,227 @@ static void print_slot(FT_GlyphSlot slot, FT_UInt glyph_index) {
     printf("}");
 }
 
-static void print_size_metrics(FT_Size_Metrics metrics) {
+static void print_glyph_metrics(FT_Glyph_Metrics metrics) {
+    printf("\"output\":{\"metrics\":{");
+    printf("\"width\":%ld,\"height\":%ld,\"horiBearingX\":%ld,\"horiBearingY\":%ld,\"horiAdvance\":%ld,\"vertBearingX\":%ld,\"vertBearingY\":%ld,\"vertAdvance\":%ld",
+           metrics.width,
+           metrics.height,
+           metrics.horiBearingX,
+           metrics.horiBearingY,
+           metrics.horiAdvance,
+           metrics.vertBearingX,
+           metrics.vertBearingY,
+           metrics.vertAdvance);
+    printf("}}");
+}
+
+static void print_char_iteration_result(FT_ULong char_code, FT_UInt glyph_index) {
+    printf("{\"return\":%lu,\"writes\":{\"agindex\":%u}}",
+           (unsigned long)char_code,
+           (unsigned int)glyph_index);
+}
+
+static void print_bbox_named(const char* name, FT_BBox bbox) {
+    printf("\"%s\":{\"xMin\":%ld,\"yMin\":%ld,\"xMax\":%ld,\"yMax\":%ld}",
+           name,
+           bbox.xMin,
+           bbox.yMin,
+           bbox.xMax,
+           bbox.yMax);
+}
+
+static void print_outline(FT_Outline* outline) {
+    printf("\"outline\":{");
+    printf("\"n_points\":%d,\"n_contours\":%d,", outline->n_points, outline->n_contours);
+    printf("\"points\":[");
+    for (short i = 0; i < outline->n_points; i++) {
+        if (i) printf(",");
+        printf("{\"x\":%ld,\"y\":%ld}", outline->points[i].x, outline->points[i].y);
+    }
+    printf("],\"tags\":[");
+    for (short i = 0; i < outline->n_points; i++) {
+        if (i) printf(",");
+        printf("%u", (unsigned char)outline->tags[i]);
+    }
+    printf("],\"contours\":[");
+    for (short i = 0; i < outline->n_contours; i++) {
+        if (i) printf(",");
+        printf("%d", outline->contours[i]);
+    }
+    printf("],\"flags\":%d}", outline->flags);
+}
+
+static void print_outline_payload(FT_GlyphSlot slot) {
+    FT_BBox cbox;
+    FT_Outline_Get_CBox(&slot->outline, &cbox);
     printf("\"output\":{");
+    printf("\"slot_format\":%ld,", (long)slot->format);
+    print_outline(&slot->outline);
+    printf(",");
+    print_bbox_named("cbox", cbox);
+    printf("}");
+}
+
+static void print_outline_bbox_payload(FT_GlyphSlot slot) {
+    FT_BBox bbox;
+    FT_BBox cbox;
+    FT_Error bbox_err = FT_Outline_Get_BBox(&slot->outline, &bbox);
+    FT_Outline_Get_CBox(&slot->outline, &cbox);
+    printf("\"output\":{");
+    printf("\"bbox_error\":%d,", bbox_err);
+    print_bbox_named("bbox", bbox);
+    printf(",");
+    print_bbox_named("cbox", cbox);
+    printf("}");
+}
+
+static void print_outline_cbox_payload(FT_GlyphSlot slot) {
+    FT_BBox cbox;
+    FT_Outline_Get_CBox(&slot->outline, &cbox);
+    printf("\"output\":{");
+    print_bbox_named("cbox", cbox);
+    printf("}");
+}
+
+static void print_glyph_cbox_payload(FT_GlyphSlot slot, const char* modes_csv) {
+    FT_Glyph glyph = NULL;
+    FT_Error err = FT_Get_Glyph(slot, &glyph);
+    if (err) {
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return;
+    }
+    print_status(0);
+    printf(",\"output\":{\"boxes\":[");
+    size_t modes_len = strlen(modes_csv);
+    char* modes = (char*)malloc(modes_len + 1);
+    if (modes) {
+        memcpy(modes, modes_csv, modes_len + 1);
+    }
+    char* token = modes ? strtok(modes, ",") : NULL;
+    int first = 1;
+    while (token) {
+        FT_UInt mode = (FT_UInt)strtoul(token, NULL, 10);
+        FT_BBox bbox;
+        FT_Glyph_Get_CBox(glyph, mode, &bbox);
+        if (!first) printf(",");
+        first = 0;
+        printf("{\"mode\":%u,", mode);
+        print_bbox_named("bbox", bbox);
+        printf("}");
+        token = strtok(NULL, ",");
+    }
+    free(modes);
+    printf("]}}\n");
+    FT_Done_Glyph(glyph);
+}
+
+static void print_bitmap_glyph_payload(FT_BitmapGlyph glyph, int destroy) {
+    FT_Bitmap* bitmap = &glyph->bitmap;
+    long len = 0;
+    if (bitmap->buffer && bitmap->rows > 0) {
+        len = labs(bitmap->pitch) * bitmap->rows;
+    }
+    printf("\"output\":{");
+    printf("\"format\":%ld,", (long)glyph->root.format);
+    printf("\"advance\":{\"x\":%ld,\"y\":%ld},", glyph->root.advance.x, glyph->root.advance.y);
+    printf("\"destroy\":%s,", destroy ? "true" : "false");
+    printf("\"bitmap\":");
+    if (!bitmap->buffer || len == 0) {
+        printf("null");
+    } else {
+        printf("{\"width\":%u,\"rows\":%u,\"pitch\":%d,\"pixel_mode\":%u,\"num_grays\":%u,\"left\":%d,\"top\":%d,\"buffer_hex\":\"",
+               bitmap->width,
+               bitmap->rows,
+               bitmap->pitch,
+               bitmap->pixel_mode,
+               bitmap->num_grays,
+               glyph->left,
+               glyph->top);
+        print_hex_bytes(bitmap->buffer, len);
+        printf("\"}");
+    }
+    printf("}");
+}
+
+static void print_glyph_to_bitmap_payload(FT_GlyphSlot slot, FT_Render_Mode render_mode, int destroy) {
+    FT_Glyph glyph = NULL;
+    FT_Error err = FT_Get_Glyph(slot, &glyph);
+    if (!err) {
+        err = FT_Glyph_To_Bitmap(&glyph, render_mode, NULL, destroy);
+    }
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",");
+        print_bitmap_glyph_payload((FT_BitmapGlyph)glyph, destroy);
+        printf("}\n");
+    }
+    if (glyph) {
+        FT_Done_Glyph(glyph);
+    }
+}
+
+static void print_glyph_record_payload(FT_Glyph glyph) {
+    printf("\"output\":{\"glyph\":{");
+    printf("\"format\":%ld,", (long)glyph->format);
+    printf("\"advance\":{\"x\":%ld,\"y\":%ld},", glyph->advance.x, glyph->advance.y);
+    printf("\"library_present\":%s,", glyph->library ? "true" : "false");
+    printf("\"clazz_present\":%s", glyph->clazz ? "true" : "false");
+    printf("}}");
+}
+
+static void print_get_glyph_payload(FT_GlyphSlot slot, const char* action) {
+    FT_Glyph glyph = NULL;
+    FT_Error err = FT_Get_Glyph(slot, &glyph);
+    if (!err && streq(action, "copy")) {
+        FT_Glyph copy = NULL;
+        err = FT_Glyph_Copy(glyph, &copy);
+        FT_Done_Glyph(glyph);
+        glyph = copy;
+    }
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",");
+        print_glyph_record_payload(glyph);
+        printf("}\n");
+    }
+    if (glyph) {
+        FT_Done_Glyph(glyph);
+    }
+}
+
+static void print_sbit_payload(FT_GlyphSlot slot) {
+    FT_Bitmap* bitmap = &slot->bitmap;
+    long len = 0;
+    if (bitmap->buffer && bitmap->rows > 0) {
+        len = labs(bitmap->pitch) * bitmap->rows;
+    }
+    printf("\"output\":{\"sbit\":{");
+    printf("\"width\":%u,\"height\":%u,\"left\":%d,\"top\":%d,",
+           bitmap->width,
+           bitmap->rows,
+           slot->bitmap_left,
+           slot->bitmap_top);
+    printf("\"format\":%u,\"max_grays\":%u,\"pitch\":%d,",
+           bitmap->pixel_mode,
+           bitmap->num_grays,
+           bitmap->pitch);
+    printf("\"xadvance\":%ld,\"yadvance\":%ld,",
+           slot->advance.x >> 6,
+           slot->advance.y >> 6);
+    printf("\"buffer_null\":%s,\"buffer_hex\":\"",
+           (!bitmap->buffer || len == 0) ? "true" : "false");
+    if (bitmap->buffer && len > 0) {
+        print_hex_bytes(bitmap->buffer, len);
+    }
+    printf("\"},\"node\":{\"locked\":false}}");
+}
+
+static void print_size_metrics_object(FT_Size_Metrics metrics) {
     printf("\"x_ppem\":%u,\"y_ppem\":%u,\"x_scale\":%ld,\"y_scale\":%ld,\"ascender\":%ld,\"descender\":%ld,\"height\":%ld,\"max_advance\":%ld",
            metrics.x_ppem,
            metrics.y_ppem,
@@ -1289,6 +2628,11 @@ static void print_size_metrics(FT_Size_Metrics metrics) {
            metrics.descender,
            metrics.height,
            metrics.max_advance);
+}
+
+static void print_size_metrics(FT_Size_Metrics metrics) {
+    printf("\"output\":{");
+    print_size_metrics_object(metrics);
     printf("}");
 }
 
@@ -1305,6 +2649,1582 @@ static void print_advances(const FT_Fixed* advances, FT_UInt count) {
         printf("%ld", (long)advances[i]);
     }
     printf("]}");
+}
+
+typedef struct MemoryFaceRequestRec_ {
+    const unsigned char* data;
+    long data_len;
+    FT_Long face_index;
+    unsigned int calls;
+} MemoryFaceRequestRec;
+
+static FT_Error memory_face_requester(FTC_FaceID face_id,
+                                      FT_Library library,
+                                      FT_Pointer req_data,
+                                      FT_Face* aface) {
+    MemoryFaceRequestRec* request = (MemoryFaceRequestRec*)req_data;
+    if (!request) {
+        request = (MemoryFaceRequestRec*)face_id;
+    }
+    if (!request || !aface) {
+        return FT_Err_Invalid_Argument;
+    }
+    request->calls++;
+    return FT_New_Memory_Face(library,
+                              request->data,
+                              request->data_len,
+                              request->face_index,
+                              aface);
+}
+
+static void print_manager_reset_payload(unsigned int before_calls,
+                                        unsigned int after_calls,
+                                        FT_Error post_reset_error) {
+    printf("\"output\":{");
+    printf("\"void\":true,");
+    printf("\"reset\":{\"called\":true},");
+    printf("\"requester_call_counts\":{\"before_reset\":%u,\"after_reset\":%u},",
+           before_calls,
+           after_calls);
+    printf("\"post_reset\":{\"status\":%d,\"usable\":%s},",
+           post_reset_error,
+           post_reset_error ? "false" : "true");
+    printf("\"manager_handle\":\"same_identity_class\",");
+    printf("\"face_identity_class_after_reset\":\"fresh_or_reloaded\",");
+    printf("\"size_identity_class_after_reset\":\"fresh_or_reloaded\",");
+    printf("\"node_count_class\":\"not_observed\"");
+    printf("}");
+}
+
+static int emit_manager_reset(int argc, char** argv) {
+    const char* command = argv[1];
+    if (streq(command, "--manager-reset-null")) {
+        FTC_Manager_Reset(NULL);
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"void\":true,\"manager_null\":true,\"reset\":{\"called\":true}}}\n");
+        return 0;
+    }
+
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    FT_UInt pixel_width = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_UInt pixel_height = (FT_UInt)strtoul(argv[6], NULL, 10);
+    (void)argv[7];
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        free(data);
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    MemoryFaceRequestRec request = {data, data_len, face_index, 0};
+    FTC_Manager manager = NULL;
+    err = FTC_Manager_New(library, 1, 2, 4096, memory_face_requester, &request, &manager);
+    if (!err) {
+        FT_Face face = NULL;
+        err = FTC_Manager_LookupFace(manager, (FTC_FaceID)&request, &face);
+    }
+    if (!err) {
+        FTC_ScalerRec scaler;
+        scaler.face_id = (FTC_FaceID)&request;
+        scaler.width = pixel_width;
+        scaler.height = pixel_height;
+        scaler.pixel = 1;
+        scaler.x_res = 0;
+        scaler.y_res = 0;
+        FT_Size size = NULL;
+        err = FTC_Manager_LookupSize(manager, &scaler, &size);
+    }
+    unsigned int before_calls = request.calls;
+    FT_Error post_reset_error = err;
+    if (!err) {
+        FTC_Manager_Reset(manager);
+        FT_Face post_face = NULL;
+        post_reset_error = FTC_Manager_LookupFace(manager, (FTC_FaceID)&request, &post_face);
+    }
+    unsigned int after_calls = request.calls;
+
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",");
+        print_manager_reset_payload(before_calls, after_calls, post_reset_error);
+        printf("}\n");
+    }
+    if (manager) {
+        FTC_Manager_Done(manager);
+    }
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
+static void print_outline_render_bitmap_payload(const FT_Bitmap* bitmap) {
+    long len = 0;
+    if (bitmap->buffer && bitmap->rows > 0) {
+        len = labs(bitmap->pitch) * bitmap->rows;
+    }
+    printf("\"output\":{");
+    printf("\"params_source_is_outline\":true,");
+    printf("\"bitmap\":{");
+    printf("\"width\":%u,\"rows\":%u,\"pitch\":%d,\"pixel_mode\":%u,\"num_grays\":%u,",
+           bitmap->width,
+           bitmap->rows,
+           bitmap->pitch,
+           bitmap->pixel_mode,
+           bitmap->num_grays);
+    printf("\"buffer_hex\":\"");
+    if (bitmap->buffer && len > 0) {
+        print_hex_bytes(bitmap->buffer, len);
+    }
+    printf("\"}}");
+}
+
+static int emit_outline_render(int argc, char** argv) {
+    (void)argc;
+    const char* mode = argv[2];
+    if (streq(mode, "error")) {
+        printf("{");
+        print_status(FT_Err_Invalid_Argument);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    FT_Vector points[4];
+    points[0].x = 8 * 64;
+    points[0].y = 8 * 64;
+    points[1].x = 24 * 64;
+    points[1].y = 8 * 64;
+    points[2].x = 24 * 64;
+    points[2].y = 24 * 64;
+    points[3].x = 8 * 64;
+    points[3].y = 24 * 64;
+    char tags[4] = {
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+    };
+    short contours[1] = {3};
+    FT_Outline outline;
+    outline.n_contours = 1;
+    outline.n_points = 4;
+    outline.points = points;
+    outline.tags = tags;
+    outline.contours = contours;
+    outline.flags = 0;
+
+    unsigned char buffer[32 * 32];
+    memset(buffer, 0, sizeof(buffer));
+    FT_Bitmap bitmap;
+    memset(&bitmap, 0, sizeof(bitmap));
+    bitmap.rows = 32;
+    bitmap.width = 32;
+    bitmap.pitch = 32;
+    bitmap.buffer = buffer;
+    bitmap.num_grays = 256;
+    bitmap.pixel_mode = FT_PIXEL_MODE_GRAY;
+
+    FT_Raster_Params params;
+    memset(&params, 0, sizeof(params));
+    params.target = &bitmap;
+    params.flags = FT_RASTER_FLAG_AA;
+    params.source = (void*)0x1;
+
+    err = FT_Outline_Render(library, &outline, &params);
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",");
+        print_outline_render_bitmap_payload(&bitmap);
+        printf("}\n");
+    }
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static int face_macro_value(FT_Face face, const char* macro_name, int* out) {
+    if (streq(macro_name, "FT_HAS_COLOR")) {
+        *out = FT_HAS_COLOR(face);
+    } else if (streq(macro_name, "FT_HAS_FAST_GLYPHS")) {
+        *out = FT_HAS_FAST_GLYPHS(face);
+    } else if (streq(macro_name, "FT_HAS_FIXED_SIZES")) {
+        *out = FT_HAS_FIXED_SIZES(face);
+    } else if (streq(macro_name, "FT_HAS_GLYPH_NAMES")) {
+        *out = FT_HAS_GLYPH_NAMES(face);
+    } else if (streq(macro_name, "FT_HAS_HORIZONTAL")) {
+        *out = FT_HAS_HORIZONTAL(face);
+    } else if (streq(macro_name, "FT_HAS_KERNING")) {
+        *out = FT_HAS_KERNING(face);
+    } else if (streq(macro_name, "FT_HAS_MULTIPLE_MASTERS")) {
+        *out = FT_HAS_MULTIPLE_MASTERS(face);
+    } else if (streq(macro_name, "FT_HAS_SBIX")) {
+        *out = FT_HAS_SBIX(face);
+    } else if (streq(macro_name, "FT_HAS_SBIX_OVERLAY")) {
+        *out = FT_HAS_SBIX_OVERLAY(face);
+    } else if (streq(macro_name, "FT_HAS_SVG")) {
+        *out = FT_HAS_SVG(face);
+    } else if (streq(macro_name, "FT_HAS_VERTICAL")) {
+        *out = FT_HAS_VERTICAL(face);
+    } else if (streq(macro_name, "FT_IS_CID_KEYED")) {
+        *out = FT_IS_CID_KEYED(face);
+    } else if (streq(macro_name, "FT_IS_FIXED_WIDTH")) {
+        *out = FT_IS_FIXED_WIDTH(face);
+    } else if (streq(macro_name, "FT_IS_NAMED_INSTANCE")) {
+        *out = FT_IS_NAMED_INSTANCE(face);
+    } else if (streq(macro_name, "FT_IS_SCALABLE")) {
+        *out = FT_IS_SCALABLE(face);
+    } else if (streq(macro_name, "FT_IS_SFNT")) {
+        *out = FT_IS_SFNT(face);
+    } else if (streq(macro_name, "FT_IS_TRICKY")) {
+        *out = FT_IS_TRICKY(face);
+    } else if (streq(macro_name, "FT_IS_VARIATION")) {
+        *out = FT_IS_VARIATION(face);
+    } else {
+        return 0;
+    }
+    return 1;
+}
+
+static int emit_face_macro(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    const char* macro_name = argv[5];
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        free(data);
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    FT_Face face;
+    err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    int macro_result = 0;
+    if (!face_macro_value(face, macro_name, &macro_result)) {
+        fprintf(stderr, "unsupported face macro: %s\n", macro_name);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 2;
+    }
+    printf(",\"output\":{\"macro_result\":%d,\"face_flags\":%ld,\"face_index\":%ld,\"import_compiles\":true}}\n",
+           macro_result,
+           face->face_flags,
+           face->face_index);
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
+static int emit_face_macro_flags(int argc, char** argv) {
+    (void)argc;
+    const char* macro_name = argv[2];
+    FT_Long face_index = atol(argv[3]);
+    char* flags = (char*)malloc(strlen(argv[4]) + 1);
+    if (!flags) {
+        return 1;
+    }
+    memcpy(flags, argv[4], strlen(argv[4]) + 1);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"macro\":\"%s\",\"import_compiles\":true,\"rows\":[", macro_name);
+    char* cursor = flags;
+    int emitted = 0;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ',');
+        if (next) {
+            *next = '\0';
+        }
+        FT_FaceRec face;
+        memset(&face, 0, sizeof(face));
+        face.face_flags = atol(cursor);
+        face.face_index = face_index;
+        int macro_result = 0;
+        if (!face_macro_value(&face, macro_name, &macro_result)) {
+            fprintf(stderr, "unsupported face macro: %s\n", macro_name);
+            free(flags);
+            return 2;
+        }
+        if (emitted) {
+            printf(",");
+        }
+        printf("{\"face_flags\":%ld,\"macro_result\":%d}", face.face_flags, macro_result);
+        emitted = 1;
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("]}}\n");
+    free(flags);
+    return 0;
+}
+
+static int emit_face_flags(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    const char* flag_name = argv[5];
+
+    long long flag_value = 0;
+    if (!emit_generated_constant_value(flag_name, &flag_value)) {
+        fprintf(stderr, "unsupported face flag: %s\n", flag_name);
+        return 2;
+    }
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        free(data);
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    FT_Face face;
+    err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    printf(",\"output\":{\"face_flags\":%ld,\"flag\":%lld,\"bit_set\":%s,\"face_index\":%ld,\"import_compiles\":true}}\n",
+           face->face_flags,
+           flag_value,
+           (face->face_flags & flag_value) ? "true" : "false",
+           face->face_index);
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
+typedef struct SizeRequestRow_ {
+    int face_is_null;
+    int request_is_null;
+    FT_Size_RequestRec req;
+} SizeRequestRow;
+
+static int parse_size_request_row(char* row, SizeRequestRow* out) {
+    char* fields[7];
+    char* cursor = row;
+    for (int i = 0; i < 7; i++) {
+        fields[i] = cursor;
+        char* sep = strchr(cursor, ':');
+        if (i == 6) {
+            if (sep) {
+                return 0;
+            }
+            break;
+        }
+        if (!sep) {
+            return 0;
+        }
+        *sep = '\0';
+        cursor = sep + 1;
+    }
+    out->face_is_null = (int)strtol(fields[0], NULL, 10) != 0;
+    out->request_is_null = (int)strtol(fields[1], NULL, 10) != 0;
+    out->req.type = (FT_Size_Request_Type)strtol(fields[2], NULL, 10);
+    out->req.width = (FT_Long)strtol(fields[3], NULL, 10);
+    out->req.height = (FT_Long)strtol(fields[4], NULL, 10);
+    out->req.horiResolution = (FT_UInt)strtoul(fields[5], NULL, 10);
+    out->req.vertResolution = (FT_UInt)strtoul(fields[6], NULL, 10);
+    return 1;
+}
+
+static void print_size_request_row(SizeRequestRow row, FT_Error err, FT_Size_Metrics* metrics) {
+    printf("{\"face\":\"%s\",\"request\":",
+           row.face_is_null ? "null" : "valid");
+    if (row.request_is_null) {
+        printf("null");
+    } else {
+        printf("{\"type\":%d,\"width\":%ld,\"height\":%ld,\"horiResolution\":%u,\"vertResolution\":%u}",
+               row.req.type,
+               row.req.width,
+               row.req.height,
+               row.req.horiResolution,
+               row.req.vertResolution);
+    }
+    printf(",\"status\":%d,\"metrics\":", err);
+    if (err) {
+        printf("null}");
+    } else {
+        printf("{");
+        print_size_metrics_object(*metrics);
+        printf("}}");
+    }
+}
+
+static int emit_request_size(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    char* rows = (char*)malloc(strlen(argv[5]) + 1);
+    if (!rows) {
+        return 1;
+    }
+    memcpy(rows, argv[5], strlen(argv[5]) + 1);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            free(rows);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            free(rows);
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        free(rows);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    FT_Face face = NULL;
+    if (!err) {
+        err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    }
+
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        if (library) {
+            FT_Done_FreeType(library);
+        }
+        free(data);
+        free(rows);
+        return 0;
+    }
+
+    size_t row_count = 0;
+    const char* count_cursor = rows;
+    while (count_cursor && *count_cursor) {
+        row_count++;
+        const char* next = strchr(count_cursor, ',');
+        count_cursor = next ? next + 1 : NULL;
+    }
+    SizeRequestRow* parsed_rows = (SizeRequestRow*)calloc(row_count, sizeof(SizeRequestRow));
+    FT_Error* errors = (FT_Error*)calloc(row_count, sizeof(FT_Error));
+    FT_Size_Metrics* metrics = (FT_Size_Metrics*)calloc(row_count, sizeof(FT_Size_Metrics));
+    if ((!parsed_rows || !errors || !metrics) && row_count > 0) {
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        free(rows);
+        free(parsed_rows);
+        free(errors);
+        free(metrics);
+        return 1;
+    }
+
+    char* cursor = rows;
+    size_t row_index = 0;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ',');
+        if (next) {
+            *next = '\0';
+        }
+        if (!parse_size_request_row(cursor, &parsed_rows[row_index])) {
+            fprintf(stderr, "bad size request row: %s\n", cursor);
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            free(rows);
+            free(parsed_rows);
+            free(errors);
+            free(metrics);
+            return 2;
+        }
+        row_index++;
+        cursor = next ? next + 1 : NULL;
+    }
+
+    FT_Error first_error = FT_Err_Ok;
+    for (size_t i = 0; i < row_count; i++) {
+        errors[i] = FT_Request_Size(
+            parsed_rows[i].face_is_null ? NULL : face,
+            parsed_rows[i].request_is_null ? NULL : &parsed_rows[i].req
+        );
+        if (!first_error && errors[i]) {
+            first_error = errors[i];
+        }
+        if (!errors[i] && !parsed_rows[i].face_is_null) {
+            metrics[i] = face->size->metrics;
+        }
+    }
+
+    printf("{");
+    print_status(first_error);
+    printf(",\"output\":{\"outputs\":[");
+    for (size_t i = 0; i < row_count; i++) {
+        if (i) {
+            printf(",");
+        }
+        print_size_request_row(parsed_rows[i], errors[i], &metrics[i]);
+    }
+    printf("]}}\n");
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    free(rows);
+    free(parsed_rows);
+    free(errors);
+    free(metrics);
+    return 0;
+}
+
+static void print_charmap_probe_indices(FT_Face face, const char* chars_csv) {
+    if (streq(chars_csv, "-") || !chars_csv[0]) {
+        printf("[]");
+        return;
+    }
+    char* chars = (char*)malloc(strlen(chars_csv) + 1);
+    if (!chars) {
+        printf("[]");
+        return;
+    }
+    memcpy(chars, chars_csv, strlen(chars_csv) + 1);
+    printf("[");
+    char* cursor = chars;
+    int emitted = 0;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ',');
+        if (next) {
+            *next = '\0';
+        }
+        FT_ULong char_code = strtoul(cursor, NULL, 10);
+        if (emitted) {
+            printf(",");
+        }
+        printf("{\"char_code\":%lu,\"glyph_index\":%u}",
+               (unsigned long)char_code,
+               FT_Get_Char_Index(face, char_code));
+        emitted = 1;
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("]");
+    free(chars);
+}
+
+typedef struct OracleFace {
+    FT_Library library;
+    FT_Face face;
+    unsigned char* data;
+} OracleFace;
+
+static void close_oracle_face(OracleFace* face) {
+    if (face->face) {
+        FT_Done_Face(face->face);
+        face->face = NULL;
+    }
+    if (face->library) {
+        FT_Done_FreeType(face->library);
+        face->library = NULL;
+    }
+    free(face->data);
+    face->data = NULL;
+}
+
+static int open_oracle_face(
+    const char* source_kind,
+    const char* source_value,
+    FT_Long face_index,
+    OracleFace* out) {
+    out->library = NULL;
+    out->face = NULL;
+    out->data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &out->data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &out->data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Error err = FT_Init_FreeType(&out->library);
+    if (!err) {
+        err = FT_New_Memory_Face(out->library, out->data, data_len, face_index, &out->face);
+    }
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        close_oracle_face(out);
+        return 1;
+    }
+    return 0;
+}
+
+static void print_set_charmap_row(
+    const char* variant,
+    FT_Int charmap_index,
+    FT_Error status,
+    FT_CharMap before,
+    FT_Face face,
+    const char* chars_csv) {
+    printf("{\"variant\":\"%s\",\"charmap_index\":", variant);
+    if (charmap_index < 0) {
+        printf("null");
+    } else {
+        printf("%d", charmap_index);
+    }
+    printf(",\"status\":%d,\"active_charmap_before\":", status);
+    print_charmap_inventory_record(before);
+    printf(",\"active_charmap_after\":");
+    print_active_charmap(face);
+    printf(",\"selected_charmap\":");
+    print_active_charmap(face);
+    printf(",\"char_indices\":");
+    print_charmap_probe_indices(face, chars_csv);
+    printf("}");
+}
+
+static int set_charmap_index_selected(FT_Face face, const char* indices_arg, FT_Int index) {
+    if (streq(indices_arg, "all_non_format14_charmaps")) {
+        if (!face || !face->charmaps || index < 0 || index >= face->num_charmaps) {
+            return 0;
+        }
+        return FT_Get_CMap_Format(face->charmaps[index]) != 14;
+    }
+    if (streq(indices_arg, "all_charmaps")) {
+        return 1;
+    }
+    const char* cursor = indices_arg;
+    while (cursor && *cursor) {
+        char* end = NULL;
+        long value = strtol(cursor, &end, 10);
+        if (end == cursor) {
+            return 0;
+        }
+        if (value == index) {
+            return 1;
+        }
+        cursor = *end == ',' ? end + 1 : end;
+    }
+    return 0;
+}
+
+static const char* kerning_units(FT_UInt mode) {
+    if (mode == FT_KERNING_UNFITTED) {
+        return "unfitted_26_6_pixels";
+    }
+    if (mode == FT_KERNING_UNSCALED) {
+        return "font_units";
+    }
+    return "grid_fitted_26_6_pixels";
+}
+
+static FT_UInt glyph_selector_index(FT_Face face, const char* selector) {
+    if (!face || !selector) {
+        return 0;
+    }
+    if (streq(selector, "glyph0") || streq(selector, ".notdef")) {
+        return 0;
+    }
+    if (strncmp(selector, "gid:", 4) == 0) {
+        return (FT_UInt)strtoul(selector + 4, NULL, 10);
+    }
+    if (strncmp(selector, "U+", 2) == 0) {
+        return FT_Get_Char_Index(face, strtoul(selector + 2, NULL, 16));
+    }
+    if (selector[0] && !selector[1]) {
+        return FT_Get_Char_Index(face, (FT_ULong)(unsigned char)selector[0]);
+    }
+    return FT_Get_Name_Index(face, (FT_String*)selector);
+}
+
+static int emit_set_charmap_null_face(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    FT_Error err = FT_Set_Charmap(NULL, NULL);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":{\"status\":%d,\"outputs\":[", err);
+    print_set_charmap_row("null_face", -1, err, NULL, NULL, "-");
+    printf("]}}\n");
+    return 0;
+}
+
+static int emit_set_charmap_variants(int argc, char** argv) {
+    (void)argc;
+    OracleFace target;
+    OracleFace foreign;
+    const char* variants_csv = argv[8];
+
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &target);
+    if (opened != 0) {
+        return opened == 1 ? 0 : opened;
+    }
+    opened = open_oracle_face(argv[5], argv[6], atol(argv[7]), &foreign);
+    if (opened != 0) {
+        close_oracle_face(&target);
+        return opened == 1 ? 0 : opened;
+    }
+
+    char* variants = (char*)malloc(strlen(variants_csv) + 1);
+    if (!variants) {
+        close_oracle_face(&foreign);
+        close_oracle_face(&target);
+        return 2;
+    }
+    memcpy(variants, variants_csv, strlen(variants_csv) + 1);
+
+    FT_Error first_error = FT_Err_Ok;
+    char* token = strtok(variants, ",");
+    while (token) {
+        FT_CharMap charmap = NULL;
+        if (streq(token, "from_other_face")) {
+            charmap = (foreign.face && foreign.face->charmaps && foreign.face->num_charmaps > 0)
+                ? foreign.face->charmaps[0]
+                : NULL;
+        }
+        FT_Error err = FT_Set_Charmap(target.face, charmap);
+        if (first_error == FT_Err_Ok && err != FT_Err_Ok) {
+            first_error = err;
+        }
+        token = strtok(NULL, ",");
+    }
+    free(variants);
+    close_oracle_face(&foreign);
+    close_oracle_face(&target);
+
+    opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &target);
+    if (opened != 0) {
+        return opened == 1 ? 0 : opened;
+    }
+    opened = open_oracle_face(argv[5], argv[6], atol(argv[7]), &foreign);
+    if (opened != 0) {
+        close_oracle_face(&target);
+        return opened == 1 ? 0 : opened;
+    }
+    variants = (char*)malloc(strlen(variants_csv) + 1);
+    if (!variants) {
+        close_oracle_face(&foreign);
+        close_oracle_face(&target);
+        return 2;
+    }
+    memcpy(variants, variants_csv, strlen(variants_csv) + 1);
+
+    printf("{");
+    print_status(first_error);
+    printf(",\"output\":{\"status\":%d,\"outputs\":[", first_error);
+    token = strtok(variants, ",");
+    int first = 1;
+    while (token) {
+        FT_CharMap before = target.face ? target.face->charmap : NULL;
+        FT_CharMap charmap = NULL;
+        if (streq(token, "from_other_face")) {
+            charmap = (foreign.face && foreign.face->charmaps && foreign.face->num_charmaps > 0)
+                ? foreign.face->charmaps[0]
+                : NULL;
+        }
+        FT_Error err = FT_Set_Charmap(target.face, charmap);
+        if (first_error == FT_Err_Ok && err != FT_Err_Ok) {
+            first_error = err;
+        }
+        if (!first) {
+            printf(",");
+        }
+        first = 0;
+        print_set_charmap_row(token, -1, err, before, target.face, "-");
+        token = strtok(NULL, ",");
+    }
+    printf("]}}\n");
+
+    free(variants);
+    close_oracle_face(&foreign);
+    close_oracle_face(&target);
+    return 0;
+}
+
+static int emit_select_charmap(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    FT_Encoding encoding = (FT_Encoding)strtol(argv[5], NULL, 10);
+    const char* chars_csv = argv[6];
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    FT_Face face = NULL;
+    if (!err) {
+        err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    }
+    if (!err) {
+        err = FT_Select_Charmap(face, encoding);
+    }
+
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{\"char_indices\":");
+        print_charmap_probe_indices(face, chars_csv);
+        printf("}}\n");
+    }
+    if (face) {
+        FT_Done_Face(face);
+    }
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    free(data);
+    return 0;
+}
+
+static int emit_select_charmap_null_face(int argc, char** argv) {
+    (void)argc;
+    FT_Encoding encoding = (FT_Encoding)strtol(argv[2], NULL, 10);
+    FT_Error err = FT_Select_Charmap(NULL, encoding);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":null}\n");
+    return 0;
+}
+
+static int emit_get_charmap_index_variants(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    const char* variants_csv = argv[5];
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        free(data);
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Face face = NULL;
+    err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    if (err) {
+        FT_Done_FreeType(library);
+        free(data);
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    char* variants = (char*)malloc(strlen(variants_csv) + 1);
+    if (!variants) {
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 2;
+    }
+    memcpy(variants, variants_csv, strlen(variants_csv) + 1);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"variants\":[");
+    char* token = strtok(variants, ",");
+    int first = 1;
+    while (token) {
+        FT_Int value = -1;
+        if (streq(token, "null")) {
+            value = FT_Get_Charmap_Index(NULL);
+        } else if (streq(token, "foreign_face_charmap")) {
+            value = (face && face->charmaps && face->num_charmaps > 0)
+                ? FT_Get_Charmap_Index(face->charmaps[0])
+                : -1;
+        } else if (streq(token, "detached_invalid_pointer_harness_sentinel")) {
+            FT_CharMapRec detached;
+            memset(&detached, 0, sizeof(detached));
+            value = FT_Get_Charmap_Index(&detached);
+        }
+        if (!first) {
+            printf(",");
+        }
+        first = 0;
+        printf("{\"variant\":\"%s\",\"return\":%d}", token, value);
+        token = strtok(NULL, ",");
+    }
+    printf("],\"returns\":[");
+    memcpy(variants, variants_csv, strlen(variants_csv) + 1);
+    token = strtok(variants, ",");
+    first = 1;
+    while (token) {
+        FT_Int value = -1;
+        if (streq(token, "null")) {
+            value = FT_Get_Charmap_Index(NULL);
+        } else if (streq(token, "foreign_face_charmap")) {
+            value = (face && face->charmaps && face->num_charmaps > 0)
+                ? FT_Get_Charmap_Index(face->charmaps[0])
+                : -1;
+        } else if (streq(token, "detached_invalid_pointer_harness_sentinel")) {
+            FT_CharMapRec detached;
+            memset(&detached, 0, sizeof(detached));
+            value = FT_Get_Charmap_Index(&detached);
+        }
+        if (!first) {
+            printf(",");
+        }
+        first = 0;
+        printf("%d", value);
+        token = strtok(NULL, ",");
+    }
+    printf("]}}\n");
+
+    free(variants);
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
+static int emit_select_charmaps(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    const char* encodings_csv = argv[5];
+    const char* chars_csv = argv[6];
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    FT_Face face = NULL;
+    if (!err) {
+        err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    }
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        if (library) FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    char* encodings = (char*)malloc(strlen(encodings_csv) + 1);
+    if (!encodings) {
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 2;
+    }
+    memcpy(encodings, encodings_csv, strlen(encodings_csv) + 1);
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"outputs\":[");
+    char* token = strtok(encodings, ",");
+    int first = 1;
+    while (token) {
+        FT_Encoding encoding = (FT_Encoding)strtol(token, NULL, 10);
+        FT_Error select_error = FT_Select_Charmap(face, encoding);
+        if (!first) printf(",");
+        first = 0;
+        printf("{\"status\":%d,\"output\":", select_error);
+        if (select_error) {
+            printf("null");
+        } else {
+            printf("{\"char_indices\":");
+            print_charmap_probe_indices(face, chars_csv);
+            printf("}");
+        }
+        printf("}");
+        token = strtok(NULL, ",");
+    }
+    printf("]}}\n");
+    free(encodings);
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
+static int emit_set_lcd_filter(int argc, char** argv) {
+    (void)argc;
+    int library_present = atoi(argv[2]);
+    char* filters = (char*)malloc(strlen(argv[3]) + 1);
+    if (!filters) {
+        return 1;
+    }
+    memcpy(filters, argv[3], strlen(argv[3]) + 1);
+
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Err_Ok;
+    if (library_present) {
+        init_error = FT_Init_FreeType(&library);
+    }
+    printf("{");
+    if (init_error) {
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        free(filters);
+        return 0;
+    }
+
+    size_t filter_count = 0;
+    const char* count_cursor = filters;
+    while (count_cursor && *count_cursor) {
+        filter_count++;
+        const char* next = strchr(count_cursor, ',');
+        count_cursor = next ? next + 1 : NULL;
+    }
+    FT_LcdFilter* filter_values = (FT_LcdFilter*)malloc(sizeof(FT_LcdFilter) * filter_count);
+    FT_Error* errors = (FT_Error*)malloc(sizeof(FT_Error) * filter_count);
+    if ((!filter_values || !errors) && filter_count > 0) {
+        free(filter_values);
+        free(errors);
+        free(filters);
+        return 1;
+    }
+    FT_Error first_error = FT_Err_Ok;
+    char* cursor = filters;
+    size_t index = 0;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ',');
+        if (next) {
+            *next = '\0';
+        }
+        FT_LcdFilter filter = (FT_LcdFilter)strtol(cursor, NULL, 10);
+        FT_Error err = FT_Library_SetLcdFilter(library_present ? library : NULL, filter);
+        filter_values[index] = filter;
+        errors[index] = err;
+        if (!first_error && err) {
+            first_error = err;
+        }
+        index++;
+        cursor = next ? next + 1 : NULL;
+    }
+
+    print_status(first_error);
+    printf(",\"output\":{\"outputs\":[");
+    for (size_t i = 0; i < index; i++) {
+        if (i) {
+            printf(",");
+        }
+        printf("{\"filter\":%d,\"error\":%d}", filter_values[i], errors[i]);
+    }
+    printf("]}}\n");
+    free(filter_values);
+    free(errors);
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    free(filters);
+    return 0;
+}
+
+static int emit_set_lcd_filter_weights(int argc, char** argv) {
+    (void)argc;
+    int library_present = atoi(argv[2]);
+    const char* weights_arg = argv[3];
+    unsigned char weights_buffer[FT_LCD_FILTER_FIVE_TAPS] = {0, 0, 0, 0, 0};
+    unsigned char* weights = NULL;
+
+    if (!streq(weights_arg, "-")) {
+        char* values = (char*)malloc(strlen(weights_arg) + 1);
+        if (!values) {
+            return 1;
+        }
+        memcpy(values, weights_arg, strlen(weights_arg) + 1);
+        char* cursor = values;
+        size_t index = 0;
+        while (cursor && *cursor && index < FT_LCD_FILTER_FIVE_TAPS) {
+            char* next = strchr(cursor, ',');
+            if (next) {
+                *next = '\0';
+            }
+            long value = strtol(cursor, NULL, 10);
+            if (value < 0 || value > 255) {
+                free(values);
+                fprintf(stderr, "lcd filter weight out of u8 range: %ld\n", value);
+                return 2;
+            }
+            weights_buffer[index++] = (unsigned char)value;
+            cursor = next ? next + 1 : NULL;
+        }
+        free(values);
+        if (index < FT_LCD_FILTER_FIVE_TAPS) {
+            fprintf(stderr, "lcd filter weights require at least %d bytes\n", FT_LCD_FILTER_FIVE_TAPS);
+            return 2;
+        }
+        weights = weights_buffer;
+    }
+
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Err_Ok;
+    if (library_present) {
+        init_error = FT_Init_FreeType(&library);
+    }
+    printf("{");
+    if (init_error) {
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    FT_Error err = FT_Library_SetLcdFilterWeights(library_present ? library : NULL, weights);
+    print_status(err);
+    printf(",\"output\":{\"error\":%d}}\n", err);
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    return 0;
+}
+
+static int parse_lcd_geometry(const char* arg, FT_Vector sub[3]) {
+    char* values = (char*)malloc(strlen(arg) + 1);
+    if (!values) {
+        return 1;
+    }
+    memcpy(values, arg, strlen(arg) + 1);
+    char* cursor = values;
+    size_t index = 0;
+    while (cursor && *cursor && index < 3) {
+        char* next = strchr(cursor, ';');
+        if (next) {
+            *next = '\0';
+        }
+        char* comma = strchr(cursor, ',');
+        if (!comma) {
+            free(values);
+            return 1;
+        }
+        *comma = '\0';
+        sub[index].x = (FT_Pos)strtol(cursor, NULL, 10);
+        sub[index].y = (FT_Pos)strtol(comma + 1, NULL, 10);
+        index++;
+        cursor = next ? next + 1 : NULL;
+    }
+    free(values);
+    return index == 3 ? 0 : 1;
+}
+
+static int emit_set_lcd_geometry(int argc, char** argv) {
+    (void)argc;
+    int library_present = atoi(argv[2]);
+    const char* geometry_arg = argv[3];
+    FT_Vector geometry[3];
+    FT_Vector* sub = NULL;
+    if (!streq(geometry_arg, "-")) {
+        if (parse_lcd_geometry(geometry_arg, geometry) != 0) {
+            fprintf(stderr, "lcd geometry must be '-' or x,y;x,y;x,y\n");
+            return 2;
+        }
+        sub = geometry;
+    }
+
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Err_Ok;
+    if (library_present) {
+        init_error = FT_Init_FreeType(&library);
+    }
+    printf("{");
+    if (init_error) {
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    FT_Error err = FT_Library_SetLcdGeometry(library_present ? library : NULL, sub);
+    print_status(err);
+    printf(",\"output\":{\"error\":%d}}\n", err);
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    return 0;
+}
+
+static int emit_truetype_engine_type(int argc, char** argv) {
+    (void)argc;
+    int library_present = atoi(argv[2]);
+    FT_Library library = NULL;
+    FT_Error err = FT_Err_Ok;
+    if (library_present) {
+        err = FT_Init_FreeType(&library);
+    }
+
+    printf("{");
+    if (err) {
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_TrueTypeEngineType engine_type = FT_Get_TrueType_Engine_Type(library);
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"engine_type\":%d}}\n", engine_type);
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    return 0;
+}
+
+static void print_lifecycle_result(FT_Error err) {
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{\"done\":true}}\n");
+    }
+}
+
+static int emit_done_freetype(int argc, char** argv) {
+    const char* mode = argv[2];
+    printf("{");
+    if (streq(mode, "null")) {
+        print_lifecycle_result(FT_Done_FreeType(NULL));
+        return 0;
+    }
+
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        print_lifecycle_result(err);
+        return 0;
+    }
+
+    unsigned char* data = NULL;
+    if (argc == 6) {
+        const char* source_kind = argv[3];
+        const char* source_value = argv[4];
+        FT_Long face_index = atol(argv[5]);
+        long data_len = 0;
+        if (!streq(source_kind, "file") || load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            FT_Done_FreeType(library);
+            return 2;
+        }
+        FT_Face face = NULL;
+        err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+        if (err && face) {
+            FT_Done_Face(face);
+        }
+    }
+    if (!err) {
+        err = FT_Done_FreeType(library);
+    } else {
+        FT_Done_FreeType(library);
+    }
+    print_lifecycle_result(err);
+    free(data);
+    return 0;
+}
+
+static int emit_done_face(int argc, char** argv) {
+    const char* mode = argv[2];
+    printf("{");
+    if (streq(mode, "null")) {
+        print_lifecycle_result(FT_Done_Face(NULL));
+        return 0;
+    }
+    if (argc != 6) {
+        fprintf(stderr, "done-face live mode requires source and face_index\n");
+        return 2;
+    }
+
+    const char* source_kind = argv[3];
+    const char* source_value = argv[4];
+    FT_Long face_index = atol(argv[5]);
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (!streq(source_kind, "file") || load_file(source_value, &data, &data_len) != 0) {
+        fprintf(stderr, "failed to read font file: %s\n", source_value);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (!err) {
+        FT_Face face = NULL;
+        err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+        if (!err) {
+            err = FT_Done_Face(face);
+        }
+        FT_Done_FreeType(library);
+    }
+    print_lifecycle_result(err);
+    free(data);
+    return 0;
+}
+
+static int open_optional_face_for_patent(
+    const char* mode,
+    int argc,
+    char** argv,
+    FT_Library* library,
+    FT_Face* face,
+    unsigned char** data) {
+    *library = NULL;
+    *face = NULL;
+    *data = NULL;
+    if (streq(mode, "null")) {
+        return 0;
+    }
+    if (argc < 6) {
+        fprintf(stderr, "live patent command requires source and face_index\n");
+        return 2;
+    }
+    const char* source_kind = argv[3];
+    const char* source_value = argv[4];
+    FT_Long face_index = atol(argv[5]);
+    long data_len = 0;
+    if (!streq(source_kind, "file") || load_file(source_value, data, &data_len) != 0) {
+        fprintf(stderr, "failed to read font file: %s\n", source_value);
+        return 2;
+    }
+    FT_Error err = FT_Init_FreeType(library);
+    if (!err) {
+        err = FT_New_Memory_Face(*library, *data, data_len, face_index, face);
+    }
+    if (err) {
+        if (*library) {
+            FT_Done_FreeType(*library);
+        }
+        free(*data);
+        *library = NULL;
+        *data = NULL;
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 1;
+    }
+    return 0;
+}
+
+static int emit_face_check_truetype_patents(int argc, char** argv) {
+    const char* mode = argv[2];
+    FT_Library library = NULL;
+    FT_Face face = NULL;
+    unsigned char* data = NULL;
+    int open_result = open_optional_face_for_patent(mode, argc, argv, &library, &face, &data);
+    if (open_result == 1) {
+        return 0;
+    }
+    if (open_result != 0) {
+        return open_result;
+    }
+    FT_Bool result = FT_Face_CheckTrueTypePatents(face);
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"result\":%u}}\n", (unsigned)result);
+    if (face) {
+        FT_Done_Face(face);
+    }
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    free(data);
+    return 0;
+}
+
+static int emit_face_set_unpatented_hinting(int argc, char** argv) {
+    const char* mode = argv[2];
+    const char* values_arg = argv[3];
+    FT_Library library = NULL;
+    FT_Face face = NULL;
+    unsigned char* data = NULL;
+    int open_result = open_optional_face_for_patent(mode, argc - 1, argv + 1, &library, &face, &data);
+    if (open_result == 1) {
+        return 0;
+    }
+    if (open_result != 0) {
+        return open_result;
+    }
+    char* values = (char*)malloc(strlen(values_arg) + 1);
+    if (!values) {
+        if (face) FT_Done_Face(face);
+        if (library) FT_Done_FreeType(library);
+        free(data);
+        return 1;
+    }
+    memcpy(values, values_arg, strlen(values_arg) + 1);
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"outputs\":[");
+    char* cursor = values;
+    int first = 1;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ',');
+        if (next) {
+            *next = '\0';
+        }
+        FT_Bool value = (FT_Bool)strtoul(cursor, NULL, 10);
+        FT_Bool result = FT_Face_SetUnpatentedHinting(face, value);
+        if (!first) {
+            printf(",");
+        }
+        first = 0;
+        printf("{\"value\":%u,\"result\":%u}", (unsigned)value, (unsigned)result);
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("]}}\n");
+    free(values);
+    if (face) {
+        FT_Done_Face(face);
+    }
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    free(data);
+    return 0;
 }
 
 static int emit_face_or_slot(int argc, char** argv) {
@@ -1387,6 +4307,595 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
+    if (streq(command, "--get-kerning")) {
+        const char* rows_arg = argv[7];
+        char* rows = (char*)malloc(strlen(rows_arg) + 1);
+        if (!rows) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+        FT_Error first_error = FT_Err_Ok;
+        char* token = strtok(rows, ",");
+        while (token) {
+            char* left = token;
+            char* right = strchr(left, '|');
+            char* mode_text = right ? strchr(right + 1, '|') : NULL;
+            if (right && mode_text) {
+                *right = '\0';
+                *mode_text = '\0';
+                right++;
+                mode_text++;
+                FT_Vector kerning;
+                FT_Error err = FT_Get_Kerning(
+                    face,
+                    glyph_selector_index(face, left),
+                    glyph_selector_index(face, right),
+                    (FT_UInt)strtoul(mode_text, NULL, 10),
+                    &kerning);
+                if (first_error == FT_Err_Ok && err != FT_Err_Ok) {
+                    first_error = err;
+                }
+            }
+            token = strtok(NULL, ",");
+        }
+        free(rows);
+
+        rows = (char*)malloc(strlen(rows_arg) + 1);
+        if (!rows) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+        print_status(first_error);
+        printf(",\"output\":{\"status\":%d,\"kerning_vectors\":[", first_error);
+        token = strtok(rows, ",");
+        int first = 1;
+        int have_first_vector = 0;
+        FT_Vector first_vector;
+        first_vector.x = 0;
+        first_vector.y = 0;
+        while (token) {
+            char* left = token;
+            char* right = strchr(left, '|');
+            char* mode_text = right ? strchr(right + 1, '|') : NULL;
+            if (right && mode_text) {
+                *right = '\0';
+                *mode_text = '\0';
+                right++;
+                mode_text++;
+                FT_UInt left_glyph = glyph_selector_index(face, left);
+                FT_UInt right_glyph = glyph_selector_index(face, right);
+                FT_UInt mode = (FT_UInt)strtoul(mode_text, NULL, 10);
+                FT_Vector kerning;
+                kerning.x = 0;
+                kerning.y = 0;
+                FT_Error err = FT_Get_Kerning(face, left_glyph, right_glyph, mode, &kerning);
+                if (!have_first_vector) {
+                    first_vector = kerning;
+                    have_first_vector = 1;
+                }
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf("{\"left\":\"%s\",\"right\":\"%s\",\"mode\":%u,\"left_glyph\":%u,\"right_glyph\":%u,\"status\":%d,\"akerning\":{\"x\":%ld,\"y\":%ld},\"kerning\":{\"x\":%ld,\"y\":%ld},\"x_26_6\":%ld,\"y_26_6\":%ld,\"units\":\"%s\"}",
+                       left,
+                       right,
+                       mode,
+                       left_glyph,
+                       right_glyph,
+                       err,
+                       kerning.x,
+                       kerning.y,
+                       kerning.x,
+                       kerning.y,
+                       kerning.x,
+                       kerning.y,
+                       kerning_units(mode));
+            }
+            token = strtok(NULL, ",");
+        }
+        printf("],\"glyph_indexes\":[");
+        memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+        token = strtok(rows, ",");
+        first = 1;
+        while (token) {
+            char* left = token;
+            char* right = strchr(left, '|');
+            char* mode_text = right ? strchr(right + 1, '|') : NULL;
+            if (right && mode_text) {
+                *right = '\0';
+                *mode_text = '\0';
+                right++;
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf("{\"left\":%u,\"right\":%u}",
+                       glyph_selector_index(face, left),
+                       glyph_selector_index(face, right));
+            }
+            token = strtok(NULL, ",");
+        }
+        printf("],\"akerning\":{\"x\":%ld,\"y\":%ld},\"kerning\":{\"x\":%ld,\"y\":%ld}}}\n",
+               first_vector.x,
+               first_vector.y,
+               first_vector.x,
+               first_vector.y);
+        free(rows);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--charmap-get-char-index")) {
+        long platform = atol(argv[7]);
+        long encoding = atol(argv[8]);
+        FT_ULong char_code = strtoul(argv[9], NULL, 10);
+        FT_CharMap matched_charmap = find_charmap_by_ids(face, platform, encoding);
+        FT_Error err = matched_charmap
+            ? FT_Set_Charmap(face, matched_charmap)
+            : FT_ERR(Invalid_Argument);
+        print_status(err);
+        if (err) {
+            printf(",\"output\":null}\n");
+        } else {
+            printf(",\"output\":{\"value\":%u}}\n", FT_Get_Char_Index(face, char_code));
+        }
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--inspect-charmaps")) {
+        const char* encodings_csv = argv[7];
+        const char* chars_csv = argv[8];
+        FT_Error status = 0;
+
+        print_status(0);
+        printf(",\"output\":{\"selection_statuses\":[");
+        if (!streq(encodings_csv, "-") && encodings_csv[0]) {
+            size_t encodings_len = strlen(encodings_csv);
+            char* encodings = (char*)malloc(encodings_len + 1);
+            if (!encodings) {
+                FT_Done_Face(face);
+                FT_Done_FreeType(library);
+                free(data);
+                return 2;
+            }
+            memcpy(encodings, encodings_csv, encodings_len + 1);
+            char* token = strtok(encodings, ",");
+            int first = 1;
+            while (token) {
+                FT_Encoding encoding = (FT_Encoding)strtol(token, NULL, 10);
+                status = FT_Select_Charmap(face, encoding);
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf("{\"encoding\":%ld,\"status\":%d}", (long)encoding, status);
+                token = strtok(NULL, ",");
+            }
+            free(encodings);
+        }
+        printf("],\"status\":%d", status);
+        printf(",\"num_charmaps\":%d,\"charmaps\":", face->num_charmaps);
+        print_charmap_inventory_records(face);
+        FT_Int active = active_charmap_index(face);
+        printf(",\"active_charmap_index\":");
+        if (active < 0) {
+            printf("null");
+        } else {
+            printf("%d", active);
+        }
+        printf(",\"selected\":");
+        print_active_charmap(face);
+        printf(",\"selected_charmap\":");
+        print_active_charmap(face);
+        printf(",\"glyph_indexes\":[");
+        if (!streq(chars_csv, "-") && chars_csv[0]) {
+            size_t chars_len = strlen(chars_csv);
+            char* chars = (char*)malloc(chars_len + 1);
+            if (!chars) {
+                FT_Done_Face(face);
+                FT_Done_FreeType(library);
+                free(data);
+                return 2;
+            }
+            memcpy(chars, chars_csv, chars_len + 1);
+            char* token = strtok(chars, ",");
+            int first = 1;
+            while (token) {
+                FT_ULong char_code = strtoul(token, NULL, 10);
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf("%u", FT_Get_Char_Index(face, char_code));
+                token = strtok(NULL, ",");
+            }
+            free(chars);
+        }
+        printf("],\"char_indices\":");
+        print_charmap_probe_indices(face, chars_csv);
+        printf("}}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--set-charmap")) {
+        const char* indices_arg = argv[7];
+        const char* chars_csv = argv[8];
+        FT_Error first_error = FT_Err_Ok;
+        FT_Face probe_face = NULL;
+        FT_Error probe_error = FT_New_Memory_Face(library, data, data_len, face_index, &probe_face);
+        if (probe_error) {
+            first_error = probe_error;
+        } else {
+            for (FT_Int i = 0; probe_face && probe_face->charmaps && i < probe_face->num_charmaps; i++) {
+                if (!set_charmap_index_selected(probe_face, indices_arg, i)) {
+                    continue;
+                }
+                FT_Error row_error = FT_Set_Charmap(probe_face, probe_face->charmaps[i]);
+                if (first_error == FT_Err_Ok && row_error != FT_Err_Ok) {
+                    first_error = row_error;
+                }
+            }
+            FT_Done_Face(probe_face);
+        }
+
+        print_status(first_error);
+        printf(",\"output\":{\"status\":%d,\"outputs\":[", first_error);
+        int first = 1;
+        for (FT_Int i = 0; face && face->charmaps && i < face->num_charmaps; i++) {
+            if (!set_charmap_index_selected(face, indices_arg, i)) {
+                continue;
+            }
+            FT_CharMap before = face->charmap;
+            FT_Error row_error = FT_Set_Charmap(face, face->charmaps[i]);
+            if (!first) {
+                printf(",");
+            }
+            first = 0;
+            print_set_charmap_row("index", i, row_error, before, face, chars_csv);
+        }
+        printf("]}}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-charmap-index")) {
+        print_status(0);
+        printf(",\"output\":{\"indices\":[");
+        for (FT_Int i = 0; face && face->charmaps && i < face->num_charmaps; i++) {
+            if (i) {
+                printf(",");
+            }
+            FT_CharMap charmap = face->charmaps[i];
+            printf("{\"return\":%d,\"charmap_metadata\":", FT_Get_Charmap_Index(charmap));
+            print_charmap_inventory_record(charmap);
+            printf("}");
+        }
+        printf("],\"returns\":[");
+        for (FT_Int i = 0; face && face->charmaps && i < face->num_charmaps; i++) {
+            if (i) {
+                printf(",");
+            }
+            printf("%d", FT_Get_Charmap_Index(face->charmaps[i]));
+        }
+        printf("]}}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-fstype-flags")) {
+        const char* symbol_name = argc > 7 ? argv[7] : NULL;
+        FT_UShort flags = FT_Get_FSType_Flags(face);
+        print_status(0);
+        printf(",\"output\":");
+        print_fstype_flags_result(flags, symbol_name);
+        printf("}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-sfnt-name-count")) {
+        print_status(0);
+        printf(",\"output\":{\"return\":%u}}\n", FT_Get_Sfnt_Name_Count(face));
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-sfnt-name")) {
+        FT_UInt count = FT_Get_Sfnt_Name_Count(face);
+        size_t indexes_len = strlen(argv[7]);
+        char* indexes = (char*)malloc(indexes_len + 1);
+        if (!indexes) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        memcpy(indexes, argv[7], indexes_len + 1);
+        print_status(0);
+        printf(",\"output\":{\"return_sequence\":[");
+        char* token = strtok(indexes, ",");
+        int first_return = 1;
+        while (token) {
+            FT_UInt index = streq(token, "last_valid_index") && count > 0
+                ? count - 1
+                : (FT_UInt)strtoul(token, NULL, 10);
+            FT_SfntName name;
+            FT_Error name_error = FT_Get_Sfnt_Name(face, index, &name);
+            if (!first_return) printf(",");
+            first_return = 0;
+            printf("%d", name_error);
+            token = strtok(NULL, ",");
+        }
+        printf("],\"names\":[");
+        free(indexes);
+
+        indexes = (char*)malloc(indexes_len + 1);
+        if (!indexes) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        memcpy(indexes, argv[7], indexes_len + 1);
+        token = strtok(indexes, ",");
+        int first_name = 1;
+        while (token) {
+            FT_UInt index = streq(token, "last_valid_index") && count > 0
+                ? count - 1
+                : (FT_UInt)strtoul(token, NULL, 10);
+            FT_SfntName name;
+            FT_Error name_error = FT_Get_Sfnt_Name(face, index, &name);
+            if (!name_error) {
+                if (!first_name) printf(",");
+                first_name = 0;
+                print_sfnt_name_record(index, &name);
+            }
+            token = strtok(NULL, ",");
+        }
+        printf("]}}\n");
+        free(indexes);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-sfnt-name-match")) {
+        long platform = atol(argv[7]);
+        long encoding = atol(argv[8]);
+        long language = atol(argv[9]);
+        long name_id = atol(argv[10]);
+        FT_UInt count = FT_Get_Sfnt_Name_Count(face);
+        FT_Error status = FT_ERR(Invalid_Argument);
+        FT_UInt matched_index = 0;
+        FT_SfntName matched_name;
+        int matched = 0;
+        print_status(0);
+        printf(",\"output\":{\"name_count\":%u,\"matches\":[", count);
+        int first = 1;
+        for (FT_UInt i = 0; i < count; i++) {
+            FT_SfntName name;
+            FT_Error name_error = FT_Get_Sfnt_Name(face, i, &name);
+            if (!name_error && sfnt_name_matches(&name, platform, encoding, language, name_id)) {
+                if (!first) printf(",");
+                first = 0;
+                print_sfnt_name_record(i, &name);
+                if (!matched) {
+                    matched = 1;
+                    matched_index = i;
+                    matched_name = name;
+                    status = FT_Err_Ok;
+                }
+            }
+        }
+        printf("],\"status\":%d,\"matched_name\":", status);
+        if (matched) {
+            print_sfnt_name_record(matched_index, &matched_name);
+        } else {
+            printf("null");
+        }
+        printf("}}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--sfnt-mac-encoding-record")) {
+        long platform = atol(argv[7]);
+        long encoding = atol(argv[8]);
+        long language = atol(argv[9]);
+        long name_id = atol(argv[10]);
+        const char* chars_csv = argv[11];
+        FT_CharMap matched_charmap = find_charmap_by_ids(face, platform, encoding);
+        FT_Error set_status = matched_charmap
+            ? FT_Set_Charmap(face, matched_charmap)
+            : FT_ERR(Invalid_Argument);
+
+        FT_UInt count = FT_Get_Sfnt_Name_Count(face);
+        FT_UInt matched_index = 0;
+        FT_SfntName matched_name;
+        int matched = 0;
+        for (FT_UInt i = 0; i < count; i++) {
+            FT_SfntName name;
+            FT_Error name_error = FT_Get_Sfnt_Name(face, i, &name);
+            if (!name_error && sfnt_name_matches(&name, platform, encoding, language, name_id)) {
+                matched = 1;
+                matched_index = i;
+                matched_name = name;
+                break;
+            }
+        }
+
+        print_status(0);
+        printf(",\"output\":{\"status\":%d,\"matched_charmap\":", set_status);
+        print_charmap_record(matched_charmap);
+        printf(",\"glyph_indices\":[");
+        if (!streq(chars_csv, "-") && chars_csv[0]) {
+            size_t chars_len = strlen(chars_csv);
+            char* chars = (char*)malloc(chars_len + 1);
+            if (!chars) {
+                FT_Done_Face(face);
+                FT_Done_FreeType(library);
+                free(data);
+                return 2;
+            }
+            memcpy(chars, chars_csv, chars_len + 1);
+            char* token = strtok(chars, ",");
+            int first = 1;
+            while (token) {
+                FT_ULong char_code = strtoul(token, NULL, 10);
+                if (!first) printf(",");
+                first = 0;
+                printf("%u", set_status ? 0 : FT_Get_Char_Index(face, char_code));
+                token = strtok(NULL, ",");
+            }
+            free(chars);
+        }
+        printf("],\"matched_name\":");
+        if (matched) {
+            print_sfnt_name_record(matched_index, &matched_name);
+        } else {
+            printf("null");
+        }
+        printf("}}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-sfnt-os2-unicode-ranges")) {
+        TT_OS2* os2 = (TT_OS2*)FT_Get_Sfnt_Table(face, FT_SFNT_OS2);
+        print_status(0);
+        printf(",\"output\":{\"table_present\":");
+        print_json_bool(os2 != NULL);
+        printf(",\"has_os2_table\":");
+        print_json_bool(os2 != NULL);
+        if (os2) {
+            printf(",\"ulUnicodeRange1\":%lu", os2->ulUnicodeRange1);
+            printf(",\"ulUnicodeRange2\":%lu", os2->ulUnicodeRange2);
+            printf(",\"ulUnicodeRange3\":%lu", os2->ulUnicodeRange3);
+            printf(",\"ulUnicodeRange4\":%lu", os2->ulUnicodeRange4);
+        } else {
+            printf(",\"ulUnicodeRange1\":0,\"ulUnicodeRange2\":0,\"ulUnicodeRange3\":0,\"ulUnicodeRange4\":0");
+        }
+        printf(",\"glyph_indices\":[");
+        size_t codepoints_len = strlen(argv[7]);
+        char* codepoints = (char*)malloc(codepoints_len + 1);
+        if (!codepoints) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        memcpy(codepoints, argv[7], codepoints_len + 1);
+        char* token = strtok(codepoints, ",");
+        int first = 1;
+        while (token) {
+            if (token[0] != '\0') {
+                FT_ULong char_code = strtoul(token, NULL, 10);
+                if (!first) printf(",");
+                first = 0;
+                printf("%u", FT_Get_Char_Index(face, char_code));
+            }
+            token = strtok(NULL, ",");
+        }
+        free(codepoints);
+        printf("]}}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-first-char")) {
+        FT_UInt glyph_index = 0;
+        FT_ULong char_code = FT_Get_First_Char(face, &glyph_index);
+        print_status(0);
+        printf(",\"output\":");
+        print_char_iteration_result(char_code, glyph_index);
+        printf("}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-next-char-sequence")) {
+        unsigned long max_steps = strtoul(argv[7], NULL, 10);
+        FT_UInt glyph_index = 0;
+        FT_ULong char_code = FT_Get_First_Char(face, &glyph_index);
+        print_status(0);
+        printf(",\"output\":{\"sequence\":[");
+        for (unsigned long i = 0; i < max_steps && glyph_index != 0; i++) {
+            if (i) printf(",");
+            print_char_iteration_result(char_code, glyph_index);
+            char_code = FT_Get_Next_Char(face, char_code, &glyph_index);
+        }
+        printf("]}}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-next-char-starts")) {
+        size_t starts_len = strlen(argv[7]);
+        char* starts = (char*)malloc(starts_len + 1);
+        if (!starts) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        memcpy(starts, argv[7], starts_len + 1);
+        print_status(0);
+        printf(",\"output\":{\"rows\":[");
+        char* token = strtok(starts, ",");
+        int first = 1;
+        while (token) {
+            FT_ULong start = strtoul(token, NULL, 10);
+            FT_UInt glyph_index = 0;
+            FT_ULong char_code = FT_Get_Next_Char(face, start, &glyph_index);
+            if (!first) printf(",");
+            first = 0;
+            printf("{\"start\":%lu,\"result\":", (unsigned long)start);
+            print_char_iteration_result(char_code, glyph_index);
+            printf("}");
+            token = strtok(NULL, ",");
+        }
+        printf("]}}\n");
+        free(starts);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
     if (streq(command, "--get-advance")) {
         FT_UInt glyph_index = (FT_UInt)strtoul(argv[7], NULL, 10);
         FT_Int32 load_flags = (FT_Int32)strtol(argv[8], NULL, 10);
@@ -1436,11 +4945,14 @@ static int emit_face_or_slot(int argc, char** argv) {
 
     FT_UInt glyph_index = 0;
     FT_Int32 load_flags = 0;
-    if (streq(command, "--load-char") || streq(command, "--render-glyph")) {
+    if (streq(command, "--load-char") || streq(command, "--render-glyph") || streq(command, "--load-glyph-from-char")) {
         FT_ULong char_code = strtoul(argv[7], NULL, 10);
         load_flags = (FT_Int32)strtol(argv[8], NULL, 10);
         glyph_index = FT_Get_Char_Index(face, char_code);
-    } else if (streq(command, "--load-glyph") || streq(command, "--render-glyph-index")) {
+    } else if (streq(command, "--load-glyph-num-glyphs")) {
+        glyph_index = (FT_UInt)face->num_glyphs;
+        load_flags = (FT_Int32)strtol(argv[7], NULL, 10);
+    } else if (streq(command, "--load-glyph") || streq(command, "--render-glyph-index") || streq(command, "--inspect-glyph-metrics") || streq(command, "--inspect-glyph-slot") || streq(command, "--load-glyph-outline") || streq(command, "--outline-get-bbox") || streq(command, "--outline-get-cbox") || streq(command, "--glyph-get-cbox") || streq(command, "--glyph-to-bitmap") || streq(command, "--glyph-record") || streq(command, "--sbit-cache-lookup")) {
         glyph_index = (FT_UInt)strtoul(argv[7], NULL, 10);
         load_flags = (FT_Int32)strtol(argv[8], NULL, 10);
     } else {
@@ -1452,13 +4964,69 @@ static int emit_face_or_slot(int argc, char** argv) {
     }
 
     err = FT_Load_Glyph(face, glyph_index, load_flags);
-    if (!err && (streq(command, "--render-glyph") || streq(command, "--render-glyph-index"))) {
+    if (!err && (streq(command, "--render-glyph") || streq(command, "--render-glyph-index") || (streq(command, "--inspect-glyph-slot") && argc == 10))) {
         FT_Render_Mode render_mode = (FT_Render_Mode)strtol(argv[9], NULL, 10);
         err = FT_Render_Glyph(face->glyph, render_mode);
+    }
+    if (!err && streq(command, "--glyph-get-cbox")) {
+        print_glyph_cbox_payload(face->glyph, argv[9]);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+    if (!err && streq(command, "--glyph-to-bitmap")) {
+        FT_Render_Mode render_mode = (FT_Render_Mode)strtol(argv[9], NULL, 10);
+        int destroy = atoi(argv[10]);
+        print_glyph_to_bitmap_payload(face->glyph, render_mode, destroy);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+    if (!err && streq(command, "--glyph-record")) {
+        print_get_glyph_payload(face->glyph, argv[9]);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+    if (!err && streq(command, "--sbit-cache-lookup")) {
+        if (face->glyph->format != FT_GLYPH_FORMAT_BITMAP) {
+            err = FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
+        }
+        print_status(err);
+        if (err) {
+            printf(",\"output\":null}\n");
+        } else {
+            printf(",");
+            print_sbit_payload(face->glyph);
+            printf("}\n");
+        }
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
     }
     print_status(err);
     if (err) {
         printf(",\"output\":null}\n");
+    } else if (streq(command, "--inspect-glyph-metrics")) {
+        printf(",");
+        print_glyph_metrics(face->glyph->metrics);
+        printf("}\n");
+    } else if (streq(command, "--load-glyph-outline")) {
+        printf(",");
+        print_outline_payload(face->glyph);
+        printf("}\n");
+    } else if (streq(command, "--outline-get-bbox")) {
+        printf(",");
+        print_outline_bbox_payload(face->glyph);
+        printf("}\n");
+    } else if (streq(command, "--outline-get-cbox")) {
+        printf(",");
+        print_outline_cbox_payload(face->glyph);
+        printf("}\n");
     } else {
         printf(",");
         print_slot(face->glyph, glyph_index);
@@ -1468,6 +5036,159 @@ static int emit_face_or_slot(int argc, char** argv) {
     FT_Done_Face(face);
     FT_Done_FreeType(library);
     free(data);
+    return 0;
+}
+
+typedef struct MemoryFaceRow_ {
+    FT_Long face_index;
+    int has_file_size;
+    FT_Long file_size;
+} MemoryFaceRow;
+
+static int parse_memory_face_row(char* row, MemoryFaceRow* out) {
+    char* fields[3];
+    char* cursor = row;
+    for (int i = 0; i < 3; i++) {
+        fields[i] = cursor;
+        char* sep = strchr(cursor, ':');
+        if (i == 2) {
+            if (sep) {
+                return 0;
+            }
+            break;
+        }
+        if (!sep) {
+            return 0;
+        }
+        *sep = '\0';
+        cursor = sep + 1;
+    }
+    out->face_index = (FT_Long)strtol(fields[0], NULL, 10);
+    out->has_file_size = (int)strtol(fields[1], NULL, 10) != 0;
+    out->file_size = (FT_Long)strtol(fields[2], NULL, 10);
+    return 1;
+}
+
+static void print_memory_face_row(MemoryFaceRow row, FT_Error err) {
+    printf("{\"face_index\":%ld,\"file_size\":", row.face_index);
+    if (row.has_file_size) {
+        printf("%ld", row.file_size);
+    } else {
+        printf("null");
+    }
+    printf(",\"status\":%d,\"opened\":%s}", err, err ? "false" : "true");
+}
+
+static int emit_new_memory_face_variants(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    char* rows_arg = (char*)malloc(strlen(argv[4]) + 1);
+    if (!rows_arg) {
+        return 1;
+    }
+    memcpy(rows_arg, argv[4], strlen(argv[4]) + 1);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            free(rows_arg);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            free(rows_arg);
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        free(rows_arg);
+        return 2;
+    }
+
+    size_t row_count = 0;
+    const char* count_cursor = rows_arg;
+    while (count_cursor && *count_cursor) {
+        row_count++;
+        const char* next = strchr(count_cursor, ',');
+        count_cursor = next ? next + 1 : NULL;
+    }
+    MemoryFaceRow* rows = (MemoryFaceRow*)calloc(row_count, sizeof(MemoryFaceRow));
+    FT_Error* errors = (FT_Error*)calloc(row_count, sizeof(FT_Error));
+    if ((!rows || !errors) && row_count > 0) {
+        free(data);
+        free(rows_arg);
+        free(rows);
+        free(errors);
+        return 1;
+    }
+
+    char* cursor = rows_arg;
+    size_t row_index = 0;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ',');
+        if (next) {
+            *next = '\0';
+        }
+        if (!parse_memory_face_row(cursor, &rows[row_index])) {
+            fprintf(stderr, "bad memory face row: %s\n", cursor);
+            free(data);
+            free(rows_arg);
+            free(rows);
+            free(errors);
+            return 2;
+        }
+        row_index++;
+        cursor = next ? next + 1 : NULL;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        free(rows_arg);
+        free(rows);
+        free(errors);
+        return 0;
+    }
+
+    FT_Error first_error = FT_Err_Ok;
+    for (size_t i = 0; i < row_count; i++) {
+        FT_Face face = NULL;
+        FT_Long file_size = rows[i].has_file_size ? rows[i].file_size : data_len;
+        errors[i] = FT_New_Memory_Face(library, data, file_size, rows[i].face_index, &face);
+        if (!first_error && errors[i]) {
+            first_error = errors[i];
+        }
+        if (!errors[i] && face) {
+            FT_Done_Face(face);
+        }
+    }
+
+    printf("{");
+    print_status(first_error);
+    printf(",\"output\":{\"outputs\":[");
+    for (size_t i = 0; i < row_count; i++) {
+        if (i) {
+            printf(",");
+        }
+        print_memory_face_row(rows[i], errors[i]);
+    }
+    printf("]}}\n");
+
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    free(data);
+    free(rows_arg);
+    free(rows);
+    free(errors);
     return 0;
 }
 
@@ -1525,9 +5246,341 @@ static int emit_set_char_size(int argc, char** argv) {
     return 0;
 }
 
+typedef struct CharSizeRow_ {
+    FT_F26Dot6 char_width;
+    FT_F26Dot6 char_height;
+    FT_UInt horz_resolution;
+    FT_UInt vert_resolution;
+} CharSizeRow;
+
+static int parse_char_size_row(const char* token, CharSizeRow* row) {
+    char* copy = (char*)malloc(strlen(token) + 1);
+    if (!copy) {
+        return 1;
+    }
+    memcpy(copy, token, strlen(token) + 1);
+    char* cursor = copy;
+    char* parts[4] = {NULL, NULL, NULL, NULL};
+    for (int i = 0; i < 4; i++) {
+        parts[i] = cursor;
+        char* next = strchr(cursor, ':');
+        if (i < 3) {
+            if (!next) {
+                free(copy);
+                return 1;
+            }
+            *next = '\0';
+            cursor = next + 1;
+        } else if (next) {
+            free(copy);
+            return 1;
+        }
+    }
+    row->char_width = (FT_F26Dot6)strtol(parts[0], NULL, 10);
+    row->char_height = (FT_F26Dot6)strtol(parts[1], NULL, 10);
+    row->horz_resolution = (FT_UInt)strtoul(parts[2], NULL, 10);
+    row->vert_resolution = (FT_UInt)strtoul(parts[3], NULL, 10);
+    free(copy);
+    return 0;
+}
+
+static int emit_set_char_sizes(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    char* rows_arg = (char*)malloc(strlen(argv[5]) + 1);
+    if (!rows_arg) {
+        return 1;
+    }
+    memcpy(rows_arg, argv[5], strlen(argv[5]) + 1);
+
+    size_t row_count = 0;
+    const char* count_cursor = rows_arg;
+    while (count_cursor && *count_cursor) {
+        row_count++;
+        const char* next = strchr(count_cursor, ',');
+        count_cursor = next ? next + 1 : NULL;
+    }
+    CharSizeRow* rows = (CharSizeRow*)calloc(row_count, sizeof(CharSizeRow));
+    FT_Error* errors = (FT_Error*)calloc(row_count, sizeof(FT_Error));
+    FT_Size_Metrics* metrics = (FT_Size_Metrics*)calloc(row_count, sizeof(FT_Size_Metrics));
+    if ((!rows || !errors || !metrics) && row_count > 0) {
+        free(rows);
+        free(errors);
+        free(metrics);
+        free(rows_arg);
+        return 1;
+    }
+    char* cursor = rows_arg;
+    size_t row_index = 0;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ',');
+        if (next) {
+            *next = '\0';
+        }
+        if (parse_char_size_row(cursor, &rows[row_index]) != 0) {
+            fprintf(stderr, "char size rows must be WIDTH:HEIGHT:HRES:VRES\n");
+            free(rows);
+            free(errors);
+            free(metrics);
+            free(rows_arg);
+            return 2;
+        }
+        row_index++;
+        cursor = next ? next + 1 : NULL;
+    }
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            free(rows);
+            free(errors);
+            free(metrics);
+            free(rows_arg);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            free(rows);
+            free(errors);
+            free(metrics);
+            free(rows_arg);
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        free(rows);
+        free(errors);
+        free(metrics);
+        free(rows_arg);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Face face = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (!setup_error) {
+        setup_error = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    }
+    printf("{");
+    if (setup_error) {
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        if (face) FT_Done_Face(face);
+        if (library) FT_Done_FreeType(library);
+        free(data);
+        free(rows);
+        free(errors);
+        free(metrics);
+        free(rows_arg);
+        return 0;
+    }
+
+    FT_Error first_error = FT_Err_Ok;
+    for (size_t i = 0; i < row_count; i++) {
+        errors[i] = FT_Set_Char_Size(
+            face,
+            rows[i].char_width,
+            rows[i].char_height,
+            rows[i].horz_resolution,
+            rows[i].vert_resolution
+        );
+        if (!first_error && errors[i]) {
+            first_error = errors[i];
+        }
+        if (!errors[i]) {
+            metrics[i] = face->size->metrics;
+        }
+    }
+
+    print_status(first_error);
+    printf(",\"output\":{\"outputs\":[");
+    for (size_t i = 0; i < row_count; i++) {
+        if (i) {
+            printf(",");
+        }
+        printf("{\"request\":{\"char_width\":%ld,\"char_height\":%ld,\"horz_resolution\":%u,\"vert_resolution\":%u},\"status\":%d,\"output\":",
+               (long)rows[i].char_width,
+               (long)rows[i].char_height,
+               rows[i].horz_resolution,
+               rows[i].vert_resolution,
+               errors[i]);
+        if (errors[i]) {
+            printf("null");
+        } else {
+            printf("{");
+            print_size_metrics_object(metrics[i]);
+            printf("}");
+        }
+        printf("}");
+    }
+    printf("]}}\n");
+
+    if (face) FT_Done_Face(face);
+    if (library) FT_Done_FreeType(library);
+    free(data);
+    free(rows);
+    free(errors);
+    free(metrics);
+    free(rows_arg);
+    return 0;
+}
+
+static void print_library_version_field_list(unsigned int mask) {
+    int first = 1;
+    printf("[");
+    if (mask & 1U) {
+        printf("\"amajor\"");
+        first = 0;
+    }
+    if (mask & 2U) {
+        if (!first) printf(",");
+        printf("\"aminor\"");
+        first = 0;
+    }
+    if (mask & 4U) {
+        if (!first) printf(",");
+        printf("\"apatch\"");
+    }
+    printf("]");
+}
+
+static void print_library_version_map(
+    const char* name,
+    unsigned int mask,
+    int major,
+    int minor,
+    int patch,
+    int invert
+) {
+    int first = 1;
+    printf("\"%s\":{", name);
+    if (((mask & 1U) != 0) != invert) {
+        printf("\"major\":%d", major);
+        first = 0;
+    }
+    if (((mask & 2U) != 0) != invert) {
+        if (!first) printf(",");
+        printf("\"minor\":%d", minor);
+        first = 0;
+    }
+    if (((mask & 4U) != 0) != invert) {
+        if (!first) printf(",");
+        printf("\"patch\":%d", patch);
+    }
+    printf("}");
+}
+
+static int parse_int_triplet(const char* csv, int* a, int* b, int* c) {
+    char* copy = (char*)malloc(strlen(csv) + 1);
+    if (!copy) return 0;
+    memcpy(copy, csv, strlen(csv) + 1);
+    char* first = strtok(copy, ",");
+    char* second = strtok(NULL, ",");
+    char* third = strtok(NULL, ",");
+    char* extra = strtok(NULL, ",");
+    if (!first || !second || !third || extra) {
+        free(copy);
+        return 0;
+    }
+    *a = atoi(first);
+    *b = atoi(second);
+    *c = atoi(third);
+    free(copy);
+    return 1;
+}
+
+static int emit_library_version(int argc, char** argv) {
+    (void)argc;
+    int library_present = atoi(argv[2]);
+    const char* rows_csv = argv[3];
+    int sentinel_major = 111;
+    int sentinel_minor = 222;
+    int sentinel_patch = 333;
+    if (!parse_int_triplet(argv[4], &sentinel_major, &sentinel_minor, &sentinel_patch)) {
+        fprintf(stderr, "invalid library version sentinel triplet\n");
+        return 2;
+    }
+    FT_Library library = NULL;
+    if (library_present) {
+        FT_Error err = FT_Init_FreeType(&library);
+        if (err) {
+            printf("{");
+            print_status(err);
+            printf(",\"output\":null}\n");
+            return 0;
+        }
+    }
+
+    size_t rows_len = strlen(rows_csv);
+    char* rows = (char*)malloc(rows_len + 1);
+    if (!rows) {
+        if (library) FT_Done_FreeType(library);
+        return 2;
+    }
+    memcpy(rows, rows_csv, rows_len + 1);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    char* token = strtok(rows, ",");
+    int first = 1;
+    while (token) {
+        unsigned int mask = (unsigned int)strtoul(token, NULL, 10);
+        int major = sentinel_major;
+        int minor = sentinel_minor;
+        int patch = sentinel_patch;
+        FT_Library_Version(
+            library,
+            (mask & 1U) ? &major : NULL,
+            (mask & 2U) ? &minor : NULL,
+            (mask & 4U) ? &patch : NULL
+        );
+        if (!first) printf(",");
+        first = 0;
+        printf("{\"outputs\":");
+        print_library_version_field_list(mask);
+        printf(",");
+        print_library_version_map("writes", mask, major, minor, patch, 0);
+        printf(",");
+        print_library_version_map("sentinel_outputs", mask, sentinel_major, sentinel_minor, sentinel_patch, 1);
+        printf("}");
+        token = strtok(NULL, ",");
+    }
+    printf("]}}\n");
+    free(rows);
+    if (library) FT_Done_FreeType(library);
+    return 0;
+}
+
 static int dispatch(int argc, char** argv) {
     if (argc == 3 && streq(argv[1], "--constant")) {
         return emit_constant(argv[2]);
+    }
+    if (argc == 3 && streq(argv[1], "--constant-map")) {
+        return emit_constant_map(argv[2]);
+    }
+    if (argc == 4 && streq(argv[1], "--fixed-math")) {
+        return emit_fixed_math(argv[2], argv[3]);
+    }
+    if (argc == 3 && streq(argv[1], "--vector-transform")) {
+        return emit_vector_transform(argv[2]);
+    }
+    if (argc == 3 && streq(argv[1], "--matrix-multiply")) {
+        return emit_matrix_multiply(argv[2]);
+    }
+    if (argc == 3 && streq(argv[1], "--matrix-invert")) {
+        return emit_matrix_invert(argv[2]);
+    }
+    if (argc == 4 && streq(argv[1], "--trigon")) {
+        return emit_trigon(argv[2], argv[3]);
+    }
+    if (argc == 4 && streq(argv[1], "--trigon-aggregate")) {
+        return emit_trigon_aggregate(argv[2], argv[3]);
     }
     if (argc == 3 && streq(argv[1], "--layout")) {
         return emit_layout(argv[2]);
@@ -1535,22 +5588,145 @@ static int dispatch(int argc, char** argv) {
     if (argc == 3 && streq(argv[1], "--type-probe")) {
         return emit_type_probe(argv[2]);
     }
+    if (argc == 3 && streq(argv[1], "--type-map-probe")) {
+        return emit_type_map_probe(argv[2]);
+    }
     if (argc == 3 && streq(argv[1], "--function-probe")) {
         return emit_function_probe(argv[2]);
+    }
+    if (argc == 4 && streq(argv[1], "--abi-value-echo")) {
+        return emit_abi_value_echo(argv[2], argv[3]);
+    }
+    if (argc == 5 && streq(argv[1], "--compile-alias-probe")) {
+        return emit_compile_alias_probe(argv[2], argv[3], argv[4]);
     }
     if (argc == 3 && streq(argv[1], "--macro-eval")) {
         return emit_macro_eval(argv[2]);
     }
+    if (argc == 6 && streq(argv[1], "--face-macro")) {
+        return emit_face_macro(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--face-macro-flags")) {
+        return emit_face_macro_flags(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--library-version")) {
+        return emit_library_version(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--face-flags")) {
+        return emit_face_flags(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--manager-reset-null")) {
+        return emit_manager_reset(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--manager-reset")) {
+        return emit_manager_reset(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--outline-render")) {
+        return emit_outline_render(argc, argv);
+    }
     if (argc == 7 && (streq(argv[1], "--new-memory-face") || streq(argv[1], "--set-pixel-sizes") || streq(argv[1], "--size-metrics"))) {
         return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--new-memory-face-variants")) {
+        return emit_new_memory_face_variants(argc, argv);
     }
     if (argc == 9 && streq(argv[1], "--set-char-size")) {
         return emit_set_char_size(argc, argv);
     }
+    if (argc == 6 && streq(argv[1], "--set-char-sizes")) {
+        return emit_set_char_sizes(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--request-size")) {
+        return emit_request_size(argc, argv);
+    }
     if (argc == 8 && streq(argv[1], "--get-char-index")) {
         return emit_face_or_slot(argc, argv);
     }
-    if (argc == 9 && (streq(argv[1], "--load-char") || streq(argv[1], "--load-glyph"))) {
+    if (argc == 8 && streq(argv[1], "--get-kerning")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 10 && streq(argv[1], "--charmap-get-char-index")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--inspect-charmaps")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--set-charmap")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--set-charmap-null-face")) {
+        return emit_set_charmap_null_face(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--set-charmap-variants")) {
+        return emit_set_charmap_variants(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--get-charmap-index")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--get-charmap-index-variants")) {
+        return emit_get_charmap_index_variants(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--select-charmap")) {
+        return emit_select_charmap(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--select-charmap-null-face")) {
+        return emit_select_charmap_null_face(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--select-charmaps")) {
+        return emit_select_charmaps(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--set-lcd-filter")) {
+        return emit_set_lcd_filter(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--set-lcd-filter-weights")) {
+        return emit_set_lcd_filter_weights(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--set-lcd-geometry")) {
+        return emit_set_lcd_geometry(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--get-truetype-engine-type")) {
+        return emit_truetype_engine_type(argc, argv);
+    }
+    if ((argc == 3 || argc == 6) && streq(argv[1], "--done-freetype")) {
+        return emit_done_freetype(argc, argv);
+    }
+    if ((argc == 3 || argc == 6) && streq(argv[1], "--done-face")) {
+        return emit_done_face(argc, argv);
+    }
+    if ((argc == 3 || argc == 6) && streq(argv[1], "--face-check-tt-patents")) {
+        return emit_face_check_truetype_patents(argc, argv);
+    }
+    if ((argc == 4 || argc == 7) && streq(argv[1], "--face-set-unpatented-hinting")) {
+        return emit_face_set_unpatented_hinting(argc, argv);
+    }
+    if ((argc == 7 || argc == 8) && streq(argv[1], "--get-fstype-flags")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--get-sfnt-name-count")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--get-sfnt-name")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 11 && streq(argv[1], "--get-sfnt-name-match")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 12 && streq(argv[1], "--sfnt-mac-encoding-record")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--get-sfnt-os2-unicode-ranges")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--get-first-char")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 8 && (streq(argv[1], "--get-next-char-sequence") || streq(argv[1], "--get-next-char-starts"))) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 9 && (streq(argv[1], "--load-char") || streq(argv[1], "--load-glyph") || streq(argv[1], "--load-glyph-from-char") || streq(argv[1], "--inspect-glyph-metrics") || streq(argv[1], "--inspect-glyph-slot") || streq(argv[1], "--load-glyph-outline") || streq(argv[1], "--outline-get-bbox") || streq(argv[1], "--outline-get-cbox"))) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--load-glyph-num-glyphs")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 9 && streq(argv[1], "--get-advance")) {
@@ -1562,7 +5738,22 @@ static int dispatch(int argc, char** argv) {
     if (argc == 10 && (streq(argv[1], "--render-glyph") || streq(argv[1], "--render-glyph-index"))) {
         return emit_face_or_slot(argc, argv);
     }
-    fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | --layout RECORD | --type-probe SYMBOL | --function-probe SYMBOL | --macro-eval CASE_ID | --new-memory-face SRC_KIND SRC FACE_INDEX PX PY | --set-pixel-sizes SRC_KIND SRC FACE_INDEX PX PY | --set-char-size SRC_KIND SRC FACE_INDEX WIDTH HEIGHT HR VR | --size-metrics SRC_KIND SRC FACE_INDEX PX PY | --get-char-index SRC_KIND SRC FACE_INDEX PX PY CHAR | --load-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --get-advance SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --get-advances SRC_KIND SRC FACE_INDEX PX PY START COUNT FLAGS | --render-glyph SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS MODE | --render-glyph-index SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE\n");
+    if (argc == 10 && streq(argv[1], "--inspect-glyph-slot")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 10 && streq(argv[1], "--glyph-get-cbox")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 11 && streq(argv[1], "--glyph-to-bitmap")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 10 && streq(argv[1], "--glyph-record")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--sbit-cache-lookup")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | --constant-map SYMBOLS_CSV | --fixed-math OP ROWS | --trigon OP ROWS | --trigon-aggregate OP ROWS | --vector-transform ROWS | --matrix-multiply ROWS | --matrix-invert ROWS | --layout RECORD | --type-probe SYMBOL | --function-probe SYMBOL | --abi-value-echo TYPE ROWS | --compile-alias-probe MACRO TYPEDEF SIGNATURE | --macro-eval CASE_ID | --face-macro SRC_KIND SRC FACE_INDEX MACRO | --face-macro-flags MACRO FACE_INDEX FLAGS_CSV | --library-version PRESENT ROW_MASKS SENTINELS | --face-flags SRC_KIND SRC FACE_INDEX FLAG | --manager-reset-null | --manager-reset SRC_KIND SRC FACE_INDEX PX PY GID | --outline-render MODE CASE_ID | --new-memory-face SRC_KIND SRC FACE_INDEX PX PY | --new-memory-face-variants SRC_KIND SRC ROWS | --set-pixel-sizes SRC_KIND SRC FACE_INDEX PX PY | --set-char-size SRC_KIND SRC FACE_INDEX WIDTH HEIGHT HR VR | --set-char-sizes SRC_KIND SRC FACE_INDEX ROWS | --request-size SRC_KIND SRC FACE_INDEX ROWS | --size-metrics SRC_KIND SRC FACE_INDEX PX PY | --get-char-index SRC_KIND SRC FACE_INDEX PX PY CHAR | --get-kerning SRC_KIND SRC FACE_INDEX PX PY ROWS | --charmap-get-char-index SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING CHAR | --inspect-charmaps SRC_KIND SRC FACE_INDEX PX PY ENCODINGS CHARS | --set-charmap SRC_KIND SRC FACE_INDEX PX PY INDICES CHARS | --set-charmap-null-face | --set-charmap-variants SRC_KIND SRC FACE_INDEX FOREIGN_KIND FOREIGN_SRC FOREIGN_FACE_INDEX VARIANTS | --get-charmap-index SRC_KIND SRC FACE_INDEX PX PY | --get-charmap-index-variants SRC_KIND SRC FACE_INDEX VARIANTS | --select-charmap SRC_KIND SRC FACE_INDEX ENCODING CHARS | --set-lcd-filter LIBRARY_PRESENT FILTERS | --set-lcd-filter-weights LIBRARY_PRESENT WEIGHTS | --set-lcd-geometry LIBRARY_PRESENT GEOMETRY | --get-truetype-engine-type LIBRARY_PRESENT | --done-freetype MODE [SRC_KIND SRC FACE_INDEX] | --done-face MODE [SRC_KIND SRC FACE_INDEX] | --face-check-tt-patents MODE [SRC_KIND SRC FACE_INDEX] | --face-set-unpatented-hinting MODE VALUES [SRC_KIND SRC FACE_INDEX] | --get-fstype-flags SRC_KIND SRC FACE_INDEX PX PY [SYMBOL] | --get-sfnt-name-count SRC_KIND SRC FACE_INDEX PX PY | --get-sfnt-name SRC_KIND SRC FACE_INDEX PX PY INDEXES | --get-sfnt-name-match SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID | --sfnt-mac-encoding-record SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID CODEPOINTS | --get-sfnt-os2-unicode-ranges SRC_KIND SRC FACE_INDEX PX PY CODEPOINTS | --get-first-char SRC_KIND SRC FACE_INDEX PX PY | --get-next-char-sequence SRC_KIND SRC FACE_INDEX PX PY MAX_STEPS | --get-next-char-starts SRC_KIND SRC FACE_INDEX PX PY STARTS_CSV | --load-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --load-glyph-from-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph-num-glyphs SRC_KIND SRC FACE_INDEX PX PY FLAGS | --load-glyph-outline SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-bbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --glyph-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODES | --glyph-to-bitmap SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE DESTROY | --glyph-record SRC_KIND SRC FACE_INDEX PX PY GID FLAGS ACTION | --sbit-cache-lookup SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-metrics SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-slot SRC_KIND SRC FACE_INDEX PX PY GID FLAGS [MODE] | --get-advance SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --get-advances SRC_KIND SRC FACE_INDEX PX PY START COUNT FLAGS | --render-glyph SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS MODE | --render-glyph-index SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE\n");
     return 2;
 }
 

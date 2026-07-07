@@ -10,7 +10,7 @@
       "case_id": "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.value_matches_header",
       "subject": "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND",
       "case": "value_matches_header",
-      "operation": "ftcolor.constant_value",
+      "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
       "inputs": {

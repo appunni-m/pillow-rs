@@ -1,18 +1,58 @@
 {
   "version": 1,
   "subject": "ftimage.FT_Pixel_Mode",
-  "manifest_cases": ["enum_variants_match_header", "bitmap_pixel_mode_matches_render_output"],
+  "manifest_cases": [
+    "enum_variants_match_header",
+    "bitmap_pixel_mode_matches_render_output"
+  ],
   "cases": [
     {
       "case_id": "ftimage.FT_Pixel_Mode.enum_variants_match_header",
       "subject": "ftimage.FT_Pixel_Mode",
       "case": "enum_variants_match_header",
-      "operation": "ftimage.enum_values",
-      "schema": "api_enum",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"include": "<freetype/ftimage.h>", "enum": "FT_Pixel_Mode", "variants": {"FT_PIXEL_MODE_NONE": 0, "FT_PIXEL_MODE_MONO": 1, "FT_PIXEL_MODE_GRAY": 2, "FT_PIXEL_MODE_GRAY2": 3, "FT_PIXEL_MODE_GRAY4": 4, "FT_PIXEL_MODE_LCD": 5, "FT_PIXEL_MODE_LCD_V": 6, "FT_PIXEL_MODE_BGRA": 7, "FT_PIXEL_MODE_MAX": 8}}},
-      "classifiers": ["kind:enum", "header:ftimage", "abi:value"],
-      "expectation": {"status": "ok", "output_shape": {"enum": "FT_Pixel_Mode", "values": "sequential C enum values"}, "compare": {"mode": "value", "paths": ["enum", "variants.*"]}, "source_refs": ["freetype/include/freetype/ftimage.h:151-164"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftimage.h>",
+          "enum": "FT_Pixel_Mode",
+          "symbols": [
+            "FT_PIXEL_MODE_NONE",
+            "FT_PIXEL_MODE_MONO",
+            "FT_PIXEL_MODE_GRAY",
+            "FT_PIXEL_MODE_GRAY2",
+            "FT_PIXEL_MODE_GRAY4",
+            "FT_PIXEL_MODE_LCD",
+            "FT_PIXEL_MODE_LCD_V",
+            "FT_PIXEL_MODE_BGRA",
+            "FT_PIXEL_MODE_MAX"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:ftimage",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "enum": "FT_Pixel_Mode",
+          "values": "sequential C enum values"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "enum",
+            "variants.*"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:151-164"
+        ]
+      }
     },
     {
       "case_id": "ftimage.FT_Pixel_Mode.bitmap_pixel_mode_matches_render_output",
@@ -21,9 +61,77 @@
       "operation": "freetype.render_glyph_bitmap",
       "schema": "bitmap_result",
       "expect_error": false,
-      "inputs": {"assets": {"outline_font": {"kind": "file", "role": "font", "path": "input/fonts/DejaVuSans.ttf"}, "color_bitmap_font": {"kind": "ref", "id": "fonts/color/cbdt-bgra.ttf"}, "gray_bitmap_font": {"kind": "ref", "id": "fonts/bitmap/gray2-gray4-strikes.ttf"}}, "params": {"render_modes": ["FT_RENDER_MODE_MONO", "FT_RENDER_MODE_NORMAL", "FT_RENDER_MODE_LCD", "FT_RENDER_MODE_LCD_V"], "load_flags": ["FT_LOAD_RENDER", "FT_LOAD_COLOR"], "inspect_fields": ["pixel_mode", "rows", "width", "pitch", "num_grays", "buffer"]}, "variability": {"axes": ["load_flags", "render_modes"]}},
-      "classifiers": ["kind:enum", "header:ftimage", "path:runtime"],
-      "expectation": {"status": "build_dependent", "output_shape": {"status": "FT_Error", "bitmap": "FT_Bitmap metadata and bytes", "pixel_mode": "FT_Pixel_Mode"}, "compare": {"mode": "bytes", "paths": ["rows[*].status", "rows[*].bitmap.pixel_mode", "rows[*].bitmap.rows", "rows[*].bitmap.width", "rows[*].bitmap.pitch", "rows[*].bitmap.num_grays", "rows[*].bitmap.buffer"]}, "fixture_requirements": ["color and gray2/gray4 bitmap rows require future shared fonts; unavailable rows must be classified rather than silently skipped."]}
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "color_bitmap_font": {
+            "kind": "ref",
+            "id": "fonts/color/cbdt-bgra.ttf"
+          },
+          "gray_bitmap_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap/gray2-gray4-strikes.ttf"
+          }
+        },
+        "params": {
+          "render_modes": [
+            "FT_RENDER_MODE_MONO",
+            "FT_RENDER_MODE_NORMAL",
+            "FT_RENDER_MODE_LCD",
+            "FT_RENDER_MODE_LCD_V"
+          ],
+          "load_flags": [
+            "FT_LOAD_RENDER",
+            "FT_LOAD_COLOR"
+          ],
+          "inspect_fields": [
+            "pixel_mode",
+            "rows",
+            "width",
+            "pitch",
+            "num_grays",
+            "buffer"
+          ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags",
+            "render_modes"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:ftimage",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "status": "FT_Error",
+          "bitmap": "FT_Bitmap metadata and bytes",
+          "pixel_mode": "FT_Pixel_Mode"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "rows[*].status",
+            "rows[*].bitmap.pixel_mode",
+            "rows[*].bitmap.rows",
+            "rows[*].bitmap.width",
+            "rows[*].bitmap.pitch",
+            "rows[*].bitmap.num_grays",
+            "rows[*].bitmap.buffer"
+          ]
+        },
+        "fixture_requirements": [
+          "color and gray2/gray4 bitmap rows require future shared fonts; unavailable rows must be classified rather than silently skipped."
+        ]
+      }
     }
   ]
 }

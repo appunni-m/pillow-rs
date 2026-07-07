@@ -1,7 +1,11 @@
 {
   "version": 1,
   "subject": "fttypes.FT_List",
-  "manifest_cases": ["alias_defined_as_list_record_pointer", "pointer_size_alignment_and_nullability", "list_record_shape_dependency"],
+  "manifest_cases": [
+    "alias_defined_as_list_record_pointer",
+    "pointer_size_alignment_and_nullability",
+    "list_record_shape_dependency"
+  ],
   "cases": [
     {
       "case_id": "fttypes.FT_List.alias_defined_as_list_record_pointer",
@@ -10,22 +14,117 @@
       "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_List", "c_definition": "typedef struct FT_ListRec_* FT_List", "underlying_type": "struct FT_ListRec_*", "pointer_depth": 1, "pointee_record": "FT_ListRec", "probes": ["include_compiles", "forward_record_pointer_compiles"]}},
-      "classifiers": ["kind:pointer-alias", "header:fttypes", "area:list"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_List", "kind": "typedef", "underlying": "struct FT_ListRec_*"}},
-      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "underlying_type": "c_type", "pointer_depth": "usize", "pointee_record": "string", "import_compiles": "bool"}, "compare": {"mode": "value", "paths": ["symbol", "underlying_type", "pointer_depth", "pointee_record", "import_compiles"]}, "source_refs": ["freetype/include/freetype/fttypes.h:528-536"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_List",
+          "c_definition": "typedef struct FT_ListRec_* FT_List",
+          "underlying_type": "struct FT_ListRec_*",
+          "pointer_depth": 1,
+          "pointee_record": "FT_ListRec",
+          "probes": [
+            "include_compiles",
+            "forward_record_pointer_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:pointer-alias",
+        "header:fttypes",
+        "area:list"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_List",
+          "kind": "typedef",
+          "underlying": "struct FT_ListRec_*"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "underlying_type": "c_type",
+          "pointer_depth": "usize",
+          "pointee_record": "string",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "underlying_type",
+            "pointer_depth",
+            "pointee_record",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:528-536"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_List.pointer_size_alignment_and_nullability",
       "subject": "fttypes.FT_List",
       "case": "pointer_size_alignment_and_nullability",
-      "operation": "abi.pointer_layout",
+      "operation": "abi_type_probe",
       "schema": "abi_layout",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_List", "null_allowed": true, "model_pointers": ["NULL", "address_of_FT_ListRec"], "probes": ["sizeof", "alignof", "null_assignment", "pointer_roundtrip"]}},
-      "classifiers": ["kind:pointer-alias", "header:fttypes", "area:list"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_List", "kind": "pointer-alias", "underlying": "struct FT_ListRec_*"}},
-      "expectation": {"status": "ok", "output_shape": {"sizeof": "usize", "alignof": "usize", "nullness": "nullable", "roundtrip": "identity_class"}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "nullness", "roundtrip"]}, "source_refs": ["freetype/include/freetype/fttypes.h:528-536"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_List",
+          "null_allowed": true,
+          "model_pointers": [
+            "NULL",
+            "address_of_FT_ListRec"
+          ],
+          "probes": [
+            "sizeof",
+            "alignof",
+            "null_assignment",
+            "pointer_roundtrip"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:pointer-alias",
+        "header:fttypes",
+        "area:list"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_List",
+          "kind": "pointer-alias",
+          "underlying": "struct FT_ListRec_*"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "nullness": "nullable",
+          "roundtrip": "identity_class"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "nullness",
+            "roundtrip"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:528-536"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_List.list_record_shape_dependency",
@@ -34,10 +133,75 @@
       "operation": "record_layout",
       "schema": "abi_layout",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_ListRec", "fields_in_order": ["head", "tail"], "field_types": {"head": "FT_ListNode", "tail": "FT_ListNode"}, "model_states": [{"name": "empty", "head": "NULL", "tail": "NULL"}, {"name": "single", "head": "node0", "tail": "node0"}], "probes": ["sizeof", "alignof", "offsetof", "field_types"]}},
-      "classifiers": ["kind:record", "header:fttypes", "area:list", "coverage:abi-layout"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_ListRec", "kind": "record"}},
-      "expectation": {"status": "ok", "output_shape": {"sizeof": "usize", "alignof": "usize", "offsets": "object<field,usize>", "field_types": "object<field,c_type>", "states": "array<object>"}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "offsets", "field_types", "states"]}, "source_refs": ["freetype/include/freetype/fttypes.h:566-587"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_ListRec",
+          "fields_in_order": [
+            "head",
+            "tail"
+          ],
+          "field_types": {
+            "head": "FT_ListNode",
+            "tail": "FT_ListNode"
+          },
+          "model_states": [
+            {
+              "name": "empty",
+              "head": "NULL",
+              "tail": "NULL"
+            },
+            {
+              "name": "single",
+              "head": "node0",
+              "tail": "node0"
+            }
+          ],
+          "probes": [
+            "sizeof",
+            "alignof",
+            "offsetof",
+            "field_types"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:fttypes",
+        "area:list",
+        "coverage:abi-layout"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_ListRec",
+          "kind": "record"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "offsets": "object<field,usize>",
+          "field_types": "object<field,c_type>",
+          "states": "array<object>"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "offsets",
+            "field_types",
+            "states"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:566-587"
+        ]
+      }
     }
   ]
 }

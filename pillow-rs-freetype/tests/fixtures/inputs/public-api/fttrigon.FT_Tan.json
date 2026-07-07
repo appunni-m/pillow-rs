@@ -1,10 +1,26 @@
 {
   "version": 1,
   "subject": "fttrigon.FT_Tan",
-  "manifest_cases": ["signature_and_return_type", "zero_diagonal_and_negative_angles", "near_vertical_edge_cases"],
+  "manifest_cases": [
+    "signature_and_return_type",
+    "zero_diagonal_and_negative_angles",
+    "near_vertical_edge_cases"
+  ],
   "metadata": {
-    "abi": {"kind": "function", "header": "freetype/fttrigon.h", "symbol": "FT_Tan", "c_signature": "FT_Fixed FT_Tan(FT_Angle angle)", "return": "FT_Fixed", "args": ["FT_Angle angle"]},
-    "source_refs": ["freetype/include/freetype/fttrigon.h", "freetype/src/base/fttrigon.c:FT_Tan"],
+    "abi": {
+      "kind": "function",
+      "header": "freetype/fttrigon.h",
+      "symbol": "FT_Tan",
+      "c_signature": "FT_Fixed FT_Tan(FT_Angle angle)",
+      "return": "FT_Fixed",
+      "args": [
+        "FT_Angle angle"
+      ]
+    },
+    "source_refs": [
+      "freetype/include/freetype/fttrigon.h",
+      "freetype/src/base/fttrigon.c:FT_Tan"
+    ],
     "source_behavior": "C uses CORDIC pseudo-rotation and FT_DivFix-style fixed division, including exact integer behavior near vertical angles rather than reporting errors."
   },
   "cases": [
@@ -12,12 +28,41 @@
       "case_id": "fttrigon.FT_Tan.signature_and_return_type",
       "subject": "fttrigon.FT_Tan",
       "case": "signature_and_return_type",
-      "operation": "abi.function_signature",
+      "operation": "abi_function_probe",
       "schema": "abi_signature",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"include": "freetype/fttrigon.h", "symbol": "FT_Tan", "expected_signature": "FT_Fixed (*)(FT_Angle)"}},
-      "classifiers": ["kind:function", "header:fttrigon", "area:trigonometry", "abi:return-value"],
-      "expectation": {"status": "ok", "output_shape": {"import_compiles": "bool", "return_type": "FT_Fixed", "argument_types": ["FT_Angle"]}, "compare": {"mode": "layout", "paths": ["import_compiles", "return_type", "argument_types"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/fttrigon.h",
+          "symbol": "FT_Tan",
+          "expected_signature": "FT_Fixed (*)(FT_Angle)"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:fttrigon",
+        "area:trigonometry",
+        "abi:return-value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "import_compiles": "bool",
+          "return_type": "FT_Fixed",
+          "argument_types": [
+            "FT_Angle"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "import_compiles",
+            "return_type",
+            "argument_types"
+          ]
+        }
+      }
     },
     {
       "case_id": "fttrigon.FT_Tan.zero_diagonal_and_negative_angles",
@@ -26,9 +71,42 @@
       "operation": "fttrigon.tan",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"angles": [0, 2949120, -2949120, 1234567, -7654321, 14745600]}},
-      "classifiers": ["kind:function", "header:fttrigon", "area:trigonometry", "edge:signed-angles"],
-      "expectation": {"status": "ok", "output_shape": {"results": [{"angle": "FT_Angle", "tan": "FT_Fixed"}]}, "compare": {"mode": "exact", "paths": ["results[*].tan"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "angles": [
+            0,
+            2949120,
+            -2949120,
+            1234567,
+            -7654321,
+            14745600
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:fttrigon",
+        "area:trigonometry",
+        "edge:signed-angles"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "results": [
+            {
+              "angle": "FT_Angle",
+              "tan": "FT_Fixed"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "results[*].tan"
+          ]
+        }
+      }
     },
     {
       "case_id": "fttrigon.FT_Tan.near_vertical_edge_cases",
@@ -37,9 +115,43 @@
       "operation": "fttrigon.tan",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"angles": [5898239, 5898240, 5898241, -5898239, -5898240, -5898241, 29491200]}},
-      "classifiers": ["kind:function", "header:fttrigon", "area:trigonometry", "edge:near-vertical"],
-      "expectation": {"status": "ok", "output_shape": {"results": [{"angle": "FT_Angle", "tan": "FT_Fixed"}]}, "compare": {"mode": "exact", "paths": ["results[*].tan"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "angles": [
+            5898239,
+            5898240,
+            5898241,
+            -5898239,
+            -5898240,
+            -5898241,
+            29491200
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:fttrigon",
+        "area:trigonometry",
+        "edge:near-vertical"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "results": [
+            {
+              "angle": "FT_Angle",
+              "tan": "FT_Fixed"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "results[*].tan"
+          ]
+        }
+      }
     }
   ]
 }

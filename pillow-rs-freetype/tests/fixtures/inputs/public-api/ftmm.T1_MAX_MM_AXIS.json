@@ -10,7 +10,7 @@
       "case_id": "ftmm.T1_MAX_MM_AXIS.value_matches_header",
       "subject": "ftmm.T1_MAX_MM_AXIS",
       "case": "value_matches_header",
-      "operation": "ftmm.constant_value",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "abi": {
@@ -23,7 +23,8 @@
       "inputs": {
         "assets": {},
         "params": {
-          "constant": "T1_MAX_MM_AXIS"
+          "constant": "T1_MAX_MM_AXIS",
+          "symbol": "T1_MAX_MM_AXIS"
         }
       },
       "classifiers": [

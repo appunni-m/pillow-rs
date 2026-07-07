@@ -11,22 +11,22 @@
       "case_id": "ftlcdfil.FT_LcdFilter.variants_match_header",
       "subject": "ftlcdfil.FT_LcdFilter",
       "case": "variants_match_header",
-      "operation": "abi.enum_values",
-      "schema": "abi_enum",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
         "params": {
           "include": "freetype/ftlcdfil.h",
           "symbol": "FT_LcdFilter",
-          "variants": {
-            "FT_LCD_FILTER_NONE": 0,
-            "FT_LCD_FILTER_DEFAULT": 1,
-            "FT_LCD_FILTER_LIGHT": 2,
-            "FT_LCD_FILTER_LEGACY1": 3,
-            "FT_LCD_FILTER_LEGACY": 16,
-            "FT_LCD_FILTER_MAX": 17
-          }
+          "symbols": [
+            "FT_LCD_FILTER_NONE",
+            "FT_LCD_FILTER_DEFAULT",
+            "FT_LCD_FILTER_LIGHT",
+            "FT_LCD_FILTER_LEGACY1",
+            "FT_LCD_FILTER_LEGACY",
+            "FT_LCD_FILTER_MAX"
+          ]
         }
       },
       "classifiers": [

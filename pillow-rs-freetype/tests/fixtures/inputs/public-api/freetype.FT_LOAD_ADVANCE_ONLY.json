@@ -60,7 +60,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/DejaVuSans.ttf"
+            "id": "input/fonts/DejaVuSans.ttf"
           }
         },
         "params": {

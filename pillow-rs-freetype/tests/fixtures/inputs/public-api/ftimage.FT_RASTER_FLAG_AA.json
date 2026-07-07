@@ -11,7 +11,7 @@
       "case_id": "ftimage.FT_RASTER_FLAG_AA.value_matches_header",
       "subject": "ftimage.FT_RASTER_FLAG_AA",
       "case": "value_matches_header",
-      "operation": "ftimage.raster_flag_value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

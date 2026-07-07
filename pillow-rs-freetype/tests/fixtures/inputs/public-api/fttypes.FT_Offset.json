@@ -1,7 +1,11 @@
 {
   "version": 1,
   "subject": "fttypes.FT_Offset",
-  "manifest_cases": ["alias_defined_as_size_t", "size_alignment_and_unsigned_range", "file_and_memory_offset_domain"],
+  "manifest_cases": [
+    "alias_defined_as_size_t",
+    "size_alignment_and_unsigned_range",
+    "file_and_memory_offset_domain"
+  ],
   "cases": [
     {
       "case_id": "fttypes.FT_Offset.alias_defined_as_size_t",
@@ -10,22 +14,125 @@
       "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Offset", "c_definition": "typedef size_t FT_Offset", "underlying_type": "size_t", "signedness": "unsigned", "probes": ["include_compiles", "assignment_compiles", "stddef_size_t_available"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:offset"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Offset", "kind": "typedef", "underlying": "size_t"}},
-      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "underlying_type": "c_type", "signedness": "unsigned", "import_compiles": "bool"}, "compare": {"mode": "value", "paths": ["symbol", "underlying_type", "signedness", "import_compiles"]}, "source_refs": ["freetype/include/freetype/fttypes.h:316-326"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Offset",
+          "c_definition": "typedef size_t FT_Offset",
+          "underlying_type": "size_t",
+          "signedness": "unsigned",
+          "probes": [
+            "include_compiles",
+            "assignment_compiles",
+            "stddef_size_t_available"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:offset"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Offset",
+          "kind": "typedef",
+          "underlying": "size_t"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "underlying_type": "c_type",
+          "signedness": "unsigned",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "underlying_type",
+            "signedness",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:316-326"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_Offset.size_alignment_and_unsigned_range",
       "subject": "fttypes.FT_Offset",
       "case": "size_alignment_and_unsigned_range",
-      "operation": "abi.scalar_layout",
+      "operation": "abi_type_probe",
       "schema": "abi_layout",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Offset", "underlying_type": "size_t", "boundary_selectors": [0, 1, 4096, "SIZE_MAX"], "probes": ["sizeof", "alignof", "unsigned_min", "unsigned_max", "roundtrip_cast"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:scalar"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Offset", "kind": "scalar", "underlying": "size_t"}},
-      "expectation": {"status": "ok", "output_shape": {"sizeof": "usize", "alignof": "usize", "signedness": "unsigned", "range": {"min": "integer", "max": "integer"}, "roundtrip_values": ["FT_Offset"]}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "signedness", "range", "roundtrip_values"]}, "source_refs": ["freetype/include/freetype/fttypes.h:316-326"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Offset",
+          "underlying_type": "size_t",
+          "boundary_selectors": [
+            0,
+            1,
+            4096,
+            "SIZE_MAX"
+          ],
+          "probes": [
+            "sizeof",
+            "alignof",
+            "unsigned_min",
+            "unsigned_max",
+            "roundtrip_cast"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:scalar"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Offset",
+          "kind": "scalar",
+          "underlying": "size_t"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "signedness": "unsigned",
+          "range": {
+            "min": "integer",
+            "max": "integer"
+          },
+          "roundtrip_values": [
+            "FT_Offset"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "signedness",
+            "range",
+            "roundtrip_values"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:316-326"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_Offset.file_and_memory_offset_domain",
@@ -34,10 +141,73 @@
       "operation": "fttypes.offset_domain",
       "schema": "api_model",
       "expect_error": false,
-      "inputs": {"assets": {"bytes": {"kind": "ref", "id": "bytes/fttypes/offset-probe-4k.bin", "asset_kind": "binary"}}, "params": {"model_offsets": [0, 1, 255, 256, 4095], "used_for": ["file size", "file position", "memory block size"], "probe": ["pointer_plus_offset", "stream_cursor_difference"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:offset", "runtime:binary-input"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Offset", "kind": "offset", "underlying": "size_t"}},
-      "expectation": {"status": "ok", "output_shape": {"offsets": ["FT_Offset"], "resolved_positions": ["usize"], "bytes": "byte_array"}, "compare": {"mode": "bytes", "paths": ["offsets", "resolved_positions", "bytes"]}, "source_refs": ["freetype/include/freetype/fttypes.h:316-326"], "fixture_requirements": ["Binary fixture at least 4096 bytes long with deterministic contents for offset probes."]}
+      "inputs": {
+        "assets": {
+          "bytes": {
+            "kind": "ref",
+            "id": "bytes/fttypes/offset-probe-4k.bin",
+            "asset_kind": "binary"
+          }
+        },
+        "params": {
+          "model_offsets": [
+            0,
+            1,
+            255,
+            256,
+            4095
+          ],
+          "used_for": [
+            "file size",
+            "file position",
+            "memory block size"
+          ],
+          "probe": [
+            "pointer_plus_offset",
+            "stream_cursor_difference"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:offset",
+        "runtime:binary-input"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Offset",
+          "kind": "offset",
+          "underlying": "size_t"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "offsets": [
+            "FT_Offset"
+          ],
+          "resolved_positions": [
+            "usize"
+          ],
+          "bytes": "byte_array"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "offsets",
+            "resolved_positions",
+            "bytes"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:316-326"
+        ],
+        "fixture_requirements": [
+          "Binary fixture at least 4096 bytes long with deterministic contents for offset probes."
+        ]
+      }
     }
   ]
 }

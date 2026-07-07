@@ -202,11 +202,20 @@
           "variants": [
             {
               "face": "null",
-              "request": "valid"
+              "type": "FT_SIZE_REQUEST_TYPE_NOMINAL",
+              "width": 0,
+              "height": 768,
+              "horiResolution": 72,
+              "vertResolution": 72
             },
             {
               "face": "valid",
-              "request": "null"
+              "request": "null",
+              "type": "FT_SIZE_REQUEST_TYPE_NOMINAL",
+              "width": 0,
+              "height": 768,
+              "horiResolution": 72,
+              "vertResolution": 72
             }
           ]
         }
@@ -243,31 +252,25 @@
             "kind": "file",
             "role": "font",
             "path": "input/fonts/DejaVuSans.ttf"
-          },
-          "bitmap_font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/bitmap/embedded-strike.ttf",
-            "status": "required_future_asset",
-            "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
           }
         },
         "params": {
           "variants": [
             {
-              "type": "FT_SIZE_REQUEST_TYPE_MAX"
+              "type": "FT_SIZE_REQUEST_TYPE_MAX",
+              "width": 0,
+              "height": 768
             },
             {
+              "type": "FT_SIZE_REQUEST_TYPE_NOMINAL",
               "width": -64
             },
             {
+              "type": "FT_SIZE_REQUEST_TYPE_NOMINAL",
               "height": -64
             },
             {
-              "font": "bitmap_font",
-              "height": "missing_strike_ppem"
-            },
-            {
+              "type": "FT_SIZE_REQUEST_TYPE_NOMINAL",
               "width": 4294967296,
               "height": 4294967296
             }

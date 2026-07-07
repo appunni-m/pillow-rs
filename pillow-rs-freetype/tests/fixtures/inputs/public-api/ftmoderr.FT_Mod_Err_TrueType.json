@@ -107,8 +107,8 @@
       "case_id": "ftmoderr.FT_Mod_Err_TrueType.module_name_contract",
       "subject": "ftmoderr.FT_Mod_Err_TrueType",
       "case": "module_name_contract",
-      "operation": "abi.module_error_list",
-      "schema": "constant_metadata",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -117,7 +117,10 @@
           "symbol": "FT_Mod_Err_TrueType",
           "module_name": "TrueType module",
           "list_entry_order_after": "FT_Mod_Err_Smooth",
-          "list_entry_order_before": "FT_Mod_Err_Type1"
+          "list_entry_order_before": "FT_Mod_Err_Type1",
+          "symbols": [
+            "FT_Mod_Err_TrueType"
+          ]
         }
       },
       "classifiers": [

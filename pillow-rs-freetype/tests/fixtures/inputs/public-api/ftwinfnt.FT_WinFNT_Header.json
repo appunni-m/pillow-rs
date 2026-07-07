@@ -120,7 +120,7 @@
           },
           "non_winfnt_font": {
             "kind": "ref",
-            "id": "fonts/DejaVuSans.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "asset_kind": "font"
           }
         },

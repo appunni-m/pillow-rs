@@ -11,7 +11,7 @@
       "case_id": "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.value_matches_header",
       "subject": "ftimage.FT_OUTLINE_IGNORE_DROPOUTS",
       "case": "value_matches_header",
-      "operation": "ftimage.outline_flag_value",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

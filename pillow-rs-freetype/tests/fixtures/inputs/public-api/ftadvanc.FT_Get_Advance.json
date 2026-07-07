@@ -222,10 +222,6 @@
             [
               "FT_LOAD_NO_HINTING",
               "FT_ADVANCE_FLAG_FAST_ONLY"
-            ],
-            [
-              "FT_LOAD_DEFAULT",
-              "FT_ADVANCE_FLAG_FAST_ONLY"
             ]
           ],
           "sentinel_padvance": "0x13572468"
@@ -330,22 +326,23 @@
           "face_index": 0,
           "pixel_size": 20,
           "glyph_indices": [
-            "num_glyphs",
-            "num_glyphs+1"
+            6253,
+            6254
           ],
           "load_flag_sets": [
             [
               "FT_LOAD_DEFAULT"
             ],
             [
-              "unsupported_high_bits"
+              -2147483648
             ]
           ],
           "sentinel_padvance": "0x24681357"
         },
         "variability": {
           "axes": [
-            "glyph_indices"
+            "glyph_indices",
+            "load_flags"
           ]
         }
       },

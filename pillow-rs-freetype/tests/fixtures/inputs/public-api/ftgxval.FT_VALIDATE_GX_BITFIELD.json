@@ -10,8 +10,8 @@
       "case_id": "ftgxval.FT_VALIDATE_GX_BITFIELD.expansion_matches_header",
       "subject": "ftgxval.FT_VALIDATE_GX_BITFIELD",
       "case": "expansion_matches_header",
-      "operation": "macro.value",
-      "schema": "api_constant",
+      "operation": "macro_eval",
+      "schema": "api_macro",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -74,8 +74,8 @@
       "case_id": "ftgxval.FT_VALIDATE_GX_BITFIELD.table_tokens_generate_distinct_bits",
       "subject": "ftgxval.FT_VALIDATE_GX_BITFIELD",
       "case": "table_tokens_generate_distinct_bits",
-      "operation": "constant.bitfield_group",
-      "schema": "api_constant",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -107,7 +107,29 @@
             "FT_VALIDATE_prop",
             "FT_VALIDATE_lcar"
           ],
-          "expected_group_mask": 16760832
+          "symbols": [
+            "FT_VALIDATE_feat",
+            "FT_VALIDATE_mort",
+            "FT_VALIDATE_morx",
+            "FT_VALIDATE_bsln",
+            "FT_VALIDATE_just",
+            "FT_VALIDATE_kern",
+            "FT_VALIDATE_opbd",
+            "FT_VALIDATE_trak",
+            "FT_VALIDATE_prop",
+            "FT_VALIDATE_lcar",
+            "FT_VALIDATE_feat_INDEX",
+            "FT_VALIDATE_mort_INDEX",
+            "FT_VALIDATE_morx_INDEX",
+            "FT_VALIDATE_bsln_INDEX",
+            "FT_VALIDATE_just_INDEX",
+            "FT_VALIDATE_kern_INDEX",
+            "FT_VALIDATE_opbd_INDEX",
+            "FT_VALIDATE_trak_INDEX",
+            "FT_VALIDATE_prop_INDEX",
+            "FT_VALIDATE_lcar_INDEX",
+            "FT_VALIDATE_GX_START"
+          ]
         }
       },
       "classifiers": [

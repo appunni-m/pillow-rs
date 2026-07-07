@@ -22,7 +22,7 @@
       "case_id": "ftsizes.FT_New_Size.import_contract",
       "subject": "ftsizes.FT_New_Size",
       "case": "import_contract",
-      "operation": "abi.function_import",
+      "operation": "abi_function_probe",
       "schema": "abi_import",
       "expect_error": false,
       "inputs": {

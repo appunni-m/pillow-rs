@@ -11,7 +11,7 @@
       "case_id": "ftincrem.FT_Incremental_Interface.typedef_pointer_shape",
       "subject": "ftincrem.FT_Incremental_Interface",
       "case": "typedef_pointer_shape",
-      "operation": "abi.typedef_shape",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {

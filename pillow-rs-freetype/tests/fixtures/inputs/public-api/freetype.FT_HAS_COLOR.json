@@ -11,12 +11,13 @@
       "case_id": "freetype.FT_HAS_COLOR.face_flags_bit_probe",
       "subject": "freetype.FT_HAS_COLOR",
       "case": "face_flags_bit_probe",
-      "operation": "freetype.face_macro",
+      "operation": "face_macro_flags",
       "schema": "macro_probe",
       "expect_error": false,
       "inputs": {
         "assets": {},
         "params": {
+          "macro": "FT_HAS_COLOR",
           "flags": [
             0,
             "FT_FACE_FLAG_COLOR",
@@ -76,6 +77,7 @@
           }
         },
         "params": {
+          "macro": "FT_HAS_COLOR",
           "face_index": 0,
           "font_variants": [
             "COLR/CPAL",
@@ -122,6 +124,7 @@
           }
         },
         "params": {
+          "macro": "FT_HAS_COLOR",
           "face_index": 0
         }
       },

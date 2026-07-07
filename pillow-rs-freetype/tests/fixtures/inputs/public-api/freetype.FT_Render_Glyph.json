@@ -137,19 +137,44 @@
       "expect_error": false,
       "inputs": {
         "assets": {
-          "matrix": {
-            "kind": "ref",
-            "role": "fixture_matrix",
-            "path": "render_mode_matrix.json"
+          "font_folder": {
+            "kind": "file",
+            "role": "font_folder",
+            "path": "input/fonts"
           }
         },
         "params": {
-          "use_existing_render_mode_matrix": true,
-          "compare_targets": [
-            "C FreeType",
-            "Rust FFI",
-            "C FFI",
-            "Wasm FFI"
+          "face_index": 0,
+          "sizes": [
+            10,
+            20,
+            32
+          ],
+          "glyph_indices": [
+            36,
+            68,
+            82
+          ],
+          "load_flags": [
+            "FT_LOAD_DEFAULT",
+            "FT_LOAD_NO_HINTING",
+            "FT_LOAD_RENDER"
+          ],
+          "render_modes": [
+            "FT_RENDER_MODE_NORMAL",
+            "FT_RENDER_MODE_LIGHT",
+            "FT_RENDER_MODE_MONO",
+            "FT_RENDER_MODE_LCD",
+            "FT_RENDER_MODE_LCD_V"
+          ]
+        },
+        "variability": {
+          "axes": [
+            "fonts",
+            "sizes",
+            "glyph_indices",
+            "load_flags",
+            "render_modes"
           ]
         }
       },

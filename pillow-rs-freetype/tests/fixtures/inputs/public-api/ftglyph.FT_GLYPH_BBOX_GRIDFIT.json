@@ -10,7 +10,7 @@
       "case_id": "ftglyph.FT_GLYPH_BBOX_GRIDFIT.value_matches_header",
       "subject": "ftglyph.FT_GLYPH_BBOX_GRIDFIT",
       "case": "value_matches_header",
-      "operation": "ftglyph.glyph_bbox_mode.value",
+      "operation": "constant",
       "schema": "api_abi_constant",
       "expect_error": false,
       "inputs": {

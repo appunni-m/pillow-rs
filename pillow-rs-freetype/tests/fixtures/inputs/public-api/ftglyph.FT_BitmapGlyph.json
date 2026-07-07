@@ -10,14 +10,15 @@
       "case_id": "ftglyph.FT_BitmapGlyph.alias_defined",
       "subject": "ftglyph.FT_BitmapGlyph",
       "case": "alias_defined",
-      "operation": "ftglyph.type_alias",
+      "operation": "abi_type_probe",
       "schema": "api_abi_type",
       "expect_error": false,
       "inputs": {
         "assets": {},
         "params": {
           "include": "freetype/ftglyph.h",
-          "ctype": "FT_BitmapGlyph"
+          "ctype": "FT_BitmapGlyph",
+          "symbol": "FT_BitmapGlyph"
         }
       },
       "classifiers": [

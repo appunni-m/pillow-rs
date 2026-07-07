@@ -105,8 +105,8 @@
       "case_id": "ftmoderr.FT_Mod_Err_Raster.module_name_contract",
       "subject": "ftmoderr.FT_Mod_Err_Raster",
       "case": "module_name_contract",
-      "operation": "abi.module_error_list",
-      "schema": "constant_metadata",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -115,7 +115,10 @@
           "symbol": "FT_Mod_Err_Raster",
           "module_name": "raster module",
           "list_entry_order_after": "FT_Mod_Err_PSnames",
-          "list_entry_order_before": "FT_Mod_Err_SFNT"
+          "list_entry_order_before": "FT_Mod_Err_SFNT",
+          "symbols": [
+            "FT_Mod_Err_Raster"
+          ]
         }
       },
       "classifiers": [

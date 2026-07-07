@@ -10,7 +10,7 @@
       "case_id": "ftrender.FT_Glyph_Done_Func.alias_matches_callback_typedef",
       "subject": "ftrender.FT_Glyph_Done_Func",
       "case": "alias_matches_callback_typedef",
-      "operation": "abi.callback_typedef_alias",
+      "operation": "abi_type_probe",
       "schema": "c_abi_type",
       "expect_error": false,
       "inputs": {

@@ -1,7 +1,11 @@
 {
   "version": 1,
   "subject": "t1tables.T1_ENCODING_TYPE_ISOLATIN1",
-  "manifest_cases": ["value_matches_header", "import_contract", "ps_font_value_encoding_type"],
+  "manifest_cases": [
+    "value_matches_header",
+    "import_contract",
+    "ps_font_value_encoding_type"
+  ],
   "cases": [
     {
       "case_id": "t1tables.T1_ENCODING_TYPE_ISOLATIN1.value_matches_header",
@@ -10,20 +14,73 @@
       "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"symbol": "T1_ENCODING_TYPE_ISOLATIN1", "include": "<freetype/t1tables.h>", "declared_type": "T1_EncodingType", "expected_value": 3, "header_source": "freetype/include/freetype/t1tables.h:530"}},
-      "classifiers": ["kind:enum_variant", "header:t1tables", "area:type1_encoding"],
-      "expectation": {"status": "ok", "output_shape": {"value_type": "T1_EncodingType", "value": "integer", "symbol": "T1_ENCODING_TYPE_ISOLATIN1"}, "compare": {"mode": "value", "paths": ["value", "type", "header_symbol"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "symbol": "T1_ENCODING_TYPE_ISOLATIN1",
+          "include": "<freetype/t1tables.h>",
+          "declared_type": "T1_EncodingType",
+          "expected_value": 3,
+          "header_source": "freetype/include/freetype/t1tables.h:530"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:t1tables",
+        "area:type1_encoding"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value_type": "T1_EncodingType",
+          "value": "integer",
+          "symbol": "T1_ENCODING_TYPE_ISOLATIN1"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "type",
+            "header_symbol"
+          ]
+        }
+      }
     },
     {
       "case_id": "t1tables.T1_ENCODING_TYPE_ISOLATIN1.import_contract",
       "subject": "t1tables.T1_ENCODING_TYPE_ISOLATIN1",
       "case": "import_contract",
-      "operation": "c_abi.import",
+      "operation": "constant",
       "schema": "api_import",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"include": "<freetype/t1tables.h>", "declaration": "T1_EncodingType encoding = T1_ENCODING_TYPE_ISOLATIN1;", "must_compile_as_constant_expression": true}},
-      "classifiers": ["kind:enum_variant", "header:t1tables", "area:import"],
-      "expectation": {"status": "ok", "output_shape": {"compile": "success", "assignable_to": "T1_EncodingType"}, "compare": {"mode": "layout", "paths": ["compile", "assignable_to"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/t1tables.h>",
+          "declaration": "T1_EncodingType encoding = T1_ENCODING_TYPE_ISOLATIN1;",
+          "must_compile_as_constant_expression": true,
+          "symbol": "T1_ENCODING_TYPE_ISOLATIN1"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:t1tables",
+        "area:import"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile": "success",
+          "assignable_to": "T1_EncodingType"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "compile",
+            "assignable_to"
+          ]
+        }
+      }
     },
     {
       "case_id": "t1tables.T1_ENCODING_TYPE_ISOLATIN1.ps_font_value_encoding_type",
@@ -32,9 +89,44 @@
       "operation": "t1tables.get_ps_font_value",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {"font": {"kind": "ref", "role": "type1_font", "id": "input/fonts/type1-encoding/isolatin1.pfb", "requirements": "Type 1 face whose Encoding selects ISOLatin1Encoding."}}, "params": {"face_index": 0, "key": "PS_DICT_ENCODING_TYPE", "value_type": "T1_EncodingType", "expected_constant": "T1_ENCODING_TYPE_ISOLATIN1", "source_behavior": "Type 1 service copies type1->encoding_type when the output buffer is large enough."}},
-      "classifiers": ["kind:enum_variant", "header:t1tables", "area:ps_font_value", "requires:future_asset"],
-      "expectation": {"status": "build_dependent", "fixture_requirements": "Needs Type 1 font using ISOLatin1Encoding.", "output_shape": {"required_len": "FT_Long", "encoding_type": "T1_EncodingType"}, "compare": {"mode": "exact", "paths": ["required_len", "encoding_type"]}}
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "type1_font",
+            "id": "input/fonts/type1-encoding/isolatin1.pfb",
+            "requirements": "Type 1 face whose Encoding selects ISOLatin1Encoding."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "key": "PS_DICT_ENCODING_TYPE",
+          "value_type": "T1_EncodingType",
+          "expected_constant": "T1_ENCODING_TYPE_ISOLATIN1",
+          "source_behavior": "Type 1 service copies type1->encoding_type when the output buffer is large enough."
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:t1tables",
+        "area:ps_font_value",
+        "requires:future_asset"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "fixture_requirements": "Needs Type 1 font using ISOLatin1Encoding.",
+        "output_shape": {
+          "required_len": "FT_Long",
+          "encoding_type": "T1_EncodingType"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "required_len",
+            "encoding_type"
+          ]
+        }
+      }
     }
   ]
 }

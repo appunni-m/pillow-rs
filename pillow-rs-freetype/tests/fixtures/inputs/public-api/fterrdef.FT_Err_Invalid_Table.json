@@ -114,7 +114,7 @@
       "case_id": "fterrdef.FT_Err_Invalid_Table.constant_fixture_present",
       "subject": "fterrdef.FT_Err_Invalid_Table",
       "case": "constant_fixture_present",
-      "operation": "legacy_unified_constant_fixture",
+      "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
       "inputs": {

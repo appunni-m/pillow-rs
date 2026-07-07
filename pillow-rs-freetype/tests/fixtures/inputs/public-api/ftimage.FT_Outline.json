@@ -86,13 +86,9 @@
       "expect_error": false,
       "inputs": {
         "assets": {
-          "tt_font": {
+          "font": {
             "kind": "ref",
             "id": "input/fonts/LiberationSerif-Regular.ttf"
-          },
-          "cff_font": {
-            "kind": "ref",
-            "id": "fonts/cff/source-sans-cff.otf"
           }
         },
         "params": {
@@ -101,11 +97,10 @@
             "x": 0,
             "y": 40
           },
-          "glyph_cases": [
-            "simple_line",
-            "simple_conic",
-            "cff_cubic",
-            "composite"
+          "glyph_indices": [
+            36,
+            74,
+            77
           ],
           "load_flags": [
             "FT_LOAD_DEFAULT",
@@ -119,6 +114,12 @@
             "slot.outline.tags[]",
             "slot.outline.contours[]",
             "slot.outline.flags"
+          ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices",
+            "load_flags"
           ]
         }
       },

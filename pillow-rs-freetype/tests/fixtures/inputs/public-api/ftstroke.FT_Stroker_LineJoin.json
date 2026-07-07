@@ -26,15 +26,15 @@
       "case_id": "ftstroke.FT_Stroker_LineJoin.enum_variants_match_header",
       "subject": "ftstroke.FT_Stroker_LineJoin",
       "case": "enum_variants_match_header",
-      "operation": "abi.enum_values",
-      "schema": "abi_enum",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
         "params": {
           "include": "freetype/ftstroke.h",
           "enum": "FT_Stroker_LineJoin",
-          "variants": [
+          "symbols": [
             "FT_STROKER_LINEJOIN_ROUND",
             "FT_STROKER_LINEJOIN_BEVEL",
             "FT_STROKER_LINEJOIN_MITER_VARIABLE",

@@ -50,8 +50,8 @@
       "case_id": "ftgxval.FT_VALIDATE_GX_START.separates_gx_from_ot_validation_bits",
       "subject": "ftgxval.FT_VALIDATE_GX_START",
       "case": "separates_gx_from_ot_validation_bits",
-      "operation": "constant.bitfield_group",
-      "schema": "api_constant",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -64,13 +64,7 @@
             "FT_VALIDATE_feat",
             "FT_VALIDATE_MS",
             "FT_VALIDATE_APPLE"
-          ],
-          "expected_values_from_pinned_header": {
-            "FT_VALIDATE_GX_START": 16384,
-            "FT_VALIDATE_feat": 16384,
-            "FT_VALIDATE_MS": 16384,
-            "FT_VALIDATE_APPLE": 32768
-          }
+          ]
         }
       },
       "classifiers": [

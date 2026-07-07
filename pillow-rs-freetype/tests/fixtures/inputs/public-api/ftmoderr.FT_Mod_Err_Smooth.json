@@ -115,8 +115,8 @@
       "case_id": "ftmoderr.FT_Mod_Err_Smooth.module_name_contract",
       "subject": "ftmoderr.FT_Mod_Err_Smooth",
       "case": "module_name_contract",
-      "operation": "abi.module_error_list",
-      "schema": "constant_metadata",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -125,7 +125,10 @@
           "symbol": "FT_Mod_Err_Smooth",
           "module_name": "smooth raster module",
           "list_entry_order_after": "FT_Mod_Err_SFNT",
-          "list_entry_order_before": "FT_Mod_Err_TrueType"
+          "list_entry_order_before": "FT_Mod_Err_TrueType",
+          "symbols": [
+            "FT_Mod_Err_Smooth"
+          ]
         }
       },
       "classifiers": [

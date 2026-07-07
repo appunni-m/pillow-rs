@@ -58,8 +58,8 @@
       "case_id": "fterrdef.FT_Err_Invalid_Post_Table.source_emitter_inventory",
       "subject": "fterrdef.FT_Err_Invalid_Post_Table",
       "case": "source_emitter_inventory",
-      "operation": "source_emitter_audit",
-      "schema": "api_audit",
+      "operation": "constant",
+      "schema": "constant",
       "expect_error": false,
       "inputs": {
         "assets": {},

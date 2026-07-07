@@ -3,6 +3,7 @@
 use std::ptr;
 
 use crate::api;
+use crate::font::{KerningMode, SizeRequest, SizeRequestError, SizeRequestType};
 
 use super::constants::*;
 use super::convert::{
@@ -10,9 +11,12 @@ use super::convert::{
     render_mode_to_core,
 };
 use super::types::{
-    FT_Bitmap, FT_Byte, FT_CharMap, FT_Error, FT_F26Dot6, FT_Fixed, FT_Glyph_Format,
-    FT_Glyph_Metrics, FT_Int, FT_Int32, FT_Long, FT_Pointer, FT_Render_Mode, FT_Sfnt_Tag,
-    FT_Size_Metrics as FT_Size_MetricsRec, FT_UInt, FT_ULong, FT_Vector,
+    FT_Angle, FT_BBox, FT_Bitmap, FT_Bool, FT_Byte, FT_Bytes, FT_Char, FT_CharMap,
+    FT_CharMapRecPublic, FT_Encoding, FT_Error, FT_F26Dot6, FT_FaceRecPublic, FT_Fixed,
+    FT_Glyph_Format, FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_Long, FT_Matrix,
+    FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag,
+    FT_SfntName, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec,
+    FT_TrueTypeEngineType, FT_UInt, FT_ULong, FT_UShort, FT_Vector, TT_OS2,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -20,12 +24,16 @@ const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FT_Library {
     inner: api::Library,
+    _lcd_geometry: [FT_Vector; 3],
 }
 
 #[derive(Clone)]
 pub struct FT_Face {
     inner: api::Face,
     probe_only: bool,
+    sfnt_os2: Option<Box<TT_OS2>>,
+    charmaps: Box<[FT_CharMapRecPublic]>,
+    charmap_formats: Box<[FT_UShort]>,
 }
 
 #[derive(Clone)]
@@ -37,6 +45,10 @@ pub struct FT_GlyphSlot {
     pub bitmap: Option<FT_Bitmap>,
     pub bitmap_left: FT_Int,
     pub bitmap_top: FT_Int,
+    pub outline_cbox: FT_BBox,
+    pub outline_bbox: FT_BBox,
+    pub outline: Option<FT_OutlineSnapshot>,
+    core_slot: api::GlyphSlot,
     source_face: api::Face,
     load_flags: api::LoadFlags,
 }
@@ -44,6 +56,382 @@ pub struct FT_GlyphSlot {
 pub fn FT_Init_FreeType() -> FT_Library {
     FT_Library {
         inner: api::Library::init(),
+        _lcd_geometry: [
+            FT_Vector { x: -21, y: 0 },
+            FT_Vector { x: 0, y: 0 },
+            FT_Vector { x: 21, y: 0 },
+        ],
+    }
+}
+
+pub fn FT_Done_FreeType(library: Option<FT_Library>) -> FT_Error {
+    if library.is_some() {
+        FT_Err_Ok
+    } else {
+        FT_Err_Invalid_Library_Handle as FT_Error
+    }
+}
+
+pub fn FT_Done_Face(face: Option<FT_Face>) -> FT_Error {
+    if face.is_some() {
+        FT_Err_Ok
+    } else {
+        FT_Err_Invalid_Face_Handle as FT_Error
+    }
+}
+
+pub fn FT_Face_CheckTrueTypePatents(_face: Option<&FT_Face>) -> FT_Bool {
+    0
+}
+
+pub fn FT_Face_SetUnpatentedHinting(_face: Option<&mut FT_Face>, _value: FT_Bool) -> FT_Bool {
+    0
+}
+
+pub fn FT_OpenType_Free(_face: Option<&FT_Face>, _table: FT_Bytes) {}
+
+pub fn FT_OpenType_Validate(
+    _face: Option<&FT_Face>,
+    _validation_flags: FT_UInt,
+    _base_table: Option<&mut FT_Bytes>,
+    _gdef_table: Option<&mut FT_Bytes>,
+    _gpos_table: Option<&mut FT_Bytes>,
+    _gsub_table: Option<&mut FT_Bytes>,
+    _jstf_table: Option<&mut FT_Bytes>,
+) -> FT_Error {
+    FT_Err_Unimplemented_Feature as FT_Error
+}
+
+pub fn FT_GlyphSlot_AdjustWeight(_slot: FT_GlyphSlot, _x_delta: FT_Fixed, _y_delta: FT_Fixed) {}
+
+pub fn FT_GlyphSlot_Embolden(_slot: FT_GlyphSlot) {}
+
+pub fn FT_GlyphSlot_Oblique(_slot: FT_GlyphSlot) {}
+
+pub fn FT_GlyphSlot_Slant(_slot: FT_GlyphSlot) {}
+
+pub fn FT_Get_Sfnt_LangTag(
+    _face: Option<&FT_Face>,
+    _lang_id: FT_UInt,
+    _lang_tag: Option<&mut FT_SfntLangTag>,
+) -> FT_Error {
+    FT_Err_Unimplemented_Feature as FT_Error
+}
+
+pub fn FT_New_Size(_face: Option<&FT_Face>, _size: Option<&mut FT_Size>) -> FT_Error {
+    FT_Err_Unimplemented_Feature as FT_Error
+}
+
+pub fn FT_Done_Size(_size: FT_Size) -> FT_Error {
+    FT_Err_Unimplemented_Feature as FT_Error
+}
+
+pub fn FT_Activate_Size(_size: FT_Size) -> FT_Error {
+    FT_Err_Unimplemented_Feature as FT_Error
+}
+
+const FT_TRIG_SCALE: FT_Fixed = 0xDBD9_5B16;
+const FT_TRIG_SAFE_MSB: i32 = 29;
+const FT_TRIG_MAX_ITERS: usize = 23;
+const FT_TRIG_ARCTAN_TABLE: [FT_Angle; FT_TRIG_MAX_ITERS - 1] = [
+    1_740_967, 919_879, 466_945, 234_379, 117_304, 58_666, 29_335, 14_668, 7_334, 3_667, 1_833,
+    917, 458, 229, 115, 57, 29, 14, 7, 4, 2, 1,
+];
+
+pub fn FT_Sin(angle: FT_Angle) -> FT_Fixed {
+    let mut vector = FT_Vector { x: 0, y: 0 };
+    FT_Vector_Unit(Some(&mut vector), angle);
+    vector.y
+}
+
+pub fn FT_Cos(angle: FT_Angle) -> FT_Fixed {
+    let mut vector = FT_Vector { x: 0, y: 0 };
+    FT_Vector_Unit(Some(&mut vector), angle);
+    vector.x
+}
+
+pub fn FT_Tan(angle: FT_Angle) -> FT_Fixed {
+    let mut vector = FT_Vector { x: 1 << 24, y: 0 };
+    ft_trig_pseudo_rotate(&mut vector, angle);
+    FT_DivFix(vector.y, vector.x)
+}
+
+pub fn FT_Atan2(dx: FT_Fixed, dy: FT_Fixed) -> FT_Angle {
+    if dx == 0 && dy == 0 {
+        return 0;
+    }
+
+    let mut vector = FT_Vector { x: dx, y: dy };
+    ft_trig_prenorm(&mut vector);
+    ft_trig_pseudo_polarize(&mut vector);
+    vector.y
+}
+
+pub fn FT_Angle_Diff(angle1: FT_Angle, angle2: FT_Angle) -> FT_Angle {
+    let mut delta = angle2.wrapping_sub(angle1);
+    while delta <= FT_ANGLE_PI.wrapping_neg() {
+        delta = delta.wrapping_add(FT_ANGLE_2PI);
+    }
+    while delta > FT_ANGLE_PI {
+        delta = delta.wrapping_sub(FT_ANGLE_2PI);
+    }
+    delta
+}
+
+pub fn FT_Vector_Unit(vec: Option<&mut FT_Vector>, angle: FT_Angle) {
+    let Some(vec) = vec else {
+        return;
+    };
+    vec.x = FT_TRIG_SCALE >> 8;
+    vec.y = 0;
+    ft_trig_pseudo_rotate(vec, angle);
+    vec.x = (vec.x + 0x80) >> 8;
+    vec.y = (vec.y + 0x80) >> 8;
+}
+
+pub fn FT_Vector_From_Polar(vec: Option<&mut FT_Vector>, length: FT_Fixed, angle: FT_Angle) {
+    let Some(vec) = vec else {
+        return;
+    };
+    vec.x = length;
+    vec.y = 0;
+    FT_Vector_Rotate(Some(vec), angle);
+}
+
+pub fn FT_Vector_Length(vec: Option<&FT_Vector>) -> FT_Fixed {
+    let Some(vec) = vec else {
+        return 0;
+    };
+    let mut vector = *vec;
+    if vector.x == 0 {
+        return ft_abs(vector.y);
+    }
+    if vector.y == 0 {
+        return ft_abs(vector.x);
+    }
+
+    let shift = ft_trig_prenorm(&mut vector);
+    ft_trig_pseudo_polarize(&mut vector);
+    vector.x = ft_trig_downscale(vector.x);
+
+    if shift > 0 {
+        (vector.x + (1 << (shift - 1))) >> shift
+    } else {
+        (vector.x as u64).wrapping_shl((-shift) as u32) as FT_Fixed
+    }
+}
+
+pub fn FT_Vector_Polarize(
+    vec: Option<&FT_Vector>,
+    length: Option<&mut FT_Fixed>,
+    angle: Option<&mut FT_Angle>,
+) {
+    let (Some(vec), Some(length), Some(angle)) = (vec, length, angle) else {
+        return;
+    };
+    let mut vector = *vec;
+    if vector.x == 0 && vector.y == 0 {
+        return;
+    }
+
+    let shift = ft_trig_prenorm(&mut vector);
+    ft_trig_pseudo_polarize(&mut vector);
+    vector.x = ft_trig_downscale(vector.x);
+    *length = if shift >= 0 {
+        vector.x >> shift
+    } else {
+        (vector.x as u64).wrapping_shl((-shift) as u32) as FT_Fixed
+    };
+    *angle = vector.y;
+}
+
+pub fn FT_Vector_Rotate(vec: Option<&mut FT_Vector>, angle: FT_Angle) {
+    let Some(vec) = vec else {
+        return;
+    };
+    if angle == 0 {
+        return;
+    }
+    let mut vector = *vec;
+    if vector.x == 0 && vector.y == 0 {
+        return;
+    }
+
+    let mut shift = ft_trig_prenorm(&mut vector);
+    ft_trig_pseudo_rotate(&mut vector, angle);
+    vector.x = ft_trig_downscale(vector.x);
+    vector.y = ft_trig_downscale(vector.y);
+
+    if shift > 0 {
+        let half = 1 << (shift - 1);
+        vec.x = (vector.x + half - i64::from(vector.x < 0)) >> shift;
+        vec.y = (vector.y + half - i64::from(vector.y < 0)) >> shift;
+    } else {
+        shift = -shift;
+        vec.x = (vector.x as u64).wrapping_shl(shift as u32) as FT_Pos;
+        vec.y = (vector.y as u64).wrapping_shl(shift as u32) as FT_Pos;
+    }
+}
+
+fn ft_trig_downscale(value: FT_Fixed) -> FT_Fixed {
+    let (value, sign) = move_long_sign(value, 1);
+    let value = ((value as u128 * FT_TRIG_SCALE as u128 + 0x4000_0000) >> 32) as FT_Fixed;
+    if sign < 0 { -value } else { value }
+}
+
+fn ft_trig_prenorm(vec: &mut FT_Vector) -> i32 {
+    let x = vec.x;
+    let y = vec.y;
+    let mut shift = ft_msb_u32((ft_abs(x) as u32) | (ft_abs(y) as u32));
+    if shift <= FT_TRIG_SAFE_MSB {
+        shift = FT_TRIG_SAFE_MSB - shift;
+        vec.x = (x as u64).wrapping_shl(shift as u32) as FT_Pos;
+        vec.y = (y as u64).wrapping_shl(shift as u32) as FT_Pos;
+    } else {
+        shift -= FT_TRIG_SAFE_MSB;
+        vec.x = x >> shift;
+        vec.y = y >> shift;
+        shift = -shift;
+    }
+    shift
+}
+
+fn ft_trig_pseudo_rotate(vec: &mut FT_Vector, mut theta: FT_Angle) {
+    let mut x = vec.x;
+    let mut y = vec.y;
+
+    while theta < -FT_ANGLE_PI4 {
+        let xtemp = y;
+        y = -x;
+        x = xtemp;
+        theta += FT_ANGLE_PI2;
+    }
+    while theta > FT_ANGLE_PI4 {
+        let xtemp = -y;
+        y = x;
+        x = xtemp;
+        theta -= FT_ANGLE_PI2;
+    }
+
+    let mut b = 1;
+    for (i, arctan) in (1..FT_TRIG_MAX_ITERS).zip(FT_TRIG_ARCTAN_TABLE) {
+        if theta < 0 {
+            let xtemp = x + ((y + b) >> i);
+            y -= (x + b) >> i;
+            x = xtemp;
+            theta += arctan;
+        } else {
+            let xtemp = x - ((y + b) >> i);
+            y += (x + b) >> i;
+            x = xtemp;
+            theta -= arctan;
+        }
+        b <<= 1;
+    }
+
+    vec.x = x;
+    vec.y = y;
+}
+
+fn ft_trig_pseudo_polarize(vec: &mut FT_Vector) {
+    let mut x = vec.x;
+    let mut y = vec.y;
+    let mut theta;
+
+    if y > x {
+        if y > -x {
+            theta = FT_ANGLE_PI2;
+            let xtemp = y;
+            y = -x;
+            x = xtemp;
+        } else {
+            theta = if y > 0 { FT_ANGLE_PI } else { -FT_ANGLE_PI };
+            x = -x;
+            y = -y;
+        }
+    } else if y < -x {
+        theta = -FT_ANGLE_PI2;
+        let xtemp = -y;
+        y = x;
+        x = xtemp;
+    } else {
+        theta = 0;
+    }
+
+    let mut b = 1;
+    for (i, arctan) in (1..FT_TRIG_MAX_ITERS).zip(FT_TRIG_ARCTAN_TABLE) {
+        if y > 0 {
+            let xtemp = x + ((y + b) >> i);
+            y -= (x + b) >> i;
+            x = xtemp;
+            theta += arctan;
+        } else {
+            let xtemp = x - ((y + b) >> i);
+            y += (x + b) >> i;
+            x = xtemp;
+            theta -= arctan;
+        }
+        b <<= 1;
+    }
+
+    theta = if theta >= 0 {
+        ft_pad_round(theta, 16)
+    } else {
+        -ft_pad_round(-theta, 16)
+    };
+    vec.x = x;
+    vec.y = theta;
+}
+
+fn ft_msb_u32(value: u32) -> i32 {
+    if value == 0 {
+        -1
+    } else {
+        31 - value.leading_zeros() as i32
+    }
+}
+
+fn ft_abs(value: FT_Long) -> FT_Long {
+    if value < 0 { -value } else { value }
+}
+
+fn ft_pad_round(value: FT_Long, n: FT_Long) -> FT_Long {
+    (value + n / 2) & !(n - 1)
+}
+
+pub fn FT_Library_SetLcdFilter(
+    _library: Option<&mut FT_Library>,
+    _filter: FT_LcdFilter,
+) -> FT_Error {
+    FT_Err_Unimplemented_Feature
+}
+
+pub fn FT_Library_SetLcdFilterWeights(
+    _library: Option<&mut FT_Library>,
+    _weights: *mut FT_Byte,
+) -> FT_Error {
+    FT_Err_Unimplemented_Feature
+}
+
+pub fn FT_Library_SetLcdGeometry(
+    library: Option<&mut FT_Library>,
+    sub: Option<[FT_Vector; 3]>,
+) -> FT_Error {
+    let Some(library) = library else {
+        return FT_Err_Invalid_Library_Handle as FT_Error;
+    };
+    let Some(sub) = sub else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    library._lcd_geometry = sub;
+    FT_Err_Ok
+}
+
+pub fn FT_Get_TrueType_Engine_Type(library: Option<&FT_Library>) -> FT_TrueTypeEngineType {
+    if library.is_some() {
+        FT_TRUETYPE_ENGINE_TYPE_PATENTED as FT_TrueTypeEngineType
+    } else {
+        FT_TRUETYPE_ENGINE_TYPE_NONE as FT_TrueTypeEngineType
     }
 }
 
@@ -57,8 +445,117 @@ pub fn FT_New_Memory_Face(
     library
         .inner
         .new_memory_face(data, face_index, size_pt)
-        .map(|inner| FT_Face { inner, probe_only })
+        .map(|inner| face_to_ffi(inner, probe_only))
         .map_err(error_to_ft)
+}
+
+fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
+    let sfnt_os2 = inner.font().os2_table().map(os2_to_ffi).map(Box::new);
+    let (charmaps, charmap_formats) = charmaps_to_ffi(&inner);
+    FT_Face {
+        inner,
+        probe_only,
+        sfnt_os2,
+        charmaps,
+        charmap_formats,
+    }
+}
+
+fn charmaps_to_ffi(face: &api::Face) -> (Box<[FT_CharMapRecPublic]>, Box<[FT_UShort]>) {
+    let infos = face.font().charmaps();
+    let charmaps = infos
+        .iter()
+        .map(|info| FT_CharMapRecPublic {
+            face: ptr::null_mut(),
+            encoding: charmap_encoding(info.platform_id, info.encoding_id),
+            platform_id: info.platform_id,
+            encoding_id: info.encoding_id,
+        })
+        .collect::<Vec<_>>()
+        .into_boxed_slice();
+    let formats = infos
+        .iter()
+        .map(|info| info.format)
+        .collect::<Vec<_>>()
+        .into_boxed_slice();
+    (charmaps, formats)
+}
+
+fn charmap_encoding(platform_id: FT_UShort, encoding_id: FT_UShort) -> FT_Encoding {
+    match (platform_id, encoding_id) {
+        (TT_PLATFORM_ISO_U16, _) | (TT_PLATFORM_APPLE_UNICODE_U16, _) => {
+            FT_ENCODING_UNICODE as FT_Encoding
+        }
+        (TT_PLATFORM_MACINTOSH_U16, TT_MAC_ID_ROMAN_U16) => FT_ENCODING_APPLE_ROMAN as FT_Encoding,
+        (TT_PLATFORM_MICROSOFT_U16, TT_MS_ID_SYMBOL_CS_U16) => FT_ENCODING_MS_SYMBOL as FT_Encoding,
+        (TT_PLATFORM_MICROSOFT_U16, TT_MS_ID_UCS_4_U16 | TT_MS_ID_UNICODE_CS_U16) => {
+            FT_ENCODING_UNICODE as FT_Encoding
+        }
+        (TT_PLATFORM_MICROSOFT_U16, TT_MS_ID_SJIS_U16) => FT_ENCODING_SJIS as FT_Encoding,
+        (TT_PLATFORM_MICROSOFT_U16, TT_MS_ID_PRC_U16) => FT_ENCODING_PRC as FT_Encoding,
+        (TT_PLATFORM_MICROSOFT_U16, TT_MS_ID_BIG_5_U16) => FT_ENCODING_BIG5 as FT_Encoding,
+        (TT_PLATFORM_MICROSOFT_U16, TT_MS_ID_WANSUNG_U16) => FT_ENCODING_WANSUNG as FT_Encoding,
+        (TT_PLATFORM_MICROSOFT_U16, TT_MS_ID_JOHAB_U16) => FT_ENCODING_JOHAB as FT_Encoding,
+        _ => FT_ENCODING_NONE as FT_Encoding,
+    }
+}
+
+const TT_PLATFORM_APPLE_UNICODE_U16: FT_UShort = TT_PLATFORM_APPLE_UNICODE as FT_UShort;
+const TT_PLATFORM_MACINTOSH_U16: FT_UShort = TT_PLATFORM_MACINTOSH as FT_UShort;
+const TT_PLATFORM_ISO_U16: FT_UShort = TT_PLATFORM_ISO as FT_UShort;
+const TT_PLATFORM_MICROSOFT_U16: FT_UShort = TT_PLATFORM_MICROSOFT as FT_UShort;
+const TT_MAC_ID_ROMAN_U16: FT_UShort = TT_MAC_ID_ROMAN as FT_UShort;
+const TT_MS_ID_SYMBOL_CS_U16: FT_UShort = TT_MS_ID_SYMBOL_CS as FT_UShort;
+const TT_MS_ID_UNICODE_CS_U16: FT_UShort = TT_MS_ID_UNICODE_CS as FT_UShort;
+const TT_MS_ID_SJIS_U16: FT_UShort = TT_MS_ID_SJIS as FT_UShort;
+const TT_MS_ID_PRC_U16: FT_UShort = TT_MS_ID_PRC as FT_UShort;
+const TT_MS_ID_BIG_5_U16: FT_UShort = TT_MS_ID_BIG_5 as FT_UShort;
+const TT_MS_ID_WANSUNG_U16: FT_UShort = TT_MS_ID_WANSUNG as FT_UShort;
+const TT_MS_ID_JOHAB_U16: FT_UShort = TT_MS_ID_JOHAB as FT_UShort;
+const TT_MS_ID_UCS_4_U16: FT_UShort = TT_MS_ID_UCS_4 as FT_UShort;
+
+fn os2_to_ffi(os2: &crate::tt::os2::Os2Table) -> TT_OS2 {
+    TT_OS2 {
+        version: os2.version as FT_UShort,
+        xAvgCharWidth: os2.x_avg_char_width,
+        usWeightClass: os2.us_weight_class as FT_UShort,
+        usWidthClass: os2.us_width_class as FT_UShort,
+        fsType: os2.fs_type as FT_UShort,
+        ySubscriptXSize: os2.y_subscript_x_size,
+        ySubscriptYSize: os2.y_subscript_y_size,
+        ySubscriptXOffset: os2.y_subscript_x_offset,
+        ySubscriptYOffset: os2.y_subscript_y_offset,
+        ySuperscriptXSize: os2.y_superscript_x_size,
+        ySuperscriptYSize: os2.y_superscript_y_size,
+        ySuperscriptXOffset: os2.y_superscript_x_offset,
+        ySuperscriptYOffset: os2.y_superscript_y_offset,
+        yStrikeoutSize: os2.y_strikeout_size,
+        yStrikeoutPosition: os2.y_strikeout_position,
+        sFamilyClass: os2.s_family_class,
+        panose: os2.panose,
+        ulUnicodeRange1: FT_ULong::from(os2.ul_unicode_range1),
+        ulUnicodeRange2: FT_ULong::from(os2.ul_unicode_range2),
+        ulUnicodeRange3: FT_ULong::from(os2.ul_unicode_range3),
+        ulUnicodeRange4: FT_ULong::from(os2.ul_unicode_range4),
+        achVendID: os2.ach_vend_id.map(|value| value as FT_Char),
+        fsSelection: os2.fs_selection(),
+        usFirstCharIndex: os2.us_first_char_index as FT_UShort,
+        usLastCharIndex: os2.us_last_char_index as FT_UShort,
+        sTypoAscender: os2.s_typo_ascender,
+        sTypoDescender: os2.s_typo_descender,
+        sTypoLineGap: os2.s_typo_line_gap,
+        usWinAscent: os2.us_win_ascent as FT_UShort,
+        usWinDescent: os2.us_win_descent as FT_UShort,
+        ulCodePageRange1: FT_ULong::from(os2.ul_code_page_range1),
+        ulCodePageRange2: FT_ULong::from(os2.ul_code_page_range2),
+        sxHeight: os2.sx_height,
+        sCapHeight: os2.s_cap_height,
+        usDefaultChar: os2.us_default_char as FT_UShort,
+        usBreakChar: os2.us_break_char as FT_UShort,
+        usMaxContext: os2.us_max_context as FT_UShort,
+        usLowerOpticalPointSize: os2.us_lower_optical_point_size as FT_UShort,
+        usUpperOpticalPointSize: os2.us_upper_optical_point_size as FT_UShort,
+    }
 }
 
 pub fn FT_Set_Char_Size(
@@ -77,9 +574,14 @@ pub fn FT_Set_Char_Size(
     let Ok(char_height) = i32::try_from(char_height) else {
         return FT_Err_Invalid_Argument;
     };
-    face.inner
-        .set_char_size(char_width, char_height, horz_resolution, vert_resolution);
-    FT_Err_Ok
+    match face
+        .inner
+        .try_set_char_size(char_width, char_height, horz_resolution, vert_resolution)
+    {
+        Ok(()) => FT_Err_Ok,
+        Err(SizeRequestError::DivideByZero) => FT_Err_Divide_By_Zero as FT_Error,
+        Err(SizeRequestError::InvalidPixelSize) => FT_Err_Invalid_Pixel_Size,
+    }
 }
 
 pub fn FT_Set_Pixel_Sizes(
@@ -94,11 +596,262 @@ pub fn FT_Set_Pixel_Sizes(
     FT_Err_Ok
 }
 
+pub fn FT_Request_Size(face: Option<&mut FT_Face>, req: Option<&FT_Size_RequestRec>) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    if face.probe_only {
+        return FT_Err_Invalid_Size_Handle;
+    }
+    let Some(req) = req else {
+        return FT_Err_Invalid_Argument;
+    };
+    if req.width < 0 || req.height < 0 {
+        return FT_Err_Invalid_Argument;
+    }
+    let request_type = match i64::from(req.type_) {
+        FT_SIZE_REQUEST_TYPE_NOMINAL => SizeRequestType::Nominal,
+        FT_SIZE_REQUEST_TYPE_REAL_DIM => SizeRequestType::RealDim,
+        FT_SIZE_REQUEST_TYPE_BBOX => SizeRequestType::BBox,
+        FT_SIZE_REQUEST_TYPE_CELL => SizeRequestType::Cell,
+        FT_SIZE_REQUEST_TYPE_SCALES => SizeRequestType::Scales,
+        _ => return FT_Err_Invalid_Argument,
+    };
+    let request = SizeRequest {
+        request_type,
+        width: req.width,
+        height: req.height,
+        hori_resolution: req.horiResolution,
+        vert_resolution: req.vertResolution,
+    };
+    match face.inner.request_size(request) {
+        Ok(()) => FT_Err_Ok,
+        Err(SizeRequestError::DivideByZero) => FT_Err_Divide_By_Zero as FT_Error,
+        Err(SizeRequestError::InvalidPixelSize) => FT_Err_Invalid_Pixel_Size,
+    }
+}
+
 pub fn FT_Get_Char_Index(face: &FT_Face, char_code: FT_ULong) -> FT_UInt {
     let Ok(char_code) = u32::try_from(char_code) else {
         return 0;
     };
     u32::from(face.inner.get_char_index(char_code))
+}
+
+pub fn FT_Get_Kerning(
+    face: Option<&FT_Face>,
+    left_glyph: FT_UInt,
+    right_glyph: FT_UInt,
+    kern_mode: FT_UInt,
+    akerning: Option<&mut FT_Vector>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(akerning) = akerning else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    akerning.x = 0;
+    akerning.y = 0;
+    let mode = match kern_mode {
+        mode if mode == FT_KERNING_UNFITTED as FT_UInt => KerningMode::Unfitted,
+        mode if mode == FT_KERNING_UNSCALED as FT_UInt => KerningMode::Unscaled,
+        _ => KerningMode::Default,
+    };
+    let vector = face.inner.kerning_by_glyphs(left_glyph, right_glyph, mode);
+    akerning.x = FT_Long::from(vector.x);
+    akerning.y = FT_Long::from(vector.y);
+    FT_Err_Ok
+}
+
+pub fn FT_Face_Charmap_Count(face: &FT_Face) -> FT_UInt {
+    FT_UInt::try_from(face.charmaps.len()).unwrap_or(FT_UInt::MAX)
+}
+
+pub fn FT_Face_Charmap(face: &FT_Face, index: FT_UInt) -> FT_CharMap {
+    let Ok(index) = usize::try_from(index) else {
+        return ptr::null_mut();
+    };
+    face.charmaps.get(index).map_or(ptr::null_mut(), |record| {
+        (record as *const FT_CharMapRecPublic).cast_mut().cast()
+    })
+}
+
+pub fn FT_Face_Charmap_Info(face: &FT_Face, index: FT_UInt) -> Option<FT_CharMapRecPublic> {
+    let index = usize::try_from(index).ok()?;
+    face.charmaps.get(index).copied()
+}
+
+pub fn FT_Face_Active_Charmap_Index(face: &FT_Face) -> FT_Int {
+    face.inner
+        .charmap_index()
+        .and_then(|index| FT_Int::try_from(index).ok())
+        .unwrap_or(-1)
+}
+
+pub fn FT_Charmap_Info(face: &FT_Face, charmap: FT_CharMap) -> Option<FT_CharMapRecPublic> {
+    let index = charmap_index_in_face(face, charmap)?;
+    face.charmaps.get(index).copied()
+}
+
+pub fn FT_Charmap_Format(face: &FT_Face, charmap: FT_CharMap) -> Option<FT_UShort> {
+    let index = charmap_index_in_face(face, charmap)?;
+    face.charmap_formats.get(index).copied()
+}
+
+pub fn FT_Get_Charmap_Index(_charmap: FT_CharMap) -> FT_Int {
+    -1
+}
+
+pub fn FT_Get_Charmap_Index_For_Face(face: &FT_Face, charmap: FT_CharMap) -> FT_Int {
+    charmap_index_in_face(face, charmap)
+        .and_then(|index| FT_Int::try_from(index).ok())
+        .unwrap_or(-1)
+}
+
+pub fn FT_Set_Charmap(face: Option<&mut FT_Face>, charmap: FT_CharMap) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    if face.charmaps.is_empty() || charmap.is_null() {
+        return FT_Err_Invalid_CharMap_Handle as FT_Error;
+    }
+    let Some(index) = charmap_index_in_face(face, charmap) else {
+        return FT_Err_Invalid_Argument;
+    };
+    if face.charmap_formats.get(index).copied() == Some(14) {
+        return FT_Err_Invalid_Argument;
+    }
+    match face.inner.set_charmap(index) {
+        Ok(()) => FT_Err_Ok,
+        Err(_) => FT_Err_Invalid_Argument,
+    }
+}
+
+fn charmap_index_in_face(face: &FT_Face, charmap: FT_CharMap) -> Option<usize> {
+    if charmap.is_null() {
+        return None;
+    }
+    let target = charmap.cast_const().cast::<FT_CharMapRecPublic>();
+    face.charmaps
+        .iter()
+        .position(|record| ptr::eq(record as *const FT_CharMapRecPublic, target))
+}
+
+pub fn FT_Select_Charmap(face: Option<&mut FT_Face>, encoding: FT_Encoding) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    match i64::from(encoding) {
+        FT_ENCODING_UNICODE => match face.inner.select_unicode_charmap() {
+            Ok(()) => FT_Err_Ok,
+            Err(_) => FT_Err_Invalid_Argument,
+        },
+        _ => {
+            let Some(index) = face
+                .charmaps
+                .iter()
+                .position(|charmap| charmap.encoding == encoding)
+            else {
+                return FT_Err_Invalid_Argument;
+            };
+            match face.inner.set_charmap(index) {
+                Ok(()) => FT_Err_Ok,
+                Err(_) => FT_Err_Invalid_Argument,
+            }
+        }
+    }
+}
+
+pub fn FT_Get_FSType_Flags(face: Option<&FT_Face>) -> FT_UShort {
+    face.map_or(0, |face| face.inner.get_fstype_flags())
+}
+
+pub fn FT_Get_Sfnt_Name_Count(face: Option<&FT_Face>) -> FT_UInt {
+    face.map_or(0, |face| {
+        FT_UInt::try_from(face.inner.sfnt_name_count()).unwrap_or(FT_UInt::MAX)
+    })
+}
+
+pub fn FT_Get_Sfnt_Name(
+    face: Option<&FT_Face>,
+    idx: FT_UInt,
+    aname: Option<&mut FT_SfntName>,
+) -> FT_Error {
+    let Some(aname) = aname else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(face) = face else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(record) = face.inner.sfnt_name(idx as usize) else {
+        return FT_Err_Invalid_Argument;
+    };
+    aname.platform_id = record.platform_id;
+    aname.encoding_id = record.encoding_id;
+    aname.language_id = record.language_id;
+    aname.name_id = record.name_id;
+    aname.string = record.string.as_ptr().cast_mut().cast::<FT_Byte>();
+    aname.string_len = FT_UInt::try_from(record.string.len()).unwrap_or(FT_UInt::MAX);
+    FT_Err_Ok
+}
+
+pub fn FT_Get_First_Char(face: Option<&FT_Face>, agindex: Option<&mut FT_UInt>) -> FT_ULong {
+    let mut glyph_index = 0;
+    let mut char_code = 0;
+    if let Some(face) = face {
+        if let Some((code, glyph)) = face.inner.first_char() {
+            char_code = FT_ULong::from(code);
+            glyph_index = FT_UInt::from(glyph);
+        }
+    }
+    if let Some(out) = agindex {
+        *out = glyph_index;
+    }
+    char_code
+}
+
+pub fn FT_Get_Next_Char(
+    face: Option<&FT_Face>,
+    char_code: FT_ULong,
+    agindex: Option<&mut FT_UInt>,
+) -> FT_ULong {
+    let mut glyph_index = 0;
+    let mut next_char = 0;
+    if let Some(face) = face {
+        if let Some((code, glyph)) = face.inner.next_char(char_code as u32) {
+            next_char = FT_ULong::from(code);
+            glyph_index = FT_UInt::from(glyph);
+        }
+    }
+    if let Some(out) = agindex {
+        *out = glyph_index;
+    }
+    next_char
+}
+
+pub fn FT_Library_Version(
+    library: Option<&FT_Library>,
+    amajor: Option<&mut FT_Int>,
+    aminor: Option<&mut FT_Int>,
+    apatch: Option<&mut FT_Int>,
+) {
+    // FreeType 2.14.3 `FT_Library_Version` writes zeroes for a null library;
+    // the pinned oracle build reports 2.14.3 for a live default library.
+    let (major, minor, patch) = if library.is_some() {
+        (2, 14, 3)
+    } else {
+        (0, 0, 0)
+    };
+    if let Some(out) = amajor {
+        *out = major;
+    }
+    if let Some(out) = aminor {
+        *out = minor;
+    }
+    if let Some(out) = apatch {
+        *out = patch;
+    }
 }
 
 pub fn FT_Load_Char(
@@ -119,6 +872,11 @@ pub fn FT_Load_Glyph(
     }
     let glyph_index = u16::try_from(glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
     let flags = load_flags_to_core(load_flags)?;
+    // C defers glyph index validation to the driver; TrueType returns
+    // `Invalid_Glyph_Index` before loading (`src/truetype/ttgload.c:1447-1451`).
+    if glyph_index >= face.inner.info().num_glyphs {
+        return Err(FT_Err_Invalid_Glyph_Index);
+    }
     face.inner
         .load_glyph(glyph_index, flags)
         .map(|slot| slot_to_ffi(face, slot, flags))
@@ -140,6 +898,10 @@ pub fn FT_Get_Advance(
     }
     let glyph_index = u16::try_from(glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
     let flags = load_flags_to_core(load_flags)?;
+    // Match the same driver-side glyph index guard used by `FT_Load_Glyph`.
+    if glyph_index >= face.inner.info().num_glyphs {
+        return Err(FT_Err_Invalid_Glyph_Index);
+    }
     if use_fast_horizontal_advance(flags) {
         // C `tt_get_advances` returns raw hmtx advances; `ft_face_scale_advances_`
         // scales them directly to 16.16 with `FT_MulFix(1024 * advance, x_scale)`.
@@ -185,17 +947,18 @@ pub fn FT_Render_Glyph(
     render_mode: FT_Render_Mode,
 ) -> Result<FT_GlyphSlot, FT_Error> {
     let mode = render_mode_to_core(render_mode).ok_or(FT_Err_Cannot_Render_Glyph)?;
-    let glyph_index = u16::try_from(slot.glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
-    slot.source_face
-        .render_loaded_glyph(glyph_index, slot.load_flags, mode)
+    if slot.format == FT_GLYPH_FORMAT_BITMAP {
+        return Ok(slot);
+    }
+    let source_face = slot.source_face.clone();
+    let load_flags = slot.load_flags;
+    slot.core_slot
+        .render(mode)
         .map(|rendered| {
             slot_to_ffi(
-                &FT_Face {
-                    inner: slot.source_face,
-                    probe_only: false,
-                },
+                &face_to_ffi(source_face, false),
                 rendered,
-                slot.load_flags | api::LoadFlags::RENDER,
+                load_flags | api::LoadFlags::RENDER,
             )
         })
         .map_err(error_to_ft)
@@ -205,8 +968,141 @@ pub fn FT_Size_Metrics(face: &FT_Face) -> FT_Size_MetricsRec {
     face.inner.size_metrics().into()
 }
 
-pub fn FT_Get_Sfnt_Table(_face: &FT_Face, _tag: FT_Sfnt_Tag) -> FT_Pointer {
+pub fn FT_MulDiv(a: FT_Long, b: FT_Long, c: FT_Long) -> FT_Long {
+    let (a, sign) = move_long_sign(a, 1);
+    let (b, sign) = move_long_sign(b, sign);
+    let (c, sign) = move_long_sign(c, sign);
+    let d = if c > 0 {
+        a.wrapping_mul(b).wrapping_add(c >> 1) / c
+    } else {
+        0x7FFF_FFFF
+    } as FT_Long;
+    if sign < 0 { neg_long(d) } else { d }
+}
+
+pub fn FT_MulFix(a: FT_Long, b: FT_Long) -> FT_Long {
+    let ab = i128::from(a) * i128::from(b);
+    ((ab + 0x8000 + (ab >> 63)) >> 16) as FT_Long
+}
+
+pub fn FT_DivFix(a: FT_Long, b: FT_Long) -> FT_Long {
+    let (a, sign) = move_long_sign(a, 1);
+    let (b, sign) = move_long_sign(b, sign);
+    let q = if b > 0 {
+        (a.wrapping_shl(16).wrapping_add(b >> 1)) / b
+    } else {
+        0x7FFF_FFFF
+    } as FT_Long;
+    if sign < 0 { neg_long(q) } else { q }
+}
+
+pub fn FT_RoundFix(a: FT_Fixed) -> FT_Fixed {
+    add_long(a, 0x8000 - FT_Fixed::from(a < 0)) & !0xFFFF
+}
+
+pub fn FT_CeilFix(a: FT_Fixed) -> FT_Fixed {
+    add_long(a, 0xFFFF) & !0xFFFF
+}
+
+pub fn FT_FloorFix(a: FT_Fixed) -> FT_Fixed {
+    a & !0xFFFF
+}
+
+pub fn FT_Vector_Transform(vector: Option<&mut FT_Vector>, matrix: Option<&FT_Matrix>) {
+    let (Some(vector), Some(matrix)) = (vector, matrix) else {
+        return;
+    };
+    let xz = FT_MulFix(vector.x, matrix.xx).wrapping_add(FT_MulFix(vector.y, matrix.xy));
+    let yz = FT_MulFix(vector.x, matrix.yx).wrapping_add(FT_MulFix(vector.y, matrix.yy));
+    vector.x = xz;
+    vector.y = yz;
+}
+
+pub fn FT_Matrix_Multiply(a: Option<&FT_Matrix>, b: Option<&mut FT_Matrix>) {
+    let (Some(a), Some(b)) = (a, b) else {
+        return;
+    };
+    let xx = add_long(FT_MulFix(a.xx, b.xx), FT_MulFix(a.xy, b.yx));
+    let xy = add_long(FT_MulFix(a.xx, b.xy), FT_MulFix(a.xy, b.yy));
+    let yx = add_long(FT_MulFix(a.yx, b.xx), FT_MulFix(a.yy, b.yx));
+    let yy = add_long(FT_MulFix(a.yx, b.xy), FT_MulFix(a.yy, b.yy));
+    b.xx = xx;
+    b.xy = xy;
+    b.yx = yx;
+    b.yy = yy;
+}
+
+pub fn FT_Matrix_Invert(matrix: Option<&mut FT_Matrix>) -> FT_Error {
+    let Some(matrix) = matrix else {
+        return FT_Err_Invalid_Argument;
+    };
+    let delta = FT_MulFix(matrix.xx, matrix.yy).wrapping_sub(FT_MulFix(matrix.xy, matrix.yx));
+    if delta == 0 {
+        return FT_Err_Invalid_Argument;
+    }
+    let xx = matrix.xx;
+    let yy = matrix.yy;
+    matrix.xy = neg_long(FT_DivFix(matrix.xy, delta));
+    matrix.yx = neg_long(FT_DivFix(matrix.yx, delta));
+    matrix.xx = FT_DivFix(yy, delta);
+    matrix.yy = FT_DivFix(xx, delta);
+    FT_Err_Ok
+}
+
+fn add_long(a: FT_Long, b: FT_Long) -> FT_Long {
+    (a as FT_ULong).wrapping_add(b as FT_ULong) as FT_Long
+}
+
+fn neg_long(a: FT_Long) -> FT_Long {
+    (0 as FT_ULong).wrapping_sub(a as FT_ULong) as FT_Long
+}
+
+fn move_long_sign(value: FT_Long, sign: i32) -> (FT_ULong, i32) {
+    if value < 0 {
+        ((0 as FT_ULong).wrapping_sub(value as FT_ULong), -sign)
+    } else {
+        (value as FT_ULong, sign)
+    }
+}
+
+pub fn FT_Face_Info(face: &FT_Face) -> FT_FaceRecPublic {
+    let info = face.inner.info();
+    FT_FaceRecPublic {
+        num_faces: info.num_faces as FT_Long,
+        face_index: info.face_index as FT_Long,
+        face_flags: FT_Long::from(info.face_flags),
+        style_flags: FT_Long::from(info.style_flags),
+        num_glyphs: FT_Long::from(info.num_glyphs),
+        bbox: FT_BBox {
+            xMin: FT_Long::from(info.bbox.x_min),
+            yMin: FT_Long::from(info.bbox.y_min),
+            xMax: FT_Long::from(info.bbox.x_max),
+            yMax: FT_Long::from(info.bbox.y_max),
+        },
+        units_per_EM: info.units_per_em,
+        ascender: info.ascender,
+        descender: info.descender,
+        height: info.height,
+        max_advance_width: info.max_advance_width as i16,
+        max_advance_height: info.max_advance_height as i16,
+        underline_position: info.underline_position,
+        underline_thickness: info.underline_thickness,
+        ..FT_FaceRecPublic::default()
+    }
+}
+
+pub fn FT_Get_Sfnt_Table(face: &FT_Face, tag: FT_Sfnt_Tag) -> FT_Pointer {
+    if i64::from(tag) == FT_SFNT_OS2 {
+        return face
+            .sfnt_os2
+            .as_deref()
+            .map_or(ptr::null_mut(), |os2| os2 as *const TT_OS2 as FT_Pointer);
+    }
     ptr::null_mut()
+}
+
+pub fn FT_Get_Sfnt_OS2(face: &FT_Face) -> Option<TT_OS2> {
+    face.sfnt_os2.as_deref().copied()
 }
 
 pub fn FT_Load_Sfnt_Table(
@@ -237,6 +1133,8 @@ pub fn FT_Get_CMap_Format(_charmap: FT_CharMap) -> FT_Long {
 }
 
 fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags) -> FT_GlyphSlot {
+    let outline = slot.slot_outline().map(outline_to_ffi_snapshot);
+    let core_slot = slot.clone();
     FT_GlyphSlot {
         glyph_index: FT_UInt::from(slot.glyph_index),
         metrics: slot.metrics.into(),
@@ -245,8 +1143,49 @@ fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags)
         bitmap: slot.bitmap.map(Into::into),
         bitmap_left: slot.bitmap_left,
         bitmap_top: slot.bitmap_top,
+        outline_cbox: bbox_to_ffi(slot.outline_cbox),
+        outline_bbox: bbox_to_ffi(slot.outline_bbox),
+        outline,
+        core_slot,
         source_face: face.inner.clone(),
         load_flags,
+    }
+}
+
+fn outline_to_ffi_snapshot(outline: &crate::outline::Outline) -> FT_OutlineSnapshot {
+    FT_OutlineSnapshot {
+        points: outline
+            .points
+            .iter()
+            .map(|point| FT_Vector {
+                x: i64::from(point.x),
+                y: i64::from(point.y),
+            })
+            .collect(),
+        tags: if outline.tags.is_empty() {
+            outline
+                .points
+                .iter()
+                .map(|point| if point.on_curve { 1 } else { 0 })
+                .collect()
+        } else {
+            outline.tags.clone()
+        },
+        contours: outline
+            .contours
+            .iter()
+            .map(|&contour| contour as FT_UShort)
+            .collect(),
+        flags: outline.flags as FT_Int,
+    }
+}
+
+fn bbox_to_ffi(bbox: crate::font::BBox) -> FT_BBox {
+    FT_BBox {
+        xMin: FT_Long::from(bbox.x_min),
+        yMin: FT_Long::from(bbox.y_min),
+        xMax: FT_Long::from(bbox.x_max),
+        yMax: FT_Long::from(bbox.y_max),
     }
 }
 
@@ -265,7 +1204,13 @@ fn use_fast_horizontal_advance(flags: api::LoadFlags) -> bool {
 
 fn c_face_index_to_core(face_index: FT_Long) -> Result<(usize, bool), FT_Error> {
     if face_index >= 0 {
-        let face_index = usize::try_from(face_index).map_err(|_| FT_Err_Invalid_Argument)?;
+        // FreeType encodes named instance selection in bits 16..30 of
+        // `face_index`; the low 16 bits remain the selected face number
+        // (ftobjs.c, FT_Open_Face face_index handling). The pure-Rust core
+        // does not apply variation coordinates yet, but it must open the base
+        // face instead of treating the encoded value as an SFNT/TTC index.
+        let face_index =
+            usize::try_from(face_index & 0xFFFF).map_err(|_| FT_Err_Invalid_Argument)?;
         return Ok((face_index, false));
     }
     // FreeType treats negative face indexes as probes: `-(N+1)` opens face N

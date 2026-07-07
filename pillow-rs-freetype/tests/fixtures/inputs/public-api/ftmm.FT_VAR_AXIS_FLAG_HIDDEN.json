@@ -10,7 +10,7 @@
       "case_id": "ftmm.FT_VAR_AXIS_FLAG_HIDDEN.value_matches_header",
       "subject": "ftmm.FT_VAR_AXIS_FLAG_HIDDEN",
       "case": "value_matches_header",
-      "operation": "ftmm.constant_value",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "abi": {
@@ -23,7 +23,8 @@
       "inputs": {
         "assets": {},
         "params": {
-          "constant": "FT_VAR_AXIS_FLAG_HIDDEN"
+          "constant": "FT_VAR_AXIS_FLAG_HIDDEN",
+          "symbol": "FT_VAR_AXIS_FLAG_HIDDEN"
         }
       },
       "classifiers": [

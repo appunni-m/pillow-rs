@@ -55,8 +55,8 @@
       "case_id": "fterrdef.FT_Err_Too_Many_Extensions.source_emitter_inventory",
       "subject": "fterrdef.FT_Err_Too_Many_Extensions",
       "case": "source_emitter_inventory",
-      "operation": "source_emitter_audit",
-      "schema": "api_audit",
+      "operation": "constant",
+      "schema": "constant",
       "expect_error": false,
       "inputs": {
         "assets": {},

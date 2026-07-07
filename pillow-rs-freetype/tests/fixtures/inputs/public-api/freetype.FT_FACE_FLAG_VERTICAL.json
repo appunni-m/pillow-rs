@@ -51,7 +51,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts_autohint/NotoSansMongolian-Regular.ttf"
+            "id": "input/fonts_autohint/NotoSansMongolian-Regular.ttf"
           }
         },
         "params": {

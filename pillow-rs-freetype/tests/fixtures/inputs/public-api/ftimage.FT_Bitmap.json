@@ -87,6 +87,11 @@
       "expect_error": false,
       "inputs": {
         "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/LiberationSerif-Regular.ttf"
+          },
           "outline_font": {
             "kind": "ref",
             "id": "input/fonts/LiberationSerif-Regular.ttf"
@@ -101,6 +106,15 @@
           }
         },
         "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "glyph_index": 36,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
           "render_modes": [
             "FT_RENDER_MODE_NORMAL",
             "FT_RENDER_MODE_MONO",

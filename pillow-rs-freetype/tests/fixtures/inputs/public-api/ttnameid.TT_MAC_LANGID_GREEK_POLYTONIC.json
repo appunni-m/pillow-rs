@@ -29,11 +29,11 @@
       "case_id": "ttnameid.TT_MAC_LANGID_GREEK_POLYTONIC.representative_name_record_language_match",
       "subject": "ttnameid.TT_MAC_LANGID_GREEK_POLYTONIC",
       "case": "representative_name_record_language_match",
-      "operation": "sfnt.get_name_record",
+      "operation":"sfnt.get_name",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {"font": {"kind": "ref", "id": "fonts/names/mac-greek-polytonic.ttf"}},
+        "assets": {"font": {"kind": "ref", "id": "input/fonts/names/mac-greek-polytonic.ttf"}},
         "params": {
           "function": "FT_Get_Sfnt_Name",
           "face_index": 0,

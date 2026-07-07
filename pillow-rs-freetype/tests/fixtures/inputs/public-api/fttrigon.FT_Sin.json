@@ -1,10 +1,27 @@
 {
   "version": 1,
   "subject": "fttrigon.FT_Sin",
-  "manifest_cases": ["signature_and_return_type", "cardinal_and_diagonal_angles", "periodic_and_large_angle_inputs"],
+  "manifest_cases": [
+    "signature_and_return_type",
+    "cardinal_and_diagonal_angles",
+    "periodic_and_large_angle_inputs"
+  ],
   "metadata": {
-    "abi": {"kind": "function", "header": "freetype/fttrigon.h", "symbol": "FT_Sin", "c_signature": "FT_Fixed FT_Sin(FT_Angle angle)", "return": "FT_Fixed", "args": ["FT_Angle angle"]},
-    "source_refs": ["freetype/include/freetype/fttrigon.h", "freetype/src/base/fttrigon.c:FT_Sin", "freetype/src/base/fttrigon.c:FT_Vector_Unit"],
+    "abi": {
+      "kind": "function",
+      "header": "freetype/fttrigon.h",
+      "symbol": "FT_Sin",
+      "c_signature": "FT_Fixed FT_Sin(FT_Angle angle)",
+      "return": "FT_Fixed",
+      "args": [
+        "FT_Angle angle"
+      ]
+    },
+    "source_refs": [
+      "freetype/include/freetype/fttrigon.h",
+      "freetype/src/base/fttrigon.c:FT_Sin",
+      "freetype/src/base/fttrigon.c:FT_Vector_Unit"
+    ],
     "source_behavior": "C computes sine through the same CORDIC unit-vector path used by FT_Vector_Unit and returns vec.y as an FT_Fixed value."
   },
   "cases": [
@@ -12,12 +29,41 @@
       "case_id": "fttrigon.FT_Sin.signature_and_return_type",
       "subject": "fttrigon.FT_Sin",
       "case": "signature_and_return_type",
-      "operation": "abi.function_signature",
+      "operation": "abi_function_probe",
       "schema": "abi_signature",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"include": "freetype/fttrigon.h", "symbol": "FT_Sin", "expected_signature": "FT_Fixed (*)(FT_Angle)"}},
-      "classifiers": ["kind:function", "header:fttrigon", "area:trigonometry", "abi:return-value"],
-      "expectation": {"status": "ok", "output_shape": {"import_compiles": "bool", "return_type": "FT_Fixed", "argument_types": ["FT_Angle"]}, "compare": {"mode": "layout", "paths": ["import_compiles", "return_type", "argument_types"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/fttrigon.h",
+          "symbol": "FT_Sin",
+          "expected_signature": "FT_Fixed (*)(FT_Angle)"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:fttrigon",
+        "area:trigonometry",
+        "abi:return-value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "import_compiles": "bool",
+          "return_type": "FT_Fixed",
+          "argument_types": [
+            "FT_Angle"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "import_compiles",
+            "return_type",
+            "argument_types"
+          ]
+        }
+      }
     },
     {
       "case_id": "fttrigon.FT_Sin.cardinal_and_diagonal_angles",
@@ -26,9 +72,43 @@
       "operation": "fttrigon.sin",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"angles": [0, 2949120, -2949120, 5898240, -5898240, 11796480, 23592960]}},
-      "classifiers": ["kind:function", "header:fttrigon", "area:trigonometry", "edge:cardinal-diagonal"],
-      "expectation": {"status": "ok", "output_shape": {"results": [{"angle": "FT_Angle", "sin": "FT_Fixed"}]}, "compare": {"mode": "exact", "paths": ["results[*].sin"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "angles": [
+            0,
+            2949120,
+            -2949120,
+            5898240,
+            -5898240,
+            11796480,
+            23592960
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:fttrigon",
+        "area:trigonometry",
+        "edge:cardinal-diagonal"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "results": [
+            {
+              "angle": "FT_Angle",
+              "sin": "FT_Fixed"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "results[*].sin"
+          ]
+        }
+      }
     },
     {
       "case_id": "fttrigon.FT_Sin.periodic_and_large_angle_inputs",
@@ -37,9 +117,42 @@
       "operation": "fttrigon.sin",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"angles": [1234567, -7654321, 24827527, -54840201, 70778880, -70778880]}},
-      "classifiers": ["kind:function", "header:fttrigon", "area:trigonometry", "edge:periodic-large"],
-      "expectation": {"status": "ok", "output_shape": {"results": [{"angle": "FT_Angle", "sin": "FT_Fixed"}]}, "compare": {"mode": "exact", "paths": ["results[*].sin"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "angles": [
+            1234567,
+            -7654321,
+            24827527,
+            -54840201,
+            70778880,
+            -70778880
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:fttrigon",
+        "area:trigonometry",
+        "edge:periodic-large"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "results": [
+            {
+              "angle": "FT_Angle",
+              "sin": "FT_Fixed"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "results[*].sin"
+          ]
+        }
+      }
     }
   ]
 }

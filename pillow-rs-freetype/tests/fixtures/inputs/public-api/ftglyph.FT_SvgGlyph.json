@@ -11,7 +11,7 @@
       "case_id": "ftglyph.FT_SvgGlyph.alias_defined",
       "subject": "ftglyph.FT_SvgGlyph",
       "case": "alias_defined",
-      "operation": "ftglyph.type_alias",
+      "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
       "inputs": {
@@ -25,7 +25,8 @@
             "kind": "pointer_alias",
             "record": "FT_SvgGlyphRec",
             "since": "2.12"
-          }
+          },
+          "symbol": "FT_SvgGlyph"
         }
       },
       "classifiers": [

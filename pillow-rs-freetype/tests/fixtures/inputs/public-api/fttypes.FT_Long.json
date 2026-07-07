@@ -1,7 +1,11 @@
 {
   "version": 1,
   "subject": "fttypes.FT_Long",
-  "manifest_cases": ["alias_defined_as_signed_long", "size_alignment_and_signed_range", "signed_value_domain"],
+  "manifest_cases": [
+    "alias_defined_as_signed_long",
+    "size_alignment_and_signed_range",
+    "signed_value_domain"
+  ],
   "cases": [
     {
       "case_id": "fttypes.FT_Long.alias_defined_as_signed_long",
@@ -10,22 +14,126 @@
       "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Long", "c_definition": "typedef signed long FT_Long", "underlying_type": "signed long", "signedness": "signed", "probes": ["include_compiles", "assignment_compiles"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:integer"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Long", "kind": "typedef", "underlying": "signed long"}},
-      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "underlying_type": "c_type", "signedness": "signed", "import_compiles": "bool"}, "compare": {"mode": "value", "paths": ["symbol", "underlying_type", "signedness", "import_compiles"]}, "source_refs": ["freetype/include/freetype/fttypes.h:237-245"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Long",
+          "c_definition": "typedef signed long FT_Long",
+          "underlying_type": "signed long",
+          "signedness": "signed",
+          "probes": [
+            "include_compiles",
+            "assignment_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:integer"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Long",
+          "kind": "typedef",
+          "underlying": "signed long"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "underlying_type": "c_type",
+          "signedness": "signed",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "underlying_type",
+            "signedness",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:237-245"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_Long.size_alignment_and_signed_range",
       "subject": "fttypes.FT_Long",
       "case": "size_alignment_and_signed_range",
-      "operation": "abi.scalar_layout",
+      "operation": "abi_type_probe",
       "schema": "abi_layout",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Long", "underlying_type": "signed long", "boundary_selectors": ["LONG_MIN", -1, 0, 1, "LONG_MAX"], "probes": ["sizeof", "alignof", "signed_min", "signed_max", "roundtrip_cast"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:scalar"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Long", "kind": "scalar", "underlying": "signed long"}},
-      "expectation": {"status": "ok", "output_shape": {"sizeof": "usize", "alignof": "usize", "signedness": "signed", "range": {"min": "integer", "max": "integer"}, "roundtrip_values": ["FT_Long"]}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "signedness", "range", "roundtrip_values"]}, "source_refs": ["freetype/include/freetype/fttypes.h:237-245", "freetype/include/freetype/config/ftstdlib.h:60-69"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Long",
+          "underlying_type": "signed long",
+          "boundary_selectors": [
+            "LONG_MIN",
+            -1,
+            0,
+            1,
+            "LONG_MAX"
+          ],
+          "probes": [
+            "sizeof",
+            "alignof",
+            "signed_min",
+            "signed_max",
+            "roundtrip_cast"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:scalar"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Long",
+          "kind": "scalar",
+          "underlying": "signed long"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "signedness": "signed",
+          "range": {
+            "min": "integer",
+            "max": "integer"
+          },
+          "roundtrip_values": [
+            "FT_Long"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "signedness",
+            "range",
+            "roundtrip_values"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:237-245",
+          "freetype/include/freetype/config/ftstdlib.h:60-69"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_Long.signed_value_domain",
@@ -34,10 +142,61 @@
       "operation": "fttypes.long_value_domain",
       "schema": "api_model",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"model_values": [-65536, -1, 0, 1, 65536], "boundary_selectors": ["LONG_MIN", "LONG_MAX"], "preserve_signedness": true}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:signed-domain"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Long", "kind": "integer", "underlying": "signed long"}},
-      "expectation": {"status": "ok", "output_shape": {"values": ["FT_Long"], "negative_values": "preserved", "positive_values": "preserved", "boundaries": ["FT_Long"]}, "compare": {"mode": "exact", "paths": ["values", "negative_values", "positive_values", "boundaries"]}, "source_refs": ["freetype/include/freetype/fttypes.h:237-245"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "model_values": [
+            -65536,
+            -1,
+            0,
+            1,
+            65536
+          ],
+          "boundary_selectors": [
+            "LONG_MIN",
+            "LONG_MAX"
+          ],
+          "preserve_signedness": true
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:signed-domain"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Long",
+          "kind": "integer",
+          "underlying": "signed long"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "values": [
+            "FT_Long"
+          ],
+          "negative_values": "preserved",
+          "positive_values": "preserved",
+          "boundaries": [
+            "FT_Long"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "values",
+            "negative_values",
+            "positive_values",
+            "boundaries"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:237-245"
+        ]
+      }
     }
   ]
 }

@@ -10,8 +10,8 @@
       "case_id": "ftcolor.FT_PaintExtend.enum_variants_match_header",
       "subject": "ftcolor.FT_PaintExtend",
       "case": "enum_variants_match_header",
-      "operation": "ftcolor.enum_values",
-      "schema": "enum_value_set",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -22,7 +22,12 @@
             "FT_COLR_PAINT_EXTEND_PAD": 0,
             "FT_COLR_PAINT_EXTEND_REPEAT": 1,
             "FT_COLR_PAINT_EXTEND_REFLECT": 2
-          }
+          },
+          "symbols": [
+            "FT_COLR_PAINT_EXTEND_PAD",
+            "FT_COLR_PAINT_EXTEND_REPEAT",
+            "FT_COLR_PAINT_EXTEND_REFLECT"
+          ]
         }
       },
       "classifiers": [

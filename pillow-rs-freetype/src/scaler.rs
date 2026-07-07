@@ -723,9 +723,16 @@ fn scale_glyph_impl_with_context(
         } else {
             None
         };
+        let mut outline = Outline::default();
+        // C `TT_Load_Glyph` applies `FT_OUTLINE_HIGH_PRECISION` to every
+        // scaled TrueType slot below 24 ppem, even when the glyph has no
+        // points (`src/truetype/ttgload.c:2569-2577`).
+        if scale.ppem < 24 {
+            outline.flags = OUTLINE_HIGH_PRECISION;
+        }
         return Ok((
             ScaledGlyph {
-                outline: Outline::default(),
+                outline,
                 advance_width,
                 slot_advance_width,
                 phantom_pp1_x: 0,
@@ -842,6 +849,7 @@ fn scale_glyph_impl_with_context(
     let mut composite_use_my_metrics_advance = None;
     let mut composite_use_my_metrics_vertical_advance = None;
     let mut composite_use_my_metrics_phantoms = None;
+    let mut composite_point_tags = None;
     let mut scaled: Vec<OutlinePoint> =
         if outline_raw.is_composite && !use_autohint && allow_bytecode {
             let composite = scale_composite_components(
@@ -856,6 +864,7 @@ fn scale_glyph_impl_with_context(
             composite_use_my_metrics_advance = composite.use_my_metrics_advance;
             composite_use_my_metrics_vertical_advance = composite.use_my_metrics_vertical_advance;
             composite_use_my_metrics_phantoms = composite.use_my_metrics_phantoms;
+            composite_point_tags = Some(composite.tags);
             composite.points
         } else {
             let mut scaled = Vec::with_capacity(outline_raw.points.len());
@@ -883,6 +892,13 @@ fn scale_glyph_impl_with_context(
     // ── Hinting dispatch ────────────────────────────────────────────────
     let mut tt_outline_flags = 0;
     let mut contour_dropouts = Vec::new();
+    let mut point_tags = composite_point_tags.unwrap_or_else(|| {
+        outline_raw
+            .points
+            .iter()
+            .map(|point| if point.on_curve { 0x01 } else { 0x00 })
+            .collect::<Vec<_>>()
+    });
     let mut final_hint_context = None;
     if use_autohint {
         let hinted_advance = autohint_glyph(
@@ -940,6 +956,7 @@ fn scale_glyph_impl_with_context(
             let hint_result = crate::tt::hinter::hint_glyph(
                 &mut scaled,
                 &raw_pts,
+                &point_tags,
                 &outline_raw.end_pts_of_contours,
                 advance_width,
                 h_metric.advance_width as i32,
@@ -960,6 +977,7 @@ fn scale_glyph_impl_with_context(
                     phantom_pp2_x = outcome.pp2_x;
                     tt_outline_flags = outcome.outline_flags;
                     contour_dropouts = outcome.contour_dropouts;
+                    point_tags = outcome.point_tags;
                     if let Some(advance_width) = composite_use_my_metrics_advance {
                         // C `load_truetype_glyph` keeps the subglyph phantoms
                         // when a composite component has `USE_MY_METRICS`
@@ -1100,6 +1118,7 @@ fn scale_glyph_impl_with_context(
             .map(|&e| e as i16)
             .collect(),
         points: scaled,
+        tags: point_tags,
         contour_dropouts,
         flags: outline_flags,
         cbox_x_min: 0,
@@ -1225,6 +1244,7 @@ fn scale_composite_components(
     bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
 ) -> Result<CompositeScaleResult, FontError> {
     let mut points: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
+    let mut tags: Vec<u8> = Vec::with_capacity(outline_raw.points.len());
     let mut use_my_metrics_advance = None;
     let mut use_my_metrics_vertical_advance = None;
     let mut use_my_metrics_phantoms = None;
@@ -1281,8 +1301,9 @@ fn scale_composite_components(
         }
         let off_x = ft_pix_floor(sub.outline_cbox_x_min);
         let off_y = ft_pix_floor(sub.outline_cbox_y_min);
+        let sub_tags = outline_tags_or_curve_tags(&sub.outline);
         let mut transformed = Vec::with_capacity(sub.outline.points.len());
-        for point in &sub.outline.points {
+        for (index, point) in sub.outline.points.iter().enumerate() {
             // Recursive component loading happens before the final top-level
             // `-loader.pp1.x` outline translation in `TT_Load_Glyph`
             // (`ttgload.c:1858-1888, 2578-2583`). `scale_glyph_impl` returns
@@ -1295,6 +1316,11 @@ fn scale_composite_components(
                 y: ft_mul_fix(x, comp.transform.yx) + ft_mul_fix(y, comp.transform.yy),
                 on_curve: point.on_curve,
             });
+            tags.push(sub_tags.get(index).copied().unwrap_or(if point.on_curve {
+                0x01
+            } else {
+                0x00
+            }));
         }
         let (dx, dy) = if comp.args_are_xy {
             let scaled_x = scale.scale_x(comp.arg1);
@@ -1337,6 +1363,7 @@ fn scale_composite_components(
     }
     Ok(CompositeScaleResult {
         points,
+        tags,
         use_my_metrics_advance,
         use_my_metrics_vertical_advance,
         use_my_metrics_phantoms,
@@ -1345,9 +1372,21 @@ fn scale_composite_components(
 
 struct CompositeScaleResult {
     points: Vec<OutlinePoint>,
+    tags: Vec<u8>,
     use_my_metrics_advance: Option<i32>,
     use_my_metrics_vertical_advance: Option<i32>,
     use_my_metrics_phantoms: Option<(i32, i32)>,
+}
+
+fn outline_tags_or_curve_tags(outline: &Outline) -> Vec<u8> {
+    if !outline.tags.is_empty() {
+        return outline.tags.clone();
+    }
+    outline
+        .points
+        .iter()
+        .map(|point| if point.on_curve { 0x01 } else { 0x00 })
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1572,6 +1611,7 @@ fn autohint_glyph(
             .map(|&e| e as i16)
             .collect(),
         points,
+        tags: Vec::new(),
         contour_dropouts: Vec::new(),
         flags: 0,
         cbox_x_min: 0,

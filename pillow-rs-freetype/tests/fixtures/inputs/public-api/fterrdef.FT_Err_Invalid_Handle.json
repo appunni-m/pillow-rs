@@ -70,7 +70,7 @@
           "glyph_source_font": {
             "kind": "ref",
             "role": "font",
-            "id": "fonts/DejaVuSans.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "asset_kind": "font"
           }
         },

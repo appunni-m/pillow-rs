@@ -141,23 +141,11 @@
       "expect_error": false,
       "inputs": {
         "assets": {
-          "fonts": [
-            {
-              "kind": "file",
-              "role": "font",
-              "path": "input/fonts/DejaVuSans.ttf"
-            },
-            {
-              "kind": "file",
-              "role": "font",
-              "path": "input/fonts/variable/inter-var.ttf"
-            },
-            {
-              "kind": "file",
-              "role": "font",
-              "path": "input/fonts/vertical/cjk-vertical-metrics.ttf"
-            }
-          ]
+          "font_folder": {
+            "kind": "file",
+            "role": "font_folder",
+            "path": "input/fonts"
+          }
         },
         "params": {
           "face_index": 0,
@@ -182,6 +170,7 @@
         },
         "variability": {
           "axes": [
+            "fonts",
             "sizes"
           ]
         }

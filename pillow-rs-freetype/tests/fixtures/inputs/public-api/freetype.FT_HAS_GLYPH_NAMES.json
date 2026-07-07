@@ -11,12 +11,13 @@
       "case_id": "freetype.FT_HAS_GLYPH_NAMES.face_flags_bit_probe",
       "subject": "freetype.FT_HAS_GLYPH_NAMES",
       "case": "face_flags_bit_probe",
-      "operation": "freetype.face_macro",
+      "operation": "face_macro_flags",
       "schema": "macro_probe",
       "expect_error": false,
       "inputs": {
         "assets": {},
         "params": {
+          "macro": "FT_HAS_GLYPH_NAMES",
           "flags": [
             0,
             "FT_FACE_FLAG_GLYPH_NAMES"
@@ -62,16 +63,8 @@
         },
         "params": {
           "face_index": 0,
-          "glyph_indices": [
-            1,
-            36
-          ],
+          "macro": "FT_HAS_GLYPH_NAMES",
           "post_probe": "FT_Get_Glyph_Name and FT_Get_Name_Index"
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
         }
       },
       "classifiers": [
@@ -117,6 +110,7 @@
         },
         "params": {
           "face_index": 0,
+          "macro": "FT_HAS_GLYPH_NAMES",
           "post_probe": "glyph-name APIs"
         }
       },

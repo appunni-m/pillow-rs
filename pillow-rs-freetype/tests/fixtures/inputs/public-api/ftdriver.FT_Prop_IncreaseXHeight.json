@@ -84,7 +84,7 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "id": "fonts/DejaVuSans.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "requirements": "Existing scalable Latin control font with lowercase x-height glyphs."
           }
         },
@@ -156,7 +156,7 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "id": "fonts/DejaVuSans.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "requirements": "Existing scalable Latin font with stable lowercase x-height glyphs such as x, e, n."
           },
           "control_font": {

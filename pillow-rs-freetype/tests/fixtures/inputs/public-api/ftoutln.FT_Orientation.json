@@ -11,25 +11,21 @@
       "case_id": "ftoutln.FT_Orientation.enum_variants_match_header",
       "subject": "ftoutln.FT_Orientation",
       "case": "enum_variants_match_header",
-      "operation": "abi.enum_layout",
-      "schema": "abi_enum",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
         "params": {
           "header": "freetype/ftoutln.h",
           "symbol": "FT_Orientation",
-          "variants": {
-            "FT_ORIENTATION_TRUETYPE": 0,
-            "FT_ORIENTATION_POSTSCRIPT": 1,
-            "FT_ORIENTATION_FILL_RIGHT": 0,
-            "FT_ORIENTATION_FILL_LEFT": 1,
-            "FT_ORIENTATION_NONE": 2
-          },
-          "aliases": {
-            "FT_ORIENTATION_FILL_RIGHT": "FT_ORIENTATION_TRUETYPE",
-            "FT_ORIENTATION_FILL_LEFT": "FT_ORIENTATION_POSTSCRIPT"
-          }
+          "symbols": [
+            "FT_ORIENTATION_TRUETYPE",
+            "FT_ORIENTATION_POSTSCRIPT",
+            "FT_ORIENTATION_FILL_RIGHT",
+            "FT_ORIENTATION_FILL_LEFT",
+            "FT_ORIENTATION_NONE"
+          ]
         }
       },
       "classifiers": [

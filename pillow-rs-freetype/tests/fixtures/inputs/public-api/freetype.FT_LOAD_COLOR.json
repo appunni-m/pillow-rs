@@ -66,9 +66,11 @@
         "params": {
           "face_index": 0,
           "pixel_size": 20,
-          "load_flags": [
-            "FT_LOAD_COLOR",
-            "FT_LOAD_RENDER"
+          "load_flag_sets": [
+            [
+              "FT_LOAD_COLOR",
+              "FT_LOAD_RENDER"
+            ]
           ],
           "symbol_under_test": "FT_LOAD_COLOR",
           "call_sequence": [

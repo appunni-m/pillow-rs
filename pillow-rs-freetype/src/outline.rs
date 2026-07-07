@@ -5,7 +5,7 @@
 //! indices, and per-point on/off-curve tags.
 
 /// A point in an `FT_Outline`-style outline (26.6 coordinates).
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct OutlinePoint {
     pub x: i32,
     pub y: i32,
@@ -19,7 +19,7 @@ pub(crate) const OUTLINE_SMART_DROPOUTS: u32 = 0x10;
 pub(crate) const OUTLINE_INCLUDE_STUBS: u32 = 0x20;
 
 /// FreeType's `FT_Outline`: flattened contours in 26.6 units.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Outline {
     /// Number of contours.
     pub n_contours: i32,
@@ -27,6 +27,9 @@ pub struct Outline {
     pub contours: Vec<i16>,
     /// Flattened points across all contours.
     pub points: Vec<OutlinePoint>,
+    /// Full FreeType outline tag bytes when a loader has exact public tags.
+    /// Empty means derive curve tags from [`OutlinePoint::on_curve`].
+    pub tags: Vec<u8>,
     /// Per-contour black rasterizer dropout controls.  Empty means derive the
     /// control from [`Self::flags`].
     pub contour_dropouts: Vec<u8>,

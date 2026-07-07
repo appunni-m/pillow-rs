@@ -70,27 +70,24 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "id": "fonts/DejaVuSans.ttf",
-            "asset_kind": "font"
-          },
-          "foreign_font": {
-            "kind": "ref",
-            "role": "font",
-            "id": "fonts/LiberationSerif.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "asset_kind": "font"
           }
         },
         "params": {
           "call_sequence": [
             "FT_New_Memory_Face for face A",
-            "FT_New_Memory_Face for face B",
-            "FT_Set_Charmap(face A, face B charmap)"
+            "FT_Set_Charmap(face A, NULL)"
           ],
           "face_index": 0,
-          "variant": "foreign_charmap_handle",
+          "variants": [
+            {
+              "charmap": "null"
+            }
+          ],
           "expected_error_symbol": "FT_Err_Invalid_CharMap_Handle",
           "expected_error_value": 38,
-          "c_behavior": "FT_Set_Charmap verifies that the charmap belongs to the target face and returns Invalid_CharMap_Handle for NULL or foreign charmaps"
+          "c_behavior": "FT_Set_Charmap returns Invalid_CharMap_Handle for NULL charmaps; foreign charmaps return Invalid_Argument."
         }
       },
       "classifiers": [

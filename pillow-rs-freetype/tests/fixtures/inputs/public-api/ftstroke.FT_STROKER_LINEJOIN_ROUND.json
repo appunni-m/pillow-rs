@@ -11,7 +11,7 @@
       "case_id": "ftstroke.FT_STROKER_LINEJOIN_ROUND.value_matches_header",
       "subject": "ftstroke.FT_STROKER_LINEJOIN_ROUND",
       "case": "value_matches_header",
-      "operation": "ftstroke.linejoin_constant",
+      "operation": "constant",
       "schema": "api_result",
       "expect_error": false,
       "abi": {
@@ -25,7 +25,8 @@
         "assets": {},
         "params": {
           "include_header": "freetype/ftstroke.h",
-          "constant": "FT_STROKER_LINEJOIN_ROUND"
+          "constant": "FT_STROKER_LINEJOIN_ROUND",
+          "symbol": "FT_STROKER_LINEJOIN_ROUND"
         }
       },
       "classifiers": [

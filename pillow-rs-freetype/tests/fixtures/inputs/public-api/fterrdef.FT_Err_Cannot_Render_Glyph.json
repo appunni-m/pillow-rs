@@ -67,7 +67,7 @@
           "fixture": {
             "kind": "ref",
             "role": "font",
-            "id": "fonts/DejaVuSans.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "requirements": "Existing outline font, load a normal outline glyph then render through unsupported/sentinel mode if ABI permits; compare normal modes as controls."
           }
         },
@@ -125,7 +125,7 @@
           "fixture": {
             "kind": "ref",
             "role": "font",
-            "id": "fonts/DejaVuSans.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "requirements": "Existing outline font; pass outline through raster params/mode combination that C classifies as unsupported while preserving retry semantics."
           }
         },

@@ -1,7 +1,11 @@
 {
   "version": 1,
   "subject": "fttypes.FT_Pointer",
-  "manifest_cases": ["alias_defined_as_void_pointer", "pointer_size_alignment_and_nullability", "opaque_identity_domain"],
+  "manifest_cases": [
+    "alias_defined_as_void_pointer",
+    "pointer_size_alignment_and_nullability",
+    "opaque_identity_domain"
+  ],
   "cases": [
     {
       "case_id": "fttypes.FT_Pointer.alias_defined_as_void_pointer",
@@ -10,22 +14,116 @@
       "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Pointer", "c_definition": "typedef void* FT_Pointer", "underlying_type": "void*", "pointer_depth": 1, "probes": ["include_compiles", "assignment_from_object_pointer", "assignment_to_void_pointer"]}},
-      "classifiers": ["kind:pointer-alias", "header:fttypes", "area:pointer"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Pointer", "kind": "typedef", "underlying": "void*"}},
-      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "underlying_type": "c_type", "pointer_depth": "usize", "import_compiles": "bool"}, "compare": {"mode": "value", "paths": ["symbol", "underlying_type", "pointer_depth", "import_compiles"]}, "source_refs": ["freetype/include/freetype/fttypes.h:305-313"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Pointer",
+          "c_definition": "typedef void* FT_Pointer",
+          "underlying_type": "void*",
+          "pointer_depth": 1,
+          "probes": [
+            "include_compiles",
+            "assignment_from_object_pointer",
+            "assignment_to_void_pointer"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:pointer-alias",
+        "header:fttypes",
+        "area:pointer"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Pointer",
+          "kind": "typedef",
+          "underlying": "void*"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "underlying_type": "c_type",
+          "pointer_depth": "usize",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "underlying_type",
+            "pointer_depth",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:305-313"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_Pointer.pointer_size_alignment_and_nullability",
       "subject": "fttypes.FT_Pointer",
       "case": "pointer_size_alignment_and_nullability",
-      "operation": "abi.pointer_layout",
+      "operation": "abi_type_probe",
       "schema": "abi_layout",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Pointer", "null_allowed": true, "model_pointers": ["NULL", "address_of_int", "address_of_record"], "probes": ["sizeof", "alignof", "null_assignment", "pointer_roundtrip"]}},
-      "classifiers": ["kind:pointer-alias", "header:fttypes", "area:pointer"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Pointer", "kind": "pointer-alias", "underlying": "void*"}},
-      "expectation": {"status": "ok", "output_shape": {"sizeof": "usize", "alignof": "usize", "nullness": "nullable", "roundtrip": "identity_class"}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "nullness", "roundtrip"]}, "source_refs": ["freetype/include/freetype/fttypes.h:305-313"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Pointer",
+          "null_allowed": true,
+          "model_pointers": [
+            "NULL",
+            "address_of_int",
+            "address_of_record"
+          ],
+          "probes": [
+            "sizeof",
+            "alignof",
+            "null_assignment",
+            "pointer_roundtrip"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:pointer-alias",
+        "header:fttypes",
+        "area:pointer"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Pointer",
+          "kind": "pointer-alias",
+          "underlying": "void*"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "nullness": "nullable",
+          "roundtrip": "identity_class"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "nullness",
+            "roundtrip"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:305-313"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_Pointer.opaque_identity_domain",
@@ -34,10 +132,71 @@
       "operation": "fttypes.pointer_identity_domain",
       "schema": "api_model",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"opaque_objects": ["client_data0", "client_data1"], "model_aliases": [{"name": "null", "pointer": "NULL"}, {"name": "object0", "pointer": "address_of_client_data0"}, {"name": "object1", "pointer": "address_of_client_data1"}], "probe": ["store_in_FT_Generic_data", "roundtrip_without_deref"]}},
-      "classifiers": ["kind:pointer-alias", "header:fttypes", "area:pointer", "runtime:opaque"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Pointer", "kind": "opaque-pointer", "underlying": "void*"}},
-      "expectation": {"status": "ok", "output_shape": {"aliases": ["identity_class"], "nullness": ["bool"], "dereferenced": false}, "compare": {"mode": "identity_class", "paths": ["aliases", "nullness", "dereferenced"]}, "source_refs": ["freetype/include/freetype/fttypes.h:305-313", "freetype/include/freetype/fttypes.h:441-475"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "opaque_objects": [
+            "client_data0",
+            "client_data1"
+          ],
+          "model_aliases": [
+            {
+              "name": "null",
+              "pointer": "NULL"
+            },
+            {
+              "name": "object0",
+              "pointer": "address_of_client_data0"
+            },
+            {
+              "name": "object1",
+              "pointer": "address_of_client_data1"
+            }
+          ],
+          "probe": [
+            "store_in_FT_Generic_data",
+            "roundtrip_without_deref"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:pointer-alias",
+        "header:fttypes",
+        "area:pointer",
+        "runtime:opaque"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Pointer",
+          "kind": "opaque-pointer",
+          "underlying": "void*"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "aliases": [
+            "identity_class"
+          ],
+          "nullness": [
+            "bool"
+          ],
+          "dereferenced": false
+        },
+        "compare": {
+          "mode": "identity_class",
+          "paths": [
+            "aliases",
+            "nullness",
+            "dereferenced"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:305-313",
+          "freetype/include/freetype/fttypes.h:441-475"
+        ]
+      }
     }
   ]
 }

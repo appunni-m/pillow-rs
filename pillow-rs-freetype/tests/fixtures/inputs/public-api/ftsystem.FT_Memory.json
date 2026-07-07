@@ -14,7 +14,12 @@
       "c_decl": "typedef struct FT_MemoryRec_* FT_Memory",
       "pointee": {
         "symbol": "FT_MemoryRec_",
-        "fields": ["void* user", "FT_Alloc_Func alloc", "FT_Free_Func free", "FT_Realloc_Func realloc"]
+        "fields": [
+          "void* user",
+          "FT_Alloc_Func alloc",
+          "FT_Free_Func free",
+          "FT_Realloc_Func realloc"
+        ]
       },
       "callbacks": {
         "FT_Alloc_Func": "void* (*)(FT_Memory memory, long size)",
@@ -43,10 +48,19 @@
           "include": "freetype/ftsystem.h",
           "symbol": "FT_Memory",
           "expected_decl": "struct FT_MemoryRec_*",
-          "probe": ["import_compiles", "is_pointer", "pointee_tag"]
+          "probe": [
+            "import_compiles",
+            "is_pointer",
+            "pointee_tag"
+          ]
         }
       },
-      "classifiers": ["kind:type", "header:ftsystem", "area:memory", "abi:opaque-pointer"],
+      "classifiers": [
+        "kind:type",
+        "header:ftsystem",
+        "area:memory",
+        "abi:opaque-pointer"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
@@ -56,7 +70,11 @@
         },
         "compare": {
           "mode": "layout",
-          "paths": ["import_compiles", "is_pointer", "pointee_tag"]
+          "paths": [
+            "import_compiles",
+            "is_pointer",
+            "pointee_tag"
+          ]
         }
       }
     },
@@ -64,7 +82,7 @@
       "case_id": "ftsystem.FT_Memory.pointer_abi_contract",
       "subject": "ftsystem.FT_Memory",
       "case": "pointer_abi_contract",
-      "operation": "abi.pointer_contract",
+      "operation": "abi_type_probe",
       "schema": "abi_layout",
       "expect_error": false,
       "inputs": {
@@ -72,11 +90,24 @@
         "params": {
           "include": "freetype/ftsystem.h",
           "symbol": "FT_Memory",
-          "probe": ["sizeof_pointer", "alignof_pointer", "callback_argument_identity"],
-          "callbacks": ["FT_Alloc_Func", "FT_Free_Func", "FT_Realloc_Func"]
+          "probe": [
+            "sizeof_pointer",
+            "alignof_pointer",
+            "callback_argument_identity"
+          ],
+          "callbacks": [
+            "FT_Alloc_Func",
+            "FT_Free_Func",
+            "FT_Realloc_Func"
+          ]
         }
       },
-      "classifiers": ["kind:type", "header:ftsystem", "area:memory", "abi:pointer"],
+      "classifiers": [
+        "kind:type",
+        "header:ftsystem",
+        "area:memory",
+        "abi:pointer"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
@@ -86,7 +117,11 @@
         },
         "compare": {
           "mode": "identity_class",
-          "paths": ["sizeof_pointer", "alignof_pointer", "callback_argument_identity"]
+          "paths": [
+            "sizeof_pointer",
+            "alignof_pointer",
+            "callback_argument_identity"
+          ]
         }
       }
     },
@@ -113,29 +148,62 @@
           }
         },
         "params": {
-          "library_sequence": ["FT_New_Library", "FT_Add_Default_Modules", "FT_New_Memory_Face", "FT_Done_Face", "FT_Done_Library"],
-          "allocator_plan": [
-            {"event": "alloc", "sizes": "record"},
-            {"event": "realloc", "cur_size": "record", "new_size": "record"},
-            {"event": "free", "block_identity": "record"}
+          "library_sequence": [
+            "FT_New_Library",
+            "FT_Add_Default_Modules",
+            "FT_New_Memory_Face",
+            "FT_Done_Face",
+            "FT_Done_Library"
           ],
-          "failure_plan": {"alloc_fail_after": null, "realloc_fail_after": null}
+          "allocator_plan": [
+            {
+              "event": "alloc",
+              "sizes": "record"
+            },
+            {
+              "event": "realloc",
+              "cur_size": "record",
+              "new_size": "record"
+            },
+            {
+              "event": "free",
+              "block_identity": "record"
+            }
+          ],
+          "failure_plan": {
+            "alloc_fail_after": null,
+            "realloc_fail_after": null
+          }
         }
       },
-      "classifiers": ["kind:type", "header:ftsystem", "area:memory", "operation:custom-allocator"],
+      "classifiers": [
+        "kind:type",
+        "header:ftsystem",
+        "area:memory",
+        "operation:custom-allocator"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
           "library_status": "FT_Error",
           "face_load_status": "FT_Error",
-          "allocator_events": ["alloc_realloc_free_event"],
+          "allocator_events": [
+            "alloc_realloc_free_event"
+          ],
           "memory_pointer_identity": "bool"
         },
         "compare": {
           "mode": "exact",
-          "paths": ["library_status", "face_load_status", "allocator_events", "memory_pointer_identity"]
+          "paths": [
+            "library_status",
+            "face_load_status",
+            "allocator_events",
+            "memory_pointer_identity"
+          ]
         },
-        "fixture_requirements": ["Add an allocator harness that can record callback order and pointer identity without treating addresses as stable scalar values."]
+        "fixture_requirements": [
+          "Add an allocator harness that can record callback order and pointer identity without treating addresses as stable scalar values."
+        ]
       }
     }
   ]

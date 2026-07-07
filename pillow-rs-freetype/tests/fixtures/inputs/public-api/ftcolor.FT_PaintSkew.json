@@ -65,7 +65,7 @@
       "case_id": "ftcolor.FT_PaintSkew.field_order_matches_c",
       "subject": "ftcolor.FT_PaintSkew",
       "case": "field_order_matches_c",
-      "operation": "abi.record_field_order",
+      "operation": "record_layout",
       "schema": "record_layout",
       "expect_error": false,
       "inputs": {

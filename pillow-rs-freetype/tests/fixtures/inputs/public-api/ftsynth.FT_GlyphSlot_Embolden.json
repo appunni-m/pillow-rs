@@ -14,7 +14,9 @@
       "symbol": "FT_GlyphSlot_Embolden",
       "c_signature": "void FT_GlyphSlot_Embolden(FT_GlyphSlot slot)",
       "return": "void",
-      "args": ["FT_GlyphSlot slot"]
+      "args": [
+        "FT_GlyphSlot slot"
+      ]
     },
     "source_refs": [
       "freetype/include/freetype/ftsynth.h",
@@ -27,7 +29,7 @@
       "case_id": "ftsynth.FT_GlyphSlot_Embolden.signature_and_wrapper_strength",
       "subject": "ftsynth.FT_GlyphSlot_Embolden",
       "case": "signature_and_wrapper_strength",
-      "operation": "abi.function_signature",
+      "operation": "abi_function_probe",
       "schema": "abi_signature",
       "expect_error": false,
       "inputs": {
@@ -43,18 +45,33 @@
           }
         }
       },
-      "classifiers": ["kind:function", "header:ftsynth", "abi:void", "behavior:wrapper"],
+      "classifiers": [
+        "kind:function",
+        "header:ftsynth",
+        "abi:void",
+        "behavior:wrapper"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
           "import_compiles": "bool",
           "return_type": "void",
-          "argument_types": ["FT_GlyphSlot"],
-          "wrapper_strengths": {"xdelta": "FT_Fixed", "ydelta": "FT_Fixed"}
+          "argument_types": [
+            "FT_GlyphSlot"
+          ],
+          "wrapper_strengths": {
+            "xdelta": "FT_Fixed",
+            "ydelta": "FT_Fixed"
+          }
         },
         "compare": {
           "mode": "layout",
-          "paths": ["import_compiles", "return_type", "argument_types", "wrapper_strengths"]
+          "paths": [
+            "import_compiles",
+            "return_type",
+            "argument_types",
+            "wrapper_strengths"
+          ]
         }
       }
     },
@@ -79,26 +96,45 @@
           "size_ppem": 24,
           "load": {
             "operation": "FT_Load_Glyph",
-            "glyph_indices": [36, 80],
-            "load_flags": ["FT_LOAD_DEFAULT", "FT_LOAD_NO_BITMAP"]
+            "glyph_indices": [
+              36,
+              80
+            ],
+            "load_flags": [
+              "FT_LOAD_DEFAULT",
+              "FT_LOAD_NO_BITMAP"
+            ]
           },
           "compare_with_adjust_weight_strength": 2730,
           "capture_before_after": true
         }
       },
-      "classifiers": ["kind:function", "header:ftsynth", "format:outline", "operation:glyph-slot-mutation"],
+      "classifiers": [
+        "kind:function",
+        "header:ftsynth",
+        "format:outline",
+        "operation:glyph-slot-mutation"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
           "slot_format": "FT_GLYPH_FORMAT_OUTLINE",
-          "outline_points_after": ["FT_Vector"],
+          "outline_points_after": [
+            "FT_Vector"
+          ],
           "outline_cbox_after": "FT_BBox",
           "metrics_after": "FT_Glyph_Metrics",
           "advance_after": "FT_Vector"
         },
         "compare": {
           "mode": "exact",
-          "paths": ["slot_format", "outline_points_after", "outline_cbox_after", "metrics_after", "advance_after"]
+          "paths": [
+            "slot_format",
+            "outline_points_after",
+            "outline_cbox_after",
+            "metrics_after",
+            "advance_after"
+          ]
         }
       }
     },
@@ -125,13 +161,24 @@
           "select_size_index": 0,
           "load": {
             "operation": "FT_Load_Glyph",
-            "glyph_indices": [1, 2],
-            "load_flags": ["FT_LOAD_DEFAULT", "FT_LOAD_COLOR"]
+            "glyph_indices": [
+              1,
+              2
+            ],
+            "load_flags": [
+              "FT_LOAD_DEFAULT",
+              "FT_LOAD_COLOR"
+            ]
           },
           "capture_before_after": true
         }
       },
-      "classifiers": ["kind:function", "header:ftsynth", "format:bitmap", "operation:glyph-slot-mutation"],
+      "classifiers": [
+        "kind:function",
+        "header:ftsynth",
+        "format:bitmap",
+        "operation:glyph-slot-mutation"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
@@ -143,9 +190,17 @@
         },
         "compare": {
           "mode": "bytes",
-          "paths": ["slot_format", "bitmap_after", "bitmap_top_after", "metrics_after", "advance_after"]
+          "paths": [
+            "slot_format",
+            "bitmap_after",
+            "bitmap_top_after",
+            "metrics_after",
+            "advance_after"
+          ]
         },
-        "fixture_requirements": ["Add an embedded-bitmap strike fixture that loads bitmap slots without outline fallback."]
+        "fixture_requirements": [
+          "Add an embedded-bitmap strike fixture that loads bitmap slots without outline fallback."
+        ]
       }
     },
     {
@@ -166,14 +221,25 @@
         },
         "params": {
           "scenarios": [
-            {"slot_pointer": null},
-            {"slot_ref": "synthetic_slots:composite"},
-            {"slot_ref": "synthetic_slots:none"}
+            {
+              "slot_pointer": null
+            },
+            {
+              "slot_ref": "synthetic_slots:composite"
+            },
+            {
+              "slot_ref": "synthetic_slots:none"
+            }
           ],
           "initial_slot_snapshot": "sentinel_fields"
         }
       },
-      "classifiers": ["kind:function", "header:ftsynth", "behavior:no-op", "format:unsupported"],
+      "classifiers": [
+        "kind:function",
+        "header:ftsynth",
+        "behavior:no-op",
+        "format:unsupported"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
@@ -183,7 +249,10 @@
         },
         "compare": {
           "mode": "exact",
-          "paths": ["slot_after", "null_call_completed"]
+          "paths": [
+            "slot_after",
+            "null_call_completed"
+          ]
         }
       }
     }

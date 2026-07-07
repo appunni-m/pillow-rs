@@ -12,7 +12,7 @@
       "case_id": "ftimage.FT_Outline_MoveTo_Func.macro_alias_matches_typedef",
       "subject": "ftimage.FT_Outline_MoveTo_Func",
       "case": "macro_alias_matches_typedef",
-      "operation": "ftimage.macro_alias",
+      "operation": "abi_type_probe",
       "schema": "api_abi_type",
       "expect_error": false,
       "inputs": {
@@ -20,10 +20,15 @@
         "params": {
           "include": "<freetype/ftimage.h>",
           "macro": "FT_Outline_MoveTo_Func",
-          "expands_to": "FT_Outline_MoveToFunc"
+          "expands_to": "FT_Outline_MoveToFunc",
+          "symbol": "FT_Outline_MoveTo_Func"
         }
       },
-      "classifiers": ["kind:macro", "header:ftimage", "area:outline-decompose"],
+      "classifiers": [
+        "kind:macro",
+        "header:ftimage",
+        "area:outline-decompose"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
@@ -32,17 +37,23 @@
         },
         "compare": {
           "mode": "exact",
-          "paths": ["macro", "expands_to", "include"]
+          "paths": [
+            "macro",
+            "expands_to",
+            "include"
+          ]
         },
-        "source_refs": ["freetype/include/freetype/ftimage.h:505-517"]
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:505-517"
+        ]
       }
     },
     {
       "case_id": "ftimage.FT_Outline_MoveTo_Func.callback_abi_matches_c",
       "subject": "ftimage.FT_Outline_MoveTo_Func",
       "case": "callback_abi_matches_c",
-      "operation": "ftimage.callback_abi",
-      "schema": "api_abi_type",
+      "operation": "abi_type_probe",
+      "schema": "c_abi_type",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -50,12 +61,22 @@
           "typedef": "FT_Outline_MoveToFunc",
           "return_type": "int",
           "arguments": [
-            {"name": "to", "type": "const FT_Vector*"},
-            {"name": "user", "type": "void*"}
+            {
+              "name": "to",
+              "type": "const FT_Vector*"
+            },
+            {
+              "name": "user",
+              "type": "void*"
+            }
           ]
         }
       },
-      "classifiers": ["kind:callback", "header:ftimage", "abi:function-pointer"],
+      "classifiers": [
+        "kind:callback",
+        "header:ftimage",
+        "abi:function-pointer"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
@@ -65,9 +86,15 @@
         },
         "compare": {
           "mode": "layout",
-          "paths": ["return_type", "arguments[*].type", "arguments[*].position"]
+          "paths": [
+            "return_type",
+            "arguments[*].type",
+            "arguments[*].position"
+          ]
         },
-        "source_refs": ["freetype/include/freetype/ftimage.h:505-516"]
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:505-516"
+        ]
       }
     },
     {
@@ -90,12 +117,28 @@
           }
         },
         "params": {
-          "glyph_indices": [36, 37],
-          "load_flags": ["FT_LOAD_NO_HINTING"],
-          "decompose_funcs": {"move_to": "instrumented", "line_to": "instrumented", "conic_to": "instrumented", "cubic_to": "instrumented"},
+          "glyph_indices": [
+            36,
+            37
+          ],
+          "load_flags": [
+            "FT_LOAD_NO_HINTING"
+          ],
+          "decompose_funcs": {
+            "move_to": "instrumented",
+            "line_to": "instrumented",
+            "conic_to": "instrumented",
+            "cubic_to": "instrumented"
+          },
           "shift_delta_matrix": [
-            {"shift": 0, "delta": 0},
-            {"shift": 1, "delta": 32}
+            {
+              "shift": 0,
+              "delta": 0
+            },
+            {
+              "shift": 1,
+              "delta": 32
+            }
           ]
         },
         "variability": {
@@ -105,7 +148,11 @@
           ]
         }
       },
-      "classifiers": ["kind:macro", "header:ftimage", "path:runtime"],
+      "classifiers": [
+        "kind:macro",
+        "header:ftimage",
+        "path:runtime"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
@@ -115,12 +162,20 @@
         },
         "compare": {
           "mode": "exact",
-          "paths": ["status", "events[*].kind", "events[*].to.x", "events[*].to.y", "events[*].contour_index"]
+          "paths": [
+            "status",
+            "events[*].kind",
+            "events[*].to.x",
+            "events[*].to.y",
+            "events[*].contour_index"
+          ]
         },
         "fixture_requirements": [
           "outlines/multi-contour-negative-coordinates.json must include at least two contours and negative coordinates to verify move_to ordering and coordinate transform."
         ],
-        "source_refs": ["freetype/include/freetype/ftimage.h:652-665"]
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:652-665"
+        ]
       }
     },
     {
@@ -144,7 +199,11 @@
           "abort_on_callback": "move_to"
         }
       },
-      "classifiers": ["kind:macro", "header:ftimage", "path:error"],
+      "classifiers": [
+        "kind:macro",
+        "header:ftimage",
+        "path:error"
+      ],
       "expectation": {
         "status": "error",
         "output_shape": {
@@ -153,7 +212,11 @@
         },
         "compare": {
           "mode": "exact_error",
-          "paths": ["status", "events[*].kind", "first_error_callback"]
+          "paths": [
+            "status",
+            "events[*].kind",
+            "first_error_callback"
+          ]
         },
         "error": "callback_return_value"
       }

@@ -82,7 +82,7 @@
       "case_id": "tttables.TT_Postscript.field_order_matches_header",
       "subject": "tttables.TT_Postscript",
       "case": "field_order_matches_header",
-      "operation": "abi.record_field_order",
+      "operation": "record_layout",
       "schema": "abi_record",
       "expect_error": false,
       "inputs": {

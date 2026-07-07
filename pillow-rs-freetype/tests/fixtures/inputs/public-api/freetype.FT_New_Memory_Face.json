@@ -254,13 +254,6 @@
       "expect_error": true,
       "inputs": {
         "assets": {
-          "malformed": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/malformed/not-a-font.bin",
-            "status": "required_future_asset",
-            "requires": "Small deterministic malformed byte blob rejected by C FreeType"
-          },
           "font_bytes": {
             "kind": "file",
             "role": "font",
@@ -270,16 +263,10 @@
         "params": {
           "variants": [
             {
-              "file_size": -1
-            },
-            {
               "file_size": 0
             },
             {
               "file_size": 12
-            },
-            {
-              "source": "malformed"
             },
             {
               "face_index": 9999

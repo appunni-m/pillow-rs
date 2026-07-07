@@ -11,12 +11,13 @@
       "case_id": "freetype.FT_HAS_HORIZONTAL.face_flags_bit_probe",
       "subject": "freetype.FT_HAS_HORIZONTAL",
       "case": "face_flags_bit_probe",
-      "operation": "freetype.face_macro",
+      "operation": "face_macro_flags",
       "schema": "macro_probe",
       "expect_error": false,
       "inputs": {
         "assets": {},
         "params": {
+          "macro": "FT_HAS_HORIZONTAL",
           "flags": [
             0,
             "FT_FACE_FLAG_HORIZONTAL"
@@ -60,16 +61,7 @@
         },
         "params": {
           "face_index": 0,
-          "glyph_indices": [
-            36,
-            68
-          ],
-          "size_ppem": 20
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
+          "macro": "FT_HAS_HORIZONTAL"
         }
       },
       "classifiers": [
@@ -112,6 +104,7 @@
         },
         "params": {
           "face_index": 0,
+          "macro": "FT_HAS_HORIZONTAL",
           "probe": "C false or synthesized behavior"
         }
       },

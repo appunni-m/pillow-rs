@@ -1,18 +1,55 @@
 {
   "version": 1,
   "subject": "ftimage.FT_Glyph_Format",
-  "manifest_cases": ["enum_variants_match_header", "slot_format_matches_loaded_glyph"],
+  "manifest_cases": [
+    "enum_variants_match_header",
+    "slot_format_matches_loaded_glyph"
+  ],
   "cases": [
     {
       "case_id": "ftimage.FT_Glyph_Format.enum_variants_match_header",
       "subject": "ftimage.FT_Glyph_Format",
       "case": "enum_variants_match_header",
-      "operation": "ftimage.enum_values",
-      "schema": "api_enum",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"include": "<freetype/ftimage.h>", "enum": "FT_Glyph_Format", "variants": {"FT_GLYPH_FORMAT_NONE": 0, "FT_GLYPH_FORMAT_COMPOSITE": 1668246896, "FT_GLYPH_FORMAT_BITMAP": 1651078259, "FT_GLYPH_FORMAT_OUTLINE": 1869968492, "FT_GLYPH_FORMAT_PLOTTER": 1886154612, "FT_GLYPH_FORMAT_SVG": 1398163232}}},
-      "classifiers": ["kind:enum", "header:ftimage", "abi:value"],
-      "expectation": {"status": "ok", "output_shape": {"enum": "FT_Glyph_Format", "values": "FT_IMAGE_TAG-derived unsigned long tags"}, "compare": {"mode": "value", "paths": ["enum", "variants.*"]}, "source_refs": ["freetype/include/freetype/ftimage.h:711-764"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftimage.h>",
+          "enum": "FT_Glyph_Format",
+          "symbols": [
+            "FT_GLYPH_FORMAT_NONE",
+            "FT_GLYPH_FORMAT_COMPOSITE",
+            "FT_GLYPH_FORMAT_BITMAP",
+            "FT_GLYPH_FORMAT_OUTLINE",
+            "FT_GLYPH_FORMAT_PLOTTER",
+            "FT_GLYPH_FORMAT_SVG"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:ftimage",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "enum": "FT_Glyph_Format",
+          "values": "FT_IMAGE_TAG-derived unsigned long tags"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "enum",
+            "variants.*"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftimage.h:711-764"
+        ]
+      }
     },
     {
       "case_id": "ftimage.FT_Glyph_Format.slot_format_matches_loaded_glyph",
@@ -21,9 +58,68 @@
       "operation": "freetype.load_render_get_glyph",
       "schema": "glyph_slot",
       "expect_error": false,
-      "inputs": {"assets": {"outline_font": {"kind": "file", "role": "font", "path": "input/fonts/DejaVuSans.ttf"}, "bitmap_strike_font": {"kind": "ref", "id": "fonts/bitmap/embedded-strike.ttf"}, "svg_font": {"kind": "ref", "id": "fonts/svg/otsvg-glyph.ttf"}}, "params": {"rows": [{"path": "load_outline", "expected_format": "FT_GLYPH_FORMAT_OUTLINE"}, {"path": "render_outline", "expected_format": "FT_GLYPH_FORMAT_BITMAP"}, {"path": "load_composite_no_recurse", "expected_format": "FT_GLYPH_FORMAT_COMPOSITE"}, {"path": "load_svg_when_enabled", "expected_format": "FT_GLYPH_FORMAT_SVG"}]}},
-      "classifiers": ["kind:enum", "header:ftimage", "path:runtime"],
-      "expectation": {"status": "build_dependent", "output_shape": {"status": "FT_Error", "slot_format": "FT_Glyph_Format", "detached_glyph_format": "FT_GlyphRec.format where applicable"}, "compare": {"mode": "exact", "paths": ["rows[*].status", "rows[*].slot_format", "rows[*].detached_glyph_format", "rows[*].payload_class"]}, "fixture_requirements": ["bitmap and SVG rows require future shared assets; SVG row must record feature-disabled behavior explicitly."]}
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "bitmap_strike_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap/embedded-strike.ttf"
+          },
+          "svg_font": {
+            "kind": "ref",
+            "id": "fonts/svg/otsvg-glyph.ttf"
+          }
+        },
+        "params": {
+          "rows": [
+            {
+              "path": "load_outline",
+              "expected_format": "FT_GLYPH_FORMAT_OUTLINE"
+            },
+            {
+              "path": "render_outline",
+              "expected_format": "FT_GLYPH_FORMAT_BITMAP"
+            },
+            {
+              "path": "load_composite_no_recurse",
+              "expected_format": "FT_GLYPH_FORMAT_COMPOSITE"
+            },
+            {
+              "path": "load_svg_when_enabled",
+              "expected_format": "FT_GLYPH_FORMAT_SVG"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:enum",
+        "header:ftimage",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "status": "FT_Error",
+          "slot_format": "FT_Glyph_Format",
+          "detached_glyph_format": "FT_GlyphRec.format where applicable"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].slot_format",
+            "rows[*].detached_glyph_format",
+            "rows[*].payload_class"
+          ]
+        },
+        "fixture_requirements": [
+          "bitmap and SVG rows require future shared assets; SVG row must record feature-disabled behavior explicitly."
+        ]
+      }
     }
   ]
 }

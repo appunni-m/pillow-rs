@@ -9,15 +9,15 @@
       "case_id": "freetype.FT_Render_Mode.enum_variants_match_header",
       "subject": "freetype.FT_Render_Mode",
       "case": "enum_variants_match_header",
-      "operation": "abi.enum_variants",
-      "schema": "abi_enum",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
         "params": {
           "header": "freetype/freetype.h",
           "enum": "FT_Render_Mode",
-          "expected_variants": [
+          "symbols": [
             "FT_RENDER_MODE_NORMAL",
             "FT_RENDER_MODE_LIGHT",
             "FT_RENDER_MODE_MONO",
@@ -67,7 +67,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/DejaVuSans.ttf"
+            "id": "input/fonts/DejaVuSans.ttf"
           }
         },
         "params": {

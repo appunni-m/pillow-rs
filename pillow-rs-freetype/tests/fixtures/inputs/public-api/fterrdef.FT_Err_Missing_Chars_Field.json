@@ -58,9 +58,9 @@
       "case_id": "fterrdef.FT_Err_Missing_Chars_Field.source_emitter_audit",
       "subject": "fterrdef.FT_Err_Missing_Chars_Field",
       "case": "source_emitter_audit",
-      "operation": "source_emitter_audit",
-      "schema": "api_result",
-      "expect_error": true,
+      "operation": "constant",
+      "schema": "constant",
+      "expect_error": false,
       "inputs": {
         "assets": {
           "fixture": {
@@ -76,7 +76,8 @@
           "pinned_source": "freetype/include/freetype/fterrdef.h:265; no direct FT_THROW(Missing_Chars_Field) found under freetype/src",
           "face_index": 0,
           "source_scan": "no direct FT_THROW(Missing_Chars_Field) emitter in pinned source",
-          "candidate_terminal_state": "EOF before CHARS"
+          "candidate_terminal_state": "EOF before CHARS",
+          "symbol": "FT_Err_Missing_Chars_Field"
         }
       },
       "classifiers": [

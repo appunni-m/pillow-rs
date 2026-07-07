@@ -77,9 +77,11 @@
           "pinned_source": "freetype/src/sfnt/ttsbit.c:1496-1497",
           "face_index": 0,
           "select_size_index": 0,
-          "load_flags": [
-            "FT_LOAD_COLOR",
-            "FT_LOAD_SBITS_ONLY"
+          "load_flag_sets": [
+            [
+              "FT_LOAD_COLOR",
+              "FT_LOAD_SBITS_ONLY"
+            ]
           ],
           "glyph_record": "glyph_start == glyph_end"
         }
@@ -136,9 +138,11 @@
           "pinned_source": "freetype/src/sfnt/ttsbit.c:1436-1441",
           "face_index": 0,
           "select_size_index": 0,
-          "load_flags": [
-            "FT_LOAD_COLOR",
-            "FT_LOAD_SBITS_ONLY"
+          "load_flag_sets": [
+            [
+              "FT_LOAD_COLOR",
+              "FT_LOAD_SBITS_ONLY"
+            ]
           ]
         }
       },

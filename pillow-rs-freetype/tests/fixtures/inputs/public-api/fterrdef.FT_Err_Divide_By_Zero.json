@@ -125,7 +125,7 @@
           "fixture": {
             "kind": "ref",
             "role": "font",
-            "id": "fonts/DejaVuSans.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "requirements": "Existing scalable font plus public size/transform parameters that reach ftobjs.c divide guards without UB."
           }
         },

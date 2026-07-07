@@ -11,7 +11,7 @@
       "case_id": "ftcache.FTC_IMAGE_TYPE_COMPARE.value_matches_header",
       "subject": "ftcache.FTC_IMAGE_TYPE_COMPARE",
       "case": "value_matches_header",
-      "operation": "ftcache.image_type_compare_macro",
+      "operation": "macro_eval",
       "schema": "macro_eval",
       "expect_error": false,
       "inputs": {
@@ -55,7 +55,7 @@
       "case_id": "ftcache.FTC_IMAGE_TYPE_COMPARE.height_is_ignored",
       "subject": "ftcache.FTC_IMAGE_TYPE_COMPARE",
       "case": "height_is_ignored",
-      "operation": "ftcache.image_type_compare_macro",
+      "operation": "macro_eval",
       "schema": "macro_eval",
       "expect_error": false,
       "inputs": {
@@ -98,7 +98,7 @@
       "case_id": "ftcache.FTC_IMAGE_TYPE_COMPARE.compared_fields_must_match",
       "subject": "ftcache.FTC_IMAGE_TYPE_COMPARE",
       "case": "compared_fields_must_match",
-      "operation": "ftcache.image_type_compare_macro",
+      "operation": "macro_eval",
       "schema": "macro_eval",
       "expect_error": false,
       "inputs": {

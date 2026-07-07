@@ -10,7 +10,7 @@
       "case_id": "ftcolor.FT_COLR_COMPOSITE_DEST.value_matches_header",
       "subject": "ftcolor.FT_COLR_COMPOSITE_DEST",
       "case": "value_matches_header",
-      "operation": "ftcolor.enum_variant_value",
+      "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
       "inputs": {

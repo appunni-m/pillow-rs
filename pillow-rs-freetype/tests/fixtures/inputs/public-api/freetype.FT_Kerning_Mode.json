@@ -9,15 +9,15 @@
       "case_id": "freetype.FT_Kerning_Mode.enum_variants_match_header",
       "subject": "freetype.FT_Kerning_Mode",
       "case": "enum_variants_match_header",
-      "operation": "abi.enum_variants",
-      "schema": "abi_enum",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
         "params": {
           "header": "freetype/freetype.h",
           "enum": "FT_Kerning_Mode",
-          "expected_variants": [
+          "symbols": [
             "FT_KERNING_DEFAULT",
             "FT_KERNING_UNFITTED",
             "FT_KERNING_UNSCALED"
@@ -63,7 +63,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/DejaVuSans.ttf"
+            "id": "input/fonts/DejaVuSans.ttf"
           }
         },
         "params": {

@@ -66,7 +66,7 @@
           "fixture": {
             "kind": "ref",
             "role": "font",
-            "id": "fonts/DejaVuSans.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "requirements": "Existing bytecode-capable TrueType font with runner allocation-failure injection targeted at TT_New_Context during bytecode initialization."
           }
         },

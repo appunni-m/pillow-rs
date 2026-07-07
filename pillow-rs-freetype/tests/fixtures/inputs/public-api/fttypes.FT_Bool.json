@@ -1,10 +1,178 @@
 {
   "version": 1,
   "subject": "fttypes.FT_Bool",
-  "manifest_cases": ["alias_defined", "abi_unsigned_char", "boolean_value_convention"],
+  "manifest_cases": [
+    "alias_defined",
+    "abi_unsigned_char",
+    "boolean_value_convention"
+  ],
   "cases": [
-    {"case_id": "fttypes.FT_Bool.alias_defined", "subject": "fttypes.FT_Bool", "case": "alias_defined", "operation": "abi.type_probe", "schema": "api_abi", "expect_error": false, "inputs": {"assets": {}, "params": {"type": "FT_Bool", "typedef_target": "unsigned char", "header": "freetype/fttypes.h"}}, "classifiers": ["kind:type", "header:fttypes", "surface:abi"], "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Bool", "kind": "typedef", "c_definition": "typedef unsigned char FT_Bool"}}, "expectation": {"status": "ok", "output_shape": {"typedef_target": "string", "imported": "bool"}, "compare": {"mode": "exact", "paths": ["typedef_target", "imported"]}, "source_refs": ["freetype/include/freetype/fttypes.h:FT_Bool"]}},
-    {"case_id": "fttypes.FT_Bool.abi_unsigned_char", "subject": "fttypes.FT_Bool", "case": "abi_unsigned_char", "operation": "abi.type_probe", "schema": "api_abi", "expect_error": false, "inputs": {"assets": {}, "params": {"types": ["FT_Bool", "unsigned char"], "probes": ["sizeof", "alignof", "unsignedness", "call_abi"]}}, "classifiers": ["kind:type", "header:fttypes", "surface:abi"], "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Bool", "kind": "typedef", "target": "unsigned char"}}, "expectation": {"status": "ok", "output_shape": {"sizeof": "integer", "alignof": "integer", "unsigned": "bool", "call_abi_equal": "bool"}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "unsigned", "call_abi_equal"]}, "source_refs": ["freetype/include/freetype/fttypes.h:FT_Bool"]}},
-    {"case_id": "fttypes.FT_Bool.boolean_value_convention", "subject": "fttypes.FT_Bool", "case": "boolean_value_convention", "operation": "abi.value_echo", "schema": "api_abi", "expect_error": false, "inputs": {"assets": {}, "params": {"type": "FT_Bool", "values": [0, 1, 2, 127, 128, 255], "canonical_false": 0, "canonical_true": 1, "storage_can_carry_noncanonical_values": true}}, "classifiers": ["kind:type", "header:fttypes", "area:boolean"], "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Bool", "kind": "typedef", "target": "unsigned char"}, "source_behavior": "FreeType uses 0 and 1 conventionally, while the unsigned-char storage type can carry any byte value."}, "expectation": {"status": "ok", "output_shape": {"rows": [{"input": "integer", "stored": "FT_Bool", "canonical_class": "string"}]}, "compare": {"mode": "exact", "paths": ["rows[*].input", "rows[*].stored", "rows[*].canonical_class"]}, "source_refs": ["freetype/include/freetype/fttypes.h:FT_Bool", "freetype/include/freetype/fttypes.h:FT_BOOL"]}}
+    {
+      "case_id": "fttypes.FT_Bool.alias_defined",
+      "subject": "fttypes.FT_Bool",
+      "case": "alias_defined",
+      "operation": "abi_type_probe",
+      "schema": "api_abi",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "type": "FT_Bool",
+          "typedef_target": "unsigned char",
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Bool"
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:fttypes",
+        "surface:abi"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Bool",
+          "kind": "typedef",
+          "c_definition": "typedef unsigned char FT_Bool"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "typedef_target": "string",
+          "imported": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "typedef_target",
+            "imported"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:FT_Bool"
+        ]
+      }
+    },
+    {
+      "case_id": "fttypes.FT_Bool.abi_unsigned_char",
+      "subject": "fttypes.FT_Bool",
+      "case": "abi_unsigned_char",
+      "operation": "abi_type_map_probe",
+      "schema": "api_abi",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "types": [
+            "FT_Bool",
+            "unsigned char"
+          ],
+          "probes": [
+            "sizeof",
+            "alignof",
+            "unsignedness",
+            "call_abi"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:fttypes",
+        "surface:abi"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Bool",
+          "kind": "typedef",
+          "target": "unsigned char"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "integer",
+          "alignof": "integer",
+          "unsigned": "bool",
+          "call_abi_equal": "bool"
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "unsigned",
+            "call_abi_equal"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:FT_Bool"
+        ]
+      }
+    },
+    {
+      "case_id": "fttypes.FT_Bool.boolean_value_convention",
+      "subject": "fttypes.FT_Bool",
+      "case": "boolean_value_convention",
+      "operation": "abi.value_echo",
+      "schema": "api_abi",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "type": "FT_Bool",
+          "values": [
+            0,
+            1,
+            2,
+            127,
+            128,
+            255
+          ],
+          "canonical_false": 0,
+          "canonical_true": 1,
+          "storage_can_carry_noncanonical_values": true
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:fttypes",
+        "area:boolean"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Bool",
+          "kind": "typedef",
+          "target": "unsigned char"
+        },
+        "source_behavior": "FreeType uses 0 and 1 conventionally, while the unsigned-char storage type can carry any byte value."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "rows": [
+            {
+              "input": "integer",
+              "stored": "FT_Bool",
+              "canonical_class": "string"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].input",
+            "rows[*].stored",
+            "rows[*].canonical_class"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:FT_Bool",
+          "freetype/include/freetype/fttypes.h:FT_BOOL"
+        ]
+      }
+    }
   ]
 }

@@ -223,10 +223,6 @@
             [
               "FT_LOAD_NO_HINTING",
               "FT_ADVANCE_FLAG_FAST_ONLY"
-            ],
-            [
-              "FT_LOAD_DEFAULT",
-              "FT_ADVANCE_FLAG_FAST_ONLY"
             ]
           ],
           "sentinel_array": "0x13572468"
@@ -375,15 +371,15 @@
           "pixel_size": 20,
           "ranges": [
             {
-              "start": "num_glyphs",
+              "start": 6253,
               "count": 1
             },
             {
-              "start": "num_glyphs-1",
+              "start": 6252,
               "count": 2
             },
             {
-              "start": "uint_max-1",
+              "start": 4294967294,
               "count": 4
             }
           ],
@@ -392,10 +388,15 @@
               "FT_LOAD_DEFAULT"
             ],
             [
-              "unsupported_high_bits"
+              -2147483648
             ]
           ],
           "sentinel_array": "0x24681357"
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [

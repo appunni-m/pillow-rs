@@ -1,7 +1,11 @@
 {
   "version": 1,
   "subject": "fttypes.FT_Char",
-  "manifest_cases": ["alias_defined_as_signed_char", "size_alignment_and_signed_range", "distinct_from_ft_string"],
+  "manifest_cases": [
+    "alias_defined_as_signed_char",
+    "size_alignment_and_signed_range",
+    "distinct_from_ft_string"
+  ],
   "cases": [
     {
       "case_id": "fttypes.FT_Char.alias_defined_as_signed_char",
@@ -10,22 +14,126 @@
       "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Char", "c_definition": "typedef signed char FT_Char", "underlying_type": "signed char", "signedness": "signed", "probes": ["include_compiles", "assignment_compiles", "negative_literal_compiles"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:abi"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Char", "kind": "typedef", "underlying": "signed char"}},
-      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "underlying_type": "c_type", "signedness": "signed", "import_compiles": "bool"}, "compare": {"mode": "value", "paths": ["symbol", "underlying_type", "signedness", "import_compiles"]}, "source_refs": ["freetype/include/freetype/fttypes.h:138-146"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Char",
+          "c_definition": "typedef signed char FT_Char",
+          "underlying_type": "signed char",
+          "signedness": "signed",
+          "probes": [
+            "include_compiles",
+            "assignment_compiles",
+            "negative_literal_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:abi"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Char",
+          "kind": "typedef",
+          "underlying": "signed char"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "underlying_type": "c_type",
+          "signedness": "signed",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "underlying_type",
+            "signedness",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:138-146"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_Char.size_alignment_and_signed_range",
       "subject": "fttypes.FT_Char",
       "case": "size_alignment_and_signed_range",
-      "operation": "abi.scalar_layout",
+      "operation": "abi_type_probe",
       "schema": "abi_layout",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Char", "underlying_type": "signed char", "model_values": [-128, -1, 0, 1, 127], "probes": ["sizeof", "alignof", "signed_min", "signed_max", "roundtrip_cast"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:scalar"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Char", "kind": "scalar", "underlying": "signed char"}},
-      "expectation": {"status": "ok", "output_shape": {"sizeof": "usize", "alignof": "usize", "signedness": "signed", "range": {"min": "integer", "max": "integer"}, "roundtrip_values": ["FT_Char"]}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "signedness", "range", "roundtrip_values"]}, "source_refs": ["freetype/include/freetype/fttypes.h:138-146"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Char",
+          "underlying_type": "signed char",
+          "model_values": [
+            -128,
+            -1,
+            0,
+            1,
+            127
+          ],
+          "probes": [
+            "sizeof",
+            "alignof",
+            "signed_min",
+            "signed_max",
+            "roundtrip_cast"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:scalar"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Char",
+          "kind": "scalar",
+          "underlying": "signed char"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "signedness": "signed",
+          "range": {
+            "min": "integer",
+            "max": "integer"
+          },
+          "roundtrip_values": [
+            "FT_Char"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "signedness",
+            "range",
+            "roundtrip_values"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:138-146"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_Char.distinct_from_ft_string",
@@ -34,10 +142,60 @@
       "operation": "abi.typedef_relation",
       "schema": "abi_type",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"left_symbol": "FT_Char", "right_symbol": "FT_String", "left_underlying": "signed char", "right_underlying": "char", "model_values": [-1, 0, 65, 127], "probe": ["types_are_distinct_in_c_declaration", "ft_string_signedness_is_implementation_defined"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:char-string"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Char", "kind": "scalar", "underlying": "signed char"}},
-      "expectation": {"status": "ok", "output_shape": {"left_underlying": "c_type", "right_underlying": "c_type", "same_size": "bool", "same_signedness": "bool"}, "compare": {"mode": "value", "paths": ["left_underlying", "right_underlying", "same_size", "same_signedness"]}, "source_refs": ["freetype/include/freetype/fttypes.h:138-146", "freetype/include/freetype/fttypes.h:182-190"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "left_symbol": "FT_Char",
+          "right_symbol": "FT_String",
+          "left_underlying": "signed char",
+          "right_underlying": "char",
+          "model_values": [
+            -1,
+            0,
+            65,
+            127
+          ],
+          "probe": [
+            "types_are_distinct_in_c_declaration",
+            "ft_string_signedness_is_implementation_defined"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:char-string"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Char",
+          "kind": "scalar",
+          "underlying": "signed char"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "left_underlying": "c_type",
+          "right_underlying": "c_type",
+          "same_size": "bool",
+          "same_signedness": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "left_underlying",
+            "right_underlying",
+            "same_size",
+            "same_signedness"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:138-146",
+          "freetype/include/freetype/fttypes.h:182-190"
+        ]
+      }
     }
   ]
 }

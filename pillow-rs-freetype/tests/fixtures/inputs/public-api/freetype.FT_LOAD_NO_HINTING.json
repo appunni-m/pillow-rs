@@ -62,7 +62,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/DejaVuSans.ttf"
+            "id": "input/fonts/DejaVuSans.ttf"
           }
         },
         "params": {
@@ -131,7 +131,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/DejaVuSans.ttf"
+            "id": "input/fonts/DejaVuSans.ttf"
           }
         },
         "params": {
@@ -203,15 +203,17 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/DejaVuSans.ttf"
+            "id": "input/fonts/DejaVuSans.ttf"
           }
         },
         "params": {
           "face_index": 0,
           "pixel_size": 20,
-          "load_flags": [
-            "FT_LOAD_NO_HINTING",
-            "FT_LOAD_RENDER"
+          "load_flag_sets": [
+            [
+              "FT_LOAD_NO_HINTING",
+              "FT_LOAD_RENDER"
+            ]
           ],
           "symbol_under_test": "FT_LOAD_NO_HINTING",
           "call_sequence": [

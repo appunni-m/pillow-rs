@@ -77,9 +77,9 @@
       "case_id": "ftmoderr.FT_Mod_Err_CFF.module_error_prefix_used",
       "subject": "ftmoderr.FT_Mod_Err_CFF",
       "case": "module_error_prefix_used",
-      "operation": "freetype.module_error_base_runtime",
-      "schema": "api_result",
-      "expect_error": true,
+      "operation": "constant_map",
+      "schema": "constant_map",
+      "expect_error": false,
       "inputs": {
         "assets": {
           "cff_font": {
@@ -126,6 +126,9 @@
             "freetype/src/cff/cfferrs.h:32-37",
             "freetype/include/freetype/ftmoderr.h:23-34",
             "freetype/include/freetype/ftmoderr.h:151-175"
+          ],
+          "symbols": [
+            "FT_Mod_Err_CFF"
           ]
         }
       },

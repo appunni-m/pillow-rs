@@ -10,8 +10,8 @@
       "case_id": "freetype.FT_ENC_TAG.value_matches_header",
       "subject": "freetype.FT_ENC_TAG",
       "case": "value_matches_header",
-      "operation": "macro.ft_enc_tag",
-      "schema": "macro_value",
+      "operation": "macro_eval",
+      "schema": "api_macro",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -80,8 +80,8 @@
       "case_id": "freetype.FT_ENC_TAG.encoding_enum_tag_values",
       "subject": "freetype.FT_ENC_TAG",
       "case": "encoding_enum_tag_values",
-      "operation": "macro.ft_enc_tag_encoding_enum",
-      "schema": "macro_value",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},

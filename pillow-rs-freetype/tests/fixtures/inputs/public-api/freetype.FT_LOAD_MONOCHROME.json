@@ -60,15 +60,17 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/DejaVuSans.ttf"
+            "id": "input/fonts/DejaVuSans.ttf"
           }
         },
         "params": {
           "face_index": 0,
           "pixel_size": 20,
-          "load_flags": [
-            "FT_LOAD_RENDER",
-            "FT_LOAD_MONOCHROME"
+          "load_flag_sets": [
+            [
+              "FT_LOAD_RENDER",
+              "FT_LOAD_MONOCHROME"
+            ]
           ],
           "symbol_under_test": "FT_LOAD_MONOCHROME",
           "call_sequence": [

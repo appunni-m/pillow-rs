@@ -220,7 +220,8 @@
         },
         "variability": {
           "axes": [
-            "codepoints"
+            "codepoints",
+            "load_flags"
           ]
         }
       },

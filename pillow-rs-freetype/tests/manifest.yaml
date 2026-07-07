@@ -5123,11 +5123,11 @@ subjects:
     cases:
       - id: value_matches_header
         description: Numeric value is exactly 23, matching FT_ERRORDEF_(Invalid_Pixel_Size, 0x17) in the pinned header.
-      - id: set_pixel_sizes_rejects_zero_dimensions
-        description: FT_Set_Pixel_Sizes or FT_Request_Size with dimensions that round to zero returns FT_Err_Invalid_Pixel_Size like ftobjs.c.
+      - id: set_char_size_rejects_oversized_dimensions
+        description: FT_Set_Char_Size with oversized 26.6 dimensions returns FT_Err_Invalid_Pixel_Size like ftobjs.c.
       - id: bitmap_strike_mismatch
         description: Fixed-size bitmap faces return FT_Err_Invalid_Pixel_Size when the requested strike dimensions do not match any available size.
-    # needs-input: operation=set_pixel_sizes and FT_Request_Size; fixture_asset=scalable font plus fixed-size bitmap font; params={width:0,height:0}, {width:1,height:0}, and unmatched fixed strike size; output shape={FT_Error, FT_Size_Metrics preservation}; comparison=exact C oracle error code 23 and size-metrics mutation behavior.
+    # needs-input: operation=FT_Set_Char_Size and FT_Request_Size; fixture_asset=scalable font plus fixed-size bitmap font; params={oversized 26.6 char size} and unmatched fixed strike size; output shape={FT_Error, FT_Size_Metrics preservation}; comparison=exact C oracle error code 23 and size-metrics mutation behavior.
 
   - id: fterrdef.FT_Err_Invalid_Post_Table
     kind: error

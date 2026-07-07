@@ -1288,6 +1288,13 @@ pub fn metrics_init_blues_impl(
         let mut descender: i32 = 0;
 
         for &ch in entry.chars {
+            // FreeType's afblue.dat uses `|` as blue-string syntax separating
+            // overshoot/fill values from reference/flat values. The generated
+            // Rust table stores it as a char, so skip it before cmap lookup.
+            if ch == '|' {
+                continue;
+            }
+
             let gid = font_data.cmap.char_index(ch as u32).unwrap_or(0);
             if gid == 0 {
                 continue;
@@ -2693,12 +2700,10 @@ pub fn apply_hints(
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
     hints.metrics = metrics.cloned();
 
-    // C: when no blue zones can be built for a style (all blue-zone
-    // characters missing from font), C remaps the style to NONE_DFLT
-    // and runs the hinting pipeline without blue zone alignment.
-    // Our pipeline with blue_count==0 produces different results than
-    // C's NONE_DFLT path. Match C by skipping hinting entirely when
-    // the VERT axis has no blue zones.
+    // C: when no blue zones can be built for a Latin-style script, C remaps to
+    // NONE_DFLT. Our Latin pipeline with blue_count==0 produces different
+    // results than that dummy-style path, so skip it. Do not skip the CJK path:
+    // af_cjk_hints_apply still runs edge hinting without active blue zones.
     if metrics.is_none_or(|m| !m.no_advance_hinting && m.axis[1].blue_count == 0) {
         return output;
     }

@@ -1,7 +1,11 @@
 {
   "version": 1,
   "subject": "fttypes.FT_UFWord",
-  "manifest_cases": ["alias_defined_as_unsigned_short", "size_alignment_and_unsigned_range", "unsigned_font_unit_distance_domain"],
+  "manifest_cases": [
+    "alias_defined_as_unsigned_short",
+    "size_alignment_and_unsigned_range",
+    "unsigned_font_unit_distance_domain"
+  ],
   "cases": [
     {
       "case_id": "fttypes.FT_UFWord.alias_defined_as_unsigned_short",
@@ -10,22 +14,125 @@
       "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_UFWord", "c_definition": "typedef unsigned short FT_UFWord", "underlying_type": "unsigned short", "signedness": "unsigned", "probes": ["include_compiles", "assignment_compiles"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:font-units"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_UFWord", "kind": "typedef", "underlying": "unsigned short"}},
-      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "underlying_type": "c_type", "signedness": "unsigned", "import_compiles": "bool"}, "compare": {"mode": "value", "paths": ["symbol", "underlying_type", "signedness", "import_compiles"]}, "source_refs": ["freetype/include/freetype/fttypes.h:126-135"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_UFWord",
+          "c_definition": "typedef unsigned short FT_UFWord",
+          "underlying_type": "unsigned short",
+          "signedness": "unsigned",
+          "probes": [
+            "include_compiles",
+            "assignment_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:font-units"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_UFWord",
+          "kind": "typedef",
+          "underlying": "unsigned short"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "underlying_type": "c_type",
+          "signedness": "unsigned",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "underlying_type",
+            "signedness",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:126-135"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_UFWord.size_alignment_and_unsigned_range",
       "subject": "fttypes.FT_UFWord",
       "case": "size_alignment_and_unsigned_range",
-      "operation": "abi.scalar_layout",
+      "operation": "abi_type_probe",
       "schema": "abi_layout",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_UFWord", "underlying_type": "unsigned short", "model_values": [0, 1, 2048, 32767, 65535], "probes": ["sizeof", "alignof", "unsigned_min", "unsigned_max", "roundtrip_cast"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:scalar"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_UFWord", "kind": "scalar", "underlying": "unsigned short"}},
-      "expectation": {"status": "ok", "output_shape": {"sizeof": "usize", "alignof": "usize", "signedness": "unsigned", "range": {"min": "integer", "max": "integer"}, "roundtrip_values": ["FT_UFWord"]}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "signedness", "range", "roundtrip_values"]}, "source_refs": ["freetype/include/freetype/fttypes.h:126-135"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_UFWord",
+          "underlying_type": "unsigned short",
+          "model_values": [
+            0,
+            1,
+            2048,
+            32767,
+            65535
+          ],
+          "probes": [
+            "sizeof",
+            "alignof",
+            "unsigned_min",
+            "unsigned_max",
+            "roundtrip_cast"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:scalar"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_UFWord",
+          "kind": "scalar",
+          "underlying": "unsigned short"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "signedness": "unsigned",
+          "range": {
+            "min": "integer",
+            "max": "integer"
+          },
+          "roundtrip_values": [
+            "FT_UFWord"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "signedness",
+            "range",
+            "roundtrip_values"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:126-135"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_UFWord.unsigned_font_unit_distance_domain",
@@ -34,10 +141,66 @@
       "operation": "fttypes.ufword_domain",
       "schema": "api_model",
       "expect_error": false,
-      "inputs": {"assets": {"font": {"kind": "ref", "id": "fonts/truetype/metrics-ufword-boundaries.ttf", "asset_kind": "font"}}, "params": {"font_unit_fields": ["units_per_em", "unsigned metric distances"], "model_distances": [0, 1, 2048, 4096, 65535], "negative_values_allowed": false}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:font-units"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_UFWord", "kind": "font-unit-scalar", "underlying": "unsigned short"}},
-      "expectation": {"status": "ok", "output_shape": {"distances": ["FT_UFWord"], "negative_values_allowed": false, "font_units_preserved": "bool"}, "compare": {"mode": "exact", "paths": ["distances", "negative_values_allowed", "font_units_preserved"]}, "source_refs": ["freetype/include/freetype/fttypes.h:126-135"], "fixture_requirements": ["Deterministic font asset with observable unsigned UFWORD metric values."]}
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/truetype/metrics-ufword-boundaries.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "font_unit_fields": [
+            "units_per_em",
+            "unsigned metric distances"
+          ],
+          "model_distances": [
+            0,
+            1,
+            2048,
+            4096,
+            65535
+          ],
+          "negative_values_allowed": false
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:font-units"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_UFWord",
+          "kind": "font-unit-scalar",
+          "underlying": "unsigned short"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "distances": [
+            "FT_UFWord"
+          ],
+          "negative_values_allowed": false,
+          "font_units_preserved": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "distances",
+            "negative_values_allowed",
+            "font_units_preserved"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:126-135"
+        ],
+        "fixture_requirements": [
+          "Deterministic font asset with observable unsigned UFWORD metric values."
+        ]
+      }
     }
   ]
 }

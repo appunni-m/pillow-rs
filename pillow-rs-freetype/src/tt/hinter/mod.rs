@@ -80,6 +80,8 @@ pub struct HintOutcome {
     pub outline_flags: u32,
     /// Per-contour black rasterizer dropout controls.
     pub contour_dropouts: Vec<u8>,
+    /// Full public `FT_Outline.tags` bytes for real glyph points.
+    pub point_tags: Vec<u8>,
     /// Execution context after running this glyph program.
     pub context: exec::ExecContext,
 }
@@ -142,6 +144,7 @@ pub fn prepare_context(
 pub fn hint_glyph(
     scaled: &mut [OutlinePoint],
     raw: &[OutlinePoint],
+    raw_tags: &[u8],
     contours: &[u16],
     advance_width: i32,
     raw_advance_width: i32,
@@ -179,6 +182,8 @@ pub fn hint_glyph(
     } else {
         (pp1_x, default_pp2_x)
     };
+    let public_base_tags =
+        public_base_tags(raw, raw_tags, scale.is_composite, !glyph_ins.is_empty());
 
     let mut zone = GlyphZone {
         cur_x: Vec::with_capacity(total),
@@ -187,7 +192,12 @@ pub fn hint_glyph(
         org_y: Vec::with_capacity(total),
         orus_x: Vec::with_capacity(total),
         orus_y: Vec::with_capacity(total),
-        tags: vec![0u8; total],
+        tags: public_base_tags
+            .iter()
+            .map(|&tag| public_tag_to_internal_touch_tag(tag))
+            .chain(std::iter::repeat(0))
+            .take(total)
+            .collect(),
         contours: contours.to_vec(),
         n_points: n_pts,
         n_contours: contours.len() as u16,
@@ -350,6 +360,27 @@ pub fn hint_glyph(
         // outline-level dropout flags for the first contour only.
         contour_dropouts[0] = ctx.gs.scan_type & 7;
     }
+    let mut point_tags = Vec::with_capacity(n_points);
+    for (index, point) in raw.iter().enumerate().take(n_points) {
+        let mut tag = public_base_tags
+            .get(index)
+            .copied()
+            .unwrap_or(if point.on_curve { 0x01 } else { 0x00 })
+            & !0x18;
+        if zone.tags.get(index).is_some_and(|value| value & 0x01 != 0) {
+            tag |= 0x08;
+        }
+        if zone.tags.get(index).is_some_and(|value| value & 0x02 != 0) {
+            tag |= 0x10;
+        }
+        point_tags.push(tag);
+    }
+    if !glyph_ins.is_empty() && !point_tags.is_empty() {
+        // C stores `(scan_type << 5) | FT_CURVE_TAG_HAS_SCANMODE` in
+        // `outline.tags[0]` after TrueType bytecode execution
+        // (`src/truetype/ttgload.c:839-840`).
+        point_tags[0] |= (ctx.gs.scan_type << 5) | 0x04;
+    }
 
     Ok(HintOutcome {
         advance_width: pp2 - pp1,
@@ -357,8 +388,42 @@ pub fn hint_glyph(
         pp2_x: pp2,
         outline_flags,
         contour_dropouts,
+        point_tags,
         context: ctx,
     })
+}
+
+fn public_base_tags(
+    raw: &[OutlinePoint],
+    raw_tags: &[u8],
+    is_composite: bool,
+    has_parent_instructions: bool,
+) -> Vec<u8> {
+    raw.iter()
+        .enumerate()
+        .map(|(index, point)| {
+            let fallback = if point.on_curve { 0x01 } else { 0x00 };
+            let mut tag = raw_tags.get(index).copied().unwrap_or(fallback);
+            if is_composite && has_parent_instructions {
+                // C `TT_Process_Composite_Glyph` preserves curve/scan bits but
+                // clears component touch state before executing parent
+                // instructions (`src/truetype/ttgload.c:1244-1249`).
+                tag &= !0x18;
+            }
+            tag
+        })
+        .collect()
+}
+
+fn public_tag_to_internal_touch_tag(tag: u8) -> u8 {
+    let mut internal = 0;
+    if tag & 0x08 != 0 {
+        internal |= 0x01;
+    }
+    if tag & 0x10 != 0 {
+        internal |= 0x02;
+    }
+    internal
 }
 
 fn outline_flags_from_scan_control(scan_control: bool, scan_type: u8) -> u32 {

@@ -9,6 +9,7 @@ use crate::casts::{i32_from_f32, u32_from_i64, u32_from_usize};
 use crate::error::FontError;
 use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
 use crate::grays::{self, RasterResult};
+use crate::outline::{Outline, OutlinePoint};
 use crate::scaler::{self, ft_pix_ceil, ft_pix_floor, ft_pix_round, pixel_round};
 use crate::tables::FontData;
 use crate::tt::hinter::NativeHintMode;
@@ -30,6 +31,17 @@ pub enum LoadMode {
     NoHinting,
     /// `FT_LOAD_NO_AUTOHINT`: prefer native hints, but do not fall back to autohinting.
     NoAutoHint,
+}
+
+/// Public `FT_Get_Kerning` mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KerningMode {
+    /// `FT_KERNING_DEFAULT`: scaled and grid-fitted 26.6 pixel values.
+    Default,
+    /// `FT_KERNING_UNFITTED`: scaled but un-grid-fitted 26.6 pixel values.
+    Unfitted,
+    /// `FT_KERNING_UNSCALED`: original font-unit values.
+    Unscaled,
 }
 
 /// A loaded TrueType font at a given point size.
@@ -110,6 +122,32 @@ pub struct SizeMetrics {
     pub char_height: i32,
 }
 
+/// Request kind accepted by `FT_Request_Size`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SizeRequestType {
+    Nominal,
+    RealDim,
+    BBox,
+    Cell,
+    Scales,
+}
+
+/// Validated FreeType-style size request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SizeRequest {
+    pub request_type: SizeRequestType,
+    pub width: i64,
+    pub height: i64,
+    pub hori_resolution: u32,
+    pub vert_resolution: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SizeRequestError {
+    DivideByZero,
+    InvalidPixelSize,
+}
+
 /// Public face metadata matching the scalar fields exposed by `FT_Face`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FaceInfo {
@@ -178,6 +216,30 @@ pub struct GlyphSlotMetrics {
     pub vert_bearing_x: i32,
     pub vert_bearing_y: i32,
     pub vert_advance: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GlyphSlotLoad {
+    pub metrics: GlyphSlotMetrics,
+    pub format: GlyphSlotLoadFormat,
+    pub outline_cbox: BBox,
+    pub outline_bbox: BBox,
+    pub slot_outline: Option<Outline>,
+    pub render_outline: Option<LoadedOutline>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GlyphSlotLoadFormat {
+    Outline,
+    Composite,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LoadedOutline {
+    pub outline: Outline,
+    pub left: i32,
+    pub bottom: i32,
+    pub top: i32,
 }
 
 struct PositionedGlyph {
@@ -278,6 +340,7 @@ impl Font {
                 family: "Unknown".into(),
                 subfamily: "Regular".into(),
                 postscript_name: None,
+                records: Vec::new(),
             },
         };
 
@@ -450,13 +513,61 @@ impl Font {
         self.data.os2.as_ref().map_or(0, |os2| os2.fs_type)
     }
 
+    /// Equivalent to `FT_Get_Kerning` for legacy horizontal `kern` tables.
+    pub fn kerning_by_glyphs(&self, left: u32, right: u32, mode: KerningMode) -> (i32, i32) {
+        let raw_x = left
+            .try_into()
+            .ok()
+            .zip(right.try_into().ok())
+            .and_then(|(left, right)| self.data.kern.as_ref().map(|kern| kern.get(left, right)))
+            .map_or(0, i32::from);
+        let mut x = raw_x;
+        let mut y = 0;
+        if mode != KerningMode::Unscaled {
+            x = ft_mul_fix(x, self.size_metrics.x_scale);
+            y = ft_mul_fix(y, self.size_metrics.y_scale);
+            if mode == KerningMode::Default {
+                // FreeType `FT_Get_Kerning` scales default-mode kerning down
+                // below 25 ppem before `FT_PIX_ROUND` to avoid oversized
+                // rounded distances at small sizes.
+                if self.size_metrics.x_ppem < 25 {
+                    x = ft_mul_div(x, i32::from(self.size_metrics.x_ppem), 25);
+                }
+                if self.size_metrics.y_ppem < 25 {
+                    y = ft_mul_div(y, i32::from(self.size_metrics.y_ppem), 25);
+                }
+                x = ft_pix_round(x);
+                y = ft_pix_round(y);
+            }
+        }
+        (x, y)
+    }
+
+    pub(crate) fn os2_table(&self) -> Option<&tt::os2::Os2Table> {
+        self.data.os2.as_ref()
+    }
+
+    /// Number of raw SFNT name records exposed by `FT_Get_Sfnt_Name_Count`.
+    pub fn sfnt_name_count(&self) -> usize {
+        self.data.name.records.len()
+    }
+
+    /// Return one raw SFNT name record by index.
+    pub fn sfnt_name(&self, index: usize) -> Option<&tt::name::SfntNameRecord> {
+        self.data.name.records.get(index)
+    }
+
     /// Approximate `FT_FaceRec::face_flags` for supported SFNT outline faces.
     pub fn face_flags(&self) -> u32 {
         const FT_FACE_FLAG_SCALABLE: u32 = 1 << 0;
         const FT_FACE_FLAG_FIXED_WIDTH: u32 = 1 << 2;
         const FT_FACE_FLAG_SFNT: u32 = 1 << 3;
         const FT_FACE_FLAG_HORIZONTAL: u32 = 1 << 4;
+        const FT_FACE_FLAG_VERTICAL: u32 = 1 << 5;
+        const FT_FACE_FLAG_KERNING: u32 = 1 << 6;
+        const FT_FACE_FLAG_MULTIPLE_MASTERS: u32 = 1 << 8;
         const FT_FACE_FLAG_GLYPH_NAMES: u32 = 1 << 9;
+        const FT_FACE_FLAG_HINTER: u32 = 1 << 11;
 
         let mut flags = FT_FACE_FLAG_SCALABLE | FT_FACE_FLAG_SFNT | FT_FACE_FLAG_HORIZONTAL;
         if self
@@ -469,6 +580,18 @@ impl Font {
         }
         if self.data.table_directory.record(tag(b"post")).is_some() {
             flags |= FT_FACE_FLAG_GLYPH_NAMES;
+        }
+        if self.data.vhea.is_some() && self.data.vmtx.is_some() {
+            flags |= FT_FACE_FLAG_VERTICAL;
+        }
+        if self.data.kern.as_ref().is_some_and(|kern| !kern.is_empty()) {
+            flags |= FT_FACE_FLAG_KERNING;
+        }
+        if self.data.table_directory.record(tag(b"fvar")).is_some() {
+            flags |= FT_FACE_FLAG_MULTIPLE_MASTERS;
+        }
+        if self.data.table_directory.record(tag(b"glyf")).is_some() {
+            flags |= FT_FACE_FLAG_HINTER;
         }
         flags
     }
@@ -501,20 +624,21 @@ impl Font {
 
     /// Equivalent to `FT_Set_Char_Size`.
     pub fn set_char_size(&mut self, char_width: i32, char_height: i32, x_dpi: u32, y_dpi: u32) {
-        let height = if char_height == 0 {
-            char_width
-        } else {
-            char_height
-        };
-        let width = if char_width == 0 { height } else { char_width };
+        let _ = self.try_set_char_size(char_width, char_height, x_dpi, y_dpi);
+    }
+
+    pub(crate) fn try_set_char_size(
+        &mut self,
+        char_width: i32,
+        char_height: i32,
+        x_dpi: u32,
+        y_dpi: u32,
+    ) -> Result<(), SizeRequestError> {
+        let (width, height) = normalize_char_size_dimensions(char_width, char_height);
+        let (x_dpi, y_dpi) = normalize_size_resolutions(x_dpi, y_dpi);
+        let size_metrics = SizeMetrics::try_from_char_size(width, height, x_dpi, y_dpi, &self.data)?;
         self.size_pt = height as f32 / 64.0;
-        self.size_metrics = SizeMetrics::from_char_size(
-            width,
-            height,
-            normalize_dpi(x_dpi),
-            normalize_dpi(y_dpi),
-            &self.data,
-        );
+        self.size_metrics = size_metrics;
         Arc::make_mut(&mut self.data).size_pt = self.size_pt;
         self.face_globals =
             crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
@@ -522,6 +646,7 @@ impl Font {
         // (`ttobjs.c:tt_size_run_prep`).  A size request invalidates the
         // prepared CVT/prep state; reusing it keeps stale scale values.
         self.bytecode_context = BytecodeContextCache::default();
+        Ok(())
     }
 
     /// Equivalent to `FT_Set_Pixel_Sizes`.
@@ -540,6 +665,19 @@ impl Font {
         // (`ttobjs.c:tt_size_run_prep`).  A size request invalidates the
         // prepared CVT/prep state; reusing it keeps stale scale values.
         self.bytecode_context = BytecodeContextCache::default();
+    }
+
+    /// Equivalent to `FT_Request_Size` for scalable outline faces.
+    pub fn request_size(&mut self, request: SizeRequest) -> Result<(), SizeRequestError> {
+        self.size_metrics = SizeMetrics::from_size_request(request, &self.data)?;
+        self.size_pt = f32::from(self.size_metrics.y_ppem);
+        Arc::make_mut(&mut self.data).size_pt = self.size_pt;
+        self.face_globals =
+            crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
+        // `FT_Request_Size` invalidates the active size's prepared bytecode
+        // state just like `FT_Set_Char_Size` and `FT_Set_Pixel_Sizes`.
+        self.bytecode_context = BytecodeContextCache::default();
+        Ok(())
     }
 
     /// Return all selectable charmaps.
@@ -581,6 +719,18 @@ impl Font {
                 "charmap {platform_id}/{encoding_id} not found"
             )));
         };
+        self.selected_charmap = index;
+        Ok(())
+    }
+
+    /// Equivalent to `FT_Select_Charmap(FT_ENCODING_UNICODE)`.
+    pub fn select_unicode_charmap(&mut self) -> Result<(), FontError> {
+        let index = default_unicode_charmap_index(&self.data.cmap);
+        if index >= self.data.cmap.charmaps.len() {
+            return Err(FontError::InvalidFont(
+                "unicode charmap not found".to_string(),
+            ));
+        }
         self.selected_charmap = index;
         Ok(())
     }
@@ -776,8 +926,19 @@ impl Font {
         vertical_layout: bool,
         native_hint_mode: NativeHintMode,
     ) -> Result<GlyphSlotMetrics, FontError> {
+        Ok(self
+            .glyph_slot_load_default_with_layout_and_mode(glyph, vertical_layout, native_hint_mode)?
+            .metrics)
+    }
+
+    pub(crate) fn glyph_slot_load_default_with_layout_and_mode(
+        &self,
+        glyph: u16,
+        vertical_layout: bool,
+        native_hint_mode: NativeHintMode,
+    ) -> Result<GlyphSlotLoad, FontError> {
         let scaled = self.scale_glyph_for_metrics_default_with_mode(glyph, native_hint_mode)?;
-        Ok(self.slot_metrics_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
+        Ok(self.slot_load_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
     }
 
     pub(crate) fn glyph_metrics_for_index_force_autohint(
@@ -805,6 +966,21 @@ impl Font {
         vertical_layout: bool,
         native_hint_mode: NativeHintMode,
     ) -> Result<GlyphSlotMetrics, FontError> {
+        Ok(self
+            .glyph_slot_load_force_autohint_with_layout_and_mode(
+                glyph,
+                vertical_layout,
+                native_hint_mode,
+            )?
+            .metrics)
+    }
+
+    pub(crate) fn glyph_slot_load_force_autohint_with_layout_and_mode(
+        &self,
+        glyph: u16,
+        vertical_layout: bool,
+        native_hint_mode: NativeHintMode,
+    ) -> Result<GlyphSlotLoad, FontError> {
         let metrics_cache = self.autohint_metrics_for_glyph(glyph);
         let scaled = scaler::scale_glyph_for_metrics_with_autohint_and_mode(
             &self.data,
@@ -813,7 +989,7 @@ impl Font {
             self.is_italic,
             native_hint_mode,
         )?;
-        Ok(self.slot_metrics_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
+        Ok(self.slot_load_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
     }
 
     pub(crate) fn glyph_metrics_for_index_target_light_with_layout(
@@ -821,6 +997,13 @@ impl Font {
         glyph: u16,
         _vertical_layout: bool,
     ) -> Result<GlyphSlotMetrics, FontError> {
+        Ok(self.glyph_slot_load_target_light(glyph)?.metrics)
+    }
+
+    pub(crate) fn glyph_slot_load_target_light(
+        &self,
+        glyph: u16,
+    ) -> Result<GlyphSlotLoad, FontError> {
         let metrics_cache = self.autohint_metrics_for_glyph(glyph);
         let scaled = scaler::scale_glyph_for_metrics_light(
             &self.data,
@@ -830,24 +1013,35 @@ impl Font {
         )?;
         // C target-light keeps the light horizontal metric box even when
         // FT_LOAD_VERTICAL_LAYOUT is set; only the slot advance vector changes.
-        Ok(self.slot_metrics_from_scaled(glyph, &scaled, MetricsGridFit::Horizontal))
+        Ok(self.slot_load_from_scaled(glyph, &scaled, MetricsGridFit::Horizontal))
     }
 
     pub(crate) fn glyph_metrics_for_index_no_hinting(
         &self,
         glyph: u16,
     ) -> Result<GlyphSlotMetrics, FontError> {
+        Ok(self.glyph_slot_load_no_hinting(glyph)?.metrics)
+    }
+
+    pub(crate) fn glyph_slot_load_no_hinting(
+        &self,
+        glyph: u16,
+    ) -> Result<GlyphSlotLoad, FontError> {
         let scaled = scaler::scale_glyph_no_hinting(&self.data, glyph, self.is_italic)?;
         // C: `FT_Load_Glyph` calls `ft_glyphslot_grid_fit_metrics` only when
         // `FT_LOAD_NO_HINTING` is not set (`src/base/ftobjs.c`).  No-hinting
         // slot metrics keep the fractional 26.6 values from `ttgload.c`.
-        Ok(self.slot_metrics_from_scaled(glyph, &scaled, MetricsGridFit::None))
+        Ok(self.slot_load_from_scaled(glyph, &scaled, MetricsGridFit::None))
     }
 
     pub(crate) fn glyph_metrics_for_index_no_scale(
         &self,
         glyph: u16,
     ) -> Result<GlyphSlotMetrics, FontError> {
+        Ok(self.glyph_slot_load_no_scale(glyph)?.metrics)
+    }
+
+    pub(crate) fn glyph_slot_load_no_scale(&self, glyph: u16) -> Result<GlyphSlotLoad, FontError> {
         let outline = tt::glyf::load_glyph(
             &self.data.glyf_data,
             &self.data.loca_data,
@@ -869,7 +1063,25 @@ impl Font {
                 vert_advance: 0,
             };
             self.fill_no_scale_vertical_metrics(glyph, &outline, &mut metrics);
-            return Ok(metrics);
+            let outline_cbox = BBox {
+                x_min: 0,
+                y_min: 0,
+                x_max: 0,
+                y_max: 0,
+            };
+            return Ok(GlyphSlotLoad {
+                metrics,
+                format: GlyphSlotLoadFormat::Outline,
+                outline_cbox,
+                outline_bbox: outline_cbox,
+                slot_outline: Some(Outline::default()),
+                render_outline: Some(LoadedOutline {
+                    outline: Outline::default(),
+                    left: 0,
+                    bottom: 0,
+                    top: 0,
+                }),
+            });
         }
 
         // C: normal recursive `FT_LOAD_NO_SCALE` leaves the slot format as an
@@ -901,7 +1113,39 @@ impl Font {
             vert_advance: 0,
         };
         self.fill_no_scale_vertical_metrics(glyph, &outline, &mut metrics);
-        Ok(metrics)
+        let outline_cbox = BBox {
+            x_min,
+            y_min,
+            x_max,
+            y_max,
+        };
+        let slot_outline = no_scale_slot_outline(&outline, pp1x, outline_cbox);
+        let render_outline = no_scale_render_outline(&outline, pp1x, outline_cbox);
+        Ok(GlyphSlotLoad {
+            metrics,
+            format: GlyphSlotLoadFormat::Outline,
+            outline_cbox,
+            outline_bbox: outline_cbox,
+            slot_outline: Some(slot_outline),
+            render_outline: Some(render_outline),
+        })
+    }
+
+    pub(crate) fn glyph_slot_load_no_recurse(
+        &self,
+        glyph: u16,
+    ) -> Result<GlyphSlotLoad, FontError> {
+        let mut loaded = self.glyph_slot_load_no_scale(glyph)?;
+        if self.glyph_is_composite(glyph)? {
+            // C: FT_LOAD_NO_RECURSE leaves composite glyphs in
+            // FT_GLYPH_FORMAT_COMPOSITE instead of resolving them to an
+            // outline (`src/truetype/ttgload.c`).  Renderers then reject the
+            // slot with Cannot_Render_Glyph.
+            loaded.format = GlyphSlotLoadFormat::Composite;
+            loaded.slot_outline = None;
+            loaded.render_outline = None;
+        }
+        Ok(loaded)
     }
 
     pub(crate) fn glyph_metrics_for_index_no_autohint(
@@ -929,8 +1173,23 @@ impl Font {
         vertical_layout: bool,
         native_hint_mode: NativeHintMode,
     ) -> Result<GlyphSlotMetrics, FontError> {
+        Ok(self
+            .glyph_slot_load_no_autohint_with_layout_and_mode(
+                glyph,
+                vertical_layout,
+                native_hint_mode,
+            )?
+            .metrics)
+    }
+
+    pub(crate) fn glyph_slot_load_no_autohint_with_layout_and_mode(
+        &self,
+        glyph: u16,
+        vertical_layout: bool,
+        native_hint_mode: NativeHintMode,
+    ) -> Result<GlyphSlotLoad, FontError> {
         let scaled = self.scale_glyph_no_autohint_for_metrics_with_mode(glyph, native_hint_mode)?;
-        Ok(self.slot_metrics_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
+        Ok(self.slot_load_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
     }
 
     /// `getbbox(text)` -> FreeType rendered bitmap bbox for the first glyph.
@@ -1291,6 +1550,16 @@ impl Font {
         scaled: &scaler::ScaledGlyph,
         grid_fit_metrics: MetricsGridFit,
     ) -> GlyphSlotMetrics {
+        self.slot_load_from_scaled(glyph_index, scaled, grid_fit_metrics)
+            .metrics
+    }
+
+    fn slot_load_from_scaled(
+        &self,
+        glyph_index: u16,
+        scaled: &scaler::ScaledGlyph,
+        grid_fit_metrics: MetricsGridFit,
+    ) -> GlyphSlotLoad {
         let mut metrics = GlyphSlotMetrics {
             width: scaled.cbox_x_max - scaled.cbox_x_min,
             height: scaled.cbox_y_max - scaled.cbox_y_min,
@@ -1332,7 +1601,51 @@ impl Font {
             MetricsGridFit::Horizontal => grid_fit_horizontal_metrics(&mut metrics),
             MetricsGridFit::Vertical => grid_fit_vertical_metrics(&mut metrics),
         }
-        metrics
+        GlyphSlotLoad {
+            metrics,
+            format: GlyphSlotLoadFormat::Outline,
+            outline_cbox: BBox {
+                x_min: scaled.outline_cbox_x_min,
+                y_min: scaled.outline_cbox_y_min,
+                x_max: scaled.outline_cbox_x_max,
+                y_max: scaled.outline_cbox_y_max,
+            },
+            outline_bbox: BBox {
+                x_min: scaled.outline_bbox_x_min,
+                y_min: scaled.outline_bbox_y_min,
+                x_max: scaled.outline_bbox_x_max,
+                y_max: scaled.outline_bbox_y_max,
+            },
+            slot_outline: Some(scaled_slot_outline(scaled)),
+            render_outline: Some(LoadedOutline {
+                outline: scaled.outline.clone(),
+                left: scaled.bbox_x_min,
+                bottom: scaled.bbox_y_min,
+                top: scaled.bbox_y_max,
+            }),
+        }
+    }
+
+    fn glyph_is_composite(&self, glyph_index: u16) -> Result<bool, FontError> {
+        let loc = tt::loca::get_glyph_location(
+            &self.data.loca_data,
+            glyph_index,
+            self.data.head.index_to_loc_format,
+        )
+        .ok_or_else(|| FontError::InvalidOutline("loca: glyph index out of range".into()))?;
+        if loc.length == 0 {
+            return Ok(false);
+        }
+        let bytes = self
+            .data
+            .glyf_data
+            .get(loc.offset as usize..loc.offset as usize + loc.length as usize)
+            .ok_or_else(|| FontError::InvalidOutline("glyf: data out of range".into()))?;
+        if bytes.len() < 2 {
+            return Err(FontError::InvalidOutline("glyf: glyph too short".into()));
+        }
+        let num_contours = i16::from_be_bytes([bytes[0], bytes[1]]);
+        Ok(num_contours < 0)
     }
 
     fn fill_no_scale_vertical_metrics(
@@ -1352,6 +1665,95 @@ impl Font {
             metrics.vert_advance = advance;
         }
         metrics.vert_bearing_x = metrics.hori_bearing_x - metrics.hori_advance / 2;
+    }
+}
+
+fn scaled_slot_outline(scaled: &scaler::ScaledGlyph) -> Outline {
+    let off_x = ft_pix_floor(scaled.outline_cbox_x_min);
+    let off_y = ft_pix_floor(scaled.outline_cbox_y_min);
+    let mut outline = scaled.outline.clone();
+    for point in &mut outline.points {
+        point.x += off_x;
+        point.y += off_y;
+    }
+    outline.cbox_x_min = scaled.outline_cbox_x_min;
+    outline.cbox_y_min = scaled.outline_cbox_y_min;
+    outline.cbox_x_max = scaled.outline_cbox_x_max;
+    outline.cbox_y_max = scaled.outline_cbox_y_max;
+    outline
+}
+
+fn no_scale_slot_outline(outline: &tt::glyf::GlyphOutline, pp1x: i32, cbox: BBox) -> Outline {
+    Outline {
+        n_contours: i32::from(outline.num_contours),
+        contours: outline
+            .end_pts_of_contours
+            .iter()
+            .map(|&e| e as i16)
+            .collect(),
+        points: outline
+            .points
+            .iter()
+            .map(|point| OutlinePoint {
+                x: point.x - pp1x,
+                y: point.y,
+                on_curve: point.on_curve,
+            })
+            .collect(),
+        tags: Vec::new(),
+        contour_dropouts: Vec::new(),
+        flags: 0,
+        cbox_x_min: cbox.x_min,
+        cbox_y_min: cbox.y_min,
+        cbox_x_max: cbox.x_max,
+        cbox_y_max: cbox.y_max,
+    }
+}
+
+fn no_scale_render_outline(
+    outline: &tt::glyf::GlyphOutline,
+    pp1x: i32,
+    cbox: BBox,
+) -> LoadedOutline {
+    let px_x_min = ft_pix_floor(cbox.x_min) >> 6;
+    let px_y_min = ft_pix_floor(cbox.y_min) >> 6;
+    let px_x_max = ft_pix_ceil(cbox.x_max) >> 6;
+    let px_y_max = ft_pix_ceil(cbox.y_max) >> 6;
+    let off_x = ft_pix_floor(cbox.x_min);
+    let off_y = ft_pix_floor(cbox.y_min);
+    let points = outline
+        .points
+        .iter()
+        .map(|point| OutlinePoint {
+            x: point.x - pp1x - off_x,
+            y: point.y - off_y,
+            on_curve: point.on_curve,
+        })
+        .collect();
+
+    // C renders the current `FT_GlyphSlot` outline as-is.  For `FT_LOAD_NO_SCALE`
+    // those coordinates are font units, still interpreted by the rasterizers as
+    // 26.6 values; only the bitmap-origin preset translates the outline.
+    LoadedOutline {
+        outline: Outline {
+            n_contours: i32::from(outline.num_contours),
+            contours: outline
+                .end_pts_of_contours
+                .iter()
+                .map(|&e| e as i16)
+                .collect(),
+            points,
+            tags: Vec::new(),
+            contour_dropouts: Vec::new(),
+            flags: 0,
+            cbox_x_min: 0,
+            cbox_y_min: 0,
+            cbox_x_max: px_x_max - px_x_min,
+            cbox_y_max: px_y_max - px_y_min,
+        },
+        left: px_x_min,
+        bottom: px_y_min,
+        top: px_y_max,
     }
 }
 
@@ -1494,14 +1896,27 @@ impl SizeMetrics {
         y_dpi: u32,
         data: &FontData,
     ) -> Self {
-        let x_dpi = normalize_dpi(x_dpi);
-        let y_dpi = normalize_dpi(y_dpi);
-        let x_ppem = ppem_from_char_size(char_width, x_dpi);
-        let y_ppem = ppem_from_char_size(char_height, y_dpi);
+        Self::try_from_char_size(char_width, char_height, x_dpi, y_dpi, data)
+            .unwrap_or_else(|_| Self::from_pixel_size(1, 1, data))
+    }
+
+    fn try_from_char_size(
+        char_width: i32,
+        char_height: i32,
+        x_dpi: u32,
+        y_dpi: u32,
+        data: &FontData,
+    ) -> Result<Self, SizeRequestError> {
+        let (char_width, char_height) = normalize_char_size_dimensions(char_width, char_height);
+        let (x_dpi, y_dpi) = normalize_size_resolutions(x_dpi, y_dpi);
+        let scaled_width = scaled_char_size_26dot6(char_width, x_dpi);
+        let scaled_height = scaled_char_size_26dot6(char_height, y_dpi);
+        let x_ppem = ppem_from_scaled_char_size(scaled_width)?;
+        let y_ppem = ppem_from_scaled_char_size(scaled_height)?;
         let units_per_em = i32::from(data.head.units_per_em);
-        let x_scale = ft_div_fix((x_ppem as i32) << 6, units_per_em);
-        let y_scale = ft_div_fix((y_ppem as i32) << 6, units_per_em);
-        SizeMetrics {
+        let x_scale = ft_div_fix(scaled_width.max(64), units_per_em);
+        let y_scale = ft_div_fix(scaled_height.max(64), units_per_em);
+        Ok(SizeMetrics {
             x_ppem,
             y_ppem,
             x_scale,
@@ -1515,7 +1930,7 @@ impl SizeMetrics {
             char_width,
             char_height,
         }
-        .with_face_metrics(data)
+        .with_face_metrics(data))
     }
 
     fn from_pixel_size(pixel_width: u32, pixel_height: u32, data: &FontData) -> Self {
@@ -1549,6 +1964,104 @@ impl SizeMetrics {
         .with_face_metrics(data)
     }
 
+    fn from_size_request(request: SizeRequest, data: &FontData) -> Result<Self, SizeRequestError> {
+        let units_per_em = i64::from(data.head.units_per_em);
+        let (x_scale, y_scale, mut scaled_w, mut scaled_h) = match request.request_type {
+            SizeRequestType::Scales => {
+                let mut x_scale = request.width;
+                let mut y_scale = request.height;
+                if x_scale == 0 {
+                    x_scale = y_scale;
+                } else if y_scale == 0 {
+                    y_scale = x_scale;
+                }
+                (x_scale, y_scale, 0, 0)
+            }
+            _ => {
+                let (mut w, mut h) = match request.request_type {
+                    SizeRequestType::Nominal => (units_per_em, units_per_em),
+                    SizeRequestType::RealDim => {
+                        let real_dim = i64::from(data.hhea.ascent) - i64::from(data.hhea.descent);
+                        (real_dim, real_dim)
+                    }
+                    SizeRequestType::BBox => (
+                        i64::from(data.head.x_max) - i64::from(data.head.x_min),
+                        i64::from(data.head.y_max) - i64::from(data.head.y_min),
+                    ),
+                    SizeRequestType::Cell => (
+                        i64::from(data.hhea.advance_width_max),
+                        i64::from(data.hhea.ascent) - i64::from(data.hhea.descent),
+                    ),
+                    SizeRequestType::Scales => unreachable!(),
+                };
+                w = w.abs();
+                h = h.abs();
+
+                let mut scaled_w =
+                    request_dimension(request.width, request.hori_resolution, "width")?;
+                let mut scaled_h =
+                    request_dimension(request.height, request.vert_resolution, "height")?;
+
+                let mut y_scale = 0;
+                if request.height != 0 || request.width == 0 {
+                    if h == 0 {
+                        return Err(SizeRequestError::DivideByZero);
+                    }
+                    y_scale = ft_div_fix_i64(scaled_h, h)?;
+                }
+
+                let x_scale = if request.width != 0 {
+                    if w == 0 {
+                        return Err(SizeRequestError::DivideByZero);
+                    }
+                    ft_div_fix_i64(scaled_w, w)?
+                } else {
+                    scaled_w = ft_mul_div_i64(scaled_h, w, h)?;
+                    y_scale
+                };
+
+                let mut x_scale = x_scale;
+                if request.height == 0 {
+                    y_scale = x_scale;
+                    scaled_h = ft_mul_div_i64(scaled_w, h, w)?;
+                }
+
+                if request.request_type == SizeRequestType::Cell {
+                    if y_scale > x_scale {
+                        y_scale = x_scale;
+                    } else {
+                        x_scale = y_scale;
+                    }
+                }
+
+                (x_scale, y_scale, scaled_w, scaled_h)
+            }
+        };
+
+        if request.request_type != SizeRequestType::Nominal {
+            scaled_w = ft_mul_fix_i64(units_per_em, x_scale)?;
+            scaled_h = ft_mul_fix_i64(units_per_em, y_scale)?;
+        }
+
+        let x_ppem = ppem_from_scaled_26dot6(scaled_w)?;
+        let y_ppem = ppem_from_scaled_26dot6(scaled_h)?;
+        Ok(SizeMetrics {
+            x_ppem,
+            y_ppem,
+            x_scale: i32_from_i64(x_scale)?,
+            y_scale: i32_from_i64(y_scale)?,
+            ascender: 0,
+            descender: 0,
+            height: 0,
+            max_advance: 0,
+            x_dpi: normalize_dpi(request.hori_resolution),
+            y_dpi: normalize_dpi(request.vert_resolution),
+            char_width: i32_from_i64(request.width).unwrap_or_default(),
+            char_height: i32_from_i64(request.height).unwrap_or_default(),
+        }
+        .with_face_metrics(data))
+    }
+
     fn with_face_metrics(mut self, data: &FontData) -> Self {
         let ascender = i32::from(data.hhea.ascent);
         let descender = i32::from(data.hhea.descent);
@@ -1564,13 +2077,87 @@ impl SizeMetrics {
     }
 }
 
+fn request_dimension(value: i64, resolution: u32, _axis: &str) -> Result<i64, SizeRequestError> {
+    if resolution == 0 {
+        return Ok(value);
+    }
+    value
+        .checked_mul(i64::from(resolution))
+        .and_then(|value| value.checked_add(36))
+        .map(|value| value / 72)
+        .ok_or(SizeRequestError::InvalidPixelSize)
+}
+
+fn ppem_from_scaled_26dot6(value: i64) -> Result<u16, SizeRequestError> {
+    let ppem = (value + 32) >> 6;
+    if !(0..=i64::from(u16::MAX)).contains(&ppem) {
+        return Err(SizeRequestError::InvalidPixelSize);
+    }
+    Ok(ppem as u16)
+}
+
+fn i32_from_i64(value: i64) -> Result<i32, SizeRequestError> {
+    i32::try_from(value).map_err(|_| SizeRequestError::InvalidPixelSize)
+}
+
+fn ft_div_fix_i64(a: i64, b: i64) -> Result<i64, SizeRequestError> {
+    let a = i32_from_i64(a)?;
+    let b = i32_from_i64(b)?;
+    if b == 0 {
+        return Err(SizeRequestError::DivideByZero);
+    }
+    Ok(i64::from(ft_div_fix(a, b)))
+}
+
+fn ft_mul_fix_i64(a: i64, b: i64) -> Result<i64, SizeRequestError> {
+    Ok(i64::from(ft_mul_fix(i32_from_i64(a)?, i32_from_i64(b)?)))
+}
+
+fn ft_mul_div_i64(a: i64, b: i64, c: i64) -> Result<i64, SizeRequestError> {
+    if c == 0 {
+        return Err(SizeRequestError::DivideByZero);
+    }
+    Ok(i64::from(ft_mul_div(
+        i32_from_i64(a)?,
+        i32_from_i64(b)?,
+        i32_from_i64(c)?,
+    )))
+}
+
 fn normalize_dpi(dpi: u32) -> u32 {
     if dpi == 0 { 72 } else { dpi }
 }
 
-fn ppem_from_char_size(char_size_26dot6: i32, dpi: u32) -> u16 {
-    let ppem_26dot6 = ft_mul_div(char_size_26dot6, dpi as i32, 72);
-    (((ppem_26dot6 + 32) & !63) >> 6).max(1) as u16
+fn normalize_size_resolutions(mut x_dpi: u32, mut y_dpi: u32) -> (u32, u32) {
+    if x_dpi == 0 {
+        x_dpi = y_dpi;
+    } else if y_dpi == 0 {
+        y_dpi = x_dpi;
+    }
+    if x_dpi == 0 {
+        (72, 72)
+    } else {
+        (x_dpi, y_dpi)
+    }
+}
+
+fn normalize_char_size_dimensions(mut char_width: i32, mut char_height: i32) -> (i32, i32) {
+    if char_width == 0 {
+        char_width = char_height;
+    } else if char_height == 0 {
+        char_height = char_width;
+    }
+    (char_width, char_height)
+}
+
+fn scaled_char_size_26dot6(char_size_26dot6: i32, dpi: u32) -> i32 {
+    ft_mul_div(char_size_26dot6, dpi as i32, 72)
+}
+
+fn ppem_from_scaled_char_size(scaled_26dot6: i32) -> Result<u16, SizeRequestError> {
+    let rounded = (i64::from(scaled_26dot6) + 32) & !63;
+    let ppem = (rounded >> 6).max(1);
+    u16::try_from(ppem).map_err(|_| SizeRequestError::InvalidPixelSize)
 }
 
 /// Pick (ascender, descender) as positive font-unit magnitudes.

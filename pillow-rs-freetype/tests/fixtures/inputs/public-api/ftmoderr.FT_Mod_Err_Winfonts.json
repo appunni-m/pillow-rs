@@ -103,8 +103,8 @@
       "case_id": "ftmoderr.FT_Mod_Err_Winfonts.module_name_contract",
       "subject": "ftmoderr.FT_Mod_Err_Winfonts",
       "case": "module_name_contract",
-      "operation": "abi.module_error_list",
-      "schema": "constant_metadata",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
@@ -113,7 +113,10 @@
           "symbol": "FT_Mod_Err_Winfonts",
           "module_name": "Windows FON/FNT module",
           "list_entry_order_after": "FT_Mod_Err_Type42",
-          "list_entry_order_before": "FT_Mod_Err_GXvalid"
+          "list_entry_order_before": "FT_Mod_Err_GXvalid",
+          "symbols": [
+            "FT_Mod_Err_Winfonts"
+          ]
         }
       },
       "classifiers": [

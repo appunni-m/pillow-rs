@@ -1,7 +1,11 @@
 {
   "version": 1,
   "subject": "fttypes.FT_Fixed",
-  "manifest_cases": ["alias_defined_as_signed_long", "size_alignment_and_signed_range", "fractional_unit_domain"],
+  "manifest_cases": [
+    "alias_defined_as_signed_long",
+    "size_alignment_and_signed_range",
+    "fractional_unit_domain"
+  ],
   "cases": [
     {
       "case_id": "fttypes.FT_Fixed.alias_defined_as_signed_long",
@@ -10,22 +14,130 @@
       "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Fixed", "c_definition": "typedef signed long FT_Fixed", "underlying_type": "signed long", "signedness": "signed", "fractional_bits": 16, "probes": ["include_compiles", "assignment_compiles"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:fixed-point"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Fixed", "kind": "typedef", "underlying": "signed long"}},
-      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "underlying_type": "c_type", "signedness": "signed", "fractional_bits": "integer", "import_compiles": "bool"}, "compare": {"mode": "value", "paths": ["symbol", "underlying_type", "signedness", "fractional_bits", "import_compiles"]}, "source_refs": ["freetype/include/freetype/fttypes.h:281-290"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Fixed",
+          "c_definition": "typedef signed long FT_Fixed",
+          "underlying_type": "signed long",
+          "signedness": "signed",
+          "fractional_bits": 16,
+          "probes": [
+            "include_compiles",
+            "assignment_compiles"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:fixed-point"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Fixed",
+          "kind": "typedef",
+          "underlying": "signed long"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "underlying_type": "c_type",
+          "signedness": "signed",
+          "fractional_bits": "integer",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "underlying_type",
+            "signedness",
+            "fractional_bits",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:281-290"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_Fixed.size_alignment_and_signed_range",
       "subject": "fttypes.FT_Fixed",
       "case": "size_alignment_and_signed_range",
-      "operation": "abi.scalar_layout",
+      "operation": "abi_type_probe",
       "schema": "abi_layout",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_Fixed", "underlying_type": "signed long", "boundary_selectors": ["LONG_MIN", -65536, -1, 0, 1, 65536, "LONG_MAX"], "probes": ["sizeof", "alignof", "signed_min", "signed_max", "roundtrip_cast"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:scalar"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Fixed", "kind": "scalar", "underlying": "signed long"}},
-      "expectation": {"status": "ok", "output_shape": {"sizeof": "usize", "alignof": "usize", "signedness": "signed", "range": {"min": "integer", "max": "integer"}, "roundtrip_values": ["FT_Fixed"]}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "signedness", "range", "roundtrip_values"]}, "source_refs": ["freetype/include/freetype/fttypes.h:281-290"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Fixed",
+          "underlying_type": "signed long",
+          "boundary_selectors": [
+            "LONG_MIN",
+            -65536,
+            -1,
+            0,
+            1,
+            65536,
+            "LONG_MAX"
+          ],
+          "probes": [
+            "sizeof",
+            "alignof",
+            "signed_min",
+            "signed_max",
+            "roundtrip_cast"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:scalar"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Fixed",
+          "kind": "scalar",
+          "underlying": "signed long"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "signedness": "signed",
+          "range": {
+            "min": "integer",
+            "max": "integer"
+          },
+          "roundtrip_values": [
+            "FT_Fixed"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "signedness",
+            "range",
+            "roundtrip_values"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:281-290"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_Fixed.fractional_unit_domain",
@@ -34,10 +146,63 @@
       "operation": "fttypes.fixed_domain",
       "schema": "api_model",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"fractional_bits": 16, "one_unit": 65536, "model_values": [-65536, -32768, -1, 0, 1, 32768, 65536], "used_by": ["FT_Matrix", "scale values"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:fixed-point"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_Fixed", "kind": "fixed-point", "underlying": "signed long"}},
-      "expectation": {"status": "ok", "output_shape": {"values": ["FT_Fixed"], "fractional_bits": "integer", "unit_values": ["fixed_point"]}, "compare": {"mode": "exact", "paths": ["values", "fractional_bits", "unit_values"]}, "source_refs": ["freetype/include/freetype/fttypes.h:281-290", "freetype/include/freetype/fttypes.h:366-398"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "fractional_bits": 16,
+          "one_unit": 65536,
+          "model_values": [
+            -65536,
+            -32768,
+            -1,
+            0,
+            1,
+            32768,
+            65536
+          ],
+          "used_by": [
+            "FT_Matrix",
+            "scale values"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:fixed-point"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_Fixed",
+          "kind": "fixed-point",
+          "underlying": "signed long"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "values": [
+            "FT_Fixed"
+          ],
+          "fractional_bits": "integer",
+          "unit_values": [
+            "fixed_point"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "values",
+            "fractional_bits",
+            "unit_values"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:281-290",
+          "freetype/include/freetype/fttypes.h:366-398"
+        ]
+      }
     }
   ]
 }

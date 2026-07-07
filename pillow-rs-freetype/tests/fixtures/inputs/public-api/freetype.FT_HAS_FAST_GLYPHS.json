@@ -22,6 +22,7 @@
           }
         },
         "params": {
+          "macro": "FT_HAS_FAST_GLYPHS",
           "faces": [
             "null_not_evaluated",
             "normal_face",
@@ -52,12 +53,13 @@
       "case_id": "freetype.FT_HAS_FAST_GLYPHS.ignores_face_flags",
       "subject": "freetype.FT_HAS_FAST_GLYPHS",
       "case": "ignores_face_flags",
-      "operation": "freetype.face_macro",
+      "operation": "face_macro_flags",
       "schema": "macro_probe",
       "expect_error": false,
       "inputs": {
         "assets": {},
         "params": {
+          "macro": "FT_HAS_FAST_GLYPHS",
           "face_flags_values": [
             0,
             "FT_FACE_FLAG_FAST_GLYPHS",

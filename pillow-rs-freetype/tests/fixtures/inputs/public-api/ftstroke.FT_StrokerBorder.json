@@ -21,15 +21,15 @@
       "case_id": "ftstroke.FT_StrokerBorder.enum_variants_match_header",
       "subject": "ftstroke.FT_StrokerBorder",
       "case": "enum_variants_match_header",
-      "operation": "abi.enum_values",
-      "schema": "abi_enum",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
         "params": {
           "include": "freetype/ftstroke.h",
           "enum": "FT_StrokerBorder",
-          "variants": [
+          "symbols": [
             "FT_STROKER_BORDER_LEFT",
             "FT_STROKER_BORDER_RIGHT"
           ]

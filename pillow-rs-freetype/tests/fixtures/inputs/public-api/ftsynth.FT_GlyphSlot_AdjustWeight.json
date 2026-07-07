@@ -14,7 +14,11 @@
       "symbol": "FT_GlyphSlot_AdjustWeight",
       "c_signature": "void FT_GlyphSlot_AdjustWeight(FT_GlyphSlot slot, FT_Fixed xdelta, FT_Fixed ydelta)",
       "return": "void",
-      "args": ["FT_GlyphSlot slot", "FT_Fixed xdelta", "FT_Fixed ydelta"]
+      "args": [
+        "FT_GlyphSlot slot",
+        "FT_Fixed xdelta",
+        "FT_Fixed ydelta"
+      ]
     },
     "source_refs": [
       "freetype/include/freetype/ftsynth.h",
@@ -27,7 +31,7 @@
       "case_id": "ftsynth.FT_GlyphSlot_AdjustWeight.signature_and_void_contract",
       "subject": "ftsynth.FT_GlyphSlot_AdjustWeight",
       "case": "signature_and_void_contract",
-      "operation": "abi.function_signature",
+      "operation": "abi_function_probe",
       "schema": "abi_signature",
       "expect_error": false,
       "inputs": {
@@ -40,17 +44,30 @@
           "observable_result": "mutated_slot"
         }
       },
-      "classifiers": ["kind:function", "header:ftsynth", "area:glyph-slot-synthesis", "abi:void"],
+      "classifiers": [
+        "kind:function",
+        "header:ftsynth",
+        "area:glyph-slot-synthesis",
+        "abi:void"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
           "import_compiles": "bool",
           "return_type": "void",
-          "argument_types": ["FT_GlyphSlot", "FT_Fixed", "FT_Fixed"]
+          "argument_types": [
+            "FT_GlyphSlot",
+            "FT_Fixed",
+            "FT_Fixed"
+          ]
         },
         "compare": {
           "mode": "layout",
-          "paths": ["import_compiles", "return_type", "argument_types"]
+          "paths": [
+            "import_compiles",
+            "return_type",
+            "argument_types"
+          ]
         }
       }
     },
@@ -76,24 +93,48 @@
           "size_ppem": 28,
           "load": {
             "operation": "FT_Load_Glyph",
-            "glyph_indices": [36, 57],
-            "load_flags": ["FT_LOAD_DEFAULT", "FT_LOAD_NO_BITMAP"]
+            "glyph_indices": [
+              36,
+              57
+            ],
+            "load_flags": [
+              "FT_LOAD_DEFAULT",
+              "FT_LOAD_NO_BITMAP"
+            ]
           },
           "adjustments": [
-            {"xdelta_16_16": 3277, "ydelta_16_16": 0},
-            {"xdelta_16_16": 0, "ydelta_16_16": 3277},
-            {"xdelta_16_16": -2048, "ydelta_16_16": 2048}
+            {
+              "xdelta_16_16": 3277,
+              "ydelta_16_16": 0
+            },
+            {
+              "xdelta_16_16": 0,
+              "ydelta_16_16": 3277
+            },
+            {
+              "xdelta_16_16": -2048,
+              "ydelta_16_16": 2048
+            }
           ],
           "capture_before_after": true
         }
       },
-      "classifiers": ["kind:function", "header:ftsynth", "format:outline", "operation:glyph-slot-mutation"],
+      "classifiers": [
+        "kind:function",
+        "header:ftsynth",
+        "format:outline",
+        "operation:glyph-slot-mutation"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
           "slot_format": "FT_GLYPH_FORMAT_OUTLINE",
-          "outline_points_before": ["FT_Vector"],
-          "outline_points_after": ["FT_Vector"],
+          "outline_points_before": [
+            "FT_Vector"
+          ],
+          "outline_points_after": [
+            "FT_Vector"
+          ],
           "outline_cbox_after": "FT_BBox",
           "metrics_after": "FT_Glyph_Metrics",
           "advance_after": "FT_Vector"
@@ -112,7 +153,9 @@
             "advance_after"
           ]
         },
-        "fixture_requirements": ["Use an outline glyph whose post-load slot has an outline format and active size metrics so xdelta and ydelta map to non-zero C strengths."]
+        "fixture_requirements": [
+          "Use an outline glyph whose post-load slot has an outline format and active size metrics so xdelta and ydelta map to non-zero C strengths."
+        ]
       }
     },
     {
@@ -138,17 +181,34 @@
           "select_size_index": 0,
           "load": {
             "operation": "FT_Load_Glyph",
-            "glyph_indices": [1, 2],
-            "load_flags": ["FT_LOAD_DEFAULT", "FT_LOAD_COLOR"]
+            "glyph_indices": [
+              1,
+              2
+            ],
+            "load_flags": [
+              "FT_LOAD_DEFAULT",
+              "FT_LOAD_COLOR"
+            ]
           },
           "adjustments": [
-            {"xdelta_16_16": 4096, "ydelta_16_16": 4096},
-            {"xdelta_16_16": -2048, "ydelta_16_16": 2048}
+            {
+              "xdelta_16_16": 4096,
+              "ydelta_16_16": 4096
+            },
+            {
+              "xdelta_16_16": -2048,
+              "ydelta_16_16": 2048
+            }
           ],
           "capture_before_after": true
         }
       },
-      "classifiers": ["kind:function", "header:ftsynth", "format:bitmap", "operation:glyph-slot-mutation"],
+      "classifiers": [
+        "kind:function",
+        "header:ftsynth",
+        "format:bitmap",
+        "operation:glyph-slot-mutation"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
@@ -173,7 +233,9 @@
             "advance_after"
           ]
         },
-        "fixture_requirements": ["Add an embedded-bitmap strike fixture where FT_Load_Glyph produces an owned or ownable bitmap slot."]
+        "fixture_requirements": [
+          "Add an embedded-bitmap strike fixture where FT_Load_Glyph produces an owned or ownable bitmap slot."
+        ]
       }
     },
     {
@@ -195,14 +257,31 @@
         },
         "params": {
           "scenarios": [
-            {"slot_pointer": null, "xdelta_16_16": 3277, "ydelta_16_16": 3277},
-            {"slot_ref": "synthetic_slots:composite", "xdelta_16_16": 3277, "ydelta_16_16": 3277},
-            {"slot_ref": "synthetic_slots:none", "xdelta_16_16": -3277, "ydelta_16_16": 0}
+            {
+              "slot_pointer": null,
+              "xdelta_16_16": 3277,
+              "ydelta_16_16": 3277
+            },
+            {
+              "slot_ref": "synthetic_slots:composite",
+              "xdelta_16_16": 3277,
+              "ydelta_16_16": 3277
+            },
+            {
+              "slot_ref": "synthetic_slots:none",
+              "xdelta_16_16": -3277,
+              "ydelta_16_16": 0
+            }
           ],
           "initial_slot_snapshot": "sentinel_fields"
         }
       },
-      "classifiers": ["kind:function", "header:ftsynth", "behavior:no-op", "format:unsupported"],
+      "classifiers": [
+        "kind:function",
+        "header:ftsynth",
+        "behavior:no-op",
+        "format:unsupported"
+      ],
       "expectation": {
         "status": "ok",
         "output_shape": {
@@ -212,9 +291,14 @@
         },
         "compare": {
           "mode": "exact",
-          "paths": ["slot_after", "null_call_completed"]
+          "paths": [
+            "slot_after",
+            "null_call_completed"
+          ]
         },
-        "fixture_requirements": ["Synthetic slot records must be isolated from real face-owned slots and only used by a C ABI harness that can safely build unsupported slot formats."]
+        "fixture_requirements": [
+          "Synthetic slot records must be isolated from real face-owned slots and only used by a C ABI harness that can safely build unsupported slot formats."
+        ]
       }
     }
   ]

@@ -106,7 +106,7 @@
             "role": "font",
             "path": "input/fonts/DejaVuSans.ttf"
           },
-          "other_font": {
+          "foreign_font": {
             "kind": "file",
             "role": "font",
             "path": "input/fonts/LiberationSerif-Regular.ttf"

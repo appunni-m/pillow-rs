@@ -1,7 +1,11 @@
 {
   "version": 1,
   "subject": "ttnameid.TT_MS_ID_GB2312",
-  "manifest_cases": ["value_matches_header", "alias_matches_prc", "public_import_contract"],
+  "manifest_cases": [
+    "value_matches_header",
+    "alias_matches_prc",
+    "public_import_contract"
+  ],
   "cases": [
     {
       "case_id": "ttnameid.TT_MS_ID_GB2312.value_matches_header",
@@ -10,22 +14,116 @@
       "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"include": "<freetype/ttnameid.h>", "header": "freetype/ttnameid.h", "symbol": "TT_MS_ID_GB2312", "macro_expression": "TT_MS_ID_PRC", "expected_value_from_pinned_header": 3, "expected_value_hex": "0x0003", "constant_type": "FT_UShort-compatible integer constant expression", "platform_group": {"platform_symbol": "TT_PLATFORM_MICROSOFT", "platform_value": 3, "field": "encoding_id", "encoding_family": "Deprecated alias for PRC GB2312/GBK/GB18030"}}},
-      "classifiers": ["kind:constant", "header:ttnameid", "area:microsoft_encoding_id", "area:deprecated_alias", "public-api-slice:1220-1239"],
-      "metadata": {"abi": {"header": "freetype/ttnameid.h", "symbol": "TT_MS_ID_GB2312", "kind": "object_like_macro_alias", "alias_of": "TT_MS_ID_PRC", "result_type": "integer constant expression", "assignable_to": "FT_UShort"}},
-      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "constant_value": "uint16", "value_hex": "string", "alias_of": "string"}, "compare": {"mode": "exact", "paths": ["symbol", "constant_value", "value_hex", "alias_of"]}, "source_refs": ["freetype/include/freetype/ttnameid.h:250", "freetype/include/freetype/ttnameid.h:257"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ttnameid.h>",
+          "header": "freetype/ttnameid.h",
+          "symbol": "TT_MS_ID_GB2312",
+          "macro_expression": "TT_MS_ID_PRC",
+          "expected_value_from_pinned_header": 3,
+          "expected_value_hex": "0x0003",
+          "constant_type": "FT_UShort-compatible integer constant expression",
+          "platform_group": {
+            "platform_symbol": "TT_PLATFORM_MICROSOFT",
+            "platform_value": 3,
+            "field": "encoding_id",
+            "encoding_family": "Deprecated alias for PRC GB2312/GBK/GB18030"
+          }
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "area:microsoft_encoding_id",
+        "area:deprecated_alias",
+        "public-api-slice:1220-1239"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/ttnameid.h",
+          "symbol": "TT_MS_ID_GB2312",
+          "kind": "object_like_macro_alias",
+          "alias_of": "TT_MS_ID_PRC",
+          "result_type": "integer constant expression",
+          "assignable_to": "FT_UShort"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "constant_value": "uint16",
+          "value_hex": "string",
+          "alias_of": "string"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "symbol",
+            "constant_value",
+            "value_hex",
+            "alias_of"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ttnameid.h:250",
+          "freetype/include/freetype/ttnameid.h:257"
+        ]
+      }
     },
     {
       "case_id": "ttnameid.TT_MS_ID_GB2312.alias_matches_prc",
       "subject": "ttnameid.TT_MS_ID_GB2312",
       "case": "alias_matches_prc",
-      "operation": "abi.constant_alias_eval",
+      "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"include": "<freetype/ttnameid.h>", "alias_symbol": "TT_MS_ID_GB2312", "target_symbol": "TT_MS_ID_PRC", "equality_expression": "TT_MS_ID_GB2312 == TT_MS_ID_PRC", "expected_value_from_pinned_header": 3, "expected_alias_value_from_pinned_header": 3}},
-      "classifiers": ["kind:constant", "header:ttnameid", "area:alias", "public-api-slice:1220-1239"],
-      "metadata": {"source_behavior": "The public header defines TT_MS_ID_GB2312 directly as TT_MS_ID_PRC, so C preprocessor equality is exact."},
-      "expectation": {"status": "ok", "output_shape": {"alias_symbol": "string", "target_symbol": "string", "alias_value": "uint16", "target_value": "uint16", "equal": "bool"}, "compare": {"mode": "exact", "paths": ["alias_symbol", "target_symbol", "alias_value", "target_value", "equal"]}, "source_refs": ["freetype/include/freetype/ttnameid.h:250", "freetype/include/freetype/ttnameid.h:257"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ttnameid.h>",
+          "alias_symbol": "TT_MS_ID_GB2312",
+          "target_symbol": "TT_MS_ID_PRC",
+          "equality_expression": "TT_MS_ID_GB2312 == TT_MS_ID_PRC",
+          "expected_value_from_pinned_header": 3,
+          "expected_alias_value_from_pinned_header": 3,
+          "symbol": "TT_MS_ID_GB2312"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "area:alias",
+        "public-api-slice:1220-1239"
+      ],
+      "metadata": {
+        "source_behavior": "The public header defines TT_MS_ID_GB2312 directly as TT_MS_ID_PRC, so C preprocessor equality is exact."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "alias_symbol": "string",
+          "target_symbol": "string",
+          "alias_value": "uint16",
+          "target_value": "uint16",
+          "equal": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "alias_symbol",
+            "target_symbol",
+            "alias_value",
+            "target_value",
+            "equal"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ttnameid.h:250",
+          "freetype/include/freetype/ttnameid.h:257"
+        ]
+      }
     },
     {
       "case_id": "ttnameid.TT_MS_ID_GB2312.public_import_contract",
@@ -34,10 +132,49 @@
       "operation": "constant",
       "schema": "api_import",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"include": "<freetype/ttnameid.h>", "symbol": "TT_MS_ID_GB2312", "usage": "FT_UShort encoding_id = TT_MS_ID_GB2312;", "expected_value_from_pinned_header": 3}},
-      "classifiers": ["kind:constant", "header:ttnameid", "area:public_import", "public-api-slice:1220-1239"],
-      "metadata": {"abi": {"visibility": "public C macro", "requires_private_header": false, "assignable_to": "FT_UShort"}},
-      "expectation": {"status": "ok", "output_shape": {"compile_status": "ok", "symbol_visible": "bool", "constant_value": "uint16", "assignable_to": "string"}, "compare": {"mode": "exact", "paths": ["compile_status", "symbol_visible", "constant_value", "assignable_to"]}, "source_refs": ["freetype/include/freetype/ttnameid.h:257"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ttnameid.h>",
+          "symbol": "TT_MS_ID_GB2312",
+          "usage": "FT_UShort encoding_id = TT_MS_ID_GB2312;",
+          "expected_value_from_pinned_header": 3
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "area:public_import",
+        "public-api-slice:1220-1239"
+      ],
+      "metadata": {
+        "abi": {
+          "visibility": "public C macro",
+          "requires_private_header": false,
+          "assignable_to": "FT_UShort"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "compile_status": "ok",
+          "symbol_visible": "bool",
+          "constant_value": "uint16",
+          "assignable_to": "string"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "compile_status",
+            "symbol_visible",
+            "constant_value",
+            "assignable_to"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ttnameid.h:257"
+        ]
+      }
     }
   ]
 }

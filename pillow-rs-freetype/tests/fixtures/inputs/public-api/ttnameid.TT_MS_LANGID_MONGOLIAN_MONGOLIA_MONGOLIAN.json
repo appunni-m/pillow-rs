@@ -90,7 +90,7 @@
       "case_id": "ttnameid.TT_MS_LANGID_MONGOLIAN_MONGOLIA_MONGOLIAN.alias_matches_c_header",
       "subject": "ttnameid.TT_MS_LANGID_MONGOLIAN_MONGOLIA_MONGOLIAN",
       "case": "alias_matches_c_header",
-      "operation": "constant.alias",
+      "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
       "inputs": {

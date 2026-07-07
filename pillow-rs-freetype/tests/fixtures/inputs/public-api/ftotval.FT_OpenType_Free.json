@@ -12,7 +12,7 @@
       "case_id": "ftotval.FT_OpenType_Free.declaration_matches_header",
       "subject": "ftotval.FT_OpenType_Free",
       "case": "declaration_matches_header",
-      "operation": "abi.function_signature",
+      "operation": "abi_function_probe",
       "schema": "abi_signature",
       "expect_error": false,
       "inputs": {

@@ -196,10 +196,31 @@ fixture-render-lcd: fixture-ref-bin fixture-inventory
 fixture-render-mode: fixture-ref-bin
 	FT_REF_BIN=$(REF_BIN) $(PYTHON) scripts/build_render_mode_fixture.py
 
+.PHONY: fixture-fstype
+fixture-fstype:
+	$(PYTHON) scripts/build_fstype_fixtures.py
+
+.PHONY: fixture-kerning
+fixture-kerning:
+	$(PYTHON) scripts/build_kerning_fixtures.py
+
+.PHONY: fixture-face-properties
+fixture-face-properties: fixture-kerning
+	$(PYTHON) scripts/build_face_property_fixtures.py
+
+.PHONY: fixture-variable
+fixture-variable:
+	$(PYTHON) scripts/build_variable_fixtures.py
+
+.PHONY: fixture-vertical
+fixture-vertical:
+	$(PYTHON) scripts/build_vertical_fixtures.py
+
 .PHONY: fixtures
 fixtures: fixture-inventory fixture-force-autohint fixture-native-tt-default fixture-no-hinting
 fixtures: fixture-metrics-only fixture-outline-cbox fixture-render-mono
-fixtures: fixture-render-lcd fixture-render-mode
+fixtures: fixture-render-lcd fixture-render-mode fixture-fstype fixture-kerning fixture-face-properties
+fixtures: fixture-variable fixture-vertical
 
 .PHONY: bench
 bench: fixture-ref-bin

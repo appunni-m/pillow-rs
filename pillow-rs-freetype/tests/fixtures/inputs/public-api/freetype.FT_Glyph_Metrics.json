@@ -107,7 +107,8 @@
         "variability": {
           "axes": [
             "sizes",
-            "glyph_indices"
+            "glyph_indices",
+            "load_flags"
           ]
         }
       },

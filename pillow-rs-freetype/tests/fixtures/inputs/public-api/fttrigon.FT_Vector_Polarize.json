@@ -1,7 +1,12 @@
 {
   "version": 1,
   "subject": "fttrigon.FT_Vector_Polarize",
-  "manifest_cases": ["signature_and_void_contract", "null_pointer_noop", "zero_vector_preserves_outputs", "quadrant_lengths_and_angles"],
+  "manifest_cases": [
+    "signature_and_void_contract",
+    "null_pointer_noop",
+    "zero_vector_preserves_outputs",
+    "quadrant_lengths_and_angles"
+  ],
   "metadata": {
     "abi": {
       "kind": "function",
@@ -9,9 +14,16 @@
       "symbol": "FT_Vector_Polarize",
       "c_signature": "void FT_Vector_Polarize(FT_Vector* vec, FT_Fixed* length, FT_Angle* angle)",
       "return": "void",
-      "args": ["FT_Vector* vec", "FT_Fixed* length", "FT_Angle* angle"]
+      "args": [
+        "FT_Vector* vec",
+        "FT_Fixed* length",
+        "FT_Angle* angle"
+      ]
     },
-    "source_refs": ["freetype/include/freetype/fttrigon.h", "freetype/src/base/fttrigon.c:FT_Vector_Polarize"],
+    "source_refs": [
+      "freetype/include/freetype/fttrigon.h",
+      "freetype/src/base/fttrigon.c:FT_Vector_Polarize"
+    ],
     "source_behavior": "C is void and writes length and angle output pointers only when all required pointers are non-null and the vector is non-zero; null pointers and zero vectors preserve caller-provided sentinels."
   },
   "cases": [
@@ -19,12 +31,43 @@
       "case_id": "fttrigon.FT_Vector_Polarize.signature_and_void_contract",
       "subject": "fttrigon.FT_Vector_Polarize",
       "case": "signature_and_void_contract",
-      "operation": "abi.function_signature",
+      "operation": "abi_function_probe",
       "schema": "abi_signature",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"include": "freetype/fttrigon.h", "symbol": "FT_Vector_Polarize", "expected_signature": "void (*)(FT_Vector*, FT_Fixed*, FT_Angle*)"}},
-      "classifiers": ["kind:function", "header:fttrigon", "area:trigonometry", "abi:void"],
-      "expectation": {"status": "ok", "output_shape": {"import_compiles": "bool", "return_type": "void", "argument_types": ["FT_Vector*", "FT_Fixed*", "FT_Angle*"]}, "compare": {"mode": "layout", "paths": ["import_compiles", "return_type", "argument_types"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "freetype/fttrigon.h",
+          "symbol": "FT_Vector_Polarize",
+          "expected_signature": "void (*)(FT_Vector*, FT_Fixed*, FT_Angle*)"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:fttrigon",
+        "area:trigonometry",
+        "abi:void"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "import_compiles": "bool",
+          "return_type": "void",
+          "argument_types": [
+            "FT_Vector*",
+            "FT_Fixed*",
+            "FT_Angle*"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "import_compiles",
+            "return_type",
+            "argument_types"
+          ]
+        }
+      }
     },
     {
       "case_id": "fttrigon.FT_Vector_Polarize.null_pointer_noop",
@@ -33,9 +76,61 @@
       "operation": "fttrigon.vector_polarize",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"scenarios": [{"vec_pointer": null, "length_initial": 305419896, "angle_initial": -305419896}, {"vec": {"x": 65536, "y": 65536}, "length_pointer": null, "angle_initial": -305419896}, {"vec": {"x": 65536, "y": 65536}, "length_initial": 305419896, "angle_pointer": null}], "call_must_complete": true}},
-      "classifiers": ["kind:function", "header:fttrigon", "area:trigonometry", "edge:null-pointer"],
-      "expectation": {"status": "ok", "output_shape": {"results": [{"length_after": "FT_Fixed_or_sentinel", "angle_after": "FT_Angle_or_sentinel", "call_completed": "bool"}]}, "compare": {"mode": "exact", "paths": ["results[*].length_after", "results[*].angle_after", "results[*].call_completed"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "scenarios": [
+            {
+              "vec_pointer": null,
+              "length_initial": 305419896,
+              "angle_initial": -305419896
+            },
+            {
+              "vec": {
+                "x": 65536,
+                "y": 65536
+              },
+              "length_pointer": null,
+              "angle_initial": -305419896
+            },
+            {
+              "vec": {
+                "x": 65536,
+                "y": 65536
+              },
+              "length_initial": 305419896,
+              "angle_pointer": null
+            }
+          ],
+          "call_must_complete": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:fttrigon",
+        "area:trigonometry",
+        "edge:null-pointer"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "results": [
+            {
+              "length_after": "FT_Fixed_or_sentinel",
+              "angle_after": "FT_Angle_or_sentinel",
+              "call_completed": "bool"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "results[*].length_after",
+            "results[*].angle_after",
+            "results[*].call_completed"
+          ]
+        }
+      }
     },
     {
       "case_id": "fttrigon.FT_Vector_Polarize.zero_vector_preserves_outputs",
@@ -44,9 +139,57 @@
       "operation": "fttrigon.vector_polarize",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"scenarios": [{"vec": {"x": 0, "y": 0}, "length_initial": 305419896, "angle_initial": -305419896}, {"vec": {"x": 0, "y": 0}, "length_initial": 0, "angle_initial": 0}]}},
-      "classifiers": ["kind:function", "header:fttrigon", "area:trigonometry", "edge:zero-vector"],
-      "expectation": {"status": "ok", "output_shape": {"results": [{"length_before": "FT_Fixed", "angle_before": "FT_Angle", "length_after": "FT_Fixed", "angle_after": "FT_Angle"}]}, "compare": {"mode": "exact", "paths": ["results[*].length_before", "results[*].angle_before", "results[*].length_after", "results[*].angle_after"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "scenarios": [
+            {
+              "vec": {
+                "x": 0,
+                "y": 0
+              },
+              "length_initial": 305419896,
+              "angle_initial": -305419896
+            },
+            {
+              "vec": {
+                "x": 0,
+                "y": 0
+              },
+              "length_initial": 0,
+              "angle_initial": 0
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:fttrigon",
+        "area:trigonometry",
+        "edge:zero-vector"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "results": [
+            {
+              "length_before": "FT_Fixed",
+              "angle_before": "FT_Angle",
+              "length_after": "FT_Fixed",
+              "angle_after": "FT_Angle"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "results[*].length_before",
+            "results[*].angle_before",
+            "results[*].length_after",
+            "results[*].angle_after"
+          ]
+        }
+      }
     },
     {
       "case_id": "fttrigon.FT_Vector_Polarize.quadrant_lengths_and_angles",
@@ -55,9 +198,72 @@
       "operation": "fttrigon.vector_polarize",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"vectors": [{"x": 65536, "y": 0}, {"x": 0, "y": 65536}, {"x": -65536, "y": 0}, {"x": 0, "y": -65536}, {"x": 65536, "y": 65536}, {"x": -65536, "y": 65536}, {"x": 1234567, "y": -7654321}, {"x": 1073741824, "y": 536870912}], "initial_length": 305419896, "initial_angle": -305419896}},
-      "classifiers": ["kind:function", "header:fttrigon", "area:trigonometry", "edge:quadrants-large"],
-      "expectation": {"status": "ok", "output_shape": {"results": [{"vector": "FT_Vector", "length": "FT_Fixed", "angle": "FT_Angle"}]}, "compare": {"mode": "exact", "paths": ["results[*].length", "results[*].angle"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "vectors": [
+            {
+              "x": 65536,
+              "y": 0
+            },
+            {
+              "x": 0,
+              "y": 65536
+            },
+            {
+              "x": -65536,
+              "y": 0
+            },
+            {
+              "x": 0,
+              "y": -65536
+            },
+            {
+              "x": 65536,
+              "y": 65536
+            },
+            {
+              "x": -65536,
+              "y": 65536
+            },
+            {
+              "x": 1234567,
+              "y": -7654321
+            },
+            {
+              "x": 1073741824,
+              "y": 536870912
+            }
+          ],
+          "initial_length": 305419896,
+          "initial_angle": -305419896
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:fttrigon",
+        "area:trigonometry",
+        "edge:quadrants-large"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "results": [
+            {
+              "vector": "FT_Vector",
+              "length": "FT_Fixed",
+              "angle": "FT_Angle"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "results[*].length",
+            "results[*].angle"
+          ]
+        }
+      }
     }
   ]
 }

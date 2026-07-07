@@ -1,7 +1,11 @@
 {
   "version": 1,
   "subject": "fttypes.FT_String",
-  "manifest_cases": ["alias_defined_as_plain_char", "size_alignment_and_implementation_signedness", "c_string_and_byte_string_domain"],
+  "manifest_cases": [
+    "alias_defined_as_plain_char",
+    "size_alignment_and_implementation_signedness",
+    "c_string_and_byte_string_domain"
+  ],
   "cases": [
     {
       "case_id": "fttypes.FT_String.alias_defined_as_plain_char",
@@ -10,22 +14,127 @@
       "operation": "abi_type_probe",
       "schema": "abi_type",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_String", "c_definition": "typedef char FT_String", "underlying_type": "char", "signedness": "implementation-defined", "probes": ["include_compiles", "assignment_from_char_pointer", "not_forced_signed_char"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:string"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_String", "kind": "typedef", "underlying": "char"}},
-      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "underlying_type": "c_type", "signedness": "implementation_defined", "import_compiles": "bool"}, "compare": {"mode": "value", "paths": ["symbol", "underlying_type", "signedness", "import_compiles"]}, "source_refs": ["freetype/include/freetype/fttypes.h:182-190"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_String",
+          "c_definition": "typedef char FT_String",
+          "underlying_type": "char",
+          "signedness": "implementation-defined",
+          "probes": [
+            "include_compiles",
+            "assignment_from_char_pointer",
+            "not_forced_signed_char"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:string"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_String",
+          "kind": "typedef",
+          "underlying": "char"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "underlying_type": "c_type",
+          "signedness": "implementation_defined",
+          "import_compiles": "bool"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "underlying_type",
+            "signedness",
+            "import_compiles"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:182-190"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_String.size_alignment_and_implementation_signedness",
       "subject": "fttypes.FT_String",
       "case": "size_alignment_and_implementation_signedness",
-      "operation": "abi.scalar_layout",
+      "operation": "abi_type_probe",
       "schema": "abi_layout",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/fttypes.h", "symbol": "FT_String", "underlying_type": "char", "model_bytes": [0, 65, 127, 128, 255], "probes": ["sizeof", "alignof", "CHAR_MIN", "CHAR_MAX", "char_signedness"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:scalar"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_String", "kind": "scalar", "underlying": "char"}},
-      "expectation": {"status": "build_dependent", "output_shape": {"sizeof": "usize", "alignof": "usize", "signedness": "signed_or_unsigned", "range": {"min": "integer", "max": "integer"}, "roundtrip_bytes": ["FT_String"]}, "compare": {"mode": "layout", "paths": ["sizeof", "alignof", "signedness", "range", "roundtrip_bytes"]}, "source_refs": ["freetype/include/freetype/fttypes.h:182-190", "freetype/include/freetype/config/ftstdlib.h:60-62"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_String",
+          "underlying_type": "char",
+          "model_bytes": [
+            0,
+            65,
+            127,
+            128,
+            255
+          ],
+          "probes": [
+            "sizeof",
+            "alignof",
+            "CHAR_MIN",
+            "CHAR_MAX",
+            "char_signedness"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:scalar"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_String",
+          "kind": "scalar",
+          "underlying": "char"
+        }
+      },
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "sizeof": "usize",
+          "alignof": "usize",
+          "signedness": "signed_or_unsigned",
+          "range": {
+            "min": "integer",
+            "max": "integer"
+          },
+          "roundtrip_bytes": [
+            "FT_String"
+          ]
+        },
+        "compare": {
+          "mode": "layout",
+          "paths": [
+            "sizeof",
+            "alignof",
+            "signedness",
+            "range",
+            "roundtrip_bytes"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:182-190",
+          "freetype/include/freetype/config/ftstdlib.h:60-62"
+        ]
+      }
     },
     {
       "case_id": "fttypes.FT_String.c_string_and_byte_string_domain",
@@ -34,10 +143,70 @@
       "operation": "fttypes.string_domain",
       "schema": "api_model",
       "expect_error": false,
-      "inputs": {"assets": {"cstring": {"kind": "ref", "id": "strings/fttypes/ascii-name-nul.bin", "asset_kind": "binary"}, "byte_string": {"kind": "ref", "id": "strings/fttypes/high-bit-name-nul.bin", "asset_kind": "binary"}}, "params": {"requires_nul_termination": true, "model_lengths": [0, 1, 5], "probe": ["C string bytes", "high-bit byte preservation"]}},
-      "classifiers": ["kind:type-alias", "header:fttypes", "area:string", "runtime:binary-input"],
-      "metadata": {"abi": {"header": "freetype/fttypes.h", "symbol": "FT_String", "kind": "string-byte", "underlying": "char"}},
-      "expectation": {"status": "ok", "output_shape": {"bytes": "byte_array", "nul_terminated": "bool", "length": "usize", "signedness": "signed_or_unsigned"}, "compare": {"mode": "bytes", "paths": ["bytes", "nul_terminated", "length", "signedness"]}, "source_refs": ["freetype/include/freetype/fttypes.h:182-190"], "fixture_requirements": ["Shared NUL-terminated string byte fixtures, one ASCII-only and one preserving high-bit bytes."]}
+      "inputs": {
+        "assets": {
+          "cstring": {
+            "kind": "ref",
+            "id": "strings/fttypes/ascii-name-nul.bin",
+            "asset_kind": "binary"
+          },
+          "byte_string": {
+            "kind": "ref",
+            "id": "strings/fttypes/high-bit-name-nul.bin",
+            "asset_kind": "binary"
+          }
+        },
+        "params": {
+          "requires_nul_termination": true,
+          "model_lengths": [
+            0,
+            1,
+            5
+          ],
+          "probe": [
+            "C string bytes",
+            "high-bit byte preservation"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:type-alias",
+        "header:fttypes",
+        "area:string",
+        "runtime:binary-input"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/fttypes.h",
+          "symbol": "FT_String",
+          "kind": "string-byte",
+          "underlying": "char"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "bytes": "byte_array",
+          "nul_terminated": "bool",
+          "length": "usize",
+          "signedness": "signed_or_unsigned"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "bytes",
+            "nul_terminated",
+            "length",
+            "signedness"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/fttypes.h:182-190"
+        ],
+        "fixture_requirements": [
+          "Shared NUL-terminated string byte fixtures, one ASCII-only and one preserving high-bit bytes."
+        ]
+      }
     }
   ]
 }

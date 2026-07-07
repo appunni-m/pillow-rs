@@ -10,20 +10,20 @@
       "case_id": "ftmodapi.FT_TrueTypeEngineType.enum_variants_match_header",
       "subject": "ftmodapi.FT_TrueTypeEngineType",
       "case": "enum_variants_match_header",
-      "operation": "abi.enum_layout",
-      "schema": "c_abi_type",
+      "operation": "constant_map",
+      "schema": "constant_map",
       "expect_error": false,
       "inputs": {
         "assets": {},
         "params": {
           "symbol": "FT_TrueTypeEngineType",
           "include": "<freetype/ftmodapi.h>",
-          "variants": {
-            "FT_TRUETYPE_ENGINE_TYPE_NONE": 0,
-            "FT_TRUETYPE_ENGINE_TYPE_UNPATENTED": 1,
-            "FT_TRUETYPE_ENGINE_TYPE_PATENTED": 2
-          },
-          "underlying_c_type": "enum"
+          "underlying_c_type": "enum",
+          "symbols": [
+            "FT_TRUETYPE_ENGINE_TYPE_NONE",
+            "FT_TRUETYPE_ENGINE_TYPE_UNPATENTED",
+            "FT_TRUETYPE_ENGINE_TYPE_PATENTED"
+          ]
         }
       },
       "classifiers": [
