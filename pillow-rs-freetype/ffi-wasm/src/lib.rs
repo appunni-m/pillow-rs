@@ -22,6 +22,7 @@ pub type FT_UInt = u32;
 pub type FT_Sfnt_Tag = u32;
 pub type FT_Short = i16;
 pub type FT_UShort = u16;
+pub type FT_Byte = u8;
 pub type FT_Size_Request_Type = i32;
 pub type FT_Encoding = i32;
 pub type FT_LcdFilter = i32;
@@ -976,6 +977,70 @@ pub extern "C" fn fontdone_wasm_get_sfnt_os2(
         };
     }
     rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_load_sfnt_table(
+    handle: usize,
+    tag: FT_ULong,
+    offset: FT_Long,
+    out_buffer: *mut FT_Byte,
+    out_length: *mut FT_ULong,
+) -> FT_Error {
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    if out_length.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument as FT_Error;
+    }
+    // SAFETY: caller provides a writable FT_ULong.
+    let mut len_val = unsafe { *out_length };
+    match rust_ffi::FT_Load_Sfnt_Table(&face.face, tag, offset, Some(&mut len_val)) {
+        Ok(Some(bytes)) => {
+            let copy_len = bytes.len().min(len_val as usize);
+            if !out_buffer.is_null() {
+                // SAFETY: out_buffer has at least len_val bytes.
+                unsafe {
+                    std::ptr::copy_nonoverlapping(bytes.as_ptr(), out_buffer, copy_len);
+                }
+            }
+            // SAFETY: writable FT_ULong out-param.
+            unsafe { *out_length = copy_len as FT_ULong };
+            rust_ffi::FT_Err_Ok as FT_Error
+        }
+        Ok(None) => {
+            // SAFETY: writable FT_ULong out-param (length probe result).
+            unsafe { *out_length = len_val };
+            rust_ffi::FT_Err_Ok as FT_Error
+        }
+        Err(err) => err as FT_Error,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_sfnt_table_info(
+    handle: usize,
+    table_index: FT_UInt,
+    out_tag: *mut FT_ULong,
+    out_length: *mut FT_ULong,
+) -> FT_Error {
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    match rust_ffi::FT_Sfnt_Table_Info(&face.face, table_index) {
+        Ok((tbl_tag, tbl_len)) => {
+            if !out_tag.is_null() {
+                // SAFETY: writable FT_ULong out-param.
+                unsafe { *out_tag = tbl_tag };
+            }
+            if !out_length.is_null() {
+                // SAFETY: writable FT_ULong out-param.
+                unsafe { *out_length = tbl_len };
+            }
+            rust_ffi::FT_Err_Ok as FT_Error
+        }
+        Err(err) => err as FT_Error,
+    }
 }
 
 #[unsafe(no_mangle)]

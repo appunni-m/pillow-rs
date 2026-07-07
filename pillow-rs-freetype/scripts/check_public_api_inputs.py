@@ -72,6 +72,8 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_sfnt_name_count",
     "fontdone_wasm_get_sfnt_name",
     "fontdone_wasm_get_sfnt_os2",
+    "fontdone_wasm_load_sfnt_table",
+    "fontdone_wasm_sfnt_table_info",
     "fontdone_wasm_get_first_char",
     "fontdone_wasm_get_next_char",
     "fontdone_wasm_library_version",

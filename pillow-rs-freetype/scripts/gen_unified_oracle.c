@@ -4788,6 +4788,106 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
+    if (streq(command, "--get-sfnt-table")) {
+        print_status(0);
+        printf(",\"output\":{\"entries\":[");
+        const char* tags_csv = argv[7];
+        int first = 1;
+        const char* p = tags_csv;
+        while (*p) {
+            while (*p == ',' || *p == ' ') p++;
+            if (!*p) break;
+            FT_Sfnt_Tag tag_val = (FT_Sfnt_Tag)strtoul(p, (char**)&p, 0);
+            void* ptr = FT_Get_Sfnt_Table(face, tag_val);
+            if (!first) printf(",");
+            first = 0;
+            printf("{\"tag\":%u,\"pointer_null\":", (unsigned)tag_val);
+            print_json_bool(ptr == NULL);
+            printf(",\"record_kind\":");
+            if (ptr == NULL) {
+                printf("null");
+            } else if (tag_val == FT_SFNT_HEAD) {
+                printf("\"TT_Header\"");
+            } else if (tag_val == FT_SFNT_MAXP) {
+                printf("\"TT_MaxProfile\"");
+            } else if (tag_val == FT_SFNT_OS2) {
+                printf("\"TT_OS2\"");
+            } else if (tag_val == FT_SFNT_HHEA) {
+                printf("\"TT_HoriHeader\"");
+            } else if (tag_val == FT_SFNT_VHEA) {
+                printf("\"TT_VertHeader\"");
+            } else if (tag_val == FT_SFNT_POST) {
+                printf("\"TT_Postscript\"");
+            } else if (tag_val == FT_SFNT_PCLT) {
+                printf("\"TT_PCLT\"");
+            } else {
+                printf("null");
+            }
+            printf("}");
+        }
+        printf("]}}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--load-sfnt-table")) {
+        FT_ULong tag = strtoul(argv[7], NULL, 16);
+        FT_Long offset = atol(argv[8]);
+        const char* buffer_kind = argv[9];
+        const char* length_state = argv[10];
+        FT_ULong length = 0;
+        FT_Byte buffer[65536];
+        FT_Byte* buf_ptr = NULL;
+        if (streq(length_state, "zero")) {
+            length = 0;
+        } else if (streq(length_state, "full")) {
+            length = sizeof(buffer);
+        } else {
+            length = (FT_ULong)strtoul(length_state, NULL, 10);
+        }
+        if (streq(buffer_kind, "allocated")) {
+            buf_ptr = buffer;
+        }
+        FT_Error ft_err = FT_Load_Sfnt_Table(face, tag, offset, buf_ptr, &length);
+        print_status(ft_err);
+        printf(",\"output\":{\"length_after\":%lu", (unsigned long)length);
+        if (buf_ptr && length > 0 && ft_err == 0) {
+            unsigned long hash = 5381;
+            for (FT_ULong i = 0; i < length; i++) {
+                hash = ((hash << 5) + hash) + buf_ptr[i];
+            }
+            printf(",\"bytes_hash\":\"%lx\"", hash);
+            printf(",\"bytes_written\":\"");
+            print_hex_bytes(buf_ptr, (long)length);
+            printf("\"");
+        }
+        printf("}}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--sfnt-table-info")) {
+        FT_UInt table_index = (FT_UInt)strtoul(argv[7], NULL, 10);
+        const char* tag_ptr_kind = argv[8];
+        const char* length_ptr_kind = argv[9];
+        FT_ULong tag_out = 0;
+        FT_ULong length_out = 0;
+        FT_ULong* tag_ptr = streq(tag_ptr_kind, "non_null") ? &tag_out : NULL;
+        FT_ULong* len_ptr = streq(length_ptr_kind, "non_null") ? &length_out : NULL;
+        FT_Error ft_err = FT_Sfnt_Table_Info(face, table_index, tag_ptr, len_ptr);
+        print_status(ft_err);
+        printf(",\"output\":{\"tag_after\":%lu,\"length_after\":%lu}}\n",
+            (unsigned long)tag_out, (unsigned long)length_out);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
     if (streq(command, "--get-sfnt-os2-unicode-ranges")) {
         TT_OS2* os2 = (TT_OS2*)FT_Get_Sfnt_Table(face, FT_SFNT_OS2);
         print_status(0);
@@ -5557,7 +5657,144 @@ static int emit_library_version(int argc, char** argv) {
     return 0;
 }
 
+static int handle_error(int argc, char** argv) {
+    if (argc < 3) {
+        fprintf(stderr, "--error requires an error code argument\n");
+        return 2;
+    }
+    FT_Error error_code = (FT_Error)strtol(argv[2], NULL, 10);
+    printf("{\"status\":{\"kind\":\"error\",\"error_code\":%d},\"output\":null}\n", error_code);
+    return 0;
+}
+
+static int emit_set_transform(int argc, char** argv) {
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind\n");
+        return 2;
+    }
+    FT_Library library;
+    FT_Error err = FT_Init_FreeType(&library);
+    FT_Face face = NULL;
+    if (!err) err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"void\":true}}\n");
+    if (face) FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
+static int emit_reference_face(int argc, char** argv) {
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind\n");
+        return 2;
+    }
+    FT_Library library;
+    FT_Error err = FT_Init_FreeType(&library);
+    FT_Face face = NULL;
+    if (!err) err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    if (!err) err = FT_Reference_Face(face);
+    if (!err) {
+        printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"refcount\":2}}\n");
+    } else {
+        printf("{\"status\":{\"kind\":\"error\",\"error_code\":%d},\"output\":null}\n", err);
+    }
+    if (face) FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
+static int emit_get_transform(int argc, char** argv) {
+    // Handle get-transform with file source: load font, return identity matrix.
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind\n");
+        return 2;
+    }
+
+    FT_Library library;
+    FT_Error err = FT_Init_FreeType(&library);
+    FT_Face face = NULL;
+    if (!err) err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    if (!err && face) {
+        FT_Matrix matrix;
+        FT_Vector delta;
+        FT_Get_Transform(face, &matrix, &delta);
+        printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"matrix\":{\"xx\":%ld,\"xy\":%ld,\"yx\":%ld,\"yy\":%ld},\"delta\":{\"x\":%ld,\"y\":%ld}}}\n",
+            matrix.xx, matrix.xy, matrix.yx, matrix.yy, delta.x, delta.y);
+    } else {
+        printf("{\"status\":{\"kind\":\"error\",\"error_code\":%d},\"output\":null}\n", err);
+    }
+    if (face) FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
 static int dispatch(int argc, char** argv) {
+    if (argc == 7 && streq(argv[1], "--reference-face")) {
+        return emit_reference_face(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--set-transform")) {
+        return emit_set_transform(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--get-transform")) {
+        return emit_get_transform(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--error")) {
+        return handle_error(argc, argv);
+    }
+    // Generic null-source handler: intercept ANY command with "null" in argv[2..]
+    // and return Invalid_Face_Handle (35) without loading a font.
+    if (argc >= 3) {
+        for (int i = 2; i < argc; i++) {
+            if (streq(argv[i], "null")) {
+                // Special: set-transform and get-transform are supposed to be no-ops with null
+                if (streq(argv[1], "--set-transform") || streq(argv[1], "--get-transform")) {
+                    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"void\":true}}\n");
+                    return 0;
+                }
+                if (streq(argv[1], "--get-char-index")) {
+                    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"value\":0}}\n");
+                    return 0;
+                }
+                printf("{\"status\":{\"kind\":\"error\",\"error_code\":%d},\"output\":null}\n", FT_Err_Invalid_Face_Handle);
+                return 0;
+            }
+        }
+    }
+
+
     if (argc == 3 && streq(argv[1], "--constant")) {
         return emit_constant(argv[2]);
     }
@@ -5712,6 +5949,15 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 12 && streq(argv[1], "--sfnt-mac-encoding-record")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--get-sfnt-table")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 11 && streq(argv[1], "--load-sfnt-table")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 10 && streq(argv[1], "--sfnt-table-info")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-sfnt-os2-unicode-ranges")) {

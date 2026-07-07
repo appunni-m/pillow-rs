@@ -73,6 +73,12 @@ that document with `make repo-map-update` and verify it with
   checkouts unless the user explicitly asks.
 - Do not revert user changes. Work with them or ask only if they make progress
   impossible.
+- All FFI layers must be thin wrappers. `fontdone-ffi-c` and `fontdone-ffi-wasm`
+  may own raw-pointer validation, handle lifetime, `repr(C)` record copying,
+  and C-ABI boilerplate — they must not contain font parsing, glyph rendering,
+  math algorithms, fixture interpretation, native FreeType calls, or any
+  parity-specific behavior. The core crate `fontdone` owns all logic and must
+  be 100% safe Rust (`#![deny(unsafe_code)]`).
 
 ## Binding Rules
 

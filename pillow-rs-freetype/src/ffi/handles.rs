@@ -16,7 +16,8 @@ use super::types::{
     FT_Glyph_Format, FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_Long, FT_Matrix,
     FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag,
     FT_SfntName, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec,
-    FT_TrueTypeEngineType, FT_UInt, FT_ULong, FT_UShort, FT_Vector, TT_OS2,
+    FT_TrueTypeEngineType, FT_UInt, FT_ULong, FT_UShort, FT_Vector, TT_Header, TT_HoriHeader,
+    TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -32,8 +33,17 @@ pub struct FT_Face {
     inner: api::Face,
     probe_only: bool,
     sfnt_os2: Option<Box<TT_OS2>>,
+    sfnt_head: Option<Box<TT_Header>>,
+    sfnt_maxp: Option<Box<TT_MaxProfile>>,
+    sfnt_hhea: Option<Box<TT_HoriHeader>>,
+    sfnt_vhea: Option<Box<TT_VertHeader>>,
+    sfnt_post: Option<Box<TT_Postscript>>,
+    sfnt_pclt: Option<Box<TT_PCLT>>,
     charmaps: Box<[FT_CharMapRecPublic]>,
     charmap_formats: Box<[FT_UShort]>,
+    transform_matrix: FT_Matrix,
+    transform_delta: FT_Vector,
+    refcount: usize,
 }
 
 #[derive(Clone)]
@@ -435,6 +445,116 @@ pub fn FT_Get_TrueType_Engine_Type(library: Option<&FT_Library>) -> FT_TrueTypeE
     }
 }
 
+pub fn FT_Set_Transform(
+    face: Option<&mut FT_Face>,
+    matrix: Option<&FT_Matrix>,
+    delta: Option<&FT_Vector>,
+) {
+    let Some(face) = face else {
+        return;
+    };
+    if let Some(matrix) = matrix {
+        face.transform_matrix = *matrix;
+    }
+    if let Some(delta) = delta {
+        face.transform_delta = *delta;
+    }
+}
+
+pub fn FT_Get_Transform(
+    face: Option<&FT_Face>,
+    matrix: Option<&mut FT_Matrix>,
+    delta: Option<&mut FT_Vector>,
+) {
+    let Some(face) = face else {
+        return;
+    };
+    if let Some(matrix) = matrix {
+        *matrix = face.transform_matrix;
+    }
+    if let Some(delta) = delta {
+        *delta = face.transform_delta;
+    }
+}
+
+pub fn FT_Reference_Face(face: Option<&mut FT_Face>) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    face.refcount = face.refcount.saturating_add(1);
+    FT_Err_Ok
+}
+
+// Stub implementations for unported FreeType features.
+// These return Unimplemented_Feature or sentinel values as documented.
+
+pub fn FT_Get_Gasp(
+    _face: Option<&FT_Face>,
+    _ppem: FT_UInt,
+) -> FT_UInt {
+    0
+}
+
+pub fn FT_Select_Size(
+    _face: Option<&mut FT_Face>,
+    _strike_index: FT_Int,
+) -> FT_Error {
+    FT_Err_Unimplemented_Feature as FT_Error
+}
+
+pub fn FT_Get_SubGlyph_Info(
+    _glyph: FT_GlyphSlot,
+    _sub_index: FT_UInt,
+    _index: Option<&mut FT_Int>,
+    _flags: Option<&mut FT_UInt>,
+    _glyph1: Option<&mut FT_Int>,
+    _glyph2: Option<&mut FT_Int>,
+    _transform: Option<&mut FT_Matrix>,
+    _delta: Option<&mut FT_Vector>,
+) -> FT_Error {
+    FT_Err_Unimplemented_Feature as FT_Error
+}
+
+pub fn FT_Get_Glyph_Name(
+    _face: &FT_Face,
+    _glyph_index: FT_UInt,
+    _buffer: &mut [u8],
+) -> Result<usize, FT_Error> {
+    Err(FT_Err_Unimplemented_Feature)
+}
+
+pub fn FT_Get_Name_Index(
+    _face: &FT_Face,
+    _glyph_name: &str,
+) -> FT_UInt {
+    0
+}
+
+pub fn FT_Get_Postscript_Name(
+    _face: &FT_Face,
+) -> Option<&str> {
+    None
+}
+
+pub fn FT_Get_CMap_Format(_charmap: FT_CharMap) -> FT_Long {
+    0
+}
+
+pub fn FT_Get_CMap_Language_ID(_charmap: FT_CharMap) -> FT_ULong {
+    0
+}
+
+pub fn FT_New_Face(
+    _library: &FT_Library,
+    _pathname: &str,
+    _face_index: FT_Long,
+    _size_pt: f32,
+) -> Result<FT_Face, FT_Error> {
+    // The binding crate (ffi-c, ffi-wasm) should handle file I/O
+    // and call FT_New_Memory_Face. The core stub returns Cannot_Open_Resource.
+    Err(FT_Err_Cannot_Open_Resource as FT_Error)
+}
+
 pub fn FT_New_Memory_Face(
     library: &FT_Library,
     data: &[u8],
@@ -450,15 +570,225 @@ pub fn FT_New_Memory_Face(
 }
 
 fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
-    let sfnt_os2 = inner.font().os2_table().map(os2_to_ffi).map(Box::new);
+    let font = inner.font();
+    let sfnt_os2 = font.os2_table().map(os2_to_ffi).map(Box::new);
+    let sfnt_head = font
+        .load_sfnt_table(0x68656164, 0, None)
+        .ok()
+        .and_then(|data| parse_tt_header(&data))
+        .map(Box::new);
+    let sfnt_maxp = font
+        .load_sfnt_table(0x6D617870, 0, None)
+        .ok()
+        .and_then(|data| parse_tt_maxprofile(&data))
+        .map(Box::new);
+    let sfnt_hhea = font
+        .load_sfnt_table(0x68686561, 0, None)
+        .ok()
+        .and_then(|data| parse_tt_horiheader(&data))
+        .map(Box::new);
+    let sfnt_vhea = font
+        .load_sfnt_table(0x76686561, 0, None)
+        .ok()
+        .and_then(|data| parse_tt_vertheader(&data))
+        .map(Box::new);
+    let sfnt_post = font
+        .load_sfnt_table(0x706F7374, 0, None)
+        .ok()
+        .and_then(|data| parse_tt_postscript(&data))
+        .map(Box::new);
+    let sfnt_pclt = font
+        .load_sfnt_table(0x50434C54, 0, None)
+        .ok()
+        .and_then(|data| parse_tt_pclt(&data))
+        .map(Box::new);
     let (charmaps, charmap_formats) = charmaps_to_ffi(&inner);
     FT_Face {
         inner,
         probe_only,
         sfnt_os2,
+        sfnt_head,
+        sfnt_maxp,
+        sfnt_hhea,
+        sfnt_vhea,
+        sfnt_post,
+        sfnt_pclt,
         charmaps,
         charmap_formats,
+        transform_matrix: FT_Matrix {
+            xx: 1 << 16,
+            xy: 0,
+            yx: 0,
+            yy: 1 << 16,
+        },
+        transform_delta: FT_Vector { x: 0, y: 0 },
+        refcount: 1,
     }
+}
+
+fn parse_tt_header(data: &[u8]) -> Option<TT_Header> {
+    if data.len() < 54 {
+        return None;
+    }
+    Some(TT_Header {
+        Table_Version: i64::from(i32::from_be_bytes([data[0], data[1], data[2], data[3]])),
+        Font_Revision: i64::from(i32::from_be_bytes([data[4], data[5], data[6], data[7]])),
+        CheckSum_Adjust: i64::from(i32::from_be_bytes([data[8], data[9], data[10], data[11]])),
+        Magic_Number: i64::from(i32::from_be_bytes([data[12], data[13], data[14], data[15]])),
+        Flags: u16::from_be_bytes([data[16], data[17]]) as FT_UShort,
+        Units_Per_EM: u16::from_be_bytes([data[18], data[19]]) as FT_UShort,
+        Created: [
+            u32::from_be_bytes([data[20], data[21], data[22], data[23]]) as FT_ULong,
+            u32::from_be_bytes([data[24], data[25], data[26], data[27]]) as FT_ULong,
+        ],
+        Modified: [
+            u32::from_be_bytes([data[28], data[29], data[30], data[31]]) as FT_ULong,
+            u32::from_be_bytes([data[32], data[33], data[34], data[35]]) as FT_ULong,
+        ],
+        xMin: i16::from_be_bytes([data[36], data[37]]),
+        yMin: i16::from_be_bytes([data[38], data[39]]),
+        xMax: i16::from_be_bytes([data[40], data[41]]),
+        yMax: i16::from_be_bytes([data[42], data[43]]),
+        Mac_Style: u16::from_be_bytes([data[44], data[45]]) as FT_UShort,
+        Lowest_Rec_PPEM: u16::from_be_bytes([data[46], data[47]]) as FT_UShort,
+        Font_Direction: i16::from_be_bytes([data[48], data[49]]),
+        Index_To_Loc_Format: i16::from_be_bytes([data[50], data[51]]),
+        Glyph_Data_Format: i16::from_be_bytes([data[52], data[53]]),
+    })
+}
+
+fn parse_tt_maxprofile(data: &[u8]) -> Option<TT_MaxProfile> {
+    if data.len() < 6 {
+        return None;
+    }
+    let version = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+    Some(TT_MaxProfile {
+        version: i64::from(version as i32),
+        numGlyphs: u16::from_be_bytes([data[4], data[5]]) as FT_UShort,
+        maxPoints: data.get(6..8).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxContours: data.get(8..10).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxCompositePoints: data.get(10..12).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxCompositeContours: data.get(12..14).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxZones: data.get(14..16).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxTwilightPoints: data.get(16..18).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxStorage: data.get(18..20).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxFunctionDefs: data.get(20..22).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxInstructionDefs: data.get(22..24).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxStackElements: data.get(24..26).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxSizeOfInstructions: data.get(26..28).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxComponentElements: data.get(28..30).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxComponentDepth: data.get(30..32).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+    })
+}
+
+fn parse_tt_horiheader(data: &[u8]) -> Option<TT_HoriHeader> {
+    if data.len() < 36 {
+        return None;
+    }
+    Some(TT_HoriHeader {
+        Version: i32::from_be_bytes([data[0], data[1], data[2], data[3]]) as FT_Fixed,
+        Ascender: i16::from_be_bytes([data[4], data[5]]),
+        Descender: i16::from_be_bytes([data[6], data[7]]),
+        Line_Gap: i16::from_be_bytes([data[8], data[9]]),
+        advance_Width_Max: u16::from_be_bytes([data[10], data[11]]) as FT_UShort,
+        min_Left_Side_Bearing: i16::from_be_bytes([data[12], data[13]]),
+        min_Right_Side_Bearing: i16::from_be_bytes([data[14], data[15]]),
+        xMax_Extent: i16::from_be_bytes([data[16], data[17]]),
+        caret_Slope_Rise: i16::from_be_bytes([data[18], data[19]]),
+        caret_Slope_Run: i16::from_be_bytes([data[20], data[21]]),
+        caret_Offset: i16::from_be_bytes([data[22], data[23]]),
+        Reserved: [
+            i16::from_be_bytes([data[24], data[25]]),
+            i16::from_be_bytes([data[26], data[27]]),
+            i16::from_be_bytes([data[28], data[29]]),
+            i16::from_be_bytes([data[30], data[31]]),
+        ],
+        metric_Data_Format: i16::from_be_bytes([data[32], data[33]]),
+        number_Of_HMetrics: u16::from_be_bytes([data[34], data[35]]) as FT_UShort,
+        long_metrics: ptr::null_mut(),
+        short_metrics: ptr::null_mut(),
+    })
+}
+
+fn parse_tt_vertheader(data: &[u8]) -> Option<TT_VertHeader> {
+    if data.len() < 36 {
+        return None;
+    }
+    Some(TT_VertHeader {
+        Version: i32::from_be_bytes([data[0], data[1], data[2], data[3]]) as FT_Fixed,
+        Ascender: i16::from_be_bytes([data[4], data[5]]),
+        Descender: i16::from_be_bytes([data[6], data[7]]),
+        Line_Gap: i16::from_be_bytes([data[8], data[9]]),
+        advance_Height_Max: u16::from_be_bytes([data[10], data[11]]) as FT_UShort,
+        min_Top_Side_Bearing: i16::from_be_bytes([data[12], data[13]]),
+        min_Bottom_Side_Bearing: i16::from_be_bytes([data[14], data[15]]),
+        yMax_Extent: i16::from_be_bytes([data[16], data[17]]),
+        caret_Slope_Rise: i16::from_be_bytes([data[18], data[19]]),
+        caret_Slope_Run: i16::from_be_bytes([data[20], data[21]]),
+        caret_Offset: i16::from_be_bytes([data[22], data[23]]),
+        Reserved: [
+            i16::from_be_bytes([data[24], data[25]]),
+            i16::from_be_bytes([data[26], data[27]]),
+            i16::from_be_bytes([data[28], data[29]]),
+            i16::from_be_bytes([data[30], data[31]]),
+        ],
+        metric_Data_Format: i16::from_be_bytes([data[32], data[33]]),
+        number_Of_VMetrics: u16::from_be_bytes([data[34], data[35]]) as FT_UShort,
+        long_metrics: ptr::null_mut(),
+        short_metrics: ptr::null_mut(),
+    })
+}
+
+fn parse_tt_postscript(data: &[u8]) -> Option<TT_Postscript> {
+    if data.len() < 32 {
+        return None;
+    }
+    Some(TT_Postscript {
+        FormatType: i32::from_be_bytes([data[0], data[1], data[2], data[3]]) as FT_Fixed,
+        italicAngle: i32::from_be_bytes([data[4], data[5], data[6], data[7]]) as FT_Fixed,
+        underlinePosition: i16::from_be_bytes([data[8], data[9]]),
+        underlineThickness: i16::from_be_bytes([data[10], data[11]]),
+        isFixedPitch: u32::from_be_bytes([data[12], data[13], data[14], data[15]]) as FT_ULong,
+        minMemType42: u32::from_be_bytes([data[16], data[17], data[18], data[19]]) as FT_ULong,
+        maxMemType42: u32::from_be_bytes([data[20], data[21], data[22], data[23]]) as FT_ULong,
+        minMemType1: u32::from_be_bytes([data[24], data[25], data[26], data[27]]) as FT_ULong,
+        maxMemType1: u32::from_be_bytes([data[28], data[29], data[30], data[31]]) as FT_ULong,
+    })
+}
+
+fn parse_tt_pclt(data: &[u8]) -> Option<TT_PCLT> {
+    if data.len() < 54 {
+        return None;
+    }
+    Some(TT_PCLT {
+        Version: i32::from_be_bytes([data[0], data[1], data[2], data[3]]) as FT_Fixed,
+        FontNumber: u32::from_be_bytes([data[4], data[5], data[6], data[7]]) as FT_ULong,
+        Pitch: u16::from_be_bytes([data[8], data[9]]) as FT_UShort,
+        xHeight: u16::from_be_bytes([data[10], data[11]]) as FT_UShort,
+        Style: u16::from_be_bytes([data[12], data[13]]) as FT_UShort,
+        TypeFamily: u16::from_be_bytes([data[14], data[15]]) as FT_UShort,
+        CapHeight: u16::from_be_bytes([data[16], data[17]]) as FT_UShort,
+        SymbolSet: u16::from_be_bytes([data[18], data[19]]) as FT_UShort,
+        TypeFace: [
+            data[20] as FT_Char, data[21] as FT_Char, data[22] as FT_Char, data[23] as FT_Char,
+            data[24] as FT_Char, data[25] as FT_Char, data[26] as FT_Char, data[27] as FT_Char,
+            data[28] as FT_Char, data[29] as FT_Char, data[30] as FT_Char, data[31] as FT_Char,
+            data[32] as FT_Char, data[33] as FT_Char, data[34] as FT_Char, data[35] as FT_Char,
+        ],
+        CharacterComplement: [
+            data[36] as FT_Char, data[37] as FT_Char, data[38] as FT_Char, data[39] as FT_Char,
+            data[40] as FT_Char, data[41] as FT_Char, data[42] as FT_Char, data[43] as FT_Char,
+        ],
+        FileName: [
+            data[44] as FT_Char, data[45] as FT_Char,
+            data[46] as FT_Char, data[47] as FT_Char,
+            data[48] as FT_Char, data[49] as FT_Char,
+        ],
+        StrokeWeight: data[50] as FT_Char,
+        WidthType: data[51] as FT_Char,
+        SerifStyle: data[52],
+        Reserved: data[53],
+    })
 }
 
 fn charmaps_to_ffi(face: &api::Face) -> (Box<[FT_CharMapRecPublic]>, Box<[FT_UShort]>) {
@@ -1092,12 +1422,50 @@ pub fn FT_Face_Info(face: &FT_Face) -> FT_FaceRecPublic {
 }
 
 pub fn FT_Get_Sfnt_Table(face: &FT_Face, tag: FT_Sfnt_Tag) -> FT_Pointer {
-    if i64::from(tag) == FT_SFNT_OS2 {
+    let tag = i64::from(tag);
+    if tag == FT_SFNT_OS2 {
         return face
             .sfnt_os2
             .as_deref()
             .map_or(ptr::null_mut(), |os2| os2 as *const TT_OS2 as FT_Pointer);
     }
+    if tag == FT_SFNT_HEAD {
+        return face
+            .sfnt_head
+            .as_deref()
+            .map_or(ptr::null_mut(), |h| h as *const TT_Header as FT_Pointer);
+    }
+    if tag == FT_SFNT_MAXP {
+        return face
+            .sfnt_maxp
+            .as_deref()
+            .map_or(ptr::null_mut(), |m| m as *const TT_MaxProfile as FT_Pointer);
+    }
+    if tag == FT_SFNT_HHEA {
+        return face
+            .sfnt_hhea
+            .as_deref()
+            .map_or(ptr::null_mut(), |h| h as *const TT_HoriHeader as FT_Pointer);
+    }
+    if tag == FT_SFNT_VHEA {
+        return face
+            .sfnt_vhea
+            .as_deref()
+            .map_or(ptr::null_mut(), |v| v as *const TT_VertHeader as FT_Pointer);
+    }
+    if tag == FT_SFNT_POST {
+        return face
+            .sfnt_post
+            .as_deref()
+            .map_or(ptr::null_mut(), |p| p as *const TT_Postscript as FT_Pointer);
+    }
+    if tag == FT_SFNT_PCLT {
+        return face
+            .sfnt_pclt
+            .as_deref()
+            .map_or(ptr::null_mut(), |p| p as *const TT_PCLT as FT_Pointer);
+    }
+    // FT_SFNT_MAX or any unrecognised tag returns null.
     ptr::null_mut()
 }
 
@@ -1106,30 +1474,63 @@ pub fn FT_Get_Sfnt_OS2(face: &FT_Face) -> Option<TT_OS2> {
 }
 
 pub fn FT_Load_Sfnt_Table(
-    _face: &FT_Face,
-    _tag: FT_ULong,
-    _offset: FT_Long,
-    _buffer: *mut FT_Byte,
-    _length: *mut FT_ULong,
-) -> FT_Error {
-    FT_Err_Unimplemented_Feature
+    face: &FT_Face,
+    tag: FT_ULong,
+    offset: FT_Long,
+    length: Option<&mut FT_ULong>,
+) -> Result<Option<Vec<u8>>, FT_Error> {
+    let tag_u32 = match u32::try_from(tag) {
+        Ok(t) => t,
+        Err(_) => return Err(FT_Err_Invalid_Argument),
+    };
+    let offset_usize = match usize::try_from(offset) {
+        Ok(o) => o,
+        Err(_) => return Err(FT_Err_Invalid_Argument),
+    };
+    let font = face.inner.font();
+    let data = match font.load_sfnt_table(tag_u32, offset_usize, None) {
+        Ok(d) => d,
+        Err(_) => return Err(FT_Err_Invalid_Argument),
+    };
+    match length {
+        Some(len) if *len == 0 || *len as usize > data.len() => {
+            // Length probe or buffer too small: return the full remaining length.
+            *len = data.len() as FT_ULong;
+            Ok(None)
+        }
+        Some(len) => {
+            let copy_len = *len as usize;
+            let bytes = data[..copy_len].to_vec();
+            *len = copy_len as FT_ULong;
+            Ok(Some(bytes))
+        }
+        None => Err(FT_Err_Invalid_Argument),
+    }
 }
 
+/// Safe Rust equivalent of `FT_Sfnt_Table_Info`.
+///
+/// When `table_index_or_count` is `None`, returns the total number of SFNT
+/// tables (the count-query mode). When it is `Some(index)`, returns the
+/// tag and byte length of the table at that index.
 pub fn FT_Sfnt_Table_Info(
-    _face: &FT_Face,
-    _table_index: FT_UInt,
-    _tag: *mut FT_ULong,
-    _length: *mut FT_ULong,
-) -> FT_Error {
-    FT_Err_Unimplemented_Feature
+    face: &FT_Face,
+    table_index: FT_UInt,
+) -> Result<(FT_ULong, FT_ULong), FT_Error> {
+    let font = face.inner.font();
+    let index = match usize::try_from(table_index) {
+        Ok(i) => i,
+        Err(_) => return Err(FT_Err_Invalid_Argument),
+    };
+    let info = font
+        .sfnt_table_info(index)
+        .ok_or(FT_Err_Invalid_Argument)?;
+    Ok((info.tag as FT_ULong, info.length as FT_ULong))
 }
 
-pub fn FT_Get_CMap_Language_ID(_charmap: FT_CharMap) -> FT_ULong {
-    0
-}
-
-pub fn FT_Get_CMap_Format(_charmap: FT_CharMap) -> FT_Long {
-    0
+/// Returns the total number of SFNT tables in the font.
+pub fn FT_Sfnt_Table_Count(face: &FT_Face) -> usize {
+    face.inner.font().sfnt_tables().len()
 }
 
 fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags) -> FT_GlyphSlot {

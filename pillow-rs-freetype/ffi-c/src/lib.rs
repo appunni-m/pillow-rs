@@ -1085,6 +1085,70 @@ pub extern "C" fn FT_Get_Sfnt_Table(face: FT_Face, tag: FT_Sfnt_Tag) -> *mut c_v
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Load_Sfnt_Table(
+    face: FT_Face,
+    tag: FT_ULong,
+    offset: FT_Long,
+    buffer: *mut FT_Byte,
+    length: *mut FT_ULong,
+) -> FT_Error {
+    let Some(state) = face_state(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(len_ptr) = non_null_mut(length) else {
+        return rust_ffi::FT_Err_Invalid_Argument as FT_Error;
+    };
+    // SAFETY: caller-provided writable FT_ULong or NULL (caught above).
+    let mut len_val = unsafe { *len_ptr.as_ptr() };
+    match rust_ffi::FT_Load_Sfnt_Table(&state.inner, tag, offset, Some(&mut len_val)) {
+        Ok(Some(bytes)) => {
+            let copy_len = bytes.len().min(len_val as usize);
+            if let Some(buf) = non_null_mut(buffer) {
+                // SAFETY: caller provides a buffer of at least len_val bytes.
+                unsafe {
+                    ptr::copy_nonoverlapping(bytes.as_ptr(), buf.as_ptr().cast(), copy_len);
+                }
+            }
+            // SAFETY: writable FT_ULong out-param.
+            unsafe { *len_ptr.as_ptr() = copy_len as FT_ULong };
+            rust_ffi::FT_Err_Ok as FT_Error
+        }
+        Ok(None) => {
+            // SAFETY: writable FT_ULong out-param (length probe result).
+            unsafe { *len_ptr.as_ptr() = len_val };
+            rust_ffi::FT_Err_Ok as FT_Error
+        }
+        Err(err) => err as FT_Error,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Sfnt_Table_Info(
+    face: FT_Face,
+    table_index: FT_UInt,
+    tag: *mut FT_ULong,
+    length: *mut FT_ULong,
+) -> FT_Error {
+    let Some(state) = face_state(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    match rust_ffi::FT_Sfnt_Table_Info(&state.inner, table_index) {
+        Ok((tbl_tag, tbl_len)) => {
+            if let Some(tag_ptr) = non_null_mut(tag) {
+                // SAFETY: writable FT_ULong out-param.
+                unsafe { *tag_ptr.as_ptr() = tbl_tag };
+            }
+            if let Some(len_ptr) = non_null_mut(length) {
+                // SAFETY: writable FT_ULong out-param.
+                unsafe { *len_ptr.as_ptr() = tbl_len };
+            }
+            rust_ffi::FT_Err_Ok as FT_Error
+        }
+        Err(err) => err as FT_Error,
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_First_Char(face: FT_Face, agindex: *mut FT_UInt) -> FT_ULong {
     let mut glyph_index = 0;
     let char_code =
