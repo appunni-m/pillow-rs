@@ -87,7 +87,7 @@ doc-test:
 test: test-unified-fixtures test-ffi
 
 .PHONY: test-parity
-test-parity: test-unified-fixtures
+test-parity: test-unified-fixtures test-ffi
 
 .PHONY: unified-oracle
 unified-oracle: oracle-fetch
@@ -118,7 +118,7 @@ test-unified-fixtures-release: unified-oracle unified-inputs-check api-abi-check
 test-unified-coverage: test-unified-fixtures
 
 .PHONY: test-api-abi
-test-api-abi: test-unified-fixtures
+test-api-abi: test-unified-fixtures test-ffi
 
 .PHONY: test-ffi
 test-ffi:
