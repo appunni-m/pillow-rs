@@ -348,7 +348,19 @@ impl Face {
     }
 
     /// Load a glyph index, equivalent to `FT_Load_Glyph`.
+    /// Optionally apply a 2×2 transform matrix after loading.
     pub fn load_glyph(&self, glyph_index: u16, flags: LoadFlags) -> Result<GlyphSlot, FontError> {
+        self.load_glyph_with_transform(glyph_index, flags, None)
+    }
+
+    /// Load a glyph index with an optional transform, equivalent to
+    /// `FT_Load_Glyph` + `FT_Set_Transform`.
+    pub fn load_glyph_with_transform(
+        &self,
+        glyph_index: u16,
+        flags: LoadFlags,
+        transform: Option<(i32, i32, i32, i32, i32, i32)>,
+    ) -> Result<GlyphSlot, FontError> {
         let vertical_layout = flags.contains(LoadFlags::VERTICAL_LAYOUT);
         let native_hint_mode = flags.native_hint_mode();
         let loaded = if flags.contains(LoadFlags::NO_RECURSE) {
@@ -384,11 +396,24 @@ impl Face {
         };
 
         let render_requested = flags.contains(LoadFlags::RENDER);
-        let bitmap = if render_requested {
-            // Rasterize the already-hinted outline directly instead of
-            // re-loading via render_font.  This avoids a duplicate glyf
-            // parse + point-scale + autohint pipeline (~3-5 µs per glyph).
-            let render_outline = loaded.render_outline.as_ref().ok_or_else(|| {
+
+        // Build the slot first so transform can be applied before rendering.
+        let mut slot = GlyphSlot::new(
+            glyph_index,
+            loaded,
+            None, // bitmap applied after transform
+            vertical_layout,
+            false,
+        );
+
+        // Apply transform if present — must happen before rendering.
+        if let Some((xx, xy, yx, yy, dx, dy)) = transform {
+            slot.apply_transform(xx, xy, yx, yy, dx, dy);
+        }
+
+        // Render after transform so the rasterizer sees transformed coords.
+        if render_requested {
+            let render_outline = slot.loaded_outline.as_ref().ok_or_else(|| {
                 FontError::InvalidOutline("no render outline in loaded glyph".into())
             })?;
             let mode = flags.render_mode();
@@ -402,22 +427,10 @@ impl Face {
                 &mut *scratch,
             )?;
             drop(scratch);
-            if bmp.buffer.is_empty() {
-                None
-            } else {
-                Some(bmp)
-            }
-        } else {
-            None
-        };
+            slot.set_rendered_bitmap(bmp);
+        }
 
-        Ok(GlyphSlot::new(
-            glyph_index,
-            loaded,
-            bitmap,
-            vertical_layout,
-            render_requested,
-        ))
+        Ok(slot)
     }
 
     pub fn render_loaded_glyph(
@@ -571,6 +584,92 @@ impl GlyphSlot {
         )?;
         self.set_rendered_bitmap(bitmap);
         Ok(self)
+    }
+
+    /// Apply a 2×2 transform matrix to metrics, advance, outline, and bbox.
+    /// Mirrors C's `ft_glyphslot_grid_fit_metrics` in `src/base/ftobjs.c`.
+    pub fn apply_transform(&mut self, xx: i32, xy: i32, yx: i32, yy: i32, dx: i32, dy: i32) {
+        let ft_mul = crate::fixed::ft_mul_fix;
+        // Transform metrics (C: ftobjs.c ft_glyphslot_grid_fit_metrics).
+        {
+            let m = &mut self.metrics;
+            let (hbx, hby) = (
+                ft_mul(m.hori_bearing_x, xx) + ft_mul(m.hori_bearing_y, xy),
+                ft_mul(m.hori_bearing_x, yx) + ft_mul(m.hori_bearing_y, yy),
+            );
+            m.hori_bearing_x = hbx;
+            m.hori_bearing_y = hby;
+            m.width = ft_mul(m.width, xx) + ft_mul(m.height, xy);
+            m.height = ft_mul(m.width, yx) + ft_mul(m.height, yy);
+            if dx != 0 || dy != 0 {
+                m.hori_bearing_x += dx;
+                m.hori_bearing_y += dy;
+            }
+            let (vbx, vby) = (
+                ft_mul(m.vert_bearing_x, xx) + ft_mul(m.vert_bearing_y, xy),
+                ft_mul(m.vert_bearing_x, yx) + ft_mul(m.vert_bearing_y, yy),
+            );
+            m.vert_bearing_x = vbx;
+            m.vert_bearing_y = vby;
+            m.vert_advance = ft_mul(m.vert_advance, xx) + ft_mul(m.vert_advance, xy);
+        }
+        // Transform advance
+        {
+            let a = &mut self.advance;
+            let (ax, ay) = (
+                ft_mul(a.x, xx) + ft_mul(a.y, xy),
+                ft_mul(a.x, yx) + ft_mul(a.y, yy),
+            );
+            a.x = ax;
+            a.y = ay;
+        }
+        // Transform both slot_outline and loaded_outline points
+        let transform_points = |pts: &mut [crate::outline::OutlinePoint]| {
+            for pt in pts {
+                let (px, py) = (
+                    ft_mul(pt.x, xx) + ft_mul(pt.y, xy) + dx,
+                    ft_mul(pt.x, yx) + ft_mul(pt.y, yy) + dy,
+                );
+                pt.x = px;
+                pt.y = py;
+            }
+        };
+        if let Some(ref mut outline) = self.slot_outline {
+            transform_points(&mut outline.points);
+        }
+        if let Some(ref mut lo) = self.loaded_outline {
+            transform_points(&mut lo.outline.points);
+        }
+        // Recompute bbox from slot_outline
+        let mut new_cbox = crate::font::BBox {
+            x_min: 0,
+            y_min: 0,
+            x_max: 0,
+            y_max: 0,
+        };
+        let mut new_bbox = crate::font::BBox {
+            x_min: 0,
+            y_min: 0,
+            x_max: 0,
+            y_max: 0,
+        };
+        if let Some(ref outline) = self.slot_outline {
+            if !outline.points.is_empty() {
+                new_cbox.x_min = outline.points[0].x;
+                new_cbox.y_min = outline.points[0].y;
+                new_cbox.x_max = outline.points[0].x;
+                new_cbox.y_max = outline.points[0].y;
+                for pt in &outline.points[1..] {
+                    new_cbox.x_min = new_cbox.x_min.min(pt.x);
+                    new_cbox.y_min = new_cbox.y_min.min(pt.y);
+                    new_cbox.x_max = new_cbox.x_max.max(pt.x);
+                    new_cbox.y_max = new_cbox.y_max.max(pt.y);
+                }
+                new_bbox = new_cbox;
+            }
+        }
+        self.outline_cbox = new_cbox;
+        self.outline_bbox = new_bbox;
     }
 
     pub(crate) fn slot_outline(&self) -> Option<&crate::outline::Outline> {
