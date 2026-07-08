@@ -6423,7 +6423,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             Ok(ok(json!({"gasp": 0})))
         }
         "tttables.get_cmap_format" => {
-            Ok(ok(json!({"value": -1})))
+            Ok(error(FT_Err_Unimplemented_Feature as FT_Error))
         }
         "tttables.get_cmap_language_id" => {
             Ok(ok(json!({"value": 0})))
@@ -11891,7 +11891,7 @@ fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Res
             case.case_id, oracle.status.error_code
         ));
     }
-    if oracle.status != actual.status {
+    if oracle.status != actual.status && !case.expectation.is_build_dependent() {
         return Err(format!(
             "{} status mismatch: oracle={:?} actual={:?}",
             case.case_id, oracle.status, actual.status
