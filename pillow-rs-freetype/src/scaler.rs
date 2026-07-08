@@ -846,26 +846,51 @@ fn scale_glyph_impl_with_context(
             composite_use_my_metrics_phantoms = composite.use_my_metrics_phantoms;
             composite_point_tags = Some(composite.tags);
             composite.points
-        } else {
+        } else if let Some(ref no_hint_outline) = no_hinting_scaled {
+            // Composite no-hinting path: pre-scaled coordinates from
+            // load_glyph_scaled_no_hinting.  Use them directly.
+            let shift_x = no_hinting_origin_shift_x;
             let mut scaled = Vec::with_capacity(outline_raw.points.len());
             for (index, p) in outline_raw.points.iter().enumerate() {
-                let scaled_point = no_hinting_scaled
-                    .as_ref()
-                    .and_then(|outline| outline.points.get(index));
-                let x = if let Some(point) = scaled_point {
-                    point.x
-                } else if use_autohint {
-                    scale.scale_x(p.x - autohint_pp1x_fu)
-                } else {
-                    scale.scale_x(p.x)
-                };
-                let y = scaled_point.map_or_else(|| ft_mul_fix(p.y, y_adj), |point| point.y);
+                let sp = &no_hint_outline.points[index];
                 scaled.push(OutlinePoint {
-                    x: x - no_hinting_origin_shift_x,
+                    x: sp.x - shift_x,
+                    y: sp.y,
+                    on_curve: p.on_curve,
+                });
+            }
+            scaled
+        } else if use_autohint {
+            let shift_x = autohint_pp1x_fu;
+            let origin_shift = no_hinting_origin_shift_x;
+            let mut scaled = Vec::with_capacity(outline_raw.points.len());
+            for p in &outline_raw.points {
+                let x = scale.scale_x(p.x - shift_x) - origin_shift;
+                let y = ft_mul_fix(p.y, y_adj);
+                scaled.push(OutlinePoint {
+                    x,
                     y,
                     on_curve: p.on_curve,
                 });
             }
+            scaled
+        } else {
+            // No-hinting or bytecode-only: simplest scaling loop.
+            // Unconditional per-point path avoids branches inside the loop.
+            let shift_x = no_hinting_origin_shift_x;
+            let mut scaled = Vec::with_capacity(outline_raw.points.len());
+            let mut tags = Vec::with_capacity(outline_raw.points.len());
+            for p in &outline_raw.points {
+                let x = scale.scale_x(p.x) - shift_x;
+                let y = ft_mul_fix(p.y, y_adj);
+                scaled.push(OutlinePoint {
+                    x,
+                    y,
+                    on_curve: p.on_curve,
+                });
+                tags.push(if p.on_curve { 0x01 } else { 0x00 });
+            }
+            composite_point_tags = Some(tags);
             scaled
         };
 
