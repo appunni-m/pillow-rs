@@ -235,8 +235,8 @@ fn load_glyph_inner(
         // compute pp1.x = xmin - sub_lsb in scaler.rs — exactly
         // matching C's accidental-but-intentional behavior.
         let composite = parse_composite_components(bytes, 10)?;
-        let mut points: Vec<OutlinePoint> = Vec::new();
-        let mut end_pts: Vec<u16> = Vec::new();
+        let mut points: Vec<OutlinePoint> = Vec::with_capacity(128);
+        let mut end_pts: Vec<u16> = Vec::with_capacity(8);
         let mut num_contours_total = 0u16;
         let mut last_sub_xmin = xmin;
         let mut last_sub_lsb = hmtx.get(glyph_index).lsb as i32;
@@ -357,8 +357,8 @@ fn load_glyph_scaled_inner(
     }
 
     let composite = parse_composite_components(bytes, 10)?;
-    let mut points: Vec<OutlinePoint> = Vec::new();
-    let mut end_pts: Vec<u16> = Vec::new();
+    let mut points: Vec<OutlinePoint> = Vec::with_capacity(128);
+    let mut end_pts: Vec<u16> = Vec::with_capacity(8);
     let mut num_contours_total = 0u16;
     let mut last_sub_xmin = xmin;
     let mut last_sub_lsb = hmtx.get(glyph_index).lsb as i32;
