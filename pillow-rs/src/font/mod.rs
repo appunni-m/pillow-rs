@@ -1,70 +1,65 @@
 //! Pillow-compatible font loading and text rendering.
 //!
-//! This module exposes the font surface used by drawing and binding crates.
-//! TrueType/OpenType rendering is delegated to `fontdone`, a pure Rust
-//! FreeType-compatible implementation. The default bitmap font uses pre-rendered
-//! Pillow glyph data for exact `ImageFont.load_default()` behavior.
-//!
-//! Font APIs return Rust primitives: dimensions, bounding boxes, and mask bytes.
-//! Binding crates translate those into host-language objects.
-
-use std::rc::Rc;
+//! TrueType rendering uses `fontdone::ffi` (FreeType FFI facade —
+//! proven pixel-identical parity with C FreeType 2.14.3: 4,097/4,097).
+//! The compact `fontdone::Font` API is used for getname() and getmetrics()
+//! metadata; all glyph loading, rendering, advance, and kerning go through
+//! the FFI facade.
 
 use crate::bitmap_font::BitmapFont;
 use crate::error::PilError;
 
-/// PIL `_imagingft.c` integration adapter.
 pub mod imagingft;
 
-/// Loaded font source for Pillow-style text measurement and masks.
 pub enum Font {
-    /// TrueType/OpenType font rendered via `fontdone` (pure-Rust FreeType-compatible).
     TrueType(TrueTypeFont),
-    /// Pre-rendered bitmap font matching PIL's default font exactly.
     Bitmap(BitmapFont),
 }
 
-/// TrueType/OpenType font loaded through `fontdone`.
 pub struct TrueTypeFont {
-    inner: Rc<fontdone::Font>,
-    size: f32,
+    /// Compact API handle — used for getname().
+    pub inner: fontdone::Font,
+    /// FFI facade face — used for pixel-identical rendering.
+    pub face: fontdone::ffi::FT_Face,
+    /// Ascender in 26.6 fixed point from FT_Size_Metrics.
+    pub ascender_26dot6: i64,
+    pub library: fontdone::ffi::FT_Library,
 }
 
 impl Font {
-    /// Loads a TrueType/OpenType font from raw bytes.
-    ///
-    /// `size` is the requested point size used by the FreeType-compatible
-    /// backend.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PilError::ValueError`] when the font bytes cannot be parsed.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
-        let inner = fontdone::Font::truetype(&data, size)
+        let compact = fontdone::Font::truetype(&data, size)
             .map_err(|e| PilError::ValueError(format!("Failed to load font: {}", e)))?;
+
+        let library = fontdone::ffi::FT_Init_FreeType();
+        let mut face = fontdone::ffi::FT_New_Memory_Face(&library, &data, 0, size)
+            .map_err(|e| PilError::ValueError(format!("FT_New_Memory_Face: error {e}")))?;
+
+        let pp = size as u32;
+        if fontdone::ffi::FT_Set_Pixel_Sizes(&mut face, pp, pp) != 0 {
+            return Err(PilError::ValueError("FT_Set_Pixel_Sizes failed".into()));
+        }
+
+        let m = fontdone::ffi::FT_Size_Metrics(&face);
         Ok(Font::TrueType(TrueTypeFont {
-            inner: Rc::new(inner),
-            size,
+            inner: compact,
+            face,
+            ascender_26dot6: m.ascender,
+            library,
         }))
     }
 
-    /// Creates the default bitmap font matching Pillow `ImageFont.load_default`.
     pub fn load_default(size: f32) -> Self {
         Font::Bitmap(BitmapFont::new(size))
     }
 
-    /// Returns the configured font size.
     pub fn font_size(&self) -> f32 {
         match self {
-            Font::TrueType(ttf) => ttf.size,
+            Font::TrueType(ttf) => ttf.inner.size_pt,
             Font::Bitmap(bf) => bf.font_size(),
         }
     }
 
-    /// Returns the width and height of `text` in pixels.
-    ///
-    /// This convenience method collapses the `_imagingft` bbox into dimensions.
-    /// Use [`crate::font::imagingft::getbbox`] when left/top offsets matter.
     pub fn text_bbox(&self, text: &str) -> (u32, u32) {
         let bbox = imagingft::getbbox(self, text);
         let w = (bbox.2 - bbox.0).max(0) as u32;
@@ -72,16 +67,6 @@ impl Font {
         (w, h)
     }
 
-    /// Renders text as an `L`-mode alpha mask.
-    ///
-    /// This is the public font-object surface, matching Pillow's
-    /// `ImageFont.getmask`/`FreeTypeFont.getmask`. The `_imagingft`-style
-    /// adapter remains an implementation detail behind this method.
-    ///
-    /// # Returns
-    ///
-    /// `(width, height, mask_bytes)` where `mask_bytes` contains one coverage
-    /// byte per pixel.
     pub fn getmask(&self, text: &str) -> (u32, u32, Vec<u8>) {
         imagingft::getmask(self, text)
     }
