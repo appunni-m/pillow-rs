@@ -5,7 +5,6 @@
 CARGO := cargo
 PYTHON := python3
 PYCACHE_DIR := target/pycache
-REF_BIN ?= /tmp/gen_refs_v4
 BENCH_SAMPLES ?= 10
 BENCH_PROFILE ?= default
 PARITY_ARGS ?= -- --nocapture
@@ -40,13 +39,7 @@ help:
 	@printf "  make clippy           Run clippy with warnings denied\n"
 	@printf "  make lint             Run fmt + clippy\n"
 	@printf "\nFixtures:\n"
-	@printf "  make fixtures         Regenerate every FreeType fixture family\n"
-	@printf "  make fixture-inventory Regenerate font inventory from tracked fonts\n"
-	@printf "  make fixture-ref-bin  Build the C oracle helper at REF_BIN=$(REF_BIN)\n"
-	@printf "  make fixture-force-autohint | fixture-native-tt-default | fixture-no-hinting\n"
-	@printf "  make fixture-metrics-only | fixture-outline-cbox | fixture-render-mono | fixture-render-lcd\n"
-	@printf "  make fixture-render-mode\n"
-	@printf "  make unified-inputs   Regenerate unified FFI input cases from matrices\n"
+	@printf "  make unified-inputs   Regenerate unified FFI input cases\n"
 	@printf "  make unified-inputs-check Check generated unified FFI input cases are current\n"
 	@printf "  make unified-oracle   Build the runtime C FreeType oracle helper\n"
 	@printf "  make public-constants Regenerate public constant parity tables\n"
@@ -62,10 +55,9 @@ help:
 	@printf "  make release          Publish crate to crates.io\n"
 	@printf "\nClean:\n"
 	@printf "  make clean            Remove local build/report artifacts\n"
-	@printf "  make clean-fixtures   Remove generated fixture matrices and raw bytes\n"
 
 .PHONY: setup
-setup: fixtures
+setup: unified-oracle unified-inputs public-constants
 
 .PHONY: setup-tools
 setup-tools:
@@ -162,80 +154,12 @@ lint: fmt clippy
 oracle-fetch:
 	bash scripts/fetch_ft.sh
 
-.PHONY: fixture-ref-bin
-fixture-ref-bin: oracle-fetch
-	bash scripts/build_ft.sh
-	mkdir -p $(dir $(REF_BIN))
-	cc -I freetype/include scripts/gen_ft_refs.c -L freetype/build -lfreetype -lm -o $(REF_BIN)
-
-.PHONY: fixture-inventory
-fixture-inventory: fixture-ref-bin
-	FT_REF_BIN=$(REF_BIN) $(PYTHON) scripts/build_fixtures.py --inventory
-
-.PHONY: fixture-force-autohint
-fixture-force-autohint: fixture-ref-bin fixture-inventory
-	FT_REF_BIN=$(REF_BIN) $(PYTHON) scripts/build_fixtures.py
-
-.PHONY: fixture-native-tt-default
-fixture-native-tt-default: fixture-ref-bin
-	$(PYTHON) scripts/build_ft_fixture.py --family native_tt_default --ref-bin $(REF_BIN)
-
-.PHONY: fixture-no-hinting
-fixture-no-hinting: fixture-ref-bin fixture-inventory
-	$(PYTHON) scripts/build_ft_fixture.py --family no_hinting --ref-bin $(REF_BIN)
-
-.PHONY: fixture-metrics-only
-fixture-metrics-only: fixture-ref-bin fixture-inventory
-	$(PYTHON) scripts/build_ft_fixture.py --family metrics_only --ref-bin $(REF_BIN)
-
-.PHONY: fixture-outline-cbox
-fixture-outline-cbox: fixture-ref-bin fixture-inventory
-	$(PYTHON) scripts/build_ft_fixture.py --family outline_cbox --ref-bin $(REF_BIN)
-
-.PHONY: fixture-render-mono
-fixture-render-mono: fixture-ref-bin fixture-inventory
-	$(PYTHON) scripts/build_ft_fixture.py --family render_mono --ref-bin $(REF_BIN)
-
-.PHONY: fixture-render-lcd
-fixture-render-lcd: fixture-ref-bin fixture-inventory
-	$(PYTHON) scripts/build_ft_fixture.py --family render_lcd --ref-bin $(REF_BIN)
-
-.PHONY: fixture-render-mode
-fixture-render-mode: fixture-ref-bin
-	FT_REF_BIN=$(REF_BIN) $(PYTHON) scripts/build_render_mode_fixture.py
-
-.PHONY: fixture-fstype
-fixture-fstype:
-	$(PYTHON) scripts/build_fstype_fixtures.py
-
-.PHONY: fixture-kerning
-fixture-kerning:
-	$(PYTHON) scripts/build_kerning_fixtures.py
-
-.PHONY: fixture-face-properties
-fixture-face-properties: fixture-kerning
-	$(PYTHON) scripts/build_face_property_fixtures.py
-
-.PHONY: fixture-variable
-fixture-variable:
-	$(PYTHON) scripts/build_variable_fixtures.py
-
-.PHONY: fixture-vertical
-fixture-vertical:
-	$(PYTHON) scripts/build_vertical_fixtures.py
-
-.PHONY: fixtures
-fixtures: fixture-inventory fixture-force-autohint fixture-native-tt-default fixture-no-hinting
-fixtures: fixture-metrics-only fixture-outline-cbox fixture-render-mono
-fixtures: fixture-render-lcd fixture-render-mode fixture-fstype fixture-kerning fixture-face-properties
-fixtures: fixture-variable fixture-vertical
-
 .PHONY: bench
-bench: fixture-ref-bin
+bench: unified-oracle
 	$(PYTHON) scripts/bench_freetype.py --compare-c --samples $(BENCH_SAMPLES) --profile $(BENCH_PROFILE) --table
 
 .PHONY: bench-quick
-bench-quick: fixture-ref-bin
+bench-quick: unified-oracle
 	$(PYTHON) scripts/bench_freetype.py --compare-c --samples 2 --profile $(BENCH_PROFILE) --table
 
 .PHONY: bench-self-test
@@ -265,9 +189,5 @@ ci: setup fmt clippy doc doc-test test bench-self-test
 .PHONY: clean
 clean:
 	rm -rf target/fontdone-bench
-	$(CARGO) clean
-
-.PHONY: clean-fixtures
-clean-fixtures:
-	rm -f tests/fixtures/*.json
 	rm -rf tests/fixtures/outputs
+	$(CARGO) clean
