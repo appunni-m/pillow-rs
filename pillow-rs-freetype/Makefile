@@ -84,7 +84,7 @@ doc-test:
 	$(CARGO) test --doc --locked
 
 .PHONY: test
-test: test-unified-fixtures
+test: test-unified-fixtures test-ffi
 
 .PHONY: test-parity
 test-parity: test-unified-fixtures
@@ -122,7 +122,15 @@ test-api-abi: test-unified-fixtures
 
 .PHONY: test-ffi
 test-ffi:
-	@! rg -n 'freetype-sys|bindgen|cc::|extern "C"|dlopen|libloading|pkg-config' src Cargo.toml
+# Core rendering code must not pull in native FreeType, bindgen, or system
+# FFI libraries.  extern "C" in src/ffi/ is expected (thin facade types).
+	@! rg -n 'freetype-sys|^bindgen |^cc |dlopen|libloading|pkg-config' Cargo.toml
+	@for f in $$(find src -name '*.rs' ! -path 'src/ffi/*'); do \
+		if rg -qn 'freetype-sys|bindgen|dlopen|libloading|pkg-config' "$$f"; then \
+			echo "$$f: forbidden FFI dependency" >&2; exit 1; \
+		fi; \
+	done
+	@echo "no-runtime-FFI guard: clean"
 
 .PHONY: test-ffi-compat
 test-ffi-compat: api-abi-check
