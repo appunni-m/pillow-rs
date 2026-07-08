@@ -549,8 +549,9 @@ impl GlyphSlot {
                 "loaded glyph slot has no outline snapshot".to_string(),
             ));
         };
+        let mut scratch = crate::grays::RasterScratch::new();
         let bitmap =
-            render_loaded_outline(loaded.outline, loaded.left, loaded.bottom, loaded.top, mode)?;
+            render_loaded_outline(loaded.outline, loaded.left, loaded.bottom, loaded.top, mode, &mut scratch)?;
         self.set_rendered_bitmap(bitmap);
         Ok(self)
     }

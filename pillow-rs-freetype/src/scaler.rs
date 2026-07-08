@@ -802,29 +802,9 @@ fn scale_glyph_impl_with_context(
             outline_raw.is_composite, outline_raw.xmin, h_metric.lsb);
     }
 
-    // Shift raw outline for autohinter fx/fy edge detection
-    let shifted_raw = crate::tt::glyf::GlyphOutline {
-        num_contours: outline_raw.num_contours,
-        end_pts_of_contours: outline_raw.end_pts_of_contours.clone(),
-        points: outline_raw
-            .points
-            .iter()
-            .map(|p| crate::tt::glyf::OutlinePoint {
-                x: p.x - autohint_pp1x_fu,
-                ..*p
-            })
-            .collect(),
-        xmin: 0,
-        ymin: 0,
-        xmax: 0,
-        ymax: 0,
-        bbox_xmin: outline_raw.bbox_xmin,
-        is_composite: outline_raw.is_composite,
-        sub_lsb: outline_raw.sub_lsb,
-        instructions: outline_raw.instructions.clone(),
-        components: Vec::new(),
-    };
-
+    // Shift raw outline for autohinter fx/fy edge detection — now computed
+    // lazily inside the autohint block below to avoid wasted clones on
+    // no-hinting and bytecode-only paths.
     let no_hinting_scaled = if !use_autohint && !allow_bytecode && outline_raw.is_composite {
         Some(crate::tt::glyf::load_glyph_scaled_no_hinting(
             &data.glyf_data,
@@ -901,6 +881,30 @@ fn scale_glyph_impl_with_context(
     });
     let mut final_hint_context = None;
     if use_autohint {
+        // Build shifted raw outline for autohinter fx/fy edge detection.
+        // Moved here from unconditional computation to avoid wasted clones
+        // on no-hinting and bytecode-only paths.
+        let shifted_raw = crate::tt::glyf::GlyphOutline {
+            num_contours: outline_raw.num_contours,
+            end_pts_of_contours: outline_raw.end_pts_of_contours.clone(),
+            points: outline_raw
+                .points
+                .iter()
+                .map(|p| crate::tt::glyf::OutlinePoint {
+                    x: p.x - autohint_pp1x_fu,
+                    ..*p
+                })
+                .collect(),
+            xmin: 0,
+            ymin: 0,
+            xmax: 0,
+            ymax: 0,
+            bbox_xmin: outline_raw.bbox_xmin,
+            is_composite: outline_raw.is_composite,
+            sub_lsb: outline_raw.sub_lsb,
+            instructions: outline_raw.instructions.clone(),
+            components: Vec::new(),
+        };
         let hinted_advance = autohint_glyph(
             &mut scaled,
             &shifted_raw,

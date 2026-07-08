@@ -4,7 +4,7 @@
 //! including text layout or framework-specific packaging, live outside this
 //! crate.
 
-use crate::casts::{i32_from_f32, u32_from_i64, u32_from_usize};
+use crate::casts::{i32_from_f32, u32_from_i64, u32_from_usize, usize_from_i32};
 
 use crate::error::FontError;
 use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
@@ -59,6 +59,9 @@ pub struct Font {
     size_metrics: SizeMetrics,
     selected_charmap: usize,
     bytecode_context: BytecodeContextCache,
+    /// Reusable raster scratch space for gray rasterizer passes.
+    /// Avoids allocating scanline cell vectors on every glyph render.
+    pub(crate) raster_scratch: std::cell::RefCell<crate::grays::RasterScratch>,
 }
 
 #[derive(Clone, Default)]
@@ -428,6 +431,7 @@ impl Font {
             size_metrics,
             selected_charmap,
             bytecode_context: BytecodeContextCache::default(),
+            raster_scratch: std::cell::RefCell::new(crate::grays::RasterScratch::new()),
         })
     }
 
@@ -1267,7 +1271,8 @@ impl Font {
         let glyph = self.char_index(ch as u32);
         let scaled = self.scale_glyph_for_load_mode(glyph)?;
 
-        if scaled.outline.n_contours == 0 {
+        let outline = scaled.outline;
+        if outline.points.is_empty() || outline.n_contours == 0 {
             return Ok(GlyphMask {
                 width: 0,
                 height: 0,
@@ -1277,12 +1282,41 @@ impl Font {
                 advance_width: 0,
             });
         }
-
-        let raster = grays::rasterize(scaled.outline)?;
+        let width = usize_from_i32(outline.cbox_x_max - outline.cbox_x_min);
+        let height = usize_from_i32(outline.cbox_y_max - outline.cbox_y_min);
+        if width == 0 || height == 0 {
+            return Ok(GlyphMask {
+                width: 0,
+                height: 0,
+                pixels: Vec::new(),
+                xmin: scaled.bbox_x_min,
+                ymin: scaled.bbox_y_min,
+                advance_width: pixel_round(scaled.advance_width),
+            });
+        }
+        let mut target = vec![0u8; width * height];
+        let mut scratch = self.raster_scratch.borrow_mut();
+        crate::grays::rasterize_shifted_in_box_to_with_scratch(
+            &outline,
+            0,
+            0,
+            width,
+            height,
+            &mut target,
+            width,
+            1,
+            0,
+            outline.cbox_x_min,
+            outline.cbox_x_max,
+            outline.cbox_y_min,
+            outline.cbox_y_max,
+            &mut scratch,
+        )?;
+        drop(scratch);
         Ok(GlyphMask {
-            width: u32_from_usize(raster.width),
-            height: u32_from_usize(raster.height),
-            pixels: raster.pixels,
+            width: u32_from_usize(width),
+            height: u32_from_usize(height),
+            pixels: target,
             xmin: scaled.bbox_x_min,
             ymin: scaled.bbox_y_min,
             advance_width: pixel_round(scaled.advance_width),
