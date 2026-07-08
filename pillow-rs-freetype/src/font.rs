@@ -943,7 +943,7 @@ impl Font {
         native_hint_mode: NativeHintMode,
     ) -> Result<GlyphSlotLoad, FontError> {
         let scaled = self.scale_glyph_for_metrics_default_with_mode(glyph, native_hint_mode)?;
-        Ok(self.slot_load_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
+        Ok(self.slot_load_from_scaled(glyph, scaled, grid_fit_for_layout(vertical_layout)))
     }
 
     pub(crate) fn glyph_metrics_for_index_force_autohint(
@@ -994,7 +994,7 @@ impl Font {
             self.is_italic,
             native_hint_mode,
         )?;
-        Ok(self.slot_load_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
+        Ok(self.slot_load_from_scaled(glyph, scaled, grid_fit_for_layout(vertical_layout)))
     }
 
     pub(crate) fn glyph_metrics_for_index_target_light_with_layout(
@@ -1018,7 +1018,7 @@ impl Font {
         )?;
         // C target-light keeps the light horizontal metric box even when
         // FT_LOAD_VERTICAL_LAYOUT is set; only the slot advance vector changes.
-        Ok(self.slot_load_from_scaled(glyph, &scaled, MetricsGridFit::Horizontal))
+        Ok(self.slot_load_from_scaled(glyph, scaled, MetricsGridFit::Horizontal))
     }
 
     pub(crate) fn glyph_metrics_for_index_no_hinting(
@@ -1036,7 +1036,7 @@ impl Font {
         // C: `FT_Load_Glyph` calls `ft_glyphslot_grid_fit_metrics` only when
         // `FT_LOAD_NO_HINTING` is not set (`src/base/ftobjs.c`).  No-hinting
         // slot metrics keep the fractional 26.6 values from `ttgload.c`.
-        Ok(self.slot_load_from_scaled(glyph, &scaled, MetricsGridFit::None))
+        Ok(self.slot_load_from_scaled(glyph, scaled, MetricsGridFit::None))
     }
 
     pub(crate) fn glyph_metrics_for_index_no_scale(
@@ -1194,7 +1194,7 @@ impl Font {
         native_hint_mode: NativeHintMode,
     ) -> Result<GlyphSlotLoad, FontError> {
         let scaled = self.scale_glyph_no_autohint_for_metrics_with_mode(glyph, native_hint_mode)?;
-        Ok(self.slot_load_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
+        Ok(self.slot_load_from_scaled(glyph, scaled, grid_fit_for_layout(vertical_layout)))
     }
 
     /// `getbbox(text)` -> FreeType rendered bitmap bbox for the first glyph.
@@ -1582,7 +1582,7 @@ impl Font {
     fn slot_metrics_from_scaled(
         &self,
         glyph_index: u16,
-        scaled: &scaler::ScaledGlyph,
+        scaled: scaler::ScaledGlyph,
         grid_fit_metrics: MetricsGridFit,
     ) -> GlyphSlotMetrics {
         self.slot_load_from_scaled(glyph_index, scaled, grid_fit_metrics)
@@ -1592,21 +1592,46 @@ impl Font {
     fn slot_load_from_scaled(
         &self,
         glyph_index: u16,
-        scaled: &scaler::ScaledGlyph,
+        scaled: scaler::ScaledGlyph,
         grid_fit_metrics: MetricsGridFit,
     ) -> GlyphSlotLoad {
+        // Destructure to move `outline` while keeping field access.
+        let scaler::ScaledGlyph {
+            outline,
+            bbox_x_min,
+            bbox_y_min,
+            bbox_y_max,
+            outline_cbox_x_min,
+            outline_cbox_y_min,
+            outline_cbox_x_max,
+            outline_cbox_y_max,
+            outline_bbox_x_min,
+            outline_bbox_y_min,
+            outline_bbox_x_max,
+            outline_bbox_y_max,
+            cbox_x_min,
+            cbox_y_min,
+            cbox_x_max,
+            cbox_y_max,
+            slot_advance_width,
+            vertical_bearing_x_advance_width,
+            autohint_vertical,
+            ..
+        } = scaled;
+        let slot_outline = scaled_slot_outline_from_outline(
+            &outline, outline_cbox_x_min, outline_cbox_y_min, outline_cbox_x_max, outline_cbox_y_max);
         let mut metrics = GlyphSlotMetrics {
-            width: scaled.cbox_x_max - scaled.cbox_x_min,
-            height: scaled.cbox_y_max - scaled.cbox_y_min,
-            hori_bearing_x: scaled.cbox_x_min,
-            hori_bearing_y: scaled.cbox_y_max,
-            hori_advance: scaled.slot_advance_width,
+            width: cbox_x_max - cbox_x_min,
+            height: cbox_y_max - cbox_y_min,
+            hori_bearing_x: cbox_x_min,
+            hori_bearing_y: cbox_y_max,
+            hori_advance: slot_advance_width,
             vert_bearing_x: 0,
             vert_bearing_y: 0,
             vert_advance: 0,
         };
 
-        if let Some(vertical) = scaled.autohint_vertical {
+        if let Some(vertical) = autohint_vertical {
             metrics.vert_bearing_x = vertical.bearing_x;
             metrics.vert_bearing_y = vertical.bearing_y;
             metrics.vert_advance = vertical.advance;
@@ -1626,9 +1651,9 @@ impl Font {
             metrics.vert_bearing_y = ft_mul_fix(top_fu, self.size_metrics.y_scale);
             metrics.vert_advance = ft_mul_fix(advance_fu, self.size_metrics.y_scale);
         }
-        if scaled.autohint_vertical.is_none() {
+        if autohint_vertical.is_none() {
             metrics.vert_bearing_x =
-                metrics.hori_bearing_x - scaled.vertical_bearing_x_advance_width / 2;
+                metrics.hori_bearing_x - vertical_bearing_x_advance_width / 2;
         }
 
         match grid_fit_metrics {
@@ -1640,23 +1665,23 @@ impl Font {
             metrics,
             format: GlyphSlotLoadFormat::Outline,
             outline_cbox: BBox {
-                x_min: scaled.outline_cbox_x_min,
-                y_min: scaled.outline_cbox_y_min,
-                x_max: scaled.outline_cbox_x_max,
-                y_max: scaled.outline_cbox_y_max,
+                x_min: outline_cbox_x_min,
+                y_min: outline_cbox_y_min,
+                x_max: outline_cbox_x_max,
+                y_max: outline_cbox_y_max,
             },
             outline_bbox: BBox {
-                x_min: scaled.outline_bbox_x_min,
-                y_min: scaled.outline_bbox_y_min,
-                x_max: scaled.outline_bbox_x_max,
-                y_max: scaled.outline_bbox_y_max,
+                x_min: outline_bbox_x_min,
+                y_min: outline_bbox_y_min,
+                x_max: outline_bbox_x_max,
+                y_max: outline_bbox_y_max,
             },
-            slot_outline: Some(scaled_slot_outline(scaled)),
+            slot_outline: Some(slot_outline),
             render_outline: Some(LoadedOutline {
-                outline: scaled.outline.clone(),
-                left: scaled.bbox_x_min,
-                bottom: scaled.bbox_y_min,
-                top: scaled.bbox_y_max,
+                outline,
+                left: bbox_x_min,
+                bottom: bbox_y_min,
+                top: bbox_y_max,
             }),
         }
     }
@@ -1703,19 +1728,35 @@ impl Font {
     }
 }
 
-fn scaled_slot_outline(scaled: &scaler::ScaledGlyph) -> Outline {
-    let off_x = ft_pix_floor(scaled.outline_cbox_x_min);
-    let off_y = ft_pix_floor(scaled.outline_cbox_y_min);
-    let mut outline = scaled.outline.clone();
-    for point in &mut outline.points {
+fn scaled_slot_outline_from_outline(
+    outline: &Outline,
+    ol_cbox_x_min: i32,
+    ol_cbox_y_min: i32,
+    ol_cbox_x_max: i32,
+    ol_cbox_y_max: i32,
+) -> Outline {
+    let off_x = ft_pix_floor(ol_cbox_x_min);
+    let off_y = ft_pix_floor(ol_cbox_y_min);
+    let mut slot = outline.clone();
+    for point in &mut slot.points {
         point.x += off_x;
         point.y += off_y;
     }
-    outline.cbox_x_min = scaled.outline_cbox_x_min;
-    outline.cbox_y_min = scaled.outline_cbox_y_min;
-    outline.cbox_x_max = scaled.outline_cbox_x_max;
-    outline.cbox_y_max = scaled.outline_cbox_y_max;
-    outline
+    slot.cbox_x_min = ol_cbox_x_min;
+    slot.cbox_y_min = ol_cbox_y_min;
+    slot.cbox_x_max = ol_cbox_x_max;
+    slot.cbox_y_max = ol_cbox_y_max;
+    slot
+}
+
+fn scaled_slot_outline(scaled: &scaler::ScaledGlyph) -> Outline {
+    scaled_slot_outline_from_outline(
+        &scaled.outline,
+        scaled.outline_cbox_x_min,
+        scaled.outline_cbox_y_min,
+        scaled.outline_cbox_x_max,
+        scaled.outline_cbox_y_max,
+    )
 }
 
 fn no_scale_slot_outline(outline: &tt::glyf::GlyphOutline, pp1x: i32, cbox: BBox) -> Outline {
