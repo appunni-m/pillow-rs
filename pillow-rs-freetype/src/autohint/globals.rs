@@ -239,7 +239,7 @@ impl FaceGlobals {
 
             // Scale
             let bs = crate::scaler::ScaleMetrics::new(
-                self.font_data.size_pt,
+                self.font_data.size_pt.get(),
                 self.font_data.head.units_per_em,
             );
             let (_, ya) = if style.script_tag == "hani" {
