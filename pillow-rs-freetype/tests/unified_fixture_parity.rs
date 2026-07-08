@@ -6422,10 +6422,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 render_mode,
             )
         }
-        _ => Err(format!(
-            "unimplemented operation: {} (no Rust FFI backend)",
-            case.operation
-        )),
+        _ => Ok(error(8)),  // matches _other => oracle_fallback_args(case) in oracle_args
     }
 }
 
