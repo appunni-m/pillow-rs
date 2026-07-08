@@ -318,7 +318,9 @@ pub fn parse_cmap(data: &[u8]) -> Result<CmapTable, FontError> {
                 Err(e) => warn!("[cmap] format 12 parse failed: {e}"),
             },
             other => {
-                warn!("[cmap] unsupported format {other}: preserving charmap record without lookup");
+                warn!(
+                    "[cmap] unsupported format {other}: preserving charmap record without lookup"
+                );
                 table.charmaps.push(CharmapRecord {
                     platform_id: *platform_id,
                     encoding_id: *encoding_id,
@@ -419,7 +421,9 @@ fn parse_format6(
         .get(offset..offset + length)
         .ok_or_else(|| FontError::InvalidFont("cmap format 6: length exceeds data".into()))?;
     if body.len() < 10 {
-        return Err(FontError::InvalidFont("cmap format 6: length too short".into()));
+        return Err(FontError::InvalidFont(
+            "cmap format 6: length too short".into(),
+        ));
     }
     let first_code = u16::from_be_bytes([body[6], body[7]]);
     let entry_count = u16::from_be_bytes([body[8], body[9]]) as usize;

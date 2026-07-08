@@ -636,7 +636,8 @@ impl Font {
     ) -> Result<(), SizeRequestError> {
         let (width, height) = normalize_char_size_dimensions(char_width, char_height);
         let (x_dpi, y_dpi) = normalize_size_resolutions(x_dpi, y_dpi);
-        let size_metrics = SizeMetrics::try_from_char_size(width, height, x_dpi, y_dpi, &self.data)?;
+        let size_metrics =
+            SizeMetrics::try_from_char_size(width, height, x_dpi, y_dpi, &self.data)?;
         self.size_pt = height as f32 / 64.0;
         self.size_metrics = size_metrics;
         Arc::make_mut(&mut self.data).size_pt = self.size_pt;
@@ -2134,11 +2135,7 @@ fn normalize_size_resolutions(mut x_dpi: u32, mut y_dpi: u32) -> (u32, u32) {
     } else if y_dpi == 0 {
         y_dpi = x_dpi;
     }
-    if x_dpi == 0 {
-        (72, 72)
-    } else {
-        (x_dpi, y_dpi)
-    }
+    if x_dpi == 0 { (72, 72) } else { (x_dpi, y_dpi) }
 }
 
 fn normalize_char_size_dimensions(mut char_width: i32, mut char_height: i32) -> (i32, i32) {
