@@ -13,3 +13,8 @@ path = "src/main.rs"
 [dependencies]
 fontdone = { path = ".." }
 fontdone-ffi-c = { path = "../ffi-c" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
