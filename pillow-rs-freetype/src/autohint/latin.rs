@@ -2757,8 +2757,6 @@ pub fn apply_hints(
     let use_cjk_edges = hints.metrics.as_ref().is_some_and(|m| m.no_advance_hinting);
     let mut horz_widths_26_6: Vec<i32> = Vec::new();
     if do_horz {
-        compute_segments(&mut hints, Dimension::Horz);
-        {
             let (wc, widths) = extract_widths(&hints, Dimension::Horz);
             horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
             if use_cjk_edges {
@@ -2777,7 +2775,6 @@ pub fn apply_hints(
             super::cjk::cjk_compute_blue_edges(&mut hints, Dimension::Horz);
         } else {
             compute_edges(&mut hints, Dimension::Horz);
-        }
     }
 
     if font_data.is_some() {

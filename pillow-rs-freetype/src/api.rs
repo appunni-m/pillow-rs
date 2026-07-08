@@ -385,16 +385,27 @@ impl Face {
 
         let render_requested = flags.contains(LoadFlags::RENDER);
         let bitmap = if render_requested {
-            let render_font = self.render_font(flags)?;
-            let bitmap = render_font.render_char_mode_for_index_with_native_hint_mode(
-                glyph_index,
-                flags.render_mode(),
-                native_hint_mode,
+            // Rasterize the already-hinted outline directly instead of
+            // re-loading via render_font.  This avoids a duplicate glyf
+            // parse + point-scale + autohint pipeline (~3-5 µs per glyph).
+            let render_outline = loaded.render_outline.as_ref().ok_or_else(|| {
+                FontError::InvalidOutline("no render outline in loaded glyph".into())
+            })?;
+            let mode = flags.render_mode();
+            let mut scratch = self.font.raster_scratch.borrow_mut();
+            let bmp = crate::render::render_loaded_outline(
+                render_outline.outline.clone(),
+                render_outline.left,
+                render_outline.bottom,
+                render_outline.top,
+                mode,
+                &mut *scratch,
             )?;
-            if bitmap.buffer.is_empty() {
+            drop(scratch);
+            if bmp.buffer.is_empty() {
                 None
             } else {
-                Some(bitmap)
+                Some(bmp)
             }
         } else {
             None
