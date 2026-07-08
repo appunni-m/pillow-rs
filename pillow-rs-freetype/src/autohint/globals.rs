@@ -26,7 +26,7 @@
 use super::blue_strings::{BlueStringEntry, SCRIPT_LATN, SCRIPT_TABLE};
 use super::cjk::{cjk_metrics_init_blues, cjk_metrics_init_widths, cjk_metrics_scale};
 use super::globals_data::{STYLE_FALLBACK, STYLE_TABLE, STYLE_UNASSIGNED};
-use super::latin::{metrics_init_blues_impl, metrics_init_widths, ADJUSTMENT_DATABASE};
+use super::latin::{ADJUSTMENT_DATABASE, metrics_init_blues_impl, metrics_init_widths};
 use super::types::AfLatinMetrics;
 use crate::tables::FontData;
 use crate::tt::cmap::CmapTable;

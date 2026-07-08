@@ -2479,7 +2479,9 @@ fn vertical_separation_adjustments(
     }
 
     // Use cached reverse glyph_index → adjustment lookup from metrics.
-    let adj_type = hints.metrics.as_ref()
+    let adj_type = hints
+        .metrics
+        .as_ref()
         .and_then(|m| m.reverse_adjustment_map.get(&glyph_index).copied())
         .unwrap_or(0);
 
@@ -2529,7 +2531,7 @@ fn vertical_separation_adjustments(
             }
             let min_y = hints.contour_y_minima[ci];
             let max_y = hints.contour_y_maxima[ci];
-            let distance = high_min_y - max_y;
+            let distance = high_min_y.wrapping_sub(max_y);
             if distance < 64 && distance < min_distance && min_y < high_min_y {
                 min_distance = distance;
             }
@@ -2608,7 +2610,7 @@ fn vertical_separation_adjustments(
             }
             let min_y = hints.contour_y_minima[ci];
             let max_y = hints.contour_y_maxima[ci];
-            let distance = min_y - low_max_y;
+            let distance = min_y.wrapping_sub(low_max_y);
             if distance < 64 && distance < min_distance && max_y > low_max_y {
                 min_distance = distance;
             }
@@ -2757,31 +2759,33 @@ pub fn apply_hints(
     let use_cjk_edges = hints.metrics.as_ref().is_some_and(|m| m.no_advance_hinting);
     let mut horz_widths_26_6: Vec<i32> = Vec::new();
     if do_horz {
-            let (wc, widths) = extract_widths(&hints, Dimension::Horz);
-            horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
-            if use_cjk_edges {
-                // FreeType 2.14.3's `af_cjk_hints_compute_segments` snapshots
-                // the segment limit before `af_latin_hints_compute_segments`.
-                // `af_glyph_hints_reload` has just reset that count to zero,
-                // so the CJK roundness cleanup is skipped and the Latin segment
-                // roundness flags are preserved for CJK/Hani parity.
-                super::cjk::cjk_link_segments(&mut hints, Dimension::Horz);
-            } else {
-                link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
-            }
-        }
+        let (wc, widths) = extract_widths(&hints, Dimension::Horz);
+        horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
         if use_cjk_edges {
-            super::cjk::cjk_compute_edges(&mut hints, Dimension::Horz, false);
-            super::cjk::cjk_compute_blue_edges(&mut hints, Dimension::Horz);
+            // FreeType 2.14.3's `af_cjk_hints_compute_segments` snapshots
+            // the segment limit before `af_latin_hints_compute_segments`.
+            // `af_glyph_hints_reload` has just reset that count to zero,
+            // so the CJK roundness cleanup is skipped and the Latin segment
+            // roundness flags are preserved for CJK/Hani parity.
+            super::cjk::cjk_link_segments(&mut hints, Dimension::Horz);
         } else {
-            compute_edges(&mut hints, Dimension::Horz);
+            link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
+        }
+    }
+    if use_cjk_edges {
+        super::cjk::cjk_compute_edges(&mut hints, Dimension::Horz, false);
+        super::cjk::cjk_compute_blue_edges(&mut hints, Dimension::Horz);
+    } else {
+        compute_edges(&mut hints, Dimension::Horz);
     }
 
     if font_data.is_some() {
         // Use cached reverse glyph_index → adjustment lookup from metrics.
         // Avoids expensive per-glyph reverse_cmap_lookup that scans all ~500
         // ADJUSTMENT_DATABASE entries through the cmap.
-        let adj_type = hints.metrics.as_ref()
+        let adj_type = hints
+            .metrics
+            .as_ref()
             .and_then(|m| m.reverse_adjustment_map.get(&glyph_index).copied())
             .unwrap_or(0);
         // C applies tilde stretching/alignment before vertical feature
@@ -2812,7 +2816,9 @@ pub fn apply_hints(
     }
     if font_data.is_some() {
         // Use cached reverse glyph_index → adjustment lookup from metrics.
-        let adj_type = hints.metrics.as_ref()
+        let adj_type = hints
+            .metrics
+            .as_ref()
             .and_then(|m| m.reverse_adjustment_map.get(&glyph_index).copied())
             .unwrap_or(0);
         apply_blue_zone_ignore_adjustments(&mut hints, adj_type);
