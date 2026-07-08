@@ -1,0 +1,15 @@
+[workspace]
+
+[package]
+name = "ffi-bench"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.87"
+
+[[bin]]
+name = "ffi-bench"
+path = "src/main.rs"
+
+[dependencies]
+fontdone = { path = ".." }
+fontdone-ffi-c = { path = "../ffi-c" }
