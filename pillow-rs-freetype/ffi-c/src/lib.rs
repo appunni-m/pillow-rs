@@ -264,6 +264,7 @@ impl FaceState {
             .position(|record| ptr::eq(record as *const FT_CharMapRec, charmap.cast_const()))
     }
 
+    #[expect(dead_code)]
     fn charmap_by_index(&self, index: FT_UInt) -> Option<FT_CharMap> {
         let index = usize::try_from(index).ok()?;
         self.charmap_ptrs.get(index).copied()
@@ -476,19 +477,18 @@ pub extern "C" fn FT_Init_FreeType(alibrary: *mut FT_Library) -> FT_Error {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Done_FreeType(library: FT_Library) -> FT_Error {
-    let Some(library) = non_null_mut(library) else {
-        return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
-    };
-    // SAFETY: `library` must be a live handle returned by `FT_Init_FreeType`.
-    unsafe {
-        let library = Box::from_raw(library.as_ptr());
-        if !library.internal.is_null() {
-            drop(Box::from_raw(
-                library.internal.cast::<rust_ffi::FT_Library>(),
-            ));
+    if let Some(library) = non_null_mut(library) {
+        // SAFETY: library must be a live handle from FT_Init_FreeType.
+        unsafe {
+            let library = Box::from_raw(library.as_ptr());
+            if !library.internal.is_null() {
+                drop(Box::from_raw(library.internal.cast::<rust_ffi::FT_Library>()));
+            }
         }
+        rust_ffi::FT_Err_Ok
+    } else {
+        35 // matches C runtime: FT_Done_FreeType(NULL)
     }
-    rust_ffi::FT_Err_Ok
 }
 
 #[unsafe(no_mangle)]

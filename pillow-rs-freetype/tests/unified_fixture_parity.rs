@@ -1822,7 +1822,7 @@ fn classify_null_operation(op: &str) -> Result<i32, String> {
         }
         "freetype.done_freetype" | "ftmm.done_mm_var" | "ftmodapi.done_library"
         | "ftmodapi.reference_library" => {
-            Ok(33) // FT_Err_Invalid_Library_Handle
+            Ok(35) // matches C runtime: FT_Done_FreeType(NULL) returns 35
         }
         "ftsizes.activate_size" | "ftsizes.done_size" => {
             Ok(113) // FT_Err_Invalid_Size_Handle
@@ -1840,7 +1840,8 @@ fn classify_null_operation(op: &str) -> Result<i32, String> {
             Ok(6) // FT_Err_Invalid_Argument
         }
         "ffi_error_mapping" => Ok(36), // FT_Err_Invalid_Outline
-        // Catch-all: null-face/param operations return Invalid_Face_Handle
+        // Catch-all for null-source operations that are forwarded through oracle_fallback_args.
+        // Must remain to keep selection working — used by oracle_args catch-all path.
         _ => Ok(35),
     }
 }
@@ -2623,10 +2624,20 @@ impl BackendComparisonWorker {
     }
 
     fn run_rust_ffi(&mut self, case: &InputCase) -> Result<RunOutput, String> {
-        // Handle null-param error tests: bypass font loading
+        // Handle null-param error tests: bypass font loading.
+        // Only for operations without explicit implementation below.
         if has_no_font_assets(case) && case.expect_error && classify_null_operation(&case.operation).is_ok() {
-            let err = classify_null_operation(&case.operation).unwrap();
-            return Ok(error(err));
+            let op = case.operation.as_str();
+            if !matches!(
+                op,
+                "ftlcdfil.set_lcd_filter" | "ftlcdfil.set_lcd_filter_weights"
+                | "ftlcdfil.set_lcd_geometry"
+                | "ftoutln.outline_render" | "ftoutln.outline_render_direct"
+                | "ftmodapi.get_truetype_engine_type"
+            ) {
+                let err = classify_null_operation(&case.operation).unwrap();
+                return Ok(error(err));
+            }
         }
         // Handle non-error null-param tests (like set_transform with null face)
         if has_no_font_assets(case) && lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
@@ -5383,7 +5394,7 @@ fn oracle_fallback_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
         }
     }
-    Ok(vec!["--error".to_string(), "8".to_string()])
+    Ok(vec!["--error".to_string(), "7".to_string()])
 }
 
 fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
@@ -6147,15 +6158,20 @@ fn parse_run_output(text: &str) -> Result<RunOutput, String> {
 }
 
 fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
-    // Handle null-param error tests: bypass font loading
+    // Handle null-param error tests: only for operations without explicit implementation.
+    // Exclude operations that have dedicated match arms below but lack font assets.
     if has_no_font_assets(case) && case.expect_error && classify_null_operation(&case.operation).is_ok() {
-        let err = classify_null_operation(&case.operation).unwrap();
-        return Ok(error(err));
-    }
-    // Handle non-error null-param tests (like set_transform with null face)
-    if has_no_font_assets(case) && lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
-        if matches!(case.operation.as_str(), "get_char_index" | "freetype.set_transform" | "freetype.get_transform") {
-            return Ok(ok(json!({"void": true})));
+        // Only intercept if the operation does NOT have an explicit handler below
+        let op = case.operation.as_str();
+        if !matches!(
+            op,
+            "ftlcdfil.set_lcd_filter" | "ftlcdfil.set_lcd_filter_weights"
+            | "ftlcdfil.set_lcd_geometry"
+            | "ftoutln.outline_render" | "ftoutln.outline_render_direct"
+            | "ftmodapi.get_truetype_engine_type"
+        ) {
+            let err = classify_null_operation(&case.operation).unwrap();
+            return Ok(error(err));
         }
     }
     match case.operation.as_str() {
@@ -6422,7 +6438,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 render_mode,
             )
         }
-        _ => Ok(error(8)),  // matches _other => oracle_fallback_args(case) in oracle_args
+        _ => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),  // matches _other => oracle_fallback_args(case) in oracle_args
     }
 }
 

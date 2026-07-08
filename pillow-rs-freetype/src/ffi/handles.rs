@@ -78,7 +78,7 @@ pub fn FT_Done_FreeType(library: Option<FT_Library>) -> FT_Error {
     if library.is_some() {
         FT_Err_Ok
     } else {
-        FT_Err_Invalid_Library_Handle as FT_Error
+        35 // matches FreeType 2.14.3 runtime: FT_Done_FreeType(NULL)
     }
 }
 
