@@ -400,7 +400,7 @@ impl Font {
             kern,
             loca_data,
             glyf_data,
-            size_pt,
+            size_pt: std::cell::Cell::new(size_pt),
             fpgm,
             prep,
             cvt,
@@ -640,7 +640,7 @@ impl Font {
             SizeMetrics::try_from_char_size(width, height, x_dpi, y_dpi, &self.data)?;
         self.size_pt = height as f32 / 64.0;
         self.size_metrics = size_metrics;
-        Arc::make_mut(&mut self.data).size_pt = self.size_pt;
+        self.data.size_pt.set(self.size_pt);
         self.face_globals =
             crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
         // C keeps TrueType bytecode execution state on the active size object
@@ -659,7 +659,7 @@ impl Font {
         };
         self.size_pt = height as f32;
         self.size_metrics = SizeMetrics::from_pixel_size(pixel_width, height, &self.data);
-        Arc::make_mut(&mut self.data).size_pt = self.size_pt;
+        self.data.size_pt.set(self.size_pt);
         self.face_globals =
             crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
         // C keeps TrueType bytecode execution state on the active size object
@@ -672,7 +672,7 @@ impl Font {
     pub fn request_size(&mut self, request: SizeRequest) -> Result<(), SizeRequestError> {
         self.size_metrics = SizeMetrics::from_size_request(request, &self.data)?;
         self.size_pt = f32::from(self.size_metrics.y_ppem);
-        Arc::make_mut(&mut self.data).size_pt = self.size_pt;
+        self.data.size_pt.set(self.size_pt);
         self.face_globals =
             crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
         // `FT_Request_Size` invalidates the active size's prepared bytecode

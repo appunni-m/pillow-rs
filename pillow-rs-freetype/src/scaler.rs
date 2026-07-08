@@ -646,7 +646,7 @@ fn scale_glyph_impl_with_context(
     legacy_hinter_phantoms: bool,
     bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
 ) -> Result<(ScaledGlyph, Option<crate::tt::hinter::exec::ExecContext>), FontError> {
-    let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
+    let scale = ScaleMetrics::new(data.size_pt.get(), data.head.units_per_em);
 
     let h_metric = data.hmtx.get(glyph_index);
     let advance_width = scale.scale_x(h_metric.advance_width as i32);
@@ -1186,7 +1186,7 @@ fn autohint_vertical_metrics(
 
     let vvector_x = ft_mul_fix(
         -(hori_advance_fu / 2),
-        ScaleMetrics::new(data.size_pt, data.head.units_per_em).x_scale,
+        ScaleMetrics::new(data.size_pt.get(), data.head.units_per_em).x_scale,
     );
     let vvector_y = ft_mul_fix(top_fu - raw_y_max, y_scale);
 
@@ -1204,7 +1204,7 @@ fn empty_autohint_vertical_metrics(
     y_scale: i32,
 ) -> AutohintVerticalMetrics {
     let (top_fu, advance_fu) = vertical_top_and_advance_font_units(data, glyph_index, 0);
-    let x_scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em).x_scale;
+    let x_scale = ScaleMetrics::new(data.size_pt.get(), data.head.units_per_em).x_scale;
 
     AutohintVerticalMetrics {
         bearing_x: ft_pix_floor(ft_mul_fix(-(hori_advance_fu / 2), x_scale)),

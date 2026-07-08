@@ -3,6 +3,8 @@
 //! [`FontData`] is constructed by [`crate::font::Font::truetype`] and
 //! holds the parsed results of all required TrueType tables.
 
+use std::cell::Cell;
+
 use crate::tt::cmap::CmapTable;
 use crate::tt::hdmx::HdmxTable;
 use crate::tt::head::HeadTable;
@@ -38,7 +40,7 @@ pub struct FontData {
     pub kern: Option<KernTable>,
     pub loca_data: Vec<u8>,
     pub glyf_data: Vec<u8>,
-    pub size_pt: f32,
+    pub size_pt: Cell<f32>,
     /// Font program bytecode (fpgm table). Optional — not all fonts have bytecode.
     pub fpgm: Option<Vec<u8>>,
     /// CVT program bytecode (prep table). Optional.
