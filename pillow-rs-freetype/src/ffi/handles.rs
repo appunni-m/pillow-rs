@@ -488,17 +488,11 @@ pub fn FT_Reference_Face(face: Option<&mut FT_Face>) -> FT_Error {
 // Stub implementations for unported FreeType features.
 // These return Unimplemented_Feature or sentinel values as documented.
 
-pub fn FT_Get_Gasp(
-    _face: Option<&FT_Face>,
-    _ppem: FT_UInt,
-) -> FT_UInt {
+pub fn FT_Get_Gasp(_face: Option<&FT_Face>, _ppem: FT_UInt) -> FT_UInt {
     0
 }
 
-pub fn FT_Select_Size(
-    _face: Option<&mut FT_Face>,
-    _strike_index: FT_Int,
-) -> FT_Error {
+pub fn FT_Select_Size(_face: Option<&mut FT_Face>, _strike_index: FT_Int) -> FT_Error {
     FT_Err_Unimplemented_Feature as FT_Error
 }
 
@@ -523,16 +517,11 @@ pub fn FT_Get_Glyph_Name(
     Err(FT_Err_Unimplemented_Feature)
 }
 
-pub fn FT_Get_Name_Index(
-    _face: &FT_Face,
-    _glyph_name: &str,
-) -> FT_UInt {
+pub fn FT_Get_Name_Index(_face: &FT_Face, _glyph_name: &str) -> FT_UInt {
     0
 }
 
-pub fn FT_Get_Postscript_Name(
-    _face: &FT_Face,
-) -> Option<&str> {
+pub fn FT_Get_Postscript_Name(_face: &FT_Face) -> Option<&str> {
     None
 }
 
@@ -665,19 +654,52 @@ fn parse_tt_maxprofile(data: &[u8]) -> Option<TT_MaxProfile> {
     Some(TT_MaxProfile {
         version: i64::from(version as i32),
         numGlyphs: u16::from_be_bytes([data[4], data[5]]) as FT_UShort,
-        maxPoints: data.get(6..8).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
-        maxContours: data.get(8..10).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
-        maxCompositePoints: data.get(10..12).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
-        maxCompositeContours: data.get(12..14).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
-        maxZones: data.get(14..16).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
-        maxTwilightPoints: data.get(16..18).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
-        maxStorage: data.get(18..20).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
-        maxFunctionDefs: data.get(20..22).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
-        maxInstructionDefs: data.get(22..24).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
-        maxStackElements: data.get(24..26).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
-        maxSizeOfInstructions: data.get(26..28).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
-        maxComponentElements: data.get(28..30).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
-        maxComponentDepth: data.get(30..32).map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxPoints: data
+            .get(6..8)
+            .map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxContours: data
+            .get(8..10)
+            .map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxCompositePoints: data
+            .get(10..12)
+            .map_or(0, |s| u16::from_be_bytes([s[0], s[1]]))
+            as FT_UShort,
+        maxCompositeContours: data
+            .get(12..14)
+            .map_or(0, |s| u16::from_be_bytes([s[0], s[1]]))
+            as FT_UShort,
+        maxZones: data
+            .get(14..16)
+            .map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxTwilightPoints: data
+            .get(16..18)
+            .map_or(0, |s| u16::from_be_bytes([s[0], s[1]]))
+            as FT_UShort,
+        maxStorage: data
+            .get(18..20)
+            .map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxFunctionDefs: data
+            .get(20..22)
+            .map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxInstructionDefs: data
+            .get(22..24)
+            .map_or(0, |s| u16::from_be_bytes([s[0], s[1]]))
+            as FT_UShort,
+        maxStackElements: data
+            .get(24..26)
+            .map_or(0, |s| u16::from_be_bytes([s[0], s[1]])) as FT_UShort,
+        maxSizeOfInstructions: data
+            .get(26..28)
+            .map_or(0, |s| u16::from_be_bytes([s[0], s[1]]))
+            as FT_UShort,
+        maxComponentElements: data
+            .get(28..30)
+            .map_or(0, |s| u16::from_be_bytes([s[0], s[1]]))
+            as FT_UShort,
+        maxComponentDepth: data
+            .get(30..32)
+            .map_or(0, |s| u16::from_be_bytes([s[0], s[1]]))
+            as FT_UShort,
     })
 }
 
@@ -770,19 +792,40 @@ fn parse_tt_pclt(data: &[u8]) -> Option<TT_PCLT> {
         CapHeight: u16::from_be_bytes([data[16], data[17]]) as FT_UShort,
         SymbolSet: u16::from_be_bytes([data[18], data[19]]) as FT_UShort,
         TypeFace: [
-            data[20] as FT_Char, data[21] as FT_Char, data[22] as FT_Char, data[23] as FT_Char,
-            data[24] as FT_Char, data[25] as FT_Char, data[26] as FT_Char, data[27] as FT_Char,
-            data[28] as FT_Char, data[29] as FT_Char, data[30] as FT_Char, data[31] as FT_Char,
-            data[32] as FT_Char, data[33] as FT_Char, data[34] as FT_Char, data[35] as FT_Char,
+            data[20] as FT_Char,
+            data[21] as FT_Char,
+            data[22] as FT_Char,
+            data[23] as FT_Char,
+            data[24] as FT_Char,
+            data[25] as FT_Char,
+            data[26] as FT_Char,
+            data[27] as FT_Char,
+            data[28] as FT_Char,
+            data[29] as FT_Char,
+            data[30] as FT_Char,
+            data[31] as FT_Char,
+            data[32] as FT_Char,
+            data[33] as FT_Char,
+            data[34] as FT_Char,
+            data[35] as FT_Char,
         ],
         CharacterComplement: [
-            data[36] as FT_Char, data[37] as FT_Char, data[38] as FT_Char, data[39] as FT_Char,
-            data[40] as FT_Char, data[41] as FT_Char, data[42] as FT_Char, data[43] as FT_Char,
+            data[36] as FT_Char,
+            data[37] as FT_Char,
+            data[38] as FT_Char,
+            data[39] as FT_Char,
+            data[40] as FT_Char,
+            data[41] as FT_Char,
+            data[42] as FT_Char,
+            data[43] as FT_Char,
         ],
         FileName: [
-            data[44] as FT_Char, data[45] as FT_Char,
-            data[46] as FT_Char, data[47] as FT_Char,
-            data[48] as FT_Char, data[49] as FT_Char,
+            data[44] as FT_Char,
+            data[45] as FT_Char,
+            data[46] as FT_Char,
+            data[47] as FT_Char,
+            data[48] as FT_Char,
+            data[49] as FT_Char,
         ],
         StrokeWeight: data[50] as FT_Char,
         WidthType: data[51] as FT_Char,
@@ -1522,9 +1565,7 @@ pub fn FT_Sfnt_Table_Info(
         Ok(i) => i,
         Err(_) => return Err(FT_Err_Invalid_Argument),
     };
-    let info = font
-        .sfnt_table_info(index)
-        .ok_or(FT_Err_Invalid_Argument)?;
+    let info = font.sfnt_table_info(index).ok_or(FT_Err_Invalid_Argument)?;
     Ok((info.tag as FT_ULong, info.length as FT_ULong))
 }
 
@@ -1607,9 +1648,14 @@ fn c_face_index_to_core(face_index: FT_Long) -> Result<(usize, bool), FT_Error> 
     if face_index >= 0 {
         // FreeType encodes named instance selection in bits 16..30 of
         // `face_index`; the low 16 bits remain the selected face number
-        // (ftobjs.c, FT_Open_Face face_index handling). The pure-Rust core
-        // does not apply variation coordinates yet, but it must open the base
-        // face instead of treating the encoded value as an SFNT/TTC index.
+        // (ftobjs.c, FT_Open_Face face_index handling).
+        // The pure-Rust core does not handle named-instance variation yet;
+        // reject these indices the same way C FreeType rejects named
+        // instances on non-variable fonts (FT_Err_Invalid_Argument).
+        let named_instance_bits = (face_index >> 16) as u32 & 0x7FFF;
+        if named_instance_bits != 0 {
+            return Err(FT_Err_Invalid_Argument);
+        }
         let face_index =
             usize::try_from(face_index & 0xFFFF).map_err(|_| FT_Err_Invalid_Argument)?;
         return Ok((face_index, false));

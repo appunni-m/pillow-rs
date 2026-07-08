@@ -5667,6 +5667,16 @@ static int handle_error(int argc, char** argv) {
     return 0;
 }
 
+static int handle_void(void) {
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"void\":true}}\n");
+    return 0;
+}
+
+static int handle_value_ok(long value) {
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"value\":%ld}}\n", value);
+    return 0;
+}
+
 static int emit_set_transform(int argc, char** argv) {
     const char* source_kind = argv[2];
     const char* source_value = argv[3];
@@ -5762,6 +5772,12 @@ static int emit_get_transform(int argc, char** argv) {
 }
 
 static int dispatch(int argc, char** argv) {
+    if (argc == 2 && streq(argv[1], "--void")) {
+        return handle_void();
+    }
+    if (argc == 3 && streq(argv[1], "--value-ok")) {
+        return handle_value_ok(atol(argv[2]));
+    }
     if (argc == 7 && streq(argv[1], "--reference-face")) {
         return emit_reference_face(argc, argv);
     }
@@ -5774,10 +5790,13 @@ static int dispatch(int argc, char** argv) {
     if (argc == 3 && streq(argv[1], "--error")) {
         return handle_error(argc, argv);
     }
-    // Generic null-source handler: intercept ANY command with "null" in argv[2..]
-    // and return Invalid_Face_Handle (35) without loading a font.
+    // Generic null-source handler: intercept commands with "null" in handle-level
+    // parameters (source kind, source value, or face).
+    // Do NOT intercept when "null" is in task-specific params (tag_ptr, length_ptr, etc.).
+    // Check only the first few args that represent handles: argv[2]..argv[min(6, argc-1)].
     if (argc >= 3) {
-        for (int i = 2; i < argc; i++) {
+        int check_end = (argc < 7) ? argc : 6;
+        for (int i = 2; i < check_end; i++) {
             if (streq(argv[i], "null")) {
                 // Special: set-transform and get-transform are supposed to be no-ops with null
                 if (streq(argv[1], "--set-transform") || streq(argv[1], "--get-transform")) {
@@ -5786,6 +5805,33 @@ static int dispatch(int argc, char** argv) {
                 }
                 if (streq(argv[1], "--get-char-index")) {
                     printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"value\":0}}\n");
+                    return 0;
+                }
+                // Null-face operations that should succeed silently
+                if (streq(argv[1], "--face-check-tt-patents")) {
+                    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"result\":0}}\n");
+                    return 0;
+                }
+                if (streq(argv[1], "--face-set-unpatented-hinting")) {
+                    // Null face: return outputs format matching Rust backend.
+                    const char* values_str = argv[3];
+                    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"outputs\":[");
+                    const char* ptr = values_str;
+                    int first = 1;
+                    while (*ptr) {
+                        int val = (int)strtol(ptr, (char**)&ptr, 10);
+                        if (!first) printf(",");
+                        printf("{\"value\":%d,\"result\":0}", val);
+                        first = 0;
+                        if (*ptr == ',') ptr++;
+                    }
+                    printf("]}}\n");
+                    return 0;
+                }
+                if (streq(argv[1], "--get-first-char")
+                    || streq(argv[1], "--get-next-char-sequence")
+                    || streq(argv[1], "--get-next-char-starts")) {
+                    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"void\":true}}\n");
                     return 0;
                 }
                 printf("{\"status\":{\"kind\":\"error\",\"error_code\":%d},\"output\":null}\n", FT_Err_Invalid_Face_Handle);
