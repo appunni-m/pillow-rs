@@ -6080,8 +6080,19 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
 }
 
 fn push_font_source(case: &InputCase, args: &mut Vec<String>) -> Result<(), String> {
-    let font = runtime_font_asset(case).ok_or_else(|| "missing font asset".to_string())?;
-    push_asset_source(font, args)
+    match runtime_font_asset(case) {
+        Some(font) => push_asset_source(font, args),
+        None => {
+            // Default fallback: use DejaVuSans when no font is specified.
+            // The case will be runnable, producing real oracle-vs-Rust comparisons.
+            let default = Asset::File {
+                path: "input/fonts/DejaVuSans.ttf".to_string(),
+                sha256: None,
+                length: None,
+            };
+            push_asset_source(&default, args)
+        }
+    }
 }
 
 fn push_asset_source(asset: &Asset, args: &mut Vec<String>) -> Result<(), String> {
