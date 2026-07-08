@@ -26,7 +26,7 @@
 use super::blue_strings::{BlueStringEntry, SCRIPT_LATN, SCRIPT_TABLE};
 use super::cjk::{cjk_metrics_init_blues, cjk_metrics_init_widths, cjk_metrics_scale};
 use super::globals_data::{STYLE_FALLBACK, STYLE_TABLE, STYLE_UNASSIGNED};
-use super::latin::{metrics_init_blues_impl, metrics_init_widths};
+use super::latin::{metrics_init_blues_impl, metrics_init_widths, ADJUSTMENT_DATABASE};
 use super::types::AfLatinMetrics;
 use crate::tables::FontData;
 use crate::tt::cmap::CmapTable;
@@ -248,6 +248,16 @@ impl FaceGlobals {
                 super::latin::metrics_scale_dim(&mut m, bs.x_scale, bs.y_scale, 0, 0)
             };
             m.axis[1].org_scale = ya;
+
+            // Precompute reverse glyph_index → adjustment flags map.
+            // Avoids per-glyph reverse_cmap_lookup which scans all ~500 entries.
+            for &(cp, flags) in ADJUSTMENT_DATABASE {
+                if let Some(gi) = self.font_data.cmap.char_index(cp) {
+                    if gi != 0 {
+                        m.reverse_adjustment_map.insert(gi, flags);
+                    }
+                }
+            }
 
             cache[si] = Some(Rc::new(m));
         }

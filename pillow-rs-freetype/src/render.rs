@@ -269,7 +269,7 @@ impl Font {
         }
 
         match mode {
-            RenderMode::Normal => render_scaled_normal(scaled),
+            RenderMode::Normal => render_scaled_normal(scaled, &mut *self.raster_scratch.borrow_mut()),
             RenderMode::Mono => render_scaled_mono(scaled),
             RenderMode::Lcd => render_scaled_lcd(scaled),
             RenderMode::LcdV => render_scaled_lcd_v(scaled),
@@ -289,6 +289,7 @@ impl Font {
             scaled.bbox_y_min,
             scaled.bbox_y_max,
             mode,
+            &mut *self.raster_scratch.borrow_mut(),
         )
     }
 }
@@ -299,13 +300,14 @@ pub(crate) fn render_loaded_outline(
     bottom: i32,
     top: i32,
     mode: RenderMode,
+    scratch: &mut crate::grays::RasterScratch,
 ) -> Result<RenderedBitmap, FontError> {
     if outline.is_empty() {
         return render_empty_loaded_outline(mode);
     }
 
     match mode {
-        RenderMode::Normal => render_normal(outline, left, top),
+        RenderMode::Normal => render_normal(outline, left, top, scratch),
         RenderMode::Mono => render_mono(outline, left, bottom),
         RenderMode::Lcd => render_lcd(outline, left, top),
         RenderMode::LcdV => render_lcd_v(outline, left, top),
@@ -345,8 +347,8 @@ fn render_empty_loaded_outline(mode: RenderMode) -> Result<RenderedBitmap, FontE
     })
 }
 
-fn render_scaled_normal(scaled: scaler::ScaledGlyph) -> Result<RenderedBitmap, FontError> {
-    render_normal(scaled.outline, scaled.bbox_x_min, scaled.bbox_y_max)
+fn render_scaled_normal(scaled: scaler::ScaledGlyph, scratch: &mut crate::grays::RasterScratch) -> Result<RenderedBitmap, FontError> {
+    render_normal(scaled.outline, scaled.bbox_x_min, scaled.bbox_y_max, scratch)
 }
 
 fn render_scaled_mono(scaled: scaler::ScaledGlyph) -> Result<RenderedBitmap, FontError> {
@@ -370,17 +372,59 @@ fn render_scaled_sdf(scaled: scaler::ScaledGlyph) -> Result<RenderedBitmap, Font
     )
 }
 
-fn render_normal(outline: Outline, left: i32, top: i32) -> Result<RenderedBitmap, FontError> {
-    let raster = grays::rasterize(outline)?;
+fn render_normal(outline: Outline, left: i32, top: i32, scratch: &mut crate::grays::RasterScratch) -> Result<RenderedBitmap, FontError> {
+    if outline.points.is_empty() || outline.n_contours == 0 {
+        return Ok(RenderedBitmap {
+            width: 0,
+            rows: 0,
+            pitch: 0,
+            pixel_mode: PixelMode::Gray,
+            num_grays: PixelMode::Gray.num_grays(),
+            left,
+            top,
+            buffer: Vec::new(),
+        });
+    }
+    let width = usize_from_i32(outline.cbox_x_max - outline.cbox_x_min);
+    let height = usize_from_i32(outline.cbox_y_max - outline.cbox_y_min);
+    if width == 0 || height == 0 {
+        return Ok(RenderedBitmap {
+            width: 0,
+            rows: 0,
+            pitch: 0,
+            pixel_mode: PixelMode::Gray,
+            num_grays: PixelMode::Gray.num_grays(),
+            left,
+            top,
+            buffer: Vec::new(),
+        });
+    }
+    let mut target = vec![0u8; width * height];
+    crate::grays::rasterize_shifted_in_box_to_with_scratch(
+        &outline,
+        0,
+        0,
+        width,
+        height,
+        &mut target,
+        width,
+        1,
+        0,
+        outline.cbox_x_min,
+        outline.cbox_x_max,
+        outline.cbox_y_min,
+        outline.cbox_y_max,
+        scratch,
+    )?;
     Ok(RenderedBitmap {
-        width: u32_from_usize(raster.width),
-        rows: u32_from_usize(raster.height),
-        pitch: i32_from_usize(raster.width),
+        width: u32_from_usize(width),
+        rows: u32_from_usize(height),
+        pitch: i32_from_usize(width),
         pixel_mode: PixelMode::Gray,
         num_grays: PixelMode::Gray.num_grays(),
         left,
         top,
-        buffer: raster.pixels,
+        buffer: target,
     })
 }
 

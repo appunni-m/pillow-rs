@@ -4,6 +4,7 @@
 //! `AF_AxisHintsRec`, and `AF_GlyphHintsRec`.
 
 use crate::outline::Outline;
+use std::collections::HashMap;
 
 // ── Direction constants (afhints.h:31–40) ──────────────────────────────────
 
@@ -164,6 +165,11 @@ pub struct AfLatinMetrics {
     /// (`afcjk.c:1419`).  The outline can still be hinted, but pp2 is rounded
     /// from the original phantom instead of edge-adjusted.
     pub no_advance_hinting: bool,
+    /// Cached reverse glyph_index → adjustment flags map for vertical
+    /// separation adjustments.  Populated once during metrics init to avoid
+    /// per-glyph `reverse_cmap_lookup` (which scans all ~500 adjustment
+    /// database entries through the cmap on every glyph load).
+    pub reverse_adjustment_map: HashMap<u16, u32>,
 }
 
 impl AfLatinMetrics {
@@ -178,6 +184,7 @@ impl AfLatinMetrics {
             top_to_bottom_hinting: false,
             skip_xh_adjust: false,
             no_advance_hinting: false,
+            reverse_adjustment_map: HashMap::new(),
         }
     }
 }

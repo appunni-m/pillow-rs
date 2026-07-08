@@ -154,7 +154,7 @@ pub struct RasterResult {
 /// LCD rendering performs three shifted passes over the same outline.  Keeping
 /// scanline cell vectors here lets later passes reuse the first pass's
 /// allocations, closer to FreeType's reusable raster worker.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct RasterScratch {
     scanlines: Vec<Vec<Cell>>,
 }

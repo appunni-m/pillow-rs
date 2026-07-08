@@ -77,7 +77,7 @@ pub const AF_ADJUST_NO_HEIGHT_CHECK: u32 = 0x1000;
 /// Port of FreeType's `adjustment_database` in `afadjust.c`.
 /// Keyed by Unicode codepoint; sorted for binary search lookup.
 #[rustfmt::skip]
-static ADJUSTMENT_DATABASE: &[(u32, u32)] = &[
+pub(crate) static ADJUSTMENT_DATABASE: &[(u32, u32)] = &[
     (0x0021, AF_ADJUST_UP | AF_ADJUST_NO_HEIGHT_CHECK), /* ! */
     (0x003F, AF_ADJUST_UP | AF_ADJUST_NO_HEIGHT_CHECK), /* ? */
     (0x0051, AF_IGNORE_CAPITAL_BOTTOM), /* Q */
@@ -1987,6 +1987,7 @@ fn ft_pix_round(x: i32) -> i32 {
 /// No-op for all other glyphs.
 /// Reverse cmap lookup: glyph_index → Unicode codepoint.
 /// Mirrors C's af_reverse_character_map_new (afadjust.c) without HarfBuzz.
+#[allow(dead_code)]
 fn reverse_cmap_lookup(font_data: &crate::tables::FontData, glyph_index: u16) -> Option<u32> {
     // Scan all entries in the adjustment database and check if any
     // codepoint maps to this glyph index.
@@ -2471,16 +2472,16 @@ fn vertical_separation_accent_height_limit(hints: &GlyphHints, adj_type: u32) ->
 fn vertical_separation_adjustments(
     hints: &mut GlyphHints,
     glyph_index: u16,
-    font_data: &crate::tables::FontData,
+    _font_data: &crate::tables::FontData,
 ) {
     if hints.contours.len() < 2 {
         return;
     }
 
-    // C uses reverse_charmap + af_adjustment_database_lookup.
-    // We replicate via direct cmap scan on known adjustment codepoints.
-    let adj_type =
-        reverse_cmap_lookup(font_data, glyph_index).map_or(0, adjustment_database_lookup);
+    // Use cached reverse glyph_index → adjustment lookup from metrics.
+    let adj_type = hints.metrics.as_ref()
+        .and_then(|m| m.reverse_adjustment_map.get(&glyph_index).copied())
+        .unwrap_or(0);
 
     if adj_type == 0 {
         return;
@@ -2779,8 +2780,13 @@ pub fn apply_hints(
         }
     }
 
-    if let Some(data) = font_data {
-        let adj_type = reverse_cmap_lookup(data, glyph_index).map_or(0, adjustment_database_lookup);
+    if font_data.is_some() {
+        // Use cached reverse glyph_index → adjustment lookup from metrics.
+        // Avoids expensive per-glyph reverse_cmap_lookup that scans all ~500
+        // ADJUSTMENT_DATABASE entries through the cmap.
+        let adj_type = hints.metrics.as_ref()
+            .and_then(|m| m.reverse_adjustment_map.get(&glyph_index).copied())
+            .unwrap_or(0);
         // C applies tilde stretching/alignment before vertical feature
         // detection (aflatin.c:4938-4980), after horizontal detection.
         apply_tilde_stretch_alignment(&mut hints, adj_type);
@@ -2807,8 +2813,11 @@ pub fn apply_hints(
     } else {
         compute_edges(&mut hints, Dimension::Vert);
     }
-    if let Some(data) = font_data {
-        let adj_type = reverse_cmap_lookup(data, glyph_index).map_or(0, adjustment_database_lookup);
+    if font_data.is_some() {
+        // Use cached reverse glyph_index → adjustment lookup from metrics.
+        let adj_type = hints.metrics.as_ref()
+            .and_then(|m| m.reverse_adjustment_map.get(&glyph_index).copied())
+            .unwrap_or(0);
         apply_blue_zone_ignore_adjustments(&mut hints, adj_type);
     }
     let is_nonbase = hints.metrics.as_ref().is_some_and(|m| {
