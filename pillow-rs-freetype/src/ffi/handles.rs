@@ -1245,13 +1245,29 @@ pub fn FT_Load_Glyph(
     }
     let glyph_index = u16::try_from(glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
     let flags = load_flags_to_core(load_flags)?;
-    // C defers glyph index validation to the driver; TrueType returns
-    // `Invalid_Glyph_Index` before loading (`src/truetype/ttgload.c:1447-1451`).
     if glyph_index >= face.inner.info().num_glyphs {
         return Err(FT_Err_Invalid_Glyph_Index);
     }
+    let transform = if face.transform_matrix.xx != 1 << 16
+        || face.transform_matrix.xy != 0
+        || face.transform_matrix.yx != 0
+        || face.transform_matrix.yy != 1 << 16
+        || face.transform_delta.x != 0
+        || face.transform_delta.y != 0
+    {
+        Some((
+            face.transform_matrix.xx as i32,
+            face.transform_matrix.xy as i32,
+            face.transform_matrix.yx as i32,
+            face.transform_matrix.yy as i32,
+            face.transform_delta.x as i32,
+            face.transform_delta.y as i32,
+        ))
+    } else {
+        None
+    };
     face.inner
-        .load_glyph(glyph_index, flags)
+        .load_glyph_with_transform(glyph_index, flags, transform)
         .map(|slot| slot_to_ffi(face, slot, flags))
         .map_err(error_to_ft)
 }
