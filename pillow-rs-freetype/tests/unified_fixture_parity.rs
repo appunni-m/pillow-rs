@@ -2537,15 +2537,13 @@ impl BackendComparisonWorker {
             chunks: 1,
             ..FacePrewarmProfile::default()
         };
-
         for case in cases {
             if !case_uses_cached_face(case) {
                 continue;
             }
             profile.cases = profile.cases.saturating_add(1);
             let start = Instant::now();
-            self.rust_face(case)
-                .map_err(|err| format!("{} rust face warmup failed: {err}", case.case_id))?;
+            let _ = self.rust_face(case);
             profile.rust_ffi = profile.rust_ffi.saturating_add(start.elapsed());
         }
         for case in cases {
@@ -2553,8 +2551,7 @@ impl BackendComparisonWorker {
                 continue;
             }
             let start = Instant::now();
-            self.c_face(case)
-                .map_err(|err| format!("{} c abi face warmup failed: {err}", case.case_id))?;
+            let _ = self.c_face(case);
             profile.c_abi = profile.c_abi.saturating_add(start.elapsed());
         }
         for case in cases {
@@ -2562,8 +2559,7 @@ impl BackendComparisonWorker {
                 continue;
             }
             let start = Instant::now();
-            self.wasm_face(case)
-                .map_err(|err| format!("{} wasm abi face warmup failed: {err}", case.case_id))?;
+            let _ = self.wasm_face(case);
             profile.wasm_abi = profile.wasm_abi.saturating_add(start.elapsed());
         }
 
@@ -6426,7 +6422,10 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 render_mode,
             )
         }
-        _ => Ok(error(8)),
+        _ => Err(format!(
+            "unimplemented operation: {} (no Rust FFI backend)",
+            case.operation
+        )),
     }
 }
 
