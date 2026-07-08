@@ -47,6 +47,14 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-core$(NC)      Run Rust core tests\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
+	@printf "  $(CYAN)make parity$(NC)        Run pillow-rs imagingft + fontdone unified parity\n"
+	@printf "\n$(BOLD)pillow-rs / core crate$(NC)\n"
+	@printf "  $(CYAN)make pillow-rs-help$(NC) Show crate-local pillow-rs targets\n"
+	@printf "  $(CYAN)make pillow-rs-test$(NC) Run all pillow-rs Rust tests\n"
+	@printf "  $(CYAN)make pillow-rs-imagingft$(NC) Run imagingft matrix parity tests\n"
+	@printf "  $(CYAN)make pillow-rs-fixtures$(NC) Regenerate imagingft fixture matrix\n"
+	@printf "  $(CYAN)make pillow-rs-lint$(NC) Run pillow-rs fmt + clippy\n"
+	@printf "  $(CYAN)make pillow-rs-ci$(NC)   Run pillow-rs CI sequence\n"
 	@printf "\n$(BOLD)fontdone / FreeType parity$(NC)\n"
 	@printf "  $(CYAN)make fontdone-help$(NC)  Show crate-local fontdone targets\n"
 	@printf "  $(CYAN)make fontdone-ci$(NC)    Run fontdone docs, lint, tests, parity, FFI, bench contracts\n"
@@ -141,14 +149,17 @@ test-suite2: ## Run suite2 only
 	$(PYTHON) -m pytest tests/ -q --tb=short --timeout=$(TIMEOUT) \
 		--json-report --json-report-file=$(REPORT) -k "suite2"
 
-test-core: ## Run Rust core tests
-	$(CARGO) test -p $(CORE_SRC)
+test-core: ## Run Rust core tests (pillow-rs unit + imagingft)
+	$(MAKE) -C $(CORE_SRC) test
 
 test-wasm: ## Run WASM/JS tests
 	@[ -f "$(JS_SRC)/tests/run_wasm_test.mjs" ] || { echo "No WASM test runner found"; exit 1; }
 	$(NODE) $(JS_SRC)/tests/run_wasm_test.mjs
 
 test-all: test-core test test-wasm ## Run core + Python + WASM tests
+
+.PHONY: parity
+parity: pillow-rs-imagingft fontdone-parity ## Run pillow-rs imagingft + fontdone unified parity
 
 # ── fontdone / FreeType parity ───────────────────────────────────────────────
 .PHONY: fontdone-help fontdone-build fontdone-doc fontdone-doc-test
@@ -162,6 +173,62 @@ test-all: test-core test test-wasm ## Run core + Python + WASM tests
 .PHONY: freetype-bench freetype-bench-quick freetype-bench-self-test
 .PHONY: freetype-fixtures freetype-ci freetype-clean
 
+# ── pillow-rs / core crate ──────────────────────────────────────────────────
+.PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core pillow-rs-imagingft
+.PHONY: pillow-rs-imagingft-release pillow-rs-fixtures pillow-rs-fixtures-clean
+.PHONY: pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
+.PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
+.PHONY: pillow-rs-ci pillow-rs-clean
+
+pillow-rs-help: ## Show pillow-rs crate targets
+	$(MAKE) -C $(CORE_SRC) help
+
+pillow-rs-test: ## Run all pillow-rs Rust tests
+	$(MAKE) -C $(CORE_SRC) test
+
+pillow-rs-test-core: ## Run pillow-rs unit tests
+	$(MAKE) -C $(CORE_SRC) test-core
+
+pillow-rs-imagingft: ## Run imagingft matrix parity tests
+	$(MAKE) -C $(CORE_SRC) test-imagingft
+
+pillow-rs-imagingft-release: ## Run imagingft parity (release)
+	$(MAKE) -C $(CORE_SRC) test-imagingft-release
+
+pillow-rs-fixtures: ## Regenerate imagingft fixture matrix
+	$(MAKE) -C $(CORE_SRC) fixtures
+
+pillow-rs-fixtures-clean: ## Remove imagingft fixture outputs
+	$(MAKE) -C $(CORE_SRC) fixtures-clean
+
+pillow-rs-fmt: ## Check pillow-rs formatting
+	$(MAKE) -C $(CORE_SRC) fmt
+
+pillow-rs-fmt-fix: ## Fix pillow-rs formatting
+	$(MAKE) -C $(CORE_SRC) fmt-fix
+
+pillow-rs-clippy: ## Run strict pillow-rs clippy
+	$(MAKE) -C $(CORE_SRC) clippy
+
+pillow-rs-lint: ## Run pillow-rs fmt + clippy
+	$(MAKE) -C $(CORE_SRC) lint
+
+pillow-rs-build: ## Build pillow-rs
+	$(MAKE) -C $(CORE_SRC) build
+
+pillow-rs-build-release: ## Build pillow-rs (release)
+	$(MAKE) -C $(CORE_SRC) build-release
+
+pillow-rs-bench: ## Run pillow-rs benchmarks
+	$(MAKE) -C $(CORE_SRC) bench
+
+pillow-rs-ci: ## Run pillow-rs CI sequence
+	$(MAKE) -C $(CORE_SRC) ci
+
+pillow-rs-clean: ## Clean pillow-rs artifacts
+	$(MAKE) -C $(CORE_SRC) clean
+
+# ── fontdone / FreeType parity ───────────────────────────────────────────────
 fontdone-help: ## Show pillow-rs-freetype targets
 	$(MAKE) -C $(FONTDONE_SRC) help
 
@@ -312,10 +379,10 @@ repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
 # ── CI ────────────────────────────────────────────────────────────────────────
 .PHONY: ci verify
 
-ci: repo-map-check fmt clippy test-core fixtures-suite0 test coverage-validate ## Full CI pipeline
+ci: repo-map-check fmt clippy pillow-rs-test-core pillow-rs-imagingft fixtures-suite0 test coverage-validate ## Full CI pipeline
 	@echo "=== done ==="
 
-verify: ci fontdone-ci ## Full workspace CI plus FreeType CI
+verify: ci fontdone-parity ## Full workspace CI plus FreeType parity
 	@echo "=== all verification done ==="
 
 # ── Clean ─────────────────────────────────────────────────────────────────────
