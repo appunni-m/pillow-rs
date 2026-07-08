@@ -1067,7 +1067,8 @@ impl<'a> Worker<'a> {
 
         let band_height = usize_from_i32(self.max_ey - self.min_ey);
         if self.scanlines.len() < band_height {
-            self.scanlines.resize_with(band_height, || Vec::with_capacity(4));
+            self.scanlines
+                .resize_with(band_height, || Vec::with_capacity(4));
         }
         for scanline in &mut self.scanlines[..band_height] {
             scanline.clear();

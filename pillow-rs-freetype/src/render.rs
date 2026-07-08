@@ -269,7 +269,9 @@ impl Font {
         }
 
         match mode {
-            RenderMode::Normal => render_scaled_normal(scaled, &mut *self.raster_scratch.borrow_mut()),
+            RenderMode::Normal => {
+                render_scaled_normal(scaled, &mut *self.raster_scratch.borrow_mut())
+            }
             RenderMode::Mono => render_scaled_mono(scaled),
             RenderMode::Lcd => render_scaled_lcd(scaled),
             RenderMode::LcdV => render_scaled_lcd_v(scaled),
@@ -347,8 +349,16 @@ fn render_empty_loaded_outline(mode: RenderMode) -> Result<RenderedBitmap, FontE
     })
 }
 
-fn render_scaled_normal(scaled: scaler::ScaledGlyph, scratch: &mut crate::grays::RasterScratch) -> Result<RenderedBitmap, FontError> {
-    render_normal(scaled.outline, scaled.bbox_x_min, scaled.bbox_y_max, scratch)
+fn render_scaled_normal(
+    scaled: scaler::ScaledGlyph,
+    scratch: &mut crate::grays::RasterScratch,
+) -> Result<RenderedBitmap, FontError> {
+    render_normal(
+        scaled.outline,
+        scaled.bbox_x_min,
+        scaled.bbox_y_max,
+        scratch,
+    )
 }
 
 fn render_scaled_mono(scaled: scaler::ScaledGlyph) -> Result<RenderedBitmap, FontError> {
@@ -372,7 +382,12 @@ fn render_scaled_sdf(scaled: scaler::ScaledGlyph) -> Result<RenderedBitmap, Font
     )
 }
 
-fn render_normal(outline: Outline, left: i32, top: i32, scratch: &mut crate::grays::RasterScratch) -> Result<RenderedBitmap, FontError> {
+fn render_normal(
+    outline: Outline,
+    left: i32,
+    top: i32,
+    scratch: &mut crate::grays::RasterScratch,
+) -> Result<RenderedBitmap, FontError> {
     if outline.points.is_empty() || outline.n_contours == 0 {
         return Ok(RenderedBitmap {
             width: 0,

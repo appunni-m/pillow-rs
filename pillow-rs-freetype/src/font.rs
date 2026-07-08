@@ -1619,7 +1619,12 @@ impl Font {
             ..
         } = scaled;
         let slot_outline = scaled_slot_outline_from_outline(
-            &outline, outline_cbox_x_min, outline_cbox_y_min, outline_cbox_x_max, outline_cbox_y_max);
+            &outline,
+            outline_cbox_x_min,
+            outline_cbox_y_min,
+            outline_cbox_x_max,
+            outline_cbox_y_max,
+        );
         let mut metrics = GlyphSlotMetrics {
             width: cbox_x_max - cbox_x_min,
             height: cbox_y_max - cbox_y_min,
@@ -1652,8 +1657,7 @@ impl Font {
             metrics.vert_advance = ft_mul_fix(advance_fu, self.size_metrics.y_scale);
         }
         if autohint_vertical.is_none() {
-            metrics.vert_bearing_x =
-                metrics.hori_bearing_x - vertical_bearing_x_advance_width / 2;
+            metrics.vert_bearing_x = metrics.hori_bearing_x - vertical_bearing_x_advance_width / 2;
         }
 
         match grid_fit_metrics {
