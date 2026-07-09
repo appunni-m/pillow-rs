@@ -1147,7 +1147,7 @@ pub fn metrics_init_widths(
     hints.metrics = Some(std::rc::Rc::new(metrics.clone()));
     hints.other_flags =
         AF_LATIN_HINTS_HORZ_SNAP | AF_LATIN_HINTS_VERT_SNAP | AF_LATIN_HINTS_STEM_ADJUST;
-    loader::reload(&mut hints, raw_outline, scaled_points);
+    loader::reload(&mut hints, raw_outline, scaled_points, 0);
 
     if hints.num_points() == 0 {
         return;
@@ -2706,6 +2706,7 @@ pub fn apply_hints(
     vert_snap: bool,
     font_data: Option<&crate::tables::FontData>,
     target_mono: bool,
+    pp1x_shift: i32,
 ) -> ApplyHintsMetrics {
     let mut output = ApplyHintsMetrics::default();
     let num_pts = outline.points.len();
@@ -2757,7 +2758,7 @@ pub fn apply_hints(
     let ppem = ppem.clamp(1, 100);
 
     // Step 1: Load outline into hints (raw font units → fx/fy; scaled 26.6 → ox/oy)
-    loader::reload(&mut hints, raw_outline, &outline.points);
+    loader::reload(&mut hints, raw_outline, &outline.points, pp1x_shift);
     if hints.num_points() == 0 {
         return output;
     }

@@ -57,7 +57,7 @@ pub fn cjk_metrics_init_widths(
     hints.metrics = Some(std::rc::Rc::new(dummy));
 
     // afcjk.c:155 — reload outline into hints
-    super::loader::reload(&mut hints, outline, scaled_points);
+    super::loader::reload(&mut hints, outline, scaled_points, 0);
 
     // afcjk.c:166-202 — for each dimension: compute segments, link, extract widths
     for dim in 0..2 {
