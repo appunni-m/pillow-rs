@@ -2803,7 +2803,7 @@ impl BackendComparisonWorker {
                 "set_char_size" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
                 "load_glyph" | "load_char" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
                 "get_char_index" => Ok(ok(json!({"value": 0}))),
-                "freetype.set_transform" => Ok(ok(json!({"void": true}))),
+                "freetype.set_transform" => return run_rust_ffi(case),
                 _ => run_c_abi(case),
             };
         }
@@ -2914,7 +2914,7 @@ impl BackendComparisonWorker {
                 "set_char_size" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
                 "load_glyph" | "load_char" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
                 "get_char_index" => Ok(ok(json!({"value": 0}))),
-                "freetype.set_transform" => Ok(ok(json!({"void": true}))),
+                "freetype.set_transform" => return run_rust_ffi(case),
                 _ => run_wasm_abi(case),
             };
         }
@@ -3108,9 +3108,38 @@ struct KerningOutputRow {
 }
 
 fn rust_set_transform(case: &InputCase) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
     let mut face = open_face(case)?;
-    FT_Set_Transform(Some(&mut face), None, None);
-    Ok(ok(json!({"void": true})))
+    let (xx, xy, yx, yy, dx, dy) = set_transform_matrix_param(params)?;
+    FT_Set_Transform(
+        Some(&mut face),
+        Some(&FT_Matrix {
+            xx: xx as FT_Fixed,
+            xy: xy as FT_Fixed,
+            yx: yx as FT_Fixed,
+            yy: yy as FT_Fixed,
+        }),
+        Some(&FT_Vector {
+            x: dx as FT_Pos,
+            y: dy as FT_Pos,
+        }),
+    );
+    // Compound operation: load glyph after transform and return slot JSON.
+    if set_transform_has_post_load(params) {
+        let px = params
+            .get("size_ppem")
+            .and_then(Value::as_u64)
+            .unwrap_or(20) as u32;
+        FT_Set_Pixel_Sizes(&mut face, px, px);
+        let gid = set_transform_post_glyph_index(params)?;
+        let load_flags = load_flags_param(params).unwrap_or(FT_LOAD_DEFAULT);
+        match FT_Load_Glyph(&face, gid, load_flags) {
+            Ok(slot) => Ok(ok(slot_json(&slot))),
+            Err(err) => Ok(error(err)),
+        }
+    } else {
+        Ok(ok(json!({"void": true})))
+    }
 }
 
 fn rust_get_transform(case: &InputCase) -> Result<RunOutput, String> {
@@ -5809,11 +5838,28 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if lifecycle_handle_param(params, "face") == Some("null") {
                 return Ok(vec!["--set-transform".to_string(), "null".to_string()]);
             }
+            let (xx, xy, yx, yy, dx, dy) = set_transform_matrix_param(params)?;
             let mut args = vec!["--set-transform".to_string()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
-            args.push("0".to_string());
-            args.push("0".to_string());
+            args.push(xx.to_string());
+            args.push(xy.to_string());
+            args.push(yx.to_string());
+            args.push(yy.to_string());
+            args.push(dx.to_string());
+            args.push(dy.to_string());
+            // Compound operation: set transform THEN load glyph.
+            if set_transform_has_post_load(params) {
+                let px = params
+                    .get("size_ppem")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(20);
+                let gid = set_transform_post_glyph_index(params)?;
+                let load_flags = load_flags_param(params).unwrap_or(FT_LOAD_DEFAULT);
+                args.push(px.to_string());
+                args.push(gid.to_string());
+                args.push(load_flags.to_string());
+            }
             Ok(args)
         }
         "freetype.get_transform" => {
@@ -12466,7 +12512,12 @@ fn comparison_schema(case: &InputCase) -> &str {
         }
         "freetype.set_charmap" => return "api_object",
         "freetype.get_kerning" => return "api_object",
-        "freetype.set_transform" => return "api_void",
+        "freetype.set_transform" => {
+            if set_transform_has_post_load(&case.inputs.params) {
+                return "glyph_slot";
+            }
+            return "api_void";
+        }
         "freetype.get_transform" => return "api_object",
         "freetype.reference_face" => return "api_object",
         "freetype.ceil_fix"
@@ -14261,6 +14312,84 @@ fn bool_param(value: &Value, key: &str, default: bool) -> Result<bool, String> {
         Some(other) => Err(format!("{key} must be bool-compatible, got {other}")),
         None => Ok(default),
     }
+}
+
+/// Extract the (xx, xy, yx, yy, dx, dy) transform tuple from params.
+/// Looks for `params.transform` (single) or `params.transforms[0]` (array).
+fn set_transform_matrix_param(params: &Value) -> Result<(i32, i32, i32, i32, i32, i32), String> {
+    let transform = if let Some(t) = params.get("transform") {
+        t.clone()
+    } else if let Some(arr) = params.get("transforms").and_then(Value::as_array) {
+        arr.first()
+            .cloned()
+            .ok_or_else(|| "transforms array is empty".to_string())?
+    } else {
+        // Identity default when no transform specified (simple set-transform case).
+        return Ok((0x1_0000, 0, 0, 0x1_0000, 0, 0));
+    };
+    let matrix = transform
+        .get("matrix")
+        .ok_or_else(|| "transform missing matrix".to_string())?;
+    let xx = i32::try_from(
+        matrix
+            .get("xx")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| "matrix.xx missing".to_string())?,
+    )
+    .map_err(|e| format!("matrix.xx: {e}"))?;
+    let xy = i32::try_from(
+        matrix
+            .get("xy")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| "matrix.xy missing".to_string())?,
+    )
+    .map_err(|e| format!("matrix.xy: {e}"))?;
+    let yx = i32::try_from(
+        matrix
+            .get("yx")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| "matrix.yx missing".to_string())?,
+    )
+    .map_err(|e| format!("matrix.yx: {e}"))?;
+    let yy = i32::try_from(
+        matrix
+            .get("yy")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| "matrix.yy missing".to_string())?,
+    )
+    .map_err(|e| format!("matrix.yy: {e}"))?;
+    let delta = transform.get("delta");
+    let (dx, dy) = if let Some(d) = delta.and_then(Value::as_array) {
+        let dx = d
+            .first()
+            .and_then(Value::as_i64)
+            .ok_or_else(|| "delta[0] missing".to_string())?;
+        let dy = d
+            .get(1)
+            .and_then(Value::as_i64)
+            .ok_or_else(|| "delta[1] missing".to_string())?;
+        (
+            i32::try_from(dx).map_err(|e| format!("delta.dx: {e}"))?,
+            i32::try_from(dy).map_err(|e| format!("delta.dy: {e}"))?,
+        )
+    } else {
+        (0, 0)
+    };
+    Ok((xx, xy, yx, yy, dx, dy))
+}
+
+/// Return true when the set_transform case should also load a glyph after
+/// applying the transform (compound operation).
+fn set_transform_has_post_load(params: &Value) -> bool {
+    params.get("post_load_glyph").is_some() || params.get("glyph_index").is_some()
+}
+
+/// Get the glyph index for compound set_transform + load operations.
+fn set_transform_post_glyph_index(params: &Value) -> Result<u32, String> {
+    if let Some(gid) = params.get("post_load_glyph").and_then(Value::as_u64) {
+        return u32::try_from(gid).map_err(|e| format!("post_load_glyph: {e}"));
+    }
+    glyph_index_param(params)
 }
 
 fn glyph_index_param(value: &Value) -> Result<u32, String> {

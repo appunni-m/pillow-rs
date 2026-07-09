@@ -276,7 +276,7 @@ pub struct AFSegment {
 #[derive(Debug, Clone, Copy)]
 pub struct AFEdge {
     /// Position in font units (canonical key).
-    pub fpos: i16,
+    pub fpos: i32,
     /// Original scaled position (26.6).
     pub opos: i32,
     /// Current (grid-fitted) position (26.6).

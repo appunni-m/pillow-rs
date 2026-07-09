@@ -597,34 +597,13 @@ impl GlyphSlot {
         Ok(self)
     }
 
-    /// Apply a 2×2 transform matrix to metrics, advance, outline, and bbox.
+    /// Apply a 2×2 transform matrix to advance, outline, and bbox.
     /// Mirrors C's `ft_glyphslot_grid_fit_metrics` in `src/base/ftobjs.c`.
+    /// NOTE: C does NOT transform metrics width/height/bearings/advance
+    /// for FT_LOAD_DEFAULT with a user-space transform.
     pub fn apply_transform(&mut self, xx: i32, xy: i32, yx: i32, yy: i32, dx: i32, dy: i32) {
         let ft_mul = crate::fixed::ft_mul_fix;
-        // Transform metrics (C: ftobjs.c ft_glyphslot_grid_fit_metrics).
-        {
-            let m = &mut self.metrics;
-            let (hbx, hby) = (
-                ft_mul(m.hori_bearing_x, xx) + ft_mul(m.hori_bearing_y, xy),
-                ft_mul(m.hori_bearing_x, yx) + ft_mul(m.hori_bearing_y, yy),
-            );
-            m.hori_bearing_x = hbx;
-            m.hori_bearing_y = hby;
-            m.width = ft_mul(m.width, xx) + ft_mul(m.height, xy);
-            m.height = ft_mul(m.width, yx) + ft_mul(m.height, yy);
-            if dx != 0 || dy != 0 {
-                m.hori_bearing_x += dx;
-                m.hori_bearing_y += dy;
-            }
-            let (vbx, vby) = (
-                ft_mul(m.vert_bearing_x, xx) + ft_mul(m.vert_bearing_y, xy),
-                ft_mul(m.vert_bearing_x, yx) + ft_mul(m.vert_bearing_y, yy),
-            );
-            m.vert_bearing_x = vbx;
-            m.vert_bearing_y = vby;
-            m.vert_advance = ft_mul(m.vert_advance, xx) + ft_mul(m.vert_advance, xy);
-        }
-        // Transform advance
+        // Transform the advance vector (matching C).
         {
             let a = &mut self.advance;
             let (ax, ay) = (
@@ -634,7 +613,7 @@ impl GlyphSlot {
             a.x = ax;
             a.y = ay;
         }
-        // Transform both slot_outline and loaded_outline points
+        // Transform both slot_outline and loaded_outline points.
         let transform_points = |pts: &mut [crate::outline::OutlinePoint]| {
             for pt in pts {
                 let (px, py) = (
@@ -651,7 +630,7 @@ impl GlyphSlot {
         if let Some(ref mut lo) = self.loaded_outline {
             transform_points(&mut lo.outline.points);
         }
-        // Recompute bbox from slot_outline
+        // Recompute bbox and cbox from transformed outline.
         let mut new_cbox = crate::font::BBox {
             x_min: 0,
             y_min: 0,

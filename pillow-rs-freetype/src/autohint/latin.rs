@@ -1816,7 +1816,7 @@ fn compute_blue_edges(hints: &mut GlyphHints) {
             continue;
         }
 
-        let edge_fpos = axis.edges[e_idx].fpos as i32;
+        let edge_fpos = axis.edges[e_idx].fpos;
         let edge_flags = axis.edges[e_idx].flags;
         if e_idx <= 3 {
             trace!(target: "autohint::pipeline", "[BLU_FLAGS] E{e_idx}: flags=0x{:02x} round={}", edge_flags, edge_flags & 0x01 != 0);
@@ -2771,7 +2771,16 @@ pub fn apply_hints(
     let use_cjk_edges = hints.metrics.as_ref().is_some_and(|m| m.no_advance_hinting);
     let mut horz_widths_26_6 = [0i32; AF_LATIN_MAX_WIDTHS];
     let mut horz_wc: usize = 0;
+    let upem = hints.metrics.as_ref().map_or(2048, |m| m.units_per_em);
     if do_horz {
+        compute_segments(
+            &mut hints.points,
+            &hints.contours,
+            &mut hints.axis[0],
+            hints.cw_orientation,
+            Dimension::Horz,
+            upem,
+        );
         let (wc, widths) = extract_widths(&hints, Dimension::Horz);
         let n = wc.min(AF_LATIN_MAX_WIDTHS);
         for i in 0..n {
@@ -3488,7 +3497,7 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
         // Look for an existing edge at approximately this position.
         for e_idx in 0..axis.edges.len() {
             let edge = &axis.edges[e_idx];
-            if edge.dir == seg_dir && (edge.fpos as i32 - seg_pos).abs() < edge_dist_thresh {
+            if edge.dir == seg_dir && (edge.fpos - seg_pos).abs() < edge_dist_thresh {
                 found_edge = e_idx;
                 break;
             }
@@ -3496,13 +3505,13 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
 
         if found_edge == usize::MAX {
             // Create a new edge.
-            let fpos = i16_from_i32(seg_pos);
+            let fpos = seg_pos;
             let scale = if dim == Dimension::Vert {
                 hints.y_scale
             } else {
                 hints.x_scale
             };
-            let opos = ft_mul_fix(fpos as i32, scale);
+            let opos = ft_mul_fix(fpos, scale);
             let edge = AFEdge {
                 fpos,
                 opos,
@@ -3571,7 +3580,7 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
         // Look for an existing edge at this position.
         let mut found: Option<usize> = None;
         for e_idx in 0..axis.edges.len() {
-            let dist = (axis.edges[e_idx].fpos as i32 - seg_pos).abs();
+            let dist = (axis.edges[e_idx].fpos - seg_pos).abs();
             if dist < edge_dist_thresh {
                 found = Some(e_idx);
                 break;
@@ -3661,8 +3670,7 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
 
                 // Compare segment gap vs edge gap (aflatin.c:2416-2430).
                 if edge2_idx != usize::MAX {
-                    let edge_delta =
-                        (axis.edges[e_idx].fpos as i32 - axis.edges[edge2_idx].fpos as i32).abs();
+                    let edge_delta = (axis.edges[e_idx].fpos - axis.edges[edge2_idx].fpos).abs();
                     let seg_delta = (seg.pos as i32 - axis.segments[linked_seg].pos as i32).abs();
                     if seg_delta < edge_delta {
                         // Segment pair is closer → trust the segment's edge.
@@ -4802,7 +4810,7 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
 
         // C: linear scan for first edge with fpos >= u (afhints.c:1492-1502)
         let mut nn: usize = 0;
-        while nn < axis.edges.len() && (axis.edges[nn].fpos as i32) < pt_fpos {
+        while nn < axis.edges.len() && (axis.edges[nn].fpos) < pt_fpos {
             nn += 1;
         }
 
@@ -4844,7 +4852,7 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
         }
 
         // C: if exact match, snap to edge (afhints.c:1496-1499)
-        if axis.edges[nn].fpos as i32 == pt_fpos {
+        if axis.edges[nn].fpos == pt_fpos {
             let val = axis.edges[nn].pos;
             if is_vert {
                 hints.points[i].y = val;
@@ -4864,7 +4872,7 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
         let pos_delta = after.pos - before.pos;
         let fpos_delta = (after.fpos - before.fpos) as i32;
         let scale = ft_div_fix(pos_delta, fpos_delta);
-        let offset = pt_fpos - before.fpos as i32;
+        let offset = pt_fpos - before.fpos;
         // C: u = before->pos + FT_MulFix(fu - before->fpos, before->scale)
         let val = before.pos + ft_mul_fix(offset, scale);
 

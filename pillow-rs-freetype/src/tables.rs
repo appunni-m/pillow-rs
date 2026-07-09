@@ -44,6 +44,15 @@ pub struct FontData {
     pub loca_data: Vec<u8>,
     pub glyf_data: Vec<u8>,
     pub size_pt: Cell<f32>,
+    /// Active 2×2 transform set via FT_Set_Transform.  The scaler reads these
+    /// before the auto-hinter runs so hinting decisions match the transformed
+    /// geometry.  Identity is (0x10000, 0, 0, 0x10000, 0, 0).
+    pub transform_xx: Cell<i32>,
+    pub transform_xy: Cell<i32>,
+    pub transform_yx: Cell<i32>,
+    pub transform_yy: Cell<i32>,
+    pub transform_dx: Cell<i32>,
+    pub transform_dy: Cell<i32>,
     /// Font program bytecode (fpgm table). Optional — not all fonts have bytecode.
     pub fpgm: Option<Vec<u8>>,
     /// CVT program bytecode (prep table). Optional.

@@ -23,16 +23,22 @@ help:
 	@printf "  make doc              Build crate documentation\n"
 	@printf "  make doc-test         Run rustdoc examples\n"
 	@printf "\nTest:\n"
-	@printf "  make test             Run manifest-driven unified public API parity\n"
-	@printf "  make test-parity      Run manifest-driven unified public API parity\n"
-	@printf "  make test-unified-fixtures Run manifest-linked input fixtures against runtime C oracle\n"
-	@printf "  make test-unified-fixtures-release Run unified fixture parity with Cargo --release\n"
+	@printf "  make test             Run full unified public API parity (~20 min, 3.0M cases)\n"
+	@printf "  make test-parity      Alias for make test\n"
+	@printf "  make test-unified-fixtures Run full parity test (same as make test)\n"
+	@printf "  make test-unified-fixtures-release Full parity test with Cargo --release\n"
 	@printf "  make test-unified-coverage Alias for the unified parity test\n"
 	@printf "  make test-api-abi     Run unified API/ABI fixture and coverage gates\n"
-	@printf "  make test-ffi         Run the no-runtime-FFI guard for core\n"
+	@printf "  make test-ffi         Run the no-runtime-FFI guard for core (<1s)\n"
 	@printf "  make test-ffi-compat  Run API/ABI coverage and thin-wrapper checks\n"
 	@printf "  make api-abi-audit    Generate C/Servo/fontdone API and ABI surface audit\n"
 	@printf "  make api-abi-check    Check manifest/input coverage and thin FFI ABI surfaces\n"
+	@printf "\nSingle Feature Testing (<1 min per operation, use for debugging):\n"
+	@printf "  make test-op OP=<op>      Run parity filtered to one operation (always refreshes oracle)\n"
+	@printf "  make test-case CASE=<s>   Run parity filtered to case/subject substring (always refreshes oracle)\n"
+	@printf "  make test-list            Print selection summary without executing (diagnostic)\n"
+	@printf "  make test-list-ops        Print operation counts without executing\n"
+	@printf "  See doc/TESTING_SINGLE_FEATURE.md for env var reference and cache behavior\n"
 	@printf "\nLint:\n"
 	@printf "  make fmt              Check rustfmt\n"
 	@printf "  make fmt-fix          Apply rustfmt\n"
@@ -98,10 +104,16 @@ unified-inputs:
 unified-inputs-check:
 	$(PYTHON) scripts/build_unified_fixture_inputs.py --check
 
+# ── Full Parity Test (~20 min, 3.0M cases) ──────────────────────────
+# Warm oracle cache (first run only): ~15 min. Subsequent runs: ~5 min.
+#
 .PHONY: test-unified-fixtures
 test-unified-fixtures: unified-oracle unified-inputs-check api-abi-check
 	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
 
+# ── Full Parity Test with --release (~15 min total) ───────────────────
+# --release mode is faster but misses debug_assertions.
+#
 .PHONY: test-unified-fixtures-release
 test-unified-fixtures-release: unified-oracle unified-inputs-check api-abi-check
 	$(CARGO) test --release --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
@@ -126,6 +138,65 @@ test-ffi:
 
 .PHONY: test-ffi-compat
 test-ffi-compat: api-abi-check
+
+# ── Single Feature Testing ────────────────────────────────────────────
+# These targets run the unified parity test filtered to a single operation
+# or case. They always refresh the oracle cache (FONTDONE_UNIFIED_ORACLE_REFRESH=1)
+# to avoid cache-key confusion when switching between filters.
+#
+# Usage:
+#   make test-op OP=ftadvanc.get_advance
+#   make test-case CASE=load_glyph
+#   make test-list
+#   make test-list-ops
+#
+# The full-suite cache is never affected — different filter selections produce
+# different cache keys, so filtered runs and full-suite runs use separate cache
+# files under tests/fixtures/outputs/unified_oracle_cache/.
+#
+# Env vars (all optional):
+#   FONTDONE_UNIFIED_OPERATION_FILTER  – substring match on operation name
+#   FONTDONE_UNIFIED_CASE_FILTER       – substring match on case_id/subject/case
+#   FONTDONE_UNIFIED_CASE_LIMIT        – max number of expanded cases
+#   FONTDONE_UNIFIED_VARIABILITY_LIMIT – max values per variation axis
+#   FONTDONE_UNIFIED_ORACLE_REFRESH    – force skip cache, re-run C oracle
+#   FONTDONE_UNIFIED_SELECTION_ONLY    – print selection, don't execute
+#   FONTDONE_UNIFIED_PROFILE           – print timing profiles
+
+.PHONY: test-op
+test-op: unified-oracle unified-inputs-check api-abi-check
+	@if [ -z "$(OP)" ]; then \
+		echo "Usage: make test-op OP=<operation>" >&2; \
+		echo "  Example operations: ftadvanc.get_advance, load_glyph, render_glyph, freetype.inspect_glyph_metrics" >&2; \
+		echo "  For diagnostics: make test-list-ops" >&2; \
+		exit 1; \
+	fi
+	FONTDONE_UNIFIED_OPERATION_FILTER="$(OP)" \
+	FONTDONE_UNIFIED_ORACLE_REFRESH=1 \
+	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
+
+.PHONY: test-case
+test-case: unified-oracle unified-inputs-check api-abi-check
+	@if [ -z "$(CASE)" ]; then \
+		echo "Usage: make test-case CASE=<substring>" >&2; \
+		echo "  Matches against case_id, subject, or case fields" >&2; \
+		exit 1; \
+	fi
+	FONTDONE_UNIFIED_CASE_FILTER="$(CASE)" \
+	FONTDONE_UNIFIED_ORACLE_REFRESH=1 \
+	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
+
+.PHONY: test-list
+test-list: unified-oracle unified-inputs-check api-abi-check
+	FONTDONE_UNIFIED_SELECTION_ONLY=1 \
+	FONTDONE_UNIFIED_CASE_LIMIT=5 \
+	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
+
+.PHONY: test-list-ops
+test-list-ops: unified-oracle unified-inputs-check api-abi-check
+	FONTDONE_UNIFIED_SELECTION_ONLY=1 \
+	FONTDONE_UNIFIED_CASE_LIMIT=0 \
+	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
 
 .PHONY: api-abi-audit
 api-abi-audit: oracle-fetch
