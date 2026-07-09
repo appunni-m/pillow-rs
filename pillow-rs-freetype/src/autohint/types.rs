@@ -445,11 +445,11 @@ impl GlyphHints {
 
     /// Copy hinted coordinates back into an Outline.
     pub fn save_to_outline(&self, outline: &mut Outline) {
-        for (i, pt) in self.points.iter().enumerate() {
-            if let Some(op) = outline.points.get_mut(i) {
-                op.x = pt.x;
-                op.y = pt.y;
-            }
+        // Use zip instead of enumerate + get_mut — identical semantics
+        // but the compiler can auto-vectorize the per-point copy.
+        for (pt, op) in self.points.iter().zip(outline.points.iter_mut()) {
+            op.x = pt.x;
+            op.y = pt.y;
         }
     }
 }
