@@ -577,28 +577,20 @@ impl<'a> Worker<'a> {
             self.y = to_y;
             return;
         } else if dx == 0 {
+            // Vertical line — unify dy>0/dy<0 via sign arithmetic.
+            // The step direction and set/restore values differ by sign;
+            // the loop body is otherwise identical.
             let two_fx = fx1 << 1;
-            if dy > 0 {
-                loop {
-                    let fy2 = i32_from_i64(ONE_PIXEL);
-                    self.integrate(fy2 - fy1, two_fx);
-                    fy1 = 0;
-                    ey1 += 1;
-                    self.set_cell(ex1, ey1);
-                    if ey1 == ey2 {
-                        break;
-                    }
-                }
-            } else {
-                loop {
-                    let fy2 = 0;
-                    self.integrate(fy2 - fy1, two_fx);
-                    fy1 = i32_from_i64(ONE_PIXEL);
-                    ey1 -= 1;
-                    self.set_cell(ex1, ey1);
-                    if ey1 == ey2 {
-                        break;
-                    }
+            let step: i32 = if dy > 0 { 1 } else { -1 };
+            let fy_add = if dy > 0 { i32_from_i64(ONE_PIXEL) } else { 0 };
+            let fy_rst = if dy > 0 { 0 } else { i32_from_i64(ONE_PIXEL) };
+            loop {
+                self.integrate(fy_add - fy1, two_fx);
+                fy1 = fy_rst;
+                ey1 += step;
+                self.set_cell(ex1, ey1);
+                if ey1 == ey2 {
+                    break;
                 }
             }
         } else {
@@ -606,30 +598,38 @@ impl<'a> Worker<'a> {
             let mut prod = dx * fy1 as i64 - dy * fx1 as i64;
             let dx_r = ft_udivprep(ex1 != ex2, dx);
             let dy_r = ft_udivprep(ey1 != ey2, dy);
+            // Hoist ONE_PIXEL * dx/dy out of the loop — saves 5 i64 multiplies
+            // per DDA step (~15-20 cycles on modern x86-64).
+            let dx_one = dx * ONE_PIXEL;
+            let dy_one = dy * ONE_PIXEL;
 
             loop {
-                if prod - dx * ONE_PIXEL > 0 && prod <= 0 {
+                // Precompute decision boundaries once per iteration
+                let p_left = prod - dx_one;
+                let p_up = p_left + dy_one;
+                let p_right = prod + dy_one;
+
+                if p_left > 0 && prod <= 0 {
                     // left
                     let fx2 = 0;
                     let fy2 = ft_udiv(-prod, -dx_r);
-                    prod -= dy * ONE_PIXEL;
+                    prod -= dy_one;
                     self.integrate(fy2 - fy1, fx1 + fx2);
                     fx1 = i32_from_i64(ONE_PIXEL);
                     fy1 = fy2;
                     ex1 -= 1;
-                } else if prod - dx * ONE_PIXEL + dy * ONE_PIXEL > 0 && prod - dx * ONE_PIXEL <= 0 {
+                } else if p_up > 0 && p_left <= 0 {
                     // up
-                    prod -= dx * ONE_PIXEL;
+                    prod -= dx_one;
                     let fx2 = ft_udiv(-prod, dy_r);
                     let fy2 = i32_from_i64(ONE_PIXEL);
                     self.integrate(fy2 - fy1, fx1 + fx2);
                     fx1 = fx2;
                     fy1 = 0;
                     ey1 += 1;
-                } else if prod + dy * ONE_PIXEL >= 0 && prod - dx * ONE_PIXEL + dy * ONE_PIXEL <= 0
-                {
+                } else if p_right >= 0 && p_up <= 0 {
                     // right
-                    prod += dy * ONE_PIXEL;
+                    prod += dy_one;
                     let fx2 = i32_from_i64(ONE_PIXEL);
                     let fy2 = ft_udiv(prod, dx_r);
                     self.integrate(fy2 - fy1, fx1 + fx2);
@@ -640,7 +640,7 @@ impl<'a> Worker<'a> {
                     // down
                     let fx2 = ft_udiv(prod, -dy_r);
                     let fy2 = 0;
-                    prod += dx * ONE_PIXEL;
+                    prod += dx_one;
                     self.integrate(fy2 - fy1, fx1 + fx2);
                     fx1 = fx2;
                     fy1 = i32_from_i64(ONE_PIXEL);
@@ -683,11 +683,7 @@ impl<'a> Worker<'a> {
         let ax = p2x - p1x - bx;
         let ay = p2y - p1y - by;
 
-        let mut d = ax.abs();
-        let ay_abs = ay.abs();
-        if d < ay_abs {
-            d = ay_abs;
-        }
+        let mut d = ax.abs().max(ay.abs());
 
         if d <= ONE_PIXEL / 4 {
             self.render_line(p2x, p2y);
