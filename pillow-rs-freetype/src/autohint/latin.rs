@@ -2768,10 +2768,15 @@ pub fn apply_hints(
     // Phase A: detect_features for HORZ (segs → link → edges)
     let do_horz = hints.scaler_flags & AF_SCALER_FLAG_NO_HORIZONTAL == 0;
     let use_cjk_edges = hints.metrics.as_ref().is_some_and(|m| m.no_advance_hinting);
-    let mut horz_widths_26_6: Vec<i32> = Vec::new();
+    let mut horz_widths_26_6 = [0i32; AF_LATIN_MAX_WIDTHS];
+    let mut horz_wc: usize = 0;
     if do_horz {
         let (wc, widths) = extract_widths(&hints, Dimension::Horz);
-        horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
+        let n = wc.min(AF_LATIN_MAX_WIDTHS);
+        for i in 0..n {
+            horz_widths_26_6[i] = widths[i].cur;
+        }
+        horz_wc = n;
         if use_cjk_edges {
             // FreeType 2.14.3's `af_cjk_hints_compute_segments` snapshots
             // the segment limit before `af_latin_hints_compute_segments`.
@@ -2815,10 +2820,15 @@ pub fn apply_hints(
         Dimension::Vert,
         upem,
     );
-    let vert_widths_26_6: Vec<i32>;
+    let mut vert_widths_26_6 = [0i32; AF_LATIN_MAX_WIDTHS];
+    let vert_wc: usize;
     {
         let (wc, widths) = extract_widths(&hints, Dimension::Vert);
-        vert_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
+        let n = wc.min(AF_LATIN_MAX_WIDTHS);
+        for i in 0..n {
+            vert_widths_26_6[i] = widths[i].cur;
+        }
+        vert_wc = n;
         if use_cjk_edges {
             // Keep Latin segment roundness flags for CJK; see the horizontal
             // phase comment above for the FreeType 2.14.3 control-flow detail.
@@ -2859,10 +2869,10 @@ pub fn apply_hints(
         if !do_dim {
             continue;
         }
-        let widths = if dim_i == 0 {
-            &horz_widths_26_6
+        let widths: &[i32] = if dim_i == 0 {
+            &horz_widths_26_6[..horz_wc]
         } else {
-            &vert_widths_26_6
+            &vert_widths_26_6[..vert_wc]
         };
         if use_cjk_edges {
             super::cjk::hint_edges(&mut hints, dim, widths);
@@ -2872,7 +2882,7 @@ pub fn apply_hints(
             align_edge_points(&mut hints, dim);
         }
         align_strong_points(&mut hints, dim);
-        align_weak_points(&mut hints, dim);
+        align_weak_points(&mut hints.points, &hints.contours, dim);
         if dim == Dimension::Vert {
             vertical_separation_adjustments(
                 &mut hints,
@@ -4941,7 +4951,7 @@ fn iup_interp(points: &mut [AFPoint], p1: usize, p2: usize, ref1: usize, ref2: u
 ///
 /// Walks contour, finds touched pairs, linearly interpolates between them.
 /// Result depends on WHICH points are touched — wrong touch flag → wrong ref.
-fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
+fn align_weak_points(points: &mut [AFPoint], contours: &[usize], dim: Dimension) {
     let is_vert = dim == Dimension::Vert;
     let touch_flag = if is_vert {
         AF_FLAG_TOUCH_Y
@@ -4950,7 +4960,7 @@ fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
     };
 
     // PASS 1: Set u = hinted (current x/y), v = original (ox/oy)
-    for pt in &mut hints.points {
+    for pt in points.iter_mut() {
         if is_vert {
             pt.u = pt.y;
             pt.v = pt.oy;
@@ -4961,9 +4971,8 @@ fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
     }
 
     // PASS 2: Iterate contours in storage order (points are contiguous per-contour)
-    let contours_snapshot = hints.contours.clone();
-    for &c_start in &contours_snapshot {
-        let end_idx = hints.points[c_start].prev; // last point index of this contour
+    for &c_start in contours {
+        let end_idx = points[c_start].prev; // last point index of this contour
 
         // Find first touched point
         let mut idx = c_start;
@@ -4971,7 +4980,7 @@ fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
             if idx > end_idx {
                 break usize::MAX;
             } // no touched point in contour
-            if hints.points[idx].flags & touch_flag != 0 {
+            if points[idx].flags & touch_flag != 0 {
                 break idx;
             }
             idx += 1;
@@ -4984,7 +4993,7 @@ fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
 
         loop {
             // skip consecutive touched points
-            while last_touched < end_idx && hints.points[last_touched + 1].flags & touch_flag != 0 {
+            while last_touched < end_idx && points[last_touched + 1].flags & touch_flag != 0 {
                 last_touched += 1;
             }
 
@@ -4994,7 +5003,7 @@ fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
                 if next > end_idx {
                     break None;
                 }
-                if hints.points[next].flags & touch_flag != 0 {
+                if points[next].flags & touch_flag != 0 {
                     break Some(next);
                 }
                 next += 1;
@@ -5002,24 +5011,18 @@ fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
 
             if let Some(nt) = next_touched {
                 // Interpolate between last_touched and next_touched
-                iup_interp(
-                    &mut hints.points,
-                    last_touched + 1,
-                    nt - 1,
-                    last_touched,
-                    nt,
-                );
+                iup_interp(points, last_touched + 1, nt - 1, last_touched, nt);
                 last_touched = nt;
             } else {
                 // End of contour
                 if last_touched == first_touched {
                     // Only one touched point: uniform shift
-                    iup_shift(&mut hints.points, c_start, end_idx, first_touched);
+                    iup_shift(points, c_start, end_idx, first_touched);
                 } else {
                     // Interpolate tail segments
                     if last_touched < end_idx {
                         iup_interp(
-                            &mut hints.points,
+                            points,
                             last_touched + 1,
                             end_idx,
                             last_touched,
@@ -5028,7 +5031,7 @@ fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
                     }
                     if first_touched > c_start {
                         iup_interp(
-                            &mut hints.points,
+                            points,
                             c_start,
                             first_touched - 1,
                             last_touched,
@@ -5042,7 +5045,7 @@ fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
     }
 
     // PASS 3: Write u back to x/y
-    for pt in &mut hints.points {
+    for pt in points.iter_mut() {
         if is_vert {
             pt.y = pt.u;
         } else {
