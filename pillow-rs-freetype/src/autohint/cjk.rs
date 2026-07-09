@@ -396,7 +396,7 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
             if edge.dir != seg_dir {
                 continue;
             }
-            let dist = (edge.fpos as i32 - seg_pos).abs();
+            let dist = (edge.fpos - seg_pos).abs();
             if dist < edge_dist_thresh && dist < best_dist {
                 // afcjk.c:1065-1085 — linked segment compatibility
                 let link = seg_link;
@@ -437,8 +437,8 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
             e.last = seg_idx;
         } else {
             // afcjk.c:1088-1109 — create new edge with sorted insertion
-            let fpos = i16_from_i32(seg_pos);
-            let opos = ft_mul_fix(fpos as i32, scale);
+            let fpos = seg_pos;
+            let opos = ft_mul_fix(fpos, scale);
             let new_edge = AFEdge {
                 fpos,
                 opos,
@@ -521,8 +521,7 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
                 let linked_seg = if is_serif { seg.serif } else { seg.link };
 
                 if edge2_idx != usize::MAX {
-                    let edge_delta =
-                        (axis.edges[e_idx].fpos as i32 - axis.edges[edge2_idx].fpos as i32).abs();
+                    let edge_delta = (axis.edges[e_idx].fpos - axis.edges[edge2_idx].fpos).abs();
                     let seg_delta = (seg.pos as i32 - axis.segments[linked_seg].pos as i32).abs();
                     if seg_delta < edge_delta {
                         edge2_idx = axis.segments[linked_seg].edge;
@@ -766,14 +765,14 @@ pub fn cjk_compute_blue_edges(hints: &mut GlyphHints, dim: Dimension) {
                 continue;
             }
 
-            let compare = if (edge.fpos as i32 - blue.ref_width.org).abs()
-                > (edge.fpos as i32 - blue.shoot_width.org).abs()
+            let compare = if (edge.fpos - blue.ref_width.org).abs()
+                > (edge.fpos - blue.shoot_width.org).abs()
             {
                 blue.shoot_width
             } else {
                 blue.ref_width
             };
-            let dist = ft_mul_fix((edge.fpos as i32 - compare.org).abs(), scale);
+            let dist = ft_mul_fix((edge.fpos - compare.org).abs(), scale);
             if dist < best_dist {
                 best_dist = dist;
                 best_blue = Some(compare);
@@ -1222,9 +1221,9 @@ pub(super) fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i
                 } else {
                     axis.edges[i].pos = axis.edges[before].pos
                         + ft_mul_div(
-                            axis.edges[i].fpos as i32 - axis.edges[before].fpos as i32,
+                            axis.edges[i].fpos - axis.edges[before].fpos,
                             axis.edges[after].pos - axis.edges[before].pos,
-                            axis.edges[after].fpos as i32 - axis.edges[before].fpos as i32,
+                            axis.edges[after].fpos - axis.edges[before].fpos,
                         );
                 }
             }

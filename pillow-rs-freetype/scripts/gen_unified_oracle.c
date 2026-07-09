@@ -5681,6 +5681,22 @@ static int emit_set_transform(int argc, char** argv) {
     const char* source_kind = argv[2];
     const char* source_value = argv[3];
     FT_Long face_index = atol(argv[4]);
+    FT_Fixed xx = (FT_Fixed)atol(argv[5]);
+    FT_Fixed xy = (FT_Fixed)atol(argv[6]);
+    FT_Fixed yx = (FT_Fixed)atol(argv[7]);
+    FT_Fixed yy = (FT_Fixed)atol(argv[8]);
+    FT_Pos dx = (FT_Pos)atol(argv[9]);
+    FT_Pos dy = (FT_Pos)atol(argv[10]);
+    int has_load = (argc >= 14);
+    FT_UInt gid = 0;
+    FT_Int32 load_flags = 0;
+    int px = 0;
+    if (has_load) {
+        px = atoi(argv[11]);
+        gid = (FT_UInt)atoi(argv[12]);
+        load_flags = (FT_Int32)atol(argv[13]);
+    }
+
     unsigned char* data = NULL;
     long data_len = 0;
     if (streq(source_kind, "file")) {
@@ -5696,7 +5712,36 @@ static int emit_set_transform(int argc, char** argv) {
     FT_Error err = FT_Init_FreeType(&library);
     FT_Face face = NULL;
     if (!err) err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
-    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"void\":true}}\n");
+    if (!err && face) {
+        FT_Matrix matrix;
+        matrix.xx = xx;
+        matrix.xy = xy;
+        matrix.yx = yx;
+        matrix.yy = yy;
+        FT_Vector delta;
+        delta.x = dx;
+        delta.y = dy;
+        FT_Set_Transform(face, &matrix, &delta);
+    }
+    if (!err && has_load && face) {
+        if (px > 0) {
+            err = FT_Set_Pixel_Sizes(face, (FT_UInt)px, (FT_UInt)px);
+        }
+        if (!err) {
+            err = FT_Load_Glyph(face, gid, load_flags);
+        }
+        printf("{");
+        print_status(err);
+        if (err) {
+            printf(",\"output\":null}\n");
+        } else {
+            printf(",");
+            print_slot(face->glyph, gid);
+            printf("}\n");
+        }
+    } else {
+        printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"void\":true}}\n");
+    }
     if (face) FT_Done_Face(face);
     FT_Done_FreeType(library);
     free(data);
@@ -5781,7 +5826,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 7 && streq(argv[1], "--reference-face")) {
         return emit_reference_face(argc, argv);
     }
-    if (argc == 7 && streq(argv[1], "--set-transform")) {
+    if ((argc == 10 || argc == 14) && streq(argv[1], "--set-transform")) {
         return emit_set_transform(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--get-transform")) {

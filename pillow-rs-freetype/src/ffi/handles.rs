@@ -1248,7 +1248,9 @@ pub fn FT_Load_Glyph(
     if glyph_index >= face.inner.info().num_glyphs {
         return Err(FT_Err_Invalid_Glyph_Index);
     }
-    let transform = if face.transform_matrix.xx != 1 << 16
+    let transform = if load_flags & FT_LOAD_IGNORE_TRANSFORM != 0 {
+        None
+    } else if face.transform_matrix.xx != 1 << 16
         || face.transform_matrix.xy != 0
         || face.transform_matrix.yx != 0
         || face.transform_matrix.yy != 1 << 16
