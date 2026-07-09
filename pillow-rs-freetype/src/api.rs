@@ -363,7 +363,7 @@ impl Face {
     ) -> Result<GlyphSlot, FontError> {
         let vertical_layout = flags.contains(LoadFlags::VERTICAL_LAYOUT);
         let native_hint_mode = flags.native_hint_mode();
-        let loaded = if flags.contains(LoadFlags::NO_RECURSE) {
+        let mut loaded = if flags.contains(LoadFlags::NO_RECURSE) {
             self.font.glyph_slot_load_no_recurse(glyph_index)?
         } else if flags.contains(LoadFlags::NO_SCALE) {
             self.font.glyph_slot_load_no_scale(glyph_index)?
@@ -396,38 +396,49 @@ impl Face {
         };
 
         let render_requested = flags.contains(LoadFlags::RENDER);
+        // Only extract render outline when we're going to render.
+        // Otherwise leave it in `loaded` for potential later FT_Render_Glyph calls.
+        let mut render_lo = if render_requested {
+            loaded.render_outline.take()
+        } else {
+            None
+        };
 
-        // Build the slot first so transform can be applied before rendering.
-        let mut slot = GlyphSlot::new(
-            glyph_index,
-            loaded,
-            None, // bitmap applied after transform
-            vertical_layout,
-            false,
-        );
+        // Build the slot (without render_outline — we handle rendering below).
+        let mut slot = GlyphSlot::new(glyph_index, loaded, None, vertical_layout, false);
 
-        // Apply transform if present — must happen before rendering.
+        // Apply transform to slot AND extracted outline before rendering.
         if let Some((xx, xy, yx, yy, dx, dy)) = transform {
             slot.apply_transform(xx, xy, yx, yy, dx, dy);
+            if let Some(lo) = render_lo.as_mut() {
+                let ft_mul = crate::fixed::ft_mul_fix;
+                for pt in &mut lo.outline.points {
+                    let (px, py) = (
+                        ft_mul(pt.x, xx) + ft_mul(pt.y, xy) + dx,
+                        ft_mul(pt.x, yx) + ft_mul(pt.y, yy) + dy,
+                    );
+                    pt.x = px;
+                    pt.y = py;
+                }
+            }
         }
 
-        // Render after transform so the rasterizer sees transformed coords.
+        // Render without cloning the outline — takes ownership.
         if render_requested {
-            let render_outline = slot.loaded_outline.as_ref().ok_or_else(|| {
-                FontError::InvalidOutline("no render outline in loaded glyph".into())
-            })?;
-            let mode = flags.render_mode();
-            let mut scratch = self.font.raster_scratch.borrow_mut();
-            let bmp = crate::render::render_loaded_outline(
-                render_outline.outline.clone(),
-                render_outline.left,
-                render_outline.bottom,
-                render_outline.top,
-                mode,
-                &mut *scratch,
-            )?;
-            drop(scratch);
-            slot.set_rendered_bitmap(bmp);
+            if let Some(lo) = render_lo {
+                let mode = flags.render_mode();
+                let mut scratch = self.font.raster_scratch.borrow_mut();
+                let bmp = crate::render::render_loaded_outline(
+                    lo.outline,
+                    lo.left,
+                    lo.bottom,
+                    lo.top,
+                    mode,
+                    &mut *scratch,
+                )?;
+                drop(scratch);
+                slot.set_rendered_bitmap(bmp);
+            }
         }
 
         Ok(slot)
