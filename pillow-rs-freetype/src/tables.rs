@@ -5,6 +5,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 
 use crate::tt::cmap::CmapTable;
@@ -51,7 +52,7 @@ pub struct FontData {
     pub cvt: Option<Vec<i32>>,
     /// Cached parsed glyph outlines.  Populated lazily during glyph loads
     /// to avoid re-parsing the glyf/loca table on every call.
-    pub glyph_cache: RefCell<HashMap<u16, crate::tt::glyf::GlyphOutline>>,
+    pub glyph_cache: RefCell<HashMap<u16, Rc<crate::tt::glyf::GlyphOutline>>>,
     /// Back-pointer to the `Arc<FontData>` that owns this instance.
     /// Set once during font construction; used to avoid expensive clones.
     #[doc(hidden)]
@@ -59,28 +60,28 @@ pub struct FontData {
 }
 
 impl FontData {
-    /// Load a glyph outline, returning a clone from the cache on hit.
-    /// The cache avoids re-parsing the raw glyf/loca table on every glyph load.
+    /// Load a glyph outline, returning a shared reference on cache hit.
+    /// Uses Rc to avoid cloning the entire outline Vec on every access.
     pub fn load_glyph_outline(
         &self,
         glyph_index: u16,
-    ) -> Result<crate::tt::glyf::GlyphOutline, crate::error::FontError> {
+    ) -> Result<Rc<crate::tt::glyf::GlyphOutline>, crate::error::FontError> {
         {
             let cache = self.glyph_cache.borrow();
             if let Some(outline) = cache.get(&glyph_index) {
-                return Ok(outline.clone());
+                return Ok(Rc::clone(outline));
             }
         }
-        let outline = crate::tt::glyf::load_glyph(
+        let outline = Rc::new(crate::tt::glyf::load_glyph(
             &self.glyf_data,
             &self.loca_data,
             self.head.index_to_loc_format,
             glyph_index,
             &self.hmtx,
-        )?;
+        )?);
         self.glyph_cache
             .borrow_mut()
-            .insert(glyph_index, outline.clone());
+            .insert(glyph_index, Rc::clone(&outline));
         Ok(outline)
     }
 }

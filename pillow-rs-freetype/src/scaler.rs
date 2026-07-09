@@ -653,8 +653,8 @@ fn scale_glyph_impl_with_context(
     let mut slot_advance_width = advance_width;
     let lsb = scale.scale_x(h_metric.lsb as i32);
 
-    let outline_raw = if round_component_offsets {
-        load_glyph_with_scaled_component_offsets(
+    let outline_raw: std::rc::Rc<crate::tt::glyf::GlyphOutline> = if round_component_offsets {
+        std::rc::Rc::new(load_glyph_with_scaled_component_offsets(
             &data.glyf_data,
             &data.loca_data,
             data.head.index_to_loc_format,
@@ -662,7 +662,7 @@ fn scale_glyph_impl_with_context(
             &data.hmtx,
             scale.x_scale,
             scale.y_scale,
-        )?
+        )?)
     } else {
         data.load_glyph_outline(glyph_index)?
     };
