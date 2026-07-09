@@ -93,6 +93,7 @@ pub fn reload(
     hints: &mut GlyphHints,
     raw_outline: &crate::tt::glyf::GlyphOutline,
     scaled_points: &[crate::outline::OutlinePoint],
+    pp1x_shift: i32,
 ) {
     let num_points = scaled_points.len();
     let num_contours = raw_outline.num_contours as usize;
@@ -111,8 +112,11 @@ pub fn reload(
         let pt = &mut hints.points[points_base + i];
 
         // Unscaled font units (from glyf parser) — for fpos edge positions.
+        // pp1x_shift shifts the coordinate system to match the pixel grid,
+        // avoiding the need to build a shifted_raw GlyphOutline clone.
         if let Some(rp) = raw_outline.points.get(i) {
-            pt.fx = i16_from_i32(rp.x.clamp(i16::MIN as i32, i16::MAX as i32));
+            let fx_raw = rp.x.saturating_sub(pp1x_shift);
+            pt.fx = i16_from_i32(fx_raw.clamp(i16::MIN as i32, i16::MAX as i32));
             pt.fy = i16_from_i32(rp.y.clamp(i16::MIN as i32, i16::MAX as i32));
         }
 

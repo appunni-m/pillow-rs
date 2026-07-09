@@ -98,7 +98,7 @@ fn main() {
             scale.x_scale, scale.y_scale, 0, 0, ga,
             metrics.as_deref(),
             false, false, true, false, false,
-            Some(data), false,
+            Some(data), false, 0,
         );
     });
 
