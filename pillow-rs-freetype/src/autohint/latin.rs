@@ -51,7 +51,7 @@ use super::types::{
     AF_FLAG_CONTROL, AF_FLAG_IGNORE, AF_FLAG_TOUCH_X, AF_FLAG_TOUCH_Y, AF_FLAG_WEAK_INTERPOLATION,
     AF_LATIN_HINTS_HORZ_SNAP, AF_LATIN_HINTS_MONO, AF_LATIN_HINTS_STEM_ADJUST,
     AF_LATIN_HINTS_VERT_SNAP, AF_LATIN_MAX_WIDTHS, AF_SCALER_FLAG_NO_HORIZONTAL, AFEdge, AFPoint,
-    AFSegment, AfLatinBlue, AfLatinMetrics, AfWidth, AxisHints, Dimension, Direction, GlyphHints,
+    AFSegment, AfLatinBlue, AfLatinMetrics, AfWidth, Dimension, Direction, GlyphHints,
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -77,7 +77,7 @@ pub const AF_ADJUST_NO_HEIGHT_CHECK: u32 = 0x1000;
 /// Port of FreeType's `adjustment_database` in `afadjust.c`.
 /// Keyed by Unicode codepoint; sorted for binary search lookup.
 #[rustfmt::skip]
-pub(crate) static ADJUSTMENT_DATABASE: &[(u32, u32)] = &[
+static ADJUSTMENT_DATABASE: &[(u32, u32)] = &[
     (0x0021, AF_ADJUST_UP | AF_ADJUST_NO_HEIGHT_CHECK), /* ! */
     (0x003F, AF_ADJUST_UP | AF_ADJUST_NO_HEIGHT_CHECK), /* ? */
     (0x0051, AF_IGNORE_CAPITAL_BOTTOM), /* Q */
@@ -1144,10 +1144,10 @@ pub fn metrics_init_widths(
     // Scan the standard glyph at identity scale (0x10000 = 1.0)
     // Build temp hints: scale=1.0, deltas=0
     let mut hints = GlyphHints::new(0x10000, 0x10000, 0, 0);
-    hints.metrics = Some(std::rc::Rc::new(metrics.clone()));
+    hints.metrics = Some(metrics.clone());
     hints.other_flags =
         AF_LATIN_HINTS_HORZ_SNAP | AF_LATIN_HINTS_VERT_SNAP | AF_LATIN_HINTS_STEM_ADJUST;
-    loader::reload(&mut hints, raw_outline, scaled_points, 0);
+    loader::reload(&mut hints, raw_outline, scaled_points);
 
     if hints.num_points() == 0 {
         return;
@@ -1159,15 +1159,7 @@ pub fn metrics_init_widths(
         } else {
             Dimension::Vert
         };
-        let upem = metrics.units_per_em;
-        compute_segments(
-            &mut hints.points,
-            &hints.contours,
-            &mut hints.axis[dim as usize],
-            hints.cw_orientation,
-            dimension,
-            upem,
-        );
+        compute_segments(&mut hints, dimension);
         // link with width_count=0 (no widths yet — uses the else branch: dist_demerit=dist)
         link_segments_inner(&mut hints, dimension, 0, &[]);
 
@@ -1816,7 +1808,7 @@ fn compute_blue_edges(hints: &mut GlyphHints) {
             continue;
         }
 
-        let edge_fpos = axis.edges[e_idx].fpos;
+        let edge_fpos = axis.edges[e_idx].fpos as i32;
         let edge_flags = axis.edges[e_idx].flags;
         if e_idx <= 3 {
             trace!(target: "autohint::pipeline", "[BLU_FLAGS] E{e_idx}: flags=0x{:02x} round={}", edge_flags, edge_flags & 0x01 != 0);
@@ -1995,7 +1987,6 @@ fn ft_pix_round(x: i32) -> i32 {
 /// No-op for all other glyphs.
 /// Reverse cmap lookup: glyph_index → Unicode codepoint.
 /// Mirrors C's af_reverse_character_map_new (afadjust.c) without HarfBuzz.
-#[allow(dead_code)]
 fn reverse_cmap_lookup(font_data: &crate::tables::FontData, glyph_index: u16) -> Option<u32> {
     // Scan all entries in the adjustment database and check if any
     // codepoint maps to this glyph index.
@@ -2480,18 +2471,16 @@ fn vertical_separation_accent_height_limit(hints: &GlyphHints, adj_type: u32) ->
 fn vertical_separation_adjustments(
     hints: &mut GlyphHints,
     glyph_index: u16,
-    _font_data: &crate::tables::FontData,
+    font_data: &crate::tables::FontData,
 ) {
     if hints.contours.len() < 2 {
         return;
     }
 
-    // Use cached reverse glyph_index → adjustment lookup from metrics.
-    let adj_type = hints
-        .metrics
-        .as_ref()
-        .and_then(|m| m.reverse_adjustment_map.get(&glyph_index).copied())
-        .unwrap_or(0);
+    // C uses reverse_charmap + af_adjustment_database_lookup.
+    // We replicate via direct cmap scan on known adjustment codepoints.
+    let adj_type =
+        reverse_cmap_lookup(font_data, glyph_index).map_or(0, adjustment_database_lookup);
 
     if adj_type == 0 {
         return;
@@ -2539,7 +2528,7 @@ fn vertical_separation_adjustments(
             }
             let min_y = hints.contour_y_minima[ci];
             let max_y = hints.contour_y_maxima[ci];
-            let distance = high_min_y.wrapping_sub(max_y);
+            let distance = high_min_y - max_y;
             if distance < 64 && distance < min_distance && min_y < high_min_y {
                 min_distance = distance;
             }
@@ -2618,7 +2607,7 @@ fn vertical_separation_adjustments(
             }
             let min_y = hints.contour_y_minima[ci];
             let max_y = hints.contour_y_maxima[ci];
-            let distance = min_y.wrapping_sub(low_max_y);
+            let distance = min_y - low_max_y;
             if distance < 64 && distance < min_distance && max_y > low_max_y {
                 min_distance = distance;
             }
@@ -2706,14 +2695,11 @@ pub fn apply_hints(
     vert_snap: bool,
     font_data: Option<&crate::tables::FontData>,
     target_mono: bool,
-    pp1x_shift: i32,
+    _pp1x_shift: i32,
 ) -> ApplyHintsMetrics {
     let mut output = ApplyHintsMetrics::default();
-    let num_pts = outline.points.len();
-    let num_cont = raw_outline.num_contours as usize;
-    let mut hints =
-        GlyphHints::with_capacity(x_scale, y_scale, x_delta, y_delta, num_pts, num_cont);
-    hints.metrics = metrics.map(|m| std::rc::Rc::new(m.clone()));
+    let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
+    hints.metrics = metrics.cloned();
 
     // C: when no blue zones can be built for a Latin-style script, C remaps to
     // NONE_DFLT. Our Latin pipeline with blue_count==0 produces different
@@ -2758,7 +2744,7 @@ pub fn apply_hints(
     let ppem = ppem.clamp(1, 100);
 
     // Step 1: Load outline into hints (raw font units → fx/fy; scaled 26.6 → ox/oy)
-    loader::reload(&mut hints, raw_outline, &outline.points, pp1x_shift);
+    loader::reload(&mut hints, raw_outline, &outline.points);
     if hints.num_points() == 0 {
         return output;
     }
@@ -2769,40 +2755,23 @@ pub fn apply_hints(
     // Phase A: detect_features for HORZ (segs → link → edges)
     let do_horz = hints.scaler_flags & AF_SCALER_FLAG_NO_HORIZONTAL == 0;
     let use_cjk_edges = hints.metrics.as_ref().is_some_and(|m| m.no_advance_hinting);
-    let mut horz_widths_26_6 = [0i32; AF_LATIN_MAX_WIDTHS];
-    let mut horz_wc: usize = 0;
-    let upem = hints.metrics.as_ref().map_or(2048, |m| m.units_per_em);
+    let mut horz_widths_26_6: Vec<i32> = Vec::new();
     if do_horz {
-        compute_segments(
-            &mut hints.points,
-            &hints.contours,
-            &mut hints.axis[0],
-            hints.cw_orientation,
-            Dimension::Horz,
-            upem,
-        );
-        let (wc, widths) = extract_widths(&hints, Dimension::Horz);
-        let n = wc.min(AF_LATIN_MAX_WIDTHS);
-        for i in 0..n {
-            horz_widths_26_6[i] = widths[i].cur;
+        compute_segments(&mut hints, Dimension::Horz);
+        {
+            let (wc, widths) = extract_widths(&hints, Dimension::Horz);
+            horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
+            if use_cjk_edges {
+                // FreeType 2.14.3's `af_cjk_hints_compute_segments` snapshots
+                // the segment limit before `af_latin_hints_compute_segments`.
+                // `af_glyph_hints_reload` has just reset that count to zero,
+                // so the CJK roundness cleanup is skipped and the Latin segment
+                // roundness flags are preserved for CJK/Hani parity.
+                super::cjk::cjk_link_segments(&mut hints, Dimension::Horz);
+            } else {
+                link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
+            }
         }
-        horz_wc = n;
-        if use_cjk_edges {
-            // FreeType 2.14.3's `af_cjk_hints_compute_segments` snapshots
-            // the segment limit before `af_latin_hints_compute_segments`.
-            // `af_glyph_hints_reload` has just reset that count to zero,
-            // so the CJK roundness cleanup is skipped and the Latin segment
-            // roundness flags are preserved for CJK/Hani parity.
-            super::cjk::cjk_link_segments(&mut hints, Dimension::Horz);
-        } else {
-            link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
-        }
-        // Horz edges must be computed INSIDE the do_horz block, before
-        // compute_segments(Vert) overwrites point.u/point.v on all points.
-        // C runs edge detection BEFORE the vertical feature pass
-        // (aflatin.c:4957-4980).  Moving this outside the do_horz guard
-        // (as done in commit aead6b96) changes the order relative to the
-        // stretch-alignment transform and the VERT point-field overwrite.
         if use_cjk_edges {
             super::cjk::cjk_compute_edges(&mut hints, Dimension::Horz, false);
             super::cjk::cjk_compute_blue_edges(&mut hints, Dimension::Horz);
@@ -2811,15 +2780,8 @@ pub fn apply_hints(
         }
     }
 
-    if font_data.is_some() {
-        // Use cached reverse glyph_index → adjustment lookup from metrics.
-        // Avoids expensive per-glyph reverse_cmap_lookup that scans all ~500
-        // ADJUSTMENT_DATABASE entries through the cmap.
-        let adj_type = hints
-            .metrics
-            .as_ref()
-            .and_then(|m| m.reverse_adjustment_map.get(&glyph_index).copied())
-            .unwrap_or(0);
+    if let Some(data) = font_data {
+        let adj_type = reverse_cmap_lookup(data, glyph_index).map_or(0, adjustment_database_lookup);
         // C applies tilde stretching/alignment before vertical feature
         // detection (aflatin.c:4938-4980), after horizontal detection.
         apply_tilde_stretch_alignment(&mut hints, adj_type);
@@ -2827,24 +2789,11 @@ pub fn apply_hints(
 
     // Phase B: detect_features for VERT (segs → link → edges) + blue zones.
     // This OVERWRITES point.v = fx — matching C's behavior before the hint loop.
-    let upem = metrics.map_or(2048, |m| m.units_per_em);
-    compute_segments(
-        &mut hints.points,
-        &hints.contours,
-        &mut hints.axis[1],
-        hints.cw_orientation,
-        Dimension::Vert,
-        upem,
-    );
-    let mut vert_widths_26_6 = [0i32; AF_LATIN_MAX_WIDTHS];
-    let vert_wc: usize;
+    compute_segments(&mut hints, Dimension::Vert);
+    let vert_widths_26_6: Vec<i32>;
     {
         let (wc, widths) = extract_widths(&hints, Dimension::Vert);
-        let n = wc.min(AF_LATIN_MAX_WIDTHS);
-        for i in 0..n {
-            vert_widths_26_6[i] = widths[i].cur;
-        }
-        vert_wc = n;
+        vert_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
         if use_cjk_edges {
             // Keep Latin segment roundness flags for CJK; see the horizontal
             // phase comment above for the FreeType 2.14.3 control-flow detail.
@@ -2859,13 +2808,8 @@ pub fn apply_hints(
     } else {
         compute_edges(&mut hints, Dimension::Vert);
     }
-    if font_data.is_some() {
-        // Use cached reverse glyph_index → adjustment lookup from metrics.
-        let adj_type = hints
-            .metrics
-            .as_ref()
-            .and_then(|m| m.reverse_adjustment_map.get(&glyph_index).copied())
-            .unwrap_or(0);
+    if let Some(data) = font_data {
+        let adj_type = reverse_cmap_lookup(data, glyph_index).map_or(0, adjustment_database_lookup);
         apply_blue_zone_ignore_adjustments(&mut hints, adj_type);
     }
     let is_nonbase = hints.metrics.as_ref().is_some_and(|m| {
@@ -2885,10 +2829,10 @@ pub fn apply_hints(
         if !do_dim {
             continue;
         }
-        let widths: &[i32] = if dim_i == 0 {
-            &horz_widths_26_6[..horz_wc]
+        let widths = if dim_i == 0 {
+            &horz_widths_26_6
         } else {
-            &vert_widths_26_6[..vert_wc]
+            &vert_widths_26_6
         };
         if use_cjk_edges {
             super::cjk::hint_edges(&mut hints, dim, widths);
@@ -2898,7 +2842,7 @@ pub fn apply_hints(
             align_edge_points(&mut hints, dim);
         }
         align_strong_points(&mut hints, dim);
-        align_weak_points(&mut hints.points, &hints.contours, dim);
+        align_weak_points(&mut hints, dim);
         if dim == Dimension::Vert {
             vertical_separation_adjustments(
                 &mut hints,
@@ -3090,18 +3034,16 @@ pub fn apply_hints(
 /// into segments. Segment height is extended by ±half the adjacent point offset
 /// for serif detection.
 #[allow(unused_assignments, unused_variables)]
-pub fn compute_segments(
-    points: &mut [AFPoint],
-    contours: &[usize],
-    axis: &mut AxisHints,
-    cw_orientation: bool,
-    dim: Dimension,
-    metrics_upem: i32,
-) {
+pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
+    let flat_threshold = hints.metrics.as_ref().map_or(146, |m| m.units_per_em / 14);
+    // `af_latin_hints_compute_segments` works over contour endpoints while
+    // mutating the current axis, so take a local copy before borrowing `axis`.
+    let contours: Vec<usize> = hints.contours.clone();
+    let axis = &mut hints.axis[dim as usize];
+
     // Per-point u/v axis swap (aflatin.c:1582). Stored on the point's u/v fields.
     let is_horz = dim == Dimension::Horz;
-    let flat_threshold = metrics_upem / 14;
-    for pt in points.iter_mut() {
+    for pt in &mut hints.points {
         if is_horz {
             pt.u = pt.fx as i32;
             pt.v = pt.fy as i32;
@@ -3118,8 +3060,7 @@ pub fn compute_segments(
     // aflatin.c:1577: major_dir is then ABSOLUTIFIED (Up/Right only) for segment
     // direction matching.
     let major_dir = {
-        let cw = cw_orientation;
-        // true = clockwise (sum<0). C matches this to FT_Outline_Get_Orientation
+        let cw = hints.cw_orientation; // true = clockwise (sum<0). C matches this to FT_Outline_Get_Orientation
         // C: default HORZ=UP VERT=LEFT. If PostScript (area>0→cw=false in our terms? or area<0→cw=true?): flip to HORZ=DOWN VERT=RIGHT
         // FT_Outline_Get_Orientation: area>0→POSTSCRIPT→flip. area<0→TRUETYPE→no_flip.
         // Our cw_orientation: area<0→true. So cw=true means area<0 means TRUETYPE means NO flip.
@@ -3138,8 +3079,9 @@ pub fn compute_segments(
     };
 
     axis.segments.clear();
+    let points = &hints.points;
 
-    for &contour0 in contours {
+    for &contour0 in &contours {
         let mut point = contour0;
         let mut last = points[point].prev;
         let mut on_edge = false;
@@ -3503,7 +3445,7 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
         // Look for an existing edge at approximately this position.
         for e_idx in 0..axis.edges.len() {
             let edge = &axis.edges[e_idx];
-            if edge.dir == seg_dir && (edge.fpos - seg_pos).abs() < edge_dist_thresh {
+            if edge.dir == seg_dir && (edge.fpos as i32 - seg_pos).abs() < edge_dist_thresh {
                 found_edge = e_idx;
                 break;
             }
@@ -3511,13 +3453,13 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
 
         if found_edge == usize::MAX {
             // Create a new edge.
-            let fpos = seg_pos;
+            let fpos = i16_from_i32(seg_pos);
             let scale = if dim == Dimension::Vert {
                 hints.y_scale
             } else {
                 hints.x_scale
             };
-            let opos = ft_mul_fix(fpos, scale);
+            let opos = ft_mul_fix(fpos as i32, scale);
             let edge = AFEdge {
                 fpos,
                 opos,
@@ -3586,7 +3528,7 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
         // Look for an existing edge at this position.
         let mut found: Option<usize> = None;
         for e_idx in 0..axis.edges.len() {
-            let dist = (axis.edges[e_idx].fpos - seg_pos).abs();
+            let dist = (axis.edges[e_idx].fpos as i32 - seg_pos).abs();
             if dist < edge_dist_thresh {
                 found = Some(e_idx);
                 break;
@@ -3676,7 +3618,8 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
 
                 // Compare segment gap vs edge gap (aflatin.c:2416-2430).
                 if edge2_idx != usize::MAX {
-                    let edge_delta = (axis.edges[e_idx].fpos - axis.edges[edge2_idx].fpos).abs();
+                    let edge_delta =
+                        (axis.edges[e_idx].fpos as i32 - axis.edges[edge2_idx].fpos as i32).abs();
                     let seg_delta = (seg.pos as i32 - axis.segments[linked_seg].pos as i32).abs();
                     if seg_delta < edge_delta {
                         // Segment pair is closer → trust the segment's edge.
@@ -3783,64 +3726,58 @@ fn link_segments_inner(
         seg.serif = usize::MAX;
     }
 
-    // Pre-split segments by direction: major-dir segments are stems,
-    // opposite-dir segments are counters.  This avoids checking seg2_dir
-    // against seg1_dir inside the O(n²) inner loop.
-    let opposite_dir = major_dir.opposite();
-    let mut major_indices: Vec<usize> = Vec::with_capacity(n / 2 + 1);
-    let mut opposite_indices: Vec<usize> = Vec::with_capacity(n / 2 + 1);
-    for (idx, seg) in axis.segments.iter().enumerate() {
-        match seg.dir {
-            d if d == major_dir => major_indices.push(idx),
-            d if d == opposite_dir => opposite_indices.push(idx),
-            _ => {}
+    for i in 0..n {
+        let seg1_dir = axis.segments[i].dir;
+        if seg1_dir != major_dir {
+            continue;
         }
-    }
-
-    for &i in &major_indices {
         let pos1 = axis.segments[i].pos as i32;
-        let seg_min_coord = axis.segments[i].min_coord as i32;
-        let seg_max_coord = axis.segments[i].max_coord as i32;
-        for &j in &opposite_indices {
+        for j in 0..n {
+            let seg2_dir = axis.segments[j].dir;
             let pos2 = axis.segments[j].pos as i32;
-            // seg2 must be to the right of seg1
-            if pos2 <= pos1 {
-                continue;
-            }
-            let min_c = seg_min_coord.min(axis.segments[j].min_coord as i32);
-            let max_c = seg_max_coord.max(axis.segments[j].max_coord as i32);
-            let len = max_c - min_c;
-            let dist = pos2 - pos1;
+            // opposite directions, seg2 to the "right" of seg1
+            if (seg1_dir as i8 + seg2_dir as i8 == 0) && pos2 > pos1 {
+                let mut min_c = axis.segments[i].min_coord as i32;
+                let mut max_c = axis.segments[i].max_coord as i32;
+                if min_c < axis.segments[j].min_coord as i32 {
+                    min_c = axis.segments[j].min_coord as i32;
+                }
+                if max_c > axis.segments[j].max_coord as i32 {
+                    max_c = axis.segments[j].max_coord as i32;
+                }
+                let len = max_c - min_c;
+                let dist = pos2 - pos1;
 
-            if len >= len_threshold {
-                // aflatin.c:2093-2113 — exact C scoring
-                let dist_demerit: i32;
-                if max_width > 0 {
-                    let delta = ((dist << 10) / max_width) - (1 << 10);
-                    if delta > 10000 {
-                        dist_demerit = 32000;
-                    } else if delta > 0 {
-                        dist_demerit = (delta * delta) / dist_score;
+                if len >= len_threshold {
+                    // aflatin.c:2093-2113 — exact C scoring
+                    let dist_demerit: i32;
+                    if max_width > 0 {
+                        let delta = ((dist << 10) / max_width) - (1 << 10);
+                        if delta > 10000 {
+                            dist_demerit = 32000;
+                        } else if delta > 0 {
+                            dist_demerit = (delta * delta) / dist_score;
+                        } else {
+                            dist_demerit = 0;
+                        }
                     } else {
-                        dist_demerit = 0;
+                        dist_demerit = dist; // no widths → use raw distance
                     }
-                } else {
-                    dist_demerit = dist; // no widths → use raw distance
-                }
 
-                let score = dist_demerit + len_score / len.max(1);
-                if score < axis.segments[i].score {
-                    #[cfg(debug_assertions)]
-                    if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
-                        log::trace!(target: "autohint::pipeline", "[LINK_SCORE] i={i}->j={j} dist={dist} len={len} max_width={max_width} delta={} dist_demerit={dist_demerit} score={score}",
+                    let score = dist_demerit + len_score / len.max(1);
+                    if score < axis.segments[i].score {
+                        #[cfg(debug_assertions)]
+                        if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+                            log::trace!(target: "autohint::pipeline", "[LINK_SCORE] i={i}->j={j} dist={dist} len={len} max_width={max_width} delta={} dist_demerit={dist_demerit} score={score}",
                                 if max_width > 0 { ((dist << 10) / max_width) - (1 << 10) } else { dist });
+                        }
+                        axis.segments[i].score = score;
+                        axis.segments[i].link = j;
                     }
-                    axis.segments[i].score = score;
-                    axis.segments[i].link = j;
-                }
-                if score < axis.segments[j].score {
-                    axis.segments[j].score = score;
-                    axis.segments[j].link = i;
+                    if score < axis.segments[j].score {
+                        axis.segments[j].score = score;
+                        axis.segments[j].link = i;
+                    }
                 }
             }
         }
@@ -4789,13 +4726,11 @@ fn align_edge_points(hints: &mut GlyphHints, dim: Dimension) {
 /// Weak/strong classification is therefore part of the coordinate contract for
 /// later untouched-point interpolation.
 fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
-    // Take ownership of axis temporarily to avoid cloning edges+segments Vec.
-    // Restored before every return and at function end.
-    let axis = std::mem::take(&mut hints.axis[dim as usize]);
+    let axis_snapshot = hints.axis[dim as usize].clone();
+    let axis = &axis_snapshot;
     let is_vert = dim == Dimension::Vert;
 
     if axis.edges.is_empty() {
-        hints.axis[dim as usize] = axis;
         return;
     }
 
@@ -4816,7 +4751,7 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
 
         // C: linear scan for first edge with fpos >= u (afhints.c:1492-1502)
         let mut nn: usize = 0;
-        while nn < axis.edges.len() && (axis.edges[nn].fpos) < pt_fpos {
+        while nn < axis.edges.len() && (axis.edges[nn].fpos as i32) < pt_fpos {
             nn += 1;
         }
 
@@ -4858,7 +4793,7 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
         }
 
         // C: if exact match, snap to edge (afhints.c:1496-1499)
-        if axis.edges[nn].fpos == pt_fpos {
+        if axis.edges[nn].fpos as i32 == pt_fpos {
             let val = axis.edges[nn].pos;
             if is_vert {
                 hints.points[i].y = val;
@@ -4878,7 +4813,7 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
         let pos_delta = after.pos - before.pos;
         let fpos_delta = (after.fpos - before.fpos) as i32;
         let scale = ft_div_fix(pos_delta, fpos_delta);
-        let offset = pt_fpos - before.fpos;
+        let offset = pt_fpos - before.fpos as i32;
         // C: u = before->pos + FT_MulFix(fu - before->fpos, before->scale)
         let val = before.pos + ft_mul_fix(offset, scale);
 
@@ -4890,7 +4825,6 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
             hints.points[i].flags |= AF_FLAG_TOUCH_X;
         }
     }
-    hints.axis[dim as usize] = axis;
 }
 
 // ── IUP helpers (afhints.c:1592-1681) ────────────────────────────────────────
@@ -4966,7 +4900,7 @@ fn iup_interp(points: &mut [AFPoint], p1: usize, p2: usize, ref1: usize, ref2: u
 ///
 /// Walks contour, finds touched pairs, linearly interpolates between them.
 /// Result depends on WHICH points are touched — wrong touch flag → wrong ref.
-fn align_weak_points(points: &mut [AFPoint], contours: &[usize], dim: Dimension) {
+fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
     let is_vert = dim == Dimension::Vert;
     let touch_flag = if is_vert {
         AF_FLAG_TOUCH_Y
@@ -4975,7 +4909,7 @@ fn align_weak_points(points: &mut [AFPoint], contours: &[usize], dim: Dimension)
     };
 
     // PASS 1: Set u = hinted (current x/y), v = original (ox/oy)
-    for pt in points.iter_mut() {
+    for pt in &mut hints.points {
         if is_vert {
             pt.u = pt.y;
             pt.v = pt.oy;
@@ -4986,8 +4920,9 @@ fn align_weak_points(points: &mut [AFPoint], contours: &[usize], dim: Dimension)
     }
 
     // PASS 2: Iterate contours in storage order (points are contiguous per-contour)
-    for &c_start in contours {
-        let end_idx = points[c_start].prev; // last point index of this contour
+    let contours_snapshot = hints.contours.clone();
+    for &c_start in &contours_snapshot {
+        let end_idx = hints.points[c_start].prev; // last point index of this contour
 
         // Find first touched point
         let mut idx = c_start;
@@ -4995,7 +4930,7 @@ fn align_weak_points(points: &mut [AFPoint], contours: &[usize], dim: Dimension)
             if idx > end_idx {
                 break usize::MAX;
             } // no touched point in contour
-            if points[idx].flags & touch_flag != 0 {
+            if hints.points[idx].flags & touch_flag != 0 {
                 break idx;
             }
             idx += 1;
@@ -5008,7 +4943,7 @@ fn align_weak_points(points: &mut [AFPoint], contours: &[usize], dim: Dimension)
 
         loop {
             // skip consecutive touched points
-            while last_touched < end_idx && points[last_touched + 1].flags & touch_flag != 0 {
+            while last_touched < end_idx && hints.points[last_touched + 1].flags & touch_flag != 0 {
                 last_touched += 1;
             }
 
@@ -5018,7 +4953,7 @@ fn align_weak_points(points: &mut [AFPoint], contours: &[usize], dim: Dimension)
                 if next > end_idx {
                     break None;
                 }
-                if points[next].flags & touch_flag != 0 {
+                if hints.points[next].flags & touch_flag != 0 {
                     break Some(next);
                 }
                 next += 1;
@@ -5026,18 +4961,24 @@ fn align_weak_points(points: &mut [AFPoint], contours: &[usize], dim: Dimension)
 
             if let Some(nt) = next_touched {
                 // Interpolate between last_touched and next_touched
-                iup_interp(points, last_touched + 1, nt - 1, last_touched, nt);
+                iup_interp(
+                    &mut hints.points,
+                    last_touched + 1,
+                    nt - 1,
+                    last_touched,
+                    nt,
+                );
                 last_touched = nt;
             } else {
                 // End of contour
                 if last_touched == first_touched {
                     // Only one touched point: uniform shift
-                    iup_shift(points, c_start, end_idx, first_touched);
+                    iup_shift(&mut hints.points, c_start, end_idx, first_touched);
                 } else {
                     // Interpolate tail segments
                     if last_touched < end_idx {
                         iup_interp(
-                            points,
+                            &mut hints.points,
                             last_touched + 1,
                             end_idx,
                             last_touched,
@@ -5046,7 +4987,7 @@ fn align_weak_points(points: &mut [AFPoint], contours: &[usize], dim: Dimension)
                     }
                     if first_touched > c_start {
                         iup_interp(
-                            points,
+                            &mut hints.points,
                             c_start,
                             first_touched - 1,
                             last_touched,
@@ -5060,7 +5001,7 @@ fn align_weak_points(points: &mut [AFPoint], contours: &[usize], dim: Dimension)
     }
 
     // PASS 3: Write u back to x/y
-    for pt in points.iter_mut() {
+    for pt in &mut hints.points {
         if is_vert {
             pt.y = pt.u;
         } else {
