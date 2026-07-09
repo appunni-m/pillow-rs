@@ -42,21 +42,23 @@ fn corner_is_flat(in_x: i32, in_y: i32, out_x: i32, out_y: i32) -> bool {
 pub fn direction_compute(dx: i32, dy: i32) -> Direction {
     let ax = dx.abs();
     let ay = dy.abs();
-
-    if ax * 14 < ay {
-        if dy > 0 {
-            Direction::Up
-        } else {
-            Direction::Down
+    // Cardinal when longest axis is > 14× the shorter (≈4.1° tolerance).
+    match (ax * 14 < ay, ay * 14 < ax) {
+        (true, _) => {
+            if dy > 0 {
+                Direction::Up
+            } else {
+                Direction::Down
+            }
         }
-    } else if ay * 14 < ax {
-        if dx > 0 {
-            Direction::Right
-        } else {
-            Direction::Left
+        (_, true) => {
+            if dx > 0 {
+                Direction::Right
+            } else {
+                Direction::Left
+            }
         }
-    } else {
-        Direction::None
+        _ => Direction::None,
     }
 }
 
