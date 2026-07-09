@@ -1591,21 +1591,32 @@ pub fn FT_Sfnt_Table_Count(face: &FT_Face) -> usize {
 }
 
 fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags) -> FT_GlyphSlot {
+    // Destructure slot to move into core_slot without cloning the entire
+    // GlyphSlot (which includes Outline Vecs and RenderedBitmap buffers).
+    let glyph_index = FT_UInt::from(slot.glyph_index);
+    let metrics: FT_Glyph_Metrics = slot.metrics.into();
+    let advance: FT_Vector = slot.advance.into();
+    let format = glyph_format_from_core(slot.format);
+    let bitmap = slot.bitmap.clone().map(Into::into);
+    let bitmap_left = slot.bitmap_left;
+    let bitmap_top = slot.bitmap_top;
+    let outline_cbox = bbox_to_ffi(slot.outline_cbox);
+    let outline_bbox = bbox_to_ffi(slot.outline_bbox);
     let outline = slot.slot_outline().map(outline_to_ffi_snapshot);
-    let core_slot = slot.clone();
+    let source_face = face.inner.clone();
     FT_GlyphSlot {
-        glyph_index: FT_UInt::from(slot.glyph_index),
-        metrics: slot.metrics.into(),
-        advance: slot.advance.into(),
-        format: glyph_format_from_core(slot.format),
-        bitmap: slot.bitmap.map(Into::into),
-        bitmap_left: slot.bitmap_left,
-        bitmap_top: slot.bitmap_top,
-        outline_cbox: bbox_to_ffi(slot.outline_cbox),
-        outline_bbox: bbox_to_ffi(slot.outline_bbox),
+        glyph_index,
+        metrics,
+        advance,
+        format,
+        bitmap,
+        bitmap_left,
+        bitmap_top,
+        outline_cbox,
+        outline_bbox,
         outline,
-        core_slot,
-        source_face: face.inner.clone(),
+        core_slot: slot,
+        source_face,
         load_flags,
     }
 }
