@@ -364,8 +364,9 @@ pub struct GlyphHints {
     /// Scaler flags (e.g., AF_SCALER_FLAG_NO_HORIZONTAL for italic).
     pub scaler_flags: u32,
 
-    /// Font-wide Latin metrics (stem widths, blue zones).  Owned clone.
-    pub metrics: Option<AfLatinMetrics>,
+    /// Font-wide Latin metrics (stem widths, blue zones).  Shared via Rc
+    /// to avoid deep-cloning Vec<bool> fields (non_base_glyphs etc.) per glyph.
+    pub metrics: Option<std::rc::Rc<AfLatinMetrics>>,
 
     /// Glyph outline orientation: true = clockwise (PostScript).
     pub cw_orientation: bool,

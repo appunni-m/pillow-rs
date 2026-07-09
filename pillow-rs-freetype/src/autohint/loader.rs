@@ -98,13 +98,17 @@ pub fn reload(
     let num_contours = raw_outline.num_contours as usize;
 
     hints.points.clear();
-    hints.points.reserve(num_points + 2);
     hints.contours.clear();
     hints.contours.reserve(num_contours);
 
     // ── Copy coordinates: fx/fy from raw font units, ox/oy from scaled 26.6 ──
+    // resize + index write avoids per-point push capacity checks.
+    let points_base = hints.points.len();
+    hints
+        .points
+        .resize(points_base + num_points + 2, AFPoint::default());
     for (i, sp) in scaled_points.iter().enumerate() {
-        let mut pt = AFPoint::default();
+        let pt = &mut hints.points[points_base + i];
 
         // Unscaled font units (from glyf parser) — for fpos edge positions.
         if let Some(rp) = raw_outline.points.get(i) {
@@ -124,8 +128,8 @@ pub fn reload(
         if !sp.on_curve {
             pt.flags |= AF_FLAG_CONIC; // TrueType has only quadratic (conic) off-curve
         }
-
-        hints.points.push(pt);
+        // pt is written directly into hints.points[points_base + i] via mutable borrow.
+        // No push needed — resize already allocated.
     }
 
     // ── Contour linking ──
