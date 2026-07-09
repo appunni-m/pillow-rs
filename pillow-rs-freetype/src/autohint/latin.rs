@@ -2797,12 +2797,18 @@ pub fn apply_hints(
         } else {
             link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
         }
-    }
-    if use_cjk_edges {
-        super::cjk::cjk_compute_edges(&mut hints, Dimension::Horz, false);
-        super::cjk::cjk_compute_blue_edges(&mut hints, Dimension::Horz);
-    } else {
-        compute_edges(&mut hints, Dimension::Horz);
+        // Horz edges must be computed INSIDE the do_horz block, before
+        // compute_segments(Vert) overwrites point.u/point.v on all points.
+        // C runs edge detection BEFORE the vertical feature pass
+        // (aflatin.c:4957-4980).  Moving this outside the do_horz guard
+        // (as done in commit aead6b96) changes the order relative to the
+        // stretch-alignment transform and the VERT point-field overwrite.
+        if use_cjk_edges {
+            super::cjk::cjk_compute_edges(&mut hints, Dimension::Horz, false);
+            super::cjk::cjk_compute_blue_edges(&mut hints, Dimension::Horz);
+        } else {
+            compute_edges(&mut hints, Dimension::Horz);
+        }
     }
 
     if font_data.is_some() {
