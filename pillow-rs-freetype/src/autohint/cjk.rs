@@ -54,7 +54,7 @@ pub fn cjk_metrics_init_widths(
 
     // afcjk.c:140-141 — identity scale dummy metrics
     let dummy = AfLatinMetrics::new(upem, 1);
-    hints.metrics = Some(dummy);
+    hints.metrics = Some(std::rc::Rc::new(dummy));
 
     // afcjk.c:155 — reload outline into hints
     super::loader::reload(&mut hints, outline, scaled_points);
@@ -68,7 +68,15 @@ pub fn cjk_metrics_init_widths(
         };
 
         // afcjk.c:184 — compute segments (shared Latin function)
-        super::latin::compute_segments(&mut hints, d);
+        let upem = hints.metrics.as_ref().map_or(2048, |m| m.units_per_em);
+        super::latin::compute_segments(
+            &mut hints.points,
+            &hints.contours,
+            &mut hints.axis[d as usize],
+            hints.cw_orientation,
+            d,
+            upem,
+        );
 
         // afcjk.c:195-199 — link segments (shared Latin function, width_count=0
         // means no per-width scoring adjustment — same as our default)

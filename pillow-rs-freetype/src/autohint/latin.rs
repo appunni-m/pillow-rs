@@ -51,7 +51,7 @@ use super::types::{
     AF_FLAG_CONTROL, AF_FLAG_IGNORE, AF_FLAG_TOUCH_X, AF_FLAG_TOUCH_Y, AF_FLAG_WEAK_INTERPOLATION,
     AF_LATIN_HINTS_HORZ_SNAP, AF_LATIN_HINTS_MONO, AF_LATIN_HINTS_STEM_ADJUST,
     AF_LATIN_HINTS_VERT_SNAP, AF_LATIN_MAX_WIDTHS, AF_SCALER_FLAG_NO_HORIZONTAL, AFEdge, AFPoint,
-    AFSegment, AfLatinBlue, AfLatinMetrics, AfWidth, Dimension, Direction, GlyphHints,
+    AFSegment, AfLatinBlue, AfLatinMetrics, AfWidth, AxisHints, Dimension, Direction, GlyphHints,
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -1144,7 +1144,7 @@ pub fn metrics_init_widths(
     // Scan the standard glyph at identity scale (0x10000 = 1.0)
     // Build temp hints: scale=1.0, deltas=0
     let mut hints = GlyphHints::new(0x10000, 0x10000, 0, 0);
-    hints.metrics = Some(metrics.clone());
+    hints.metrics = Some(std::rc::Rc::new(metrics.clone()));
     hints.other_flags =
         AF_LATIN_HINTS_HORZ_SNAP | AF_LATIN_HINTS_VERT_SNAP | AF_LATIN_HINTS_STEM_ADJUST;
     loader::reload(&mut hints, raw_outline, scaled_points);
@@ -1159,7 +1159,15 @@ pub fn metrics_init_widths(
         } else {
             Dimension::Vert
         };
-        compute_segments(&mut hints, dimension);
+        let upem = metrics.units_per_em;
+        compute_segments(
+            &mut hints.points,
+            &hints.contours,
+            &mut hints.axis[dim as usize],
+            hints.cw_orientation,
+            dimension,
+            upem,
+        );
         // link with width_count=0 (no widths yet — uses the else branch: dist_demerit=dist)
         link_segments_inner(&mut hints, dimension, 0, &[]);
 
@@ -2704,7 +2712,7 @@ pub fn apply_hints(
     let num_cont = raw_outline.num_contours as usize;
     let mut hints =
         GlyphHints::with_capacity(x_scale, y_scale, x_delta, y_delta, num_pts, num_cont);
-    hints.metrics = metrics.cloned();
+    hints.metrics = metrics.map(|m| std::rc::Rc::new(m.clone()));
 
     // C: when no blue zones can be built for a Latin-style script, C remaps to
     // NONE_DFLT. Our Latin pipeline with blue_count==0 produces different
@@ -2798,7 +2806,15 @@ pub fn apply_hints(
 
     // Phase B: detect_features for VERT (segs → link → edges) + blue zones.
     // This OVERWRITES point.v = fx — matching C's behavior before the hint loop.
-    compute_segments(&mut hints, Dimension::Vert);
+    let upem = metrics.map_or(2048, |m| m.units_per_em);
+    compute_segments(
+        &mut hints.points,
+        &hints.contours,
+        &mut hints.axis[1],
+        hints.cw_orientation,
+        Dimension::Vert,
+        upem,
+    );
     let vert_widths_26_6: Vec<i32>;
     {
         let (wc, widths) = extract_widths(&hints, Dimension::Vert);
@@ -3048,16 +3064,18 @@ pub fn apply_hints(
 /// into segments. Segment height is extended by ±half the adjacent point offset
 /// for serif detection.
 #[allow(unused_assignments, unused_variables)]
-pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
-    let flat_threshold = hints.metrics.as_ref().map_or(146, |m| m.units_per_em / 14);
-    // `af_latin_hints_compute_segments` works over contour endpoints while
-    // mutating the current axis, so take a local copy before borrowing `axis`.
-    let contours: Vec<usize> = hints.contours.clone();
-    let axis = &mut hints.axis[dim as usize];
-
+pub fn compute_segments(
+    points: &mut [AFPoint],
+    contours: &[usize],
+    axis: &mut AxisHints,
+    cw_orientation: bool,
+    dim: Dimension,
+    metrics_upem: i32,
+) {
     // Per-point u/v axis swap (aflatin.c:1582). Stored on the point's u/v fields.
     let is_horz = dim == Dimension::Horz;
-    for pt in &mut hints.points {
+    let flat_threshold = metrics_upem / 14;
+    for pt in points.iter_mut() {
         if is_horz {
             pt.u = pt.fx as i32;
             pt.v = pt.fy as i32;
@@ -3074,7 +3092,8 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
     // aflatin.c:1577: major_dir is then ABSOLUTIFIED (Up/Right only) for segment
     // direction matching.
     let major_dir = {
-        let cw = hints.cw_orientation; // true = clockwise (sum<0). C matches this to FT_Outline_Get_Orientation
+        let cw = cw_orientation;
+        // true = clockwise (sum<0). C matches this to FT_Outline_Get_Orientation
         // C: default HORZ=UP VERT=LEFT. If PostScript (area>0→cw=false in our terms? or area<0→cw=true?): flip to HORZ=DOWN VERT=RIGHT
         // FT_Outline_Get_Orientation: area>0→POSTSCRIPT→flip. area<0→TRUETYPE→no_flip.
         // Our cw_orientation: area<0→true. So cw=true means area<0 means TRUETYPE means NO flip.
@@ -3093,9 +3112,8 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
     };
 
     axis.segments.clear();
-    let points = &hints.points;
 
-    for &contour0 in &contours {
+    for &contour0 in contours {
         let mut point = contour0;
         let mut last = points[point].prev;
         let mut on_edge = false;
@@ -4746,11 +4764,13 @@ fn align_edge_points(hints: &mut GlyphHints, dim: Dimension) {
 /// Weak/strong classification is therefore part of the coordinate contract for
 /// later untouched-point interpolation.
 fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
-    let axis_snapshot = hints.axis[dim as usize].clone();
-    let axis = &axis_snapshot;
+    // Take ownership of axis temporarily to avoid cloning edges+segments Vec.
+    // Restored before every return and at function end.
+    let axis = std::mem::take(&mut hints.axis[dim as usize]);
     let is_vert = dim == Dimension::Vert;
 
     if axis.edges.is_empty() {
+        hints.axis[dim as usize] = axis;
         return;
     }
 
@@ -4845,6 +4865,7 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
             hints.points[i].flags |= AF_FLAG_TOUCH_X;
         }
     }
+    hints.axis[dim as usize] = axis;
 }
 
 // ── IUP helpers (afhints.c:1592-1681) ────────────────────────────────────────
