@@ -45,8 +45,6 @@ help:
 	@printf "  make clippy           Run clippy with warnings denied\n"
 	@printf "  make lint             Run fmt + clippy\n"
 	@printf "\nFixtures:\n"
-	@printf "  make unified-inputs   Regenerate unified FFI input cases\n"
-	@printf "  make unified-inputs-check Check generated unified FFI input cases are current\n"
 	@printf "  make unified-oracle   Build the runtime C FreeType oracle helper\n"
 	@printf "  make public-constants Regenerate public constant parity tables\n"
 	@printf "\nBenchmark:\n"
@@ -63,7 +61,7 @@ help:
 	@printf "  make clean            Remove local build/report artifacts\n"
 
 .PHONY: setup
-setup: unified-oracle unified-inputs public-constants
+setup: unified-oracle public-constants
 
 .PHONY: setup-tools
 setup-tools:
@@ -96,26 +94,18 @@ unified-oracle: oracle-fetch
 public-constants: oracle-fetch
 	$(PYTHON) scripts/generate_public_constants.py --rust-src src/ffi/generated_constants.rs --test-lookup tests/support/generated_constant_lookup.rs
 
-.PHONY: unified-inputs
-unified-inputs:
-	$(PYTHON) scripts/build_unified_fixture_inputs.py
-
-.PHONY: unified-inputs-check
-unified-inputs-check:
-	$(PYTHON) scripts/build_unified_fixture_inputs.py --check
-
 # ── Full Parity Test (~20 min, 3.0M cases) ──────────────────────────
 # Warm oracle cache (first run only): ~15 min. Subsequent runs: ~5 min.
 #
 .PHONY: test-unified-fixtures
-test-unified-fixtures: unified-oracle unified-inputs-check api-abi-check
+test-unified-fixtures: unified-oracle api-abi-check
 	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
 
 # ── Full Parity Test with --release (~15 min total) ───────────────────
 # --release mode is faster but misses debug_assertions.
 #
 .PHONY: test-unified-fixtures-release
-test-unified-fixtures-release: unified-oracle unified-inputs-check api-abi-check
+test-unified-fixtures-release: unified-oracle api-abi-check
 	$(CARGO) test --release --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
 
 .PHONY: test-unified-coverage
@@ -164,7 +154,7 @@ test-ffi-compat: api-abi-check
 #   FONTDONE_UNIFIED_PROFILE           – print timing profiles
 
 .PHONY: test-op
-test-op: unified-oracle unified-inputs-check api-abi-check
+test-op: unified-oracle api-abi-check
 	@if [ -z "$(OP)" ]; then \
 		echo "Usage: make test-op OP=<operation>" >&2; \
 		echo "  Example operations: ftadvanc.get_advance, load_glyph, render_glyph, freetype.inspect_glyph_metrics" >&2; \
@@ -176,7 +166,7 @@ test-op: unified-oracle unified-inputs-check api-abi-check
 	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
 
 .PHONY: test-case
-test-case: unified-oracle unified-inputs-check api-abi-check
+test-case: unified-oracle api-abi-check
 	@if [ -z "$(CASE)" ]; then \
 		echo "Usage: make test-case CASE=<substring>" >&2; \
 		echo "  Matches against case_id, subject, or case fields" >&2; \
@@ -187,13 +177,13 @@ test-case: unified-oracle unified-inputs-check api-abi-check
 	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
 
 .PHONY: test-list
-test-list: unified-oracle unified-inputs-check api-abi-check
+test-list: unified-oracle api-abi-check
 	FONTDONE_UNIFIED_SELECTION_ONLY=1 \
 	FONTDONE_UNIFIED_CASE_LIMIT=5 \
 	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
 
 .PHONY: test-list-ops
-test-list-ops: unified-oracle unified-inputs-check api-abi-check
+test-list-ops: unified-oracle api-abi-check
 	FONTDONE_UNIFIED_SELECTION_ONLY=1 \
 	FONTDONE_UNIFIED_CASE_LIMIT=0 \
 	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
