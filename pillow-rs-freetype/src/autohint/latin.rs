@@ -3740,58 +3740,64 @@ fn link_segments_inner(
         seg.serif = usize::MAX;
     }
 
-    for i in 0..n {
-        let seg1_dir = axis.segments[i].dir;
-        if seg1_dir != major_dir {
-            continue;
+    // Pre-split segments by direction: major-dir segments are stems,
+    // opposite-dir segments are counters.  This avoids checking seg2_dir
+    // against seg1_dir inside the O(n²) inner loop.
+    let opposite_dir = major_dir.opposite();
+    let mut major_indices: Vec<usize> = Vec::with_capacity(n / 2 + 1);
+    let mut opposite_indices: Vec<usize> = Vec::with_capacity(n / 2 + 1);
+    for (idx, seg) in axis.segments.iter().enumerate() {
+        match seg.dir {
+            d if d == major_dir => major_indices.push(idx),
+            d if d == opposite_dir => opposite_indices.push(idx),
+            _ => {}
         }
+    }
+
+    for &i in &major_indices {
         let pos1 = axis.segments[i].pos as i32;
-        for j in 0..n {
-            let seg2_dir = axis.segments[j].dir;
+        let seg_min_coord = axis.segments[i].min_coord as i32;
+        let seg_max_coord = axis.segments[i].max_coord as i32;
+        for &j in &opposite_indices {
             let pos2 = axis.segments[j].pos as i32;
-            // opposite directions, seg2 to the "right" of seg1
-            if (seg1_dir as i8 + seg2_dir as i8 == 0) && pos2 > pos1 {
-                let mut min_c = axis.segments[i].min_coord as i32;
-                let mut max_c = axis.segments[i].max_coord as i32;
-                if min_c < axis.segments[j].min_coord as i32 {
-                    min_c = axis.segments[j].min_coord as i32;
-                }
-                if max_c > axis.segments[j].max_coord as i32 {
-                    max_c = axis.segments[j].max_coord as i32;
-                }
-                let len = max_c - min_c;
-                let dist = pos2 - pos1;
+            // seg2 must be to the right of seg1
+            if pos2 <= pos1 {
+                continue;
+            }
+            let min_c = seg_min_coord.min(axis.segments[j].min_coord as i32);
+            let max_c = seg_max_coord.max(axis.segments[j].max_coord as i32);
+            let len = max_c - min_c;
+            let dist = pos2 - pos1;
 
-                if len >= len_threshold {
-                    // aflatin.c:2093-2113 — exact C scoring
-                    let dist_demerit: i32;
-                    if max_width > 0 {
-                        let delta = ((dist << 10) / max_width) - (1 << 10);
-                        if delta > 10000 {
-                            dist_demerit = 32000;
-                        } else if delta > 0 {
-                            dist_demerit = (delta * delta) / dist_score;
-                        } else {
-                            dist_demerit = 0;
-                        }
+            if len >= len_threshold {
+                // aflatin.c:2093-2113 — exact C scoring
+                let dist_demerit: i32;
+                if max_width > 0 {
+                    let delta = ((dist << 10) / max_width) - (1 << 10);
+                    if delta > 10000 {
+                        dist_demerit = 32000;
+                    } else if delta > 0 {
+                        dist_demerit = (delta * delta) / dist_score;
                     } else {
-                        dist_demerit = dist; // no widths → use raw distance
+                        dist_demerit = 0;
                     }
+                } else {
+                    dist_demerit = dist; // no widths → use raw distance
+                }
 
-                    let score = dist_demerit + len_score / len.max(1);
-                    if score < axis.segments[i].score {
-                        #[cfg(debug_assertions)]
-                        if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
-                            log::trace!(target: "autohint::pipeline", "[LINK_SCORE] i={i}->j={j} dist={dist} len={len} max_width={max_width} delta={} dist_demerit={dist_demerit} score={score}",
+                let score = dist_demerit + len_score / len.max(1);
+                if score < axis.segments[i].score {
+                    #[cfg(debug_assertions)]
+                    if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+                        log::trace!(target: "autohint::pipeline", "[LINK_SCORE] i={i}->j={j} dist={dist} len={len} max_width={max_width} delta={} dist_demerit={dist_demerit} score={score}",
                                 if max_width > 0 { ((dist << 10) / max_width) - (1 << 10) } else { dist });
-                        }
-                        axis.segments[i].score = score;
-                        axis.segments[i].link = j;
                     }
-                    if score < axis.segments[j].score {
-                        axis.segments[j].score = score;
-                        axis.segments[j].link = i;
-                    }
+                    axis.segments[i].score = score;
+                    axis.segments[i].link = j;
+                }
+                if score < axis.segments[j].score {
+                    axis.segments[j].score = score;
+                    axis.segments[j].link = i;
                 }
             }
         }
