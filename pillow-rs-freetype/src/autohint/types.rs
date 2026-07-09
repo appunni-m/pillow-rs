@@ -391,6 +391,47 @@ impl GlyphHints {
         }
     }
 
+    /// Create with pre-allocated capacities to avoid reallocation during
+    /// reload / segment-detection / edge-computation phases.
+    pub fn with_capacity(
+        x_scale: i32,
+        y_scale: i32,
+        x_delta: i32,
+        y_delta: i32,
+        num_points: usize,
+        num_contours: usize,
+    ) -> Self {
+        let seg_cap = (num_points / 2).max(4);
+        let edge_cap = seg_cap / 2;
+        GlyphHints {
+            x_scale,
+            y_scale,
+            x_delta,
+            y_delta,
+            points: Vec::with_capacity(num_points + 2),
+            contours: Vec::with_capacity(num_contours),
+            contour_y_minima: Vec::with_capacity(num_contours),
+            contour_y_maxima: Vec::with_capacity(num_contours),
+            axis: [
+                AxisHints {
+                    segments: Vec::with_capacity(seg_cap),
+                    edges: Vec::with_capacity(edge_cap),
+                    major_dir: Direction::None,
+                },
+                AxisHints {
+                    segments: Vec::with_capacity(seg_cap),
+                    edges: Vec::with_capacity(edge_cap),
+                    major_dir: Direction::None,
+                },
+            ],
+            ppem: 0,
+            other_flags: 0,
+            scaler_flags: 0,
+            metrics: None,
+            cw_orientation: false,
+        }
+    }
+
     /// Number of contours.
     pub fn num_contours(&self) -> usize {
         self.contours.len()

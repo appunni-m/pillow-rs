@@ -407,6 +407,7 @@ impl Font {
             fpgm,
             prep,
             cvt,
+            glyph_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
         });
 
         let _upem = font_data.head.units_per_em as i32;
@@ -1741,16 +1742,28 @@ fn scaled_slot_outline_from_outline(
 ) -> Outline {
     let off_x = ft_pix_floor(ol_cbox_x_min);
     let off_y = ft_pix_floor(ol_cbox_y_min);
-    let mut slot = outline.clone();
-    for point in &mut slot.points {
-        point.x += off_x;
-        point.y += off_y;
+    // Single-pass: allocate and apply offset in one loop instead of clone+loop.
+    let points: Vec<crate::outline::OutlinePoint> = outline
+        .points
+        .iter()
+        .map(|p| crate::outline::OutlinePoint {
+            x: p.x + off_x,
+            y: p.y + off_y,
+            on_curve: p.on_curve,
+        })
+        .collect();
+    Outline {
+        n_contours: outline.n_contours,
+        contours: outline.contours.clone(),
+        points,
+        tags: outline.tags.clone(),
+        contour_dropouts: outline.contour_dropouts.clone(),
+        flags: outline.flags,
+        cbox_x_min: ol_cbox_x_min,
+        cbox_y_min: ol_cbox_y_min,
+        cbox_x_max: ol_cbox_x_max,
+        cbox_y_max: ol_cbox_y_max,
     }
-    slot.cbox_x_min = ol_cbox_x_min;
-    slot.cbox_y_min = ol_cbox_y_min;
-    slot.cbox_x_max = ol_cbox_x_max;
-    slot.cbox_y_max = ol_cbox_y_max;
-    slot
 }
 
 fn scaled_slot_outline(scaled: &scaler::ScaledGlyph) -> Outline {

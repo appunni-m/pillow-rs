@@ -2700,7 +2700,10 @@ pub fn apply_hints(
     target_mono: bool,
 ) -> ApplyHintsMetrics {
     let mut output = ApplyHintsMetrics::default();
-    let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
+    let num_pts = outline.points.len();
+    let num_cont = raw_outline.num_contours as usize;
+    let mut hints =
+        GlyphHints::with_capacity(x_scale, y_scale, x_delta, y_delta, num_pts, num_cont);
     hints.metrics = metrics.cloned();
 
     // C: when no blue zones can be built for a Latin-style script, C remaps to
