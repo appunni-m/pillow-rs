@@ -10,7 +10,7 @@ use crate::error::FontError;
 use crate::fixed::{ft_mul_div, ft_mul_fix};
 use crate::outline::{OUTLINE_HIGH_PRECISION, Outline, OutlinePoint};
 use crate::tables::FontData;
-use crate::tt::glyf::{GlyphOutline, load_glyph, load_glyph_with_scaled_component_offsets};
+use crate::tt::glyf::{GlyphOutline, load_glyph_with_scaled_component_offsets};
 use crate::tt::hinter::NativeHintMode;
 
 /// Fixed-point scale factors derived from point size and units-per-em.
@@ -664,13 +664,7 @@ fn scale_glyph_impl_with_context(
             scale.y_scale,
         )?
     } else {
-        load_glyph(
-            &data.glyf_data,
-            &data.loca_data,
-            data.head.index_to_loc_format,
-            glyph_index,
-            &data.hmtx,
-        )?
+        data.load_glyph_outline(glyph_index)?
     };
 
     if !allow_bytecode && latin_metrics.is_none() {
