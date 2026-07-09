@@ -54,10 +54,10 @@ pub fn cjk_metrics_init_widths(
 
     // afcjk.c:140-141 — identity scale dummy metrics
     let dummy = AfLatinMetrics::new(upem, 1);
-    hints.metrics = Some(std::rc::Rc::new(dummy));
+    hints.metrics = Some(dummy);
 
     // afcjk.c:155 — reload outline into hints
-    super::loader::reload(&mut hints, outline, scaled_points, 0);
+    super::loader::reload(&mut hints, outline, scaled_points);
 
     // afcjk.c:166-202 — for each dimension: compute segments, link, extract widths
     for dim in 0..2 {
@@ -68,15 +68,7 @@ pub fn cjk_metrics_init_widths(
         };
 
         // afcjk.c:184 — compute segments (shared Latin function)
-        let upem = hints.metrics.as_ref().map_or(2048, |m| m.units_per_em);
-        super::latin::compute_segments(
-            &mut hints.points,
-            &hints.contours,
-            &mut hints.axis[d as usize],
-            hints.cw_orientation,
-            d,
-            upem,
-        );
+        super::latin::compute_segments(&mut hints, d);
 
         // afcjk.c:195-199 — link segments (shared Latin function, width_count=0
         // means no per-width scoring adjustment — same as our default)
@@ -396,7 +388,7 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
             if edge.dir != seg_dir {
                 continue;
             }
-            let dist = (edge.fpos - seg_pos).abs();
+            let dist = (edge.fpos as i32 - seg_pos).abs();
             if dist < edge_dist_thresh && dist < best_dist {
                 // afcjk.c:1065-1085 — linked segment compatibility
                 let link = seg_link;
@@ -437,8 +429,8 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
             e.last = seg_idx;
         } else {
             // afcjk.c:1088-1109 — create new edge with sorted insertion
-            let fpos = seg_pos;
-            let opos = ft_mul_fix(fpos, scale);
+            let fpos = i16_from_i32(seg_pos);
+            let opos = ft_mul_fix(fpos as i32, scale);
             let new_edge = AFEdge {
                 fpos,
                 opos,
@@ -521,7 +513,8 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
                 let linked_seg = if is_serif { seg.serif } else { seg.link };
 
                 if edge2_idx != usize::MAX {
-                    let edge_delta = (axis.edges[e_idx].fpos - axis.edges[edge2_idx].fpos).abs();
+                    let edge_delta =
+                        (axis.edges[e_idx].fpos as i32 - axis.edges[edge2_idx].fpos as i32).abs();
                     let seg_delta = (seg.pos as i32 - axis.segments[linked_seg].pos as i32).abs();
                     if seg_delta < edge_delta {
                         edge2_idx = axis.segments[linked_seg].edge;
@@ -765,14 +758,14 @@ pub fn cjk_compute_blue_edges(hints: &mut GlyphHints, dim: Dimension) {
                 continue;
             }
 
-            let compare = if (edge.fpos - blue.ref_width.org).abs()
-                > (edge.fpos - blue.shoot_width.org).abs()
+            let compare = if (edge.fpos as i32 - blue.ref_width.org).abs()
+                > (edge.fpos as i32 - blue.shoot_width.org).abs()
             {
                 blue.shoot_width
             } else {
                 blue.ref_width
             };
-            let dist = ft_mul_fix((edge.fpos - compare.org).abs(), scale);
+            let dist = ft_mul_fix((edge.fpos as i32 - compare.org).abs(), scale);
             if dist < best_dist {
                 best_dist = dist;
                 best_blue = Some(compare);
@@ -1221,9 +1214,9 @@ pub(super) fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i
                 } else {
                     axis.edges[i].pos = axis.edges[before].pos
                         + ft_mul_div(
-                            axis.edges[i].fpos - axis.edges[before].fpos,
+                            axis.edges[i].fpos as i32 - axis.edges[before].fpos as i32,
                             axis.edges[after].pos - axis.edges[before].pos,
-                            axis.edges[after].fpos - axis.edges[before].fpos,
+                            axis.edges[after].fpos as i32 - axis.edges[before].fpos as i32,
                         );
                 }
             }

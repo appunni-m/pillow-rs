@@ -42,23 +42,21 @@ fn corner_is_flat(in_x: i32, in_y: i32, out_x: i32, out_y: i32) -> bool {
 pub fn direction_compute(dx: i32, dy: i32) -> Direction {
     let ax = dx.abs();
     let ay = dy.abs();
-    // Cardinal when longest axis is > 14× the shorter (≈4.1° tolerance).
-    match (ax * 14 < ay, ay * 14 < ax) {
-        (true, _) => {
-            if dy > 0 {
-                Direction::Up
-            } else {
-                Direction::Down
-            }
+
+    if ax * 14 < ay {
+        if dy > 0 {
+            Direction::Up
+        } else {
+            Direction::Down
         }
-        (_, true) => {
-            if dx > 0 {
-                Direction::Right
-            } else {
-                Direction::Left
-            }
+    } else if ay * 14 < ax {
+        if dx > 0 {
+            Direction::Right
+        } else {
+            Direction::Left
         }
-        _ => Direction::None,
+    } else {
+        Direction::None
     }
 }
 
@@ -93,30 +91,22 @@ pub fn reload(
     hints: &mut GlyphHints,
     raw_outline: &crate::tt::glyf::GlyphOutline,
     scaled_points: &[crate::outline::OutlinePoint],
-    pp1x_shift: i32,
 ) {
     let num_points = scaled_points.len();
     let num_contours = raw_outline.num_contours as usize;
 
     hints.points.clear();
+    hints.points.reserve(num_points + 2);
     hints.contours.clear();
     hints.contours.reserve(num_contours);
 
     // ── Copy coordinates: fx/fy from raw font units, ox/oy from scaled 26.6 ──
-    // resize + index write avoids per-point push capacity checks.
-    let points_base = hints.points.len();
-    hints
-        .points
-        .resize(points_base + num_points + 2, AFPoint::default());
     for (i, sp) in scaled_points.iter().enumerate() {
-        let pt = &mut hints.points[points_base + i];
+        let mut pt = AFPoint::default();
 
         // Unscaled font units (from glyf parser) — for fpos edge positions.
-        // pp1x_shift shifts the coordinate system to match the pixel grid,
-        // avoiding the need to build a shifted_raw GlyphOutline clone.
         if let Some(rp) = raw_outline.points.get(i) {
-            let fx_raw = rp.x.saturating_sub(pp1x_shift);
-            pt.fx = i16_from_i32(fx_raw.clamp(i16::MIN as i32, i16::MAX as i32));
+            pt.fx = i16_from_i32(rp.x.clamp(i16::MIN as i32, i16::MAX as i32));
             pt.fy = i16_from_i32(rp.y.clamp(i16::MIN as i32, i16::MAX as i32));
         }
 
@@ -132,8 +122,8 @@ pub fn reload(
         if !sp.on_curve {
             pt.flags |= AF_FLAG_CONIC; // TrueType has only quadratic (conic) off-curve
         }
-        // pt is written directly into hints.points[points_base + i] via mutable borrow.
-        // No push needed — resize already allocated.
+
+        hints.points.push(pt);
     }
 
     // ── Contour linking ──

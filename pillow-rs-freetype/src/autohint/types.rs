@@ -4,7 +4,6 @@
 //! `AF_AxisHintsRec`, and `AF_GlyphHintsRec`.
 
 use crate::outline::Outline;
-use std::collections::HashMap;
 
 // ── Direction constants (afhints.h:31–40) ──────────────────────────────────
 
@@ -165,11 +164,6 @@ pub struct AfLatinMetrics {
     /// (`afcjk.c:1419`).  The outline can still be hinted, but pp2 is rounded
     /// from the original phantom instead of edge-adjusted.
     pub no_advance_hinting: bool,
-    /// Cached reverse glyph_index → adjustment flags map for vertical
-    /// separation adjustments.  Populated once during metrics init to avoid
-    /// per-glyph `reverse_cmap_lookup` (which scans all ~500 adjustment
-    /// database entries through the cmap on every glyph load).
-    pub reverse_adjustment_map: HashMap<u16, u32>,
 }
 
 impl AfLatinMetrics {
@@ -184,7 +178,6 @@ impl AfLatinMetrics {
             top_to_bottom_hinting: false,
             skip_xh_adjust: false,
             no_advance_hinting: false,
-            reverse_adjustment_map: HashMap::new(),
         }
     }
 }
@@ -276,7 +269,7 @@ pub struct AFSegment {
 #[derive(Debug, Clone, Copy)]
 pub struct AFEdge {
     /// Position in font units (canonical key).
-    pub fpos: i32,
+    pub fpos: i16,
     /// Original scaled position (26.6).
     pub opos: i32,
     /// Current (grid-fitted) position (26.6).
@@ -364,9 +357,8 @@ pub struct GlyphHints {
     /// Scaler flags (e.g., AF_SCALER_FLAG_NO_HORIZONTAL for italic).
     pub scaler_flags: u32,
 
-    /// Font-wide Latin metrics (stem widths, blue zones).  Shared via Rc
-    /// to avoid deep-cloning Vec<bool> fields (non_base_glyphs etc.) per glyph.
-    pub metrics: Option<std::rc::Rc<AfLatinMetrics>>,
+    /// Font-wide Latin metrics (stem widths, blue zones).  Owned clone.
+    pub metrics: Option<AfLatinMetrics>,
 
     /// Glyph outline orientation: true = clockwise (PostScript).
     pub cw_orientation: bool,
@@ -392,47 +384,6 @@ impl GlyphHints {
         }
     }
 
-    /// Create with pre-allocated capacities to avoid reallocation during
-    /// reload / segment-detection / edge-computation phases.
-    pub fn with_capacity(
-        x_scale: i32,
-        y_scale: i32,
-        x_delta: i32,
-        y_delta: i32,
-        num_points: usize,
-        num_contours: usize,
-    ) -> Self {
-        let seg_cap = (num_points / 2).max(4);
-        let edge_cap = seg_cap / 2;
-        GlyphHints {
-            x_scale,
-            y_scale,
-            x_delta,
-            y_delta,
-            points: Vec::with_capacity(num_points + 2),
-            contours: Vec::with_capacity(num_contours),
-            contour_y_minima: Vec::with_capacity(num_contours),
-            contour_y_maxima: Vec::with_capacity(num_contours),
-            axis: [
-                AxisHints {
-                    segments: Vec::with_capacity(seg_cap),
-                    edges: Vec::with_capacity(edge_cap),
-                    major_dir: Direction::None,
-                },
-                AxisHints {
-                    segments: Vec::with_capacity(seg_cap),
-                    edges: Vec::with_capacity(edge_cap),
-                    major_dir: Direction::None,
-                },
-            ],
-            ppem: 0,
-            other_flags: 0,
-            scaler_flags: 0,
-            metrics: None,
-            cw_orientation: false,
-        }
-    }
-
     /// Number of contours.
     pub fn num_contours(&self) -> usize {
         self.contours.len()
@@ -445,11 +396,11 @@ impl GlyphHints {
 
     /// Copy hinted coordinates back into an Outline.
     pub fn save_to_outline(&self, outline: &mut Outline) {
-        // Use zip instead of enumerate + get_mut — identical semantics
-        // but the compiler can auto-vectorize the per-point copy.
-        for (pt, op) in self.points.iter().zip(outline.points.iter_mut()) {
-            op.x = pt.x;
-            op.y = pt.y;
+        for (i, pt) in self.points.iter().enumerate() {
+            if let Some(op) = outline.points.get_mut(i) {
+                op.x = pt.x;
+                op.y = pt.y;
+            }
         }
     }
 }
