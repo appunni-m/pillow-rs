@@ -408,7 +408,10 @@ impl Font {
             prep,
             cvt,
             glyph_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
+            self_arc: std::sync::OnceLock::new(),
         });
+        // Set the self-referencing Arc pointer so scaler paths can clone it cheaply.
+        let _ = font_data.self_arc.set(font_data.clone());
 
         let _upem = font_data.head.units_per_em as i32;
         let is_italic = (font_data.head.mac_style & 2) != 0;

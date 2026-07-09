@@ -5,6 +5,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::sync::{Arc, OnceLock};
 
 use crate::tt::cmap::CmapTable;
 use crate::tt::hdmx::HdmxTable;
@@ -51,6 +52,10 @@ pub struct FontData {
     /// Cached parsed glyph outlines.  Populated lazily during glyph loads
     /// to avoid re-parsing the glyf/loca table on every call.
     pub glyph_cache: RefCell<HashMap<u16, crate::tt::glyf::GlyphOutline>>,
+    /// Back-pointer to the `Arc<FontData>` that owns this instance.
+    /// Set once during font construction; used to avoid expensive clones.
+    #[doc(hidden)]
+    pub self_arc: OnceLock<Arc<FontData>>,
 }
 
 impl FontData {
