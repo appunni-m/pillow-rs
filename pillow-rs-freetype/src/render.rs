@@ -6,7 +6,7 @@
 
 use crate::casts::{i32_from_usize, u32_from_usize, usize_from_i32, usize_from_i64};
 use crate::error::FontError;
-use crate::fixed::{ft_div_fix, ft_mul_fix};
+use crate::fixed::{ft_div_fix, ft_mul_fix, ft_vector_length, ft_vector_norm_len};
 use crate::font::Font;
 use crate::grays;
 use crate::outline::{
@@ -2183,7 +2183,7 @@ fn apply_horizontal_center_edges(
 }
 
 fn flatten_outline(outline: &Outline) -> Result<Vec<Segment>, FontError> {
-    let mut flattener = MonoFlattener {
+    let mut flattener = SdfFlattener {
         segments: Vec::new(),
         current_x: 0,
         current_y: 0,
@@ -2194,7 +2194,7 @@ fn flatten_outline(outline: &Outline) -> Result<Vec<Segment>, FontError> {
     Ok(flattener.segments)
 }
 
-struct MonoFlattener {
+struct SdfFlattener {
     segments: Vec<Segment>,
     current_x: i32,
     current_y: i32,
@@ -2202,7 +2202,7 @@ struct MonoFlattener {
     order: usize,
 }
 
-impl MonoFlattener {
+impl SdfFlattener {
     fn move_to(&mut self, x: i32, y: i32) {
         self.current_x = x;
         self.current_y = y;
@@ -2228,14 +2228,29 @@ impl MonoFlattener {
     fn conic_to(&mut self, cx: i32, cy: i32, x: i32, y: i32) {
         let x0 = self.current_x;
         let y0 = self.current_y;
-        self.flatten_conic(
-            [
-                Point { x: x0, y: y0 },
-                Point { x: cx, y: cy },
-                Point { x, y },
-            ],
-            0,
-        );
+        let points = [
+            Point { x: x0, y: y0 },
+            Point { x: cx, y: cy },
+            Point { x, y },
+        ];
+        if points[0].x == points[1].x && points[0].y == points[1].y
+            || points[1].x == points[2].x && points[1].y == points[2].y
+        {
+            self.line_to(x, y);
+            return;
+        }
+
+        // FreeType `split_sdf_shape` in `ftsdf.c:1263-1310` reduces the
+        // conic deviation by four per bisection until it is below 1/8 px.
+        let mut deviation = (points[2].x + points[0].x - 2 * points[1].x)
+            .abs()
+            .max((points[2].y + points[0].y - 2 * points[1].y).abs());
+        let mut splits = 1u32;
+        while deviation > FT_PIXEL_ONE / 8 {
+            deviation >>= 2;
+            splits <<= 1;
+        }
+        self.flatten_sdf_conic(points, splits);
     }
 
     fn cubic_to(&mut self, c1x: i32, c1y: i32, c2x: i32, c2y: i32, x: i32, y: i32) {
@@ -2252,22 +2267,23 @@ impl MonoFlattener {
         );
     }
 
-    fn flatten_conic(&mut self, points: [Point; 3], depth: u8) {
-        let y_min = points[0].y.min(points[2].y);
-        let y_max = points[0].y.max(points[2].y);
-        let monotonic = points[1].y >= y_min && points[1].y <= y_max;
-        let dx = points[2].x - points[0].x;
-        let dy = points[2].y - points[0].y;
-        if depth >= 32 || (monotonic && dx.abs() <= 32 && dy.abs() <= 32) {
+    fn flatten_sdf_conic(&mut self, points: [Point; 3], max_splits: u32) {
+        // `split_conic` uses signed C division, which truncates toward zero.
+        let left_mid = midpoint_trunc(points[0], points[1]);
+        let right_mid = midpoint_trunc(points[1], points[2]);
+        let center = Point {
+            x: (points[0].x + 2 * points[1].x + points[2].x) / 4,
+            y: (points[0].y + 2 * points[1].y + points[2].y) / 4,
+        };
+
+        if max_splits <= 2 {
+            self.line_to(center.x, center.y);
             self.line_to(points[2].x, points[2].y);
             return;
         }
 
-        let left_mid = midpoint(points[0], points[1]);
-        let right_mid = midpoint(points[1], points[2]);
-        let center = midpoint(left_mid, right_mid);
-        self.flatten_conic([points[0], left_mid, center], depth + 1);
-        self.flatten_conic([center, right_mid, points[2]], depth + 1);
+        self.flatten_sdf_conic([points[0], left_mid, center], max_splits / 2);
+        self.flatten_sdf_conic([center, right_mid, points[2]], max_splits / 2);
     }
 
     fn flatten_cubic(&mut self, points: [Point; 4], depth: u8) {
@@ -2572,7 +2588,7 @@ fn sdf_line_distance(segment: Segment, point: Point) -> SdfDistance {
     let nearest_vector_y = nearest_y.wrapping_sub(point.y.wrapping_mul(1024));
     let sign_cross =
         ft_mul_fix(nearest_vector_x, dy).wrapping_sub(ft_mul_fix(nearest_vector_y, dx));
-    let distance = vector_length_16d16(nearest_vector_x, nearest_vector_y);
+    let distance = ft_vector_length(nearest_vector_x, nearest_vector_y);
     let cross = if factor != 0 && factor != FT_INT_16D16_ONE {
         FT_INT_16D16_ONE
     } else {
@@ -2586,27 +2602,13 @@ fn sdf_line_distance(segment: Segment, point: Point) -> SdfDistance {
     }
 }
 
-fn vector_length_16d16(x: i32, y: i32) -> i32 {
-    if x == 0 {
-        return y.abs();
-    }
-    if y == 0 {
-        return x.abs();
-    }
-    ((x as f64).hypot(y as f64).round()) as i32
-}
-
 fn normalized_cross_16d16(dx: i32, dy: i32, vx: i32, vy: i32) -> i32 {
-    let line_len = (dx as f64).hypot(dy as f64);
-    let vector_len = (vx as f64).hypot(vy as f64);
-    if line_len == 0.0 || vector_len == 0.0 {
+    if (dx == 0 && dy == 0) || (vx == 0 && vy == 0) {
         return 0;
     }
-    let line_x = dx as f64 / line_len;
-    let line_y = dy as f64 / line_len;
-    let vector_x = vx as f64 / vector_len;
-    let vector_y = vy as f64 / vector_len;
-    ((line_x * vector_y - line_y * vector_x) * FT_INT_16D16_ONE as f64).round() as i32
+    let ((line_x, line_y), _) = ft_vector_norm_len(dx, dy);
+    let ((vector_x, vector_y), _) = ft_vector_norm_len(vx, vy);
+    ft_mul_fix(line_x, vector_y).wrapping_sub(ft_mul_fix(line_y, vector_x))
 }
 
 fn resolve_sdf_corner(left: SdfDistance, right: SdfDistance) -> SdfDistance {

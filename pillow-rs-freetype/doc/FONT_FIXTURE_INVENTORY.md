@@ -121,7 +121,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `2868a722bff5` | 1.6 | 1 | `fonts/glyf/loca-long-truncated.ttf` | long-loca control with only seven bytes, one byte below a complete glyph-0 offset pair |
 | `697619c0847e` | 1.6 | 1 | `fonts/glyf/cvt-empty.ttf` | valid TrueType control with a present zero-length cvt table |
 | `6175105e1748` | 1.6 | 1 | `fonts/glyf/cvt-odd-length.ttf` | valid TrueType control with a one-byte cvt table rejected by Rust parsing and ignored by face construction |
-| `ba4dec81f1f4` | 3.2 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed valid and malformed VM matrix covering state, geometry, control flow, DELTA, and six exact bytecode error classes |
+| `fad72271eedf` | 3.3 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed VM and render-topology matrix covering state, geometry, control flow, DELTA, six exact bytecode error classes, conic chains, intersections, thin outlines, mixed winding, and degenerate contours |
 
 ### Active Alias Concentration
 
@@ -174,6 +174,9 @@ listed because they enter different hinting and scaling conditions.
 | `loca-short-truncated.ttf`, `loca-long-truncated.ttf` | gid 0 | 20 | one checked truncation failure for each loca record format |
 | `cvt-empty.ttf`, `cvt-odd-length.ttf` | gid 1 | 20 | present-empty and odd-length CVT parser outcomes isolated with no-scale loading |
 | `hinter-control-matrix.ttf` | gid 1, gids 24-40 | 20 | valid VM family matrices plus divide-zero, truncated pushes, glyph IDEF, unterminated FDEF, and undefined-opcode errors |
+| `hinter-control-matrix.ttf` | U+E028 gid 41 | 20 | off-curve start and consecutive conic controls across normal, mono, LCD, LCD_V, and SDF modes; owns FreeType-compatible SDF conic subdivision |
+| `hinter-control-matrix.ttf` | U+E029 gid 42 | 20 | self-intersecting bowtie plus a thin rectangle in mono and normal modes |
+| `hinter-control-matrix.ttf` | U+E02A gid 43 | 20 | outer and opposite-winding inner contours plus a coincident-point degenerate contour in normal and SDF modes |
 
 The custom fonts contain additional glyphs for future focused obligations:
 Latin digits, round/straight/overshoot forms, combining marks, simple and
@@ -391,13 +394,16 @@ and selected-glyph obligations still come from explicit inputs.
     stores those raw tables directly; `tt/hinter/tables.rs` has 100% function,
     line, region, and branch coverage.
 
-27. One 3.2 KiB hinter control font combines compact IDEF and FDEF bodies,
-    present-empty `prep`, a valid CVT, and seventeen focused program glyphs.
+27. One 3.3 KiB hinter control font combines compact IDEF and FDEF bodies,
+    present-empty `prep`, a valid CVT, seventeen focused program glyphs, and
+    three render-topology glyphs.
     Eighteen explicit loads cover scan types 0/2, IDEF dispatch, UTP, the SROUND and
     S45ROUND selector/sign matrix, INSTCTRL validation, FDEF/CALL/LOOPCALL and
     conditional flow, plus consolidated VM stack/state, point geometry,
     interpolation, DELTA, and six malformed-program error families without
-    multiplying sizes or flags. Its
+    multiplying sizes or flags. Nine render variants additionally select
+    conic chains, intersections, thin geometry, winding reversal, and a
+    degenerate contour across normal, mono, LCD, LCD_V, and SDF modes. Its
     inspectable source is `tests/fixtures/font-sources/hinter-control-matrix.ttx`;
     rebuild it with `make font-fixture-hinter`.
 

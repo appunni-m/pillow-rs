@@ -126,19 +126,73 @@ fn ft_msb(value: u32) -> i32 {
     31 - value.leading_zeros() as i32
 }
 
-/// Normalize a TrueType vector to a 2.14 unit vector.
+/// FreeType `FT_Vector_Length` for a signed 32-bit vector.
 ///
-/// C reference: `Normalize` in `ttinterp.c:2326-2345`, which calls
-/// `FT_Vector_NormLen` in `ftcalc.c:787-877` and then divides the 16.16
-/// normalized vector by 4.  This intentionally avoids floating point; one-unit
-/// cbox differences can appear if SPVFS/SFVFS or line-vector opcodes use a
-/// host `sqrt` instead of FreeType's fixed Newton iteration.
-#[inline]
-pub fn ft_normalize_2dot14(vx: i32, vy: i32) -> Option<(i32, i32)> {
-    if vx == 0 && vy == 0 {
-        return None;
+/// C reference: `fttrigon.c:417-448`.  FreeType uses a fixed-point CORDIC
+/// approximation here, so an IEEE-754 hypotenuse can differ by one unit.
+pub fn ft_vector_length(mut x: i32, mut y: i32) -> i32 {
+    if x == 0 {
+        return y.wrapping_abs();
+    }
+    if y == 0 {
+        return x.wrapping_abs();
     }
 
+    let msb = ft_msb(x.wrapping_abs() as u32 | y.wrapping_abs() as u32);
+    let shift = if msb <= 29 {
+        let shift = 29 - msb;
+        x = ((x as u32) << shift) as i32;
+        y = ((y as u32) << shift) as i32;
+        shift
+    } else {
+        let shift = msb - 29;
+        x >>= shift;
+        y >>= shift;
+        -shift
+    };
+
+    if y > x {
+        if y > x.wrapping_neg() {
+            let old_x = x;
+            x = y;
+            y = old_x.wrapping_neg();
+        } else {
+            x = x.wrapping_neg();
+            y = y.wrapping_neg();
+        }
+    } else if y < x.wrapping_neg() {
+        let old_x = x;
+        x = y.wrapping_neg();
+        y = old_x;
+    }
+
+    let mut bias = 1i32;
+    for i in 1..23 {
+        let old_x = x;
+        if y > 0 {
+            x = x.wrapping_add(y.wrapping_add(bias) >> i);
+            y = y.wrapping_sub(old_x.wrapping_add(bias) >> i);
+        } else {
+            x = x.wrapping_sub(y.wrapping_add(bias) >> i);
+            y = y.wrapping_add(old_x.wrapping_add(bias) >> i);
+        }
+        bias = bias.wrapping_shl(1);
+    }
+
+    let magnitude = x.wrapping_abs() as u64;
+    let downscaled = ((magnitude * 0xDBD9_5B16 + 0x4000_0000) >> 32) as i32;
+    if shift > 0 {
+        downscaled.wrapping_add(1 << (shift - 1)) >> shift
+    } else {
+        ((downscaled as u32) << -shift) as i32
+    }
+}
+
+/// FreeType `FT_Vector_NormLen` for a signed 32-bit vector.
+///
+/// Returns the normalized 16.16 vector and its original length.  C reference:
+/// `ftcalc.c:787-877`.
+pub fn ft_vector_norm_len(vx: i32, vy: i32) -> ((i32, i32), u32) {
     let mut sx = 1i32;
     let mut sy = 1i32;
     let mut x = if vx < 0 {
@@ -155,27 +209,27 @@ pub fn ft_normalize_2dot14(vx: i32, vy: i32) -> Option<(i32, i32)> {
     };
 
     if x == 0 {
-        return Some((0, sy * 0x4000));
+        return ((0, if y > 0 { sy * 0x10000 } else { 0 }), y);
     }
     if y == 0 {
-        return Some((sx * 0x4000, 0));
+        return (((if x > 0 { sx * 0x10000 } else { 0 }), 0), x);
     }
 
-    let mut l = if x > y { x + (y >> 1) } else { y + (x >> 1) };
-    let mut shift = 31 - ft_msb(l);
-    shift -= 15 + i32::from(l >= (0xAAAA_AAAAu32 >> shift));
+    let mut length = if x > y { x + (y >> 1) } else { y + (x >> 1) };
+    let mut shift = 31 - ft_msb(length);
+    shift -= 15 + i32::from(length >= (0xAAAA_AAAAu32 >> shift));
 
     if shift > 0 {
         x <<= shift;
         y <<= shift;
-        l = if x > y { x + (y >> 1) } else { y + (x >> 1) };
+        length = if x > y { x + (y >> 1) } else { y + (x >> 1) };
     } else {
         x >>= -shift;
         y >>= -shift;
-        l >>= -shift;
+        length >>= -shift;
     }
 
-    let mut b = 0x10000i32.wrapping_sub(l as i32);
+    let mut b = 0x10000i32.wrapping_sub(length as i32);
     let x_i = x as i32;
     let y_i = y as i32;
     let (u, v) = loop {
@@ -190,16 +244,41 @@ pub fn ft_normalize_2dot14(vx: i32, vy: i32) -> Option<(i32, i32)> {
         b = b.wrapping_add(z);
     };
 
-    let x_norm = if sx < 0 {
-        0i32.wrapping_sub(u as i32)
+    let normalized = (
+        if sx < 0 {
+            0i32.wrapping_sub(u as i32)
+        } else {
+            u as i32
+        },
+        if sy < 0 {
+            0i32.wrapping_sub(v as i32)
+        } else {
+            v as i32
+        },
+    );
+    length = 0x10000u32
+        .wrapping_add((u.wrapping_mul(x).wrapping_add(v.wrapping_mul(y)) as i32 / 0x10000) as u32);
+    if shift > 0 {
+        length = length.wrapping_add(1 << (shift - 1)) >> shift;
     } else {
-        u as i32
-    };
-    let y_norm = if sy < 0 {
-        0i32.wrapping_sub(v as i32)
-    } else {
-        v as i32
-    };
+        length <<= -shift;
+    }
+    (normalized, length)
+}
+
+/// Normalize a TrueType vector to a 2.14 unit vector.
+///
+/// C reference: `Normalize` in `ttinterp.c:2326-2345`, which calls
+/// `FT_Vector_NormLen` in `ftcalc.c:787-877` and then divides the 16.16
+/// normalized vector by 4.  This intentionally avoids floating point; one-unit
+/// cbox differences can appear if SPVFS/SFVFS or line-vector opcodes use a
+/// host `sqrt` instead of FreeType's fixed Newton iteration.
+#[inline]
+pub fn ft_normalize_2dot14(vx: i32, vy: i32) -> Option<(i32, i32)> {
+    if vx == 0 && vy == 0 {
+        return None;
+    }
+    let ((x_norm, y_norm), _) = ft_vector_norm_len(vx, vy);
     Some((x_norm / 4, y_norm / 4))
 }
 
