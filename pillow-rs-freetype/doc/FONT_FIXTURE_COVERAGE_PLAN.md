@@ -343,6 +343,8 @@ top-level-directory corruptions remain standalone.
 
 #### R-1: Oracle Cache Trust Gate
 
+Status: complete.
+
 Expected additions: zero fonts, zero cases.
 
 The runtime face cache hashes font bytes, but the current C-oracle cache key
@@ -360,7 +362,10 @@ stale C output.
    still pass.
 
 Exit gate: changing any fixture byte at an unchanged path changes the C-oracle
-cache key. No further font mutation is accepted before this gate passes.
+cache key. Met: cache v3 hashes each case ID, ordered asset role, resolved path,
+byte length, and SHA-256 digest, including inline assets. A forced refresh wrote
+key `3b17c268174f6426a1f594fb4f00cdb06edb24bcd16f219f8c29bc65b0cf573f`;
+the next run hit the same key and both runs passed 6,413 / 6,413.
 
 #### R0: Public Reachability Audit
 
@@ -762,6 +767,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | short and long loca truncation | 78 unique hashes | 0 | 6,409 | 6,408 / 6,408 | 1 | 12,360 / 16,327 lines; 17,724 / 23,315 regions; 2,855 / 4,164 branches | loca reached 100% structural coverage; two checked record slices replaced twelve byte-position-specific regions |
 | 2026-07-10 | empty and odd CVT controls | 80 unique hashes | 0 | 6,411 | 6,410 / 6,410 | 1 | 12,364 / 16,321 lines; 17,726 / 23,307 regions; 2,857 / 4,164 branches | hinter table parsing reached 100% structural coverage; removed unused fpgm/prep copy helpers |
 | 2026-07-10 | hinter setup and scan-type controls | 81 unique hashes | 0 | 6,414 | 6,413 / 6,413 | 1 | 12,367 / 16,321 lines; 17,729 / 23,307 regions; 2,858 / 4,164 branches | one 1.8 KiB font covers empty fpgm/prep plus scan types 0 and 2; hinter/mod rises to 275/278 lines and 64/70 branches |
+| 2026-07-10 | content-aware C-oracle cache | 81 unique hashes | 0 | 6,414 | 6,413 / 6,413 | 1 | unchanged | cache v3 hashes resolved file and inline asset bytes; forced refresh and subsequent cache hit both preserve exact parity |
 
 ## Decision Log
 
@@ -785,17 +791,17 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Validate whole loca records | A single checked 4-byte or 8-byte slice expresses FreeType's truncated-record failure without byte-by-byte optional indexing or twelve redundant fonts |
 | 2026-07-10 | Keep raw fpgm/prep storage direct | Font construction already copies these byte streams; unused parser wrappers added functions without behavior and were removed instead of fixture-covered artificially |
 | 2026-07-10 | Keep scan conversion controls in one program font | Empty setup and scan-type variants share tables, geometry, size, and flags; only explicit glyph programs differ, avoiding a font/size/flag product |
+| 2026-07-10 | Hash resolved assets in the C-oracle cache key | JSON paths do not identify mutable fixture contents; path, length, and SHA-256 now prevent stale C output after in-place font mutation |
 
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
 
-1. Complete R-1 so every C-oracle cache key includes resolved fixture bytes.
-2. Complete R0 and classify every uncovered function as public, font-reachable,
+1. Complete R0 and classify every uncovered function as public, font-reachable,
    missing delegation, or removable.
-3. Execute R1 by extending the existing hinter control font with explicit
+2. Execute R1 by extending the existing hinter control font with explicit
    opcode-family glyph programs.
-4. Resolve the one visible embedded-strike pending case in R7 when its focused bitmap
+3. Resolve the one visible embedded-strike pending case in R7 when its focused bitmap
    font and owning core table support are implemented.
-5. Keep the deprecated corpus isolated until final cleanup is separately
+4. Keep the deprecated corpus isolated until final cleanup is separately
    reviewed and approved.
