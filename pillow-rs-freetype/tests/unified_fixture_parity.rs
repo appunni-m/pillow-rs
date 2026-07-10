@@ -11,6 +11,7 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::io::BufRead;
 use std::mem::{align_of, offset_of, size_of};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -2474,22 +2475,20 @@ fn read_oracle_cache_outputs(
         }
     }
 
-    let text = fs::read_to_string(cache_path)
-        .map_err(|err| format!("read oracle cache {}: {err}", cache_path.display()))?;
-    let lines = text.lines().collect::<Vec<_>>();
-    if lines.len() != cases.len() {
-        return Err(format!(
-            "oracle cache {} has {} lines for {} cases",
-            cache_path.display(),
-            lines.len(),
-            cases.len()
-        ));
-    }
+    // Stream lines from the cache file using a buffered reader instead of
+    // fs::read_to_string.  With 2.88M cases the cache is ~1.4 GB; loading
+    // it as a single contiguous string doubles peak memory.
+    let file = fs::File::open(cache_path)
+        .map_err(|err| format!("open oracle cache {}: {err}", cache_path.display()))?;
+    let reader = std::io::BufReader::new(file);
     let outputs = cases
         .iter()
-        .zip(lines)
+        .zip(reader.lines())
         .map(|(case, line)| {
-            parse_run_output(line).map_err(|err| format!("{} oracle failed: {err}", case.case_id))
+            let line = line
+                .map_err(|err| format!("{} oracle read error: {err}", case.case_id))?;
+            parse_run_output(&line)
+                .map_err(|err| format!("{} oracle failed: {err}", case.case_id))
         })
         .collect::<Result<Vec<_>, _>>()?;
     let outputs = Arc::<[RunOutput]>::from(outputs);
