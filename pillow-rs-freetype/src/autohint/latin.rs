@@ -1488,38 +1488,9 @@ pub fn metrics_init_blues_impl(
         } else {
             let flat_median = flats[flats.len() / 2];
             let round_median = rounds[rounds.len() / 2];
-            // Outlier detection: if flat and round medians differ by >20% of
-            // upem, some characters may have unshaped forms (HarfBuzz
-            // substitution would reshape them). For top zones, trust rounds;
-            // for bottom zones, trust flats. Falls through to median blend
-            // when values are consistent.
-            let entry_is_top = is_top_blue!(entry.props) || is_sub_top!(entry.props);
-            let threshold = metrics.units_per_em / 5;
-            let diff = (flat_median - round_median).abs();
-            if diff > threshold {
-                // Large discrepancy: some chars have unshaped forms.
-                // For TOP zones, flat values may be unshaped ascenders;
-                // trust the correctly-shaped rounds.
-                // For BOTTOM zones, only apply when flats are ABOVE
-                // rounds (unshaped ascenders in bottom zone). When flats
-                // are BELOW rounds (descenders below baseline), the
-                // divergence is expected — keep the standard blend to
-                // produce the correct zone height for the ACTIVE check.
-                if entry_is_top {
-                    (round_median, round_median)
-                } else if flat_median > round_median {
-                    // Flats above rounds: unshaped ascender forms in
-                    // bottom zone. Trust the rounds (correct baseline).
-                    (round_median, round_median)
-                } else {
-                    // Flats below rounds: normal descender zone. Keep
-                    // standard blend so the height difference keeps the
-                    // zone active for descender detection.
-                    (flat_median, round_median)
-                }
-            } else {
-                (flat_median, round_median)
-            }
+            // `af_latin_metrics_init_blues` keeps the two medians verbatim;
+            // directionally invalid overshoots are corrected below.
+            (flat_median, round_median)
         };
         trace!(target: "autohint::pipeline", "[BLUE_FINAL] entry={} flats={:?} rounds={:?} ref_idx={} shoot_idx={} ref={ref_val} shoot={shoot_val}",
             entry.chars[0], flats.len(), rounds.len(), flats.len()/2, rounds.len()/2);
@@ -2400,10 +2371,9 @@ fn vertical_separation_accent_height_limit(hints: &GlyphHints, adj_type: u32) ->
         return (top.shoot_width.cur - bottom.shoot_width.cur) / 2;
     }
 
-    let metrics = hints
-        .metrics
-        .as_ref()
-        .expect("vertical separation requires autohint metrics");
+    let Some(metrics) = hints.metrics.as_ref() else {
+        return 0;
+    };
     let scale = metrics.axis[Dimension::Vert as usize].scale;
     ft_mul_fix(metrics.units_per_em * 4 / 10, scale)
 }
@@ -2759,11 +2729,9 @@ pub fn apply_hints(
         align_strong_points(&mut hints, dim);
         align_weak_points(&mut hints, dim);
         if dim == Dimension::Vert {
-            vertical_separation_adjustments(
-                &mut hints,
-                glyph_index,
-                font_data.expect("autohinting requires font data"),
-            );
+            if let Some(data) = font_data {
+                vertical_separation_adjustments(&mut hints, glyph_index, data);
+            }
         }
     }
 

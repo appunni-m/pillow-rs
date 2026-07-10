@@ -20,6 +20,8 @@
     <GlyphID id="14" name="ignoreBlue"/>
     <GlyphID id="15" name="singleTouch"/>
     <GlyphID id="16" name="segmentMerge"/>
+    <GlyphID id="17" name="roundBlue"/>
+    <GlyphID id="18" name="roundBlueSmall"/>
   </GlyphOrder>
 
   <head>
@@ -66,7 +68,7 @@
   <maxp>
     <!-- Most of this table will be recalculated by the compiler -->
     <tableVersion value="0x10000"/>
-    <numGlyphs value="17"/>
+    <numGlyphs value="19"/>
     <maxPoints value="240"/>
     <maxContours value="40"/>
     <maxCompositePoints value="240"/>
@@ -153,6 +155,8 @@
     <mtx name="ignoreBlue" width="256" lsb="0"/>
     <mtx name="singleTouch" width="256" lsb="40"/>
     <mtx name="segmentMerge" width="256" lsb="40"/>
+    <mtx name="roundBlue" width="256" lsb="40"/>
+    <mtx name="roundBlueSmall" width="256" lsb="40"/>
   </hmtx>
 
   <cmap>
@@ -160,11 +164,12 @@
     <cmap_format_4 platformID="3" platEncID="1" language="0">
       <map code="0x20" name="space"/><!-- SPACE -->
       <map code="0x41" name="A"/><!-- LATIN CAPITAL LETTER A -->
-      <map code="0x48" name="A"/><!-- LATIN CAPITAL LETTER H -->
-      <map code="0x4f" name="A"/><!-- LATIN CAPITAL LETTER O -->
+      <map code="0x48" name="ignoreBlue"/><!-- LATIN CAPITAL LETTER H -->
+      <map code="0x4f" name="roundBlue"/><!-- LATIN CAPITAL LETTER O -->
       <map code="0x4d" name="segmentMerge"/><!-- LATIN CAPITAL LETTER M -->
       <map code="0x56" name="singleTouch"/><!-- LATIN CAPITAL LETTER V -->
-      <map code="0x6f" name="A"/><!-- LATIN SMALL LETTER O -->
+      <map code="0x6e" name="ignoreBlue"/><!-- LATIN SMALL LETTER N -->
+      <map code="0x6f" name="roundBlueSmall"/><!-- LATIN SMALL LETTER O -->
       <map code="0xc3" name="tildeTop"/><!-- LATIN CAPITAL LETTER A WITH TILDE -->
       <map code="0xd8" name="ignoreBlue"/><!-- LATIN CAPITAL LETTER O WITH STROKE -->
       <map code="0x393" name="A"/><!-- GREEK CAPITAL LETTER GAMMA -->
@@ -589,6 +594,34 @@
       <instructions/>
     </TTGlyph>
 
+    <TTGlyph name="roundBlue" xMin="40" yMin="60" xMax="216" yMax="140">
+      <contour>
+        <pt x="128" y="140" on="1"/>
+        <pt x="70" y="140" on="0"/>
+        <pt x="40" y="100" on="1"/>
+        <pt x="40" y="60" on="0"/>
+        <pt x="128" y="60" on="1"/>
+        <pt x="216" y="60" on="0"/>
+        <pt x="216" y="100" on="1"/>
+        <pt x="186" y="140" on="0"/>
+      </contour>
+      <instructions/>
+    </TTGlyph>
+
+    <TTGlyph name="roundBlueSmall" xMin="40" yMin="-80" xMax="216" yMax="140">
+      <contour>
+        <pt x="128" y="140" on="1"/>
+        <pt x="70" y="140" on="0"/>
+        <pt x="40" y="30" on="1"/>
+        <pt x="40" y="-80" on="0"/>
+        <pt x="128" y="-80" on="1"/>
+        <pt x="216" y="-80" on="0"/>
+        <pt x="216" y="30" on="1"/>
+        <pt x="186" y="140" on="0"/>
+      </contour>
+      <instructions/>
+    </TTGlyph>
+
   </glyf>
 
   <name>
@@ -725,6 +758,8 @@
     <mtx name="ignoreBlue" height="256" tsb="36"/>
     <mtx name="singleTouch" height="256" tsb="46"/>
     <mtx name="segmentMerge" height="256" tsb="6"/>
+    <mtx name="roundBlue" height="256" tsb="116"/>
+    <mtx name="roundBlueSmall" height="256" tsb="116"/>
   </vmtx>
 
 </ttFont>
