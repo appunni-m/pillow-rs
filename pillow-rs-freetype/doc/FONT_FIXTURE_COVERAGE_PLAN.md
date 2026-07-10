@@ -437,13 +437,14 @@ Primary module: `autohint/latin.rs`.
 Expected additions: extend existing compact autohint fonts; 30-45 named glyph
 topologies; 45-75 explicit variants.
 
-Status: in progress. Eight explicit variants in the source-backed
+Status: in progress. Nine explicit variants in the source-backed
 `cjk-coverage.ttf` now own top, second-top, and bottom tilde adjustment plus
 capital blue-edge suppression, single-reference IUP shifting, and mixed
-flat/round blue calibration. `latin.rs` is at 69/69 functions, 2,457/2,780
-lines, 3,533/4,112 regions, and 926/1,239 branches. A shared-start reversal
-contour covers both longer-segment selection outcomes; the rarer
-equal-direction degenerate merge remains separately owned.
+flat/round blue calibration. A compact micro-serif also owns close-serif
+overlap rejection. `latin.rs` is at 69/69 functions, 2,449/2,767 lines,
+3,522/4,096 regions, and 923/1,231 branches. A shared-start reversal contour
+covers both longer-segment selection outcomes; the rarer equal-direction
+degenerate merge remains separately owned.
 
 Required topology roles include serif/non-serif stems, linked/unlinked edges,
 top and bottom tildes, accents, overshoots, holes, short/long segments,
@@ -797,6 +798,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Latin single-reference IUP topology | 81 unique hashes | 0 | 6,434 | 6,433 / 6,433 | 1 | 12,857 / 15,891 lines; 18,494 / 22,890 regions; 3,009 / 4,077 branches | one quadratic contour reaches the final uncovered Latin function; seven no-behavior closures/wrappers removed |
 | 2026-07-10 | Latin shared-start segment reversals | 81 unique hashes | 0 | 6,435 | 6,434 / 6,434 | 1 | 12,888 / 15,891 lines; 18,539 / 22,890 regions; 3,018 / 4,077 branches | one zero-width reversal contour adds 31 lines, 45 regions, and 9 branches across segment retention/replacement |
 | 2026-07-10 | Latin mixed flat/round blue calibration | 81 unique hashes | 0 | 6,437 | 6,436 / 6,436 | 1 | 12,907 / 15,878 lines; 18,570 / 22,873 regions; 3,036 / 4,075 branches | two round glyphs plus existing flat geometry add 19 lines and 18 branches; removed non-FreeType median-outlier heuristic exposed by lowercase metric parity |
+| 2026-07-10 | Latin close-serif overlap topology | 81 unique hashes | 0 | 6,438 | 6,437 / 6,437 | 1 | 12,899 / 15,865 lines; 18,559 / 22,857 regions; 3,033 / 4,067 branches | one micro-serif owns overlap rejection; removed five impossible constructed-edge outcomes, reducing each uncovered structural gap by five |
 
 ## Decision Log
 
@@ -828,6 +830,8 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Use one strong corner with two weak controls for single-reference IUP | Keeping vectors beyond the near threshold and making only one incident direction cardinal gives one touched point without a second edge-aligned reference |
 | 2026-07-10 | Keep straight and curved degenerate segment merges separate | Straight vertical reversals cover longer-segment retention/replacement; pinned `aflatin.c` documents equal-direction unification as a rarer already-merged zig-zag state requiring different geometry |
 | 2026-07-10 | Preserve flat and round blue medians exactly | Pinned `af_latin_metrics_init_blues` takes each median verbatim and only then applies directional overshoot sanity; Rust's extra discrepancy heuristic caused a one-pixel lowercase metric-height error |
+| 2026-07-10 | Keep CJK metrics dispatch inside shared edge hinting | CJK width initialization enters the shared Latin helper before the main apply path dispatches, so the internal CJK delegate is executed behavior and must not be removed as duplicate |
+| 2026-07-10 | Remove impossible constructed-edge guards | Interior serif ranges exclude both endpoint indices by construction, and every edge is created from a valid segment chain; fixtures cannot legitimately produce those guard bodies |
 
 ## Immediate Next Actions
 

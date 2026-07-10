@@ -22,6 +22,7 @@
     <GlyphID id="16" name="segmentMerge"/>
     <GlyphID id="17" name="roundBlue"/>
     <GlyphID id="18" name="roundBlueSmall"/>
+    <GlyphID id="19" name="serifI"/>
   </GlyphOrder>
 
   <head>
@@ -68,7 +69,7 @@
   <maxp>
     <!-- Most of this table will be recalculated by the compiler -->
     <tableVersion value="0x10000"/>
-    <numGlyphs value="19"/>
+    <numGlyphs value="20"/>
     <maxPoints value="240"/>
     <maxContours value="40"/>
     <maxCompositePoints value="240"/>
@@ -157,6 +158,7 @@
     <mtx name="segmentMerge" width="256" lsb="40"/>
     <mtx name="roundBlue" width="256" lsb="40"/>
     <mtx name="roundBlueSmall" width="256" lsb="40"/>
+    <mtx name="serifI" width="256" lsb="95"/>
   </hmtx>
 
   <cmap>
@@ -165,6 +167,7 @@
       <map code="0x20" name="space"/><!-- SPACE -->
       <map code="0x41" name="A"/><!-- LATIN CAPITAL LETTER A -->
       <map code="0x48" name="ignoreBlue"/><!-- LATIN CAPITAL LETTER H -->
+      <map code="0x49" name="serifI"/><!-- LATIN CAPITAL LETTER I -->
       <map code="0x4f" name="roundBlue"/><!-- LATIN CAPITAL LETTER O -->
       <map code="0x4d" name="segmentMerge"/><!-- LATIN CAPITAL LETTER M -->
       <map code="0x56" name="singleTouch"/><!-- LATIN CAPITAL LETTER V -->
@@ -622,6 +625,24 @@
       <instructions/>
     </TTGlyph>
 
+    <TTGlyph name="serifI" xMin="95" yMin="0" xMax="161" yMax="16">
+      <contour>
+        <pt x="95" y="16" on="1"/>
+        <pt x="161" y="16" on="1"/>
+        <pt x="161" y="12" on="1"/>
+        <pt x="150" y="12" on="1"/>
+        <pt x="150" y="4" on="1"/>
+        <pt x="161" y="4" on="1"/>
+        <pt x="161" y="0" on="1"/>
+        <pt x="95" y="0" on="1"/>
+        <pt x="95" y="4" on="1"/>
+        <pt x="106" y="4" on="1"/>
+        <pt x="106" y="12" on="1"/>
+        <pt x="95" y="12" on="1"/>
+      </contour>
+      <instructions/>
+    </TTGlyph>
+
   </glyf>
 
   <name>
@@ -760,6 +781,7 @@
     <mtx name="segmentMerge" height="256" tsb="6"/>
     <mtx name="roundBlue" height="256" tsb="116"/>
     <mtx name="roundBlueSmall" height="256" tsb="116"/>
+    <mtx name="serifI" height="256" tsb="240"/>
   </vmtx>
 
 </ttFont>

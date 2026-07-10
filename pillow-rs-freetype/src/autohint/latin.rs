@@ -4015,9 +4015,8 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
         .as_ref()
         .is_some_and(|metrics| metrics.no_advance_hinting)
     {
-        // C: `hani_dflt` is `AF_WRITING_SYSTEM_CJK` in afstyles.h and
-        // dispatches to `af_cjk_hints_apply` in afcjk.c.  The Rust metrics
-        // marker is shared with CJK's no-advance behavior.
+        // CJK metrics width initialization also enters this shared helper before
+        // the main apply path switches to the dedicated CJK edge pipeline.
         super::cjk::hint_edges(hints, dim, std_widths);
         let axis = &hints.axis[dim as usize];
         dump_edge_phase("CJK", dim_label, &axis.edges);
@@ -4088,13 +4087,8 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                 continue;
             }
 
-            let e1 = match edge1_idx {
-                Some(v) => v,
-                None => unreachable!(),
-            };
-            let blue = match blue {
-                Some(b) => b,
-                None => unreachable!(),
+            let (Some(e1), Some(blue)) = (edge1_idx, blue) else {
+                continue;
             };
             trace!(target: "autohint::pipeline", "[P1] E{e1}: snap to blue.fit={}", blue.fit);
             axis.edges[e1].pos = blue.fit;
@@ -4416,14 +4410,8 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                     let hi = serif_idx.max(i);
                     let mut overlap = false;
                     for j in (lo + 1)..hi {
-                        if j == i || j == serif_idx {
-                            continue;
-                        }
                         let sj_f = axis.edges[j].first;
                         let sj_l = axis.edges[j].last;
-                        if sj_f == usize::MAX || sj_l == usize::MAX {
-                            continue;
-                        }
                         let ej_min = i32::min(seg_v_min(sj_f), seg_v_min(sj_l));
                         let ej_max = i32::max(seg_v_max(sj_f), seg_v_max(sj_l));
                         if !((ej_min < v_min && ej_max < v_min)
@@ -4564,9 +4552,6 @@ fn align_edge_points(hints: &mut GlyphHints, dim: Dimension) {
         let pos = edge.pos;
         let mut seg_idx = edge.first;
         loop {
-            if seg_idx == usize::MAX {
-                break;
-            }
             let seg = &axis.segments[seg_idx];
             let mut pt_idx = seg.first;
             loop {
