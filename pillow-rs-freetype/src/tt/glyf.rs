@@ -9,7 +9,7 @@ use crate::casts::{u16_from_i16, u16_from_u32, u32_from_usize};
 
 use crate::error::FontError;
 use crate::fixed::{ft_div_fix, ft_mul_fix};
-use crate::tt::loca::{GlyphLocation, get_glyph_location};
+use crate::tt::loca::get_glyph_location;
 
 // Simple glyph flag bits (TrueType spec, ttgload.c:53).
 const ON_CURVE: u8 = 0x01;
@@ -138,7 +138,8 @@ pub fn load_glyph_with_scaled_component_offsets(
 ///
 /// FreeType scales simple subglyphs and component offsets independently while
 /// resolving composites.  This preserves that rounding instead of flattening
-/// in font units and scaling the summed coordinates later.
+/// in font units and scaling the summed coordinates later. The scaler calls
+/// this only after `load_glyph` validates the same complete component tree.
 pub fn load_glyph_scaled_no_hinting(
     glyf: &[u8],
     loca: &[u8],
@@ -148,7 +149,7 @@ pub fn load_glyph_scaled_no_hinting(
     x_scale: i32,
     y_scale: i32,
 ) -> Result<GlyphOutline, FontError> {
-    load_glyph_scaled_inner(
+    Ok(load_glyph_scaled_inner(
         glyf,
         loca,
         index_to_loc_format,
@@ -156,8 +157,7 @@ pub fn load_glyph_scaled_no_hinting(
         hmtx,
         x_scale,
         y_scale,
-        0,
-    )
+    ))
 }
 
 fn load_glyph_inner(
@@ -266,7 +266,14 @@ fn load_glyph_inner(
                     (Some(parent), Some(component)) => {
                         (parent.x - component.x, parent.y - component.y)
                     }
-                    _ => (0, 0),
+                    _ => {
+                        // C's TT_Process_Composite_Component in
+                        // ttgload.c:1059-1071 rejects invalid attachment
+                        // point indices instead of applying a zero offset.
+                        return Err(FontError::InvalidOutline(
+                            "glyf: composite attachment point out of range".into(),
+                        ));
+                    }
                 }
             };
             for pt in transformed {
@@ -305,6 +312,7 @@ fn load_glyph_inner(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::expect_used)] // The public scaler first validates this tree with `load_glyph`.
 fn load_glyph_scaled_inner(
     glyf: &[u8],
     loca: &[u8],
@@ -313,26 +321,15 @@ fn load_glyph_scaled_inner(
     hmtx: &crate::tt::hmtx::HmtxTable,
     x_scale: i32,
     y_scale: i32,
-    depth: u8,
-) -> Result<GlyphOutline, FontError> {
-    if depth > 8 {
-        return Err(FontError::InvalidOutline(
-            "glyf: composite recursion too deep".into(),
-        ));
-    }
-
+) -> GlyphOutline {
     let loc = get_glyph_location(loca, glyph_index, index_to_loc_format)
-        .ok_or_else(|| FontError::InvalidOutline("loca: glyph index out of range".into()))?;
+        .expect("load_glyph validated the composite glyph location");
     if loc.length == 0 {
-        return Ok(GlyphOutline::default());
+        return GlyphOutline::default();
     }
 
-    let bytes = glyf
-        .get(loc.offset as usize..loc.offset as usize + loc.length as usize)
-        .ok_or_else(|| FontError::InvalidOutline("glyf: data out of range".into()))?;
-    if bytes.len() < 10 {
-        return Err(FontError::InvalidOutline("glyf: glyph too short".into()));
-    }
+    let start = loc.offset as usize;
+    let bytes = &glyf[start..start + loc.length as usize];
 
     let num_contours = i16::from_be_bytes([bytes[0], bytes[1]]);
     let xmin = i16::from_be_bytes([bytes[2], bytes[3]]) as i32;
@@ -341,7 +338,8 @@ fn load_glyph_scaled_inner(
     let ymax = i16::from_be_bytes([bytes[8], bytes[9]]) as i32;
 
     if num_contours >= 0 {
-        let mut outline = parse_simple_glyph(bytes, u16_from_i16(num_contours))?;
+        let mut outline = parse_simple_glyph(bytes, u16_from_i16(num_contours))
+            .expect("load_glyph validated the simple glyph data");
         for point in &mut outline.points {
             point.x = crate::fixed::ft_mul_fix(point.x, x_scale);
             point.y = crate::fixed::ft_mul_fix(point.y, y_scale);
@@ -353,10 +351,11 @@ fn load_glyph_scaled_inner(
         outline.bbox_xmin = xmin;
         outline.is_composite = false;
         outline.sub_lsb = hmtx.get(glyph_index).lsb as i32;
-        return Ok(outline);
+        return outline;
     }
 
-    let composite = parse_composite_components(bytes, 10)?;
+    let composite = parse_composite_components(bytes, 10)
+        .expect("load_glyph validated the composite glyph data");
     let mut points: Vec<OutlinePoint> = Vec::new();
     let mut end_pts: Vec<u16> = Vec::new();
     let mut num_contours_total = 0u16;
@@ -372,23 +371,39 @@ fn load_glyph_scaled_inner(
             hmtx,
             x_scale,
             y_scale,
-            depth + 1,
-        )?;
+        );
         last_sub_xmin = sub.xmin;
         last_sub_lsb = sub.sub_lsb;
         let base = points.len();
-        let dx = if comp.args_are_xy {
-            crate::fixed::ft_mul_fix(comp.arg1, x_scale)
-        } else {
-            0
-        };
-        let dy = if comp.args_are_xy {
-            crate::fixed::ft_mul_fix(comp.arg2, y_scale)
-        } else {
-            0
-        };
+        let mut transformed = Vec::with_capacity(sub.points.len());
         for pt in &sub.points {
-            points.push(transform_scaled_point(*pt, comp, dx, dy));
+            transformed.push(transform_scaled_point(*pt, comp, 0, 0));
+        }
+        let (dx, dy) = if comp.args_are_xy {
+            (
+                crate::fixed::ft_mul_fix(comp.arg1, x_scale),
+                crate::fixed::ft_mul_fix(comp.arg2, y_scale),
+            )
+        } else {
+            // C's TT_Process_Composite_Component in ttgload.c:1049-1071
+            // aligns transformed component points in the scaled outline.
+            let parent_point = comp.arg1 as usize;
+            let component_point = comp.arg2 as usize;
+            let parent = points
+                .get(parent_point)
+                .expect("load_glyph validated the parent attachment point");
+            let component = transformed
+                .get(component_point)
+                .expect("load_glyph validated the component attachment point");
+            (parent.x - component.x, parent.y - component.y)
+        };
+        for pt in transformed {
+            points.push(OutlinePoint {
+                x: pt.x + dx,
+                y: pt.y + dy,
+                on_curve: pt.on_curve,
+                tag: pt.tag,
+            });
         }
         for &ep in &sub.end_pts_of_contours {
             end_pts.push(u16_from_u32(u32_from_usize(base) + ep as u32));
@@ -396,7 +411,7 @@ fn load_glyph_scaled_inner(
         num_contours_total = num_contours_total.saturating_add(sub.num_contours);
     }
 
-    Ok(GlyphOutline {
+    GlyphOutline {
         num_contours: num_contours_total,
         end_pts_of_contours: end_pts,
         points,
@@ -409,7 +424,7 @@ fn load_glyph_scaled_inner(
         sub_lsb: last_sub_lsb,
         instructions: composite.instructions,
         components: composite.components,
-    })
+    }
 }
 
 /// Apply a composite component's transform + translation to a point.
@@ -462,6 +477,11 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
 
     let inst_off = end_off + nc * 2;
     let instruction_length = u16::from_be_bytes([data[inst_off], data[inst_off + 1]]) as usize;
+    if inst_off + 2 + instruction_length > data.len() {
+        return Err(FontError::InvalidOutline(
+            "glyf: simple instructions overflow".into(),
+        ));
+    }
     let instructions = if instruction_length > 0 {
         data[inst_off + 2..inst_off + 2 + instruction_length].to_vec()
     } else {
@@ -486,10 +506,14 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
             }
             let repeat = data[pos] as usize;
             pos += 1;
+            // C's TT_Load_Simple_Glyph in ttgload.c:445-455 rejects a
+            // repeat that extends beyond the remaining point-tag slots.
+            if flags.len() + repeat > num_points {
+                return Err(FontError::InvalidOutline(
+                    "glyf: repeat count exceeds point count".into(),
+                ));
+            }
             for _ in 0..repeat {
-                if flags.len() >= num_points {
-                    break;
-                }
                 flags.push(flag);
             }
         }
@@ -688,14 +712,7 @@ fn component_xy_offset(comp: &CompositeComponent, scale: Option<(i32, i32)>) -> 
 }
 
 fn rounded_offset_font_units(value: i32, scale: i32) -> i32 {
-    if scale == 0 {
-        return value;
-    }
     let scaled = ft_mul_fix(value, scale);
     let rounded = (scaled + 32) & !63;
     ft_div_fix(rounded, scale)
 }
-
-// Unused-warning suppressor for the unused `GlyphLocation` import path.
-#[allow(dead_code)]
-fn _use(_l: GlyphLocation) {}

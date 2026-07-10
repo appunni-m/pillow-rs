@@ -495,6 +495,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | name and SFNT/TTC control matrices | 66 unique hashes | 0 | 6,356 | 6,344 / 6,344 | 12 | 12,151 / 16,312 lines; 17,484 / 23,330 regions; 2,788 / 4,164 branches | name and top-level SFNT parsing reached 100% structural coverage; fixed absolute TTC table offsets and removed one unreachable helper |
 | 2026-07-10 | Explicit error-case asset completion | 66 unique hashes | 0 | 6,356 | 6,355 / 6,355 | 1 | 12,151 / 16,312 lines; 17,484 / 23,330 regions; 2,788 / 4,164 branches | 11 public error cases moved from pending to exact Rust/C/WASM comparison using existing focused SFNT and Type 1 assets |
 | 2026-07-10 | cmap parser and lookup matrix | 74 unique hashes | 0 | 6,372 | 6,371 / 6,371 | 1 | 12,263 / 16,321 lines; 17,627 / 23,338 regions; 2,829 / 4,170 branches | cmap reached 100% structural coverage; fixed format-specific terminal iteration, format-12 zero-group advance, and format-4 range validation |
+| 2026-07-10 | glyf topology and malformed matrices | 76 unique hashes | 0 | 6,407 | 6,406 / 6,406 | 1 | 12,366 / 16,333 lines; 17,743 / 23,345 regions; 2,855 / 4,164 branches | glyf reached 100% function, line, region, and branch coverage; fixed scaled point attachment, repeat overflow, invalid attachment handling, and simple instruction bounds |
 
 ## Decision Log
 
@@ -514,16 +515,18 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Treat TTC table offsets as collection-absolute | Pinned `tt_face_load_font_dir` reads table offsets from the TTC stream origin; adding the selected face base a second time breaks every nonzero face |
 | 2026-07-10 | Keep the embedded-strike request visibly pending | Existing bitmap-named aliases are scalable fonts and core has no embedded-strike table support; substituting a numeric size would falsely satisfy the manifest obligation |
 | 2026-07-10 | Model cmap `char_next` per format | Pinned format 6 increments before its terminal check and wraps at `0xFFFFFFFF`; formats 4 and 12 reject their terminal inputs before advancing |
+| 2026-07-10 | Validate a composite tree once before no-hint scaling | The public scaler always calls `load_glyph` first; the scaled helper consumes that validated tree and must not retain public-unreachable duplicate malformed-data branches |
 
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
 
-1. Classify uncovered regions and condition outcomes by module and required
-   font, glyph topology, parameter, or error-path property.
-2. Extend focused fonts only for missing properties proven by coverage.
-3. Add complete explicit variants to existing public manifest cases when one
-   case must exercise multiple deliberate inputs.
+1. Move to the next highest-yield uncovered module after `tt/cmap.rs` and
+   `tt/glyf.rs`, both of which now have complete structural coverage.
+2. Classify its uncovered regions and condition outcomes by required font,
+   glyph topology, parameter, or error-path property.
+3. Extend focused fonts only for missing properties proven by coverage, then
+   add complete explicit variants to the existing public manifest case.
 4. Resolve the one visible embedded-strike pending case when its focused bitmap
    font and owning core table support are implemented.
 5. Keep the deprecated corpus isolated until final cleanup is separately
