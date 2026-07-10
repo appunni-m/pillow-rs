@@ -519,8 +519,11 @@ off-curve starts, consecutive controls, intersections, winding reversal,
 degenerate contours, clipping, empty outlines, dropout modes, mono collapse,
 overshoot, LCD/LCD_V filters, and SDF success/error behavior.
 
-Before adding geometry, remove alternate render implementations and convenience
-entry points that no public operation can call.
+Preserve alternate render implementations, defensive paths, and convenience
+entry points while classifying their reachability. Remove code only in a
+separate cleanup with semantic proof independent of coverage; an uncovered
+render path is a missing fixture obligation, not evidence that the behavior is
+disposable.
 
 Exit gate: every supported render mode has exact bytes, placement, pitch, and
 metrics parity; unsupported modes have exact public errors.
@@ -836,6 +839,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Hani blue calibration aliases | 81 unique hashes | 0 | 6,438 | 6,437 / 6,437 | 1 | 13,083 / 15,865 lines; 18,814 / 22,857 regions; 3,115 / 4,067 branches | four cmap aliases reuse existing CJK geometry and add 146 lines, 206 regions, 48 branches, and two functions with no glyph or case growth |
 | 2026-07-10 | Coverage-deletion audit and restoration | 81 unique hashes | 0 | 6,438 | 6,437 / 6,437 | 1 | 13,097 / 16,243 lines; 18,846 / 23,196 regions; 3,129 / 4,126 branches | restored public autohint/VM/parser helpers, DOWN2/BOTTOM2 behavior, call-record contract, serif helper, and defensive guards; exact parity remains green with the honest larger denominator |
 | 2026-07-10 | Deterministic source-backed font builds | 81 unique hashes | 0 | 6,438 | 6,437 / 6,437 | 1 | 13,097 / 16,242 lines; 18,846 / 23,196 regions; 3,129 / 4,126 branches | both maintained TTX targets preserve their embedded timestamps; rebuilds remain byte-identical after source mtime changes |
+| 2026-07-10 | Render topology and SDF conic subdivision | 81 unique hashes | 0 | 6,447 | 6,446 / 6,446 | 1 | 13,236 / 16,301 lines; 19,092 / 23,292 regions; 3,187 / 4,148 branches | three glyphs and nine explicit modes add conic chains, mono/LCD variants, intersections, thin geometry, mixed winding, and degeneracy; the conic SDF case exposed and fixed Rust's non-FreeType subdivision rule with exact bytes across all ABIs |
 
 ## Decision Log
 
@@ -874,6 +878,8 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Restore second-bottom adjustment modes | Absence from the current adjustment database proves no present public selector, not that the pinned FreeType behavior is disposable; keep `DOWN2/BOTTOM2` for correctness and future database changes |
 | 2026-07-10 | Keep the CJK round-segment helper visible | Pinned FreeType's zero segment-limit snapshot prevents the current public path from calling it; preserving the helper exposes the gap instead of manufacturing coverage or deleting behavior |
 | 2026-07-10 | Preserve embedded TTX timestamps | `ttx` otherwise hashes the source filesystem mtime into the binary, making identical fixture sources produce different fonts and invalidating content-addressed oracle caching |
+| 2026-07-10 | Treat parity as input-scoped evidence | Exact C/Rust/WASM agreement proves behavior only for selected inputs; source paths remain preserved and uncovered paths remain explicit obligations so deleting code cannot silently erase an unrepresented special case |
+| 2026-07-10 | Match FreeType SDF conic subdivision exactly | Pinned `ftsdf.c` chooses bisections from conic deviation, splits every conic at least once, and uses truncating midpoint arithmetic; the previous generic flattener produced many one-byte SDF differences on consecutive off-curve controls |
 
 ## Immediate Next Actions
 
@@ -882,8 +888,9 @@ Work must resume here unless a newer user request changes priority:
 1. Complete R0 and classify every uncovered function as public, font-reachable,
    missing delegation, duplicate with independent proof, or currently
    unreachable but preserved.
-2. Continue R3 with topology roles selected from the remaining uncovered Latin
-   helpers; retain a variant only when condition coverage proves a gain.
+2. Continue R5 from the remaining uncovered render and gray-raster branches;
+   add cubic/CFF, clipping, dropout, and empty/error roles only as explicit
+   variants with measured structural gain.
 3. Resolve the one visible embedded-strike pending case in R7 when its focused bitmap
    font and owning core table support are implemented.
 4. Keep the deprecated corpus isolated until final cleanup is separately

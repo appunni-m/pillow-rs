@@ -44,6 +44,9 @@
     <GlyphID id="38" name="glyphIdef"/>
     <GlyphID id="39" name="unterminatedFdef"/>
     <GlyphID id="40" name="undefinedOpcode"/>
+    <GlyphID id="41" name="renderConicChain"/>
+    <GlyphID id="42" name="renderBowtieThin"/>
+    <GlyphID id="43" name="renderMixedWinding"/>
   </GlyphOrder>
 
   <head>
@@ -199,6 +202,9 @@
     <mtx name="glyphIdef" width="700" lsb="0"/>
     <mtx name="unterminatedFdef" width="700" lsb="0"/>
     <mtx name="undefinedOpcode" width="700" lsb="0"/>
+    <mtx name="renderConicChain" width="700" lsb="0"/>
+    <mtx name="renderBowtieThin" width="700" lsb="0"/>
+    <mtx name="renderMixedWinding" width="700" lsb="0"/>
     <mtx name="transform2x2" width="700" lsb="0"/>
     <mtx name="withInstructions" width="700" lsb="0"/>
   </hmtx>
@@ -246,6 +252,9 @@
       <map code="0xe025" name="glyphIdef"/>
       <map code="0xe026" name="unterminatedFdef"/>
       <map code="0xe027" name="undefinedOpcode"/>
+      <map code="0xe028" name="renderConicChain"/>
+      <map code="0xe029" name="renderBowtieThin"/>
+      <map code="0xe02a" name="renderMixedWinding"/>
     </cmap_format_4>
     <cmap_format_4 platformID="3" platEncID="1" language="0">
       <map code="0xe000" name="base"/><!-- ???? -->
@@ -288,6 +297,9 @@
       <map code="0xe025" name="glyphIdef"/>
       <map code="0xe026" name="unterminatedFdef"/>
       <map code="0xe027" name="undefinedOpcode"/>
+      <map code="0xe028" name="renderConicChain"/>
+      <map code="0xe029" name="renderBowtieThin"/>
+      <map code="0xe02a" name="renderMixedWinding"/>
     </cmap_format_4>
   </cmap>
 
@@ -724,6 +736,57 @@
           SVTCA[0]	/* SetFPVectorToAxis */
         </assembly>
       </instructions>
+    </TTGlyph>
+
+    <TTGlyph name="renderConicChain" xMin="100" yMin="-100" xMax="600" yMax="700">
+      <contour>
+        <pt x="100" y="300" on="0"/>
+        <pt x="100" y="600" on="0"/>
+        <pt x="300" y="700" on="1"/>
+        <pt x="500" y="600" on="0"/>
+        <pt x="600" y="300" on="0"/>
+        <pt x="500" y="0" on="1"/>
+        <pt x="300" y="-100" on="0"/>
+        <pt x="100" y="0" on="0"/>
+      </contour>
+      <instructions/>
+    </TTGlyph>
+
+    <TTGlyph name="renderBowtieThin" xMin="50" yMin="0" xMax="640" yMax="600">
+      <contour>
+        <pt x="50" y="0" on="1"/>
+        <pt x="550" y="600" on="1"/>
+        <pt x="50" y="600" on="1"/>
+        <pt x="550" y="0" on="1"/>
+      </contour>
+      <contour>
+        <pt x="620" y="0" on="1"/>
+        <pt x="640" y="0" on="1"/>
+        <pt x="640" y="600" on="1"/>
+        <pt x="620" y="600" on="1"/>
+      </contour>
+      <instructions/>
+    </TTGlyph>
+
+    <TTGlyph name="renderMixedWinding" xMin="0" yMin="0" xMax="700" yMax="700">
+      <contour>
+        <pt x="0" y="0" on="1"/>
+        <pt x="0" y="700" on="1"/>
+        <pt x="700" y="700" on="1"/>
+        <pt x="700" y="0" on="1"/>
+      </contour>
+      <contour>
+        <pt x="200" y="200" on="1"/>
+        <pt x="500" y="200" on="1"/>
+        <pt x="500" y="500" on="1"/>
+        <pt x="200" y="500" on="1"/>
+      </contour>
+      <contour>
+        <pt x="350" y="350" on="1"/>
+        <pt x="350" y="350" on="1"/>
+        <pt x="350" y="350" on="1"/>
+      </contour>
+      <instructions/>
     </TTGlyph>
 
   </glyf>
