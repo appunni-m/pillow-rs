@@ -121,7 +121,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `2868a722bff5` | 1.6 | 1 | `fonts/glyf/loca-long-truncated.ttf` | long-loca control with only seven bytes, one byte below a complete glyph-0 offset pair |
 | `697619c0847e` | 1.6 | 1 | `fonts/glyf/cvt-empty.ttf` | valid TrueType control with a present zero-length cvt table |
 | `6175105e1748` | 1.6 | 1 | `fonts/glyf/cvt-odd-length.ttf` | valid TrueType control with a one-byte cvt table rejected by Rust parsing and ignored by face construction |
-| `a9b432ffb9f7` | 2.4 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed CVT/fpgm/prep matrix with scan modes, IDEF, UTP, super-round, INSTCTRL, and consolidated VM stack/state programs |
+| `1641a34c96d5` | 2.8 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed CVT/fpgm/prep matrix with scan, definition, stack/state, point geometry, interpolation, and DELTA programs |
 
 ### Active Alias Concentration
 
@@ -165,7 +165,7 @@ listed because they enter different hinting and scaling conditions.
 | `glyf-malformed-matrix.ttf` | gids 1-19 | 20 | one explicitly selected malformed record per simple/composite parser boundary and table/reference error |
 | `loca-short-truncated.ttf`, `loca-long-truncated.ttf` | gid 0 | 20 | one checked truncation failure for each loca record format |
 | `cvt-empty.ttf`, `cvt-odd-length.ttf` | gid 1 | 20 | present-empty and odd-length CVT parser outcomes isolated with no-scale loading |
-| `hinter-control-matrix.ttf` | gid 1, gids 24-30 | 20 | fpgm/empty-prep setup, scan types 0/2, IDEF, UTP, super-round, INSTCTRL, and one consolidated stack/arithmetic/storage/CVT/state matrix |
+| `hinter-control-matrix.ttf` | gid 1, gids 24-33 | 20 | fpgm/empty-prep setup, scan/IDEF/UTP/super-round/INSTCTRL, consolidated VM state, point-coordinate/movement/interpolation, and DELTA matrices |
 
 The custom fonts contain additional glyphs for future focused obligations:
 Latin digits, round/straight/overshoot forms, combining marks, simple and
@@ -383,11 +383,12 @@ and selected-glyph obligations still come from explicit inputs.
     stores those raw tables directly; `tt/hinter/tables.rs` has 100% function,
     line, region, and branch coverage.
 
-27. One 2.4 KiB hinter control font combines a seven-byte IDEF `fpgm`,
-    present-empty `prep`, a valid CVT, and seven focused program glyphs. Eight
+27. One 2.8 KiB hinter control font combines a seven-byte IDEF `fpgm`,
+    present-empty `prep`, a valid CVT, and ten focused program glyphs. Eleven
     explicit loads cover scan types 0/2, IDEF dispatch, UTP, the SROUND and
     S45ROUND selector/sign matrix, INSTCTRL validation, and consolidated VM
-    stack/state families without multiplying sizes or flags. Its inspectable source is
+    stack/state, point geometry, interpolation, and DELTA families without
+    multiplying sizes or flags. Its inspectable source is
     `tests/fixtures/font-sources/hinter-control-matrix.ttx`; rebuild it with
     `make font-fixture-hinter`.
 
