@@ -38,23 +38,6 @@ pub fn parse_cvt(data: &[u8]) -> Result<Vec<i32>, FontError> {
     Ok(cvt)
 }
 
-/// Returned from `parse_fpgm` — the font program bytecode.
-///
-/// `fpgm` is a raw bytecode stream executed once when the font is loaded.
-/// It typically contains function definitions (FDEF/ENDF) and storage
-/// area initialization.
-pub fn parse_fpgm(data: &[u8]) -> Vec<u8> {
-    data.to_vec()
-}
-
-/// Returned from `parse_prep` — the CVT program bytecode.
-///
-/// `prep` is a raw bytecode stream executed each time the pixel size changes.
-/// It scales CVT values for the current ppem and may adjust the graphics state.
-pub fn parse_prep(data: &[u8]) -> Vec<u8> {
-    data.to_vec()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
