@@ -1460,6 +1460,50 @@
             "coverage": [
               "tt/glyf:error-composite-depth-nine-scaled"
             ]
+          },
+          {
+            "id": "loca-short-record-truncated",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/loca-short-truncated.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 0,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/loca:error-short-record-truncated"
+            ]
+          },
+          {
+            "id": "loca-long-record-truncated",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/loca-long-truncated.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 0,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/loca:error-long-record-truncated"
+            ]
           }
         ]
       },

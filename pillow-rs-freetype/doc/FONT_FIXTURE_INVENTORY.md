@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 427 | 79 | 348 | 76 | 10.2 MiB |
+| Active fixtures | 429 | 81 | 348 | 78 | 10.2 MiB |
 | Deprecated autohint corpus | 100 | 100 | 0 | 98 | 23 MiB |
 | Compact active autohint set | 5 | 5 | 0 | 5 | 187 KiB |
 
@@ -117,6 +117,8 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `19667c565a1b` | 1.7 | 1 | `fonts/charmap/cmap-unsupported-only.ttf` | valid SFNT whose sole cmap record has unsupported format 99; owns the no-active-charmap state |
 | `267a07b84237` | 1.6 | 1 | `fonts/glyf/glyf-component-matrix.ttf` | 24-glyph TrueType matrix covering point and XY attachment, word arguments, uniform/independent/2x2 transforms, rounded offsets, instructions, depth 8/9, and mixed empty components |
 | `fb3a52457f92` | 1.7 | 1 | `fonts/glyf/glyf-malformed-matrix.ttf` | isolated simple/composite parser failures: short records, contour/flag/delta/instruction overflow, repeat overflow, transform truncation, invalid attachment/reference, and loca beyond glyf |
+| `26a737107a48` | 1.6 | 1 | `fonts/glyf/loca-short-truncated.ttf` | short-loca control with only three bytes, one byte below a complete glyph-0 offset pair |
+| `2868a722bff5` | 1.6 | 1 | `fonts/glyf/loca-long-truncated.ttf` | long-loca control with only seven bytes, one byte below a complete glyph-0 offset pair |
 
 ### Active Alias Concentration
 
@@ -158,6 +160,7 @@ listed because they enter different hinting and scaling conditions.
 | `glyf-component-matrix.ttf` | gids 3-10 | 19, 20 | point attachment, word XY arguments, all component transforms, rounded/unrounded offsets, use-my-metrics, and composite instructions |
 | `glyf-component-matrix.ttf` | gids 18, 19, 23 | 20 | accepted depth-8 boundary, rejected depth-9 recursion, and non-empty composite with an empty child |
 | `glyf-malformed-matrix.ttf` | gids 1-19 | 20 | one explicitly selected malformed record per simple/composite parser boundary and table/reference error |
+| `loca-short-truncated.ttf`, `loca-long-truncated.ttf` | gid 0 | 20 | one checked truncation failure for each loca record format |
 
 The custom fonts contain additional glyphs for future focused obligations:
 Latin digits, round/straight/overshoot forms, combining marks, simple and
@@ -363,6 +366,11 @@ and selected-glyph obligations still come from explicit inputs.
     a zero offset. Rust now matches `TT_Process_Composite_Component` and
     `TT_Load_Simple_Glyph`; `tt/glyf.rs` has 100% function, line, region, and
     branch coverage.
+
+25. Two 1.6 KiB loca controls cover the short and long record truncation exits.
+    Reading each complete record through one checked slice removes nine
+    byte-position-specific regions and avoids ten additional near-duplicate
+    fonts; `tt/loca.rs` has 100% function, line, region, and branch coverage.
 
 ## Replacement Queue
 
