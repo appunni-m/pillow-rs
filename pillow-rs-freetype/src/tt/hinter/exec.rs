@@ -78,8 +78,11 @@ pub struct CallRecord {
     pub caller_ip: usize,
     /// Current loop count (for LOOPCALL).
     pub cur_count: i32,
-    /// Pointer to the function definition being called.
-    pub def_index: usize,
+    /// Definition code range and entry point. These are captured when the
+    /// active definition is resolved, so LOOPCALL repetition needs no second
+    /// fallible lookup.
+    pub def_range: u8,
+    pub def_start: usize,
 }
 
 /// The bytecode execution context.
@@ -251,34 +254,6 @@ impl ExecContext {
             .last()
             .copied()
             .ok_or(FontError::InvalidOutline("bytecode: stack empty".into()))
-    }
-
-    /// Read a byte from the active code range at the current IP,
-    /// then increment IP. Used during fpgm parsing.
-    pub fn fetch_byte(&mut self) -> Result<u8, FontError> {
-        // During fpgm parsing (cur_range=1), read from font_program.
-        // During run_program (cur_range=2), read from glyph_program.
-        let data = if self.cur_range == 1 {
-            &self.font_program
-        } else {
-            &self.glyph_program
-        };
-        if self.ip >= data.len() {
-            return Err(FontError::InvalidOutline(
-                "bytecode: IP out of range".into(),
-            ));
-        }
-        let byte = data[self.ip];
-        self.ip += 1;
-        Ok(byte)
-    }
-
-    /// Read a signed word (2 bytes, big-endian) from the current code range.
-    #[allow(dead_code)]
-    pub fn fetch_word(&mut self) -> Result<i16, FontError> {
-        let hi = self.fetch_byte()? as i16;
-        let lo = self.fetch_byte()? as i16;
-        Ok((hi << 8) | lo)
     }
 
     // ── Program execution ─────────────────────────────────────────────
@@ -661,7 +636,8 @@ impl ExecContext {
             caller_range: self.cur_range,
             caller_ip: self.ip,
             cur_count: 1,
-            def_index: opcode as usize,
+            def_range: def.range,
+            def_start: def.start,
         });
         self.ip = def.start;
         self.cur_range = def.range;
@@ -1380,7 +1356,8 @@ impl ExecContext {
                                     caller_range: self.cur_range,
                                     caller_ip: self.ip,
                                     cur_count: count,
-                                    def_index: func_num as usize,
+                                    def_range: def.range,
+                                    def_start: def.start,
                                 });
                                 self.ip = def.start;
                                 self.cur_range = def.range;
@@ -1398,7 +1375,8 @@ impl ExecContext {
                                     caller_range: self.cur_range,
                                     caller_ip: self.ip,
                                     cur_count: 0,
-                                    def_index: func_num as usize,
+                                    def_range: def.range,
+                                    def_start: def.start,
                                 });
                                 self.ip = def.start;
                                 self.cur_range = def.range;
@@ -1410,17 +1388,14 @@ impl ExecContext {
                     // ENDF: return from function
                     if let Some(call) = self.call_stack.pop() {
                         if call.cur_count > 1 {
-                            let def = self.functions[call.def_index].as_ref().ok_or_else(|| {
-                                FontError::InvalidOutline(
-                                    "bytecode: missing function definition".into(),
-                                )
-                            })?;
+                            let def_start = call.def_start;
+                            let def_range = call.def_range;
                             self.call_stack.push(CallRecord {
                                 cur_count: call.cur_count - 1,
                                 ..call
                             });
-                            self.ip = def.start;
-                            self.cur_range = def.range;
+                            self.ip = def_start;
+                            self.cur_range = def_range;
                         } else {
                             self.ip = call.caller_ip;
                             self.cur_range = call.caller_range;

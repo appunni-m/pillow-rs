@@ -21,6 +21,7 @@ help:
 	@printf "  make setup            Fetch oracle source and regenerate fixtures\n"
 	@printf "  make setup-tools      Install optional audit tooling\n"
 	@printf "  make oracle-fetch     Fetch pinned FreeType C oracle source\n"
+	@printf "  make font-fixture-hinter Rebuild the compact TrueType program fixture\n"
 	@printf "\nBuild:\n"
 	@printf "  make build            Build the crate\n"
 	@printf "  make doc              Build crate documentation\n"
@@ -209,6 +210,12 @@ api-abi-audit: oracle-fetch
 .PHONY: api-abi-check
 api-abi-check: api-abi-audit
 	$(PYTHON) scripts/check_public_api_inputs.py --audit-json target/api-abi-audit/api_abi_audit.json
+
+.PHONY: font-fixture-hinter
+font-fixture-hinter:
+	@command -v ttx >/dev/null || { echo "fonttools ttx is required" >&2; exit 1; }
+	ttx -q -o tests/fixtures/fonts/glyf/hinter-control-matrix.ttf \
+		tests/fixtures/font-sources/hinter-control-matrix.ttx
 
 .PHONY: fmt
 fmt:

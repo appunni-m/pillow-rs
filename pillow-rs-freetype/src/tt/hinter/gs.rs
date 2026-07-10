@@ -45,22 +45,6 @@ pub enum RoundMode {
     Super45 = 7,
 }
 
-impl RoundMode {
-    pub fn from_u8(v: u8) -> Self {
-        match v {
-            0 => RoundMode::HalfGrid,
-            1 => RoundMode::Grid,
-            2 => RoundMode::DoubleGrid,
-            3 => RoundMode::DownToGrid,
-            4 => RoundMode::UpToGrid,
-            5 => RoundMode::Off,
-            6 => RoundMode::Super,
-            7 => RoundMode::Super45,
-            _ => RoundMode::Grid, // safe default
-        }
-    }
-}
-
 /// The interpreter's graphics state.
 ///
 /// Initialized by `TT_Load_Context` (ttobjs.c:891-957) with defaults,
