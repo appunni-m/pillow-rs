@@ -19,18 +19,6 @@ pub enum Direction {
 }
 
 impl Direction {
-    #[inline]
-    pub fn is_horizontal(self) -> bool {
-        matches!(self, Direction::Right | Direction::Left)
-    }
-    #[inline]
-    pub fn is_vertical(self) -> bool {
-        matches!(self, Direction::Up | Direction::Down)
-    }
-    #[inline]
-    pub fn as_i8(self) -> i8 {
-        self as i8
-    }
     pub fn opposite(self) -> Direction {
         match self {
             Direction::Right => Direction::Left,
@@ -382,11 +370,6 @@ impl GlyphHints {
             metrics: None,
             cw_orientation: false,
         }
-    }
-
-    /// Number of contours.
-    pub fn num_contours(&self) -> usize {
-        self.contours.len()
     }
 
     /// Number of points.
