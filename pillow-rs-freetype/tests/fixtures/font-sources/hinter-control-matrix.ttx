@@ -37,6 +37,7 @@
     <GlyphID id="31" name="pointCoordinateMatrix"/>
     <GlyphID id="32" name="pointMoveMatrix"/>
     <GlyphID id="33" name="deltaControlMatrix"/>
+    <GlyphID id="34" name="controlFlowMatrix"/>
   </GlyphOrder>
 
   <head>
@@ -83,7 +84,7 @@
   <maxp>
     <!-- Most of this table will be recalculated by the compiler -->
     <tableVersion value="0x10000"/>
-    <numGlyphs value="34"/>
+    <numGlyphs value="35"/>
     <maxPoints value="4"/>
     <maxContours value="1"/>
     <maxCompositePoints value="6"/>
@@ -91,7 +92,7 @@
     <maxZones value="2"/>
     <maxTwilightPoints value="0"/>
     <maxStorage value="2"/>
-    <maxFunctionDefs value="0"/>
+    <maxFunctionDefs value="1"/>
     <maxInstructionDefs value="1"/>
     <maxStackElements value="16"/>
     <maxSizeOfInstructions value="400"/>
@@ -185,6 +186,7 @@
     <mtx name="pointCoordinateMatrix" width="700" lsb="0"/>
     <mtx name="pointMoveMatrix" width="700" lsb="0"/>
     <mtx name="deltaControlMatrix" width="700" lsb="0"/>
+    <mtx name="controlFlowMatrix" width="700" lsb="0"/>
     <mtx name="transform2x2" width="700" lsb="0"/>
     <mtx name="withInstructions" width="700" lsb="0"/>
   </hmtx>
@@ -225,6 +227,7 @@
       <map code="0xe01e" name="pointCoordinateMatrix"/>
       <map code="0xe01f" name="pointMoveMatrix"/>
       <map code="0xe020" name="deltaControlMatrix"/>
+      <map code="0xe021" name="controlFlowMatrix"/>
     </cmap_format_4>
     <cmap_format_4 platformID="3" platEncID="1" language="0">
       <map code="0xe000" name="base"/><!-- ???? -->
@@ -260,13 +263,14 @@
       <map code="0xe01e" name="pointCoordinateMatrix"/>
       <map code="0xe01f" name="pointMoveMatrix"/>
       <map code="0xe020" name="deltaControlMatrix"/>
+      <map code="0xe021" name="controlFlowMatrix"/>
     </cmap_format_4>
   </cmap>
 
   <fpgm>
-    <!-- Define opcode 0x8F as PUSH 1; POP, then invoke it from idefCall. -->
+    <!-- Define opcode 0x8F and function 1 as PUSH 1; POP bodies. -->
     <bytecode>
-      b0 8f 89 b0 01 21 2d
+      b0 8f 89 b0 01 21 2d b0 01 2c b0 01 21 2d
     </bytecode>
   </fpgm>
 
@@ -606,6 +610,26 @@
           b0 14 5e b0 03 5f
           b2 08 01 01 5d b2 08 01 01 71 b2 08 01 01 72
           b2 08 00 01 73 b2 08 00 01 74 b2 08 00 01 75
+        </bytecode>
+      </instructions>
+    </TTGlyph>
+
+    <TTGlyph name="controlFlowMatrix" xMin="0" yMin="0" xMax="500" yMax="600">
+      <contour>
+        <pt x="0" y="0" on="1"/>
+        <pt x="500" y="0" on="1"/>
+        <pt x="250" y="600" on="1"/>
+      </contour>
+      <instructions>
+        <bytecode>
+          b0 01 2b b1 02 01 2a b1 00 01 2a
+
+          b0 01 58 b0 01 21 1b b0 02 21 59
+          b0 00 58 b0 01 21 1b b0 02 21 59
+
+          b0 00 1c
+          b1 00 01 78 b1 00 00 78
+          b1 00 00 79 b1 00 01 79
         </bytecode>
       </instructions>
     </TTGlyph>
