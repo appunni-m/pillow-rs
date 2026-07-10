@@ -277,6 +277,7 @@ fn duration_ns(duration: Duration) -> u128 {
 #[test]
 fn unified_fixture_parity() {
     let _profile = ProfileStage::new("unified_fixture_parity.total");
+    assert_oracle_cache_key_tracks_asset_identity();
     let input_cases = {
         let _profile = ProfileStage::new("load_global_input_cache");
         read_all_case_files()
@@ -4787,14 +4788,112 @@ fn oracle_batch_input(cases: &[&InputCase]) -> Result<String, String> {
 
 fn oracle_cache_key(cases: &[&InputCase], batch_input: &str) -> Result<String, String> {
     let canonical_cases = serde_json::to_string(cases).map_err(|err| err.to_string())?;
+    let oracle_identity = oracle_identity_hash()?;
+    let asset_identity = oracle_asset_identity_hash(cases)?;
+    Ok(oracle_cache_key_from_material(
+        &canonical_cases,
+        batch_input,
+        &oracle_identity,
+        &asset_identity,
+    ))
+}
+
+fn oracle_cache_key_from_material(
+    canonical_cases: &str,
+    batch_input: &str,
+    oracle_identity: &str,
+    asset_identity: &str,
+) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(b"fontdone-unified-oracle-cache-v2\n");
+    hasher.update(b"fontdone-unified-oracle-cache-v3\n");
     hasher.update(b"\n--oracle--\n");
-    hasher.update(oracle_identity_hash()?.as_bytes());
+    hasher.update(oracle_identity.as_bytes());
+    hasher.update(b"\n--assets--\n");
+    hasher.update(asset_identity.as_bytes());
     hasher.update(canonical_cases.as_bytes());
     hasher.update(b"\n--argv--\n");
     hasher.update(batch_input.as_bytes());
+    hex_bytes(&hasher.finalize())
+}
+
+fn oracle_asset_identity_hash(cases: &[&InputCase]) -> Result<String, String> {
+    let mut hasher = Sha256::new();
+    hasher.update(b"fontdone-unified-oracle-assets-v1\n");
+    for case in cases {
+        hash_framed(&mut hasher, case.case_id.as_bytes());
+        for (name, asset) in &case.inputs.assets {
+            hash_framed(&mut hasher, name.as_bytes());
+            hash_oracle_asset_identity(&mut hasher, asset)?;
+        }
+    }
     Ok(hex_bytes(&hasher.finalize()))
+}
+
+fn hash_oracle_asset_identity(hasher: &mut Sha256, asset: &Asset) -> Result<(), String> {
+    match asset {
+        Asset::List(items) => {
+            hasher.update(b"list");
+            hasher.update(
+                u64::try_from(items.len())
+                    .map_err(|err| err.to_string())?
+                    .to_be_bytes(),
+            );
+            for asset in items {
+                hash_oracle_asset_identity(hasher, asset)?;
+            }
+        }
+        Asset::File { path, .. } => hash_oracle_file_identity(hasher, path)?,
+        Asset::Ref { .. } => {
+            if let Some(path) = asset_file_path(asset) {
+                hash_oracle_file_identity(hasher, path)?;
+            } else {
+                hasher.update(b"unresolved-ref");
+                hash_framed(hasher, asset_label(asset).as_bytes());
+            }
+        }
+        Asset::InlineBytes { encoding, .. } => {
+            hasher.update(b"inline");
+            hash_framed(hasher, encoding.as_bytes());
+            let value = inline_bytes_hex(asset)
+                .ok_or_else(|| "inline oracle asset is missing hex bytes".to_string())?;
+            let bytes = cached_inline_bytes(value)?;
+            hasher.update(
+                u64::try_from(bytes.len())
+                    .map_err(|err| err.to_string())?
+                    .to_be_bytes(),
+            );
+            hash_framed(hasher, sha256_hex(bytes.as_ref()).as_bytes());
+        }
+        Asset::Other(value) => {
+            hasher.update(b"other");
+            let encoded = serde_json::to_vec(value).map_err(|err| err.to_string())?;
+            hash_framed(hasher, &encoded);
+        }
+    }
+    Ok(())
+}
+
+fn hash_oracle_file_identity(hasher: &mut Sha256, path: &str) -> Result<(), String> {
+    let (length, digest) = validated_file_asset(path)?;
+    hasher.update(b"file");
+    hash_framed(hasher, path.as_bytes());
+    hasher.update(length.to_be_bytes());
+    hash_framed(hasher, digest.as_bytes());
+    Ok(())
+}
+
+fn hash_framed(hasher: &mut Sha256, value: &[u8]) {
+    hasher.update(u64::try_from(value.len()).unwrap_or(u64::MAX).to_be_bytes());
+    hasher.update(value);
+}
+
+fn assert_oracle_cache_key_tracks_asset_identity() {
+    let original = oracle_cache_key_from_material("cases", "argv", "oracle", "asset-sha-a");
+    let changed = oracle_cache_key_from_material("cases", "argv", "oracle", "asset-sha-b");
+    assert_ne!(
+        original, changed,
+        "oracle cache key must change when resolved asset bytes change"
+    );
 }
 
 fn oracle_identity_hash() -> Result<String, String> {
