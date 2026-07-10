@@ -33,6 +33,7 @@
     <GlyphID id="27" name="untouchPoint"/>
     <GlyphID id="28" name="superRoundMatrix"/>
     <GlyphID id="29" name="instructionControl"/>
+    <GlyphID id="30" name="stackStateMatrix"/>
   </GlyphOrder>
 
   <head>
@@ -79,18 +80,18 @@
   <maxp>
     <!-- Most of this table will be recalculated by the compiler -->
     <tableVersion value="0x10000"/>
-    <numGlyphs value="30"/>
+    <numGlyphs value="31"/>
     <maxPoints value="4"/>
     <maxContours value="1"/>
     <maxCompositePoints value="6"/>
     <maxCompositeContours value="2"/>
     <maxZones value="2"/>
     <maxTwilightPoints value="0"/>
-    <maxStorage value="0"/>
+    <maxStorage value="2"/>
     <maxFunctionDefs value="0"/>
     <maxInstructionDefs value="1"/>
     <maxStackElements value="16"/>
-    <maxSizeOfInstructions value="64"/>
+    <maxSizeOfInstructions value="400"/>
     <maxComponentElements value="2"/>
     <maxComponentDepth value="10"/>
   </maxp>
@@ -177,6 +178,7 @@
     <mtx name="untouchPoint" width="700" lsb="0"/>
     <mtx name="superRoundMatrix" width="700" lsb="0"/>
     <mtx name="instructionControl" width="700" lsb="0"/>
+    <mtx name="stackStateMatrix" width="700" lsb="0"/>
     <mtx name="transform2x2" width="700" lsb="0"/>
     <mtx name="withInstructions" width="700" lsb="0"/>
   </hmtx>
@@ -213,6 +215,7 @@
       <map code="0xe01a" name="untouchPoint"/>
       <map code="0xe01b" name="superRoundMatrix"/>
       <map code="0xe01c" name="instructionControl"/>
+      <map code="0xe01d" name="stackStateMatrix"/>
     </cmap_format_4>
     <cmap_format_4 platformID="3" platEncID="1" language="0">
       <map code="0xe000" name="base"/><!-- ???? -->
@@ -244,6 +247,7 @@
       <map code="0xe01a" name="untouchPoint"/>
       <map code="0xe01b" name="superRoundMatrix"/>
       <map code="0xe01c" name="instructionControl"/>
+      <map code="0xe01d" name="stackStateMatrix"/>
     </cmap_format_4>
   </cmap>
 
@@ -466,6 +470,62 @@
              glyph-range INSTCTRL state accepted by FreeType. -->
         <bytecode>
           b1 00 00 8e b1 01 02 8e b1 03 04 8e b1 03 00 8e
+        </bytecode>
+      </instructions>
+    </TTGlyph>
+
+    <TTGlyph name="stackStateMatrix" xMin="0" yMin="0" xMax="500" yMax="600">
+      <contour>
+        <pt x="0" y="0" on="1"/>
+        <pt x="500" y="0" on="1"/>
+        <pt x="250" y="600" on="1"/>
+      </contour>
+      <instructions>
+        <!-- One deterministic program covers independent VM families. Results
+             are consumed immediately; point-tag flips are restored. -->
+        <bytecode>
+          40 03 01 02 03 22 41 02 00 40 ff c0 22
+          b0 05 20 21 21 b1 01 02 23 22
+          b2 10 20 01 25 22 b2 10 20 01 26 22
+          b2 01 02 03 8a 22 24 21
+
+          b1 20 10 60 21 b1 20 10 61 21 b1 40 02 62 21
+          b1 40 40 63 21 b8 ff d0 64 21 b0 30 65 21
+          b0 50 66 21 b0 50 67 21
+
+          b1 00 2a 42 b0 00 43 21
+          b1 00 20 44 b0 00 45 21 b1 00 20 70
+
+          00 01 02 03 04 05 b0 00 10 b0 00 11 b0 00 12
+          0c 22 0d 22 4b 21 4c 21
+
+          18 b0 30 68 21 b8 ff d0 68 21
+          19 b0 30 68 21 b8 ff d0 68 21
+          3d b0 30 68 21 b8 ff d0 68 21
+          7a b0 30 68 21 b8 ff d0 68 21
+          7c b0 30 68 21 b8 ff d0 68 21
+          7d b0 30 68 21 b8 ff d0 68 21
+          b0 00 7e b0 00 7f
+
+          b0 01 13 b0 01 14 b0 01 15 b0 01 16
+          b0 20 1d b0 10 1e b0 08 1f 28 4d 4e 4f
+
+          b1 01 02 50 21 b1 02 01 50 21
+          b1 02 02 51 21 b1 03 02 51 21
+          b1 02 01 52 21 b1 01 02 52 21
+          b1 02 02 53 21 b1 01 02 53 21
+          b1 02 02 54 21 b1 02 03 54 21
+          b1 02 03 55 21 b1 02 02 55 21
+          b1 01 01 5a 21 b1 01 00 5a 21
+          b1 00 01 5b 21 b1 00 00 5b 21
+          b0 00 5c 21 b0 01 5c 21
+          b0 40 56 21 b0 40 57 21
+          b1 01 02 8b 21 b1 01 02 8c 21
+
+          b0 00 80 b0 00 80
+          b1 00 02 81 b1 00 02 82 b1 00 02 81
+          b0 00 85 b8 01 14 85 b8 08 13 85
+          b0 23 88 21 b8 ff ff 8d
         </bytecode>
       </instructions>
     </TTGlyph>

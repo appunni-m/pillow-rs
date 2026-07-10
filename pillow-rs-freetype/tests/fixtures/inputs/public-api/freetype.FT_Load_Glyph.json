@@ -1695,6 +1695,27 @@
             "coverage": [
               "tt/hinter:instctrl-invalid-and-selector-three"
             ]
+          },
+          {
+            "id": "hinter-stack-state-matrix",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 30,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "tt/hinter:stack-arithmetic-storage-state-matrix"
+            ]
           }
         ]
       },
