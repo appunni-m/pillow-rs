@@ -1548,7 +1548,7 @@
             ]
           },
           {
-            "id": "hinter-empty-font-and-prep-programs",
+            "id": "hinter-font-program-and-empty-prep",
             "assets": {
               "font": {
                 "kind": "ref",
@@ -1565,7 +1565,7 @@
               ]
             },
             "coverage": [
-              "tt/hinter:empty-fpgm-and-prep"
+              "tt/hinter:idef-font-program-and-empty-prep"
             ]
           },
           {
@@ -1609,6 +1609,91 @@
             },
             "coverage": [
               "tt/hinter:outline-scan-type-default"
+            ]
+          },
+          {
+            "id": "hinter-idef-call",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 26,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "tt/hinter:idef-definition-and-dispatch"
+            ]
+          },
+          {
+            "id": "hinter-untouch-point",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 27,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "tt/hinter:untouch-point"
+            ]
+          },
+          {
+            "id": "hinter-super-round-matrix",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 28,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "tt/hinter:sround-selector-and-sign-matrix",
+              "tt/hinter:s45round-sign-matrix"
+            ]
+          },
+          {
+            "id": "hinter-instruction-control",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 29,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "tt/hinter:instctrl-invalid-and-selector-three"
             ]
           }
         ]

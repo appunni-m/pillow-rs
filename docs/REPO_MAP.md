@@ -349,13 +349,11 @@ generated reports, build outputs, and package installs.
 |   |   |   |-- ALGORITHMS.md
 |   |   |   |-- blue_strings.rs
 |   |   |   |-- cjk.rs
-|   |   |   |-- coverage.rs
 |   |   |   |-- globals.rs
 |   |   |   |-- globals_data.rs
 |   |   |   |-- latin.rs
 |   |   |   |-- loader.rs
 |   |   |   |-- mod.rs
-|   |   |   |-- script.rs
 |   |   |   `-- types.rs
 |   |   |-- casts.rs
 |   |   |-- error.rs

@@ -392,6 +392,10 @@ work remains assigned to unreachable code.
 Primary modules: `tt/hinter/exec.rs`, `gs.rs`, `zone.rs`, `iup.rs`,
 `mod.rs`.
 
+Status: in progress. The source-backed control font now covers every retained
+interpreter function with four additional glyphs and variants. Remaining work
+is line, region, and condition completion within those functions.
+
 Expected additions: extend `hinter-control-matrix.ttf`; at most two malformed
 program derivatives; 35-45 named programs and 70-100 explicit variants.
 
@@ -773,6 +777,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | hinter setup and scan-type controls | 81 unique hashes | 0 | 6,414 | 6,413 / 6,413 | 1 | 12,367 / 16,321 lines; 17,729 / 23,307 regions; 2,858 / 4,164 branches | one 1.8 KiB font covers empty fpgm/prep plus scan types 0 and 2; hinter/mod rises to 275/278 lines and 64/70 branches |
 | 2026-07-10 | content-aware C-oracle cache | 81 unique hashes | 0 | 6,414 | 6,413 / 6,413 | 1 | unchanged | cache v3 hashes resolved file and inline asset bytes; forced refresh and subsequent cache hit both preserve exact parity |
 | 2026-07-10 | Autohint reachability cleanup | 81 unique hashes | 0 | 6,414 | 6,413 / 6,413 | 1 | 12,365 / 16,005 lines; 17,727 / 23,069 regions; 2,857 / 4,124 branches | removed 15 uncovered duplicate or diagnostic functions and 316 unreachable lines; exact parity unchanged |
+| 2026-07-10 | TrueType program control matrix | 81 unique hashes | 0 | 6,418 | 6,417 / 6,417 | 1 | 12,503 / 15,973 lines; 17,906 / 23,030 regions; 2,887 / 4,120 branches | four source-backed glyph programs add IDEF, UTP, super-round, and INSTCTRL coverage; all retained interpreter functions are covered |
 
 ## Decision Log
 
@@ -798,6 +803,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Keep scan conversion controls in one program font | Empty setup and scan-type variants share tables, geometry, size, and flags; only explicit glyph programs differ, avoiding a font/size/flag product |
 | 2026-07-10 | Hash resolved assets in the C-oracle cache key | JSON paths do not identify mutable fixture contents; path, length, and SHA-256 now prevent stale C output after in-place font mutation |
 | 2026-07-10 | Remove abandoned autohint coverage surfaces | Runtime script selection already uses `FaceGlobals` and `STYLE_TABLE`; an unread diagnostic mask, duplicate detector, and no-caller blue-character table cannot be justified by public fixtures |
+| 2026-07-10 | Store resolved LOOPCALL definition coordinates in call records | A loop call record is created only after resolving an active FDEF; retaining its range/start removes an impossible missing-definition re-lookup and keeps malformed definitions rejected at the actual resolution boundary |
 
 ## Immediate Next Actions
 
