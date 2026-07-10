@@ -121,7 +121,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `2868a722bff5` | 1.6 | 1 | `fonts/glyf/loca-long-truncated.ttf` | long-loca control with only seven bytes, one byte below a complete glyph-0 offset pair |
 | `697619c0847e` | 1.6 | 1 | `fonts/glyf/cvt-empty.ttf` | valid TrueType control with a present zero-length cvt table |
 | `6175105e1748` | 1.6 | 1 | `fonts/glyf/cvt-odd-length.ttf` | valid TrueType control with a one-byte cvt table rejected by Rust parsing and ignored by face construction |
-| `057a6fbc5d88` | 3.4 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed VM and render-topology matrix covering state, geometry, control flow, DELTA, six exact bytecode error classes, conic chains, intersections, thin outlines, mixed winding, degenerate contours, empty outlines, collapsed spans, and scan-type dropout modes |
+| `ce72baac6e34` | 3.5 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed VM and render-topology matrix covering state, geometry, control flow, DELTA, six exact bytecode error classes, conic chains, intersections, thin outlines, mixed winding, degenerate contours, empty outlines, collapsed spans, and scan-type dropout modes |
 
 ### Active Alias Concentration
 
@@ -180,6 +180,7 @@ listed because they enter different hinting and scaling conditions.
 | `hinter-control-matrix.ttf` | U+E02A gid 43 | 20 | outer and opposite-winding inner contours plus a coincident-point degenerate contour in normal and SDF modes |
 | `hinter-control-matrix.ttf` | U+E02B gid 44 | 20 | zero-width vertical contour selected across normal, mono, and SDF modes |
 | `hinter-control-matrix.ttf` | U+E02C gid 45 | 20 | zero-height horizontal contour selected across normal, mono, and SDF modes |
+| `hinter-control-matrix.ttf` | U+E02D gid 46, U+E02E gid 47 | 20 | scan types 4 and 5 on narrow vertical rectangles; owns smart dropout selection with and without stub inclusion |
 
 The custom fonts contain additional glyphs for future focused obligations:
 Latin digits, round/straight/overshoot forms, combining marks, simple and
@@ -397,17 +398,17 @@ and selected-glyph obligations still come from explicit inputs.
     stores those raw tables directly; `tt/hinter/tables.rs` has 100% function,
     line, region, and branch coverage.
 
-27. One 3.4 KiB hinter control font combines compact IDEF and FDEF bodies,
-    present-empty `prep`, a valid CVT, seventeen focused program glyphs, five
+27. One 3.5 KiB hinter control font combines compact IDEF and FDEF bodies,
+    present-empty `prep`, a valid CVT, nineteen focused program glyphs, five
     render-topology glyphs, and one reusable empty-outline glyph.
     Eighteen explicit loads cover scan types 0/2, IDEF dispatch, UTP, the SROUND and
     S45ROUND selector/sign matrix, INSTCTRL validation, FDEF/CALL/LOOPCALL and
     conditional flow, plus consolidated VM stack/state, point geometry,
     interpolation, DELTA, and six malformed-program error families without
-    multiplying sizes or flags. Twenty-two render variants additionally select
+    multiplying sizes or flags. Twenty-four render variants additionally select
     conic chains, intersections, thin geometry, winding reversal, a degenerate
     contour, empty outlines, collapsed horizontal/vertical spans, and mono
-    dropout scan modes across normal, mono, LCD, LCD_V, and SDF modes. Its
+    dropout scan modes 0/2/4/5 across normal, mono, LCD, LCD_V, and SDF modes. Its
     inspectable source is `tests/fixtures/font-sources/hinter-control-matrix.ttx`;
     rebuild it with `make font-fixture-hinter`.
 
