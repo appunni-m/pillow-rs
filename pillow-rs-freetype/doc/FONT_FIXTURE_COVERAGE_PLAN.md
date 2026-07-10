@@ -371,12 +371,13 @@ the next run hit the same key and both runs passed 6,413 / 6,413.
 
 Expected additions: zero fonts, zero cases.
 
-Status: in progress. Autohint audits have removed 23 uncovered functions: the
+Status: in progress. Autohint audits have removed 30 uncovered functions: the
 abandoned diagnostic bitmask, duplicate script and blue-zone entry points,
-unused direction/contour helpers, and the second-bottom adjustment path. The
-latter had no entry in `ADJUSTMENT_DATABASE`, so no public Unicode input could
-select it. The retained runtime now has one script-selection path through
-`FaceGlobals`, `STYLE_TABLE`, and `globals::detect_script`.
+unused direction/contour helpers, no-caller serif wrapper, compiler-generated
+option closures, and the second-bottom adjustment path. The latter had no entry
+in `ADJUSTMENT_DATABASE`, so no public Unicode input could select it. The
+retained runtime now has one script-selection path through `FaceGlobals`,
+`STYLE_TABLE`, and `globals::detect_script`.
 
 1. For every uncovered function, identify its public manifest operation and
    current call path.
@@ -436,11 +437,11 @@ Primary module: `autohint/latin.rs`.
 Expected additions: extend existing compact autohint fonts; 30-45 named glyph
 topologies; 45-75 explicit variants.
 
-Status: in progress. Four explicit variants in the source-backed
+Status: in progress. Five explicit variants in the source-backed
 `cjk-coverage.ttf` now own top, second-top, and bottom tilde adjustment plus
-capital blue-edge suppression. They add 12 covered functions, 256 lines, 388
-regions, and 91 branches. `latin.rs` is at 68/76 functions, 2,401/2,809 lines,
-3,446/4,148 regions, and 899/1,243 branches.
+capital blue-edge suppression and single-reference IUP shifting. `latin.rs` is
+at 69/69 functions, 2,407/2,793 lines, 3,457/4,129 regions, and 899/1,241
+branches.
 
 Required topology roles include serif/non-serif stems, linked/unlinked edges,
 top and bottom tildes, accents, overshoots, holes, short/long segments,
@@ -791,6 +792,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | TrueType function and conditional flow | 81 unique hashes | 0 | 6,423 | 6,422 / 6,422 | 1 | 12,578 / 15,973 lines; 18,083 / 23,030 regions; 2,913 / 4,120 branches | one glyph explicitly owns FDEF/CALL/LOOPCALL and both conditional-jump outcomes; no further valid-flow variants justified |
 | 2026-07-10 | TrueType malformed program errors | 81 unique hashes | 0 | 6,429 | 6,428 / 6,428 | 1 | 12,595 / 15,973 lines; 18,095 / 23,030 regions; 2,918 / 4,120 branches | six glyphs prove exact divide-zero, truncated-push, definition, and undefined-opcode errors across Rust/C/WASM |
 | 2026-07-10 | Latin adjustment topology matrix | 81 unique hashes | 0 | 6,433 | 6,432 / 6,432 | 1 | 12,851 / 15,907 lines; 18,483 / 22,909 regions; 3,009 / 4,079 branches | four glyphs add 12 functions and broad tilde/blue coverage; eight no-caller or database-impossible functions removed |
+| 2026-07-10 | Latin single-reference IUP topology | 81 unique hashes | 0 | 6,434 | 6,433 / 6,433 | 1 | 12,857 / 15,891 lines; 18,494 / 22,890 regions; 3,009 / 4,077 branches | one quadratic contour reaches the final uncovered Latin function; seven no-behavior closures/wrappers removed |
 
 ## Decision Log
 
@@ -819,6 +821,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Store resolved LOOPCALL definition coordinates in call records | A loop call record is created only after resolving an active FDEF; retaining its range/start removes an impossible missing-definition re-lookup and keeps malformed definitions rejected at the actual resolution boundary |
 | 2026-07-10 | Extend the CJK fixture into a multiscript topology matrix | Four compact Latin adjustment glyphs reuse the existing source-backed font identity and add 256 lines and 91 branches from four explicit cases |
 | 2026-07-10 | Remove second-bottom Latin adjustment modes | `AF_ADJUST_DOWN2` and `AF_ADJUST_TILDE_BOTTOM2` have no entries in the authoritative Unicode adjustment database, so public font inputs cannot reach their helper and branches |
+| 2026-07-10 | Use one strong corner with two weak controls for single-reference IUP | Keeping vectors beyond the near threshold and making only one incident direction cardinal gives one touched point without a second edge-aligned reference |
 
 ## Immediate Next Actions
 

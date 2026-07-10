@@ -1454,18 +1454,10 @@ pub fn metrics_init_blues_impl(
                 } // neutral uses flats only
             }
 
-            // Track best extremum across the (single) element (aflatin.c:869-884).
+            // Latin has one element, so this character's extremum is the result.
             if best_point >= 0 {
-                let by = best_y + y_offset;
-                if is_top {
-                    if best_y_extremum.is_none_or(|b| by > b) {
-                        best_y_extremum = Some(by);
-                        best_round = round;
-                    }
-                } else if best_y_extremum.is_none_or(|b| by < b) {
-                    best_y_extremum = Some(by);
-                    best_round = round;
-                }
+                best_y_extremum = Some(best_y + y_offset);
+                best_round = round;
             }
             // (best_round unused beyond here since Latin has 1 element; keep for clarity.)
 
@@ -2408,10 +2400,12 @@ fn vertical_separation_accent_height_limit(hints: &GlyphHints, adj_type: u32) ->
         return (top.shoot_width.cur - bottom.shoot_width.cur) / 2;
     }
 
-    hints.metrics.as_ref().map_or(0, |metrics| {
-        let scale = metrics.axis[Dimension::Vert as usize].scale;
-        ft_mul_fix(metrics.units_per_em * 4 / 10, scale)
-    })
+    let metrics = hints
+        .metrics
+        .as_ref()
+        .expect("vertical separation requires autohint metrics");
+    let scale = metrics.axis[Dimension::Vert as usize].scale;
+    ft_mul_fix(metrics.units_per_em * 4 / 10, scale)
 }
 
 fn vertical_separation_adjustments(
@@ -2768,7 +2762,7 @@ pub fn apply_hints(
             vertical_separation_adjustments(
                 &mut hints,
                 glyph_index,
-                font_data.unwrap_or_else(|| unreachable!()),
+                font_data.expect("autohinting requires font data"),
             );
         }
     }
@@ -2918,14 +2912,16 @@ pub fn apply_hints(
             trace!(target: "autohint::pipeline", "[PIPE] HS{si}: p{}..p{} dir={:?} pos={}",
                 s.first, s.last, s.dir, s.pos);
         }
-        let el_horz = hints
-            .metrics
-            .as_ref()
-            .is_some_and(|m| m.axis[Dimension::Horz as usize].extra_light);
-        let el_vert = hints
-            .metrics
-            .as_ref()
-            .is_some_and(|m| m.axis[Dimension::Vert as usize].extra_light);
+        let el_horz = if let Some(m) = hints.metrics.as_ref() {
+            m.axis[Dimension::Horz as usize].extra_light
+        } else {
+            false
+        };
+        let el_vert = if let Some(m) = hints.metrics.as_ref() {
+            m.axis[Dimension::Vert as usize].extra_light
+        } else {
+            false
+        };
         trace!(target: "autohint::pipeline", "[PIPE] horz_edges {} extra_light_h={el_horz} extra_light_v={el_vert}", ha.edges.len());
         for (ei, e) in ha.edges.iter().enumerate() {
             trace!(target: "autohint::pipeline", "[PIPE] HE{ei}: fpos={} opos={} pos={} link={} serif={}",
@@ -3795,16 +3791,6 @@ fn align_linked_edge(
     );
 
     stem_edge.pos = base_edge.pos + fitted_width;
-}
-
-// ── Helper: align serif edge ────────────────────────────────────────────────
-//
-// Port of `af_latin_align_serif_edge` (aflatin.c:4189–4197).
-// Preserves serif offset relative to the base edge.
-
-/// Snap serif edge to same position as its linked stem edge.
-fn align_serif_edge(base: &AFEdge, serif: &mut AFEdge) {
-    serif.pos = base.pos + (serif.opos - base.opos);
 }
 
 // ── Helper: compute stem width ──────────────────────────────────────────────
