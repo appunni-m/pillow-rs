@@ -158,6 +158,7 @@ pub fn scale_glyph(
         false,
         false,
         None,
+        true,
     )
 }
 
@@ -185,6 +186,7 @@ pub fn scale_glyph_for_metrics(
         false,
         true,
         None,
+        true,
     )
 }
 
@@ -210,6 +212,24 @@ pub fn scale_glyph_for_metrics_with_bytecode_context_and_mode(
     native_hint_mode: NativeHintMode,
     bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
 ) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_for_metrics_with_bytecode_context_and_mode_and_hdmx(
+        data,
+        glyph_index,
+        is_italic,
+        native_hint_mode,
+        bytecode_context,
+        true,
+    )
+}
+
+pub fn scale_glyph_for_metrics_with_bytecode_context_and_mode_and_hdmx(
+    data: &FontData,
+    glyph_index: u16,
+    is_italic: bool,
+    native_hint_mode: NativeHintMode,
+    bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
+    use_hdmx: bool,
+) -> Result<ScaledGlyph, FontError> {
     // C `tt_loader_init` disables v40 backward compatibility for
     // `FT_RENDER_MODE_MONO`; `TT_Hint_Glyph` then saves current hinted phantom
     // points for `compute_glyph_metrics` (ttgload.c:790-865, 2270-2318).
@@ -233,6 +253,7 @@ pub fn scale_glyph_for_metrics_with_bytecode_context_and_mode(
         false,
         legacy_hinter_phantoms,
         bytecode_context,
+        use_hdmx,
     )
 }
 
@@ -313,6 +334,7 @@ pub fn scale_glyph_for_metrics_with_autohint_and_mode(
         false,
         true,
         None,
+        true,
     )
 }
 
@@ -341,6 +363,7 @@ pub fn scale_glyph_for_metrics_with_autohint_preserve_advance(
         false,
         true,
         None,
+        true,
     )
 }
 
@@ -369,6 +392,7 @@ pub fn scale_glyph_for_metrics_light(
         false,
         true,
         None,
+        true,
     )
 }
 
@@ -398,6 +422,7 @@ pub fn scale_glyph_native_default(
         true,
         false,
         None,
+        true,
     )
 }
 
@@ -445,6 +470,7 @@ pub fn scale_glyph_native_default_with_bytecode_context_and_mode(
         true,
         false,
         bytecode_context,
+        true,
     )
 }
 
@@ -473,6 +499,7 @@ pub fn scale_glyph_light(
         false,
         false,
         None,
+        true,
     )
 }
 
@@ -505,6 +532,7 @@ pub fn scale_glyph_lcd(
         false,
         false,
         None,
+        true,
     )
 }
 
@@ -537,6 +565,7 @@ pub fn scale_glyph_lcd_v(
         false,
         false,
         None,
+        true,
     )
 }
 
@@ -566,6 +595,7 @@ pub fn scale_glyph_mono(
         false,
         false,
         None,
+        true,
     )
 }
 
@@ -596,6 +626,7 @@ pub fn scale_glyph_no_hinting(
         false,
         false,
         None,
+        true,
     )
 }
 
@@ -613,6 +644,7 @@ fn scale_glyph_impl(
     reset_vectors_at_glyph_entry: bool,
     legacy_hinter_phantoms: bool,
     bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
+    use_hdmx: bool,
 ) -> Result<ScaledGlyph, FontError> {
     scale_glyph_impl_with_context(
         data,
@@ -627,6 +659,7 @@ fn scale_glyph_impl(
         reset_vectors_at_glyph_entry,
         legacy_hinter_phantoms,
         bytecode_context,
+        use_hdmx,
     )
     .map(|(glyph, _)| glyph)
 }
@@ -645,6 +678,7 @@ fn scale_glyph_impl_with_context(
     reset_vectors_at_glyph_entry: bool,
     legacy_hinter_phantoms: bool,
     bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
+    use_hdmx: bool,
 ) -> Result<(ScaledGlyph, Option<crate::tt::hinter::exec::ExecContext>), FontError> {
     let scale = ScaleMetrics::new(data.size_pt.get(), data.head.units_per_em);
 
@@ -837,6 +871,7 @@ fn scale_glyph_impl_with_context(
                 legacy_hinter_phantoms,
                 native_hint_mode,
                 bytecode_context,
+                use_hdmx,
             )?;
             composite_use_my_metrics_advance = composite.use_my_metrics_advance;
             composite_use_my_metrics_vertical_advance = composite.use_my_metrics_vertical_advance;
@@ -1018,7 +1053,9 @@ fn scale_glyph_impl_with_context(
         }
     }
 
-    let hdmx_slot_advance_width = if legacy_hinter_phantoms && allow_bytecode {
+    // C `tt_loader_init` enables `size->widthp` only when v40 backward
+    // compatibility is inactive, notably for mono loads (ttgload.c:2280-2313).
+    let hdmx_slot_advance_width = if use_hdmx && !legacy_hinter_phantoms && allow_bytecode {
         data.hdmx
             .as_ref()
             .and_then(|hdmx| hdmx.width_for_ppem(scale.ppem, glyph_index))
@@ -1239,6 +1276,7 @@ fn vertical_advance_font_units(data: &FontData) -> i32 {
     data.hhea.ascent as i32 - data.hhea.descent as i32
 }
 
+#[allow(clippy::too_many_arguments)]
 fn scale_composite_components(
     data: &FontData,
     outline_raw: &GlyphOutline,
@@ -1247,6 +1285,7 @@ fn scale_composite_components(
     legacy_hinter_phantoms: bool,
     native_hint_mode: NativeHintMode,
     bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
+    use_hdmx: bool,
 ) -> Result<CompositeScaleResult, FontError> {
     let mut points: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
     let mut tags: Vec<u8> = Vec::with_capacity(outline_raw.points.len());
@@ -1298,6 +1337,7 @@ fn scale_composite_components(
             false,
             legacy_hinter_phantoms,
             base_context,
+            use_hdmx,
         )?;
         if comp.use_my_metrics {
             use_my_metrics_advance = Some(sub.slot_advance_width);

@@ -70,6 +70,8 @@ impl LoadFlags {
     pub const TARGET_LIGHT: Self = Self(1 << 9);
     /// Render as monochrome when the load target is normal.
     pub const MONOCHROME_RENDER: Self = Self(1 << 10);
+    /// Recompute scalable glyph metrics without device-width tables.
+    pub const COMPUTE_METRICS: Self = Self(1 << 12);
 
     /// Return true if all bits in `other` are set.
     pub fn contains(self, other: Self) -> bool {
@@ -388,11 +390,15 @@ impl Face {
                 native_hint_mode,
             )?
         } else {
-            self.font.glyph_slot_load_default_with_layout_and_mode(
-                glyph_index,
-                vertical_layout,
-                native_hint_mode,
-            )?
+            // C `tt_loader_init` suppresses `size->widthp` when
+            // `FT_LOAD_COMPUTE_METRICS` is set (ttgload.c:2299-2305).
+            self.font
+                .glyph_slot_load_default_with_layout_and_mode_and_hdmx(
+                    glyph_index,
+                    vertical_layout,
+                    native_hint_mode,
+                    !flags.contains(LoadFlags::COMPUTE_METRICS),
+                )?
         };
 
         let render_requested = flags.contains(LoadFlags::RENDER);

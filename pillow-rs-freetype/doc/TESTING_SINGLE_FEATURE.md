@@ -1,24 +1,24 @@
 # Testing a Single Feature
 
-The full parity suite runs **3,080,658 cases across 85 subjects** and takes
-**~20 minutes** (cold: oracle cache build ~15 min + comparison ~5 min; warm:
-~5 min with existing cache).  When debugging a specific failure bucket, you
-can filter to a single operation in under a minute.
+The full parity suite defines **6,314 explicit concrete cases**. The current
+baseline has 6,302 runnable comparisons and 12 visible pending cases. After the
+test binary is built, the normal full comparison takes about five seconds with
+the current fixture set. When debugging a specific failure bucket, filter to a
+single operation or case.
 
 ## Runtime Estimates
 
-| Target                          | Cases        | Cold cache | Warm cache |
-|---------------------------------|-------------|-----------|-----------|
-| `make test` (full parity)       | 3,080,658   | ~20 min   | ~5 min    |
-| `make test-op OP=load_glyph`    | 1,992,206   | ~10 min   | ~5 min    |
-| `make test-op OP=render_glyph`  | 336,945     | ~2 min    | ~1 min    |
-| `make test-op OP=...` (most ops)| <50,000     | <30 s     | <10 s     |
-| `make test-list` (selection)    | —           | ~10 s     | ~10 s     |
+| Target | Scope | Expected comparison time after build |
+|---|---|---:|
+| `make test` | all 6,314 explicit cases | ~5 s |
+| `make test-op OP=load_glyph` | explicit `load_glyph` cases only | <5 s |
+| `make test-op OP=render_glyph` | explicit `render_glyph` cases only | <5 s |
+| `make test-case CASE=...` | matching case/subject IDs only | <5 s |
+| `make test-list` | selection diagnostic, no comparison | <1 s |
 
-The oracle cache (`tests/fixtures/outputs/unified_oracle_cache/`) is ~1.4 GB
-full-suite.  It is only invalidated when the oracle binary (`gen_unified_oracle`)
-or linked `libfreetype.so` is rebuilt, or when `FONTDONE_UNIFIED_ORACLE_REFRESH=1`
-is set.
+The oracle cache lives under `tests/fixtures/outputs/unified_oracle_cache/`. Its
+key includes selected inputs, fixture content hashes, the oracle binary, and
+linked FreeType. `FONTDONE_UNIFIED_ORACLE_REFRESH=1` bypasses it.
 
 ## Quick Start
 
@@ -26,8 +26,8 @@ is set.
 # Run only ftadvanc.get_advance cases (refreshes oracle each run — no cache)
 make -C pillow-rs-freetype test-op OP=ftadvanc.get_advance
 
-# Run only load_glyph cases (2M cases — use VARIABILITY_LIMIT to speed up)
-FONTDONE_UNIFIED_VARIABILITY_LIMIT=2 make -C pillow-rs-freetype test-op OP=load_glyph
+# Run only explicit load_glyph cases
+make -C pillow-rs-freetype test-op OP=load_glyph
 
 # Run only cases whose case_id/subject/case matches a substring
 make -C pillow-rs-freetype test-case CASE=freetype.set_transform
@@ -83,8 +83,7 @@ All env vars are read at runtime by `tests/unified_fixture_parity.rs`.
 |--------------------------------------|------------------------------------------------------|
 | `FONTDONE_UNIFIED_OPERATION_FILTER`  | Substring match on `case.operation`                  |
 | `FONTDONE_UNIFIED_CASE_FILTER`       | Substring match on `case_id`, `subject`, or `case`   |
-| `FONTDONE_UNIFIED_CASE_LIMIT`        | Stop after N expanded cases                          |
-| `FONTDONE_UNIFIED_VARIABILITY_LIMIT` | Truncate each variability axis to N values           |
+| `FONTDONE_UNIFIED_CASE_LIMIT`        | Stop after N selected concrete cases                  |
 | `FONTDONE_UNIFIED_ORACLE_REFRESH`    | If set, skip oracle cache; re-run C oracle           |
 | `FONTDONE_UNIFIED_SELECTION_ONLY`    | Print case selection summary, don't run comparisons  |
 | `FONTDONE_UNIFIED_PROFILE`           | Print per-stage timing (ns/ms)                       |
@@ -98,23 +97,16 @@ All env vars are read at runtime by `tests/unified_fixture_parity.rs`.
 2. **Filter to the target operation.**  Use `make test-op OP=...` to run only
    those cases.
 
-3. **Narrow further with case filter.**  If you know a specific font or
-   parameter pattern, combine filters with a raw cargo invocation:
+3. **Narrow further with case filter.** If you know a specific case, subject,
+   font name encoded in the case ID, or parameter-specific variant ID, use:
    ```bash
-   FONTDONE_UNIFIED_OPERATION_FILTER="load_glyph" \
-   FONTDONE_UNIFIED_CASE_FILTER="DejaVuSans" \
-   FONTDONE_UNIFIED_ORACLE_REFRESH=1 \
-   cargo test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
+   make test-case CASE=recursive-composite
    ```
 
-4. **Reduce variability explosion.**  If the test case expands into too
-   many sub-cases, limit the cardinality:
-   ```bash
-   FONTDONE_UNIFIED_VARIABILITY_LIMIT=2 \
-   make test-op OP=load_glyph
-   ```
+4. **Select one explicit case.** Use `make test-case CASE=...` rather than
+   changing the input set or applying a hidden cardinality limit.
 
-5. **Profile slow cases.**  Enable profiling to find bottlenecks:
+5. **Profile slow cases.** Enable profiling to find bottlenecks:
    ```bash
    FONTDONE_UNIFIED_PROFILE=1 \
    make test-op OP=render_glyph
@@ -124,14 +116,12 @@ All env vars are read at runtime by `tests/unified_fixture_parity.rs`.
 
 ```text
 tests/fixtures/outputs/unified_oracle_cache/
-├── 44c6...1c5a3.jsonl   # cache for full-suite run (~1.4 GB, 2.88M lines)
-├── 56b1...8c68ca.jsonl   # cache for OP=load_glyph
-├── 91a9...55e53.jsonl   # cache for OP=ftadvanc.get_advance
-└── ...
+|-- 44c6...1c5a3.jsonl   # one selected full-suite input set
+|-- 56b1...8c68ca.jsonl   # one OP=load_glyph selection
+`-- 91a9...55e53.jsonl   # one ftadvanc.get_advance selection
 ```
 
-Each `.jsonl` file contains one JSON line per unique case.  You can inspect
-them directly with `jq` or any JSONL tool.
+Each `.jsonl` file contains one JSON line per unique oracle invocation.
 
 ## Relationship to `make -C pillow-rs-freetype test`
 

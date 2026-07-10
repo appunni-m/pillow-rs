@@ -234,4 +234,4 @@
       description: Numeric flag value matches the pinned FreeType header.
     - id: face_style_flag_behavior
       description: FT_New_Memory_Face and FT_Open_Face expose FT_STYLE_FLAG_BOLD through FT_FaceRec.style_flags for bold faces.
-  # needs-input: operation=FT_New_Memory_Face; fixture_asset=bold font such as input/fonts_autohint/NotoSans-Bold.ttf plus regular control input/fonts/DejaVuSans.ttf; params face_index=0; expected output shape=style_flags bitmask and style_name; comparison=exact C oracle bitmask equality with FT_STYLE_FLAG_BOLD set only for bold face.
+  # needs-input: operation=FT_New_Memory_Face; fixture_asset=bold font such as deprecated/fonts_autohint/NotoSans-Bold.ttf plus regular control input/fonts/DejaVuSans.ttf; params face_index=0; expected output shape=style_flags bitmask and style_name; comparison=exact C oracle bitmask equality with FT_STYLE_FLAG_BOLD set only for bold face.

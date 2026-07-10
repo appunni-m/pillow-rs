@@ -188,6 +188,48 @@ def require_current(current: str | None) -> None:
         raise RuntimeError("manifest field before subject")
 
 
+def check_explicit_inputs(subject_id: str, index: int, inputs: object) -> list[str]:
+    prefix = f"{subject_id}: cases[{index}]"
+    if not isinstance(inputs, dict):
+        return [f"{prefix} inputs must be object"]
+    errors: list[str] = []
+    if "variability" in inputs:
+        errors.append(f"{prefix} uses forbidden implicit variability")
+    assets = inputs.get("assets", {})
+    if isinstance(assets, dict) and "font_folder" in assets:
+        errors.append(f"{prefix} uses forbidden runtime font-folder discovery")
+    variants = inputs.get("variants", [])
+    if not variants:
+        return errors
+    if not isinstance(variants, list):
+        errors.append(f"{prefix} variants must be list")
+        return errors
+    if assets or inputs.get("params") not in (None, {}):
+        errors.append(f"{prefix} mixes variants with direct assets or params")
+    seen: set[str] = set()
+    for variant_index, variant in enumerate(variants):
+        variant_prefix = f"{prefix} variants[{variant_index}]"
+        if not isinstance(variant, dict):
+            errors.append(f"{variant_prefix} must be object")
+            continue
+        variant_id = variant.get("id")
+        if not isinstance(variant_id, str) or not variant_id:
+            errors.append(f"{variant_prefix} needs a non-empty id")
+        elif variant_id in seen:
+            errors.append(f"{variant_prefix} duplicates id {variant_id}")
+        else:
+            seen.add(variant_id)
+        coverage = variant.get("coverage")
+        if not isinstance(coverage, list) or not coverage or not all(
+            isinstance(item, str) and item for item in coverage
+        ):
+            errors.append(f"{variant_prefix} needs non-empty coverage intent strings")
+        variant_assets = variant.get("assets", {})
+        if isinstance(variant_assets, dict) and "font_folder" in variant_assets:
+            errors.append(f"{variant_prefix} uses forbidden runtime font-folder discovery")
+    return errors
+
+
 def check_file(subject: ManifestSubject) -> list[str]:
     errors: list[str] = []
     path = INPUT_DIR / filename_for_subject(subject.subject_id)
@@ -250,6 +292,7 @@ def check_file(subject: ManifestSubject) -> list[str]:
         for key in ("case_id", "operation", "schema", "inputs", "expectation"):
             if key not in case:
                 errors.append(f"{subject.subject_id}: cases[{index}] missing {key}")
+        errors.extend(check_explicit_inputs(subject.subject_id, index, case.get("inputs")))
         if case.get("schema") == "scalar":
             errors.append(f"{subject.subject_id}: cases[{index}] uses legacy scalar schema")
         expectation = case.get("expectation")

@@ -158,7 +158,7 @@
       description: FT_Load_Char maps the C flag to the Rust force-autohint load mode and compares glyph-slot output through the matrix fixture corpus.
       coverage:
         font_variability:
-          folder: input/fonts_autohint
+          folder: deprecated/fonts_autohint
           sizes: [10, 20]
           load_flags: [32]
     # needs-input: Add an FT_Load_Glyph matrix row with FT_LOAD_FORCE_AUTOHINT on the same autohint corpus; compare glyph_slot metrics/bitmap placement/bytes according to the row operation.
@@ -214,7 +214,7 @@
       description: Render-time monochrome bitmap behavior is covered through FT_Load_Glyph and FT_Load_Char when explicit monochrome inputs exist.
       coverage:
         font_variability:
-          folder: input/fonts_autohint
+          folder: deprecated/fonts_autohint
           sizes: [10, 20]
           load_flags: [4100]
 
@@ -254,14 +254,14 @@
       description: FT_Load_Char maps the C flag to the Rust no-hinting load mode and compares unhinted glyph-slot output through the matrix fixture corpus.
       coverage:
         font_variability:
-          folder: input/fonts_autohint
+          folder: deprecated/fonts_autohint
           sizes: [10, 20]
           load_flags: [2]
     - id: load_glyph_no_hinting_behavior
       description: FT_Load_Glyph maps the C flag to the Rust no-hinting load mode and compares unhinted glyph-slot output through the matrix fixture corpus.
       coverage:
         font_variability:
-          folder: input/fonts_autohint
+          folder: deprecated/fonts_autohint
           sizes: [10, 20]
           load_flags: [2]
     - id: no_hinting_render_error

@@ -62,7 +62,7 @@
       description: DejaVuSansMono.ttf sets the fixed-width bit in FT_FaceRec.face_flags, matching the C oracle.
       coverage:
         font_variability:
-          folder: input/fonts_autohint
+          folder: deprecated/fonts_autohint
           sizes: [20]
 
 - id: freetype.FT_FACE_FLAG_GLYPH_NAMES
@@ -137,7 +137,7 @@
       description: Ubuntu.ttf has fvar/avar variation tables, setting FT_FACE_FLAG_MULTIPLE_MASTERS and matching the C oracle.
       coverage:
         font_variability:
-          folder: input/fonts_autohint
+          folder: deprecated/fonts_autohint
           sizes: [20]
 
 - id: freetype.FT_FACE_FLAG_SBIX
@@ -222,7 +222,7 @@
       description: Ubuntu.ttf can exercise FT_FACE_FLAG_VARIATION after selecting non-default variation coordinates, matching the C oracle.
       coverage:
         font_variability:
-          folder: input/fonts_autohint
+          folder: deprecated/fonts_autohint
           sizes: [20]
 # needs-input: variation-state semantic fixture using Ubuntu.ttf or another fvar font; call FT_New_Memory_Face, first assert FT_FACE_FLAG_MULTIPLE_MASTERS without FT_FACE_FLAG_VARIATION at the default instance, then call FT_Set_Var_Design_Coordinates or FT_Set_MM_Design_Coordinates with non-default coordinates and compare the FT_FACE_FLAG_VARIATION bit exactly against the C oracle.
 
@@ -238,7 +238,7 @@
       description: NotoSansMongolian-Regular.ttf has vhea/vmtx vertical metrics, setting FT_FACE_FLAG_VERTICAL and matching the C oracle.
       coverage:
         font_variability:
-          folder: input/fonts_autohint
+          folder: deprecated/fonts_autohint
           sizes: [20]
 
 - id: freetype.FT_FSTYPE_BITMAP_EMBEDDING_ONLY

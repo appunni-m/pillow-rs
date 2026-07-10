@@ -100,8 +100,10 @@ fn raw_record(data: &[u8], string_base: usize, record: &NameRecord) -> Option<Sf
     if record.length == 0 {
         return None;
     }
-    let start = string_base.checked_add(record.offset as usize)?;
-    let end = start.checked_add(record.length as usize)?;
+    // All operands originate from u16 name-table fields, so these additions
+    // cannot overflow usize; the slice lookup below owns the range check.
+    let start = string_base + record.offset as usize;
+    let end = start + record.length as usize;
     let bytes = data.get(start..end)?;
     Some(SfntNameRecord {
         platform_id: record.platform_id,

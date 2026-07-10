@@ -117,6 +117,9 @@ pub fn load_flags_to_core(flags: FT_Int32) -> Result<api::LoadFlags, FT_Error> {
     if flags & FT_LOAD_MONOCHROME != 0 {
         core |= api::LoadFlags::MONOCHROME_RENDER;
     }
+    if flags & FT_LOAD_COMPUTE_METRICS != 0 {
+        core |= api::LoadFlags::COMPUTE_METRICS;
+    }
     core |= match FT_LOAD_TARGET_MODE(flags) {
         FT_RENDER_MODE_NORMAL => api::LoadFlags::DEFAULT,
         // C `FT_Load_Glyph` routes LIGHT target loads through the auto-hinter
@@ -182,7 +185,9 @@ pub(super) fn error_to_ft(error: FontError) -> FT_Error {
         FontError::InvalidFont(message) if message.starts_with("data too short") => {
             FT_Err_Invalid_Stream_Operation as FT_Error
         }
-        FontError::InvalidFont(message) if message.starts_with("face index ") => {
+        FontError::InvalidFont(message)
+            if message.starts_with("face index ") || message.starts_with("named instance ") =>
+        {
             FT_Err_Invalid_Argument
         }
         FontError::InvalidFont(_) => FT_Err_Invalid_File_Format,

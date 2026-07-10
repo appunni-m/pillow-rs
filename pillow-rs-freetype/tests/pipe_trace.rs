@@ -33,7 +33,7 @@ fn trace_one_glyph() {
         .next()
         .unwrap();
 
-    let font_path = format!("tests/fixtures/input/fonts_autohint/{font_name}.ttf");
+    let font_path = format!("tests/fixtures/deprecated/fonts_autohint/{font_name}.ttf");
     let data = std::fs::read(&font_path).unwrap();
     let font = Font::truetype(&data, size_pt).unwrap();
     let fd = &font.data;
@@ -134,7 +134,7 @@ fn dump_render_mode_glyph() {
         other => panic!("unknown PIPE_MODE {other}"),
     };
 
-    let font_path = format!("tests/fixtures/input/fonts_autohint/{font_name}.ttf");
+    let font_path = format!("tests/fixtures/deprecated/fonts_autohint/{font_name}.ttf");
     let data = std::fs::read(&font_path).unwrap();
     let font = Font::truetype(&data, size_pt).unwrap();
     let gid = font.data.cmap.char_index(ch as u32).unwrap_or(0);

@@ -75,6 +75,11 @@ and refreshed with `make repo-map-update`.
 - `pillow-rs-freetype/scripts/`: maintained generators, benchmark tools, and
   failure classifiers.
 - `pillow-rs-freetype/doc/GENERATOR_SYSTEM.md`: fixture generation contract.
+- `pillow-rs-freetype/doc/FONT_FIXTURE_COVERAGE_PLAN.md`: maintained plan for
+  compact font fixtures, explicit public inputs, legacy-font retirement, and
+  100% Rust structural coverage.
+- `pillow-rs-freetype/doc/FONT_FIXTURE_INVENTORY.md`: content-deduplicated active
+  and deprecated font inventory with selected glyph and coverage ownership.
 - `pillow-rs-freetype/doc/PARITY_FAILURE_CLASSIFICATION.md`: failure bucket
   taxonomy.
 - `pillow-rs-freetype/doc/PERFORMANCE_BENCHMARKING.md`: Rust-vs-C FreeType
@@ -331,17 +336,13 @@ generated reports, build outputs, and package installs.
 |   |   |-- audit_api_abi.py
 |   |   |-- bench_freetype.py
 |   |   |-- bench_ft_ops.c
-|   |   |-- build_fixtures.py
 |   |   |-- build_ft.sh
-|   |   |-- build_ft_fixture.py
-|   |   |-- build_native_tt_fixture.py
-|   |   |-- build_render_mode_fixture.py
-|   |   |-- classify_failure_ids.py
+|   |   |-- build_unified_oracle.py
+|   |   |-- check_public_api_inputs.py
 |   |   |-- extract_blues.py
 |   |   |-- fetch_ft.sh
-|   |   |-- gen_ft_refs.c
-|   |   |-- generate_globals.py
-|   |   `-- generate_script_meta.py
+|   |   |-- gen_unified_oracle.c
+|   |   `-- generate_public_constants.py
 |   |-- src/
 |   |   |-- api.rs
 |   |   |-- autohint/
@@ -361,6 +362,7 @@ generated reports, build outputs, and package installs.
 |   |   |-- ffi/
 |   |   |   |-- constants.rs
 |   |   |   |-- convert.rs
+|   |   |   |-- generated_constants.rs
 |   |   |   |-- handles.rs
 |   |   |   |-- mod.rs
 |   |   |   `-- types.rs
@@ -396,22 +398,15 @@ generated reports, build outputs, and package installs.
 |   |       |-- vhea.rs
 |   |       `-- vmtx.rs
 |   `-- tests/
-|       |-- core_face_size_charmap.rs
-|       |-- coverage_matrix_tests.rs
 |       |-- data/
 |       |   |-- interface_map.json
 |       |   `-- perf_operation_matrix.json
 |       |-- direct_ft_compare.rs
-|       |-- ffi_compat.rs
-|       |-- fixed_parity.rs
-|       |-- generator_contract.rs
-|       |-- harness_contract.rs
-|       |-- interface_coverage.rs
-|       |-- no_runtime_ffi.rs
-|       |-- perf_benchmark_contract.rs
+|       |-- manifest.yaml
 |       |-- pipe_trace.rs
-|       |-- render_mode_matrix.rs
-|       `-- vector_norm_parity.rs
+|       |-- support/
+|       |   `-- generated_constant_lookup.rs
+|       `-- unified_fixture_parity.rs
 |-- pillow-rs-image/
 |   |-- Cargo.toml
 |   |-- manifest.yaml

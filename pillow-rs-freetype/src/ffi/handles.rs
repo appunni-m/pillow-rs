@@ -1678,15 +1678,9 @@ fn c_face_index_to_core(face_index: FT_Long) -> Result<(usize, bool), FT_Error> 
         // FreeType encodes named instance selection in bits 16..30 of
         // `face_index`; the low 16 bits remain the selected face number
         // (ftobjs.c, FT_Open_Face face_index handling).
-        // The pure-Rust core does not handle named-instance variation yet;
-        // reject these indices the same way C FreeType rejects named
-        // instances on non-variable fonts (FT_Err_Invalid_Argument).
-        let named_instance_bits = (face_index >> 16) as u32 & 0x7FFF;
-        if named_instance_bits != 0 {
-            return Err(FT_Err_Invalid_Argument);
-        }
-        let face_index =
-            usize::try_from(face_index & 0xFFFF).map_err(|_| FT_Err_Invalid_Argument)?;
+        // Preserve the encoded value for public FT_FaceRec::face_index; the
+        // core validates instanceCount and resolves the low collection bits.
+        let face_index = usize::try_from(face_index).map_err(|_| FT_Err_Invalid_Argument)?;
         return Ok((face_index, false));
     }
     // FreeType treats negative face indexes as probes: `-(N+1)` opens face N

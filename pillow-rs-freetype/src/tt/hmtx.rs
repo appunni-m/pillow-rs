@@ -14,7 +14,7 @@ pub struct LongHorMetric {
 }
 
 /// Parsed 'hmtx' table.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct HmtxTable {
     /// Metrics for the first `num_hmetrics` glyphs.
     pub h_metrics: Vec<LongHorMetric>,

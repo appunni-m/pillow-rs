@@ -19,7 +19,6 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use fontdone::Face;
 use fontdone::ffi::*;
 use fontdone_ffi_c as c_abi;
 use fontdone_ffi_wasm as wasm_abi;
@@ -91,15 +90,20 @@ struct Inputs {
     #[serde(default)]
     params: Value,
     #[serde(default)]
-    variability: Option<VariabilitySpec>,
+    variants: Vec<InputVariant>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
-struct VariabilitySpec {
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct InputVariant {
+    id: String,
     #[serde(default)]
-    axes: Vec<String>,
+    assets: BTreeMap<String, Asset>,
     #[serde(default)]
-    fonts_folder: Option<String>,
+    params: Value,
+    #[serde(default)]
+    expect_error: Option<bool>,
+    #[serde(default)]
+    coverage: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -273,9 +277,6 @@ fn duration_ns(duration: Duration) -> u128 {
 #[test]
 fn unified_fixture_parity() {
     let _profile = ProfileStage::new("unified_fixture_parity.total");
-    if let Some(limit) = variability_axis_limit() {
-        eprintln!("profile_variability_limit: axis_values={limit}");
-    }
     let input_cases = {
         let _profile = ProfileStage::new("load_global_input_cache");
         read_all_case_files()
@@ -285,8 +286,8 @@ fn unified_fixture_parity() {
         preload_global_fixture_caches(input_cases);
     }
     {
-        let _profile = ProfileStage::new("assert_single_aggregate_model");
-        assert_unified_inputs_use_single_aggregate_model(input_cases);
+        let _profile = ProfileStage::new("assert_explicit_input_model");
+        assert_unified_inputs_use_explicit_model(input_cases);
     }
     {
         let _profile = ProfileStage::new("assert_manifest_cases_cover_fixture_inputs");
@@ -299,8 +300,8 @@ fn unified_fixture_parity() {
         assert_manifest_font_variability_cases_cover_declared_fixture_folder(input_cases);
     }
     {
-        let _profile = ProfileStage::new("assert_unified_variability_cases_have_single_model");
-        assert_unified_variability_cases_have_single_model(input_cases);
+        let _profile = ProfileStage::new("report_explicit_input_cases");
+        report_explicit_input_cases(input_cases);
     }
     {
         let _profile = ProfileStage::new("assert_unified_fixture_cases_match_runtime_c_oracle");
@@ -481,7 +482,7 @@ fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[InputCase]) 
     }
 }
 
-fn assert_unified_inputs_use_single_aggregate_model(cases: &[InputCase]) {
+fn assert_unified_inputs_use_explicit_model(cases: &[InputCase]) {
     let mut failures = Vec::new();
     for case in cases {
         if case.schema == "scalar" {
@@ -525,525 +526,6 @@ struct RuntimeSelection {
     pending_samples: Vec<String>,
 }
 
-const DEFAULT_VARIABILITY_SIZES: &[u32] = &[10, 20];
-const DEFAULT_VARIABILITY_CODEPOINTS: &[u64] = &[33, 65, 103, 109];
-const DEFAULT_VARIABILITY_LOAD_FLAGS: &[i32] = &[FT_LOAD_DEFAULT];
-const DEFAULT_VARIABILITY_RENDER_MODES: &[i32] = &[FT_RENDER_MODE_NORMAL];
-
-#[derive(Clone, Copy, Default)]
-struct AdvanceRange {
-    start: u32,
-    count: u32,
-}
-
-struct AppliedAxes {
-    font: Option<Asset>,
-    size: Option<u32>,
-    codepoint: Option<u64>,
-    glyph_index: Option<u32>,
-    load_flags: Option<i32>,
-    render_mode: Option<i32>,
-    range: Option<AdvanceRange>,
-}
-
-#[derive(Clone, Default)]
-struct ExpansionPlan {
-    fonts: Vec<Option<Asset>>,
-    sizes: Vec<Option<u32>>,
-    codepoints: Vec<Option<u64>>,
-    glyph_indices_enabled: bool,
-    load_flags: Vec<Option<i32>>,
-    render_modes: Vec<Option<i32>>,
-    ranges: Vec<Option<AdvanceRange>>,
-}
-
-impl ExpansionPlan {
-    fn is_identity(&self) -> bool {
-        self.fonts.len() == 1
-            && self.fonts[0].is_none()
-            && self.sizes.len() == 1
-            && self.sizes[0].is_none()
-            && self.codepoints.len() == 1
-            && self.codepoints[0].is_none()
-            && !self.glyph_indices_enabled
-            && self.load_flags.len() == 1
-            && self.load_flags[0].is_none()
-            && self.render_modes.len() == 1
-            && self.render_modes[0].is_none()
-            && self.ranges.len() == 1
-            && self.ranges[0].is_none()
-    }
-}
-
-fn for_each_expanded_input_case(
-    case: &InputCase,
-    mut visit: impl FnMut(InputCase) -> bool,
-) -> bool {
-    let plan = expansion_plan(case);
-    if plan.is_identity() {
-        return visit(case.clone());
-    }
-
-    for font in &plan.fonts {
-        let glyph_indices = glyph_indices_axis(case, font.as_ref(), plan.glyph_indices_enabled);
-        for size in &plan.sizes {
-            for codepoint in &plan.codepoints {
-                for glyph_index in &glyph_indices {
-                    for load_flags in &plan.load_flags {
-                        for render_mode in &plan.render_modes {
-                            for range in &plan.ranges {
-                                let mut case = case.clone();
-                                apply_expansion_axes(
-                                    &mut case,
-                                    AppliedAxes {
-                                        font: font.clone(),
-                                        size: *size,
-                                        codepoint: *codepoint,
-                                        glyph_index: *glyph_index,
-                                        load_flags: *load_flags,
-                                        render_mode: *render_mode,
-                                        range: *range,
-                                    },
-                                );
-                                if !visit(case) {
-                                    return false;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    true
-}
-
-fn expansion_plan(case: &InputCase) -> ExpansionPlan {
-    let axes = variability_axes(case);
-    let params = &case.inputs.params;
-    let mut plan = ExpansionPlan {
-        fonts: font_axis(case, &axes),
-        sizes: u32_axis(
-            params,
-            &["sizes", "pixel_sizes"],
-            axes.contains("sizes"),
-            DEFAULT_VARIABILITY_SIZES,
-        )
-        .into_iter()
-        .map(Some)
-        .collect(),
-        codepoints: u64_axis(
-            params,
-            &["codepoints", "char_codes"],
-            axes.contains("codepoints"),
-            DEFAULT_VARIABILITY_CODEPOINTS,
-        )
-        .into_iter()
-        .map(Some)
-        .collect(),
-        glyph_indices_enabled: axes.contains("glyph_indices"),
-        load_flags: load_flags_axis(params, axes.contains("load_flags"))
-            .into_iter()
-            .map(Some)
-            .collect(),
-        render_modes: render_modes_axis(
-            params,
-            axes.contains("render_modes"),
-            DEFAULT_VARIABILITY_RENDER_MODES,
-        )
-        .into_iter()
-        .map(Some)
-        .collect(),
-        ranges: range_axis(params).into_iter().map(Some).collect(),
-    };
-    normalize_empty_axes(&mut plan);
-    apply_variability_axis_limit(&mut plan);
-    plan
-}
-
-fn expansion_count(case: &InputCase) -> usize {
-    let plan = expansion_plan(case);
-    let other_axes = plan
-        .sizes
-        .len()
-        .saturating_mul(plan.codepoints.len())
-        .saturating_mul(plan.load_flags.len())
-        .saturating_mul(plan.render_modes.len())
-        .saturating_mul(plan.ranges.len());
-    if !plan.glyph_indices_enabled {
-        return plan.fonts.len().saturating_mul(other_axes);
-    }
-    plan.fonts
-        .iter()
-        .map(|font| glyph_indices_axis(case, font.as_ref(), true).len())
-        .sum::<usize>()
-        .saturating_mul(other_axes)
-}
-
-fn normalize_empty_axes(plan: &mut ExpansionPlan) {
-    if plan.fonts.is_empty() {
-        plan.fonts.push(None);
-    }
-    if plan.sizes.is_empty() {
-        plan.sizes.push(None);
-    }
-    if plan.codepoints.is_empty() {
-        plan.codepoints.push(None);
-    }
-    if plan.load_flags.is_empty() {
-        plan.load_flags.push(None);
-    }
-    if plan.render_modes.is_empty() {
-        plan.render_modes.push(None);
-    }
-    if plan.ranges.is_empty() {
-        plan.ranges.push(None);
-    }
-}
-
-fn apply_variability_axis_limit(plan: &mut ExpansionPlan) {
-    let Some(limit) = variability_axis_limit() else {
-        return;
-    };
-    truncate_axis(&mut plan.fonts, limit);
-    truncate_axis(&mut plan.sizes, limit);
-    truncate_axis(&mut plan.codepoints, limit);
-    truncate_axis(&mut plan.load_flags, limit);
-    truncate_axis(&mut plan.render_modes, limit);
-}
-
-fn truncate_axis<T>(values: &mut Vec<T>, limit: usize) {
-    if values.len() > limit {
-        values.truncate(limit);
-    }
-}
-
-fn variability_axis_limit() -> Option<usize> {
-    static LIMIT: OnceLock<Option<usize>> = OnceLock::new();
-    *LIMIT.get_or_init(|| {
-        std::env::var("FONTDONE_UNIFIED_VARIABILITY_LIMIT")
-            .ok()
-            .map(|value| {
-                value.parse::<usize>().unwrap_or_else(|err| {
-                    panic!("FONTDONE_UNIFIED_VARIABILITY_LIMIT must be usize: {err}")
-                })
-            })
-            .map(|value| value.max(1))
-    })
-}
-
-fn variability_axes(case: &InputCase) -> BTreeSet<&str> {
-    case.inputs
-        .variability
-        .as_ref()
-        .map(|variability| {
-            variability
-                .axes
-                .iter()
-                .map(String::as_str)
-                .collect::<BTreeSet<_>>()
-        })
-        .unwrap_or_default()
-}
-
-fn font_axis(case: &InputCase, axes: &BTreeSet<&str>) -> Vec<Option<Asset>> {
-    let folder = case
-        .inputs
-        .variability
-        .as_ref()
-        .and_then(|variability| variability.fonts_folder.as_deref())
-        .map(ToString::to_string)
-        .or_else(|| {
-            file_asset_path(case.inputs.assets.get("font_folder")).map(ToString::to_string)
-        });
-    if !axes.contains("fonts") && folder.is_none() {
-        return Vec::new();
-    }
-    let folder = folder.unwrap_or_else(|| "input/fonts".to_string());
-    fixture_font_assets(&folder).into_iter().map(Some).collect()
-}
-
-fn fixture_font_assets(folder: &str) -> Vec<Asset> {
-    static CACHE: OnceLock<Mutex<BTreeMap<String, Vec<Asset>>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
-    if let Some(assets) = cache
-        .lock()
-        .expect("font asset cache lock")
-        .get(folder)
-        .cloned()
-    {
-        return assets;
-    }
-
-    let folder_path = fixture_dir().join(folder);
-    let Ok(entries) = fs::read_dir(&folder_path) else {
-        return Vec::new();
-    };
-    let mut assets = entries
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.is_file())
-        .filter(|path| {
-            path.extension().is_some_and(|extension| {
-                matches!(
-                    extension.to_string_lossy().as_ref(),
-                    "ttf" | "otf" | "ttc" | "pfb" | "bdf" | "otb"
-                )
-            })
-        })
-        .filter_map(|path| {
-            let relative = path
-                .strip_prefix(fixture_dir())
-                .ok()?
-                .to_string_lossy()
-                .into_owned();
-            Some(Asset::File {
-                path: relative,
-                sha256: None,
-                length: None,
-            })
-        })
-        .collect::<Vec<_>>();
-    assets.sort_by_key(asset_label);
-    cache
-        .lock()
-        .expect("font asset cache lock")
-        .insert(folder.to_string(), assets.clone());
-    assets
-}
-
-fn file_asset_path(asset: Option<&Asset>) -> Option<&str> {
-    match asset {
-        Some(Asset::List(items)) => items.iter().find_map(|asset| file_asset_path(Some(asset))),
-        Some(Asset::File { path, .. }) => Some(path),
-        Some(Asset::Ref { id: Some(id), .. }) => Some(id),
-        Some(Asset::Ref {
-            path: Some(path), ..
-        }) => Some(path),
-        _ => None,
-    }
-}
-
-fn u32_axis(params: &Value, keys: &[&str], enabled: bool, defaults: &[u32]) -> Vec<u32> {
-    for key in keys {
-        if let Some(values) = numeric_array(params, key) {
-            return values
-                .iter()
-                .map(|value| u32_value(value, key))
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap_or_default();
-        }
-    }
-    if enabled {
-        defaults.to_vec()
-    } else {
-        Vec::new()
-    }
-}
-
-fn u64_axis(params: &Value, keys: &[&str], enabled: bool, defaults: &[u64]) -> Vec<u64> {
-    for key in keys {
-        if let Some(values) = numeric_array(params, key) {
-            return values
-                .iter()
-                .map(|value| u64_value(value, key))
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap_or_default();
-        }
-    }
-    if enabled {
-        defaults.to_vec()
-    } else {
-        Vec::new()
-    }
-}
-
-fn load_flags_axis(params: &Value, enabled: bool) -> Vec<i32> {
-    if let Some(values) = params.get("load_flag_sets").and_then(Value::as_array) {
-        let base_flags = values
-            .iter()
-            .map(|value| flag_value(value, "load_flag_sets"))
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap_or_default();
-        return combine_load_targets(base_flags, target_mode_axis(params));
-    }
-    if let Some(values) = params.get("load_flags").and_then(Value::as_array) {
-        if enabled || values.iter().all(|value| value.is_number()) {
-            let base_flags = values
-                .iter()
-                .map(|value| flag_value(value, "load_flags"))
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap_or_default();
-            return combine_load_targets(base_flags, target_mode_axis(params));
-        }
-    }
-    if enabled {
-        combine_load_targets(
-            DEFAULT_VARIABILITY_LOAD_FLAGS.to_vec(),
-            target_mode_axis(params),
-        )
-    } else if params.get("target_modes").is_some() {
-        combine_load_targets(vec![FT_LOAD_DEFAULT], target_mode_axis(params))
-    } else {
-        Vec::new()
-    }
-}
-
-fn combine_load_targets(base_flags: Vec<i32>, target_modes: Vec<i32>) -> Vec<i32> {
-    if target_modes.is_empty() {
-        return base_flags;
-    }
-    let bases = if base_flags.is_empty() {
-        vec![FT_LOAD_DEFAULT]
-    } else {
-        base_flags
-    };
-    let mut combined = Vec::new();
-    for base in bases {
-        for target in &target_modes {
-            let value = base | target;
-            if !combined.contains(&value) {
-                combined.push(value);
-            }
-        }
-    }
-    combined
-}
-
-fn target_mode_axis(params: &Value) -> Vec<i32> {
-    let Some(values) = params.get("target_modes").and_then(Value::as_array) else {
-        return Vec::new();
-    };
-    values
-        .iter()
-        .map(load_target_mode_value)
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap_or_default()
-}
-
-fn render_modes_axis(params: &Value, enabled: bool, defaults: &[i32]) -> Vec<i32> {
-    if let Some(values) = params.get("render_modes").and_then(Value::as_array) {
-        return values
-            .iter()
-            .map(render_mode_value)
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap_or_default();
-    }
-    if enabled {
-        defaults.to_vec()
-    } else {
-        Vec::new()
-    }
-}
-
-fn glyph_indices_axis(
-    case: &InputCase,
-    font_override: Option<&Asset>,
-    enabled: bool,
-) -> Vec<Option<u32>> {
-    if !enabled {
-        return vec![None];
-    }
-    if case.expect_error {
-        let explicit = u32_axis(&case.inputs.params, &["glyph_indices"], true, &[]);
-        if !explicit.is_empty() {
-            let mut values = explicit.into_iter().map(Some).collect::<Vec<_>>();
-            if let Some(limit) = variability_axis_limit() {
-                truncate_axis(&mut values, limit);
-            }
-            return values;
-        }
-    }
-    if operation_uses_runtime_glyph_domain(case.operation.as_str())
-        && let Some(indices) = runtime_glyph_indices(case, font_override)
-    {
-        if !indices.is_empty() {
-            let mut values = indices.iter().copied().map(Some).collect::<Vec<_>>();
-            if let Some(limit) = variability_axis_limit() {
-                truncate_axis(&mut values, limit);
-            }
-            return values;
-        }
-    }
-    let explicit = u32_axis(&case.inputs.params, &["glyph_indices"], true, &[]);
-    let mut values = if explicit.is_empty() {
-        vec![None]
-    } else {
-        explicit.into_iter().map(Some).collect()
-    };
-    if let Some(limit) = variability_axis_limit() {
-        truncate_axis(&mut values, limit);
-    }
-    values
-}
-
-fn operation_uses_runtime_glyph_domain(operation: &str) -> bool {
-    matches!(
-        operation,
-        "load_glyph"
-            | "render_glyph"
-            | "freetype.inspect_glyph_metrics"
-            | "freetype.inspect_glyph_slot"
-            | "freetype.load_glyph_outline"
-            | "ftbbox.outline_get_bbox"
-            | "ftoutln.outline_get_cbox"
-            | "ftglyph.glyph_get_cbox"
-            | "ftglyph.glyph_to_bitmap"
-            | "ftglyph.get_glyph"
-            | "ftglyph.glyph_copy"
-            | "ftglyph.record_inspect"
-            | "ftcache.sbit_cache_lookup"
-            | "ftadvanc.get_advance"
-            | "ftadvanc.get_advances"
-    )
-}
-
-fn runtime_glyph_indices(case: &InputCase, font_override: Option<&Asset>) -> Option<Arc<[u32]>> {
-    let font = font_override.or_else(|| runtime_font_asset(case))?;
-    let face_index = usize::try_from(face_index_param(&case.inputs.params).ok()?).ok()?;
-    let key = glyph_domain_cache_key(font, face_index)?;
-
-    static CACHE: OnceLock<Mutex<BTreeMap<String, Arc<[u32]>>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
-    if let Some(indices) = cache.lock().ok()?.get(&key).map(Arc::clone) {
-        return Some(indices);
-    }
-
-    let bytes = font_asset_bytes(font).ok()?;
-    let face = Face::from_memory(bytes.as_ref(), face_index, 20.0).ok()?;
-    let indices = Arc::<[u32]>::from((0..u32::from(face.info().num_glyphs)).collect::<Vec<_>>());
-    cache.lock().ok()?.insert(key, Arc::clone(&indices));
-    Some(indices)
-}
-
-fn glyph_domain_cache_key(font: &Asset, face_index: usize) -> Option<String> {
-    match font {
-        Asset::List(items) => items
-            .iter()
-            .find(|asset| asset_is_runtime_resolved(asset))
-            .and_then(|asset| glyph_domain_cache_key(asset, face_index)),
-        Asset::File { path, .. } => Some(format!("file:{path}:face:{face_index}")),
-        Asset::Ref { .. } => {
-            let path = asset_file_path(font)?;
-            Some(format!("file:{path}:face:{face_index}"))
-        }
-        Asset::InlineBytes { .. } => {
-            let value = inline_bytes_hex(font)?;
-            let mut hasher = Sha256::new();
-            hasher.update(value.as_bytes());
-            Some(format!(
-                "inline:{}:face:{face_index}",
-                hex_bytes(&hasher.finalize())
-            ))
-        }
-        Asset::Other(_) => None,
-    }
-}
-
-fn numeric_array<'a>(params: &'a Value, key: &str) -> Option<&'a [Value]> {
-    params.get(key)?.as_array().map(Vec::as_slice)
-}
-
 fn flag_value(value: &Value, key: &str) -> Result<i32, String> {
     let raw = match value {
         Value::Array(items) => {
@@ -1056,119 +538,6 @@ fn flag_value(value: &Value, key: &str) -> Result<i32, String> {
         _ => i64_value(value, key)?,
     };
     i32::try_from(raw).map_err(|err| format!("{key} does not fit i32: {err}"))
-}
-
-fn load_target_mode_value(value: &Value) -> Result<i32, String> {
-    if let Some(text) = value.as_str() {
-        return match text {
-            "NORMAL" | "FT_LOAD_TARGET_NORMAL" => Ok(FT_LOAD_TARGET_NORMAL),
-            "LIGHT" | "FT_LOAD_TARGET_LIGHT" => Ok(FT_LOAD_TARGET_LIGHT),
-            "MONO" | "FT_LOAD_TARGET_MONO" => Ok(FT_LOAD_TARGET_MONO),
-            "LCD" | "FT_LOAD_TARGET_LCD" => Ok(FT_LOAD_TARGET_LCD),
-            "LCD_V" | "FT_LOAD_TARGET_LCD_V" => Ok(FT_LOAD_TARGET_LCD_V),
-            _ => i64_value(value, "target_modes").and_then(|value| {
-                i32::try_from(value).map_err(|err| format!("target_modes does not fit i32: {err}"))
-            }),
-        };
-    }
-    let raw = i64_value(value, "target_modes")?;
-    i32::try_from(raw).map_err(|err| format!("target_modes does not fit i32: {err}"))
-}
-
-fn render_mode_value(value: &Value) -> Result<i32, String> {
-    if let Some(text) = value.as_str() {
-        return match text {
-            "NORMAL" | "FT_RENDER_MODE_NORMAL" => Ok(FT_RENDER_MODE_NORMAL),
-            "LIGHT" | "FT_RENDER_MODE_LIGHT" => Ok(FT_RENDER_MODE_LIGHT),
-            "MONO" | "FT_RENDER_MODE_MONO" => Ok(FT_RENDER_MODE_MONO),
-            "LCD" | "FT_RENDER_MODE_LCD" => Ok(FT_RENDER_MODE_LCD),
-            "LCD_V" | "FT_RENDER_MODE_LCD_V" => Ok(FT_RENDER_MODE_LCD_V),
-            "SDF" | "FT_RENDER_MODE_SDF" => Ok(FT_RENDER_MODE_SDF),
-            _ => i64_value(value, "render_modes").and_then(|value| {
-                i32::try_from(value).map_err(|err| format!("render_modes does not fit i32: {err}"))
-            }),
-        };
-    }
-    let raw = i64_value(value, "render_modes")?;
-    i32::try_from(raw).map_err(|err| format!("render_modes does not fit i32: {err}"))
-}
-
-fn range_axis(params: &Value) -> Vec<AdvanceRange> {
-    let Some(values) = params.get("ranges").and_then(Value::as_array) else {
-        return Vec::new();
-    };
-    values
-        .iter()
-        .map(|value| {
-            let object = value
-                .as_object()
-                .ok_or_else(|| "range entry must be an object".to_string())?;
-            Ok::<AdvanceRange, String>(AdvanceRange {
-                start: u32_param_object(object, "start")?,
-                count: u32_param_object(object, "count")?,
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap_or_default()
-}
-
-fn apply_expansion_axes(case: &mut InputCase, axes: AppliedAxes) {
-    let mut suffix = Vec::new();
-    if let Some(font) = axes.font {
-        suffix.push(format!("font={}", asset_label(&font)));
-        case.inputs.assets.insert("font".to_string(), font);
-        case.inputs.assets.remove("font_folder");
-    }
-    let params = case
-        .inputs
-        .params
-        .as_object_mut()
-        .expect("fixture input params must be a JSON object");
-    remove_aggregate_params(params);
-    if let Some(size) = axes.size {
-        suffix.push(format!("size={size}"));
-        params.insert("pixel_size".to_string(), json!({"x": 0, "y": size}));
-    }
-    if let Some(codepoint) = axes.codepoint {
-        suffix.push(format!("cp={codepoint}"));
-        params.insert("char_code".to_string(), Value::from(codepoint));
-    }
-    if let Some(glyph_index) = axes.glyph_index {
-        suffix.push(format!("gid={glyph_index}"));
-        params.insert("glyph_index".to_string(), Value::from(glyph_index));
-    }
-    if let Some(load_flags) = axes.load_flags {
-        suffix.push(format!("flags={load_flags}"));
-        params.insert("load_flags".to_string(), Value::from(load_flags));
-    }
-    if let Some(render_mode) = axes.render_mode {
-        suffix.push(format!("mode={render_mode}"));
-        params.insert("render_mode".to_string(), Value::from(render_mode));
-    }
-    if let Some(range) = axes.range {
-        suffix.push(format!("range={}+{}", range.start, range.count));
-        params.insert("start".to_string(), Value::from(range.start));
-        params.insert("count".to_string(), Value::from(range.count));
-    }
-    if !suffix.is_empty() {
-        case.case_id = format!("{}#{}", case.case_id, suffix.join(";"));
-    }
-}
-
-fn remove_aggregate_params(params: &mut serde_json::Map<String, Value>) {
-    for key in [
-        "sizes",
-        "pixel_sizes",
-        "codepoints",
-        "char_codes",
-        "glyph_indices",
-        "load_flag_sets",
-        "ranges",
-        "render_modes",
-        "target_modes",
-    ] {
-        params.remove(key);
-    }
 }
 
 fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness {
@@ -1199,33 +568,25 @@ fn select_runtime_cases(cases: &[InputCase]) -> RuntimeSelection {
         if !operation_matches_filter(case, operation_filter.as_deref()) {
             continue;
         }
-        let mut should_continue = true;
-        for_each_expanded_input_case(case, |expanded| {
-            if !case_matches_filter(&expanded, filter.as_deref()) {
-                return true;
-            }
-            let operation = expanded.operation.clone();
-            match classify_runtime_case(&expanded, &operation) {
-                RuntimeReadiness::Runnable => {
-                    executable.push(expanded);
-                    if limit.is_some_and(|limit| executable.len() >= limit) {
-                        should_continue = false;
-                        return false;
-                    }
-                }
-                RuntimeReadiness::Pending { reason } => {
-                    model_only = model_only.saturating_add(1);
-                    if pending_samples.len() < pending_sample_limit {
-                        pending_samples.push(format!("{} {}", reason, expanded.case_id));
-                    }
-                    let count = unsupported_operations.entry(reason).or_default();
-                    *count = count.saturating_add(1);
+        if !case_matches_filter(case, filter.as_deref()) {
+            continue;
+        }
+        let operation = case.operation.clone();
+        match classify_runtime_case(case, &operation) {
+            RuntimeReadiness::Runnable => {
+                executable.push(case.clone());
+                if limit.is_some_and(|limit| executable.len() >= limit) {
+                    break;
                 }
             }
-            true
-        });
-        if !should_continue {
-            break;
+            RuntimeReadiness::Pending { reason } => {
+                model_only = model_only.saturating_add(1);
+                if pending_samples.len() < pending_sample_limit {
+                    pending_samples.push(format!("{} {}", reason, case.case_id));
+                }
+                let count = unsupported_operations.entry(reason).or_default();
+                *count = count.saturating_add(1);
+            }
         }
     }
 
@@ -2485,10 +1846,8 @@ fn read_oracle_cache_outputs(
         .iter()
         .zip(reader.lines())
         .map(|(case, line)| {
-            let line = line
-                .map_err(|err| format!("{} oracle read error: {err}", case.case_id))?;
-            parse_run_output(&line)
-                .map_err(|err| format!("{} oracle failed: {err}", case.case_id))
+            let line = line.map_err(|err| format!("{} oracle read error: {err}", case.case_id))?;
+            parse_run_output(&line).map_err(|err| format!("{} oracle failed: {err}", case.case_id))
         })
         .collect::<Result<Vec<_>, _>>()?;
     let outputs = Arc::<[RunOutput]>::from(outputs);
@@ -4540,8 +3899,10 @@ fn runtime_face_cache_key(case: &InputCase) -> Result<String, String> {
     let font = runtime_font_asset(case).ok_or_else(|| "missing font asset".to_string())?;
     let face_index =
         usize::try_from(face_index_param(&case.inputs.params)?).map_err(|err| err.to_string())?;
-    let font_key = glyph_domain_cache_key(font, face_index)
-        .ok_or_else(|| format!("unsupported cached font asset {}", asset_label(font)))?;
+    let bytes = font_asset_bytes(font)?;
+    let mut hasher = Sha256::new();
+    hasher.update(bytes.as_ref());
+    let font_key = format!("sha256:{}:face:{face_index}", hex_bytes(&hasher.finalize()));
     let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
     Ok(format!("{font_key}:pixel:{pixel_width}:{pixel_height}"))
 }
@@ -4707,21 +4068,6 @@ fn assert_manifest_font_variability_cases_cover_declared_fixture_folder(cases: &
         failures.len(),
         manifest.font_variability.len()
     );
-    if variability_axis_limit().is_some() && !failures.is_empty() {
-        eprintln!(
-            "font_variability_coverage: diagnostic variability limit is active; missing probes are reported but not asserted"
-        );
-        for failure in failures.iter().take(20) {
-            eprintln!("{failure}");
-        }
-        if failures.len() > 20 {
-            eprintln!(
-                "... omitted {} additional font variability coverage gaps",
-                failures.len().saturating_sub(20)
-            );
-        }
-        return;
-    }
     assert!(
         failures.is_empty(),
         "font variability coverage gaps:\n{}",
@@ -4729,20 +4075,21 @@ fn assert_manifest_font_variability_cases_cover_declared_fixture_folder(cases: &
     );
 }
 
-fn assert_unified_variability_cases_have_single_model(cases: &[InputCase]) {
-    let mut expanded = 0usize;
-    let mut aggregate_subjects = BTreeSet::new();
-    for case in cases {
-        let count = expansion_count(case);
-        if count > 1 {
-            expanded = expanded.saturating_add(count);
-            aggregate_subjects.insert(case.subject.as_str());
-        }
-    }
+fn report_explicit_input_cases(cases: &[InputCase]) {
+    let logical_cases = cases
+        .iter()
+        .map(|case| {
+            case.case_id
+                .split_once('@')
+                .map_or(case.case_id.as_str(), |v| v.0)
+        })
+        .collect::<BTreeSet<_>>()
+        .len();
     eprintln!(
-        "variability_expansion: expanded_cases={} aggregate_subjects={}",
-        expanded,
-        aggregate_subjects.len()
+        "explicit_inputs: logical_cases={} concrete_cases={} additional_explicit_cases={} implicit_cases=0",
+        logical_cases,
+        cases.len(),
+        cases.len().saturating_sub(logical_cases)
     );
 }
 
@@ -4881,23 +4228,11 @@ fn read_all_case_files() -> &'static [InputCase] {
 }
 
 fn preload_global_fixture_caches(cases: &[InputCase]) {
-    let manifest = read_manifest();
-    let mut folders = BTreeSet::new();
     let mut file_assets = BTreeSet::new();
     let mut inline_assets = BTreeSet::new();
 
-    for variability in manifest.font_variability.values() {
-        folders.insert(variability.folder.clone());
-    }
-
     for case in cases {
-        collect_case_cache_inputs(case, &mut folders, &mut file_assets, &mut inline_assets);
-    }
-
-    for folder in &folders {
-        for asset in fixture_font_assets(folder) {
-            collect_asset_cache_input(&asset, &mut file_assets, &mut inline_assets);
-        }
+        collect_case_cache_inputs(case, &mut file_assets, &mut inline_assets);
     }
 
     for path in &file_assets {
@@ -4912,13 +4247,10 @@ fn preload_global_fixture_caches(cases: &[InputCase]) {
         cached_inline_bytes(inline_hex).unwrap_or_else(|err| panic!("preload inline bytes: {err}"));
     }
 
-    preload_glyph_domains(cases);
-
     if profile_enabled() {
         eprintln!(
-            "profile_global_cache_warmup: input_cases={} font_folders={} file_assets={} inline_assets={}",
+            "profile_global_cache_warmup: input_cases={} file_assets={} inline_assets={}",
             cases.len(),
-            folders.len(),
             file_assets.len(),
             inline_assets.len()
         );
@@ -4927,21 +4259,9 @@ fn preload_global_fixture_caches(cases: &[InputCase]) {
 
 fn collect_case_cache_inputs(
     case: &InputCase,
-    folders: &mut BTreeSet<String>,
     file_assets: &mut BTreeSet<String>,
     inline_assets: &mut BTreeSet<String>,
 ) {
-    if let Some(folder) = case
-        .inputs
-        .variability
-        .as_ref()
-        .and_then(|variability| variability.fonts_folder.as_deref())
-    {
-        folders.insert(folder.to_string());
-    }
-    if let Some(folder) = file_asset_path(case.inputs.assets.get("font_folder")) {
-        folders.insert(folder.to_string());
-    }
     for asset in case.inputs.assets.values() {
         collect_asset_cache_input(asset, file_assets, inline_assets);
     }
@@ -4975,23 +4295,6 @@ fn collect_asset_cache_input(
     }
 }
 
-fn preload_glyph_domains(cases: &[InputCase]) {
-    for case in cases {
-        let axes = variability_axes(case);
-        if !axes.contains("glyph_indices") {
-            continue;
-        }
-        let fonts = font_axis(case, &axes);
-        if fonts.is_empty() {
-            let _ = runtime_glyph_indices(case, None);
-            continue;
-        }
-        for font in &fonts {
-            let _ = runtime_glyph_indices(case, font.as_ref());
-        }
-    }
-}
-
 fn load_all_case_files() -> Vec<InputCase> {
     let input_dir = fixture_dir().join("inputs").join("public-api");
     let mut paths = input_case_paths(&input_dir);
@@ -5004,17 +4307,129 @@ fn load_all_case_files() -> Vec<InputCase> {
             .unwrap_or_else(|err| panic!("parse {}: {err}", path.display()));
         assert!(
             raw.get("matrix_cases").is_none(),
-            "{} uses legacy matrix_cases; move coverage into cases[].inputs.variability",
+            "{} uses legacy matrix_cases; move coverage into cases[].inputs.variants",
             path.display()
         );
+        assert_no_implicit_inputs(&path, &raw);
         let parsed: CaseFile = serde_json::from_value(raw)
             .unwrap_or_else(|err| panic!("parse {}: {err}", path.display()));
         for mut case in parsed.cases {
             resolve_case_assets(&path, &parsed.assets, &mut case);
-            cases.push(case);
+            append_concrete_input_cases(&path, case, &mut cases);
         }
     }
+    assert_unique_runtime_case_ids(&cases);
     cases
+}
+
+fn assert_no_implicit_inputs(path: &Path, raw: &Value) {
+    let cases = raw
+        .get("cases")
+        .and_then(Value::as_array)
+        .unwrap_or_else(|| panic!("{} has no cases array", path.display()));
+    for case in cases {
+        let case_id = case
+            .get("case_id")
+            .and_then(Value::as_str)
+            .unwrap_or("<missing-case-id>");
+        let Some(inputs) = case.get("inputs").and_then(Value::as_object) else {
+            continue;
+        };
+        assert!(
+            !inputs.contains_key("variability"),
+            "{} case {} uses forbidden implicit variability",
+            path.display(),
+            case_id
+        );
+        let has_font_folder = inputs
+            .get("assets")
+            .and_then(Value::as_object)
+            .is_some_and(|assets| assets.contains_key("font_folder"));
+        assert!(
+            !has_font_folder,
+            "{} case {} uses forbidden runtime font-folder discovery",
+            path.display(),
+            case_id
+        );
+        if let Some(variants) = inputs.get("variants").and_then(Value::as_array) {
+            for variant in variants {
+                let variant_id = variant
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("<missing-variant-id>");
+                let has_font_folder = variant
+                    .get("assets")
+                    .and_then(Value::as_object)
+                    .is_some_and(|assets| assets.contains_key("font_folder"));
+                assert!(
+                    !has_font_folder,
+                    "{} case {} variant {} uses forbidden runtime font-folder discovery",
+                    path.display(),
+                    case_id,
+                    variant_id
+                );
+            }
+        }
+    }
+}
+
+fn append_concrete_input_cases(path: &Path, case: InputCase, cases: &mut Vec<InputCase>) {
+    if case.inputs.variants.is_empty() {
+        cases.push(case);
+        return;
+    }
+
+    assert!(
+        case.inputs.assets.is_empty() && case.inputs.params.is_null(),
+        "{} case {} mixes explicit variants with aggregate inputs",
+        path.display(),
+        case.case_id
+    );
+
+    let mut variant_ids = BTreeSet::new();
+    for variant in &case.inputs.variants {
+        assert!(
+            !variant.id.is_empty(),
+            "{} case {} has an empty variant id",
+            path.display(),
+            case.case_id
+        );
+        assert!(
+            variant_ids.insert(variant.id.as_str()),
+            "{} case {} has duplicate variant id {}",
+            path.display(),
+            case.case_id,
+            variant.id
+        );
+        assert!(
+            !variant.coverage.is_empty(),
+            "{} case {} variant {} has no coverage intent",
+            path.display(),
+            case.case_id,
+            variant.id
+        );
+
+        let mut concrete = case.clone();
+        concrete.case_id = format!("{}@{}", case.case_id, variant.id);
+        concrete.expect_error = variant.expect_error.unwrap_or(case.expect_error);
+        concrete.inputs = Inputs {
+            assets: variant.assets.clone(),
+            params: variant.params.clone(),
+            variants: Vec::new(),
+        };
+        cases.push(concrete);
+    }
+}
+
+fn assert_unique_runtime_case_ids(cases: &[InputCase]) {
+    let mut ids = BTreeSet::new();
+    for case in cases {
+        assert!(
+            ids.insert(case.case_id.as_str()),
+            "duplicate runtime case id {}",
+            case.case_id
+        );
+    }
 }
 
 fn input_case_paths(input_dir: &Path) -> Vec<PathBuf> {
@@ -5042,7 +4457,14 @@ fn resolve_case_assets(
     shared_assets: &BTreeMap<String, Asset>,
     case: &mut InputCase,
 ) {
-    for asset in case.inputs.assets.values_mut() {
+    resolve_assets(&mut case.inputs.assets, shared_assets);
+    for variant in &mut case.inputs.variants {
+        resolve_assets(&mut variant.assets, shared_assets);
+    }
+}
+
+fn resolve_assets(assets: &mut BTreeMap<String, Asset>, shared_assets: &BTreeMap<String, Asset>) {
+    for asset in assets.values_mut() {
         let Asset::Ref { id, path } = asset else {
             continue;
         };
@@ -5075,9 +4497,6 @@ fn resolve_fixture_asset_ref(reference: &str) -> Option<String> {
     ];
     if let Some(rest) = reference.strip_prefix("fonts/") {
         candidates.push(format!("input/fonts/{rest}"));
-    }
-    if let Some(rest) = reference.strip_prefix("fonts_autohint/") {
-        candidates.push(format!("input/fonts_autohint/{rest}"));
     }
     if let Some(rest) = reference.strip_prefix("fixtures/assets/fonts/") {
         candidates.push(format!("input/fonts/{rest}"));
@@ -5164,64 +4583,20 @@ fn input_covers_font_variability(input: &InputCase, probe: &CoverageProbe<'_>) -
     if input.subject != probe.subject || input.case != probe.case_id {
         return false;
     }
-    let plan = expansion_plan(input);
-    input_covers_font_name(input, &plan, probe.font)
-        && option_axis_covers_u32(&plan.sizes, input_pixel_y(input), probe.size)
-        && probe.char_code.is_none_or(|value| {
-            option_axis_covers_u64(&plan.codepoints, input_u64_param(input, "char_code"), value)
-        })
-        && probe.glyph_index.is_none_or(|value| {
-            if plan.glyph_indices_enabled {
-                plan.fonts.iter().any(|font| {
-                    glyph_indices_axis(input, font.as_ref(), true)
-                        .into_iter()
-                        .flatten()
-                        .any(|glyph_index| glyph_index == value)
-                })
-            } else {
-                input_u32_param(input, "glyph_index") == Some(value)
-            }
-        })
-        && probe.load_flag.is_none_or(|value| {
-            option_axis_covers_i32(
-                &plan.load_flags,
-                input_i32_param(input, "load_flags"),
-                value,
-            )
-        })
-        && probe.render_mode.is_none_or(|value| {
-            option_axis_covers_i32(
-                &plan.render_modes,
-                input_i32_param(input, "render_mode"),
-                value,
-            )
-        })
-}
-
-fn input_covers_font_name(input: &InputCase, plan: &ExpansionPlan, font_name: &str) -> bool {
-    if plan.fonts.iter().any(|font| {
-        font.as_ref()
-            .and_then(asset_file_name)
-            .is_some_and(|candidate| candidate == font_name)
-    }) {
-        return true;
-    }
-    input_font_file_name(input).is_some_and(|candidate| candidate == font_name)
-}
-
-fn option_axis_covers_u32(axis: &[Option<u32>], base: Option<u32>, value: u32) -> bool {
-    axis.iter()
-        .any(|candidate| candidate.map_or(base == Some(value), |candidate| candidate == value))
-}
-
-fn option_axis_covers_u64(axis: &[Option<u64>], base: Option<u64>, value: u64) -> bool {
-    axis.iter()
-        .any(|candidate| candidate.map_or(base == Some(value), |candidate| candidate == value))
-}
-
-fn option_axis_covers_i32(axis: &[Option<i32>], base: Option<i32>, value: i32) -> bool {
-    axis.iter()
-        .any(|candidate| candidate.map_or(base == Some(value), |candidate| candidate == value))
+    input_font_file_name(input).is_some_and(|candidate| candidate == probe.font)
+        && input_pixel_y(input) == Some(probe.size)
+        && probe
+            .char_code
+            .is_none_or(|value| input_u64_param(input, "char_code") == Some(value))
+        && probe
+            .glyph_index
+            .is_none_or(|value| input_u32_param(input, "glyph_index") == Some(value))
+        && probe
+            .load_flag
+            .is_none_or(|value| input_i32_param(input, "load_flags") == Some(value))
+        && probe
+            .render_mode
+            .is_none_or(|value| input_i32_param(input, "render_mode") == Some(value))
 }
 
 fn asset_file_name(asset: &Asset) -> Option<String> {
