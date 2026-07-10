@@ -23,6 +23,7 @@
 //!
 //! Full 52-script support via generated data from afranges.c + afstyles.h.
 
+use super::blue_strings::{BlueStringEntry, SCRIPT_LATN, SCRIPT_TABLE};
 use super::cjk::{cjk_metrics_init_blues, cjk_metrics_init_widths, cjk_metrics_scale};
 use super::globals_data::{STYLE_FALLBACK, STYLE_TABLE, STYLE_UNASSIGNED};
 use super::latin::{metrics_init_blues_impl, metrics_init_widths};
@@ -358,6 +359,16 @@ fn compute_style_coverage(cmap: &CmapTable, num_glyphs: u16, glyph_styles: &mut 
             *g = STYLE_FALLBACK;
         }
     }
+}
+
+/// Quick script detection for fonts that don't need full `FaceGlobals`.
+pub fn detect_script(cmap: &CmapTable) -> &'static [BlueStringEntry] {
+    for (_tag, ch, entries) in SCRIPT_TABLE {
+        if cmap.char_index(*ch as u32).unwrap_or(0) != 0 {
+            return entries;
+        }
+    }
+    SCRIPT_LATN
 }
 
 /// Per-script hinting direction: TOP_TO_BOTTOM for Indic/Mongolian/Gothic.

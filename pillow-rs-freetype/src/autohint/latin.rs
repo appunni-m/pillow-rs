@@ -63,9 +63,11 @@ pub struct ApplyHintsMetrics {
 pub const AF_ADJUST_UP: u32 = 0x0001;
 pub const AF_ADJUST_DOWN: u32 = 0x0002;
 pub const AF_ADJUST_UP2: u32 = 0x0004;
+pub const AF_ADJUST_DOWN2: u32 = 0x0008;
 pub const AF_ADJUST_TILDE_TOP: u32 = 0x0010;
 pub const AF_ADJUST_TILDE_BOTTOM: u32 = 0x0020;
 pub const AF_ADJUST_TILDE_TOP2: u32 = 0x0040;
+pub const AF_ADJUST_TILDE_BOTTOM2: u32 = 0x0080;
 pub const AF_IGNORE_CAPITAL_TOP: u32 = 0x0100;
 pub const AF_IGNORE_CAPITAL_BOTTOM: u32 = 0x0200;
 pub const AF_IGNORE_SMALL_TOP: u32 = 0x0400;
@@ -1221,7 +1223,8 @@ fn extract_widths(hints: &GlyphHints, dim: Dimension) -> (usize, [AfWidth; AF_LA
 
 // ── Blue zone strings — dynamically selected from afblue.dat ───────────────
 
-use super::blue_strings::BlueStringEntry;
+use super::blue_strings::{BlueStringEntry, SCRIPT_GREK};
+use super::globals::detect_script;
 
 // Macros for checking blue property bits.
 macro_rules! is_top_blue {
@@ -1243,6 +1246,17 @@ macro_rules! is_x_height {
     ($p:expr) => {
         ($p & AF_BLUE_PROP_LATIN_X_HEIGHT) != 0
     };
+}
+
+/// Initialize blue zones using the script detected from the font cmap.
+pub fn metrics_init_blues(metrics: &mut AfLatinMetrics, font_data: &crate::tables::FontData) {
+    let script_strings = detect_script(&font_data.cmap);
+    metrics_init_blues_impl(metrics, font_data, script_strings);
+}
+
+/// Initialize blue zones using the Greek blue-string entries.
+pub fn metrics_init_blues_greek(metrics: &mut AfLatinMetrics, font_data: &crate::tables::FontData) {
+    metrics_init_blues_impl(metrics, font_data, SCRIPT_GREK);
 }
 
 /// Core blue zone initialization, parameterized by script entries.
@@ -2123,6 +2137,28 @@ fn find_lowest_contour(hints: &GlyphHints) -> usize {
     lowest_contour
 }
 
+fn find_second_lowest_contour(hints: &GlyphHints) -> usize {
+    if hints.contours.len() < 3 {
+        return 0;
+    }
+    let lowest = find_lowest_contour(hints);
+    let lowest_max_y = hints.contour_y_maxima[lowest];
+    let mut second = 0;
+    let mut second_min_y = i32::MAX;
+    for ci in 0..hints.contours.len() {
+        if ci == lowest {
+            continue;
+        }
+        let current_min_y = hints.contour_y_minima[ci];
+        let current_max_y = hints.contour_y_maxima[ci];
+        if current_min_y < second_min_y && current_max_y > lowest_max_y {
+            second_min_y = current_min_y;
+            second = ci;
+        }
+    }
+    second
+}
+
 fn contour_horizontal_overlap(hints: &GlyphHints, contour_index: usize) -> bool {
     let mut contour_min_x = i32::MAX;
     let mut contour_max_x = i32::MIN;
@@ -2329,7 +2365,8 @@ fn apply_tilde_stretch_alignment(hints: &mut GlyphHints, adj_type: u32) {
     let is_top_tilde = (adj_type & AF_ADJUST_TILDE_TOP) != 0;
     let is_bottom_tilde = (adj_type & AF_ADJUST_TILDE_BOTTOM) != 0;
     let is_below_top_tilde = (adj_type & AF_ADJUST_TILDE_TOP2) != 0;
-    if !(is_top_tilde || is_bottom_tilde || is_below_top_tilde) {
+    let is_above_bottom_tilde = (adj_type & AF_ADJUST_TILDE_BOTTOM2) != 0;
+    if !(is_top_tilde || is_bottom_tilde || is_below_top_tilde || is_above_bottom_tilde) {
         return;
     }
 
@@ -2340,6 +2377,14 @@ fn apply_tilde_stretch_alignment(hints: &mut GlyphHints, adj_type: u32) {
         recompute_vertical_extrema(hints);
         let limit = hints.contour_y_minima[contour];
         move_contours_up(hints, limit, y_offset);
+        recompute_vertical_extrema(hints);
+    }
+    if is_above_bottom_tilde {
+        let contour = find_second_lowest_contour(hints);
+        let y_offset = stretch_bottom_tilde(hints, contour) - align_bottom_tilde(hints, contour);
+        recompute_vertical_extrema(hints);
+        let limit = hints.contour_y_maxima[contour];
+        move_contours_down(hints, limit, y_offset);
         recompute_vertical_extrema(hints);
     }
     if is_top_tilde {
@@ -2399,9 +2444,10 @@ fn vertical_separation_adjustments(
     let adjust_top = (adj_type & AF_ADJUST_UP) != 0;
     let adjust_below_top = (adj_type & AF_ADJUST_UP2) != 0;
     let adjust_bottom = (adj_type & AF_ADJUST_DOWN) != 0;
+    let adjust_above_bottom = (adj_type & AF_ADJUST_DOWN2) != 0;
 
     if !((adjust_top || adjust_bottom) && hints.contours.len() >= 2
-        || adjust_below_top && hints.contours.len() >= 3)
+        || (adjust_below_top || adjust_above_bottom) && hints.contours.len() >= 3)
     {
         return;
     }
@@ -2490,8 +2536,14 @@ fn vertical_separation_adjustments(
         }
     }
 
-    if adjust_bottom && hints.contours.len() >= 2 {
-        let low_contour = find_lowest_contour(hints);
+    if (adjust_bottom && hints.contours.len() >= 2)
+        || (adjust_above_bottom && hints.contours.len() >= 3)
+    {
+        let low_contour = if adjust_above_bottom {
+            find_second_lowest_contour(hints)
+        } else {
+            find_lowest_contour(hints)
+        };
         if !contour_horizontal_overlap(hints, low_contour) {
             return;
         }
@@ -2518,18 +2570,30 @@ fn vertical_separation_adjustments(
 
         let adjustment_amount = 64 - min_distance;
         let is_bottom_tilde = (adj_type & AF_ADJUST_TILDE_BOTTOM) != 0;
+        let is_above_bottom_tilde = (adj_type & AF_ADJUST_TILDE_BOTTOM2) != 0;
         let mut centering_adjustment = 0;
-        if is_bottom_tilde {
-            let tilde_contour = low_contour;
+        if is_bottom_tilde || is_above_bottom_tilde {
+            let tilde_contour = if adjust_bottom {
+                low_contour
+            } else if is_above_bottom_tilde {
+                low_contour
+            } else {
+                find_lowest_contour(hints)
+            };
             let tilde_height =
                 hints.contour_y_maxima[tilde_contour] - hints.contour_y_minima[tilde_contour];
-            let pos = low_max_y - adjustment_amount;
+            let mut pos = low_max_y - adjustment_amount;
+            if adjust_above_bottom && is_bottom_tilde {
+                pos -= low_height;
+            }
             if pos % 64 == 0 && tilde_height < 3 * 64 {
                 centering_adjustment = (ft_pix_round(tilde_height) - tilde_height) / 2;
             }
         }
 
-        let calculated_amount = if adjust_bottom && is_bottom_tilde {
+        let calculated_amount = if (adjust_bottom && is_bottom_tilde)
+            || (adjust_above_bottom && is_above_bottom_tilde)
+        {
             adjustment_amount + centering_adjustment
         } else {
             adjustment_amount
@@ -2545,6 +2609,9 @@ fn vertical_separation_adjustments(
             // tilde centering is only applied to the secondary below-contour path.
             // See `aflatin.c` around the `af_move_contours_down` calls.
             move_contours_down(hints, max_y_limit, adjustment_amount);
+            if adjust_above_bottom && is_bottom_tilde {
+                move_contours_down(hints, max_y_limit - low_height, centering_adjustment);
+            }
             recompute_vertical_extrema(hints);
         }
     }
@@ -2619,6 +2686,9 @@ pub fn apply_hints(
     // AF_SCALER_FLAG_NO_HORIZONTAL (afcjk.c:1390-1421).
     if is_italic || (no_horizontal_hinting && !no_advance_hinting) {
         hints.scaler_flags |= AF_SCALER_FLAG_NO_HORIZONTAL;
+        if is_italic {
+            crate::autohint::coverage::record(crate::autohint::coverage::COV_ITALIC_NO_HORZ);
+        }
     }
 
     // Compute ppem for bdelta in compute_stem_width
@@ -3761,6 +3831,11 @@ fn align_linked_edge(
     stem_edge.pos = base_edge.pos + fitted_width;
 }
 
+/// Preserve a serif edge's original offset from its hinted base edge.
+fn align_serif_edge(base: &AFEdge, serif: &mut AFEdge) {
+    serif.pos = base.pos + (serif.opos - base.opos);
+}
+
 // ── Helper: compute stem width ──────────────────────────────────────────────
 //
 // Port of `af_latin_compute_stem_width` (aflatin.c:3960–4152).
@@ -4410,8 +4485,14 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                     let hi = serif_idx.max(i);
                     let mut overlap = false;
                     for j in (lo + 1)..hi {
+                        if j == i || j == serif_idx {
+                            continue;
+                        }
                         let sj_f = axis.edges[j].first;
                         let sj_l = axis.edges[j].last;
+                        if sj_f == usize::MAX || sj_l == usize::MAX {
+                            continue;
+                        }
                         let ej_min = i32::min(seg_v_min(sj_f), seg_v_min(sj_l));
                         let ej_max = i32::max(seg_v_max(sj_f), seg_v_max(sj_l));
                         if !((ej_min < v_min && ej_max < v_min)
@@ -4431,9 +4512,8 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                 // delta < 1.25px: use serif alignment.
                 let serif_idx = axis.edges[i].serif;
                 // SAFETY: delta is <80 only if serif_idx is valid.
-                let serif_pos = axis.edges[serif_idx].pos;
-                let serif_opos = axis.edges[serif_idx].opos;
-                axis.edges[i].pos = serif_pos + (axis.edges[i].opos - serif_opos);
+                let base = axis.edges[serif_idx];
+                align_serif_edge(&base, &mut axis.edges[i]);
             } else if anchor == usize::MAX {
                 // First non-stem edge: pixel-round and set as anchor.
                 axis.edges[i].pos = (axis.edges[i].opos + 32) & !63;
@@ -4552,6 +4632,9 @@ fn align_edge_points(hints: &mut GlyphHints, dim: Dimension) {
         let pos = edge.pos;
         let mut seg_idx = edge.first;
         loop {
+            if seg_idx == usize::MAX {
+                break;
+            }
             let seg = &axis.segments[seg_idx];
             let mut pt_idx = seg.first;
             loop {

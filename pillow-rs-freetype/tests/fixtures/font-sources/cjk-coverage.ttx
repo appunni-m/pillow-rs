@@ -178,6 +178,10 @@
       <map code="0x393" name="A"/><!-- GREEK CAPITAL LETTER GAMMA -->
       <map code="0x3b1" name="A"/><!-- GREEK SMALL LETTER ALPHA -->
       <map code="0x411" name="A"/><!-- CYRILLIC CAPITAL LETTER BE -->
+      <map code="0x4e2a" name="uni6C38"/><!-- CJK BOTTOM FILL CALIBRATION -->
+      <map code="0x4e3b" name="uni53E3"/><!-- CJK BOTTOM FLAT CALIBRATION -->
+      <map code="0x4ed6" name="uni65E5"/><!-- CJK TOP FILL CALIBRATION -->
+      <map code="0x519b" name="uni7530"/><!-- CJK TOP FLAT CALIBRATION -->
       <map code="0x43e" name="A"/><!-- CYRILLIC SMALL LETTER O -->
       <map code="0x915" name="A"/><!-- DEVANAGARI LETTER KA -->
       <map code="0x925" name="A"/><!-- DEVANAGARI LETTER THA -->
