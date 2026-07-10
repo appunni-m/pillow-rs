@@ -220,6 +220,26 @@
             ]
           },
           {
+            "id": "latin-shared-start-segment-merge",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 77,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:shared-start-segment-merge"
+            ]
+          },
+          {
             "id": "latin-shared-greek",
             "assets": {
               "font": {

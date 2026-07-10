@@ -19,6 +19,7 @@
     <GlyphID id="13" name="tildeBottom"/>
     <GlyphID id="14" name="ignoreBlue"/>
     <GlyphID id="15" name="singleTouch"/>
+    <GlyphID id="16" name="segmentMerge"/>
   </GlyphOrder>
 
   <head>
@@ -65,7 +66,7 @@
   <maxp>
     <!-- Most of this table will be recalculated by the compiler -->
     <tableVersion value="0x10000"/>
-    <numGlyphs value="16"/>
+    <numGlyphs value="17"/>
     <maxPoints value="240"/>
     <maxContours value="40"/>
     <maxCompositePoints value="240"/>
@@ -151,6 +152,7 @@
     <mtx name="tildeBottom" width="256" lsb="40"/>
     <mtx name="ignoreBlue" width="256" lsb="0"/>
     <mtx name="singleTouch" width="256" lsb="40"/>
+    <mtx name="segmentMerge" width="256" lsb="40"/>
   </hmtx>
 
   <cmap>
@@ -160,6 +162,7 @@
       <map code="0x41" name="A"/><!-- LATIN CAPITAL LETTER A -->
       <map code="0x48" name="A"/><!-- LATIN CAPITAL LETTER H -->
       <map code="0x4f" name="A"/><!-- LATIN CAPITAL LETTER O -->
+      <map code="0x4d" name="segmentMerge"/><!-- LATIN CAPITAL LETTER M -->
       <map code="0x56" name="singleTouch"/><!-- LATIN CAPITAL LETTER V -->
       <map code="0x6f" name="A"/><!-- LATIN SMALL LETTER O -->
       <map code="0xc3" name="tildeTop"/><!-- LATIN CAPITAL LETTER A WITH TILDE -->
@@ -570,6 +573,22 @@
       <instructions/>
     </TTGlyph>
 
+    <TTGlyph name="segmentMerge" xMin="40" yMin="0" xMax="216" yMax="250">
+      <contour>
+        <pt x="40" y="180" on="1"/>
+        <pt x="216" y="180" on="1"/>
+        <pt x="216" y="0" on="1"/>
+        <pt x="40" y="0" on="1"/>
+      </contour>
+      <contour>
+        <pt x="128" y="0" on="1"/>
+        <pt x="128" y="100" on="1"/>
+        <pt x="128" y="80" on="1"/>
+        <pt x="128" y="250" on="1"/>
+      </contour>
+      <instructions/>
+    </TTGlyph>
+
   </glyf>
 
   <name>
@@ -705,6 +724,7 @@
     <mtx name="tildeBottom" height="256" tsb="76"/>
     <mtx name="ignoreBlue" height="256" tsb="36"/>
     <mtx name="singleTouch" height="256" tsb="46"/>
+    <mtx name="segmentMerge" height="256" tsb="6"/>
   </vmtx>
 
 </ttFont>
