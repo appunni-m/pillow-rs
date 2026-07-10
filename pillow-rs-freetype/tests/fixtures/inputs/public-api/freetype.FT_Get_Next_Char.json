@@ -60,27 +60,73 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "default-format12",
+            "assets": {
+              "font": { "kind": "file", "role": "font", "path": "input/fonts/DejaVuSans.ttf" }
+            },
+            "params": {
+              "face_index": 0,
+              "start_charcodes": [ 0, 31, 32, 64, 65, 66, 8363, 8364, 1114111, 4294967295 ]
+            },
+            "coverage": [ "tt/cmap:format12-next-char-baseline" ]
+          },
+          {
+            "id": "format6-range-boundaries",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/format6-range.ttf" }
+            },
+            "params": {
+              "face_index": 0,
+              "start_charcodes": [ 0, 63, 64, 65, 67, 65535, 4294967295 ]
+            },
+            "coverage": [
+              "tt/cmap:format6-next-skips-zero",
+              "tt/cmap:format6-next-array-exhaustion",
+              "tt/cmap:format6-next-above-bmp"
+            ]
+          },
+          {
+            "id": "format4-cjk-boundaries",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/autohint/cjk-coverage.ttf" }
+            },
+            "params": {
+              "face_index": 0,
+              "start_charcodes": [ 0, 31, 32, 64, 65, 65534, 65535, 4294967295 ]
+            },
+            "coverage": [
+              "tt/cmap:format4-next-char",
+              "tt/cmap:format4-next-terminal-bmp",
+              "tt/cmap:format4-next-wrap"
+            ]
+          },
+          {
+            "id": "format6-terminal-zero",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/format6-terminal.ttf" }
+            },
+            "params": { "face_index": 0, "start_charcodes": [ 65534 ] },
+            "coverage": [ "tt/cmap:format6-terminal-zero-entry" ]
+          },
+          {
+            "id": "format12-zero-start-group",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/format12-zero-start.ttf" }
+            },
+            "params": { "face_index": 0, "start_charcodes": [ 0, 11 ] },
+            "coverage": [ "tt/cmap:format12-zero-glyph-group-advance" ]
+          },
+          {
+            "id": "format4-range-offset-zero-skip",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/format4-range-offset.ttf" }
+            },
+            "params": { "face_index": 0, "start_charcodes": [ 64, 79 ] },
+            "coverage": [ "tt/cmap:format4-next-skips-zero-range-entry" ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "start_charcodes": [
-            0,
-            31,
-            32,
-            64,
-            65,
-            66,
-            8363,
-            8364,
-            1114111
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -116,8 +162,8 @@
           "empty_charmap_font": {
             "kind": "ref",
             "role": "font",
-            "path": "fonts/no-encoding/bdf-or-pcf-encoding-none.bdf",
-            "requires": "BDF fixture with no active encoding or mappings"
+            "path": "fonts/charmap/cmap-unsupported-only.ttf",
+            "requires": "SFNT whose only cmap format is rejected"
           }
         },
         "params": {

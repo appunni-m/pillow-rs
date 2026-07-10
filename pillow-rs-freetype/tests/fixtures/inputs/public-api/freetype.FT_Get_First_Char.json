@@ -15,18 +15,42 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "default-format12",
+            "assets": {
+              "font": { "kind": "file", "role": "font", "path": "input/fonts/DejaVuSans.ttf" }
+            },
+            "params": {
+              "face_index": 0,
+              "select_charmap": "FT_ENCODING_UNICODE",
+              "agindex_pointer": "non_null"
+            },
+            "coverage": [ "tt/cmap:format12-first-char-baseline" ]
+          },
+          {
+            "id": "format6-zero-then-mapped",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/format6-range.ttf" }
+            },
+            "params": {
+              "face_index": 0,
+              "agindex_pointer": "non_null"
+            },
+            "coverage": [ "tt/cmap:format6-first-char-skips-zero" ]
+          },
+          {
+            "id": "format4-cjk-first",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/autohint/cjk-coverage.ttf" }
+            },
+            "params": {
+              "face_index": 0,
+              "agindex_pointer": "non_null"
+            },
+            "coverage": [ "tt/cmap:format4-first-char" ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "select_charmap": "FT_ENCODING_UNICODE",
-          "agindex_pointer": "non_null"
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -62,8 +86,8 @@
           "empty_charmap_font": {
             "kind": "ref",
             "role": "font",
-            "path": "fonts/no-encoding/bdf-or-pcf-encoding-none.bdf",
-            "requires": "BDF fixture with no active encoding or mappings"
+            "path": "fonts/charmap/cmap-unsupported-only.ttf",
+            "requires": "SFNT whose only cmap format is rejected"
           }
         },
         "params": {

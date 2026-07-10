@@ -939,6 +939,22 @@
             "coverage": [
               "tt:otto-sfnt-version-condition"
             ]
+          },
+          {
+            "id": "cmap-short-header",
+            "assets": {
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/charmap/cmap-short.ttf" }
+            },
+            "params": { "variants": [ { "face_index": 0 } ] },
+            "coverage": [ "tt/cmap:short-header-error" ]
+          },
+          {
+            "id": "cmap-record-array-overflow",
+            "assets": {
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/charmap/cmap-record-overflow.ttf" }
+            },
+            "params": { "variants": [ { "face_index": 0 } ] },
+            "coverage": [ "tt/cmap:encoding-record-array-overflow" ]
           }
         ]
       },

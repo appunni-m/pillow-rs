@@ -682,6 +682,68 @@
             "coverage": [
               "get_char_index:explicit-cp4294967296"
             ]
+          },
+          {
+            "id": "format6-below-range",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/format6-range.ttf" }
+            },
+            "params": { "face_index": 0, "char_code": 63 },
+            "coverage": [ "tt/cmap:format6-below-range" ]
+          },
+          {
+            "id": "format6-mapped",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/format6-range.ttf" }
+            },
+            "params": { "face_index": 0, "char_code": 65 },
+            "coverage": [ "tt/cmap:format6-mapped" ]
+          },
+          {
+            "id": "format6-zero-glyph",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/format6-range.ttf" }
+            },
+            "params": { "face_index": 0, "char_code": 66 },
+            "coverage": [ "tt/cmap:format6-zero-glyph" ]
+          },
+          {
+            "id": "format6-past-array",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/format6-range.ttf" }
+            },
+            "params": { "face_index": 0, "char_code": 68 },
+            "coverage": [ "tt/cmap:format6-past-array" ]
+          },
+          {
+            "id": "format6-above-bmp",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/format6-range.ttf" }
+            },
+            "params": { "face_index": 0, "char_code": 65536 },
+            "coverage": [ "tt/cmap:format6-above-bmp" ]
+          },
+          {
+            "id": "cmap-parser-matrix-valid-format6",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/cmap-parser-matrix.ttf" }
+            },
+            "params": { "face_index": 0, "char_code": 65 },
+            "coverage": [
+              "tt/cmap:invalid-subtable-offset",
+              "tt/cmap:unsupported-format-ignored",
+              "tt/cmap:format4-error-matrix",
+              "tt/cmap:format6-error-matrix",
+              "tt/cmap:format12-error-matrix"
+            ]
+          },
+          {
+            "id": "format4-range-offset-zero",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/format4-range-offset.ttf" }
+            },
+            "params": { "face_index": 0, "char_code": 65 },
+            "coverage": [ "tt/cmap:format4-range-offset-zero-glyph" ]
           }
         ]
       },
@@ -718,8 +780,8 @@
               "no_charmap_font": {
                 "kind": "ref",
                 "role": "font",
-                "path": "fonts/no-encoding/bdf-or-pcf-encoding-none.bdf",
-                "requires": "BDF fixture with no active encoding or charmap"
+                "path": "fonts/charmap/cmap-unsupported-only.ttf",
+                "requires": "SFNT whose only cmap format is rejected"
               }
             },
             "params": {
