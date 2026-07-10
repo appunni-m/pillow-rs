@@ -473,6 +473,240 @@
               "render_mode": "FT_RENDER_MODE_SDF"
             },
             "coverage": ["render:mixed-winding-degenerate-sdf"]
+          },
+          {
+            "id": "m15-render-empty-normal",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 21,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": ["render:empty-normal"]
+          },
+          {
+            "id": "m16-render-empty-mono",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 21,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": ["render:empty-mono"]
+          },
+          {
+            "id": "m17-render-empty-lcd",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 21,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_LCD"
+            },
+            "coverage": ["render:empty-lcd"]
+          },
+          {
+            "id": "m18-render-empty-lcd-v",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 21,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_LCD_V"
+            },
+            "coverage": ["render:empty-lcd-v"]
+          },
+          {
+            "id": "m19-render-empty-sdf",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 21,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": ["render:empty-sdf"]
+          },
+          {
+            "id": "m20-render-zero-width-normal",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 44,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": ["render:zero-width-normal"]
+          },
+          {
+            "id": "m21-render-zero-width-mono",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 44,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": ["render:zero-width-mono"]
+          },
+          {
+            "id": "m22-render-zero-width-sdf",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 44,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": ["render:zero-width-sdf"]
+          },
+          {
+            "id": "m23-render-zero-height-normal",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 45,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": ["render:zero-height-normal"]
+          },
+          {
+            "id": "m24-render-zero-height-mono",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 45,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": ["render:zero-height-mono"]
+          },
+          {
+            "id": "m25-render-zero-height-sdf",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 45,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": ["render:zero-height-sdf"]
+          },
+          {
+            "id": "m26-render-mono-scan-type-0",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 24,
+              "load_flags": ["FT_LOAD_DEFAULT"],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": ["render:mono-scan-type-0"]
+          },
+          {
+            "id": "m27-render-mono-scan-type-2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 25,
+              "load_flags": ["FT_LOAD_DEFAULT"],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": ["render:mono-scan-type-2"]
           }
         ]
       },
