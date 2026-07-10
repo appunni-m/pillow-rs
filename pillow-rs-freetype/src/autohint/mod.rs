@@ -29,12 +29,10 @@
 
 pub mod blue_strings;
 pub mod cjk;
-pub mod coverage;
 pub mod globals;
 pub mod globals_data;
 pub mod latin;
 pub mod loader;
-pub mod script;
 pub mod types;
 
 pub use globals::FaceGlobals;
@@ -43,7 +41,6 @@ pub use latin::apply_hints;
 pub use latin::{
     metrics_init_blues, metrics_init_blues_greek, metrics_init_blues_impl, metrics_init_widths,
 };
-pub use script::detect_script;
 pub use types::{
     AF_LATIN_MAX_WIDTHS, AFEdge, AFPoint, AFSegment, AfLatinAxisMetrics, AfLatinBlue,
     AfLatinMetrics, AfWidth, AxisHints, Dimension, Direction, GlyphHints,
