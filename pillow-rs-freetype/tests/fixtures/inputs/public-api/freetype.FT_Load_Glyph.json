@@ -670,6 +670,796 @@
             "coverage": [
               "tt/glyf:scaled-composite-no-hinting"
             ]
+          },
+          {
+            "id": "glyf-point-attachment-no-scale",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-component-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 3,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "coverage": [
+              "tt/glyf:point-attachment-byte-args"
+            ]
+          },
+          {
+            "id": "glyf-point-attachment-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-component-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 3,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "tt/glyf:scaled-point-attachment"
+            ]
+          },
+          {
+            "id": "glyf-word-offset-no-scale",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-component-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 4,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "coverage": [
+              "tt/glyf:xy-word-args"
+            ]
+          },
+          {
+            "id": "glyf-uniform-scale-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-component-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 5,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "tt/glyf:uniform-component-scale"
+            ]
+          },
+          {
+            "id": "glyf-xy-scale-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-component-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 6,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "tt/glyf:independent-component-scales"
+            ]
+          },
+          {
+            "id": "glyf-two-by-two-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-component-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 7,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "tt/glyf:two-by-two-component-transform"
+            ]
+          },
+          {
+            "id": "glyf-offset-unrounded-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-component-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 19
+              },
+              "glyph_index": 8,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "tt/glyf:unrounded-component-offset"
+            ]
+          },
+          {
+            "id": "glyf-offset-rounded-default",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-component-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 19
+              },
+              "glyph_index": 9,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "tt/glyf:rounded-component-offset",
+              "tt/glyf:use-my-metrics"
+            ]
+          },
+          {
+            "id": "glyf-composite-instructions-default",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-component-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 10,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "tt/glyf:composite-instructions"
+            ]
+          },
+          {
+            "id": "glyf-depth-boundary-no-scale",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-component-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 18,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "coverage": [
+              "tt/glyf:composite-depth-eight-boundary"
+            ]
+          },
+          {
+            "id": "glyf-mixed-empty-component-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-component-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 23,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "tt/glyf:scaled-empty-child-component"
+            ]
+          },
+          {
+            "id": "glyf-malformed-too-short-no-scale",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:glyph-too-short-unscaled"
+            ]
+          },
+          {
+            "id": "glyf-malformed-too-short-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:glyph-too-short-scaled"
+            ]
+          },
+          {
+            "id": "glyf-malformed-end-points-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 2,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:simple-end-points-overflow"
+            ]
+          },
+          {
+            "id": "glyf-malformed-flags-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 3,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:simple-flags-overflow"
+            ]
+          },
+          {
+            "id": "glyf-malformed-flags-overflow-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 3,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:simple-error-propagation-scaled"
+            ]
+          },
+          {
+            "id": "glyf-malformed-repeat-count-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 4,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:simple-repeat-count-overflow"
+            ]
+          },
+          {
+            "id": "glyf-malformed-repeat-excess",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 5,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:simple-repeat-exceeds-point-count"
+            ]
+          },
+          {
+            "id": "glyf-malformed-x-short-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 6,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:simple-x-short-overflow"
+            ]
+          },
+          {
+            "id": "glyf-malformed-x-long-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 7,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:simple-x-long-overflow"
+            ]
+          },
+          {
+            "id": "glyf-malformed-y-short-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 8,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:simple-y-short-overflow"
+            ]
+          },
+          {
+            "id": "glyf-malformed-y-long-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 9,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:simple-y-long-overflow"
+            ]
+          },
+          {
+            "id": "glyf-malformed-simple-instructions-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 10,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:simple-instructions-overflow"
+            ]
+          },
+          {
+            "id": "glyf-malformed-composite-header-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 11,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:composite-header-overflow"
+            ]
+          },
+          {
+            "id": "glyf-malformed-composite-header-overflow-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 11,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:composite-error-propagation-scaled"
+            ]
+          },
+          {
+            "id": "glyf-malformed-component-scale-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 12,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:composite-uniform-scale-overflow"
+            ]
+          },
+          {
+            "id": "glyf-malformed-component-xy-scale-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 13,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:composite-independent-scale-overflow"
+            ]
+          },
+          {
+            "id": "glyf-malformed-component-two-by-two-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 14,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:composite-two-by-two-overflow"
+            ]
+          },
+          {
+            "id": "glyf-malformed-composite-instruction-length-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 15,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:composite-instruction-length-overflow"
+            ]
+          },
+          {
+            "id": "glyf-malformed-composite-instructions-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 16,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:composite-instructions-overflow"
+            ]
+          },
+          {
+            "id": "glyf-depth-nine-no-scale",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-component-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 19,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:error-composite-depth-nine-unscaled"
+            ]
+          },
+          {
+            "id": "glyf-malformed-invalid-point-attachment",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 17,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:error-invalid-attachment-point"
+            ]
+          },
+          {
+            "id": "glyf-malformed-invalid-component-glyph-reference",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 18,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:error-component-glyph-index-out-of-range"
+            ]
+          },
+          {
+            "id": "glyf-malformed-glyf-data-out-of-range",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 19,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:error-glyf-data-out-of-range"
+            ]
+          },
+          {
+            "id": "glyf-depth-nine-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-component-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 19,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:error-composite-depth-nine-scaled"
+            ]
           }
         ]
       },
