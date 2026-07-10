@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 431 | 83 | 348 | 80 | 10.2 MiB |
+| Active fixtures | 432 | 84 | 348 | 81 | 10.2 MiB |
 | Deprecated autohint corpus | 100 | 100 | 0 | 98 | 23 MiB |
 | Compact active autohint set | 5 | 5 | 0 | 5 | 187 KiB |
 
@@ -121,6 +121,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `2868a722bff5` | 1.6 | 1 | `fonts/glyf/loca-long-truncated.ttf` | long-loca control with only seven bytes, one byte below a complete glyph-0 offset pair |
 | `697619c0847e` | 1.6 | 1 | `fonts/glyf/cvt-empty.ttf` | valid TrueType control with a present zero-length cvt table |
 | `6175105e1748` | 1.6 | 1 | `fonts/glyf/cvt-odd-length.ttf` | valid TrueType control with a one-byte cvt table rejected by Rust parsing and ignored by face construction |
+| `f63abc732922` | 1.8 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | valid CVT with present-empty fpgm/prep plus two simple glyph programs setting SCANCTRL and scan types 0/2 |
 
 ### Active Alias Concentration
 
@@ -164,6 +165,7 @@ listed because they enter different hinting and scaling conditions.
 | `glyf-malformed-matrix.ttf` | gids 1-19 | 20 | one explicitly selected malformed record per simple/composite parser boundary and table/reference error |
 | `loca-short-truncated.ttf`, `loca-long-truncated.ttf` | gid 0 | 20 | one checked truncation failure for each loca record format |
 | `cvt-empty.ttf`, `cvt-odd-length.ttf` | gid 1 | 20 | present-empty and odd-length CVT parser outcomes isolated with no-scale loading |
+| `hinter-control-matrix.ttf` | gid 1, gids 24-25 | 20 | empty font/prep setup and explicit scan type 0/default dropout mappings |
 
 The custom fonts contain additional glyphs for future focused obligations:
 Latin digits, round/straight/overshoot forms, combining marks, simple and
@@ -380,6 +382,11 @@ and selected-glyph obligations still come from explicit inputs.
     `parse_prep` byte-copy wrappers were removed because font construction
     stores those raw tables directly; `tt/hinter/tables.rs` has 100% function,
     line, region, and branch coverage.
+
+27. One 1.8 KiB hinter control font combines present-empty `fpgm`/`prep`, a
+    valid CVT, and two simple program glyphs that set SCANCTRL plus scan types
+    0 and 2. Three explicit loads cover the empty font-program decision and
+    both remaining outline dropout mappings without multiplying sizes or flags.
 
 ## Replacement Queue
 
