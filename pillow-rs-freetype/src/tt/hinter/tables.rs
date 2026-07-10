@@ -38,6 +38,16 @@ pub fn parse_cvt(data: &[u8]) -> Result<Vec<i32>, FontError> {
     Ok(cvt)
 }
 
+/// Return the raw font-program bytecode.
+pub fn parse_fpgm(data: &[u8]) -> Vec<u8> {
+    data.to_vec()
+}
+
+/// Return the raw control-value program bytecode.
+pub fn parse_prep(data: &[u8]) -> Vec<u8> {
+    data.to_vec()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

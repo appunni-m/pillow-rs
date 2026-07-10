@@ -176,6 +176,11 @@ pub(crate) fn read_u16(data: &[u8], offset: usize) -> u16 {
 }
 
 #[inline]
+pub(crate) fn read_i16(data: &[u8], offset: usize) -> i16 {
+    i16::from_be_bytes([data[offset], data[offset + 1]])
+}
+
+#[inline]
 pub(crate) fn read_u32(data: &[u8], offset: usize) -> u32 {
     u32::from_be_bytes([
         data[offset],

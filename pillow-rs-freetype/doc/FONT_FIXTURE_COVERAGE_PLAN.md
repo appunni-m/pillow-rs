@@ -37,8 +37,10 @@ The work is complete only when all of the following are true:
 - Every runnable concrete case has exact parity with pinned C FreeType. Coverage
   must never be gained by weakening comparisons, expected outputs, or error
   checks.
-- Lines that cannot be reached through a supported public operation are
-  removed or refactored. They are not hidden with coverage exclusions.
+- Lines that cannot currently be reached through a supported public operation
+  remain visible and are classified. Code is removed only with semantic proof,
+  independent of coverage, that it is duplicate or invalid; an uncovered line
+  is never by itself evidence for deletion.
 - Normal parity remains comfortably below 200,000 concrete cases and should
   remain close to the smallest set justified by unique behavior.
 
@@ -64,6 +66,26 @@ The work is complete only when all of the following are true:
 10. Every batch must preserve exact Rust/C ABI/WASM parity and report concrete
     case count, pending count, line/function/region/branch/condition coverage, active
     font size, and deprecated dependency count.
+11. Never remove implementation behavior, public helpers, defensive guards, or
+    pinned-FreeType special cases merely to reduce the coverage denominator.
+    Reachable behavior needs an explicit parity input; currently unreachable
+    behavior remains visible until its call path or semantic status is proven.
+
+### Coverage-Deletion Audit
+
+The 2026-07-10 audit restored every public symbol and FreeType special-case
+path previously removed during denominator reduction. The remaining private
+source changes were reviewed independently of coverage:
+
+| Surface | Disposition | Evidence |
+|---|---|---|
+| Autohint diagnostics, script helpers, blue-character lookup, and convenience APIs | restored | these were public Rust surfaces even though the unified executable did not call them |
+| `AF_ADJUST_DOWN2` / `AF_ADJUST_TILDE_BOTTOM2` and second-lowest contour behavior | restored | current database reachability does not prove that pinned behavior is disposable |
+| VM fetch helpers, round-mode conversion, fpgm/prep helpers, and `CallRecord` fields | restored | public helpers and record contracts must not change for coverage |
+| Serif helper and constructed-edge defensive guards | restored | valid fixtures not reaching a guard is not semantic proof that it is unnecessary |
+| `pick_typo_metrics` / `pick_os2_metrics` | retained as `face_metric_values` consolidation | explicit OS/2, hhea, and fallback fixtures prove the centralized FreeType selection order |
+| `_use(GlyphLocation)` | remains removed | it was only an unused-import warning suppressor and had no runtime or public behavior |
+| `parse_format0` fallible wrapper | retained as sanitized private parser | explicit kern fixtures prove FreeType ignores malformed optional subtables instead of returning a face error |
 
 ## Baseline
 
@@ -441,8 +463,9 @@ Status: in progress. Nine explicit variants in the source-backed
 `cjk-coverage.ttf` now own top, second-top, and bottom tilde adjustment plus
 capital blue-edge suppression, single-reference IUP shifting, and mixed
 flat/round blue calibration. A compact micro-serif also owns close-serif
-overlap rejection. `latin.rs` is at 69/69 functions, 2,487/2,767 lines,
-3,571/4,096 regions, and 957/1,231 branches. A shared-start reversal contour
+overlap rejection. After restoring previously coverage-driven deletions,
+`latin.rs` is at 70/73 functions, 2,503/2,828 lines, 3,601/4,207 regions,
+and 971/1,282 branches. A shared-start reversal contour
 covers both longer-segment selection outcomes; the rarer equal-direction
 degenerate merge remains separately owned. The three existing tilde variants
 pack both quadratic measurement directions and a no-stretch threshold without
@@ -466,6 +489,14 @@ Primary modules: `autohint/cjk.rs` and shared autohint loader/types code.
 
 Expected additions: extend `cjk-coverage.ttf` and
 `indic-coverage.ttf`; 15-25 glyph roles; 25-45 explicit variants.
+
+Status: in progress. Four Hani blue-string cmap aliases reuse distinct existing
+CJK outlines as top/bottom fill and flat calibration candidates. They activate
+blue scaling and linked-edge positioning without adding glyphs or cases;
+`cjk.rs` is at 18/19 functions, 830/941 lines, 1,111/1,247 regions, and
+337/426 branches. The remaining round-segment helper is retained and visibly
+uncovered because pinned FreeType snapshots a zero segment limit before the
+shared scanner.
 
 Cover linked-edge position selection, round-segment marking, horizontal and
 vertical stem combinations, enclosed counters, diagonal branches, zero-width
@@ -802,6 +833,8 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Latin mixed flat/round blue calibration | 81 unique hashes | 0 | 6,437 | 6,436 / 6,436 | 1 | 12,907 / 15,878 lines; 18,570 / 22,873 regions; 3,036 / 4,075 branches | two round glyphs plus existing flat geometry add 19 lines and 18 branches; removed non-FreeType median-outlier heuristic exposed by lowercase metric parity |
 | 2026-07-10 | Latin close-serif overlap topology | 81 unique hashes | 0 | 6,438 | 6,437 / 6,437 | 1 | 12,899 / 15,865 lines; 18,559 / 22,857 regions; 3,033 / 4,067 branches | one micro-serif owns overlap rejection; removed five impossible constructed-edge outcomes, reducing each uncovered structural gap by five |
 | 2026-07-10 | Latin tilde measurement topology | 81 unique hashes | 0 | 6,438 | 6,437 / 6,437 | 1 | 12,937 / 15,865 lines; 18,608 / 22,857 regions; 3,067 / 4,067 branches | three existing tilde cases pack both quadratic measurement directions and a no-stretch threshold, adding 38 lines, 49 regions, and 34 branches with no case growth |
+| 2026-07-10 | Hani blue calibration aliases | 81 unique hashes | 0 | 6,438 | 6,437 / 6,437 | 1 | 13,083 / 15,865 lines; 18,814 / 22,857 regions; 3,115 / 4,067 branches | four cmap aliases reuse existing CJK geometry and add 146 lines, 206 regions, 48 branches, and two functions with no glyph or case growth |
+| 2026-07-10 | Coverage-deletion audit and restoration | 81 unique hashes | 0 | 6,438 | 6,437 / 6,437 | 1 | 13,097 / 16,243 lines; 18,846 / 23,196 regions; 3,129 / 4,126 branches | restored public autohint/VM/parser helpers, DOWN2/BOTTOM2 behavior, call-record contract, serif helper, and defensive guards; exact parity remains green with the honest larger denominator |
 
 ## Decision Log
 
@@ -823,26 +856,30 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Model cmap `char_next` per format | Pinned format 6 increments before its terminal check and wraps at `0xFFFFFFFF`; formats 4 and 12 reject their terminal inputs before advancing |
 | 2026-07-10 | Validate a composite tree once before no-hint scaling | The public scaler always calls `load_glyph` first; the scaled helper consumes that validated tree and must not retain public-unreachable duplicate malformed-data branches |
 | 2026-07-10 | Validate whole loca records | A single checked 4-byte or 8-byte slice expresses FreeType's truncated-record failure without byte-by-byte optional indexing or twelve redundant fonts |
-| 2026-07-10 | Keep raw fpgm/prep storage direct | Font construction already copies these byte streams; unused parser wrappers added functions without behavior and were removed instead of fixture-covered artificially |
+| 2026-07-10 | Keep raw fpgm/prep storage direct while preserving helpers | Font construction consumes raw byte streams directly, but the existing public copy helpers remain available and visibly uncovered rather than being deleted for coverage |
 | 2026-07-10 | Keep scan conversion controls in one program font | Empty setup and scan-type variants share tables, geometry, size, and flags; only explicit glyph programs differ, avoiding a font/size/flag product |
 | 2026-07-10 | Hash resolved assets in the C-oracle cache key | JSON paths do not identify mutable fixture contents; path, length, and SHA-256 now prevent stale C output after in-place font mutation |
-| 2026-07-10 | Remove abandoned autohint coverage surfaces | Runtime script selection already uses `FaceGlobals` and `STYLE_TABLE`; an unread diagnostic mask, duplicate detector, and no-caller blue-character table cannot be justified by public fixtures |
-| 2026-07-10 | Store resolved LOOPCALL definition coordinates in call records | A loop call record is created only after resolving an active FDEF; retaining its range/start removes an impossible missing-definition re-lookup and keeps malformed definitions rejected at the actual resolution boundary |
+| 2026-07-10 | Preserve existing autohint diagnostic and script surfaces | Runtime uses `FaceGlobals`, but fixture reachability alone does not authorize deleting public diagnostics, script helpers, or blue-character lookup data |
+| 2026-07-10 | Preserve the existing `CallRecord` contract | LOOPCALL's repeated definition lookup is currently invariant-backed, but changing public record fields merely to remove an uncovered guard is not justified |
 | 2026-07-10 | Extend the CJK fixture into a multiscript topology matrix | Four compact Latin adjustment glyphs reuse the existing source-backed font identity and add 256 lines and 91 branches from four explicit cases |
-| 2026-07-10 | Remove second-bottom Latin adjustment modes | `AF_ADJUST_DOWN2` and `AF_ADJUST_TILDE_BOTTOM2` have no entries in the authoritative Unicode adjustment database, so public font inputs cannot reach their helper and branches |
+| 2026-07-10 | Preserve second-bottom Latin adjustment modes | `AF_ADJUST_DOWN2` and `AF_ADJUST_TILDE_BOTTOM2` have no current database selector, but that makes them visibly unreachable rather than disposable |
 | 2026-07-10 | Use one strong corner with two weak controls for single-reference IUP | Keeping vectors beyond the near threshold and making only one incident direction cardinal gives one touched point without a second edge-aligned reference |
 | 2026-07-10 | Keep straight and curved degenerate segment merges separate | Straight vertical reversals cover longer-segment retention/replacement; pinned `aflatin.c` documents equal-direction unification as a rarer already-merged zig-zag state requiring different geometry |
 | 2026-07-10 | Preserve flat and round blue medians exactly | Pinned `af_latin_metrics_init_blues` takes each median verbatim and only then applies directional overshoot sanity; Rust's extra discrepancy heuristic caused a one-pixel lowercase metric-height error |
 | 2026-07-10 | Keep CJK metrics dispatch inside shared edge hinting | CJK width initialization enters the shared Latin helper before the main apply path dispatches, so the internal CJK delegate is executed behavior and must not be removed as duplicate |
-| 2026-07-10 | Remove impossible constructed-edge guards | Interior serif ranges exclude both endpoint indices by construction, and every edge is created from a valid segment chain; fixtures cannot legitimately produce those guard bodies |
+| 2026-07-10 | Preserve constructed-edge defensive guards | Current construction excludes endpoint and invalid-chain states, but fixtures not reaching those guards is insufficient reason to remove future-safety checks |
 | 2026-07-10 | Pack tilde measurement outcomes into existing contours | Top, second-top, and bottom adjustment cases can own both quadratic measurement directions and the no-stretch threshold without another glyph or explicit input |
+| 2026-07-10 | Do not delete code to improve coverage | Current fixture parity proves only selected inputs. Uncovered public helpers, defensive guards, and pinned-FreeType special cases remain visible until independent semantic evidence proves removal is correct |
+| 2026-07-10 | Restore second-bottom adjustment modes | Absence from the current adjustment database proves no present public selector, not that the pinned FreeType behavior is disposable; keep `DOWN2/BOTTOM2` for correctness and future database changes |
+| 2026-07-10 | Keep the CJK round-segment helper visible | Pinned FreeType's zero segment-limit snapshot prevents the current public path from calling it; preserving the helper exposes the gap instead of manufacturing coverage or deleting behavior |
 
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
 
 1. Complete R0 and classify every uncovered function as public, font-reachable,
-   missing delegation, or removable.
+   missing delegation, duplicate with independent proof, or currently
+   unreachable but preserved.
 2. Continue R3 with topology roles selected from the remaining uncovered Latin
    helpers; retain a variant only when condition coverage proves a gain.
 3. Resolve the one visible embedded-strike pending case in R7 when its focused bitmap
