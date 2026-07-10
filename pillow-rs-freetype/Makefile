@@ -215,13 +215,13 @@ api-abi-check: api-abi-audit
 .PHONY: font-fixture-hinter
 font-fixture-hinter:
 	@command -v ttx >/dev/null || { echo "fonttools ttx is required" >&2; exit 1; }
-	ttx -q -o tests/fixtures/fonts/glyf/hinter-control-matrix.ttf \
+	ttx -q --no-recalc-timestamp -o tests/fixtures/fonts/glyf/hinter-control-matrix.ttf \
 		tests/fixtures/font-sources/hinter-control-matrix.ttx
 
 .PHONY: font-fixture-cjk
 font-fixture-cjk:
 	@command -v ttx >/dev/null || { echo "fonttools ttx is required" >&2; exit 1; }
-	ttx -q -o tests/fixtures/fonts/autohint/cjk-coverage.ttf \
+	ttx -q --no-recalc-timestamp -o tests/fixtures/fonts/autohint/cjk-coverage.ttf \
 		tests/fixtures/font-sources/cjk-coverage.ttx
 
 .PHONY: fmt
