@@ -21,23 +21,15 @@ pub fn get_glyph_location(
     let idx = glyph_index as usize;
     let (this, next) = if index_to_loc_format == 0 {
         let off = idx * 2;
-        let this = u16::from_be_bytes([*loca.get(off)?, *loca.get(off + 1)?]) as u32 * 2;
-        let next = u16::from_be_bytes([*loca.get(off + 2)?, *loca.get(off + 3)?]) as u32 * 2;
+        let record = loca.get(off..off + 4)?;
+        let this = u16::from_be_bytes([record[0], record[1]]) as u32 * 2;
+        let next = u16::from_be_bytes([record[2], record[3]]) as u32 * 2;
         (this, next)
     } else {
         let off = idx * 4;
-        let this = u32::from_be_bytes([
-            *loca.get(off)?,
-            *loca.get(off + 1)?,
-            *loca.get(off + 2)?,
-            *loca.get(off + 3)?,
-        ]);
-        let next = u32::from_be_bytes([
-            *loca.get(off + 4)?,
-            *loca.get(off + 5)?,
-            *loca.get(off + 6)?,
-            *loca.get(off + 7)?,
-        ]);
+        let record = loca.get(off..off + 8)?;
+        let this = u32::from_be_bytes([record[0], record[1], record[2], record[3]]);
+        let next = u32::from_be_bytes([record[4], record[5], record[6], record[7]]);
         (this, next)
     };
     Some(GlyphLocation {
