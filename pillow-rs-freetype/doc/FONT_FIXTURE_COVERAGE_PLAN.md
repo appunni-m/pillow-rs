@@ -437,11 +437,12 @@ Primary module: `autohint/latin.rs`.
 Expected additions: extend existing compact autohint fonts; 30-45 named glyph
 topologies; 45-75 explicit variants.
 
-Status: in progress. Five explicit variants in the source-backed
+Status: in progress. Six explicit variants in the source-backed
 `cjk-coverage.ttf` now own top, second-top, and bottom tilde adjustment plus
 capital blue-edge suppression and single-reference IUP shifting. `latin.rs` is
-at 69/69 functions, 2,407/2,793 lines, 3,457/4,129 regions, and 899/1,241
-branches.
+at 69/69 functions, 2,438/2,793 lines, 3,502/4,129 regions, and 908/1,241
+branches. A shared-start reversal contour covers both longer-segment selection
+outcomes; the rarer equal-direction degenerate merge remains separately owned.
 
 Required topology roles include serif/non-serif stems, linked/unlinked edges,
 top and bottom tildes, accents, overshoots, holes, short/long segments,
@@ -793,6 +794,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | TrueType malformed program errors | 81 unique hashes | 0 | 6,429 | 6,428 / 6,428 | 1 | 12,595 / 15,973 lines; 18,095 / 23,030 regions; 2,918 / 4,120 branches | six glyphs prove exact divide-zero, truncated-push, definition, and undefined-opcode errors across Rust/C/WASM |
 | 2026-07-10 | Latin adjustment topology matrix | 81 unique hashes | 0 | 6,433 | 6,432 / 6,432 | 1 | 12,851 / 15,907 lines; 18,483 / 22,909 regions; 3,009 / 4,079 branches | four glyphs add 12 functions and broad tilde/blue coverage; eight no-caller or database-impossible functions removed |
 | 2026-07-10 | Latin single-reference IUP topology | 81 unique hashes | 0 | 6,434 | 6,433 / 6,433 | 1 | 12,857 / 15,891 lines; 18,494 / 22,890 regions; 3,009 / 4,077 branches | one quadratic contour reaches the final uncovered Latin function; seven no-behavior closures/wrappers removed |
+| 2026-07-10 | Latin shared-start segment reversals | 81 unique hashes | 0 | 6,435 | 6,434 / 6,434 | 1 | 12,888 / 15,891 lines; 18,539 / 22,890 regions; 3,018 / 4,077 branches | one zero-width reversal contour adds 31 lines, 45 regions, and 9 branches across segment retention/replacement |
 
 ## Decision Log
 
@@ -822,6 +824,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Extend the CJK fixture into a multiscript topology matrix | Four compact Latin adjustment glyphs reuse the existing source-backed font identity and add 256 lines and 91 branches from four explicit cases |
 | 2026-07-10 | Remove second-bottom Latin adjustment modes | `AF_ADJUST_DOWN2` and `AF_ADJUST_TILDE_BOTTOM2` have no entries in the authoritative Unicode adjustment database, so public font inputs cannot reach their helper and branches |
 | 2026-07-10 | Use one strong corner with two weak controls for single-reference IUP | Keeping vectors beyond the near threshold and making only one incident direction cardinal gives one touched point without a second edge-aligned reference |
+| 2026-07-10 | Keep straight and curved degenerate segment merges separate | Straight vertical reversals cover longer-segment retention/replacement; pinned `aflatin.c` documents equal-direction unification as a rarer already-merged zig-zag state requiring different geometry |
 
 ## Immediate Next Actions
 
