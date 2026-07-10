@@ -707,6 +707,42 @@
               "render_mode": "FT_RENDER_MODE_MONO"
             },
             "coverage": ["render:mono-scan-type-2"]
+          },
+          {
+            "id": "m28-render-mono-scan-type-4",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 46,
+              "load_flags": ["FT_LOAD_DEFAULT"],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": ["render:mono-scan-type-4-smart-stubs"]
+          },
+          {
+            "id": "m29-render-mono-scan-type-5",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 47,
+              "load_flags": ["FT_LOAD_DEFAULT"],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": ["render:mono-scan-type-5-smart-no-stubs"]
           }
         ]
       },

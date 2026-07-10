@@ -49,6 +49,8 @@
     <GlyphID id="43" name="renderMixedWinding"/>
     <GlyphID id="44" name="renderZeroWidth"/>
     <GlyphID id="45" name="renderZeroHeight"/>
+    <GlyphID id="46" name="scanType4"/>
+    <GlyphID id="47" name="scanType5"/>
   </GlyphOrder>
 
   <head>
@@ -95,7 +97,7 @@
   <maxp>
     <!-- Most of this table will be recalculated by the compiler -->
     <tableVersion value="0x10000"/>
-    <numGlyphs value="46"/>
+    <numGlyphs value="48"/>
     <maxPoints value="4"/>
     <maxContours value="1"/>
     <maxCompositePoints value="6"/>
@@ -210,6 +212,8 @@
     <mtx name="renderZeroWidth" width="700" lsb="320"/>
     <mtx name="renderZeroHeight" width="700" lsb="0"/>
     <mtx name="transform2x2" width="700" lsb="0"/>
+    <mtx name="scanType4" width="700" lsb="0"/>
+    <mtx name="scanType5" width="700" lsb="0"/>
     <mtx name="withInstructions" width="700" lsb="0"/>
   </hmtx>
 
@@ -261,6 +265,8 @@
       <map code="0xe02a" name="renderMixedWinding"/>
       <map code="0xe02b" name="renderZeroWidth"/>
       <map code="0xe02c" name="renderZeroHeight"/>
+      <map code="0xe02d" name="scanType4"/>
+      <map code="0xe02e" name="scanType5"/>
     </cmap_format_4>
     <cmap_format_4 platformID="3" platEncID="1" language="0">
       <map code="0xe000" name="base"/><!-- ???? -->
@@ -308,6 +314,8 @@
       <map code="0xe02a" name="renderMixedWinding"/>
       <map code="0xe02b" name="renderZeroWidth"/>
       <map code="0xe02c" name="renderZeroHeight"/>
+      <map code="0xe02d" name="scanType4"/>
+      <map code="0xe02e" name="scanType5"/>
     </cmap_format_4>
   </cmap>
 
@@ -469,6 +477,44 @@
           SCANCTRL[ ]	/* ScanConversionControl */
           PUSHB[ ]	/* 1 value pushed */
           2
+          SCANTYPE[ ]	/* ScanType */
+        </assembly>
+      </instructions>
+    </TTGlyph>
+
+    <TTGlyph name="scanType4" xMin="250" yMin="0" xMax="270" yMax="700">
+      <contour>
+        <pt x="250" y="0" on="1"/>
+        <pt x="270" y="0" on="1"/>
+        <pt x="270" y="700" on="1"/>
+        <pt x="250" y="700" on="1"/>
+      </contour>
+      <instructions>
+        <assembly>
+          PUSHB[ ]	/* 1 value pushed */
+          255
+          SCANCTRL[ ]	/* ScanConversionControl */
+          PUSHB[ ]	/* 1 value pushed */
+          4
+          SCANTYPE[ ]	/* ScanType */
+        </assembly>
+      </instructions>
+    </TTGlyph>
+
+    <TTGlyph name="scanType5" xMin="250" yMin="0" xMax="270" yMax="700">
+      <contour>
+        <pt x="250" y="0" on="1"/>
+        <pt x="270" y="0" on="1"/>
+        <pt x="270" y="700" on="1"/>
+        <pt x="250" y="700" on="1"/>
+      </contour>
+      <instructions>
+        <assembly>
+          PUSHB[ ]	/* 1 value pushed */
+          255
+          SCANCTRL[ ]	/* ScanConversionControl */
+          PUSHB[ ]	/* 1 value pushed */
+          5
           SCANTYPE[ ]	/* ScanType */
         </assembly>
       </instructions>
@@ -894,6 +940,8 @@
       <psName name="mixedEmptyComponent"/>
       <psName name="scanType0"/>
       <psName name="scanType2"/>
+      <psName name="scanType4"/>
+      <psName name="scanType5"/>
       <psName name="renderConicChain"/>
       <psName name="renderBowtieThin"/>
       <psName name="renderMixedWinding"/>
