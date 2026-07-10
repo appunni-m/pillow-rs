@@ -266,6 +266,269 @@ axes.
 `doc/unified_fixture_migration_checklist.md` still describe the retired
 variability-axis migration and must be reconciled in Phase 1.
 
+## Evaluated Remaining Work
+
+Evaluation checkpoint: 2026-07-10, commit `2366de79`.
+
+The current unified public API suite has 4,110 logical cases, 6,414 concrete
+explicit cases, 6,413 runnable exact-parity cases, zero implicit cases, and one
+pending embedded-strike case. Core Rust structural coverage is:
+
+| Measure | Covered | Total | Remaining |
+|---|---:|---:|---:|
+| Functions | 732 | 989 | 257 |
+| Lines | 12,367 | 16,321 | 3,954 |
+| Regions | 17,729 | 23,307 | 5,578 |
+| Branches/conditions | 2,858 | 4,164 | 1,306 |
+
+The remaining regions and branches divide exactly into five ownership groups:
+
+| Group | Modules | Missing functions | Missing lines | Missing regions | Missing branches | Primary action |
+|---|---|---:|---:|---:|---:|---|
+| Autohint | `autohint/latin`, `cjk`, `globals*`, `script`, `coverage`, `types`, `loader` | 49 | 1,372 | 1,913 | 674 | reachability audit, then topology/script fonts |
+| Rendering | `render`, `grays`, `outline` | 64 | 1,021 | 1,442 | 227 | reachability audit, then geometry and render-mode matrix |
+| Face/API/scaler | `font`, `scaler`, `api`, `ffi/handles`, `ffi/convert`, `ffi/types` | 127 | 1,151 | 1,336 | 188 | public-operation routing, wrapper cleanup, focused state inputs |
+| TrueType interpreter | `tt/hinter/exec`, `gs`, `zone`, `mod`, `iup` | 11 | 381 | 853 | 203 | explicit bytecode-program glyph matrix |
+| Math/casts | `fixed`, `casts` | 6 | 29 | 34 | 14 | scalar boundary inputs or dead-helper removal |
+
+This concentration changes the execution strategy. More fonts alone cannot
+close the report. Entire modules such as `autohint/script.rs` and
+`autohint/coverage.rs`, plus many convenience methods in `font.rs`,
+`api.rs`, and `render.rs`, have no covered functions. Each must first be
+classified as one of:
+
+1. Required behavior already exposed by a manifest public operation.
+2. Required behavior whose existing public operation does not yet delegate to
+   the core implementation.
+3. Private behavior reachable only after a missing font/table/glyph property is
+   supplied.
+4. Duplicate, diagnostic-only, test-only, or obsolete code that must be removed
+   or feature-gated rather than artificially called.
+
+No fixture is accepted for category 4. No new fixture test, JSON generator,
+runtime discovery, glyph-index scan, or Cartesian axis is allowed.
+
+### Remaining Case And Font Budget
+
+The completion budget is deliberately conservative:
+
+| Resource | Current | Maximum addition | Completion ceiling |
+|---|---:|---:|---:|
+| Concrete explicit cases | 6,414 | 500 | 6,914 |
+| New semantic font files | 0 | 6 | 6 |
+| New glyph programs/topologies | 0 | 160 | 160 |
+| Implicit cases | 0 | 0 | 0 |
+| Pending cases | 1 | 0 | 0 |
+
+The 500-case allowance is a ceiling, not a target. A batch must justify every
+variant by a named uncovered behavior. Existing focused fonts should be
+extended before creating a new content identity.
+
+At completion, consolidate the current 81 active unique font contents toward no
+more than 30 inspectable semantic containers. The target shape is:
+
+- One core TrueType topology/metadata matrix.
+- One native TrueType bytecode program matrix.
+- Up to three compact autohint script/topology fonts.
+- One render topology font plus existing CFF/Type 1 controls.
+- One fixed-strike bitmap font.
+- Existing variable, color, collection, and Type 1/CFF controls.
+- A small number of malformed collections or standalone physical-EOF controls.
+
+Malformed fixtures may be bundled into TTC collections only when collection
+wrapping does not change the behavior being tested. Physical-EOF and
+top-level-directory corruptions remain standalone.
+
+### Ordered Remaining Batches
+
+#### R-1: Oracle Cache Trust Gate
+
+Expected additions: zero fonts, zero cases.
+
+The runtime face cache hashes font bytes, but the current C-oracle cache key
+hashes canonical case JSON, oracle binaries, and argv paths without hashing the
+resolved asset contents. Replacing a font at the same path can therefore reuse
+stale C output.
+
+1. Add every resolved file asset's byte length and SHA-256 identity to the
+   oracle cache key in deterministic case/asset order.
+2. Include referenced non-font binary assets used by an oracle operation, not
+   only the primary font role.
+3. Add a narrow cache-key regression check using the maintained unified fixture
+   test infrastructure; do not create a separate fixture suite or JSON builder.
+4. Force one oracle refresh after the fix and confirm all 6,413 runnable cases
+   still pass.
+
+Exit gate: changing any fixture byte at an unchanged path changes the C-oracle
+cache key. No further font mutation is accepted before this gate passes.
+
+#### R0: Public Reachability Audit
+
+Expected additions: zero fonts, zero cases.
+
+1. For every uncovered function, identify its public manifest operation and
+   current call path.
+2. Remove duplicate or obsolete internal wrappers and diagnostic coverage
+   modules that are not part of runtime behavior.
+3. Feature-gate intentionally test-only helpers.
+4. Record functions that require actual public delegation separately from
+   functions requiring font data.
+
+Exit gate: every one of the 257 uncovered functions is classified; no fixture
+work remains assigned to unreachable code.
+
+#### R1: Native TrueType Bytecode Matrix
+
+Primary modules: `tt/hinter/exec.rs`, `gs.rs`, `zone.rs`, `iup.rs`,
+`mod.rs`.
+
+Expected additions: extend `hinter-control-matrix.ttf`; at most two malformed
+program derivatives; 35-45 named programs and 70-100 explicit variants.
+
+1. Add one named glyph program per opcode family, not per opcode when one
+   program can exercise the family safely.
+2. Cover stack underflow/overflow, PUSH byte/word boundaries, FDEF/IDEF/CALL,
+   storage, CVT, vectors, zones, reference points, rounding modes, DELTA,
+   interpolation, scan controls, and instruction-control state.
+3. Use separate glyphs for successful state transitions and public error
+   outcomes. Do not combine independent failures in one program.
+4. Select only sizes that change a ppem predicate, DELTA band, or rounding
+   result.
+
+Exit gate: interpreter modules reach 100% functions and lines, then 100%
+regions and branches after unreachable guards are removed.
+
+#### R2: Autohint Reachability And Script Dispatch
+
+Primary modules: `autohint/script.rs`, `coverage.rs`,
+`globals_data.rs`, `globals.rs`, `types.rs`.
+
+Expected additions: zero to one font; 10-20 explicit variants.
+
+1. Determine whether the wholly uncovered script/coverage helpers duplicate
+   the active style-class dispatch.
+2. Remove or integrate them through existing public autohint operations.
+3. Use the existing Latin/Greek/Cyrillic, CJK, and Indic fonts to prove script
+   assignment and standard/blue character selection.
+
+Exit gate: script dispatch has one authoritative runtime path and no uncovered
+duplicate tables or diagnostic-only counters.
+
+#### R3: Latin Autohint Topology Matrix
+
+Primary module: `autohint/latin.rs`.
+
+Expected additions: extend existing compact autohint fonts; 30-45 named glyph
+topologies; 45-75 explicit variants.
+
+Required topology roles include serif/non-serif stems, linked/unlinked edges,
+top and bottom tildes, accents, overshoots, holes, short/long segments,
+degenerate contours, touching contours, multiple blue-zone candidates, and
+positive/negative bearings.
+
+Sizes are added only for small-size snapping, normal-size alignment, or a
+specific branch threshold. Latin, Greek, and Cyrillic use distinct geometry;
+Unicode aliases do not count.
+
+Exit gate: `latin.rs` reaches complete structural coverage with every
+special-case helper owned by a named glyph.
+
+#### R4: CJK And Remaining Script Geometry
+
+Primary modules: `autohint/cjk.rs` and shared autohint loader/types code.
+
+Expected additions: extend `cjk-coverage.ttf` and
+`indic-coverage.ttf`; 15-25 glyph roles; 25-45 explicit variants.
+
+Cover linked-edge position selection, round-segment marking, horizontal and
+vertical stem combinations, enclosed counters, diagonal branches, zero-width
+marks, and multi-contour ordering. Add a new script font only when the
+algorithm selects a genuinely distinct writing-system class.
+
+Exit gate: CJK and shared loader/type branches reach 100% without script-name
+aliases standing in for geometry.
+
+#### R5: Render And Raster Geometry Matrix
+
+Primary modules: `render.rs`, `grays.rs`, `outline.rs`.
+
+Expected additions: one scalable render-topology font; reuse existing
+TrueType/CFF/Type 1/bitmap controls; 35-45 glyph roles; 60-100 explicit
+variants.
+
+Required roles include line/conic/cubic contours, upward/downward segments,
+off-curve starts, consecutive controls, intersections, winding reversal,
+degenerate contours, clipping, empty outlines, dropout modes, mono collapse,
+overshoot, LCD/LCD_V filters, and SDF success/error behavior.
+
+Before adding geometry, remove alternate render implementations and convenience
+entry points that no public operation can call.
+
+Exit gate: every supported render mode has exact bytes, placement, pitch, and
+metrics parity; unsupported modes have exact public errors.
+
+#### R6: Face, Scaler, API, And Thin-Core FFI
+
+Primary modules: `font.rs`, `scaler.rs`, `api.rs`,
+`ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`.
+
+Expected additions: reuse existing fonts; 40-70 explicit variants.
+
+1. Map every uncovered public convenience method to an existing manifest
+   operation or remove it if it duplicates the canonical path.
+2. Cover size lifecycle, char-size versus pixel-size state, load-mode
+   delegation, vertical layout, transforms, kerning, glyph names, SFNT table
+   records, subglyph info, synthetic weight/slant, and null/output-pointer
+   behavior.
+3. Keep raw pointer and ABI record work in binding crates; core coverage must
+   come from public behavior, not ABI-specific algorithms.
+
+Exit gate: all retained public core methods are reached by fixture parity and
+all wrappers remain thin.
+
+#### R7: Embedded Strike Completion
+
+Primary modules: face sizing, fixed-size selection, bitmap glyph loading, and
+render dispatch.
+
+Expected additions: one fixed-strike font; 8-20 explicit variants.
+
+Implement the required bitmap table support in pure Rust, then replace the
+single pending `first_available_size` expression with explicit successful and
+unavailable-strike inputs. Do not substitute a scalable font.
+
+Exit gate: 0 pending cases and exact Rust/C/WASM strike parity.
+
+#### R8: Scalar, Cast, And Final Error Boundaries
+
+Primary modules: `fixed.rs`, `casts.rs`, plus residual small branches.
+
+Expected additions: no fonts; 15-30 explicit variants.
+
+Use existing fixed-math public API inputs for signed extremes, zero divisors,
+rounding boundaries, normalization axes, and conversion limits. Remove private
+conversion helpers with no production caller.
+
+Exit gate: every remaining small module reaches complete structural coverage.
+
+#### R9: Final Sweep And Corpus Consolidation
+
+Expected additions: 0-40 variants; no new semantic fonts.
+
+1. Run line and nightly condition coverage and inspect every remaining region.
+2. Resolve each gap with an explicit public input, implementation fix, or code
+   removal.
+3. Merge redundant valid font roles into the core matrices.
+4. Bundle compatible malformed faces while preserving exact C behavior.
+5. Move superseded active fonts into the deprecated area; do not delete them
+   until the separately approved cleanup.
+6. Re-run the full parity, ABI, FFI, formatting, lint, repo-map, and coverage
+   gates after each consolidation.
+
+Exit gate: 100% functions, lines, regions, and branches; zero pending and
+implicit cases; no more than 6,914 concrete cases; active font corpus reduced
+toward 30 unique semantic contents.
+
 ## Execution Phases
 
 ### Phase 0: Preserve The Explicit Baseline
@@ -274,7 +537,7 @@ Status: complete.
 
 - Replaced implicit runtime Cartesian expansion with explicit grouped variants.
 - Removed runtime folder discovery and all-glyph enumeration from public inputs.
-- Established content-hashed font cache identity.
+- Established content-hashed runtime face-cache identity.
 - Reduced the authoritative run to 6,314 concrete cases.
 - Moved 100 old fonts into `tests/fixtures/deprecated/fonts_autohint/`.
 - Added a deprecation policy and updated all live paths and symlinks.
@@ -355,7 +618,7 @@ Exit gate: zero public API JSON references and zero active symlinks into
 
 ### Phase 4: Expand Focused Fonts From Uncovered Code
 
-Status: pending.
+Status: in progress.
 
 Use the Phase 2 map in module-sized batches. For each batch:
 
@@ -392,7 +655,7 @@ records independent decision effect.
 
 Status: pending.
 
-1. Convert each of the 12 pending cases into a runnable explicit input where the
+1. Convert the remaining pending case into a runnable explicit input where the
    public operation is implemented.
 2. Re-run coverage and inspect every remaining uncovered function, line, region,
    branch, and atomic condition manually.
@@ -527,13 +790,12 @@ than percentage because source line totals change as implementation is fixed.
 
 Work must resume here unless a newer user request changes priority:
 
-1. Move to the next highest-yield uncovered module after `tt/cmap.rs` and
-   `tt/glyf.rs`, both of which now have complete structural coverage.
-2. Classify its uncovered regions and condition outcomes by required font,
-   glyph topology, parameter, or error-path property.
-3. Extend focused fonts only for missing properties proven by coverage, then
-   add complete explicit variants to the existing public manifest case.
-4. Resolve the one visible embedded-strike pending case when its focused bitmap
+1. Complete R-1 so every C-oracle cache key includes resolved fixture bytes.
+2. Complete R0 and classify every uncovered function as public, font-reachable,
+   missing delegation, or removable.
+3. Execute R1 by extending the existing hinter control font with explicit
+   opcode-family glyph programs.
+4. Resolve the one visible embedded-strike pending case in R7 when its focused bitmap
    font and owning core table support are implemented.
 5. Keep the deprecated corpus isolated until final cleanup is separately
    reviewed and approved.
