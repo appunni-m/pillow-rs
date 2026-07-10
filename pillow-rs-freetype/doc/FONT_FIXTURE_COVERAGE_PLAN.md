@@ -371,10 +371,12 @@ the next run hit the same key and both runs passed 6,413 / 6,413.
 
 Expected additions: zero fonts, zero cases.
 
-Status: in progress. The first autohint audit removed 15 uncovered functions:
-the abandoned diagnostic bitmask, a duplicate script detector, and an unused
-blue-character lookup. The retained runtime now has one script-selection path
-through `FaceGlobals`, `STYLE_TABLE`, and `globals::detect_script`.
+Status: in progress. Autohint audits have removed 23 uncovered functions: the
+abandoned diagnostic bitmask, duplicate script and blue-zone entry points,
+unused direction/contour helpers, and the second-bottom adjustment path. The
+latter had no entry in `ADJUSTMENT_DATABASE`, so no public Unicode input could
+select it. The retained runtime now has one script-selection path through
+`FaceGlobals`, `STYLE_TABLE`, and `globals::detect_script`.
 
 1. For every uncovered function, identify its public manifest operation and
    current call path.
@@ -433,6 +435,12 @@ Primary module: `autohint/latin.rs`.
 
 Expected additions: extend existing compact autohint fonts; 30-45 named glyph
 topologies; 45-75 explicit variants.
+
+Status: in progress. Four explicit variants in the source-backed
+`cjk-coverage.ttf` now own top, second-top, and bottom tilde adjustment plus
+capital blue-edge suppression. They add 12 covered functions, 256 lines, 388
+regions, and 91 branches. `latin.rs` is at 68/76 functions, 2,401/2,809 lines,
+3,446/4,148 regions, and 899/1,243 branches.
 
 Required topology roles include serif/non-serif stems, linked/unlinked edges,
 top and bottom tildes, accents, overshoots, holes, short/long segments,
@@ -782,6 +790,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | TrueType point geometry programs | 81 unique hashes | 0 | 6,422 | 6,421 / 6,421 | 1 | 12,575 / 15,973 lines; 18,079 / 23,030 regions; 2,912 / 4,120 branches | three glyphs explicitly own coordinate/vector, movement/interpolation, and point/CVT DELTA opcode families |
 | 2026-07-10 | TrueType function and conditional flow | 81 unique hashes | 0 | 6,423 | 6,422 / 6,422 | 1 | 12,578 / 15,973 lines; 18,083 / 23,030 regions; 2,913 / 4,120 branches | one glyph explicitly owns FDEF/CALL/LOOPCALL and both conditional-jump outcomes; no further valid-flow variants justified |
 | 2026-07-10 | TrueType malformed program errors | 81 unique hashes | 0 | 6,429 | 6,428 / 6,428 | 1 | 12,595 / 15,973 lines; 18,095 / 23,030 regions; 2,918 / 4,120 branches | six glyphs prove exact divide-zero, truncated-push, definition, and undefined-opcode errors across Rust/C/WASM |
+| 2026-07-10 | Latin adjustment topology matrix | 81 unique hashes | 0 | 6,433 | 6,432 / 6,432 | 1 | 12,851 / 15,907 lines; 18,483 / 22,909 regions; 3,009 / 4,079 branches | four glyphs add 12 functions and broad tilde/blue coverage; eight no-caller or database-impossible functions removed |
 
 ## Decision Log
 
@@ -808,6 +817,8 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Hash resolved assets in the C-oracle cache key | JSON paths do not identify mutable fixture contents; path, length, and SHA-256 now prevent stale C output after in-place font mutation |
 | 2026-07-10 | Remove abandoned autohint coverage surfaces | Runtime script selection already uses `FaceGlobals` and `STYLE_TABLE`; an unread diagnostic mask, duplicate detector, and no-caller blue-character table cannot be justified by public fixtures |
 | 2026-07-10 | Store resolved LOOPCALL definition coordinates in call records | A loop call record is created only after resolving an active FDEF; retaining its range/start removes an impossible missing-definition re-lookup and keeps malformed definitions rejected at the actual resolution boundary |
+| 2026-07-10 | Extend the CJK fixture into a multiscript topology matrix | Four compact Latin adjustment glyphs reuse the existing source-backed font identity and add 256 lines and 91 branches from four explicit cases |
+| 2026-07-10 | Remove second-bottom Latin adjustment modes | `AF_ADJUST_DOWN2` and `AF_ADJUST_TILDE_BOTTOM2` have no entries in the authoritative Unicode adjustment database, so public font inputs cannot reach their helper and branches |
 
 ## Immediate Next Actions
 
@@ -815,8 +826,8 @@ Work must resume here unless a newer user request changes priority:
 
 1. Complete R0 and classify every uncovered function as public, font-reachable,
    missing delegation, or removable.
-2. Execute R1 by extending the existing hinter control font with explicit
-   opcode-family glyph programs.
+2. Continue R3 with topology roles selected from the remaining uncovered Latin
+   helpers; retain a variant only when condition coverage proves a gain.
 3. Resolve the one visible embedded-strike pending case in R7 when its focused bitmap
    font and owning core table support are implemented.
 4. Keep the deprecated corpus isolated until final cleanup is separately
