@@ -8,6 +8,9 @@ PYCACHE_DIR := target/pycache
 BENCH_SAMPLES ?= 10
 BENCH_PROFILE ?= default
 PARITY_ARGS ?= -- --nocapture
+COVERAGE_OUTPUT ?= target/coverage/unified-summary.json
+CONDITION_COVERAGE_OUTPUT ?= target/coverage/unified-condition-summary.json
+CORE_COVERAGE_IGNORE_REGEX := /(ffi-c|ffi-wasm)/src/
 
 .DEFAULT_GOAL := help
 
@@ -23,11 +26,12 @@ help:
 	@printf "  make doc              Build crate documentation\n"
 	@printf "  make doc-test         Run rustdoc examples\n"
 	@printf "\nTest:\n"
-	@printf "  make test             Run full unified public API parity (~20 min, 3.0M cases)\n"
+	@printf "  make test             Run full explicit unified public API parity\n"
 	@printf "  make test-parity      Alias for make test\n"
 	@printf "  make test-unified-fixtures Run full parity test (same as make test)\n"
 	@printf "  make test-unified-fixtures-release Full parity test with Cargo --release\n"
-	@printf "  make test-unified-coverage Alias for the unified parity test\n"
+	@printf "  make test-unified-coverage Run parity and write core Rust llvm-cov JSON\n"
+	@printf "  make test-unified-condition-coverage Run parity with nightly branch/condition coverage\n"
 	@printf "  make test-api-abi     Run unified API/ABI fixture and coverage gates\n"
 	@printf "  make test-ffi         Run the no-runtime-FFI guard for core (<1s)\n"
 	@printf "  make test-ffi-compat  Run API/ABI coverage and thin-wrapper checks\n"
@@ -94,8 +98,7 @@ unified-oracle: oracle-fetch
 public-constants: oracle-fetch
 	$(PYTHON) scripts/generate_public_constants.py --rust-src src/ffi/generated_constants.rs --test-lookup tests/support/generated_constant_lookup.rs
 
-# ── Full Parity Test (~20 min, 3.0M cases) ──────────────────────────
-# Warm oracle cache (first run only): ~15 min. Subsequent runs: ~5 min.
+# ── Full Explicit Parity Test ────────────────────────────────────────
 #
 .PHONY: test-unified-fixtures
 test-unified-fixtures: unified-oracle api-abi-check
@@ -109,7 +112,19 @@ test-unified-fixtures-release: unified-oracle api-abi-check
 	$(CARGO) test --release --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
 
 .PHONY: test-unified-coverage
-test-unified-coverage: test-unified-fixtures
+test-unified-coverage: unified-oracle api-abi-check
+	mkdir -p $(dir $(COVERAGE_OUTPUT))
+	$(CARGO) llvm-cov --test unified_fixture_parity --locked --json \
+		--ignore-filename-regex '$(CORE_COVERAGE_IGNORE_REGEX)' \
+		--output-path $(COVERAGE_OUTPUT) -- unified_fixture_parity --nocapture
+
+.PHONY: test-unified-condition-coverage
+test-unified-condition-coverage: unified-oracle api-abi-check
+	mkdir -p $(dir $(CONDITION_COVERAGE_OUTPUT))
+	RUSTFLAGS="-Zcoverage-options=condition" $(CARGO) +nightly llvm-cov \
+		--test unified_fixture_parity --locked --json \
+		--ignore-filename-regex '$(CORE_COVERAGE_IGNORE_REGEX)' \
+		--output-path $(CONDITION_COVERAGE_OUTPUT) -- unified_fixture_parity --nocapture
 
 .PHONY: test-api-abi
 test-api-abi: test-unified-fixtures test-ffi
@@ -147,8 +162,7 @@ test-ffi-compat: api-abi-check
 # Env vars (all optional):
 #   FONTDONE_UNIFIED_OPERATION_FILTER  – substring match on operation name
 #   FONTDONE_UNIFIED_CASE_FILTER       – substring match on case_id/subject/case
-#   FONTDONE_UNIFIED_CASE_LIMIT        – max number of expanded cases
-#   FONTDONE_UNIFIED_VARIABILITY_LIMIT – max values per variation axis
+#   FONTDONE_UNIFIED_CASE_LIMIT        – max number of selected concrete cases
 #   FONTDONE_UNIFIED_ORACLE_REFRESH    – force skip cache, re-run C oracle
 #   FONTDONE_UNIFIED_SELECTION_ONLY    – print selection, don't execute
 #   FONTDONE_UNIFIED_PROFILE           – print timing profiles

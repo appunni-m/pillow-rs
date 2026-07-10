@@ -52,7 +52,7 @@
       description: A variation font opened with named-instance bits in face_index exposes C-matching face_index, style_flags, and variation-related face_flags.
       coverage:
         font_variability:
-          folder: input/fonts_autohint
+          folder: deprecated/fonts_autohint
           sizes:
             - 20
     - id: error_null_file_base
@@ -61,7 +61,7 @@
       description: Null library or required output face pointer errors match FT_Open_Face behavior.
     - id: error_bad_size_or_unknown_format
       description: Negative/too-small sizes, malformed bytes, unsupported formats, and out-of-range face indexes return the exact C error classification.
-  # needs-input: operation=FT_New_Memory_Face; fixture_asset=input/fonts/DejaVuSans.ttf bytes, input/fonts_autohint/Ubuntu.ttf or another fvar font, malformed byte buffer; params face_index values 0, -1, named-instance encoded value, out-of-range, file_size values -1/0/valid, null library/file_base/aface variants; expected output shape=FT_Error, aface null/non-null, num_faces, face_index, family_name, style_name, face_flags, style_flags, num_charmaps, selected charmap encoding, glyph/size presence; comparison=exact C oracle status and scalar/string equality.
+  # needs-input: operation=FT_New_Memory_Face; fixture_asset=input/fonts/DejaVuSans.ttf bytes, deprecated/fonts_autohint/Ubuntu.ttf or another fvar font, malformed byte buffer; params face_index values 0, -1, named-instance encoded value, out-of-range, file_size values -1/0/valid, null library/file_base/aface variants; expected output shape=FT_Error, aface null/non-null, num_faces, face_index, family_name, style_name, face_flags, style_flags, num_charmaps, selected charmap encoding, glyph/size presence; comparison=exact C oracle status and scalar/string equality.
 
 - id: freetype.FT_Open_Face
   kind: function
@@ -83,7 +83,7 @@
       description: Null library, args, or required output face pointer cases match pinned C error behavior.
     - id: error_unknown_format_or_out_of_range_face
       description: Malformed sources, unsupported formats, forced incompatible driver, and out-of-range face indexes return the exact C error classification.
-  # needs-input: operation=FT_Open_Face; fixture_asset=input/fonts/DejaVuSans.ttf as memory/path/custom FT_Stream, input/fonts_autohint/Ubuntu.ttf or another fvar font, malformed byte buffer; params FT_Open_Args flags FT_OPEN_MEMORY, FT_OPEN_PATHNAME, FT_OPEN_STREAM, invalid multiple source flags, FT_OPEN_DRIVER compatible/incompatible, FT_OPEN_PARAMS with zero/recognized params, face_index 0/-1/named-instance/out-of-range, null library/args/aface variants; expected output shape=FT_Error, aface null/non-null, stream-close marker on error, num_faces, face_index, family_name, style_name, face_flags, style_flags, num_charmaps, selected charmap encoding, glyph/size presence; comparison=exact C oracle status, scalar/string equality, and stream lifecycle behavior.
+  # needs-input: operation=FT_Open_Face; fixture_asset=input/fonts/DejaVuSans.ttf as memory/path/custom FT_Stream, deprecated/fonts_autohint/Ubuntu.ttf or another fvar font, malformed byte buffer; params FT_Open_Args flags FT_OPEN_MEMORY, FT_OPEN_PATHNAME, FT_OPEN_STREAM, invalid multiple source flags, FT_OPEN_DRIVER compatible/incompatible, FT_OPEN_PARAMS with zero/recognized params, face_index 0/-1/named-instance/out-of-range, null library/args/aface variants; expected output shape=FT_Error, aface null/non-null, stream-close marker on error, num_faces, face_index, family_name, style_name, face_flags, style_flags, num_charmaps, selected charmap encoding, glyph/size presence; comparison=exact C oracle status, scalar/string equality, and stream lifecycle behavior.
 
 - id: freetype.FT_Reference_Face
   kind: function
@@ -136,7 +136,7 @@
       description: Renders glyphs from the broad matrix fixture corpus for tracked fonts and sizes.
       coverage:
         font_variability:
-          folder: input/fonts_autohint
+          folder: deprecated/fonts_autohint
           sizes:
             - 10
             - 20

@@ -58,40 +58,170 @@
       "schema": "outline_raster",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline": {
-            "kind": "ref",
-            "id": "outlines/synthetic/thin-diagonal-stems.json",
-            "asset_kind": "outline"
+        "variants": [
+          {
+            "id": "g36-m1",
+            "assets": {
+              "outline": {
+                "kind": "ref",
+                "id": "outlines/synthetic/thin-diagonal-stems.json",
+                "asset_kind": "outline"
+              },
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "outline_flags_matrix": [
+                "FT_OUTLINE_NONE",
+                "FT_OUTLINE_HIGH_PRECISION"
+              ],
+              "expected_behavior": "flag is a renderer hint; compare exact C output, including no-op equivalence where ignored",
+              "glyph_index": 36,
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-g36-m1"
+            ]
           },
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+          {
+            "id": "g36-m2",
+            "assets": {
+              "outline": {
+                "kind": "ref",
+                "id": "outlines/synthetic/thin-diagonal-stems.json",
+                "asset_kind": "outline"
+              },
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "outline_flags_matrix": [
+                "FT_OUTLINE_NONE",
+                "FT_OUTLINE_HIGH_PRECISION"
+              ],
+              "expected_behavior": "flag is a renderer hint; compare exact C output, including no-op equivalence where ignored",
+              "glyph_index": 36,
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-g36-m2"
+            ]
+          },
+          {
+            "id": "g36-m3",
+            "assets": {
+              "outline": {
+                "kind": "ref",
+                "id": "outlines/synthetic/thin-diagonal-stems.json",
+                "asset_kind": "outline"
+              },
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "outline_flags_matrix": [
+                "FT_OUTLINE_NONE",
+                "FT_OUTLINE_HIGH_PRECISION"
+              ],
+              "expected_behavior": "flag is a renderer hint; compare exact C output, including no-op equivalence where ignored",
+              "glyph_index": 36,
+              "render_mode": "FT_RENDER_MODE_LCD"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-g36-m3"
+            ]
+          },
+          {
+            "id": "g92-m4",
+            "assets": {
+              "outline": {
+                "kind": "ref",
+                "id": "outlines/synthetic/thin-diagonal-stems.json",
+                "asset_kind": "outline"
+              },
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "outline_flags_matrix": [
+                "FT_OUTLINE_NONE",
+                "FT_OUTLINE_HIGH_PRECISION"
+              ],
+              "expected_behavior": "flag is a renderer hint; compare exact C output, including no-op equivalence where ignored",
+              "glyph_index": 92,
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-g92-m4"
+            ]
+          },
+          {
+            "id": "g92-m5",
+            "assets": {
+              "outline": {
+                "kind": "ref",
+                "id": "outlines/synthetic/thin-diagonal-stems.json",
+                "asset_kind": "outline"
+              },
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "outline_flags_matrix": [
+                "FT_OUTLINE_NONE",
+                "FT_OUTLINE_HIGH_PRECISION"
+              ],
+              "expected_behavior": "flag is a renderer hint; compare exact C output, including no-op equivalence where ignored",
+              "glyph_index": 92,
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-g92-m5"
+            ]
+          },
+          {
+            "id": "g92-m6",
+            "assets": {
+              "outline": {
+                "kind": "ref",
+                "id": "outlines/synthetic/thin-diagonal-stems.json",
+                "asset_kind": "outline"
+              },
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "outline_flags_matrix": [
+                "FT_OUTLINE_NONE",
+                "FT_OUTLINE_HIGH_PRECISION"
+              ],
+              "expected_behavior": "flag is a renderer hint; compare exact C output, including no-op equivalence where ignored",
+              "glyph_index": 92,
+              "render_mode": "FT_RENDER_MODE_LCD"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-g92-m6"
+            ]
           }
-        },
-        "params": {
-          "outline_flags_matrix": [
-            "FT_OUTLINE_NONE",
-            "FT_OUTLINE_HIGH_PRECISION"
-          ],
-          "render_modes": [
-            "FT_RENDER_MODE_NORMAL",
-            "FT_RENDER_MODE_MONO",
-            "FT_RENDER_MODE_LCD"
-          ],
-          "glyph_indices": [
-            36,
-            92
-          ],
-          "expected_behavior": "flag is a renderer hint; compare exact C output, including no-op equivalence where ignored"
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices",
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:flag",

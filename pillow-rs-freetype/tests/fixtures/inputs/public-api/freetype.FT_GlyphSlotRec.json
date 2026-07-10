@@ -91,54 +91,128 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts/LiberationSerif-Regular.ttf"
+        "variants": [
+          {
+            "id": "outline-default",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "size": 20,
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "slot:outline-default"
+            ]
           },
-          "composite_font": {
-            "kind": "ref",
-            "id": "fonts/composite/composite-glyph.ttf"
+          {
+            "id": "outline-no-scale",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "size": 20,
+              "glyph_index": 43,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "slot:outline-no-scale"
+            ]
           },
-          "bitmap_font": {
-            "kind": "ref",
-            "id": "fonts/bitmap/embedded-strikes.ttf"
+          {
+            "id": "composite-no-recurse",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "size": 20,
+              "glyph_index": 130,
+              "load_flags": [
+                "FT_LOAD_NO_RECURSE"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "slot:composite-subglyphs"
+            ]
           },
-          "hinted_font": {
-            "kind": "ref",
-            "id": "fonts/truetype/native-hinting.ttf"
+          {
+            "id": "outline-render-mono",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "size": 20,
+              "glyph_index": 50,
+              "load_flags": [
+                "FT_LOAD_RENDER"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "slot:rendered-bitmap-fields"
+            ]
+          },
+          {
+            "id": "hinted-lcd",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "size": 20,
+              "glyph_index": 68,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "render_mode": "FT_RENDER_MODE_LCD"
+            },
+            "coverage": [
+              "slot:hinted-lcd-fields"
+            ]
+          },
+          {
+            "id": "vertical-layout",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "size": 20,
+              "glyph_index": 82,
+              "load_flags": [
+                "FT_LOAD_VERTICAL_LAYOUT"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "slot:vertical-fields"
+            ]
           }
-        },
-        "params": {
-          "size": 20,
-          "glyph_indices": [
-            "A",
-            "composite",
-            "bitmap_strike_glyph"
-          ],
-          "load_flags": [
-            "FT_LOAD_DEFAULT",
-            "FT_LOAD_NO_SCALE",
-            "FT_LOAD_NO_RECURSE",
-            "FT_LOAD_RENDER",
-            "FT_LOAD_VERTICAL_LAYOUT"
-          ],
-          "render_modes": [
-            "FT_RENDER_MODE_NORMAL",
-            "FT_RENDER_MODE_MONO",
-            "FT_RENDER_MODE_LCD"
-          ],
-          "probe": [
-            "face.glyph public fields after load/render"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices",
-            "load_flags",
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:record",

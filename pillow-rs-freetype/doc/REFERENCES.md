@@ -41,5 +41,5 @@ fixture inputs limited to fonts under `tests/fixtures/input/`.
 ```bash
 make fixture-ref-bin
 LD_LIBRARY_PATH=freetype/build /tmp/gen_refs_v4 --json \
-  tests/fixtures/input/fonts_autohint/DejaVuSans.ttf 0041 20 force_autohint
+  tests/fixtures/deprecated/fonts_autohint/DejaVuSans.ttf 0041 20 force_autohint
 ```

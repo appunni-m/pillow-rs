@@ -16,28 +16,48 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/names/post-glyph-names.ttf",
-            "status": "required_future_asset",
-            "requires": "font with stable post/CFF glyph names for .notdef and A"
+        "variants": [
+          {
+            "id": "g.notdef",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/names/post-glyph-names.ttf",
+                "status": "required_future_asset",
+                "requires": "font with stable post/CFF glyph names for .notdef and A"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_max": 64,
+              "glyph_index": ".notdef"
+            },
+            "coverage": [
+              "freetype.get_glyph_name:explicit-g.notdef"
+            ]
+          },
+          {
+            "id": "gA",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/names/post-glyph-names.ttf",
+                "status": "required_future_asset",
+                "requires": "font with stable post/CFF glyph names for .notdef and A"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_max": 64,
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.get_glyph_name:explicit-gA"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "glyph_indices": [
-            ".notdef",
-            "A"
-          ],
-          "buffer_max": 64
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -116,37 +136,92 @@
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "font_no_names": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/names/no-glyph-names.ttf",
-            "status": "required_future_asset",
-            "requires": "font accepted by C FreeType whose face flags do not include FT_FACE_FLAG_GLYPH_NAMES"
+        "variants": [
+          {
+            "id": "gvalid_on_no_names",
+            "assets": {
+              "font_no_names": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/names/no-glyph-names.ttf",
+                "status": "required_future_asset",
+                "requires": "font accepted by C FreeType whose face flags do not include FT_FACE_FLAG_GLYPH_NAMES"
+              },
+              "font_names": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/names/post-glyph-names.ttf",
+                "status": "required_future_asset",
+                "requires": "font with stable post/CFF glyph names for .notdef and A"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "valid_on_no_names"
+            },
+            "coverage": [
+              "freetype.get_glyph_name:explicit-gvalid_on_no_names"
+            ]
           },
-          "font_names": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/names/post-glyph-names.ttf",
-            "status": "required_future_asset",
-            "requires": "font with stable post/CFF glyph names for .notdef and A"
+          {
+            "id": "gnum_glyphs",
+            "assets": {
+              "font_no_names": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/names/no-glyph-names.ttf",
+                "status": "required_future_asset",
+                "requires": "font accepted by C FreeType whose face flags do not include FT_FACE_FLAG_GLYPH_NAMES"
+              },
+              "font_names": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/names/post-glyph-names.ttf",
+                "status": "required_future_asset",
+                "requires": "font with stable post/CFF glyph names for .notdef and A"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "num_glyphs"
+            },
+            "coverage": [
+              "freetype.get_glyph_name:explicit-gnum_glyphs"
+            ]
+          },
+          {
+            "id": "gnum_glyphs_plus_1",
+            "assets": {
+              "font_no_names": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/names/no-glyph-names.ttf",
+                "status": "required_future_asset",
+                "requires": "font accepted by C FreeType whose face flags do not include FT_FACE_FLAG_GLYPH_NAMES"
+              },
+              "font_names": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/names/post-glyph-names.ttf",
+                "status": "required_future_asset",
+                "requires": "font with stable post/CFF glyph names for .notdef and A"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "num_glyphs_plus_1"
+            },
+            "coverage": [
+              "freetype.get_glyph_name:explicit-gnum_glyphs_plus_1"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "glyph_indices": [
-            "valid_on_no_names",
-            "num_glyphs",
-            "num_glyphs_plus_1"
-          ],
-          "buffer_initial": "0xAA",
-          "buffer_max": 64
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",

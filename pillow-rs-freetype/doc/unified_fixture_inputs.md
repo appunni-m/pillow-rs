@@ -1,140 +1,219 @@
 # Unified Fixture Input Format
 
-The unified parity harness has one active source of test definitions:
+The unified parity harness has one active source of executable definitions:
 
 ```text
 tests/fixtures/inputs/public-api/*.json
 ```
 
-`tests/manifest.yaml` is the coverage source of truth. It enumerates the public
-C API subjects and the required case IDs for each subject. Input JSON files are
-the execution source of truth. Every input case must reference a manifest
-`subject` and `case`, and may list extra `covers_manifest_cases` when one
-aggregate input intentionally covers more than one manifest case.
+`tests/manifest.yaml` is the public coverage contract. Each JSON case names one
+manifest `subject` and `case`; `covers_manifest_cases` may name additional cases
+when one public operation intentionally proves more than one contract entry.
 
-The runner expands only `cases[].inputs.variability`. Top-level
-`matrix_cases`, `_matrix` operation/schema names, `schema: "scalar"`, and
-`load_flags_matrix` are rejected.
+The harness executes only inputs written in JSON. It does not discover fonts,
+enumerate glyphs, expand axes, or construct Cartesian products.
 
-## Case Shape
+## Two Valid Case Shapes
 
-Each case keeps fixed operation arguments under `inputs.params` and shared files
-under `inputs.assets`.
+A logical case uses either one direct input or a list of explicit grouped input
+variants. It must not mix the two shapes.
+
+### Direct Input
+
+Use a direct input when one concrete combination is sufficient:
 
 ```json
 {
-  "case_id": "freetype.FT_Load_Char.matrix_load",
-  "subject": "freetype.FT_Load_Char",
-  "case": "matrix_load",
-  "operation": "freetype.load_char",
+  "case_id": "freetype.FT_Get_Char_Index.latin_capital_a",
+  "subject": "freetype.FT_Get_Char_Index",
+  "case": "latin_capital_a",
+  "operation": "get_char_index",
   "schema": "api_result",
   "expect_error": false,
   "inputs": {
     "assets": {
-      "font_folder": {
-        "kind": "file",
-        "role": "font_folder",
-        "path": "input/fonts"
-      }
+      "font": { "kind": "ref", "id": "fonts/autohint/basic-latin.ttf" }
     },
     "params": {
       "face_index": 0,
-      "sizes": [10, 20],
-      "char_codes": [65, 103],
-      "load_flag_sets": [
-        ["FT_LOAD_DEFAULT"],
-        ["FT_LOAD_RENDER"]
-      ]
-    },
-    "variability": {
-      "axes": ["fonts", "sizes", "codepoints", "load_flags"]
+      "char_code": 65
     }
   }
 }
 ```
 
-## Variability Axes
+### Explicit Grouped Variants
 
-Only common coverage dimensions are variability axes:
+Use `inputs.variants` when one logical manifest case needs several deliberate
+combinations:
 
-- `fonts`: expands a folder of font files. Use `font_folder` in assets or
-  `inputs.variability.fonts_folder`; otherwise the runner uses `input/fonts`.
-- `sizes`: expands `sizes` or `pixel_sizes` into `pixel_size`.
-- `codepoints`: expands `codepoints` or `char_codes` into `char_code`.
-- `glyph_indices`: expands to every glyph ID available in the active runtime
-  font face. Do not add selector markers such as `"all"` to JSON inputs.
-  Explicit `glyph_indices` arrays are only a fallback for unresolved model-only
-  assets where the runner cannot inspect a font file yet.
-- `load_flags`: expands `load_flag_sets`, numeric `load_flags`, and combines
-  optional `target_modes`.
-- `render_modes`: expands `render_modes` into `render_mode`.
+```json
+{
+  "case_id": "freetype.FT_LOAD_COMPUTE_METRICS.compute_metrics_load_behavior",
+  "subject": "freetype.FT_LOAD_COMPUTE_METRICS",
+  "case": "compute_metrics_load_behavior",
+  "operation": "load_glyph",
+  "schema": "api_result",
+  "expect_error": false,
+  "inputs": {
+    "variants": [
+      {
+        "id": "mono-device-width",
+        "assets": {
+          "font": { "kind": "ref", "id": "fonts/metrics/hdmx_observable.ttf" }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 20,
+          "load_flags": ["FT_LOAD_TARGET_MONO"],
+          "glyph_index": { "from_char_code": 65 }
+        },
+        "coverage": ["tt/hdmx:mono-device-width-lookup"]
+      },
+      {
+        "id": "mono-compute-metrics",
+        "assets": {
+          "font": { "kind": "ref", "id": "fonts/metrics/hdmx_observable.ttf" }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 20,
+          "load_flags": [
+            "FT_LOAD_TARGET_MONO",
+            "FT_LOAD_COMPUTE_METRICS"
+          ],
+          "glyph_index": { "from_char_code": 65 }
+        },
+        "coverage": ["tt/hdmx:mono-compute-metrics-suppression"]
+      }
+    ]
+  }
+}
+```
 
-Do not materialize one JSON case per font/size/codepoint combination. Put the
-fixed parameters in one case and let the runner expand the applicable axes.
+Every grouped variant requires:
+
+- A non-empty `id` unique within its logical case.
+- Its complete `assets` and `params`.
+- At least one non-empty `coverage` intent explaining why the combination
+  exists.
+- Optional `expect_error` only when that variant differs from the case default.
+
+The runtime ID is `<case_id>@<variant-id>`. Variants are concrete rows, not axes.
+Two fonts and three sizes therefore require only the combinations explicitly
+listed, not six generated combinations.
+
+## Coverage Intent
+
+A coverage intent names the behavior, branch, condition, table, glyph topology,
+or error path that justifies the concrete input. Prefer stable identifiers such
+as:
+
+```text
+tt/hdmx:mono-device-width-lookup
+tt/glyf:recursive-composite-no-hinting
+autohint/latin:blue-zone-overshoot
+render/lcd:negative-pitch-copy
+font/cmap:format-12-supplementary-hit
+```
+
+Coverage intent is reviewed against llvm-cov output and the font inventory. It
+does not change execution or comparison behavior.
 
 ## Assets
 
-Large blobs, binaries, fonts, and shared models belong under
-`tests/fixtures/input` or another fixture asset folder. JSON should reference
-them by path or shared asset ID; it should not embed large byte arrays.
+Use tracked fixture assets for fonts and binary data:
 
-Supported direct runtime assets are file assets and hex inline bytes. Missing
-future assets may remain as model-only cases, but they will not count as runtime
-parity until the file exists.
+```json
+{ "kind": "ref", "id": "fonts/autohint/basic-latin.ttf" }
+```
+
+Direct file assets and inline bytes remain available for cases that own those
+forms:
+
+```json
+{ "kind": "file", "path": "fonts/autohint/basic-latin.ttf" }
+```
+
+```json
+{ "kind": "inline_bytes", "encoding": "hex", "value": "00010000" }
+```
+
+Do not add `font_folder`. Runtime folder discovery is forbidden. Do not add new
+references to `tests/fixtures/deprecated/`; replace the required property with a
+focused active fixture.
+
+## Parameters
+
+Parameters are operation data interpreted by the existing runner and public
+backend adapters. Arrays are values unless the operation explicitly defines an
+array-valued parameter. They never become expansion axes.
+
+Some operations already use a parameter named `variants` for operation-specific
+data, such as charmap lifecycle rows. That field is `inputs.params.variants` and
+is unrelated to grouped `inputs.variants`. Preserve existing parser semantics;
+do not generalize operation parameters into harness expansion.
 
 ## Output And Comparison
 
-Expected outputs are not committed. At runtime the runner:
+Expected backend outputs are not committed. For every concrete input, the
+runner:
 
-1. Expands input cases in memory.
-2. Runs the C FreeType oracle and caches the resulting JSONL blob by a SHA-256
-   key derived from all expanded inputs.
-3. Runs the Rust FFI, C ABI, and WASM ABI paths.
-4. Compares status, error code, output shape, and actual output values.
+1. Resolves and hashes fixture bytes.
+2. Executes pinned C FreeType to obtain the oracle output.
+3. Executes the pure Rust FFI path.
+4. Executes the C ABI wrapper around the Rust core.
+5. Executes the WASM ABI wrapper around the Rust core.
+6. Compares status, error code, output shape, scalar fields, geometry, metrics,
+   and bytes according to the operation's existing exact comparison.
 
-Use `expect_error: true` only when C FreeType is expected to return an error.
-Error cases still compare the error status and error code across all backends.
+Changing a font is valid only when the new C output and all three Rust-backed
+outputs are interchangeable for that input. Do not edit expectations or
+comparison rules to accept a mismatch.
 
-Schema names should be semantic, such as `constant`, `value`, `glyph_slot`,
-`size_metrics`, `record_layout`, `face_open`, `set_status`, or `error`.
-Do not use migration names such as `scalar` or `*_matrix`.
+## Forbidden Legacy Shapes
 
-## Profiling
+The Rust and Python validators reject:
 
-For diagnostic profiling only, the runner accepts these environment variables:
+- Top-level `matrix_cases`.
+- `inputs.variability`.
+- `font_folder` assets.
+- A logical case that mixes `inputs.variants` with direct `inputs.assets` or
+  `inputs.params`.
+- Empty or duplicate variant IDs.
+- Variants without coverage intent.
 
-- `FONTDONE_UNIFIED_PROFILE=1`: print elapsed nanoseconds and milliseconds for
-  runner stages and backend totals.
-- `FONTDONE_UNIFIED_VARIABILITY_LIMIT=1`: cap each variability axis to the
-  first value so stage costs can be measured without the full Cartesian product.
-- `FONTDONE_UNIFIED_OPERATION_FILTER=load_glyph`: restrict runtime parity to a
-  canonical operation while keeping manifest and input validation active.
+Environment limits and operation filters are diagnostics only. They must not
+change the authoritative concrete input set.
 
-Use `make test-unified-fixtures-release` to run the same unified fixture test
-under Cargo's release profile.
+## Maintained Commands
 
-The runner preloads deterministic fixture state once per test process:
-manifest data, input JSON, fixture font folders, fixture bytes, asset hashes,
-inline byte blobs, glyph-index domains, and C oracle outputs. Immutable fixture
-bytes and parsed oracle outputs are shared as process-global in-memory blobs,
-not cloned per case. During runtime comparison it also opens and sizes
-face-backed Rust FFI, C ABI, and WASM ABI handles before timing the operations.
-The face warmup is reported separately as `profile_face_warmup` when profiling
-is enabled.
+Run from `pillow-rs-freetype/`:
 
-The variability limit is not a correctness run. It reports manifest
-font-variability gaps caused by the cap, but only the default unlimited runner
-is authoritative for coverage.
+```bash
+make api-abi-check
+make test-unified-fixtures
+make test-unified-coverage
+make test-unified-condition-coverage
+```
+
+`make test-unified-coverage` records stable function, line, and region coverage.
+`make test-unified-condition-coverage` uses nightly Rust condition
+instrumentation, which also instruments branch outcomes. Completion totals are
+calculated from `pillow-rs-freetype/src/**`; C and WASM wrappers still execute in
+the parity run.
 
 ## Worker Checklist
 
-For each assigned JSON file:
+1. Confirm `subject` and `case` exist in `tests/manifest.yaml`.
+2. Choose one direct input or explicit grouped variants.
+3. Name the exact font property and glyph behavior needed for each variant.
+4. Use the minimum deliberate sizes, flags, modes, transforms, and coordinates.
+5. Add controls only when they prove a distinct branch or condition outcome.
+6. Keep parser-specific operation parameters consistent with existing cases.
+7. Run the API/ABI validator and exact parity before measuring coverage.
+8. Keep a variant only when it fulfills its named obligation without reducing
+   existing structural coverage.
 
-1. Confirm every `cases[].case` exists in `tests/manifest.yaml`.
-2. Add `inputs.variability.axes` when params contain common aggregate fields.
-3. Keep fixed non-axis parameters in `inputs.params`.
-4. Prefer one aggregate case per manifest case over copied per-font rows.
-5. Move references to large blobs/fonts into fixture assets, not inline JSON.
-6. Do not add or commit expected output.
-7. Keep `case_id`, `subject`, and `case` stable unless merging duplicates.
-8. Run a JSON parse check for the files you edited.
+See `doc/FONT_FIXTURE_COVERAGE_PLAN.md` for corpus ownership, structural coverage
+requirements, phase gates, and the progress ledger.

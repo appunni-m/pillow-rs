@@ -195,31 +195,54 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "incremental_truetype_face": {
-            "kind": "ref",
-            "id": "fonts/incremental/minimal-glyf-incremental.ttf"
+        "variants": [
+          {
+            "id": "g1",
+            "assets": {
+              "incremental_truetype_face": {
+                "kind": "ref",
+                "id": "fonts/incremental/minimal-glyf-incremental.ttf"
+              },
+              "glyph_data": {
+                "kind": "ref",
+                "id": "incremental/glyf/simple-and-composite-glyph-data.bin"
+              }
+            },
+            "params": {
+              "open_tag": "FT_PARAM_TAG_INCREMENTAL",
+              "get_glyph_data_returns": "FT_Data pointer and length",
+              "expect_free_glyph_data_after_success": true,
+              "nested_composite_loads_allowed": true,
+              "glyph_index": 1
+            },
+            "coverage": [
+              "ftincrem.load_incremental_glyph:explicit-g1"
+            ]
           },
-          "glyph_data": {
-            "kind": "ref",
-            "id": "incremental/glyf/simple-and-composite-glyph-data.bin"
+          {
+            "id": "g2",
+            "assets": {
+              "incremental_truetype_face": {
+                "kind": "ref",
+                "id": "fonts/incremental/minimal-glyf-incremental.ttf"
+              },
+              "glyph_data": {
+                "kind": "ref",
+                "id": "incremental/glyf/simple-and-composite-glyph-data.bin"
+              }
+            },
+            "params": {
+              "open_tag": "FT_PARAM_TAG_INCREMENTAL",
+              "get_glyph_data_returns": "FT_Data pointer and length",
+              "expect_free_glyph_data_after_success": true,
+              "nested_composite_loads_allowed": true,
+              "glyph_index": 2
+            },
+            "coverage": [
+              "ftincrem.load_incremental_glyph:explicit-g2"
+            ]
           }
-        },
-        "params": {
-          "open_tag": "FT_PARAM_TAG_INCREMENTAL",
-          "glyph_indices": [
-            1,
-            2
-          ],
-          "get_glyph_data_returns": "FT_Data pointer and length",
-          "expect_free_glyph_data_after_success": true,
-          "nested_composite_loads_allowed": true
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:record",

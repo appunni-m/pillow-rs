@@ -126,53 +126,140 @@
       "schema": "cache_sbit_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "scalable_control_font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "scalable_control_font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "cache": "live_sbit_cache",
+              "scalers": [
+                {
+                  "face_id": "stable_pointer:dejavu",
+                  "width": 16,
+                  "height": 16,
+                  "pixel": 1,
+                  "x_res": 0,
+                  "y_res": 0
+                },
+                {
+                  "face_id": "stable_pointer:dejavu",
+                  "width": 1024,
+                  "height": 1024,
+                  "pixel": 0,
+                  "x_res": 72,
+                  "y_res": 72
+                },
+                {
+                  "face_id": "stable_pointer:dejavu",
+                  "width": 1024,
+                  "height": 2048,
+                  "pixel": 0,
+                  "x_res": 96,
+                  "y_res": 72
+                }
+              ],
+              "load_flags": "FT_LOAD_DEFAULT",
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftcache.sbit_cache_lookup_scaler:explicit-f1"
+            ]
+          },
+          {
+            "id": "f2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "scalable_control_font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "cache": "live_sbit_cache",
+              "scalers": [
+                {
+                  "face_id": "stable_pointer:dejavu",
+                  "width": 16,
+                  "height": 16,
+                  "pixel": 1,
+                  "x_res": 0,
+                  "y_res": 0
+                },
+                {
+                  "face_id": "stable_pointer:dejavu",
+                  "width": 1024,
+                  "height": 1024,
+                  "pixel": 0,
+                  "x_res": 72,
+                  "y_res": 72
+                },
+                {
+                  "face_id": "stable_pointer:dejavu",
+                  "width": 1024,
+                  "height": 2048,
+                  "pixel": 0,
+                  "x_res": 96,
+                  "y_res": 72
+                }
+              ],
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftcache.sbit_cache_lookup_scaler:explicit-f2"
+            ]
+          },
+          {
+            "id": "f3",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "scalable_control_font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "cache": "live_sbit_cache",
+              "scalers": [
+                {
+                  "face_id": "stable_pointer:dejavu",
+                  "width": 16,
+                  "height": 16,
+                  "pixel": 1,
+                  "x_res": 0,
+                  "y_res": 0
+                },
+                {
+                  "face_id": "stable_pointer:dejavu",
+                  "width": 1024,
+                  "height": 1024,
+                  "pixel": 0,
+                  "x_res": 72,
+                  "y_res": 72
+                },
+                {
+                  "face_id": "stable_pointer:dejavu",
+                  "width": 1024,
+                  "height": 2048,
+                  "pixel": 0,
+                  "x_res": 96,
+                  "y_res": 72
+                }
+              ],
+              "load_flags": "FT_LOAD_TARGET_MONO",
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftcache.sbit_cache_lookup_scaler:explicit-f3"
+            ]
           }
-        },
-        "params": {
-          "cache": "live_sbit_cache",
-          "scalers": [
-            {
-              "face_id": "stable_pointer:dejavu",
-              "width": 16,
-              "height": 16,
-              "pixel": 1,
-              "x_res": 0,
-              "y_res": 0
-            },
-            {
-              "face_id": "stable_pointer:dejavu",
-              "width": 1024,
-              "height": 1024,
-              "pixel": 0,
-              "x_res": 72,
-              "y_res": 72
-            },
-            {
-              "face_id": "stable_pointer:dejavu",
-              "width": 1024,
-              "height": 2048,
-              "pixel": 0,
-              "x_res": 96,
-              "y_res": 72
-            }
-          ],
-          "load_flags": [
-            "FT_LOAD_DEFAULT",
-            "FT_LOAD_NO_HINTING",
-            "FT_LOAD_TARGET_MONO"
-          ],
-          "glyph_index": 36
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -205,35 +292,62 @@
       "schema": "cache_sbit_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "scalable_control_font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "cache": "live_sbit_cache",
-          "scaler": {
-            "face_id": "stable_pointer:dejavu",
-            "width": 16,
-            "height": 16,
-            "pixel": 1,
-            "x_res": 0,
-            "y_res": 0
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "scalable_control_font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "cache": "live_sbit_cache",
+              "scaler": {
+                "face_id": "stable_pointer:dejavu",
+                "width": 16,
+                "height": 16,
+                "pixel": 1,
+                "x_res": 0,
+                "y_res": 0
+              },
+              "load_flags": "0x0000000000000004",
+              "glyph_index": 36,
+              "host_condition": "FT_ULong wider than FT_Int32"
+            },
+            "coverage": [
+              "ftcache.sbit_cache_lookup_scaler:explicit-f1"
+            ]
           },
-          "load_flags": [
-            "0x0000000000000004",
-            "0x0000000100000004"
-          ],
-          "glyph_index": 36,
-          "host_condition": "FT_ULong wider than FT_Int32"
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+          {
+            "id": "f2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "scalable_control_font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "cache": "live_sbit_cache",
+              "scaler": {
+                "face_id": "stable_pointer:dejavu",
+                "width": 16,
+                "height": 16,
+                "pixel": 1,
+                "x_res": 0,
+                "y_res": 0
+              },
+              "load_flags": "0x0000000100000004",
+              "glyph_index": 36,
+              "host_condition": "FT_ULong wider than FT_Int32"
+            },
+            "coverage": [
+              "ftcache.sbit_cache_lookup_scaler:explicit-f2"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",

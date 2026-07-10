@@ -17,29 +17,50 @@
       "schema": "glyph_copy",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "g36",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "source_creation": "FT_Get_Glyph outline",
+              "mutate_source_after_copy": [
+                "FT_Glyph_Transform",
+                "FT_Done_Glyph"
+              ],
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftglyph.glyph_copy:explicit-g36"
+            ]
+          },
+          {
+            "id": "g43",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "source_creation": "FT_Get_Glyph outline",
+              "mutate_source_after_copy": [
+                "FT_Glyph_Transform",
+                "FT_Done_Glyph"
+              ],
+              "glyph_index": 43
+            },
+            "coverage": [
+              "ftglyph.glyph_copy:explicit-g43"
+            ]
           }
-        },
-        "params": {
-          "source_creation": "FT_Get_Glyph outline",
-          "mutate_source_after_copy": [
-            "FT_Glyph_Transform",
-            "FT_Done_Glyph"
-          ],
-          "glyph_indices": [
-            36,
-            43
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -194,6 +215,7 @@
       "expect_error": true,
       "inputs": {
         "assets": {
+          "font": { "kind": "ref", "role": "font", "id": "input/fonts/DejaVuSans.ttf" },
           "malformed_facade": {
             "kind": "ref",
             "id": "facades/glyph/malformed-slot-and-class-cases.json",
@@ -241,6 +263,7 @@
       "expect_error": true,
       "inputs": {
         "assets": {
+          "font": { "kind": "ref", "role": "font", "id": "input/fonts/DejaVuSans.ttf" },
           "allocation_facade": {
             "kind": "ref",
             "id": "facades/memory/allocation-failure.json",

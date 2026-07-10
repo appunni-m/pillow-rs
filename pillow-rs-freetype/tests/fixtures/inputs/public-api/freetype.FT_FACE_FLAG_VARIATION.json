@@ -51,7 +51,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "input/fonts_autohint/Ubuntu.ttf"
+            "id": "fonts/variable/compact-variable.ttf"
           }
         },
         "params": {

@@ -53,40 +53,101 @@
       "schema": "glyph_cbox",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "g36",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "bitmap_strike_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "bbox_modes": [
+                "FT_GLYPH_BBOX_UNSCALED"
+              ],
+              "glyph_sources": [
+                "outline_no_scale"
+              ],
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ],
+              "face_index": 0,
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftglyph.glyph_get_cbox:explicit-g36"
+            ]
           },
-          "bitmap_strike_font": {
-            "kind": "ref",
-            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
-            "asset_kind": "font"
+          {
+            "id": "g43",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "bitmap_strike_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "bbox_modes": [
+                "FT_GLYPH_BBOX_UNSCALED"
+              ],
+              "glyph_sources": [
+                "outline_no_scale"
+              ],
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ],
+              "face_index": 0,
+              "glyph_index": 43
+            },
+            "coverage": [
+              "ftglyph.glyph_get_cbox:explicit-g43"
+            ]
+          },
+          {
+            "id": "g74",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "bitmap_strike_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "bbox_modes": [
+                "FT_GLYPH_BBOX_UNSCALED"
+              ],
+              "glyph_sources": [
+                "outline_no_scale"
+              ],
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ],
+              "face_index": 0,
+              "glyph_index": 74
+            },
+            "coverage": [
+              "ftglyph.glyph_get_cbox:explicit-g74"
+            ]
           }
-        },
-        "params": {
-          "bbox_modes": [
-            "FT_GLYPH_BBOX_UNSCALED"
-          ],
-          "glyph_sources": [
-            "outline_no_scale"
-          ],
-          "load_flags": [
-            "FT_LOAD_NO_SCALE"
-          ],
-          "glyph_indices": [
-            36,
-            43,
-            74
-          ],
-          "face_index": 0
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:enum_variant",

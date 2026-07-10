@@ -104,9 +104,8 @@
           "font_without_os2": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/type1/no-fstype.pfb",
-            "status": "required_future_asset",
-            "requires": "non-SFNT or Type1 face with no PostScript FSType"
+            "path": "fonts/type1/simple-type1.pfb",
+            "requires": "Type 1 face with no PostScript FSType"
           }
         },
         "params": {

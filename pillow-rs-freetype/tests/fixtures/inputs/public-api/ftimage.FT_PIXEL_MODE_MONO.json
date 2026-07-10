@@ -59,38 +59,86 @@
       "schema": "glyph_slot_bitmap",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": {
-            "x": 0,
-            "y": 20
+        "variants": [
+          {
+            "id": "g36-f1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "load_flags": "FT_LOAD_DEFAULT",
+              "render_mode": "FT_RENDER_MODE_MONO",
+              "expected_pixel_mode": "FT_PIXEL_MODE_MONO",
+              "pitch_rule": "((width + 15) >> 4) << 1",
+              "buffer_rule": "packed one-bit coverage, most significant bit first",
+              "glyph_index": 36
+            },
+            "coverage": [
+              "render_glyph:explicit-g36-f1"
+            ]
           },
-          "glyph_indices": [
-            36,
-            44,
-            82
-          ],
-          "load_flags": [
-            "FT_LOAD_DEFAULT"
-          ],
-          "render_mode": "FT_RENDER_MODE_MONO",
-          "expected_pixel_mode": "FT_PIXEL_MODE_MONO",
-          "pitch_rule": "((width + 15) >> 4) << 1",
-          "buffer_rule": "packed one-bit coverage, most significant bit first"
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices",
-            "load_flags"
-          ]
-        }
+          {
+            "id": "g44-f2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "load_flags": "FT_LOAD_DEFAULT",
+              "render_mode": "FT_RENDER_MODE_MONO",
+              "expected_pixel_mode": "FT_PIXEL_MODE_MONO",
+              "pitch_rule": "((width + 15) >> 4) << 1",
+              "buffer_rule": "packed one-bit coverage, most significant bit first",
+              "glyph_index": 44
+            },
+            "coverage": [
+              "render_glyph:explicit-g44-f2"
+            ]
+          },
+          {
+            "id": "g82-f3",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "load_flags": "FT_LOAD_DEFAULT",
+              "render_mode": "FT_RENDER_MODE_MONO",
+              "expected_pixel_mode": "FT_PIXEL_MODE_MONO",
+              "pitch_rule": "((width + 15) >> 4) << 1",
+              "buffer_rule": "packed one-bit coverage, most significant bit first",
+              "glyph_index": 82
+            },
+            "coverage": [
+              "render_glyph:explicit-g82-f3"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:enum_variant",
@@ -135,28 +183,29 @@
       "schema": "glyph_slot_bitmap",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/bitmap/monochrome-strikes.pcf",
-            "asset_kind": "font"
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/bitmap/monochrome-strikes.pcf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "strike_selection": "small monochrome bitmap strike",
+              "glyphs": "non-empty and empty embedded bitmap glyphs",
+              "load_flags": "FT_LOAD_DEFAULT",
+              "expected_pixel_mode": "FT_PIXEL_MODE_MONO",
+              "preserve_embedded_pitch_and_buffer": true
+            },
+            "coverage": [
+              "freetype.load_embedded_bitmap:explicit-f1"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "strike_selection": "small monochrome bitmap strike",
-          "glyphs": "non-empty and empty embedded bitmap glyphs",
-          "load_flags": [
-            "FT_LOAD_DEFAULT"
-          ],
-          "expected_pixel_mode": "FT_PIXEL_MODE_MONO",
-          "preserve_embedded_pitch_and_buffer": true
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:enum_variant",

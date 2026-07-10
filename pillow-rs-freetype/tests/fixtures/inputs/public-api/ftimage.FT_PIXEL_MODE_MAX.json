@@ -61,52 +61,312 @@
       "schema": "pixel_mode_distribution",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "f1-m1",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "color_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/color/embedded-bgra-strikes.ttf",
+                "asset_kind": "font"
+              },
+              "monochrome_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap/monochrome-strikes.pcf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
+              "valid_success_pixel_modes": [
+                "FT_PIXEL_MODE_NONE",
+                "FT_PIXEL_MODE_MONO",
+                "FT_PIXEL_MODE_GRAY",
+                "FT_PIXEL_MODE_GRAY2",
+                "FT_PIXEL_MODE_GRAY4",
+                "FT_PIXEL_MODE_LCD",
+                "FT_PIXEL_MODE_LCD_V",
+                "FT_PIXEL_MODE_BGRA"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "freetype.bitmap_pixel_mode_survey:explicit-f1-m1"
+            ]
           },
-          "color_bitmap_font": {
-            "kind": "ref",
-            "id": "fonts/color/embedded-bgra-strikes.ttf",
-            "asset_kind": "font"
+          {
+            "id": "f2-m2",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "color_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/color/embedded-bgra-strikes.ttf",
+                "asset_kind": "font"
+              },
+              "monochrome_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap/monochrome-strikes.pcf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
+              "valid_success_pixel_modes": [
+                "FT_PIXEL_MODE_NONE",
+                "FT_PIXEL_MODE_MONO",
+                "FT_PIXEL_MODE_GRAY",
+                "FT_PIXEL_MODE_GRAY2",
+                "FT_PIXEL_MODE_GRAY4",
+                "FT_PIXEL_MODE_LCD",
+                "FT_PIXEL_MODE_LCD_V",
+                "FT_PIXEL_MODE_BGRA"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "freetype.bitmap_pixel_mode_survey:explicit-f2-m2"
+            ]
           },
-          "monochrome_bitmap_font": {
-            "kind": "ref",
-            "id": "fonts/bitmap/monochrome-strikes.pcf",
-            "asset_kind": "font"
+          {
+            "id": "f3-m3",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "color_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/color/embedded-bgra-strikes.ttf",
+                "asset_kind": "font"
+              },
+              "monochrome_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap/monochrome-strikes.pcf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
+              "valid_success_pixel_modes": [
+                "FT_PIXEL_MODE_NONE",
+                "FT_PIXEL_MODE_MONO",
+                "FT_PIXEL_MODE_GRAY",
+                "FT_PIXEL_MODE_GRAY2",
+                "FT_PIXEL_MODE_GRAY4",
+                "FT_PIXEL_MODE_LCD",
+                "FT_PIXEL_MODE_LCD_V",
+                "FT_PIXEL_MODE_BGRA"
+              ],
+              "render_mode": "FT_RENDER_MODE_LCD"
+            },
+            "coverage": [
+              "freetype.bitmap_pixel_mode_survey:explicit-f3-m3"
+            ]
+          },
+          {
+            "id": "f4-m4",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "color_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/color/embedded-bgra-strikes.ttf",
+                "asset_kind": "font"
+              },
+              "monochrome_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap/monochrome-strikes.pcf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
+              "valid_success_pixel_modes": [
+                "FT_PIXEL_MODE_NONE",
+                "FT_PIXEL_MODE_MONO",
+                "FT_PIXEL_MODE_GRAY",
+                "FT_PIXEL_MODE_GRAY2",
+                "FT_PIXEL_MODE_GRAY4",
+                "FT_PIXEL_MODE_LCD",
+                "FT_PIXEL_MODE_LCD_V",
+                "FT_PIXEL_MODE_BGRA"
+              ],
+              "render_mode": "FT_RENDER_MODE_LCD_V"
+            },
+            "coverage": [
+              "freetype.bitmap_pixel_mode_survey:explicit-f4-m4"
+            ]
+          },
+          {
+            "id": "f5-m5",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "color_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/color/embedded-bgra-strikes.ttf",
+                "asset_kind": "font"
+              },
+              "monochrome_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap/monochrome-strikes.pcf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_COLOR",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
+              "valid_success_pixel_modes": [
+                "FT_PIXEL_MODE_NONE",
+                "FT_PIXEL_MODE_MONO",
+                "FT_PIXEL_MODE_GRAY",
+                "FT_PIXEL_MODE_GRAY2",
+                "FT_PIXEL_MODE_GRAY4",
+                "FT_PIXEL_MODE_LCD",
+                "FT_PIXEL_MODE_LCD_V",
+                "FT_PIXEL_MODE_BGRA"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "freetype.bitmap_pixel_mode_survey:explicit-f5-m5"
+            ]
+          },
+          {
+            "id": "f6-m6",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "color_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/color/embedded-bgra-strikes.ttf",
+                "asset_kind": "font"
+              },
+              "monochrome_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap/monochrome-strikes.pcf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_COLOR",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
+              "valid_success_pixel_modes": [
+                "FT_PIXEL_MODE_NONE",
+                "FT_PIXEL_MODE_MONO",
+                "FT_PIXEL_MODE_GRAY",
+                "FT_PIXEL_MODE_GRAY2",
+                "FT_PIXEL_MODE_GRAY4",
+                "FT_PIXEL_MODE_LCD",
+                "FT_PIXEL_MODE_LCD_V",
+                "FT_PIXEL_MODE_BGRA"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "freetype.bitmap_pixel_mode_survey:explicit-f6-m6"
+            ]
+          },
+          {
+            "id": "f7-m7",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "color_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/color/embedded-bgra-strikes.ttf",
+                "asset_kind": "font"
+              },
+              "monochrome_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap/monochrome-strikes.pcf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_COLOR",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
+              "valid_success_pixel_modes": [
+                "FT_PIXEL_MODE_NONE",
+                "FT_PIXEL_MODE_MONO",
+                "FT_PIXEL_MODE_GRAY",
+                "FT_PIXEL_MODE_GRAY2",
+                "FT_PIXEL_MODE_GRAY4",
+                "FT_PIXEL_MODE_LCD",
+                "FT_PIXEL_MODE_LCD_V",
+                "FT_PIXEL_MODE_BGRA"
+              ],
+              "render_mode": "FT_RENDER_MODE_LCD"
+            },
+            "coverage": [
+              "freetype.bitmap_pixel_mode_survey:explicit-f7-m7"
+            ]
+          },
+          {
+            "id": "f8-m8",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "color_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/color/embedded-bgra-strikes.ttf",
+                "asset_kind": "font"
+              },
+              "monochrome_bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap/monochrome-strikes.pcf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_COLOR",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
+              "valid_success_pixel_modes": [
+                "FT_PIXEL_MODE_NONE",
+                "FT_PIXEL_MODE_MONO",
+                "FT_PIXEL_MODE_GRAY",
+                "FT_PIXEL_MODE_GRAY2",
+                "FT_PIXEL_MODE_GRAY4",
+                "FT_PIXEL_MODE_LCD",
+                "FT_PIXEL_MODE_LCD_V",
+                "FT_PIXEL_MODE_BGRA"
+              ],
+              "render_mode": "FT_RENDER_MODE_LCD_V"
+            },
+            "coverage": [
+              "freetype.bitmap_pixel_mode_survey:explicit-f8-m8"
+            ]
           }
-        },
-        "params": {
-          "render_modes": [
-            "FT_RENDER_MODE_NORMAL",
-            "FT_RENDER_MODE_MONO",
-            "FT_RENDER_MODE_LCD",
-            "FT_RENDER_MODE_LCD_V"
-          ],
-          "load_flags": [
-            "FT_LOAD_DEFAULT",
-            "FT_LOAD_COLOR"
-          ],
-          "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
-          "valid_success_pixel_modes": [
-            "FT_PIXEL_MODE_NONE",
-            "FT_PIXEL_MODE_MONO",
-            "FT_PIXEL_MODE_GRAY",
-            "FT_PIXEL_MODE_GRAY2",
-            "FT_PIXEL_MODE_GRAY4",
-            "FT_PIXEL_MODE_LCD",
-            "FT_PIXEL_MODE_LCD_V",
-            "FT_PIXEL_MODE_BGRA"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags",
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:enum_variant",

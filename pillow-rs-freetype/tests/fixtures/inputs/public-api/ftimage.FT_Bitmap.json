@@ -86,56 +86,233 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/LiberationSerif-Regular.ttf"
+        "variants": [
+          {
+            "id": "m1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "outline_font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap/embedded-strikes.ttf"
+              },
+              "color_font": {
+                "kind": "ref",
+                "id": "fonts/color/bgra-color-glyph.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "probe": [
+                "slot.bitmap.rows",
+                "slot.bitmap.width",
+                "slot.bitmap.pitch",
+                "slot.bitmap.buffer",
+                "slot.bitmap.num_grays",
+                "slot.bitmap.pixel_mode"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "render_glyph:explicit-m1"
+            ]
           },
-          "outline_font": {
-            "kind": "ref",
-            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          {
+            "id": "m2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "outline_font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap/embedded-strikes.ttf"
+              },
+              "color_font": {
+                "kind": "ref",
+                "id": "fonts/color/bgra-color-glyph.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "probe": [
+                "slot.bitmap.rows",
+                "slot.bitmap.width",
+                "slot.bitmap.pitch",
+                "slot.bitmap.buffer",
+                "slot.bitmap.num_grays",
+                "slot.bitmap.pixel_mode"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "render_glyph:explicit-m2"
+            ]
           },
-          "bitmap_font": {
-            "kind": "ref",
-            "id": "fonts/bitmap/embedded-strikes.ttf"
+          {
+            "id": "m3",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "outline_font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap/embedded-strikes.ttf"
+              },
+              "color_font": {
+                "kind": "ref",
+                "id": "fonts/color/bgra-color-glyph.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "probe": [
+                "slot.bitmap.rows",
+                "slot.bitmap.width",
+                "slot.bitmap.pitch",
+                "slot.bitmap.buffer",
+                "slot.bitmap.num_grays",
+                "slot.bitmap.pixel_mode"
+              ],
+              "render_mode": "FT_RENDER_MODE_LCD"
+            },
+            "coverage": [
+              "render_glyph:explicit-m3"
+            ]
           },
-          "color_font": {
-            "kind": "ref",
-            "id": "fonts/color/bgra-color-glyph.ttf"
+          {
+            "id": "m4",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "outline_font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap/embedded-strikes.ttf"
+              },
+              "color_font": {
+                "kind": "ref",
+                "id": "fonts/color/bgra-color-glyph.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "probe": [
+                "slot.bitmap.rows",
+                "slot.bitmap.width",
+                "slot.bitmap.pitch",
+                "slot.bitmap.buffer",
+                "slot.bitmap.num_grays",
+                "slot.bitmap.pixel_mode"
+              ],
+              "render_mode": "FT_RENDER_MODE_LCD_V"
+            },
+            "coverage": [
+              "render_glyph:explicit-m4"
+            ]
+          },
+          {
+            "id": "m5",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "outline_font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "bitmap_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap/embedded-strikes.ttf"
+              },
+              "color_font": {
+                "kind": "ref",
+                "id": "fonts/color/bgra-color-glyph.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "probe": [
+                "slot.bitmap.rows",
+                "slot.bitmap.width",
+                "slot.bitmap.pitch",
+                "slot.bitmap.buffer",
+                "slot.bitmap.num_grays",
+                "slot.bitmap.pixel_mode"
+              ],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": [
+              "render_glyph:explicit-m5"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": {
-            "x": 0,
-            "y": 20
-          },
-          "glyph_index": 36,
-          "load_flags": [
-            "FT_LOAD_DEFAULT"
-          ],
-          "render_modes": [
-            "FT_RENDER_MODE_NORMAL",
-            "FT_RENDER_MODE_MONO",
-            "FT_RENDER_MODE_LCD",
-            "FT_RENDER_MODE_LCD_V",
-            "FT_RENDER_MODE_SDF"
-          ],
-          "probe": [
-            "slot.bitmap.rows",
-            "slot.bitmap.width",
-            "slot.bitmap.pitch",
-            "slot.bitmap.buffer",
-            "slot.bitmap.num_grays",
-            "slot.bitmap.pixel_mode"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:record",

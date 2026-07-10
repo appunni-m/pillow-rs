@@ -18,32 +18,88 @@
       "schema": "glyph_to_bitmap",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "g36-m1",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "source_creation": "FT_Get_Glyph outline",
+              "destroy": false,
+              "origin": null,
+              "glyph_index": 36,
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "ftglyph.glyph_to_bitmap:explicit-g36-m1"
+            ]
+          },
+          {
+            "id": "g36-m2",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "source_creation": "FT_Get_Glyph outline",
+              "destroy": false,
+              "origin": null,
+              "glyph_index": 36,
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "ftglyph.glyph_to_bitmap:explicit-g36-m2"
+            ]
+          },
+          {
+            "id": "g43-m3",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "source_creation": "FT_Get_Glyph outline",
+              "destroy": false,
+              "origin": null,
+              "glyph_index": 43,
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "ftglyph.glyph_to_bitmap:explicit-g43-m3"
+            ]
+          },
+          {
+            "id": "g43-m4",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "source_creation": "FT_Get_Glyph outline",
+              "destroy": false,
+              "origin": null,
+              "glyph_index": 43,
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "ftglyph.glyph_to_bitmap:explicit-g43-m4"
+            ]
           }
-        },
-        "params": {
-          "source_creation": "FT_Get_Glyph outline",
-          "destroy": false,
-          "render_modes": [
-            "FT_RENDER_MODE_NORMAL",
-            "FT_RENDER_MODE_MONO"
-          ],
-          "origin": null,
-          "glyph_indices": [
-            36,
-            43
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices",
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -86,30 +142,46 @@
       "schema": "glyph_to_bitmap",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "g36-m1",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "source_creation": "FT_Get_Glyph outline",
+              "destroy": true,
+              "glyph_index": 36,
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "ftglyph.glyph_to_bitmap:explicit-g36-m1"
+            ]
+          },
+          {
+            "id": "g43-m2",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "source_creation": "FT_Get_Glyph outline",
+              "destroy": true,
+              "glyph_index": 43,
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "ftglyph.glyph_to_bitmap:explicit-g43-m2"
+            ]
           }
-        },
-        "params": {
-          "source_creation": "FT_Get_Glyph outline",
-          "destroy": true,
-          "render_modes": [
-            "FT_RENDER_MODE_NORMAL"
-          ],
-          "glyph_indices": [
-            36,
-            43
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices",
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -146,25 +218,26 @@
       "schema": "glyph_to_bitmap",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "bitmap_strike_font": {
-            "kind": "ref",
-            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
-            "asset_kind": "font"
+        "variants": [
+          {
+            "id": "m1",
+            "assets": {
+              "bitmap_strike_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "source_creation": "FT_Get_Glyph bitmap",
+              "destroy": true,
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "ftglyph.glyph_to_bitmap:explicit-m1"
+            ]
           }
-        },
-        "params": {
-          "source_creation": "FT_Get_Glyph bitmap",
-          "destroy": true,
-          "render_modes": [
-            "FT_RENDER_MODE_NORMAL"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -204,39 +277,40 @@
       "schema": "glyph_to_bitmap",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "m1",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "source_creation": "FT_Get_Glyph outline",
+              "destroy": false,
+              "origins": [
+                {
+                  "x": 0,
+                  "y": 0
+                },
+                {
+                  "x": 32,
+                  "y": -48
+                },
+                {
+                  "x": -96,
+                  "y": 64
+                }
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "ftglyph.glyph_to_bitmap:explicit-m1"
+            ]
           }
-        },
-        "params": {
-          "source_creation": "FT_Get_Glyph outline",
-          "destroy": false,
-          "origins": [
-            {
-              "x": 0,
-              "y": 0
-            },
-            {
-              "x": 32,
-              "y": -48
-            },
-            {
-              "x": -96,
-              "y": 64
-            }
-          ],
-          "render_modes": [
-            "FT_RENDER_MODE_NORMAL"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -279,6 +353,7 @@
       "expect_error": true,
       "inputs": {
         "assets": {
+          "font": { "kind": "ref", "role": "font", "id": "input/fonts/DejaVuSans.ttf" },
           "malformed_facade": {
             "kind": "ref",
             "id": "facades/glyph/malformed-slot-and-class-cases.json",
@@ -328,6 +403,7 @@
       "expect_error": true,
       "inputs": {
         "assets": {
+          "font": { "kind": "ref", "role": "font", "id": "input/fonts/DejaVuSans.ttf" },
           "malformed_facade": {
             "kind": "ref",
             "id": "facades/glyph/malformed-slot-and-class-cases.json",

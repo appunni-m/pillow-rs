@@ -78,39 +78,233 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts/LiberationSerif-Regular.ttf"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": {
-            "x": 0,
-            "y": 32
+        "variants": [
+          {
+            "id": "g36-f1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "FT_Outline_Get_CBox",
+                "FT_Outline_Render direct clip_box preset"
+              ],
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftoutln.outline_get_cbox:explicit-g36-f1"
+            ]
           },
-          "glyph_indices": [
-            36,
-            74,
-            77
-          ],
-          "load_flags": [
-            "FT_LOAD_DEFAULT",
-            "FT_LOAD_NO_HINTING",
-            "FT_LOAD_NO_SCALE"
-          ],
-          "probe": [
-            "FT_Outline_Get_CBox",
-            "FT_Outline_Render direct clip_box preset"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices",
-            "load_flags"
-          ]
-        }
+          {
+            "id": "g36-f2",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "FT_Outline_Get_CBox",
+                "FT_Outline_Render direct clip_box preset"
+              ],
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftoutln.outline_get_cbox:explicit-g36-f2"
+            ]
+          },
+          {
+            "id": "g36-f3",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "FT_Outline_Get_CBox",
+                "FT_Outline_Render direct clip_box preset"
+              ],
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftoutln.outline_get_cbox:explicit-g36-f3"
+            ]
+          },
+          {
+            "id": "g74-f4",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "FT_Outline_Get_CBox",
+                "FT_Outline_Render direct clip_box preset"
+              ],
+              "glyph_index": 74
+            },
+            "coverage": [
+              "ftoutln.outline_get_cbox:explicit-g74-f4"
+            ]
+          },
+          {
+            "id": "g74-f5",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "FT_Outline_Get_CBox",
+                "FT_Outline_Render direct clip_box preset"
+              ],
+              "glyph_index": 74
+            },
+            "coverage": [
+              "ftoutln.outline_get_cbox:explicit-g74-f5"
+            ]
+          },
+          {
+            "id": "g74-f6",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "FT_Outline_Get_CBox",
+                "FT_Outline_Render direct clip_box preset"
+              ],
+              "glyph_index": 74
+            },
+            "coverage": [
+              "ftoutln.outline_get_cbox:explicit-g74-f6"
+            ]
+          },
+          {
+            "id": "g77-f7",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "FT_Outline_Get_CBox",
+                "FT_Outline_Render direct clip_box preset"
+              ],
+              "glyph_index": 77
+            },
+            "coverage": [
+              "ftoutln.outline_get_cbox:explicit-g77-f7"
+            ]
+          },
+          {
+            "id": "g77-f8",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "FT_Outline_Get_CBox",
+                "FT_Outline_Render direct clip_box preset"
+              ],
+              "glyph_index": 77
+            },
+            "coverage": [
+              "ftoutln.outline_get_cbox:explicit-g77-f8"
+            ]
+          },
+          {
+            "id": "g77-f9",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "FT_Outline_Get_CBox",
+                "FT_Outline_Render direct clip_box preset"
+              ],
+              "glyph_index": 77
+            },
+            "coverage": [
+              "ftoutln.outline_get_cbox:explicit-g77-f9"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:record",

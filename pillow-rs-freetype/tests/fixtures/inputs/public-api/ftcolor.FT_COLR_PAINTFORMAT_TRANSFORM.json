@@ -127,45 +127,88 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/color/colr-v1-root-transform.ttf",
-            "asset_kind": "font"
-          }
-        },
-        "params": {
-          "symbol_under_test": "FT_COLR_PAINTFORMAT_TRANSFORM",
-          "base_glyph": "glyph_with_colr_v1_root",
-          "root_transform": "FT_COLOR_INCLUDE_ROOT_TRANSFORM",
-          "pixel_sizes": [
-            16,
-            31
-          ],
-          "set_transform": {
-            "matrix": {
-              "xx": 65536,
-              "xy": 8192,
-              "yx": -4096,
-              "yy": 65536
+        "variants": [
+          {
+            "id": "s16",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/color/colr-v1-root-transform.ttf",
+                "asset_kind": "font"
+              }
             },
-            "delta_26_6": {
-              "x": 96,
-              "y": -64
-            }
+            "params": {
+              "symbol_under_test": "FT_COLR_PAINTFORMAT_TRANSFORM",
+              "base_glyph": "glyph_with_colr_v1_root",
+              "root_transform": "FT_COLOR_INCLUDE_ROOT_TRANSFORM",
+              "set_transform": {
+                "matrix": {
+                  "xx": 65536,
+                  "xy": 8192,
+                  "yx": -4096,
+                  "yy": 65536
+                },
+                "delta_26_6": {
+                  "x": 96,
+                  "y": -64
+                }
+              },
+              "follow_calls": [
+                "FT_Set_Pixel_Sizes",
+                "FT_Set_Transform",
+                "FT_Get_Color_Glyph_Paint",
+                "FT_Get_Paint"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              }
+            },
+            "coverage": [
+              "ftcolor.get_root_transform_paint:explicit-s16"
+            ]
           },
-          "follow_calls": [
-            "FT_Set_Pixel_Sizes",
-            "FT_Set_Transform",
-            "FT_Get_Color_Glyph_Paint",
-            "FT_Get_Paint"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "sizes"
-          ]
-        }
+          {
+            "id": "s31",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/color/colr-v1-root-transform.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "symbol_under_test": "FT_COLR_PAINTFORMAT_TRANSFORM",
+              "base_glyph": "glyph_with_colr_v1_root",
+              "root_transform": "FT_COLOR_INCLUDE_ROOT_TRANSFORM",
+              "set_transform": {
+                "matrix": {
+                  "xx": 65536,
+                  "xy": 8192,
+                  "yx": -4096,
+                  "yy": 65536
+                },
+                "delta_26_6": {
+                  "x": 96,
+                  "y": -64
+                }
+              },
+              "follow_calls": [
+                "FT_Set_Pixel_Sizes",
+                "FT_Set_Transform",
+                "FT_Get_Color_Glyph_Paint",
+                "FT_Get_Paint"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 31
+              }
+            },
+            "coverage": [
+              "ftcolor.get_root_transform_paint:explicit-s31"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:enum_variant",

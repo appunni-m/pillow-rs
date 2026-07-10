@@ -1,7 +1,10 @@
 {
   "version": 1,
   "subject": "ftimage.FT_PIXEL_MODE_LCD",
-  "manifest_cases": ["value_matches_header", "produced_by_lcd_render"],
+  "manifest_cases": [
+    "value_matches_header",
+    "produced_by_lcd_render"
+  ],
   "cases": [
     {
       "case_id": "ftimage.FT_PIXEL_MODE_LCD.value_matches_header",
@@ -10,9 +13,34 @@
       "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"include": "<freetype/ftimage.h>", "symbol": "FT_PIXEL_MODE_LCD", "enum": "FT_Pixel_Mode", "expected_value": 5}},
-      "classifiers": ["kind:enum_variant", "header:ftimage", "abi:value"],
-      "expectation": {"status": "ok", "output_shape": {"symbol": "FT_PIXEL_MODE_LCD", "value_type": "FT_Pixel_Mode"}, "compare": {"mode": "value", "paths": ["symbol", "numeric_value"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftimage.h>",
+          "symbol": "FT_PIXEL_MODE_LCD",
+          "enum": "FT_Pixel_Mode",
+          "expected_value": 5
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftimage",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "FT_PIXEL_MODE_LCD",
+          "value_type": "FT_Pixel_Mode"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "numeric_value"
+          ]
+        }
+      }
     },
     {
       "case_id": "ftimage.FT_PIXEL_MODE_LCD.produced_by_lcd_render",
@@ -21,9 +49,336 @@
       "operation": "render_glyph",
       "schema": "bitmap_result",
       "expect_error": false,
-      "inputs": {"assets": {"font": {"kind": "file", "role": "font", "path": "input/fonts/DejaVuSans.ttf"}}, "params": {"glyph_indices": [36, 43, 57], "pixel_sizes": [13, 20], "render_mode": "FT_RENDER_MODE_LCD", "load_flag_sets": [["FT_LOAD_DEFAULT"], ["FT_LOAD_NO_HINTING"]], "physical_width_is_subpixel_tripled": true}, "variability": {"axes": ["sizes", "glyph_indices", "load_flags"]}},
-      "classifiers": ["kind:enum_variant", "header:ftimage", "path:runtime"],
-      "expectation": {"status": "ok", "output_shape": {"status": "FT_Error", "bitmap.pixel_mode": "FT_PIXEL_MODE_LCD", "bitmap": "metadata and bytes", "physical_width": "three horizontal subpixel samples per logical pixel"}, "compare": {"mode": "bytes", "paths": ["rows[*].status", "rows[*].bitmap.pixel_mode", "rows[*].bitmap.rows", "rows[*].bitmap.width", "rows[*].bitmap.pitch", "rows[*].bitmap.buffer", "rows[*].placement"]}}
+      "inputs": {
+        "variants": [
+          {
+            "id": "s13-g36-f1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "render_mode": "FT_RENDER_MODE_LCD",
+              "physical_width_is_subpixel_tripled": true,
+              "pixel_size": {
+                "x": 0,
+                "y": 13
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "render_glyph:explicit-s13-g36-f1"
+            ]
+          },
+          {
+            "id": "s13-g36-f2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "render_mode": "FT_RENDER_MODE_LCD",
+              "physical_width_is_subpixel_tripled": true,
+              "pixel_size": {
+                "x": 0,
+                "y": 13
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "render_glyph:explicit-s13-g36-f2"
+            ]
+          },
+          {
+            "id": "s13-g43-f3",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "render_mode": "FT_RENDER_MODE_LCD",
+              "physical_width_is_subpixel_tripled": true,
+              "pixel_size": {
+                "x": 0,
+                "y": 13
+              },
+              "glyph_index": 43,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "render_glyph:explicit-s13-g43-f3"
+            ]
+          },
+          {
+            "id": "s13-g43-f4",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "render_mode": "FT_RENDER_MODE_LCD",
+              "physical_width_is_subpixel_tripled": true,
+              "pixel_size": {
+                "x": 0,
+                "y": 13
+              },
+              "glyph_index": 43,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "render_glyph:explicit-s13-g43-f4"
+            ]
+          },
+          {
+            "id": "s13-g57-f5",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "render_mode": "FT_RENDER_MODE_LCD",
+              "physical_width_is_subpixel_tripled": true,
+              "pixel_size": {
+                "x": 0,
+                "y": 13
+              },
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "render_glyph:explicit-s13-g57-f5"
+            ]
+          },
+          {
+            "id": "s13-g57-f6",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "render_mode": "FT_RENDER_MODE_LCD",
+              "physical_width_is_subpixel_tripled": true,
+              "pixel_size": {
+                "x": 0,
+                "y": 13
+              },
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "render_glyph:explicit-s13-g57-f6"
+            ]
+          },
+          {
+            "id": "s20-g36-f7",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "render_mode": "FT_RENDER_MODE_LCD",
+              "physical_width_is_subpixel_tripled": true,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "render_glyph:explicit-s20-g36-f7"
+            ]
+          },
+          {
+            "id": "s20-g36-f8",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "render_mode": "FT_RENDER_MODE_LCD",
+              "physical_width_is_subpixel_tripled": true,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "render_glyph:explicit-s20-g36-f8"
+            ]
+          },
+          {
+            "id": "s20-g43-f9",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "render_mode": "FT_RENDER_MODE_LCD",
+              "physical_width_is_subpixel_tripled": true,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 43,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "render_glyph:explicit-s20-g43-f9"
+            ]
+          },
+          {
+            "id": "s20-g43-f10",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "render_mode": "FT_RENDER_MODE_LCD",
+              "physical_width_is_subpixel_tripled": true,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 43,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "render_glyph:explicit-s20-g43-f10"
+            ]
+          },
+          {
+            "id": "s20-g57-f11",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "render_mode": "FT_RENDER_MODE_LCD",
+              "physical_width_is_subpixel_tripled": true,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "render_glyph:explicit-s20-g57-f11"
+            ]
+          },
+          {
+            "id": "s20-g57-f12",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "render_mode": "FT_RENDER_MODE_LCD",
+              "physical_width_is_subpixel_tripled": true,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "render_glyph:explicit-s20-g57-f12"
+            ]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftimage",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "bitmap.pixel_mode": "FT_PIXEL_MODE_LCD",
+          "bitmap": "metadata and bytes",
+          "physical_width": "three horizontal subpixel samples per logical pixel"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "rows[*].status",
+            "rows[*].bitmap.pixel_mode",
+            "rows[*].bitmap.rows",
+            "rows[*].bitmap.width",
+            "rows[*].bitmap.pitch",
+            "rows[*].bitmap.buffer",
+            "rows[*].placement"
+          ]
+        }
+      }
     }
   ]
 }

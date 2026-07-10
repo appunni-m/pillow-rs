@@ -92,7 +92,7 @@ fn get_ft_ref(
 #[ignore = "live C oracle; static fixture pixel tests are the default CI coverage"]
 fn test_direct_ft_comparison() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let font_dir = manifest_dir.join("tests/fixtures/input/fonts_autohint");
+    let font_dir = manifest_dir.join("tests/fixtures/deprecated/fonts_autohint");
     let ft_bin = Path::new("/tmp/gen_refs_v4");
     let ft_lib = manifest_dir.join("freetype/build");
     assert!(ft_bin.exists() && ft_lib.exists());

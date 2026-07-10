@@ -18,52 +18,137 @@
       "schema": "cache_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
+        "variants": [
+          {
+            "id": "cp65",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "planned_cache_subsystem_not_out_of_scope",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 65
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp65"
+            ]
           },
-          "alt_font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-serif.ttf",
-            "asset_kind": "font"
+          {
+            "id": "cp1114111",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "planned_cache_subsystem_not_out_of_scope",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 1114111
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp1114111"
+            ]
           },
-          "multi_charmap_font": {
-            "kind": "ref",
-            "id": "fonts/charmap/multiple-charmaps.ttf",
-            "asset_kind": "font"
+          {
+            "id": "cp57344",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "planned_cache_subsystem_not_out_of_scope",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 57344
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp57344"
+            ]
           }
-        },
-        "params": {
-          "manager_limits": {
-            "max_faces": 0,
-            "max_sizes": 0,
-            "max_bytes": 0
-          },
-          "face_ids": [
-            "face-A",
-            "face-B"
-          ],
-          "requester": "path_face_requester_with_log",
-          "scenario": "planned_cache_subsystem_not_out_of_scope",
-          "cmap_indexes": [
-            0,
-            -1,
-            999
-          ],
-          "char_codes": [
-            65,
-            1114111,
-            57344
-          ],
-          "repeat_lookup": true
-        },
-        "variability": {
-          "axes": [
-            "codepoints"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -100,52 +185,137 @@
       "schema": "cache_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
+        "variants": [
+          {
+            "id": "cp65",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_lookup_hit_and_repeat_hit",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 65
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp65"
+            ]
           },
-          "alt_font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-serif.ttf",
-            "asset_kind": "font"
+          {
+            "id": "cp1114111",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_lookup_hit_and_repeat_hit",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 1114111
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp1114111"
+            ]
           },
-          "multi_charmap_font": {
-            "kind": "ref",
-            "id": "fonts/charmap/multiple-charmaps.ttf",
-            "asset_kind": "font"
+          {
+            "id": "cp57344",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_lookup_hit_and_repeat_hit",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 57344
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp57344"
+            ]
           }
-        },
-        "params": {
-          "manager_limits": {
-            "max_faces": 0,
-            "max_sizes": 0,
-            "max_bytes": 0
-          },
-          "face_ids": [
-            "face-A",
-            "face-B"
-          ],
-          "requester": "path_face_requester_with_log",
-          "scenario": "success_lookup_hit_and_repeat_hit",
-          "cmap_indexes": [
-            0,
-            -1,
-            999
-          ],
-          "char_codes": [
-            65,
-            1114111,
-            57344
-          ],
-          "repeat_lookup": true
-        },
-        "variability": {
-          "axes": [
-            "codepoints"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -182,52 +352,137 @@
       "schema": "cache_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
+        "variants": [
+          {
+            "id": "cp65",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_lookup_miss_returns_zero",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 65
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp65"
+            ]
           },
-          "alt_font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-serif.ttf",
-            "asset_kind": "font"
+          {
+            "id": "cp1114111",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_lookup_miss_returns_zero",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 1114111
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp1114111"
+            ]
           },
-          "multi_charmap_font": {
-            "kind": "ref",
-            "id": "fonts/charmap/multiple-charmaps.ttf",
-            "asset_kind": "font"
+          {
+            "id": "cp57344",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_lookup_miss_returns_zero",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 57344
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp57344"
+            ]
           }
-        },
-        "params": {
-          "manager_limits": {
-            "max_faces": 0,
-            "max_sizes": 0,
-            "max_bytes": 0
-          },
-          "face_ids": [
-            "face-A",
-            "face-B"
-          ],
-          "requester": "path_face_requester_with_log",
-          "scenario": "success_lookup_miss_returns_zero",
-          "cmap_indexes": [
-            0,
-            -1,
-            999
-          ],
-          "char_codes": [
-            65,
-            1114111,
-            57344
-          ],
-          "repeat_lookup": true
-        },
-        "variability": {
-          "axes": [
-            "codepoints"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -264,52 +519,137 @@
       "schema": "cache_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
+        "variants": [
+          {
+            "id": "cp65",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_negative_cmap_index_uses_current_charmap",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 65
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp65"
+            ]
           },
-          "alt_font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-serif.ttf",
-            "asset_kind": "font"
+          {
+            "id": "cp1114111",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_negative_cmap_index_uses_current_charmap",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 1114111
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp1114111"
+            ]
           },
-          "multi_charmap_font": {
-            "kind": "ref",
-            "id": "fonts/charmap/multiple-charmaps.ttf",
-            "asset_kind": "font"
+          {
+            "id": "cp57344",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_negative_cmap_index_uses_current_charmap",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 57344
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp57344"
+            ]
           }
-        },
-        "params": {
-          "manager_limits": {
-            "max_faces": 0,
-            "max_sizes": 0,
-            "max_bytes": 0
-          },
-          "face_ids": [
-            "face-A",
-            "face-B"
-          ],
-          "requester": "path_face_requester_with_log",
-          "scenario": "success_negative_cmap_index_uses_current_charmap",
-          "cmap_indexes": [
-            0,
-            -1,
-            999
-          ],
-          "char_codes": [
-            65,
-            1114111,
-            57344
-          ],
-          "repeat_lookup": true
-        },
-        "variability": {
-          "axes": [
-            "codepoints"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -346,52 +686,137 @@
       "schema": "cache_operation",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
+        "variants": [
+          {
+            "id": "cp65",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "error_null_cache_returns_zero",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 65
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp65"
+            ]
           },
-          "alt_font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-serif.ttf",
-            "asset_kind": "font"
+          {
+            "id": "cp1114111",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "error_null_cache_returns_zero",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 1114111
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp1114111"
+            ]
           },
-          "multi_charmap_font": {
-            "kind": "ref",
-            "id": "fonts/charmap/multiple-charmaps.ttf",
-            "asset_kind": "font"
+          {
+            "id": "cp57344",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "error_null_cache_returns_zero",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 57344
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp57344"
+            ]
           }
-        },
-        "params": {
-          "manager_limits": {
-            "max_faces": 0,
-            "max_sizes": 0,
-            "max_bytes": 0
-          },
-          "face_ids": [
-            "face-A",
-            "face-B"
-          ],
-          "requester": "path_face_requester_with_log",
-          "scenario": "error_null_cache_returns_zero",
-          "cmap_indexes": [
-            0,
-            -1,
-            999
-          ],
-          "char_codes": [
-            65,
-            1114111,
-            57344
-          ],
-          "repeat_lookup": true
-        },
-        "variability": {
-          "axes": [
-            "codepoints"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -425,52 +850,137 @@
       "schema": "cache_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
+        "variants": [
+          {
+            "id": "cp65",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "lifecycle_remove_faceid_and_reset",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 65
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp65"
+            ]
           },
-          "alt_font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-serif.ttf",
-            "asset_kind": "font"
+          {
+            "id": "cp1114111",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "lifecycle_remove_faceid_and_reset",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 1114111
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp1114111"
+            ]
           },
-          "multi_charmap_font": {
-            "kind": "ref",
-            "id": "fonts/charmap/multiple-charmaps.ttf",
-            "asset_kind": "font"
+          {
+            "id": "cp57344",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "lifecycle_remove_faceid_and_reset",
+              "cmap_indexes": [
+                0,
+                -1,
+                999
+              ],
+              "repeat_lookup": true,
+              "char_code": 57344
+            },
+            "coverage": [
+              "ftcache.cmap_cache_lookup:explicit-cp57344"
+            ]
           }
-        },
-        "params": {
-          "manager_limits": {
-            "max_faces": 0,
-            "max_sizes": 0,
-            "max_bytes": 0
-          },
-          "face_ids": [
-            "face-A",
-            "face-B"
-          ],
-          "requester": "path_face_requester_with_log",
-          "scenario": "lifecycle_remove_faceid_and_reset",
-          "cmap_indexes": [
-            0,
-            -1,
-            999
-          ],
-          "char_codes": [
-            65,
-            1114111,
-            57344
-          ],
-          "repeat_lookup": true
-        },
-        "variability": {
-          "axes": [
-            "codepoints"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",

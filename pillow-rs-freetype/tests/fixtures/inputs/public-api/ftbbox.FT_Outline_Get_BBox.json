@@ -18,30 +18,52 @@
       "schema": "outline_bbox",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "g43",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "expect_cbox_equals_bbox": true,
+              "glyph_index": 43
+            },
+            "coverage": [
+              "ftbbox.outline_get_bbox:explicit-g43"
+            ]
+          },
+          {
+            "id": "g44",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "expect_cbox_equals_bbox": true,
+              "glyph_index": 44
+            },
+            "coverage": [
+              "ftbbox.outline_get_bbox:explicit-g44"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": 20,
-          "glyph_indices": [
-            43,
-            44
-          ],
-          "load_flags": [
-            "FT_LOAD_NO_HINTING"
-          ],
-          "expect_cbox_equals_bbox": true
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -76,28 +98,29 @@
       "schema": "outline_bbox",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/outlines/curve-extrema.ttf"
+        "variants": [
+          {
+            "id": "gglyph_with_off-curve_extrema",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/outlines/curve-extrema.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 64,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "glyph_index": "glyph with off-curve extrema"
+            },
+            "coverage": [
+              "ftbbox.outline_get_bbox:explicit-gglyph_with_off-curve_extrema"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": 64,
-          "glyph_indices": [
-            "glyph with off-curve extrema"
-          ],
-          "load_flags": [
-            "FT_LOAD_NO_HINTING"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -135,33 +158,34 @@
       "schema": "outline_bbox",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/outlines/empty-glyph.ttf"
+        "variants": [
+          {
+            "id": "gspace_or_empty_outline",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/outlines/empty-glyph.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "sentinel_bbox": {
+                "xMin": 111,
+                "yMin": 222,
+                "xMax": 333,
+                "yMax": 444
+              },
+              "glyph_index": "space_or_empty_outline"
+            },
+            "coverage": [
+              "ftbbox.outline_get_bbox:explicit-gspace_or_empty_outline"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "glyph_indices": [
-            "space_or_empty_outline"
-          ],
-          "load_flags": [
-            "FT_LOAD_NO_HINTING"
-          ],
-          "sentinel_bbox": {
-            "xMin": 111,
-            "yMin": 222,
-            "xMax": 333,
-            "yMax": 444
-          }
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -199,29 +223,50 @@
       "schema": "outline_bbox",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/tricky/mingliu-tricky.ttf"
+        "variants": [
+          {
+            "id": "g1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/tricky/mingliu-tricky.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ],
+              "compare_even_if_documented_meaningless": true,
+              "glyph_index": 1
+            },
+            "coverage": [
+              "ftbbox.outline_get_bbox:explicit-g1"
+            ]
+          },
+          {
+            "id": "g2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/tricky/mingliu-tricky.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ],
+              "compare_even_if_documented_meaningless": true,
+              "glyph_index": 2
+            },
+            "coverage": [
+              "ftbbox.outline_get_bbox:explicit-g2"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "glyph_indices": [
-            1,
-            2
-          ],
-          "load_flags": [
-            "FT_LOAD_NO_SCALE"
-          ],
-          "compare_even_if_documented_meaningless": true
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -310,6 +355,7 @@
       "expect_error": true,
       "inputs": {
         "assets": {
+          "font": { "kind": "ref", "role": "font", "id": "input/fonts/DejaVuSans.ttf" },
           "outline": {
             "kind": "file",
             "role": "outline",

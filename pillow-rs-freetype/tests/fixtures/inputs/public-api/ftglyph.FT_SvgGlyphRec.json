@@ -71,29 +71,30 @@
       "schema": "glyph_record",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "svg_font": {
-            "kind": "ref",
-            "id": "fonts/svg/ot-svg-glyphs.ttf",
-            "asset_kind": "font",
-            "optional": true
+        "variants": [
+          {
+            "id": "gsvg_glyph",
+            "assets": {
+              "svg_font": {
+                "kind": "ref",
+                "id": "fonts/svg/ot-svg-glyphs.ttf",
+                "asset_kind": "font",
+                "optional": true
+              }
+            },
+            "params": {
+              "creation_paths": [
+                "FT_Get_Glyph svg",
+                "FT_Glyph_Copy svg",
+                "FT_Glyph_Transform svg"
+              ],
+              "glyph_index": "svg_glyph"
+            },
+            "coverage": [
+              "ftglyph.record_inspect:explicit-gsvg_glyph"
+            ]
           }
-        },
-        "params": {
-          "creation_paths": [
-            "FT_Get_Glyph svg",
-            "FT_Glyph_Copy svg",
-            "FT_Glyph_Transform svg"
-          ],
-          "glyph_indices": [
-            "svg_glyph"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:record",

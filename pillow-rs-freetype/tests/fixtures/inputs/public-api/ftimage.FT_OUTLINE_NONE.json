@@ -58,34 +58,83 @@
       "schema": "outline_raster",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "m1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "synthetic_outlines": {
+                "kind": "ref",
+                "id": "outlines/synthetic/simple-overlap-thin-matrix.json",
+                "asset_kind": "outline-set"
+              }
+            },
+            "params": {
+              "outline_flags": [
+                "FT_OUTLINE_NONE"
+              ],
+              "role": "baseline for individual outline-flag comparisons",
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-m1"
+            ]
           },
-          "synthetic_outlines": {
-            "kind": "ref",
-            "id": "outlines/synthetic/simple-overlap-thin-matrix.json",
-            "asset_kind": "outline-set"
+          {
+            "id": "m2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "synthetic_outlines": {
+                "kind": "ref",
+                "id": "outlines/synthetic/simple-overlap-thin-matrix.json",
+                "asset_kind": "outline-set"
+              }
+            },
+            "params": {
+              "outline_flags": [
+                "FT_OUTLINE_NONE"
+              ],
+              "role": "baseline for individual outline-flag comparisons",
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-m2"
+            ]
+          },
+          {
+            "id": "m3",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "synthetic_outlines": {
+                "kind": "ref",
+                "id": "outlines/synthetic/simple-overlap-thin-matrix.json",
+                "asset_kind": "outline-set"
+              }
+            },
+            "params": {
+              "outline_flags": [
+                "FT_OUTLINE_NONE"
+              ],
+              "role": "baseline for individual outline-flag comparisons",
+              "render_mode": "FT_RENDER_MODE_LCD"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-m3"
+            ]
           }
-        },
-        "params": {
-          "outline_flags": [
-            "FT_OUTLINE_NONE"
-          ],
-          "render_modes": [
-            "FT_RENDER_MODE_NORMAL",
-            "FT_RENDER_MODE_MONO",
-            "FT_RENDER_MODE_LCD"
-          ],
-          "role": "baseline for individual outline-flag comparisons"
-        },
-        "variability": {
-          "axes": [
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:flag",

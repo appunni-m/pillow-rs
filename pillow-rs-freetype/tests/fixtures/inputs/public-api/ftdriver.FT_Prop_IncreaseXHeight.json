@@ -152,57 +152,58 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "id": "input/fonts/DejaVuSans.ttf",
-            "requirements": "Existing scalable Latin font with stable lowercase x-height glyphs such as x, e, n."
-          },
-          "control_font": {
-            "kind": "ref",
-            "role": "control_font",
-            "id": "fonts/autohint/LiberationSans-Regular.ttf",
-            "requirements": "Existing Latin control font for font variability of x-height behavior."
+        "variants": [
+          {
+            "id": "m1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "input/fonts/DejaVuSans.ttf",
+                "requirements": "Existing scalable Latin font with stable lowercase x-height glyphs such as x, e, n."
+              },
+              "control_font": {
+                "kind": "ref",
+                "role": "control_font",
+                "id": "fonts/autohint/LiberationSans-Regular.ttf",
+                "requirements": "Existing Latin control font for font variability of x-height behavior."
+              }
+            },
+            "params": {
+              "module_name": "autofitter",
+              "property_name": "increase-x-height",
+              "face_index": 0,
+              "limits": [
+                0,
+                6,
+                10,
+                14
+              ],
+              "ppems": [
+                5,
+                6,
+                9,
+                10,
+                11,
+                14,
+                15
+              ],
+              "glyph_chars": [
+                "x",
+                "e",
+                "n"
+              ],
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ],
+              "pinned_source": "freetype/include/freetype/ftdriver.h:1215-1283 and freetype/src/autofit/afmodule.c:174-187",
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "FT_Property_Set_then_FT_Load_Glyph:explicit-m1"
+            ]
           }
-        },
-        "params": {
-          "module_name": "autofitter",
-          "property_name": "increase-x-height",
-          "face_index": 0,
-          "limits": [
-            0,
-            6,
-            10,
-            14
-          ],
-          "ppems": [
-            5,
-            6,
-            9,
-            10,
-            11,
-            14,
-            15
-          ],
-          "glyph_chars": [
-            "x",
-            "e",
-            "n"
-          ],
-          "load_flags": [
-            "FT_LOAD_FORCE_AUTOHINT"
-          ],
-          "render_modes": [
-            "FT_RENDER_MODE_NORMAL"
-          ],
-          "pinned_source": "freetype/include/freetype/ftdriver.h:1215-1283 and freetype/src/autofit/afmodule.c:174-187"
-        },
-        "variability": {
-          "axes": [
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:record",

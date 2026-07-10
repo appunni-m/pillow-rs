@@ -48,27 +48,59 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts_autohint/DejaVuSansMono.ttf"
+        "variants": [
+          {
+            "id": "focused-fixed-width",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/metrics/fixed-width.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_FIXED_WIDTH",
+              "read_fields": [
+                "face_flags",
+                "family_name",
+                "style_name"
+              ]
+            },
+            "coverage": [
+              "font/face_flags:fixed-width-true"
+            ]
+          },
+          {
+            "id": "bold-italic-style-conditions",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/metadata/style-bold-italic.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_FIXED_WIDTH",
+              "read_fields": [
+                "face_flags",
+                "style_flags",
+                "family_name",
+                "style_name"
+              ]
+            },
+            "coverage": [
+              "font/style_flags:bold-condition-true",
+              "font/style_flags:italic-condition-true"
+            ]
           }
-        },
-        "params": {
-          "open": "FT_New_Memory_Face",
-          "face_index": 0,
-          "flag": "FT_FACE_FLAG_FIXED_WIDTH",
-          "read_fields": [
-            "face_flags",
-            "family_name",
-            "style_name"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:flag",
         "runtime:face_flags",
-        "asset:existing"
+        "asset:focused-fixed-width"
       ],
       "expectation": {
         "status": "ok",

@@ -18,54 +18,53 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
-        "params": {
-          "scenario": "success_empty_target_allocates_bgra",
-          "source_pixel_modes": [
-            "MONO",
-            "GRAY2",
-            "GRAY4",
-            "GRAY",
-            "LCD",
-            "LCD_V",
-            "BGRA"
-          ],
-          "offsets_26_6": [
-            [
-              31,
-              95
-            ],
-            [
-              -33,
-              130
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "synthetic_bitmaps": {
+                "kind": "ref",
+                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+                "asset_kind": "binary"
+              },
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "scenario": "success_empty_target_allocates_bgra",
+              "source_pixel_modes": [
+                "MONO",
+                "GRAY2",
+                "GRAY4",
+                "GRAY",
+                "LCD",
+                "LCD_V",
+                "BGRA"
+              ],
+              "offsets_26_6": [
+                [
+                  31,
+                  95
+                ],
+                [
+                  -33,
+                  130
+                ]
+              ],
+              "flow": [
+                "positive_pitch",
+                "negative_pitch"
+              ],
+              "load_flags": 0
+            },
+            "coverage": [
+              "ftbitmap.bitmap_blend:explicit-f1"
             ]
-          ],
-          "target_modes": [
-            "NONE",
-            "BGRA",
-            "GRAY"
-          ],
-          "flow": [
-            "positive_pitch",
-            "negative_pitch"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -115,54 +114,53 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
-        "params": {
-          "scenario": "success_existing_bgra_reallocates_or_preserves",
-          "source_pixel_modes": [
-            "MONO",
-            "GRAY2",
-            "GRAY4",
-            "GRAY",
-            "LCD",
-            "LCD_V",
-            "BGRA"
-          ],
-          "offsets_26_6": [
-            [
-              31,
-              95
-            ],
-            [
-              -33,
-              130
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "synthetic_bitmaps": {
+                "kind": "ref",
+                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+                "asset_kind": "binary"
+              },
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "scenario": "success_existing_bgra_reallocates_or_preserves",
+              "source_pixel_modes": [
+                "MONO",
+                "GRAY2",
+                "GRAY4",
+                "GRAY",
+                "LCD",
+                "LCD_V",
+                "BGRA"
+              ],
+              "offsets_26_6": [
+                [
+                  31,
+                  95
+                ],
+                [
+                  -33,
+                  130
+                ]
+              ],
+              "flow": [
+                "positive_pitch",
+                "negative_pitch"
+              ],
+              "load_flags": 0
+            },
+            "coverage": [
+              "ftbitmap.bitmap_blend:explicit-f1"
             ]
-          ],
-          "target_modes": [
-            "NONE",
-            "BGRA",
-            "GRAY"
-          ],
-          "flow": [
-            "positive_pitch",
-            "negative_pitch"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -212,54 +210,53 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
-        "params": {
-          "scenario": "success_source_pixel_modes_and_flow",
-          "source_pixel_modes": [
-            "MONO",
-            "GRAY2",
-            "GRAY4",
-            "GRAY",
-            "LCD",
-            "LCD_V",
-            "BGRA"
-          ],
-          "offsets_26_6": [
-            [
-              31,
-              95
-            ],
-            [
-              -33,
-              130
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "synthetic_bitmaps": {
+                "kind": "ref",
+                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+                "asset_kind": "binary"
+              },
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "scenario": "success_source_pixel_modes_and_flow",
+              "source_pixel_modes": [
+                "MONO",
+                "GRAY2",
+                "GRAY4",
+                "GRAY",
+                "LCD",
+                "LCD_V",
+                "BGRA"
+              ],
+              "offsets_26_6": [
+                [
+                  31,
+                  95
+                ],
+                [
+                  -33,
+                  130
+                ]
+              ],
+              "flow": [
+                "positive_pitch",
+                "negative_pitch"
+              ],
+              "load_flags": 0
+            },
+            "coverage": [
+              "ftbitmap.bitmap_blend:explicit-f1"
             ]
-          ],
-          "target_modes": [
-            "NONE",
-            "BGRA",
-            "GRAY"
-          ],
-          "flow": [
-            "positive_pitch",
-            "negative_pitch"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -309,54 +306,53 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
-        "params": {
-          "scenario": "success_integerizes_offsets",
-          "source_pixel_modes": [
-            "MONO",
-            "GRAY2",
-            "GRAY4",
-            "GRAY",
-            "LCD",
-            "LCD_V",
-            "BGRA"
-          ],
-          "offsets_26_6": [
-            [
-              31,
-              95
-            ],
-            [
-              -33,
-              130
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "synthetic_bitmaps": {
+                "kind": "ref",
+                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+                "asset_kind": "binary"
+              },
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "scenario": "success_integerizes_offsets",
+              "source_pixel_modes": [
+                "MONO",
+                "GRAY2",
+                "GRAY4",
+                "GRAY",
+                "LCD",
+                "LCD_V",
+                "BGRA"
+              ],
+              "offsets_26_6": [
+                [
+                  31,
+                  95
+                ],
+                [
+                  -33,
+                  130
+                ]
+              ],
+              "flow": [
+                "positive_pitch",
+                "negative_pitch"
+              ],
+              "load_flags": 0
+            },
+            "coverage": [
+              "ftbitmap.bitmap_blend:explicit-f1"
             ]
-          ],
-          "target_modes": [
-            "NONE",
-            "BGRA",
-            "GRAY"
-          ],
-          "flow": [
-            "positive_pitch",
-            "negative_pitch"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -406,54 +402,53 @@
       "schema": "bitmap_operation",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
-        "params": {
-          "scenario": "error_invalid_arguments_or_target_mode",
-          "source_pixel_modes": [
-            "MONO",
-            "GRAY2",
-            "GRAY4",
-            "GRAY",
-            "LCD",
-            "LCD_V",
-            "BGRA"
-          ],
-          "offsets_26_6": [
-            [
-              31,
-              95
-            ],
-            [
-              -33,
-              130
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "synthetic_bitmaps": {
+                "kind": "ref",
+                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+                "asset_kind": "binary"
+              },
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "scenario": "error_invalid_arguments_or_target_mode",
+              "source_pixel_modes": [
+                "MONO",
+                "GRAY2",
+                "GRAY4",
+                "GRAY",
+                "LCD",
+                "LCD_V",
+                "BGRA"
+              ],
+              "offsets_26_6": [
+                [
+                  31,
+                  95
+                ],
+                [
+                  -33,
+                  130
+                ]
+              ],
+              "flow": [
+                "positive_pitch",
+                "negative_pitch"
+              ],
+              "load_flags": 0
+            },
+            "coverage": [
+              "ftbitmap.bitmap_blend:explicit-f1"
             ]
-          ],
-          "target_modes": [
-            "NONE",
-            "BGRA",
-            "GRAY"
-          ],
-          "flow": [
-            "positive_pitch",
-            "negative_pitch"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -504,54 +499,53 @@
       "schema": "bitmap_operation",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
-        "params": {
-          "scenario": "error_overflow_or_flow_mismatch",
-          "source_pixel_modes": [
-            "MONO",
-            "GRAY2",
-            "GRAY4",
-            "GRAY",
-            "LCD",
-            "LCD_V",
-            "BGRA"
-          ],
-          "offsets_26_6": [
-            [
-              31,
-              95
-            ],
-            [
-              -33,
-              130
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "synthetic_bitmaps": {
+                "kind": "ref",
+                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+                "asset_kind": "binary"
+              },
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "scenario": "error_overflow_or_flow_mismatch",
+              "source_pixel_modes": [
+                "MONO",
+                "GRAY2",
+                "GRAY4",
+                "GRAY",
+                "LCD",
+                "LCD_V",
+                "BGRA"
+              ],
+              "offsets_26_6": [
+                [
+                  31,
+                  95
+                ],
+                [
+                  -33,
+                  130
+                ]
+              ],
+              "flow": [
+                "positive_pitch",
+                "negative_pitch"
+              ],
+              "load_flags": 0
+            },
+            "coverage": [
+              "ftbitmap.bitmap_blend:explicit-f1"
             ]
-          ],
-          "target_modes": [
-            "NONE",
-            "BGRA",
-            "GRAY"
-          ],
-          "flow": [
-            "positive_pitch",
-            "negative_pitch"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+          }
+        ]
       },
       "classifiers": [
         "kind:function",

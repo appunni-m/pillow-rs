@@ -16,24 +16,65 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "DejaVuSans",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "select_charmap": "FT_ENCODING_UNICODE",
+              "char_code": 65,
+              "size": 20
+            },
+            "coverage": [
+              "get_char_index:explicit-DejaVuSans"
+            ]
+          },
+          {
+            "id": "LiberationSerif-Regular",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "select_charmap": "FT_ENCODING_UNICODE",
+              "char_code": 65,
+              "size": 20
+            },
+            "coverage": [
+              "get_char_index:explicit-LiberationSerif-Regular"
+            ]
+          },
+          {
+            "id": "NotoSans-Regular",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "select_charmap": "FT_ENCODING_UNICODE",
+              "char_code": 65,
+              "size": 20
+            },
+            "coverage": [
+              "get_char_index:explicit-NotoSans-Regular"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "select_charmap": "FT_ENCODING_UNICODE",
-          "char_code": 65,
-          "size": 20
-        },
-        "variability": {
-          "axes": [
-            "fonts"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -62,39 +103,383 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font_folder": {
-            "kind": "file",
-            "role": "font_folder",
-            "path": "input/fonts"
+        "variants": [
+          {
+            "id": "DejaVuSans-s20-cp0-f1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 0
+            },
+            "coverage": [
+              "get_char_index:explicit-DejaVuSans-s20-cp0-f1"
+            ]
+          },
+          {
+            "id": "DejaVuSans-s20-cp32-f2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 32
+            },
+            "coverage": [
+              "get_char_index:explicit-DejaVuSans-s20-cp32-f2"
+            ]
+          },
+          {
+            "id": "DejaVuSans-s20-cp65-f3",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 65
+            },
+            "coverage": [
+              "get_char_index:explicit-DejaVuSans-s20-cp65-f3"
+            ]
+          },
+          {
+            "id": "DejaVuSans-s20-cp8364-f4",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 8364
+            },
+            "coverage": [
+              "get_char_index:explicit-DejaVuSans-s20-cp8364-f4"
+            ]
+          },
+          {
+            "id": "DejaVuSans-s20-cp128512-f5",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 128512
+            },
+            "coverage": [
+              "get_char_index:explicit-DejaVuSans-s20-cp128512-f5"
+            ]
+          },
+          {
+            "id": "LiberationSerif-Regular-s20-cp0-f6",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 0
+            },
+            "coverage": [
+              "get_char_index:explicit-LiberationSerif-Regular-s20-cp0-f6"
+            ]
+          },
+          {
+            "id": "LiberationSerif-Regular-s20-cp32-f7",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 32
+            },
+            "coverage": [
+              "get_char_index:explicit-LiberationSerif-Regular-s20-cp32-f7"
+            ]
+          },
+          {
+            "id": "LiberationSerif-Regular-s20-cp65-f8",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 65
+            },
+            "coverage": [
+              "get_char_index:explicit-LiberationSerif-Regular-s20-cp65-f8"
+            ]
+          },
+          {
+            "id": "LiberationSerif-Regular-s20-cp8364-f9",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 8364
+            },
+            "coverage": [
+              "get_char_index:explicit-LiberationSerif-Regular-s20-cp8364-f9"
+            ]
+          },
+          {
+            "id": "LiberationSerif-Regular-s20-cp128512-f10",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 128512
+            },
+            "coverage": [
+              "get_char_index:explicit-LiberationSerif-Regular-s20-cp128512-f10"
+            ]
+          },
+          {
+            "id": "NotoSans-Regular-s20-cp0-f11",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 0
+            },
+            "coverage": [
+              "get_char_index:explicit-NotoSans-Regular-s20-cp0-f11"
+            ]
+          },
+          {
+            "id": "NotoSans-Regular-s20-cp32-f12",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 32
+            },
+            "coverage": [
+              "get_char_index:explicit-NotoSans-Regular-s20-cp32-f12"
+            ]
+          },
+          {
+            "id": "NotoSans-Regular-s20-cp65-f13",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 65
+            },
+            "coverage": [
+              "get_char_index:explicit-NotoSans-Regular-s20-cp65-f13"
+            ]
+          },
+          {
+            "id": "NotoSans-Regular-s20-cp8364-f14",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 8364
+            },
+            "coverage": [
+              "get_char_index:explicit-NotoSans-Regular-s20-cp8364-f14"
+            ]
+          },
+          {
+            "id": "NotoSans-Regular-s20-cp128512-f15",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "selected_charmaps": [
+                "default",
+                "unicode_if_available"
+              ],
+              "load_flags": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 128512
+            },
+            "coverage": [
+              "get_char_index:explicit-NotoSans-Regular-s20-cp128512-f15"
+            ]
           }
-        },
-        "params": {
-          "sizes": [
-            20
-          ],
-          "char_codes": [
-            0,
-            32,
-            65,
-            8364,
-            128512
-          ],
-          "selected_charmaps": [
-            "default",
-            "unicode_if_available"
-          ],
-          "load_flags": [
-            0
-          ]
-        },
-        "variability": {
-          "axes": [
-            "fonts",
-            "sizes",
-            "codepoints"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -123,41 +508,182 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "cp0",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "non_unicode_charmap_font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/charmap/apple-roman-charmap.ttf",
+                "status": "required_future_asset",
+                "requires": "font with Unicode and non-Unicode charmaps"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "charmap_selection": [
+                "default",
+                "unicode",
+                "non_unicode_if_fixture_present"
+              ],
+              "char_code": 0
+            },
+            "coverage": [
+              "get_char_index:explicit-cp0"
+            ]
           },
-          "non_unicode_charmap_font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/charmap/apple-roman-charmap.ttf",
-            "status": "required_future_asset",
-            "requires": "font with Unicode and non-Unicode charmaps"
+          {
+            "id": "cp65",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "non_unicode_charmap_font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/charmap/apple-roman-charmap.ttf",
+                "status": "required_future_asset",
+                "requires": "font with Unicode and non-Unicode charmaps"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "charmap_selection": [
+                "default",
+                "unicode",
+                "non_unicode_if_fixture_present"
+              ],
+              "char_code": 65
+            },
+            "coverage": [
+              "get_char_index:explicit-cp65"
+            ]
+          },
+          {
+            "id": "cp90",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "non_unicode_charmap_font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/charmap/apple-roman-charmap.ttf",
+                "status": "required_future_asset",
+                "requires": "font with Unicode and non-Unicode charmaps"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "charmap_selection": [
+                "default",
+                "unicode",
+                "non_unicode_if_fixture_present"
+              ],
+              "char_code": 90
+            },
+            "coverage": [
+              "get_char_index:explicit-cp90"
+            ]
+          },
+          {
+            "id": "cp1114111",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "non_unicode_charmap_font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/charmap/apple-roman-charmap.ttf",
+                "status": "required_future_asset",
+                "requires": "font with Unicode and non-Unicode charmaps"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "charmap_selection": [
+                "default",
+                "unicode",
+                "non_unicode_if_fixture_present"
+              ],
+              "char_code": 1114111
+            },
+            "coverage": [
+              "get_char_index:explicit-cp1114111"
+            ]
+          },
+          {
+            "id": "cp4294967295",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "non_unicode_charmap_font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/charmap/apple-roman-charmap.ttf",
+                "status": "required_future_asset",
+                "requires": "font with Unicode and non-Unicode charmaps"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "charmap_selection": [
+                "default",
+                "unicode",
+                "non_unicode_if_fixture_present"
+              ],
+              "char_code": 4294967295
+            },
+            "coverage": [
+              "get_char_index:explicit-cp4294967295"
+            ]
+          },
+          {
+            "id": "cp4294967296",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "non_unicode_charmap_font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/charmap/apple-roman-charmap.ttf",
+                "status": "required_future_asset",
+                "requires": "font with Unicode and non-Unicode charmaps"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "charmap_selection": [
+                "default",
+                "unicode",
+                "non_unicode_if_fixture_present"
+              ],
+              "char_code": 4294967296
+            },
+            "coverage": [
+              "get_char_index:explicit-cp4294967296"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "char_codes": [
-            0,
-            65,
-            90,
-            1114111,
-            4294967295,
-            4294967296
-          ],
-          "charmap_selection": [
-            "default",
-            "unicode",
-            "non_unicode_if_fixture_present"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "codepoints"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -185,29 +711,29 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "no_charmap_font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/charmap/no-active-charmap-control.pcf",
-            "status": "required_future_asset",
-            "requires": "accepted bitmap font or harness-created face with no active charmap"
+        "variants": [
+          {
+            "id": "cp65",
+            "assets": {
+              "no_charmap_font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/no-encoding/bdf-or-pcf-encoding-none.bdf",
+                "requires": "BDF fixture with no active encoding or charmap"
+              }
+            },
+            "params": {
+              "face_variants": [
+                "null",
+                "live_with_charmap_cleared_or_absent"
+              ],
+              "char_code": 65
+            },
+            "coverage": [
+              "get_char_index:explicit-cp65"
+            ]
           }
-        },
-        "params": {
-          "face_variants": [
-            "null",
-            "live_with_charmap_cleared_or_absent"
-          ],
-          "char_codes": [
-            65
-          ]
-        },
-        "variability": {
-          "axes": [
-            "codepoints"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",

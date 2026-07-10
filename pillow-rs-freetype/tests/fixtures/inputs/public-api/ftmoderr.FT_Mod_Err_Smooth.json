@@ -55,30 +55,71 @@
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "m1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/DejaVuSans.ttf"
+              },
+              "outline": {
+                "kind": "ref",
+                "id": "outline/malformed/smooth-out-of-range.json"
+              }
+            },
+            "params": {
+              "function": "FT_Outline_Render",
+              "expected_module_base": "FT_Mod_Err_Smooth",
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "smooth.render_error_probe:explicit-m1"
+            ]
           },
-          "outline": {
-            "kind": "ref",
-            "id": "outline/malformed/smooth-out-of-range.json"
+          {
+            "id": "m2",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/DejaVuSans.ttf"
+              },
+              "outline": {
+                "kind": "ref",
+                "id": "outline/malformed/smooth-out-of-range.json"
+              }
+            },
+            "params": {
+              "function": "FT_Outline_Render",
+              "expected_module_base": "FT_Mod_Err_Smooth",
+              "render_mode": "FT_RENDER_MODE_LCD"
+            },
+            "coverage": [
+              "smooth.render_error_probe:explicit-m2"
+            ]
+          },
+          {
+            "id": "m3",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/DejaVuSans.ttf"
+              },
+              "outline": {
+                "kind": "ref",
+                "id": "outline/malformed/smooth-out-of-range.json"
+              }
+            },
+            "params": {
+              "function": "FT_Outline_Render",
+              "expected_module_base": "FT_Mod_Err_Smooth",
+              "render_mode": "FT_RENDER_MODE_LCD_V"
+            },
+            "coverage": [
+              "smooth.render_error_probe:explicit-m3"
+            ]
           }
-        },
-        "params": {
-          "function": "FT_Outline_Render",
-          "render_modes": [
-            "FT_RENDER_MODE_NORMAL",
-            "FT_RENDER_MODE_LCD",
-            "FT_RENDER_MODE_LCD_V"
-          ],
-          "expected_module_base": "FT_Mod_Err_Smooth"
-        },
-        "variability": {
-          "axes": [
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:error",

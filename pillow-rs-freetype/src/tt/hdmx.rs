@@ -20,11 +20,11 @@ struct HdmxRecord {
 impl HdmxTable {
     pub fn width_for_ppem(&self, ppem: i32, glyph_index: u16) -> Option<u8> {
         let ppem = u8::try_from(ppem).ok()?;
-        let record = self
+        let index = self
             .records
             .binary_search_by_key(&ppem, |record| record.ppem)
-            .ok()
-            .and_then(|index| self.records.get(index))?;
+            .ok()?;
+        let record = &self.records[index];
         record.widths.get(glyph_index as usize).copied()
     }
 }

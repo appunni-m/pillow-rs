@@ -58,7 +58,7 @@
         description: Resolves character codes from the broad matrix fixture corpus.
         coverage:
           font_variability:
-            folder: input/fonts_autohint
+            folder: deprecated/fonts_autohint
             sizes: [10, 20]
       # needs-input: operation FT_Get_Char_Index; fixture asset font with multiple charmaps including Unicode and non-Unicode charmaps; params selected charmap index/encoding and charcodes for present, absent, zero, BMP edge, and supplementary values; expected output shape FT_UInt glyph index; comparison rule exact glyph index parity and exact 0 for undefined/null/no-active-charmap cases.
       - id: active_charmap_present_and_missing_codes
@@ -279,7 +279,7 @@
         description: Loads character-selected glyphs from the broad matrix fixture corpus.
         coverage:
           font_variability:
-            folder: input/fonts_autohint
+            folder: deprecated/fonts_autohint
             sizes: [10, 20]
       # needs-input: operation FT_Load_Char; fixture asset input/fonts/DejaVuSans.ttf plus charmap-control font; params char_code present, missing, zero, supplementary value, selected non-Unicode charmap, and load_flags default/no_hinting/no_scale/render/target modes/vertical; expected output shape FT_Error plus full FT_GlyphSlotRec public fields, outline/bitmap bytes when present, and active slot side effects; comparison rule exact C error, metrics, advance, format, lsb/rsb deltas, outline points/tags, bitmap placement/pitch/pixel_mode/bytes.
       - id: missing_char_loads_glyph_zero
@@ -305,7 +305,7 @@
         description: Loads glyph-index-selected glyphs from the broad matrix fixture corpus.
         coverage:
           font_variability:
-            folder: input/fonts_autohint
+            folder: deprecated/fonts_autohint
             sizes: [10, 20]
       # needs-input: operation FT_Load_Glyph; fixture asset input/fonts/DejaVuSans.ttf plus fonts with composite glyphs, vertical metrics, embedded bitmaps, and malformed/out-of-range controls; params glyph indices 0, 36, composite glyph, out-of-range glyph, sizes 10/20, and load_flags default/no_hinting/force_autohint/no_scale/no_recurse/render/target modes/vertical/linear_design/sbits_only; expected output shape FT_Error plus full FT_GlyphSlotRec public fields, outline/subglyph/bitmap data, and slot mutation; comparison rule exact C error, metrics, advance, linear advances, lsb/rsb deltas, format, outline points/tags, bitmap fields/bytes, and subglyph fields when applicable.
       - id: render_and_target_modes

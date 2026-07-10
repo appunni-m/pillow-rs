@@ -48,41 +48,136 @@
       "schema": "cache_lifecycle",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "manager_limits": {
-            "max_faces": 1,
-            "max_sizes": 2,
-            "max_bytes": 4096
+        "variants": [
+          {
+            "id": "s12-g36",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 1,
+                "max_sizes": 2,
+                "max_bytes": 4096
+              },
+              "requester": "counting_memory_face_requester",
+              "face_id": "stable_pointer:dejavu",
+              "warmups": [
+                "FTC_Manager_LookupFace",
+                "FTC_Manager_LookupSize",
+                "FTC_SBitCache_Lookup"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftcache.manager_reset:explicit-s12-g36"
+            ]
           },
-          "requester": "counting_memory_face_requester",
-          "face_id": "stable_pointer:dejavu",
-          "warmups": [
-            "FTC_Manager_LookupFace",
-            "FTC_Manager_LookupSize",
-            "FTC_SBitCache_Lookup"
-          ],
-          "glyph_indices": [
-            36,
-            37
-          ],
-          "sizes": [
-            12,
-            20
-          ]
-        },
-        "variability": {
-          "axes": [
-            "sizes",
-            "glyph_indices"
-          ]
-        }
+          {
+            "id": "s12-g37",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 1,
+                "max_sizes": 2,
+                "max_bytes": 4096
+              },
+              "requester": "counting_memory_face_requester",
+              "face_id": "stable_pointer:dejavu",
+              "warmups": [
+                "FTC_Manager_LookupFace",
+                "FTC_Manager_LookupSize",
+                "FTC_SBitCache_Lookup"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": 37
+            },
+            "coverage": [
+              "ftcache.manager_reset:explicit-s12-g37"
+            ]
+          },
+          {
+            "id": "s20-g36",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 1,
+                "max_sizes": 2,
+                "max_bytes": 4096
+              },
+              "requester": "counting_memory_face_requester",
+              "face_id": "stable_pointer:dejavu",
+              "warmups": [
+                "FTC_Manager_LookupFace",
+                "FTC_Manager_LookupSize",
+                "FTC_SBitCache_Lookup"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftcache.manager_reset:explicit-s20-g36"
+            ]
+          },
+          {
+            "id": "s20-g37",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 1,
+                "max_sizes": 2,
+                "max_bytes": 4096
+              },
+              "requester": "counting_memory_face_requester",
+              "face_id": "stable_pointer:dejavu",
+              "warmups": [
+                "FTC_Manager_LookupFace",
+                "FTC_Manager_LookupSize",
+                "FTC_SBitCache_Lookup"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 37
+            },
+            "coverage": [
+              "ftcache.manager_reset:explicit-s20-g37"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",

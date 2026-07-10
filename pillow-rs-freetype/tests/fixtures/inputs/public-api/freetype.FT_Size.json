@@ -61,31 +61,83 @@
       "schema": "opaque_handle_runtime",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "s10",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "operations": [
+                "FT_Set_Pixel_Sizes",
+                "FT_Request_Size",
+                "FT_Activate_Size if multiple sizes are available"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 10
+              }
+            },
+            "coverage": [
+              "freetype.active_size_handle:explicit-s10"
+            ]
+          },
+          {
+            "id": "s16",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "operations": [
+                "FT_Set_Pixel_Sizes",
+                "FT_Request_Size",
+                "FT_Activate_Size if multiple sizes are available"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              }
+            },
+            "coverage": [
+              "freetype.active_size_handle:explicit-s16"
+            ]
+          },
+          {
+            "id": "s24",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "operations": [
+                "FT_Set_Pixel_Sizes",
+                "FT_Request_Size",
+                "FT_Activate_Size if multiple sizes are available"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 24
+              }
+            },
+            "coverage": [
+              "freetype.active_size_handle:explicit-s24"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "sizes": [
-            10,
-            16,
-            24
-          ],
-          "operations": [
-            "FT_Set_Pixel_Sizes",
-            "FT_Request_Size",
-            "FT_Activate_Size if multiple sizes are available"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "sizes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:type",

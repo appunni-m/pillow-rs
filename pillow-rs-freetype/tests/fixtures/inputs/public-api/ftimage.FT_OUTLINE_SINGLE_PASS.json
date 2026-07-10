@@ -58,40 +58,188 @@
       "schema": "outline_raster",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "s96-m1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "outline": {
+                "kind": "ref",
+                "id": "outlines/synthetic/large-render-limits.json",
+                "asset_kind": "outline"
+              }
+            },
+            "params": {
+              "outline_flags_matrix": [
+                "FT_OUTLINE_NONE",
+                "FT_OUTLINE_SINGLE_PASS"
+              ],
+              "expected_behavior": "flag is a large-outline scan-converter hint; compare C output and limit errors exactly",
+              "pixel_size": {
+                "x": 0,
+                "y": 96
+              },
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-s96-m1"
+            ]
           },
-          "outline": {
-            "kind": "ref",
-            "id": "outlines/synthetic/large-render-limits.json",
-            "asset_kind": "outline"
+          {
+            "id": "s96-m2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "outline": {
+                "kind": "ref",
+                "id": "outlines/synthetic/large-render-limits.json",
+                "asset_kind": "outline"
+              }
+            },
+            "params": {
+              "outline_flags_matrix": [
+                "FT_OUTLINE_NONE",
+                "FT_OUTLINE_SINGLE_PASS"
+              ],
+              "expected_behavior": "flag is a large-outline scan-converter hint; compare C output and limit errors exactly",
+              "pixel_size": {
+                "x": 0,
+                "y": 96
+              },
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-s96-m2"
+            ]
+          },
+          {
+            "id": "s512-m3",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "outline": {
+                "kind": "ref",
+                "id": "outlines/synthetic/large-render-limits.json",
+                "asset_kind": "outline"
+              }
+            },
+            "params": {
+              "outline_flags_matrix": [
+                "FT_OUTLINE_NONE",
+                "FT_OUTLINE_SINGLE_PASS"
+              ],
+              "expected_behavior": "flag is a large-outline scan-converter hint; compare C output and limit errors exactly",
+              "pixel_size": {
+                "x": 0,
+                "y": 512
+              },
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-s512-m3"
+            ]
+          },
+          {
+            "id": "s512-m4",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "outline": {
+                "kind": "ref",
+                "id": "outlines/synthetic/large-render-limits.json",
+                "asset_kind": "outline"
+              }
+            },
+            "params": {
+              "outline_flags_matrix": [
+                "FT_OUTLINE_NONE",
+                "FT_OUTLINE_SINGLE_PASS"
+              ],
+              "expected_behavior": "flag is a large-outline scan-converter hint; compare C output and limit errors exactly",
+              "pixel_size": {
+                "x": 0,
+                "y": 512
+              },
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-s512-m4"
+            ]
+          },
+          {
+            "id": "s2048-m5",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "outline": {
+                "kind": "ref",
+                "id": "outlines/synthetic/large-render-limits.json",
+                "asset_kind": "outline"
+              }
+            },
+            "params": {
+              "outline_flags_matrix": [
+                "FT_OUTLINE_NONE",
+                "FT_OUTLINE_SINGLE_PASS"
+              ],
+              "expected_behavior": "flag is a large-outline scan-converter hint; compare C output and limit errors exactly",
+              "pixel_size": {
+                "x": 0,
+                "y": 2048
+              },
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-s2048-m5"
+            ]
+          },
+          {
+            "id": "s2048-m6",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "outline": {
+                "kind": "ref",
+                "id": "outlines/synthetic/large-render-limits.json",
+                "asset_kind": "outline"
+              }
+            },
+            "params": {
+              "outline_flags_matrix": [
+                "FT_OUTLINE_NONE",
+                "FT_OUTLINE_SINGLE_PASS"
+              ],
+              "expected_behavior": "flag is a large-outline scan-converter hint; compare C output and limit errors exactly",
+              "pixel_size": {
+                "x": 0,
+                "y": 2048
+              },
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-s2048-m6"
+            ]
           }
-        },
-        "params": {
-          "outline_flags_matrix": [
-            "FT_OUTLINE_NONE",
-            "FT_OUTLINE_SINGLE_PASS"
-          ],
-          "pixel_sizes": [
-            96,
-            512,
-            2048
-          ],
-          "render_modes": [
-            "FT_RENDER_MODE_NORMAL",
-            "FT_RENDER_MODE_MONO"
-          ],
-          "expected_behavior": "flag is a large-outline scan-converter hint; compare C output and limit errors exactly"
-        },
-        "variability": {
-          "axes": [
-            "sizes",
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:flag",

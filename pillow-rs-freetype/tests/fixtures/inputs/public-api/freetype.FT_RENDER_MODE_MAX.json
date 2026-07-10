@@ -50,29 +50,32 @@
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "id": "input/fonts/DejaVuSans.ttf",
-            "requirements": "Scalable outline font with glyph U+0041; existing legacy fixture asset is suitable."
+        "variants": [
+          {
+            "id": "variant-1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "input/fonts/DejaVuSans.ttf",
+                "requirements": "Scalable outline font with glyph U+0041; existing legacy fixture asset is suitable."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 65,
+              "load_flags": 0,
+              "render_mode": "FT_RENDER_MODE_MAX"
+            },
+            "coverage": [
+              "render_glyph:explicit-variant-1"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": {
-            "x": 0,
-            "y": 20
-          },
-          "char_code": 65,
-          "load_flags": 0,
-          "render_mode": "FT_RENDER_MODE_MAX"
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:enum_variant",

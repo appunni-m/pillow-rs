@@ -65,33 +65,58 @@
       "schema": "glyph_record",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "m1",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "bitmap_strike_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "creation_paths": [
+                "FT_Get_Glyph bitmap",
+                "FT_Glyph_To_Bitmap outline"
+              ],
+              "render_mode": "NORMAL"
+            },
+            "coverage": [
+              "ftglyph.record_inspect:explicit-m1"
+            ]
           },
-          "bitmap_strike_font": {
-            "kind": "ref",
-            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
-            "asset_kind": "font"
+          {
+            "id": "m2",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "bitmap_strike_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "creation_paths": [
+                "FT_Get_Glyph bitmap",
+                "FT_Glyph_To_Bitmap outline"
+              ],
+              "render_mode": "MONO"
+            },
+            "coverage": [
+              "ftglyph.record_inspect:explicit-m2"
+            ]
           }
-        },
-        "params": {
-          "creation_paths": [
-            "FT_Get_Glyph bitmap",
-            "FT_Glyph_To_Bitmap outline"
-          ],
-          "render_modes": [
-            "NORMAL",
-            "MONO"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:record",

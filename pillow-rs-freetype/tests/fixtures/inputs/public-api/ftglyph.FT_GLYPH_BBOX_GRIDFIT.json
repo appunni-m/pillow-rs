@@ -53,39 +53,76 @@
       "schema": "glyph_cbox",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "s17",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "bitmap_strike_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "bbox_modes": [
+                "FT_GLYPH_BBOX_GRIDFIT"
+              ],
+              "glyph_sources": [
+                "outline_fractional_bounds"
+              ],
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 17
+              }
+            },
+            "coverage": [
+              "ftglyph.glyph_get_cbox:explicit-s17"
+            ]
           },
-          "bitmap_strike_font": {
-            "kind": "ref",
-            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
-            "asset_kind": "font"
+          {
+            "id": "s31",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "bitmap_strike_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "bbox_modes": [
+                "FT_GLYPH_BBOX_GRIDFIT"
+              ],
+              "glyph_sources": [
+                "outline_fractional_bounds"
+              ],
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 31
+              }
+            },
+            "coverage": [
+              "ftglyph.glyph_get_cbox:explicit-s31"
+            ]
           }
-        },
-        "params": {
-          "bbox_modes": [
-            "FT_GLYPH_BBOX_GRIDFIT"
-          ],
-          "glyph_sources": [
-            "outline_fractional_bounds"
-          ],
-          "load_flags": [
-            "FT_LOAD_NO_HINTING"
-          ],
-          "pixel_sizes": [
-            17,
-            31
-          ],
-          "face_index": 0
-        },
-        "variability": {
-          "axes": [
-            "sizes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:enum_variant",

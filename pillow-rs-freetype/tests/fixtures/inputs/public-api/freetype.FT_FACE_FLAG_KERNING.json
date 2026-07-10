@@ -51,7 +51,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "input/fonts_autohint/DejaVuSans.ttf"
+            "id": "fonts/native/dejavu-coverage.ttf"
           }
         },
         "params": {

@@ -18,39 +18,197 @@
       "schema": "advance_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": 20,
-          "glyph_indices": [
-            0,
-            36,
-            57
-          ],
-          "load_flag_sets": [
-            [
-              "FT_LOAD_DEFAULT"
-            ],
-            [
-              "FT_LOAD_NO_HINTING"
-            ],
-            [
-              "FT_LOAD_TARGET_LIGHT"
+        "variants": [
+          {
+            "id": "g0-f1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "glyph_index": 0,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g0-f1"
             ]
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices",
-            "load_flags"
-          ]
-        }
+          },
+          {
+            "id": "g0-f2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "glyph_index": 0,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g0-f2"
+            ]
+          },
+          {
+            "id": "g0-f3",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "glyph_index": 0,
+              "load_flags": [
+                "FT_LOAD_TARGET_LIGHT"
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g0-f3"
+            ]
+          },
+          {
+            "id": "g36-f4",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g36-f4"
+            ]
+          },
+          {
+            "id": "g36-f5",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g36-f5"
+            ]
+          },
+          {
+            "id": "g36-f6",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_TARGET_LIGHT"
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g36-f6"
+            ]
+          },
+          {
+            "id": "g57-f7",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g57-f7"
+            ]
+          },
+          {
+            "id": "g57-f8",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g57-f8"
+            ]
+          },
+          {
+            "id": "g57-f9",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_TARGET_LIGHT"
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g57-f9"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -82,28 +240,48 @@
       "schema": "advance_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "g36",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ],
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g36"
+            ]
+          },
+          {
+            "id": "g57",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ],
+              "glyph_index": 57
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g57"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "glyph_indices": [
-            36,
-            57
-          ],
-          "load_flags": [
-            "FT_LOAD_NO_SCALE"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -135,36 +313,92 @@
       "schema": "advance_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "fonts": [
-            {
-              "kind": "file",
-              "role": "font",
-              "path": "input/fonts/vertical/cjk-vertical-metrics.ttf"
+        "variants": [
+          {
+            "id": "vertical-table-gid-36",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/vertical/cjk-vertical-metrics.ttf"
+              }
             },
-            {
-              "kind": "file",
-              "role": "font",
-              "path": "input/fonts/DejaVuSans.ttf"
-            }
-          ]
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": 20,
-          "glyph_indices": [
-            36,
-            57
-          ],
-          "load_flags": [
-            "FT_LOAD_VERTICAL_LAYOUT"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_VERTICAL_LAYOUT"
+              ]
+            },
+            "coverage": [
+              "advance:vertical:vertical-table:gid-36"
+            ]
+          },
+          {
+            "id": "vertical-table-gid-57",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_VERTICAL_LAYOUT"
+              ]
+            },
+            "coverage": [
+              "advance:vertical:vertical-table:gid-57"
+            ]
+          },
+          {
+            "id": "fallback-horizontal-gid-36",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_VERTICAL_LAYOUT"
+              ]
+            },
+            "coverage": [
+              "advance:vertical:fallback-horizontal:gid-36"
+            ]
+          },
+          {
+            "id": "fallback-horizontal-gid-57",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_VERTICAL_LAYOUT"
+              ]
+            },
+            "coverage": [
+              "advance:vertical:fallback-horizontal:gid-57"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -201,36 +435,54 @@
       "schema": "advance_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": 20,
-          "glyph_indices": [
-            36
-          ],
-          "load_flag_sets": [
-            [
-              "FT_LOAD_NO_SCALE",
-              "FT_ADVANCE_FLAG_FAST_ONLY"
-            ],
-            [
-              "FT_LOAD_NO_HINTING",
-              "FT_ADVANCE_FLAG_FAST_ONLY"
+        "variants": [
+          {
+            "id": "g36-f1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "sentinel_padvance": "0x13572468",
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE",
+                "FT_ADVANCE_FLAG_FAST_ONLY"
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g36-f1"
             ]
-          ],
-          "sentinel_padvance": "0x13572468"
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+          },
+          {
+            "id": "g36-f2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "sentinel_padvance": "0x13572468",
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING",
+                "FT_ADVANCE_FLAG_FAST_ONLY"
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g36-f2"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -315,36 +567,96 @@
       "schema": "error",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": 20,
-          "glyph_indices": [
-            6253,
-            6254
-          ],
-          "load_flag_sets": [
-            [
-              "FT_LOAD_DEFAULT"
-            ],
-            [
-              -2147483648
+        "variants": [
+          {
+            "id": "g6253-f1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "sentinel_padvance": "0x24681357",
+              "glyph_index": 6253,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g6253-f1"
             ]
-          ],
-          "sentinel_padvance": "0x24681357"
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices",
-            "load_flags"
-          ]
-        }
+          },
+          {
+            "id": "g6253-f2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "sentinel_padvance": "0x24681357",
+              "glyph_index": 6253,
+              "load_flags": [
+                -2147483648
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g6253-f2"
+            ]
+          },
+          {
+            "id": "g6254-f3",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "sentinel_padvance": "0x24681357",
+              "glyph_index": 6254,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g6254-f3"
+            ]
+          },
+          {
+            "id": "g6254-f4",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "sentinel_padvance": "0x24681357",
+              "glyph_index": 6254,
+              "load_flags": [
+                -2147483648
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g6254-f4"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",

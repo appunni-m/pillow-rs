@@ -18,28 +18,508 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font_bytes": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "DejaVuSans",
+            "assets": {
+              "font_bytes": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file",
+              "post_open_probes": [
+                "face_fields",
+                "glyph_slot",
+                "active_size",
+                "selected_charmap"
+              ]
+            },
+            "coverage": [
+              "new_memory_face:explicit-DejaVuSans"
+            ]
+          },
+          {
+            "id": "LiberationSerif-Regular",
+            "assets": {
+              "font_bytes": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file",
+              "post_open_probes": [
+                "face_fields",
+                "glyph_slot",
+                "active_size",
+                "selected_charmap"
+              ]
+            },
+            "coverage": [
+              "new_memory_face:explicit-LiberationSerif-Regular"
+            ]
+          },
+          {
+            "id": "NotoSans-Regular",
+            "assets": {
+              "font_bytes": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file",
+              "post_open_probes": [
+                "face_fields",
+                "glyph_slot",
+                "active_size",
+                "selected_charmap"
+              ]
+            },
+            "coverage": [
+              "new_memory_face:explicit-NotoSans-Regular"
+            ]
+          },
+          {
+            "id": "maxp-version-05-header",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/maxp-version-05.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file",
+              "post_open_probes": [
+                "face_fields"
+              ]
+            },
+            "coverage": [
+              "tt/maxp:version-below-1-header-only"
+            ]
+          },
+          {
+            "id": "maxp-version-2",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/maxp-version-2.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file",
+              "post_open_probes": [
+                "face_fields"
+              ]
+            },
+            "coverage": [
+              "tt/maxp:version-above-1-extra-fields"
+            ]
+          },
+          {
+            "id": "maxp-v1-header-only",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/maxp-v1-header-only.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file",
+              "post_open_probes": [
+                "face_fields"
+              ]
+            },
+            "coverage": [
+              "tt/maxp:stream-extra-frame"
+            ]
+          },
+          {
+            "id": "maxp-too-short-zero-profile",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/maxp-too-short.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file",
+              "post_open_probes": [
+                "face_fields"
+              ]
+            },
+            "coverage": [
+              "tt/maxp:ignored-load-error-zero-profile"
+            ]
+          },
+          {
+            "id": "kern-short-optional-table",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/kerning/kern-short.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/kern:short-optional-table"
+            ]
+          },
+          {
+            "id": "kern-header-missing",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/kerning/kern-header-missing.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/kern:subtable-header-missing",
+              "tt/kern:subtable-count-cap"
+            ]
+          },
+          {
+            "id": "kern-length-14-boundary",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/kerning/kern-length-14.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/kern:minimum-subtable-length-rejected"
+            ]
+          },
+          {
+            "id": "kern-declared-length-truncated",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/kerning/kern-truncated.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/kern:declared-length-clamped"
+            ]
+          },
+          {
+            "id": "kern-format-coverage-matrix",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/kerning/kern-coverage-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/kern:top-version-ignored",
+              "tt/kern:unsupported-format",
+              "tt/kern:invalid-coverage",
+              "tt/kern:valid-format0-pair"
+            ]
+          },
+          {
+            "id": "hdmx-short-optional-table",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hdmx-short.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/hdmx:short-table"
+            ]
+          },
+          {
+            "id": "hdmx-high-word-record-size",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hdmx-high-word-size.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/hdmx:high-word-record-size-repair"
+            ]
+          },
+          {
+            "id": "hdmx-zero-records",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hdmx-zero-records.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/hdmx:zero-record-count"
+            ]
+          },
+          {
+            "id": "hdmx-256-records",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hdmx-256-records.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/hdmx:record-count-above-255"
+            ]
+          },
+          {
+            "id": "hdmx-record-size-mismatch",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hdmx-size-mismatch.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/hdmx:record-size-mismatch"
+            ]
+          },
+          {
+            "id": "hdmx-truncated-record",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hdmx-truncated-record.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/hdmx:record-body-truncated"
+            ]
+          },
+          {
+            "id": "horizontal-vertical-metric-count-zero",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/metrics-count-zero.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/hmtx:zero-long-metric-count",
+              "tt/vmtx:zero-long-metric-count"
+            ]
+          },
+          {
+            "id": "horizontal-vertical-metric-count-overflow",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/metrics-count-overflow.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/hmtx:long-metric-count-above-glyph-count",
+              "tt/vmtx:long-metric-count-above-glyph-count"
+            ]
+          },
+          {
+            "id": "horizontal-vertical-metric-tables-short",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/metrics-tables-short.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/hmtx:present-table-too-short",
+              "tt/vmtx:present-table-too-short"
+            ]
+          },
+          {
+            "id": "optional-os2-post-tables-short",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metadata/short-os2-post.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/os2:short-optional-table",
+              "tt/post:short-optional-table"
+            ]
+          },
+          {
+            "id": "os2-use-typo-metrics",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metadata/os2-use-typo-metrics.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/os2:use-typo-metrics-true"
+            ]
+          },
+          {
+            "id": "name-record-decode-matrix",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-record-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/name:zero-and-invalid-raw-records",
+              "tt/name:windows-decode-failure",
+              "tt/name:mac-roman-fallback",
+              "tt/name:any-windows-fallback"
+            ]
+          },
+          {
+            "id": "name-empty-defaults",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-empty.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt/name:unknown-family-default",
+              "tt/name:regular-subfamily-default"
+            ]
+          },
+          {
+            "id": "multiface-cjk-indic-collection",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/multiface-cjk-indic.ttc"
+              }
+            },
+            "params": {
+              "face_index": 1,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "tt:collection-face-offset-array",
+              "tt:collection-second-face-selection"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "memory_source": "whole_file",
-          "post_open_probes": [
-            "face_fields",
-            "glyph_slot",
-            "active_size",
-            "selected_charmap"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "fonts"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -253,26 +733,214 @@
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "font_bytes": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "bad-size-and-face-index",
+            "assets": {
+              "font_bytes": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "variants": [
+                {
+                  "file_size": 0
+                },
+                {
+                  "file_size": 12
+                },
+                {
+                  "face_index": 9999
+                }
+              ]
+            },
+            "coverage": [
+              "new-memory-face:bad-size-and-face-index"
+            ]
+          },
+          {
+            "id": "hhea-short-at-physical-eof",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hhea-short-eof.ttf"
+              }
+            },
+            "params": {
+              "variants": [
+                {
+                  "face_index": 0
+                }
+              ]
+            },
+            "coverage": [
+              "tt/hhea:short-header-error"
+            ]
+          },
+          {
+            "id": "vhea-short-at-physical-eof",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/vhea-short-eof.ttf"
+              }
+            },
+            "params": {
+              "variants": [
+                {
+                  "face_index": 0
+                }
+              ]
+            },
+            "coverage": [
+              "tt/vhea:short-header-error"
+            ]
+          },
+          {
+            "id": "head-short-at-physical-eof",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metadata/head-short-eof.ttf"
+              }
+            },
+            "params": {
+              "variants": [
+                {
+                  "face_index": 0
+                }
+              ]
+            },
+            "coverage": [
+              "tt/head:short-header-error"
+            ]
+          },
+          {
+            "id": "name-short-header",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-short.ttf"
+              }
+            },
+            "params": {
+              "variants": [
+                {
+                  "face_index": 0
+                }
+              ]
+            },
+            "coverage": [
+              "tt/name:short-header-error"
+            ]
+          },
+          {
+            "id": "name-record-array-overflow",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-record-overflow.ttf"
+              }
+            },
+            "params": {
+              "variants": [
+                {
+                  "face_index": 0
+                }
+              ]
+            },
+            "coverage": [
+              "tt/name:record-array-overflow-error"
+            ]
+          },
+          {
+            "id": "ttc-short-header",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/ttc-short.ttc"
+              }
+            },
+            "params": {
+              "variants": [
+                {
+                  "face_index": 0
+                }
+              ]
+            },
+            "coverage": [
+              "tt:collection-short-header-error"
+            ]
+          },
+          {
+            "id": "ttc-offset-array-overflow",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/ttc-offset-overflow.ttc"
+              }
+            },
+            "params": {
+              "variants": [
+                {
+                  "face_index": 0
+                }
+              ]
+            },
+            "coverage": [
+              "tt:collection-offset-array-overflow-error"
+            ]
+          },
+          {
+            "id": "ttc-face-offset-out-of-range",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/ttc-face-offset-out-of-range.ttc"
+              }
+            },
+            "params": {
+              "variants": [
+                {
+                  "face_index": 0
+                }
+              ]
+            },
+            "coverage": [
+              "tt:collection-face-offset-out-of-range-error"
+            ]
+          },
+          {
+            "id": "otto-empty-table-directory",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/otto-empty.otf"
+              }
+            },
+            "params": {
+              "variants": [
+                {
+                  "face_index": 0
+                }
+              ]
+            },
+            "coverage": [
+              "tt:otto-sfnt-version-condition"
+            ]
           }
-        },
-        "params": {
-          "variants": [
-            {
-              "file_size": 0
-            },
-            {
-              "file_size": 12
-            },
-            {
-              "face_index": 9999
-            }
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",

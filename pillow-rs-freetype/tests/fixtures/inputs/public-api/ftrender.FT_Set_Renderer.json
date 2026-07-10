@@ -196,49 +196,230 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "m1",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "svg_font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/svg/color-svg.otf",
+                "status": "required_future_asset",
+                "requires": "SVG glyph font for FT_GLYPH_FORMAT_SVG renderer when built"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_index": 36,
+              "size_ppem": 24,
+              "renderer_formats": [
+                "FT_GLYPH_FORMAT_OUTLINE",
+                "FT_GLYPH_FORMAT_SVG"
+              ],
+              "observe": [
+                "set_renderer_error",
+                "render_error",
+                "slot.format",
+                "bitmap.descriptor",
+                "bitmap.buffer_hash"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "ftrender.set_renderer_then_render:explicit-m1"
+            ]
           },
-          "svg_font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/svg/color-svg.otf",
-            "status": "required_future_asset",
-            "requires": "SVG glyph font for FT_GLYPH_FORMAT_SVG renderer when built"
+          {
+            "id": "m2",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "svg_font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/svg/color-svg.otf",
+                "status": "required_future_asset",
+                "requires": "SVG glyph font for FT_GLYPH_FORMAT_SVG renderer when built"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_index": 36,
+              "size_ppem": 24,
+              "renderer_formats": [
+                "FT_GLYPH_FORMAT_OUTLINE",
+                "FT_GLYPH_FORMAT_SVG"
+              ],
+              "observe": [
+                "set_renderer_error",
+                "render_error",
+                "slot.format",
+                "bitmap.descriptor",
+                "bitmap.buffer_hash"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "ftrender.set_renderer_then_render:explicit-m2"
+            ]
+          },
+          {
+            "id": "m3",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "svg_font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/svg/color-svg.otf",
+                "status": "required_future_asset",
+                "requires": "SVG glyph font for FT_GLYPH_FORMAT_SVG renderer when built"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_index": 36,
+              "size_ppem": 24,
+              "renderer_formats": [
+                "FT_GLYPH_FORMAT_OUTLINE",
+                "FT_GLYPH_FORMAT_SVG"
+              ],
+              "observe": [
+                "set_renderer_error",
+                "render_error",
+                "slot.format",
+                "bitmap.descriptor",
+                "bitmap.buffer_hash"
+              ],
+              "render_mode": "FT_RENDER_MODE_LCD"
+            },
+            "coverage": [
+              "ftrender.set_renderer_then_render:explicit-m3"
+            ]
+          },
+          {
+            "id": "m4",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "svg_font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/svg/color-svg.otf",
+                "status": "required_future_asset",
+                "requires": "SVG glyph font for FT_GLYPH_FORMAT_SVG renderer when built"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_index": 36,
+              "size_ppem": 24,
+              "renderer_formats": [
+                "FT_GLYPH_FORMAT_OUTLINE",
+                "FT_GLYPH_FORMAT_SVG"
+              ],
+              "observe": [
+                "set_renderer_error",
+                "render_error",
+                "slot.format",
+                "bitmap.descriptor",
+                "bitmap.buffer_hash"
+              ],
+              "render_mode": "FT_RENDER_MODE_LCD_V"
+            },
+            "coverage": [
+              "ftrender.set_renderer_then_render:explicit-m4"
+            ]
+          },
+          {
+            "id": "m5",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "svg_font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/svg/color-svg.otf",
+                "status": "required_future_asset",
+                "requires": "SVG glyph font for FT_GLYPH_FORMAT_SVG renderer when built"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_index": 36,
+              "size_ppem": 24,
+              "renderer_formats": [
+                "FT_GLYPH_FORMAT_OUTLINE",
+                "FT_GLYPH_FORMAT_SVG"
+              ],
+              "observe": [
+                "set_renderer_error",
+                "render_error",
+                "slot.format",
+                "bitmap.descriptor",
+                "bitmap.buffer_hash"
+              ],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": [
+              "ftrender.set_renderer_then_render:explicit-m5"
+            ]
+          },
+          {
+            "id": "m6",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "svg_font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/svg/color-svg.otf",
+                "status": "required_future_asset",
+                "requires": "SVG glyph font for FT_GLYPH_FORMAT_SVG renderer when built"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_index": 36,
+              "size_ppem": 24,
+              "renderer_formats": [
+                "FT_GLYPH_FORMAT_OUTLINE",
+                "FT_GLYPH_FORMAT_SVG"
+              ],
+              "observe": [
+                "set_renderer_error",
+                "render_error",
+                "slot.format",
+                "bitmap.descriptor",
+                "bitmap.buffer_hash"
+              ],
+              "render_mode": "FT_RENDER_MODE_SVG"
+            },
+            "coverage": [
+              "ftrender.set_renderer_then_render:explicit-m6"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "glyph_index": 36,
-          "size_ppem": 24,
-          "renderer_formats": [
-            "FT_GLYPH_FORMAT_OUTLINE",
-            "FT_GLYPH_FORMAT_SVG"
-          ],
-          "render_modes": [
-            "FT_RENDER_MODE_NORMAL",
-            "FT_RENDER_MODE_MONO",
-            "FT_RENDER_MODE_LCD",
-            "FT_RENDER_MODE_LCD_V",
-            "FT_RENDER_MODE_SDF",
-            "FT_RENDER_MODE_SVG"
-          ],
-          "observe": [
-            "set_renderer_error",
-            "render_error",
-            "slot.format",
-            "bitmap.descriptor",
-            "bitmap.buffer_hash"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",

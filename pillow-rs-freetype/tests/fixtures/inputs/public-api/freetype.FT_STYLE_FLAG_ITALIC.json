@@ -44,7 +44,7 @@
         "fixture_requirements": [],
         "observable_runtime_use": {
           "operation": "FT_New_Face then inspect face->style_flags",
-          "asset": "input/fonts_autohint/DejaVuSans-Oblique.ttf",
+          "asset": "fonts/metadata/style-bold-italic.ttf",
           "compare": [
             "style_flags & FT_STYLE_FLAG_ITALIC"
           ]

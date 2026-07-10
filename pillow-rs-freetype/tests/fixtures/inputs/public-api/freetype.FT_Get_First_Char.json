@@ -62,9 +62,8 @@
           "empty_charmap_font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/charmap/empty-or-no-active-charmap.ttf",
-            "status": "required_future_asset",
-            "requires": "accepted font or harness scenario with no active mappings"
+            "path": "fonts/no-encoding/bdf-or-pcf-encoding-none.bdf",
+            "requires": "BDF fixture with no active encoding or mappings"
           }
         },
         "params": {

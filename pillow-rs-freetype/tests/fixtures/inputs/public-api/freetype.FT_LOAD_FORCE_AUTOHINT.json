@@ -58,27 +58,1808 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts_autohint/NotoSans-Regular.ttf"
+        "variants": [
+          {
+            "id": "latin-a-10",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/basic-latin.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 65,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:capital-small-size"
+            ]
+          },
+          {
+            "id": "latin-a-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/basic-latin.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 65,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:capital-default-size"
+            ]
+          },
+          {
+            "id": "latin-a-32",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/basic-latin.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 65,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:capital-large-size"
+            ]
+          },
+          {
+            "id": "latin-shared-greek",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/basic-latin.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 915,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:shared-glyph-script-priority"
+            ]
+          },
+          {
+            "id": "latin-shared-cjk",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/basic-latin.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 19968,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:latin-outline-cjk-codepoint"
+            ]
+          },
+          {
+            "id": "mixed-latin-a",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-greek-cyrillic.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 65,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:latin-style"
+            ]
+          },
+          {
+            "id": "mixed-greek-gamma",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-greek-cyrillic.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 915,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:greek-capital-style"
+            ]
+          },
+          {
+            "id": "mixed-greek-alpha",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-greek-cyrillic.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 945,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:greek-lowercase-style"
+            ]
+          },
+          {
+            "id": "mixed-cyrillic-be",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-greek-cyrillic.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 1041,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:cyrillic-capital-style"
+            ]
+          },
+          {
+            "id": "mixed-cyrillic-o",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-greek-cyrillic.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 1086,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:cyrillic-lowercase-style"
+            ]
+          },
+          {
+            "id": "indic-ka-10",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/indic-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 2325,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:devanagari-small-size"
+            ]
+          },
+          {
+            "id": "indic-tha-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/indic-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 2341,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:devanagari-top-to-bottom"
+            ]
+          },
+          {
+            "id": "indic-ra-32",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/indic-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 2352,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:devanagari-large-size"
+            ]
+          },
+          {
+            "id": "indic-vowel-aa",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/indic-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 2366,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:devanagari-nonbase"
+            ]
+          },
+          {
+            "id": "indic-virama",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/indic-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 2381,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:devanagari-mark"
+            ]
+          },
+          {
+            "id": "indic-shared-latin",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/indic-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 65,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:indic-outline-latin-codepoint"
+            ]
+          },
+          {
+            "id": "cjk-zero-10",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 12295,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:round-small-size"
+            ]
+          },
+          {
+            "id": "cjk-one-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 19968,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:horizontal-stroke"
+            ]
+          },
+          {
+            "id": "cjk-three-32",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 19977,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:parallel-strokes"
+            ]
+          },
+          {
+            "id": "cjk-mouth-10",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 21475,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:box-small-size"
+            ]
+          },
+          {
+            "id": "cjk-sun-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 26085,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:box-inner-stroke"
+            ]
+          },
+          {
+            "id": "cjk-eternity-32",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 27704,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:diagonal-curves"
+            ]
+          },
+          {
+            "id": "cjk-field-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 30000,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:standard-width-glyph"
+            ]
+          },
+          {
+            "id": "cjk-shared-latin",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 65,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:cjk-outline-latin-codepoint"
+            ]
+          },
+          {
+            "id": "cjk-shared-indic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 2325,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:cjk-outline-indic-codepoint"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0021",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 33,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0021"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0023",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 35,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0023"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0025",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 37,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0025"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0026",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 38,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0026"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0028",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 40,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0028"
+            ]
+          },
+          {
+            "id": "full-dejavu-u002b",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 43,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u002b"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0030",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 48,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0030"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0031",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 49,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0031"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0032",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 50,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0032"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0038",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 56,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0038"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0040",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 64,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0040"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0041",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 65,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0041"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0043",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 67,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0043"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0048",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 72,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0048"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0049",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 73,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0049"
+            ]
+          },
+          {
+            "id": "full-dejavu-u004a",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 74,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u004a"
+            ]
+          },
+          {
+            "id": "full-dejavu-u004d",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 77,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u004d"
+            ]
+          },
+          {
+            "id": "full-dejavu-u004f",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 79,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u004f"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0051",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 81,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0051"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0053",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 83,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0053"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0056",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 86,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0056"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0057",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 87,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0057"
+            ]
+          },
+          {
+            "id": "full-dejavu-u005a",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 90,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u005a"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0061",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 97,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0061"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0062",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 98,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0062"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0066",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 102,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0066"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0067",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 103,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0067"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0069",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 105,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0069"
+            ]
+          },
+          {
+            "id": "full-dejavu-u006a",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 106,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u006a"
+            ]
+          },
+          {
+            "id": "full-dejavu-u006d",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 109,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u006d"
+            ]
+          },
+          {
+            "id": "full-dejavu-u006f",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 111,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u006f"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0070",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 112,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0070"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0071",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 113,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0071"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0077",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 119,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0077"
+            ]
+          },
+          {
+            "id": "full-dejavu-u00c0",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 192,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u00c0"
+            ]
+          },
+          {
+            "id": "full-dejavu-u00c5",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 197,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u00c5"
+            ]
+          },
+          {
+            "id": "full-dejavu-u00c7",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 199,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u00c7"
+            ]
+          },
+          {
+            "id": "full-dejavu-u00d6",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 214,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u00d6"
+            ]
+          },
+          {
+            "id": "full-dejavu-u00df",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 223,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u00df"
+            ]
+          },
+          {
+            "id": "full-dejavu-u00e0",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 224,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u00e0"
+            ]
+          },
+          {
+            "id": "full-dejavu-u00e4",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 228,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u00e4"
+            ]
+          },
+          {
+            "id": "full-dejavu-u00e9",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 233,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u00e9"
+            ]
+          },
+          {
+            "id": "full-dejavu-u00f6",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 246,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u00f6"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0153",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 339,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0153"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0393",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 915,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0393"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0398",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 920,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0398"
+            ]
+          },
+          {
+            "id": "full-dejavu-u03a9",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 937,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u03a9"
+            ]
+          },
+          {
+            "id": "full-dejavu-u03b1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 945,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u03b1"
+            ]
+          },
+          {
+            "id": "full-dejavu-u03b8",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 952,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u03b8"
+            ]
+          },
+          {
+            "id": "full-dejavu-u03c9",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 969,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u03c9"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0411",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 1041,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0411"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0416",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 1046,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0416"
+            ]
+          },
+          {
+            "id": "full-dejavu-u041e",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 1054,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u041e"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0431",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 1073,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0431"
+            ]
+          },
+          {
+            "id": "full-dejavu-u0436",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 1078,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u0436"
+            ]
+          },
+          {
+            "id": "full-dejavu-u043e",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 1086,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u043e"
+            ]
+          },
+          {
+            "id": "full-dejavu-u20ac",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 8364,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u20ac"
+            ]
+          },
+          {
+            "id": "full-dejavu-ufb00",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 64256,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-ufb00"
+            ]
+          },
+          {
+            "id": "full-dejavu-ufb01",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 64257,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-ufb01"
+            ]
+          },
+          {
+            "id": "full-dejavu-ufb02",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 64258,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-ufb02"
+            ]
+          },
+          {
+            "id": "full-dejavu-ufb03",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 64259,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-ufb03"
+            ]
+          },
+          {
+            "id": "full-dejavu-ufb04",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 64260,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-ufb04"
+            ]
+          },
+          {
+            "id": "full-dejavu-ufb05",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 64261,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-ufb05"
+            ]
+          },
+          {
+            "id": "full-dejavu-ufb06",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 10,
+              "char_code": 64262,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-ufb06"
+            ]
+          },
+          {
+            "id": "full-dejavu-u1f600",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 128512,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:representative-u1f600"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": 20,
-          "load_flags": [
-            "FT_LOAD_FORCE_AUTOHINT"
-          ],
-          "symbol_under_test": "FT_LOAD_FORCE_AUTOHINT",
-          "call_sequence": [
-            "FT_New_Memory_Face",
-            "FT_Set_Pixel_Sizes",
-            "FT_Load_Char"
-          ],
-          "char_code": 65,
-          "char_name": "A"
-        }
+        ]
       },
       "classifiers": [
         "kind:flag",
@@ -131,7 +1912,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts_autohint/NotoSans-Regular.ttf"
+            "id": "fonts/autohint/indic-coverage.ttf"
           }
         },
         "params": {
@@ -147,9 +1928,9 @@
             "FT_Load_Glyph"
           ],
           "glyph_index": {
-            "from_char_code": 65
+            "from_char_code": 2325
           },
-          "glyph_name": "A"
+          "glyph_name": "Devanagari ka"
         }
       },
       "classifiers": [

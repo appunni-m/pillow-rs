@@ -15,37 +15,92 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/pfr/basic-metrics.pfr",
-            "status": "required_future_asset",
-            "requires": "PFR face with PFR_METRICS service and at least two valid glyph advances"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "glyph_indices": [
-            0,
-            1,
-            "last_valid_glyph"
-          ],
-          "aadvance_pointer_class": "valid",
-          "abi": {
-            "include": "<freetype/ftpfr.h>",
-            "signature": "FT_Error FT_Get_PFR_Advance(FT_Face face, FT_UInt gindex, FT_Pos* aadvance)"
+        "variants": [
+          {
+            "id": "g0",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/pfr/basic-metrics.pfr",
+                "status": "required_future_asset",
+                "requires": "PFR face with PFR_METRICS service and at least two valid glyph advances"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "aadvance_pointer_class": "valid",
+              "abi": {
+                "include": "<freetype/ftpfr.h>",
+                "signature": "FT_Error FT_Get_PFR_Advance(FT_Face face, FT_UInt gindex, FT_Pos* aadvance)"
+              },
+              "source_refs": [
+                "freetype/include/freetype/ftpfr.h",
+                "freetype/src/base/ftpfr.c"
+              ],
+              "glyph_index": 0
+            },
+            "coverage": [
+              "ftpfr.get_pfr_advance:explicit-g0"
+            ]
           },
-          "source_refs": [
-            "freetype/include/freetype/ftpfr.h",
-            "freetype/src/base/ftpfr.c"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+          {
+            "id": "g1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/pfr/basic-metrics.pfr",
+                "status": "required_future_asset",
+                "requires": "PFR face with PFR_METRICS service and at least two valid glyph advances"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "aadvance_pointer_class": "valid",
+              "abi": {
+                "include": "<freetype/ftpfr.h>",
+                "signature": "FT_Error FT_Get_PFR_Advance(FT_Face face, FT_UInt gindex, FT_Pos* aadvance)"
+              },
+              "source_refs": [
+                "freetype/include/freetype/ftpfr.h",
+                "freetype/src/base/ftpfr.c"
+              ],
+              "glyph_index": 1
+            },
+            "coverage": [
+              "ftpfr.get_pfr_advance:explicit-g1"
+            ]
+          },
+          {
+            "id": "glast_valid_glyph",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/pfr/basic-metrics.pfr",
+                "status": "required_future_asset",
+                "requires": "PFR face with PFR_METRICS service and at least two valid glyph advances"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "aadvance_pointer_class": "valid",
+              "abi": {
+                "include": "<freetype/ftpfr.h>",
+                "signature": "FT_Error FT_Get_PFR_Advance(FT_Face face, FT_UInt gindex, FT_Pos* aadvance)"
+              },
+              "source_refs": [
+                "freetype/include/freetype/ftpfr.h",
+                "freetype/src/base/ftpfr.c"
+              ],
+              "glyph_index": "last_valid_glyph"
+            },
+            "coverage": [
+              "ftpfr.get_pfr_advance:explicit-glast_valid_glyph"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",

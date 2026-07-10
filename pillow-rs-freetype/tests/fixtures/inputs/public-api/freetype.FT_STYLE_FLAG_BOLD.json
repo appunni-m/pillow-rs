@@ -60,7 +60,7 @@
           "bold_font": {
             "kind": "file",
             "role": "font",
-            "path": "input/fonts_autohint/DejaVuSans-Bold.ttf"
+            "path": "fonts/metadata/style-bold-italic.ttf"
           },
           "regular_font": {
             "kind": "file",

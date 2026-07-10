@@ -123,7 +123,7 @@
           },
           "non_sfnt_font": {
             "kind": "ref",
-            "id": "fonts/non-sfnt/type1.pfa"
+            "id": "fonts/type1/simple-type1.pfb"
           }
         },
         "params": {

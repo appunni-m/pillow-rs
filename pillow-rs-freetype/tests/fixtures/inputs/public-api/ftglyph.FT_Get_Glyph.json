@@ -18,31 +18,74 @@
       "schema": "glyph_get",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "g36",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 24,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "advance_conversion": "slot 26.6 * 1024",
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftglyph.get_glyph:explicit-g36"
+            ]
+          },
+          {
+            "id": "g43",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 24,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "advance_conversion": "slot 26.6 * 1024",
+              "glyph_index": 43
+            },
+            "coverage": [
+              "ftglyph.get_glyph:explicit-g43"
+            ]
+          },
+          {
+            "id": "g74",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 24,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "advance_conversion": "slot 26.6 * 1024",
+              "glyph_index": 74
+            },
+            "coverage": [
+              "ftglyph.get_glyph:explicit-g74"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": 24,
-          "glyph_indices": [
-            36,
-            43,
-            74
-          ],
-          "load_flags": [
-            "FT_LOAD_NO_HINTING"
-          ],
-          "advance_conversion": "slot 26.6 * 1024"
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -91,28 +134,29 @@
       "schema": "glyph_get",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "bitmap_strike_font": {
-            "kind": "ref",
-            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
-            "asset_kind": "font"
+        "variants": [
+          {
+            "id": "gbitmap_glyph",
+            "assets": {
+              "bitmap_strike_font": {
+                "kind": "ref",
+                "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "strike": "first_bitmap_strike",
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "glyph_index": "bitmap_glyph"
+            },
+            "coverage": [
+              "ftglyph.get_glyph:explicit-gbitmap_glyph"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "strike": "first_bitmap_strike",
-          "glyph_indices": [
-            "bitmap_glyph"
-          ],
-          "load_flags": [
-            "FT_LOAD_DEFAULT"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -161,28 +205,29 @@
       "schema": "glyph_get",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "svg_font": {
-            "kind": "ref",
-            "id": "fonts/svg/ot-svg-glyphs.ttf",
-            "asset_kind": "font",
-            "optional": true
+        "variants": [
+          {
+            "id": "gsvg_glyph",
+            "assets": {
+              "svg_font": {
+                "kind": "ref",
+                "id": "fonts/svg/ot-svg-glyphs.ttf",
+                "asset_kind": "font",
+                "optional": true
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": [
+                "FT_LOAD_COLOR"
+              ],
+              "glyph_index": "svg_glyph"
+            },
+            "coverage": [
+              "ftglyph.get_glyph:explicit-gsvg_glyph"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "glyph_indices": [
-            "svg_glyph"
-          ],
-          "load_flags": [
-            "FT_LOAD_COLOR"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -230,6 +275,7 @@
       "expect_error": true,
       "inputs": {
         "assets": {
+          "font": { "kind": "ref", "role": "font", "id": "input/fonts/DejaVuSans.ttf" },
           "malformed_facade": {
             "kind": "ref",
             "id": "facades/glyph/malformed-slot-and-class-cases.json",
@@ -278,6 +324,7 @@
       "expect_error": true,
       "inputs": {
         "assets": {
+          "font": { "kind": "ref", "role": "font", "id": "input/fonts/DejaVuSans.ttf" },
           "malformed_facade": {
             "kind": "ref",
             "id": "facades/glyph/malformed-slot-and-class-cases.json",
@@ -330,6 +377,7 @@
       "expect_error": true,
       "inputs": {
         "assets": {
+          "font": { "kind": "ref", "role": "font", "id": "input/fonts/DejaVuSans.ttf" },
           "malformed_facade": {
             "kind": "ref",
             "id": "facades/glyph/malformed-slot-and-class-cases.json",

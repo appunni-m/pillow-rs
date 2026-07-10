@@ -18,66 +18,232 @@
       "schema": "cache_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          },
-          "alt_font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-serif.ttf",
-            "asset_kind": "font"
-          },
-          "multi_charmap_font": {
-            "kind": "ref",
-            "id": "fonts/charmap/multiple-charmaps.ttf",
-            "asset_kind": "font"
-          }
-        },
-        "params": {
-          "manager_limits": {
-            "max_faces": 0,
-            "max_sizes": 0,
-            "max_bytes": 0
-          },
-          "face_ids": [
-            "face-A",
-            "face-B"
-          ],
-          "requester": "path_face_requester_with_log",
-          "scenario": "planned_cache_subsystem_not_out_of_scope",
-          "scalers": [
-            {
-              "pixel": 1,
-              "width": 9,
-              "height": 20
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
             },
-            {
-              "pixel": 0,
-              "width": 768,
-              "height": 1024,
-              "x_res": 72,
-              "y_res": 96
-            }
-          ],
-          "glyph_indexes": [
-            0,
-            36,
-            99999
-          ],
-          "load_flags": [
-            "DEFAULT",
-            "NO_HINTING",
-            "RENDER",
-            "HIGH_BITS_SET"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "planned_cache_subsystem_not_out_of_scope",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "DEFAULT"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f1"
+            ]
+          },
+          {
+            "id": "f2",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "planned_cache_subsystem_not_out_of_scope",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "NO_HINTING"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f2"
+            ]
+          },
+          {
+            "id": "f3",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "planned_cache_subsystem_not_out_of_scope",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "RENDER"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f3"
+            ]
+          },
+          {
+            "id": "f4",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "planned_cache_subsystem_not_out_of_scope",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "HIGH_BITS_SET"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f4"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -124,66 +290,232 @@
       "schema": "cache_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          },
-          "alt_font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-serif.ttf",
-            "asset_kind": "font"
-          },
-          "multi_charmap_font": {
-            "kind": "ref",
-            "id": "fonts/charmap/multiple-charmaps.ttf",
-            "asset_kind": "font"
-          }
-        },
-        "params": {
-          "manager_limits": {
-            "max_faces": 0,
-            "max_sizes": 0,
-            "max_bytes": 0
-          },
-          "face_ids": [
-            "face-A",
-            "face-B"
-          ],
-          "requester": "path_face_requester_with_log",
-          "scenario": "success_pixel_and_point_scalers",
-          "scalers": [
-            {
-              "pixel": 1,
-              "width": 9,
-              "height": 20
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
             },
-            {
-              "pixel": 0,
-              "width": 768,
-              "height": 1024,
-              "x_res": 72,
-              "y_res": 96
-            }
-          ],
-          "glyph_indexes": [
-            0,
-            36,
-            99999
-          ],
-          "load_flags": [
-            "DEFAULT",
-            "NO_HINTING",
-            "RENDER",
-            "HIGH_BITS_SET"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_pixel_and_point_scalers",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "DEFAULT"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f1"
+            ]
+          },
+          {
+            "id": "f2",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_pixel_and_point_scalers",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "NO_HINTING"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f2"
+            ]
+          },
+          {
+            "id": "f3",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_pixel_and_point_scalers",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "RENDER"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f3"
+            ]
+          },
+          {
+            "id": "f4",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_pixel_and_point_scalers",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "HIGH_BITS_SET"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f4"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -230,66 +562,232 @@
       "schema": "cache_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          },
-          "alt_font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-serif.ttf",
-            "asset_kind": "font"
-          },
-          "multi_charmap_font": {
-            "kind": "ref",
-            "id": "fonts/charmap/multiple-charmaps.ttf",
-            "asset_kind": "font"
-          }
-        },
-        "params": {
-          "manager_limits": {
-            "max_faces": 0,
-            "max_sizes": 0,
-            "max_bytes": 0
-          },
-          "face_ids": [
-            "face-A",
-            "face-B"
-          ],
-          "requester": "path_face_requester_with_log",
-          "scenario": "success_lookup_hit_miss_and_repeated",
-          "scalers": [
-            {
-              "pixel": 1,
-              "width": 9,
-              "height": 20
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
             },
-            {
-              "pixel": 0,
-              "width": 768,
-              "height": 1024,
-              "x_res": 72,
-              "y_res": 96
-            }
-          ],
-          "glyph_indexes": [
-            0,
-            36,
-            99999
-          ],
-          "load_flags": [
-            "DEFAULT",
-            "NO_HINTING",
-            "RENDER",
-            "HIGH_BITS_SET"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_lookup_hit_miss_and_repeated",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "DEFAULT"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f1"
+            ]
+          },
+          {
+            "id": "f2",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_lookup_hit_miss_and_repeated",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "NO_HINTING"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f2"
+            ]
+          },
+          {
+            "id": "f3",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_lookup_hit_miss_and_repeated",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "RENDER"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f3"
+            ]
+          },
+          {
+            "id": "f4",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_lookup_hit_miss_and_repeated",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "HIGH_BITS_SET"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f4"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -336,66 +834,232 @@
       "schema": "cache_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          },
-          "alt_font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-serif.ttf",
-            "asset_kind": "font"
-          },
-          "multi_charmap_font": {
-            "kind": "ref",
-            "id": "fonts/charmap/multiple-charmaps.ttf",
-            "asset_kind": "font"
-          }
-        },
-        "params": {
-          "manager_limits": {
-            "max_faces": 0,
-            "max_sizes": 0,
-            "max_bytes": 0
-          },
-          "face_ids": [
-            "face-A",
-            "face-B"
-          ],
-          "requester": "path_face_requester_with_log",
-          "scenario": "success_node_acquire_and_unref",
-          "scalers": [
-            {
-              "pixel": 1,
-              "width": 9,
-              "height": 20
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
             },
-            {
-              "pixel": 0,
-              "width": 768,
-              "height": 1024,
-              "x_res": 72,
-              "y_res": 96
-            }
-          ],
-          "glyph_indexes": [
-            0,
-            36,
-            99999
-          ],
-          "load_flags": [
-            "DEFAULT",
-            "NO_HINTING",
-            "RENDER",
-            "HIGH_BITS_SET"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_node_acquire_and_unref",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "DEFAULT"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f1"
+            ]
+          },
+          {
+            "id": "f2",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_node_acquire_and_unref",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "NO_HINTING"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f2"
+            ]
+          },
+          {
+            "id": "f3",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_node_acquire_and_unref",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "RENDER"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f3"
+            ]
+          },
+          {
+            "id": "f4",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "success_node_acquire_and_unref",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "HIGH_BITS_SET"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f4"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -442,66 +1106,232 @@
       "schema": "cache_operation",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          },
-          "alt_font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-serif.ttf",
-            "asset_kind": "font"
-          },
-          "multi_charmap_font": {
-            "kind": "ref",
-            "id": "fonts/charmap/multiple-charmaps.ttf",
-            "asset_kind": "font"
-          }
-        },
-        "params": {
-          "manager_limits": {
-            "max_faces": 0,
-            "max_sizes": 0,
-            "max_bytes": 0
-          },
-          "face_ids": [
-            "face-A",
-            "face-B"
-          ],
-          "requester": "path_face_requester_with_log",
-          "scenario": "error_null_scaler_or_aglyph",
-          "scalers": [
-            {
-              "pixel": 1,
-              "width": 9,
-              "height": 20
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
             },
-            {
-              "pixel": 0,
-              "width": 768,
-              "height": 1024,
-              "x_res": 72,
-              "y_res": 96
-            }
-          ],
-          "glyph_indexes": [
-            0,
-            36,
-            99999
-          ],
-          "load_flags": [
-            "DEFAULT",
-            "NO_HINTING",
-            "RENDER",
-            "HIGH_BITS_SET"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "error_null_scaler_or_aglyph",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "DEFAULT"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f1"
+            ]
+          },
+          {
+            "id": "f2",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "error_null_scaler_or_aglyph",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "NO_HINTING"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f2"
+            ]
+          },
+          {
+            "id": "f3",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "error_null_scaler_or_aglyph",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "RENDER"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f3"
+            ]
+          },
+          {
+            "id": "f4",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "error_null_scaler_or_aglyph",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "HIGH_BITS_SET"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f4"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -549,66 +1379,232 @@
       "schema": "cache_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          },
-          "alt_font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-serif.ttf",
-            "asset_kind": "font"
-          },
-          "multi_charmap_font": {
-            "kind": "ref",
-            "id": "fonts/charmap/multiple-charmaps.ttf",
-            "asset_kind": "font"
-          }
-        },
-        "params": {
-          "manager_limits": {
-            "max_faces": 0,
-            "max_sizes": 0,
-            "max_bytes": 0
-          },
-          "face_ids": [
-            "face-A",
-            "face-B"
-          ],
-          "requester": "path_face_requester_with_log",
-          "scenario": "load_flags_truncation_policy",
-          "scalers": [
-            {
-              "pixel": 1,
-              "width": 9,
-              "height": 20
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
             },
-            {
-              "pixel": 0,
-              "width": 768,
-              "height": 1024,
-              "x_res": 72,
-              "y_res": 96
-            }
-          ],
-          "glyph_indexes": [
-            0,
-            36,
-            99999
-          ],
-          "load_flags": [
-            "DEFAULT",
-            "NO_HINTING",
-            "RENDER",
-            "HIGH_BITS_SET"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "load_flags_truncation_policy",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "DEFAULT"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f1"
+            ]
+          },
+          {
+            "id": "f2",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "load_flags_truncation_policy",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "NO_HINTING"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f2"
+            ]
+          },
+          {
+            "id": "f3",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "load_flags_truncation_policy",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "RENDER"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f3"
+            ]
+          },
+          {
+            "id": "f4",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-sans.ttf",
+                "asset_kind": "font"
+              },
+              "alt_font": {
+                "kind": "ref",
+                "id": "fonts/basic/dejavu-serif.ttf",
+                "asset_kind": "font"
+              },
+              "multi_charmap_font": {
+                "kind": "ref",
+                "id": "fonts/charmap/multiple-charmaps.ttf",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "manager_limits": {
+                "max_faces": 0,
+                "max_sizes": 0,
+                "max_bytes": 0
+              },
+              "face_ids": [
+                "face-A",
+                "face-B"
+              ],
+              "requester": "path_face_requester_with_log",
+              "scenario": "load_flags_truncation_policy",
+              "scalers": [
+                {
+                  "pixel": 1,
+                  "width": 9,
+                  "height": 20
+                },
+                {
+                  "pixel": 0,
+                  "width": 768,
+                  "height": 1024,
+                  "x_res": 72,
+                  "y_res": 96
+                }
+              ],
+              "glyph_indexes": [
+                0,
+                36,
+                99999
+              ],
+              "load_flags": "HIGH_BITS_SET"
+            },
+            "coverage": [
+              "ftcache.image_cache_lookup_scaler:explicit-f4"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",

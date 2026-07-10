@@ -68,34 +68,116 @@
       "schema": "size_metrics",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "DejaVuSans",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "requests": [
+                {
+                  "pixel_size": 12
+                },
+                {
+                  "pixel_size": 20
+                },
+                {
+                  "char_size_26_6": 1536,
+                  "hres": 72,
+                  "vres": 96
+                }
+              ]
+            },
+            "coverage": [
+              "size_metrics:explicit-DejaVuSans"
+            ]
+          },
+          {
+            "id": "LiberationSerif-Regular",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "requests": [
+                {
+                  "pixel_size": 12
+                },
+                {
+                  "pixel_size": 20
+                },
+                {
+                  "char_size_26_6": 1536,
+                  "hres": 72,
+                  "vres": 96
+                }
+              ]
+            },
+            "coverage": [
+              "size_metrics:explicit-LiberationSerif-Regular"
+            ]
+          },
+          {
+            "id": "NotoSans-Regular",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "requests": [
+                {
+                  "pixel_size": 12
+                },
+                {
+                  "pixel_size": 20
+                },
+                {
+                  "char_size_26_6": 1536,
+                  "hres": 72,
+                  "vres": 96
+                }
+              ]
+            },
+            "coverage": [
+              "size_metrics:explicit-NotoSans-Regular"
+            ]
+          },
+          {
+            "id": "os2-use-typo-metrics",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metadata/os2-use-typo-metrics.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "requests": [
+                {
+                  "pixel_size": 20
+                }
+              ]
+            },
+            "coverage": [
+              "tt/os2:use-typo-metrics-behavior"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "requests": [
-            {
-              "pixel_size": 12
-            },
-            {
-              "pixel_size": 20
-            },
-            {
-              "char_size_26_6": 1536,
-              "hres": 72,
-              "vres": 96
-            }
-          ]
-        },
-        "variability": {
-          "axes": [
-            "fonts"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:record",
@@ -140,40 +222,548 @@
       "schema": "size_metrics",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font_folder": {
-            "kind": "file",
-            "role": "font_folder",
-            "path": "input/fonts"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "sizes": [
-            8,
-            9,
-            12,
-            16,
-            20,
-            32
-          ],
-          "load_after_size_change": {
-            "glyph_indices": [
-              36,
-              57
-            ],
-            "load_flags": [
-              "FT_LOAD_DEFAULT",
-              "FT_LOAD_NO_HINTING"
+        "variants": [
+          {
+            "id": "DejaVuSans-s8",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 8
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-DejaVuSans-s8"
+            ]
+          },
+          {
+            "id": "DejaVuSans-s9",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 9
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-DejaVuSans-s9"
+            ]
+          },
+          {
+            "id": "DejaVuSans-s12",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-DejaVuSans-s12"
+            ]
+          },
+          {
+            "id": "DejaVuSans-s16",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-DejaVuSans-s16"
+            ]
+          },
+          {
+            "id": "DejaVuSans-s20",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-DejaVuSans-s20"
+            ]
+          },
+          {
+            "id": "DejaVuSans-s32",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-DejaVuSans-s32"
+            ]
+          },
+          {
+            "id": "LiberationSerif-Regular-s8",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 8
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-LiberationSerif-Regular-s8"
+            ]
+          },
+          {
+            "id": "LiberationSerif-Regular-s9",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 9
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-LiberationSerif-Regular-s9"
+            ]
+          },
+          {
+            "id": "LiberationSerif-Regular-s12",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-LiberationSerif-Regular-s12"
+            ]
+          },
+          {
+            "id": "LiberationSerif-Regular-s16",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-LiberationSerif-Regular-s16"
+            ]
+          },
+          {
+            "id": "LiberationSerif-Regular-s20",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-LiberationSerif-Regular-s20"
+            ]
+          },
+          {
+            "id": "LiberationSerif-Regular-s32",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-LiberationSerif-Regular-s32"
+            ]
+          },
+          {
+            "id": "NotoSans-Regular-s8",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 8
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-NotoSans-Regular-s8"
+            ]
+          },
+          {
+            "id": "NotoSans-Regular-s9",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 9
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-NotoSans-Regular-s9"
+            ]
+          },
+          {
+            "id": "NotoSans-Regular-s12",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-NotoSans-Regular-s12"
+            ]
+          },
+          {
+            "id": "NotoSans-Regular-s16",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-NotoSans-Regular-s16"
+            ]
+          },
+          {
+            "id": "NotoSans-Regular-s20",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-NotoSans-Regular-s20"
+            ]
+          },
+          {
+            "id": "NotoSans-Regular-s32",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_after_size_change": {
+                "glyph_indices": [
+                  36,
+                  57
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_NO_HINTING"
+                ]
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              }
+            },
+            "coverage": [
+              "size_metrics:explicit-NotoSans-Regular-s32"
             ]
           }
-        },
-        "variability": {
-          "axes": [
-            "fonts",
-            "sizes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:record",

@@ -48,27 +48,50 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts_autohint/NotoSansMongolian-Regular.ttf"
-          }
-        },
-        "params": {
-          "open": "FT_New_Memory_Face",
-          "face_index": 0,
-          "flag": "FT_FACE_FLAG_VERTICAL",
-          "read_fields": [
-            "face_flags",
-            "max_advance_height"
-          ],
-          "load_probe": {
-            "char": "U+1820",
-            "load_flags": [
-              "FT_LOAD_VERTICAL_LAYOUT"
+        "variants": [
+          {
+            "id": "compact-vertical-metrics",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_VERTICAL",
+              "read_fields": [
+                "face_flags",
+                "max_advance_height"
+              ]
+            },
+            "coverage": [
+              "font/face_flags:vhea-and-vmtx-present"
+            ]
+          },
+          {
+            "id": "vhea-without-vmtx",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/metrics/vertical-vhea-only.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_VERTICAL",
+              "read_fields": [
+                "face_flags",
+                "max_advance_height"
+              ]
+            },
+            "coverage": [
+              "font/face_flags:vhea-present-vmtx-absent"
             ]
           }
-        }
+        ]
       },
       "classifiers": [
         "kind:flag",

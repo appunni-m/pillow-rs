@@ -85,7 +85,7 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "id": "input/fonts_autohint/NotoSans-Regular.ttf"
+            "id": "input/fonts/NotoSans-Regular.ttf"
           }
         },
         "params": {

@@ -105,48 +105,82 @@
       "schema": "callback_event_stream",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          },
-          "synthetic_outline": {
-            "kind": "ref",
-            "id": "outlines/multi-contour-negative-coordinates.json"
-          }
-        },
-        "params": {
-          "glyph_indices": [
-            36,
-            37
-          ],
-          "load_flags": [
-            "FT_LOAD_NO_HINTING"
-          ],
-          "decompose_funcs": {
-            "move_to": "instrumented",
-            "line_to": "instrumented",
-            "conic_to": "instrumented",
-            "cubic_to": "instrumented"
-          },
-          "shift_delta_matrix": [
-            {
-              "shift": 0,
-              "delta": 0
+        "variants": [
+          {
+            "id": "g36-f1",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "synthetic_outline": {
+                "kind": "ref",
+                "id": "outlines/multi-contour-negative-coordinates.json"
+              }
             },
-            {
-              "shift": 1,
-              "delta": 32
-            }
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices",
-            "load_flags"
-          ]
-        }
+            "params": {
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "decompose_funcs": {
+                "move_to": "instrumented",
+                "line_to": "instrumented",
+                "conic_to": "instrumented",
+                "cubic_to": "instrumented"
+              },
+              "shift_delta_matrix": [
+                {
+                  "shift": 0,
+                  "delta": 0
+                },
+                {
+                  "shift": 1,
+                  "delta": 32
+                }
+              ],
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftoutln.outline_decompose:explicit-g36-f1"
+            ]
+          },
+          {
+            "id": "g37-f2",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "synthetic_outline": {
+                "kind": "ref",
+                "id": "outlines/multi-contour-negative-coordinates.json"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "decompose_funcs": {
+                "move_to": "instrumented",
+                "line_to": "instrumented",
+                "conic_to": "instrumented",
+                "cubic_to": "instrumented"
+              },
+              "shift_delta_matrix": [
+                {
+                  "shift": 0,
+                  "delta": 0
+                },
+                {
+                  "shift": 1,
+                  "delta": 32
+                }
+              ],
+              "glyph_index": 37
+            },
+            "coverage": [
+              "ftoutln.outline_decompose:explicit-g37-f2"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:macro",

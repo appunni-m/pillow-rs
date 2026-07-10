@@ -126,32 +126,77 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts/name-cmap/iso-7bit-ascii.ttf",
-            "role": "font",
-            "requirements": "SFNT font with deprecated ISO 7-bit ASCII cmap, including mappings for U+0041 and U+007F and a miss case for U+0080."
+        "variants": [
+          {
+            "id": "cpU+0041",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/name-cmap/iso-7bit-ascii.ttf",
+                "role": "font",
+                "requirements": "SFNT font with deprecated ISO 7-bit ASCII cmap, including mappings for U+0041 and U+007F and a miss case for U+0080."
+              }
+            },
+            "params": {
+              "function_group": "charmap.get_char_index",
+              "face_index": 0,
+              "platform_id": "TT_PLATFORM_ISO",
+              "platform_id_value": 2,
+              "encoding_id": "TT_ISO_ID_7BIT_ASCII",
+              "encoding_id_value": 0,
+              "char_code": "U+0041"
+            },
+            "coverage": [
+              "charmap.get_char_index:explicit-cpU+0041"
+            ]
+          },
+          {
+            "id": "cpU+007F",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/name-cmap/iso-7bit-ascii.ttf",
+                "role": "font",
+                "requirements": "SFNT font with deprecated ISO 7-bit ASCII cmap, including mappings for U+0041 and U+007F and a miss case for U+0080."
+              }
+            },
+            "params": {
+              "function_group": "charmap.get_char_index",
+              "face_index": 0,
+              "platform_id": "TT_PLATFORM_ISO",
+              "platform_id_value": 2,
+              "encoding_id": "TT_ISO_ID_7BIT_ASCII",
+              "encoding_id_value": 0,
+              "char_code": "U+007F"
+            },
+            "coverage": [
+              "charmap.get_char_index:explicit-cpU+007F"
+            ]
+          },
+          {
+            "id": "cpU+0080",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/name-cmap/iso-7bit-ascii.ttf",
+                "role": "font",
+                "requirements": "SFNT font with deprecated ISO 7-bit ASCII cmap, including mappings for U+0041 and U+007F and a miss case for U+0080."
+              }
+            },
+            "params": {
+              "function_group": "charmap.get_char_index",
+              "face_index": 0,
+              "platform_id": "TT_PLATFORM_ISO",
+              "platform_id_value": 2,
+              "encoding_id": "TT_ISO_ID_7BIT_ASCII",
+              "encoding_id_value": 0,
+              "char_code": "U+0080"
+            },
+            "coverage": [
+              "charmap.get_char_index:explicit-cpU+0080"
+            ]
           }
-        },
-        "params": {
-          "function_group": "charmap.get_char_index",
-          "face_index": 0,
-          "platform_id": "TT_PLATFORM_ISO",
-          "platform_id_value": 2,
-          "encoding_id": "TT_ISO_ID_7BIT_ASCII",
-          "encoding_id_value": 0,
-          "codepoints": [
-            "U+0041",
-            "U+007F",
-            "U+0080"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "codepoints"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:constant",

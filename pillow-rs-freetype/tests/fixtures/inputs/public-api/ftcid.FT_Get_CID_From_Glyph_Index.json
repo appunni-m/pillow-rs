@@ -16,29 +16,68 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "cid_keyed_font",
-            "path": "input/fonts/cid/type1-cid-ros-and-glyph-map.pfb",
-            "status": "required_future_asset",
-            "requires": "Non-SFNT CID-keyed Type 1/CFF font with known glyph-index-to-CID mapping"
+        "variants": [
+          {
+            "id": "g0",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "cid_keyed_font",
+                "path": "input/fonts/cid/type1-cid-ros-and-glyph-map.pfb",
+                "status": "required_future_asset",
+                "requires": "Non-SFNT CID-keyed Type 1/CFF font with known glyph-index-to-CID mapping"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "cid_output": "nonnull_initialized_sentinel",
+              "glyph_index": 0
+            },
+            "coverage": [
+              "ftcid.get_cid_from_glyph_index:explicit-g0"
+            ]
+          },
+          {
+            "id": "g1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "cid_keyed_font",
+                "path": "input/fonts/cid/type1-cid-ros-and-glyph-map.pfb",
+                "status": "required_future_asset",
+                "requires": "Non-SFNT CID-keyed Type 1/CFF font with known glyph-index-to-CID mapping"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "cid_output": "nonnull_initialized_sentinel",
+              "glyph_index": 1
+            },
+            "coverage": [
+              "ftcid.get_cid_from_glyph_index:explicit-g1"
+            ]
+          },
+          {
+            "id": "glast_valid",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "cid_keyed_font",
+                "path": "input/fonts/cid/type1-cid-ros-and-glyph-map.pfb",
+                "status": "required_future_asset",
+                "requires": "Non-SFNT CID-keyed Type 1/CFF font with known glyph-index-to-CID mapping"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "cid_output": "nonnull_initialized_sentinel",
+              "glyph_index": "last_valid"
+            },
+            "coverage": [
+              "ftcid.get_cid_from_glyph_index:explicit-glast_valid"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "glyph_indices": [
-            0,
-            1,
-            "last_valid"
-          ],
-          "cid_output": "nonnull_initialized_sentinel"
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -73,29 +112,68 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "sfnt_wrapped_cid_font",
-            "path": "input/fonts/cid/ot-cff-cid-keyed.otf",
-            "status": "required_future_asset",
-            "requires": "OpenType CFF/CID font whose CFF service reports internally CID-keyed state"
+        "variants": [
+          {
+            "id": "g0",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "sfnt_wrapped_cid_font",
+                "path": "input/fonts/cid/ot-cff-cid-keyed.otf",
+                "status": "required_future_asset",
+                "requires": "OpenType CFF/CID font whose CFF service reports internally CID-keyed state"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "cid_output": "nonnull_initialized_sentinel",
+              "glyph_index": 0
+            },
+            "coverage": [
+              "ftcid.get_cid_from_glyph_index:explicit-g0"
+            ]
+          },
+          {
+            "id": "g1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "sfnt_wrapped_cid_font",
+                "path": "input/fonts/cid/ot-cff-cid-keyed.otf",
+                "status": "required_future_asset",
+                "requires": "OpenType CFF/CID font whose CFF service reports internally CID-keyed state"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "cid_output": "nonnull_initialized_sentinel",
+              "glyph_index": 1
+            },
+            "coverage": [
+              "ftcid.get_cid_from_glyph_index:explicit-g1"
+            ]
+          },
+          {
+            "id": "glast_valid",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "sfnt_wrapped_cid_font",
+                "path": "input/fonts/cid/ot-cff-cid-keyed.otf",
+                "status": "required_future_asset",
+                "requires": "OpenType CFF/CID font whose CFF service reports internally CID-keyed state"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "cid_output": "nonnull_initialized_sentinel",
+              "glyph_index": "last_valid"
+            },
+            "coverage": [
+              "ftcid.get_cid_from_glyph_index:explicit-glast_valid"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "glyph_indices": [
-            0,
-            1,
-            "last_valid"
-          ],
-          "cid_output": "nonnull_initialized_sentinel"
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",

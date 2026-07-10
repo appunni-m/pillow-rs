@@ -15,47 +15,80 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/pfr/basic-metrics.pfr",
-            "status": "required_future_asset",
-            "requires": "PFR face with PFR_METRICS service"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "sizes": [
-            {
-              "label": "before_size",
-              "size_set": false
+        "variants": [
+          {
+            "id": "s1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/pfr/basic-metrics.pfr",
+                "status": "required_future_asset",
+                "requires": "PFR face with PFR_METRICS service"
+              }
             },
-            {
-              "label": "after_size",
-              "size_ppem": 20
-            }
-          ],
-          "output_pointer_mask": [
-            "aoutline_resolution",
-            "ametrics_resolution",
-            "ametrics_x_scale",
-            "ametrics_y_scale"
-          ],
-          "abi": {
-            "include": "<freetype/ftpfr.h>",
-            "signature": "FT_Error FT_Get_PFR_Metrics(FT_Face face, FT_UInt*, FT_UInt*, FT_Fixed*, FT_Fixed*)"
+            "params": {
+              "face_index": 0,
+              "output_pointer_mask": [
+                "aoutline_resolution",
+                "ametrics_resolution",
+                "ametrics_x_scale",
+                "ametrics_y_scale"
+              ],
+              "abi": {
+                "include": "<freetype/ftpfr.h>",
+                "signature": "FT_Error FT_Get_PFR_Metrics(FT_Face face, FT_UInt*, FT_UInt*, FT_Fixed*, FT_Fixed*)"
+              },
+              "source_refs": [
+                "freetype/include/freetype/ftpfr.h",
+                "freetype/src/base/ftpfr.c"
+              ],
+              "pixel_size": {
+                "label": "before_size",
+                "size_set": false
+              }
+            },
+            "coverage": [
+              "ftpfr.get_pfr_metrics:explicit-s1"
+            ]
           },
-          "source_refs": [
-            "freetype/include/freetype/ftpfr.h",
-            "freetype/src/base/ftpfr.c"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "sizes"
-          ]
-        }
+          {
+            "id": "s2",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/pfr/basic-metrics.pfr",
+                "status": "required_future_asset",
+                "requires": "PFR face with PFR_METRICS service"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "output_pointer_mask": [
+                "aoutline_resolution",
+                "ametrics_resolution",
+                "ametrics_x_scale",
+                "ametrics_y_scale"
+              ],
+              "abi": {
+                "include": "<freetype/ftpfr.h>",
+                "signature": "FT_Error FT_Get_PFR_Metrics(FT_Face face, FT_UInt*, FT_UInt*, FT_Fixed*, FT_Fixed*)"
+              },
+              "source_refs": [
+                "freetype/include/freetype/ftpfr.h",
+                "freetype/src/base/ftpfr.c"
+              ],
+              "pixel_size": {
+                "label": "after_size",
+                "size_ppem": 20
+              }
+            },
+            "coverage": [
+              "ftpfr.get_pfr_metrics:explicit-s2"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -94,38 +127,62 @@
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "sizes": [
-            {
-              "label": "no_active_size",
-              "size_set": false
+        "variants": [
+          {
+            "id": "s1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
             },
-            {
-              "label": "active_size",
-              "size_ppem": 20
-            }
-          ],
-          "output_pointer_mask": [
-            "aoutline_resolution",
-            "ametrics_resolution",
-            "ametrics_x_scale",
-            "ametrics_y_scale"
-          ],
-          "c_behavior": "Non-PFR writes units_per_EM to both resolutions, writes face->size metrics scales when size exists or 0x10000 otherwise, then returns Unknown_File_Format"
-        },
-        "variability": {
-          "axes": [
-            "sizes"
-          ]
-        }
+            "params": {
+              "face_index": 0,
+              "output_pointer_mask": [
+                "aoutline_resolution",
+                "ametrics_resolution",
+                "ametrics_x_scale",
+                "ametrics_y_scale"
+              ],
+              "c_behavior": "Non-PFR writes units_per_EM to both resolutions, writes face->size metrics scales when size exists or 0x10000 otherwise, then returns Unknown_File_Format",
+              "pixel_size": {
+                "label": "no_active_size",
+                "size_set": false
+              }
+            },
+            "coverage": [
+              "ftpfr.get_pfr_metrics:explicit-s1"
+            ]
+          },
+          {
+            "id": "s2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "output_pointer_mask": [
+                "aoutline_resolution",
+                "ametrics_resolution",
+                "ametrics_x_scale",
+                "ametrics_y_scale"
+              ],
+              "c_behavior": "Non-PFR writes units_per_EM to both resolutions, writes face->size metrics scales when size exists or 0x10000 otherwise, then returns Unknown_File_Format",
+              "pixel_size": {
+                "label": "active_size",
+                "size_ppem": 20
+              }
+            },
+            "coverage": [
+              "ftpfr.get_pfr_metrics:explicit-s2"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",

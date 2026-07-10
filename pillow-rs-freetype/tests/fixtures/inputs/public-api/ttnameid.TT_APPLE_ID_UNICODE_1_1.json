@@ -126,31 +126,54 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts/name-cmap/apple-unicode-1-1.ttf",
-            "role": "font",
-            "requirements": "SFNT font with an Apple Unicode 1.1 cmap, including representative mappings for U+0041 and the historical Hangul range around U+3400."
+        "variants": [
+          {
+            "id": "cpU+0041",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/name-cmap/apple-unicode-1-1.ttf",
+                "role": "font",
+                "requirements": "SFNT font with an Apple Unicode 1.1 cmap, including representative mappings for U+0041 and the historical Hangul range around U+3400."
+              }
+            },
+            "params": {
+              "function_group": "charmap.get_char_index",
+              "face_index": 0,
+              "platform_id": "TT_PLATFORM_APPLE_UNICODE",
+              "platform_id_value": 0,
+              "encoding_id": "TT_APPLE_ID_UNICODE_1_1",
+              "encoding_id_value": 1,
+              "char_code": "U+0041"
+            },
+            "coverage": [
+              "charmap.get_char_index:explicit-cpU+0041"
+            ]
+          },
+          {
+            "id": "cpU+3400",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/name-cmap/apple-unicode-1-1.ttf",
+                "role": "font",
+                "requirements": "SFNT font with an Apple Unicode 1.1 cmap, including representative mappings for U+0041 and the historical Hangul range around U+3400."
+              }
+            },
+            "params": {
+              "function_group": "charmap.get_char_index",
+              "face_index": 0,
+              "platform_id": "TT_PLATFORM_APPLE_UNICODE",
+              "platform_id_value": 0,
+              "encoding_id": "TT_APPLE_ID_UNICODE_1_1",
+              "encoding_id_value": 1,
+              "char_code": "U+3400"
+            },
+            "coverage": [
+              "charmap.get_char_index:explicit-cpU+3400"
+            ]
           }
-        },
-        "params": {
-          "function_group": "charmap.get_char_index",
-          "face_index": 0,
-          "platform_id": "TT_PLATFORM_APPLE_UNICODE",
-          "platform_id_value": 0,
-          "encoding_id": "TT_APPLE_ID_UNICODE_1_1",
-          "encoding_id_value": 1,
-          "codepoints": [
-            "U+0041",
-            "U+3400"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "codepoints"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:constant",

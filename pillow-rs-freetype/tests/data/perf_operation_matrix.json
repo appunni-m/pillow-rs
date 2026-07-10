@@ -169,7 +169,7 @@
       "operation": "getmask",
       "timing_boundary": "font face is constructed before timing; measure fallback-font non-Latin mask generation",
       "comparison_trust": "timing_only",
-      "font": "tests/fixtures/input/fonts_autohint/DroidSansFallbackFull.ttf",
+      "font": "tests/fixtures/deprecated/fonts_autohint/DroidSansFallbackFull.ttf",
       "size": 20,
       "text": "\u4e2d",
       "weight": 6,

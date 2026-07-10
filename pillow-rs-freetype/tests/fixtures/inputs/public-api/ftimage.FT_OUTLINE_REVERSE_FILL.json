@@ -58,34 +58,60 @@
       "schema": "outline_raster",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline_set": {
-            "kind": "ref",
-            "id": "outlines/synthetic/cw-ccw-orientation-pairs.json",
-            "asset_kind": "outline-set"
+        "variants": [
+          {
+            "id": "m1",
+            "assets": {
+              "outline_set": {
+                "kind": "ref",
+                "id": "outlines/synthetic/cw-ccw-orientation-pairs.json",
+                "asset_kind": "outline-set"
+              },
+              "type1_font": {
+                "kind": "ref",
+                "id": "fonts/type1/reverse-fill-orientation.pfb",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "outline_flags_matrix": [
+                "FT_OUTLINE_NONE",
+                "FT_OUTLINE_REVERSE_FILL"
+              ],
+              "expected_behavior": "flag records opposite contour orientation; scan converter may ignore it, so compare C effect classification exactly",
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-m1"
+            ]
           },
-          "type1_font": {
-            "kind": "ref",
-            "id": "fonts/type1/reverse-fill-orientation.pfb",
-            "asset_kind": "font"
+          {
+            "id": "m2",
+            "assets": {
+              "outline_set": {
+                "kind": "ref",
+                "id": "outlines/synthetic/cw-ccw-orientation-pairs.json",
+                "asset_kind": "outline-set"
+              },
+              "type1_font": {
+                "kind": "ref",
+                "id": "fonts/type1/reverse-fill-orientation.pfb",
+                "asset_kind": "font"
+              }
+            },
+            "params": {
+              "outline_flags_matrix": [
+                "FT_OUTLINE_NONE",
+                "FT_OUTLINE_REVERSE_FILL"
+              ],
+              "expected_behavior": "flag records opposite contour orientation; scan converter may ignore it, so compare C effect classification exactly",
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "ftoutln.outline_render:explicit-m2"
+            ]
           }
-        },
-        "params": {
-          "outline_flags_matrix": [
-            "FT_OUTLINE_NONE",
-            "FT_OUTLINE_REVERSE_FILL"
-          ],
-          "render_modes": [
-            "FT_RENDER_MODE_NORMAL",
-            "FT_RENDER_MODE_MONO"
-          ],
-          "expected_behavior": "flag records opposite contour orientation; scan converter may ignore it, so compare C effect classification exactly"
-        },
-        "variability": {
-          "axes": [
-            "render_modes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:flag",

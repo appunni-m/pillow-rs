@@ -1,7 +1,11 @@
 {
   "version": 1,
   "subject": "ftimage.FT_GLYPH_FORMAT_OUTLINE",
-  "manifest_cases": ["value_matches_header", "produced_by_scalable_glyph_load", "outline_payload_matches_format"],
+  "manifest_cases": [
+    "value_matches_header",
+    "produced_by_scalable_glyph_load",
+    "outline_payload_matches_format"
+  ],
   "cases": [
     {
       "case_id": "ftimage.FT_GLYPH_FORMAT_OUTLINE.value_matches_header",
@@ -10,9 +14,37 @@
       "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"include": "<freetype/ftimage.h>", "symbol": "FT_GLYPH_FORMAT_OUTLINE", "enum": "FT_Glyph_Format", "expected_value": 1869968492, "tag": "outl"}},
-      "classifiers": ["kind:enum_variant", "header:ftimage", "abi:value"],
-      "expectation": {"status": "ok", "output_shape": {"symbol": "FT_GLYPH_FORMAT_OUTLINE", "value_type": "FT_Glyph_Format", "tag": "FT_IMAGE_TAG('o','u','t','l')"}, "compare": {"mode": "value", "paths": ["symbol", "numeric_value", "tag"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftimage.h>",
+          "symbol": "FT_GLYPH_FORMAT_OUTLINE",
+          "enum": "FT_Glyph_Format",
+          "expected_value": 1869968492,
+          "tag": "outl"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftimage",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "FT_GLYPH_FORMAT_OUTLINE",
+          "value_type": "FT_Glyph_Format",
+          "tag": "FT_IMAGE_TAG('o','u','t','l')"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "numeric_value",
+            "tag"
+          ]
+        }
+      }
     },
     {
       "case_id": "ftimage.FT_GLYPH_FORMAT_OUTLINE.produced_by_scalable_glyph_load",
@@ -21,9 +53,308 @@
       "operation": "load_glyph",
       "schema": "glyph_slot",
       "expect_error": false,
-      "inputs": {"assets": {"font": {"kind": "file", "role": "font", "path": "input/fonts/DejaVuSans.ttf"}}, "params": {"glyph_indices": [36, 57], "pixel_sizes": [13, 20], "load_flag_sets": [["FT_LOAD_DEFAULT"], ["FT_LOAD_NO_HINTING"], ["FT_LOAD_NO_SCALE"]]}, "variability": {"axes": ["sizes", "glyph_indices", "load_flags"]}},
-      "classifiers": ["kind:enum_variant", "header:ftimage", "path:runtime"],
-      "expectation": {"status": "ok", "output_shape": {"status": "FT_Error", "slot_format": "FT_GLYPH_FORMAT_OUTLINE", "outline": "FT_Outline descriptor"}, "compare": {"mode": "exact", "paths": ["rows[*].status", "rows[*].slot_format", "rows[*].outline.n_points", "rows[*].outline.n_contours"]}}
+      "inputs": {
+        "variants": [
+          {
+            "id": "s13-g36-f1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "pixel_size": {
+                "x": 0,
+                "y": 13
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "load_glyph:explicit-s13-g36-f1"
+            ]
+          },
+          {
+            "id": "s13-g36-f2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "pixel_size": {
+                "x": 0,
+                "y": 13
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "load_glyph:explicit-s13-g36-f2"
+            ]
+          },
+          {
+            "id": "s13-g36-f3",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "pixel_size": {
+                "x": 0,
+                "y": 13
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "coverage": [
+              "load_glyph:explicit-s13-g36-f3"
+            ]
+          },
+          {
+            "id": "s13-g57-f4",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "pixel_size": {
+                "x": 0,
+                "y": 13
+              },
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "load_glyph:explicit-s13-g57-f4"
+            ]
+          },
+          {
+            "id": "s13-g57-f5",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "pixel_size": {
+                "x": 0,
+                "y": 13
+              },
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "load_glyph:explicit-s13-g57-f5"
+            ]
+          },
+          {
+            "id": "s13-g57-f6",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "pixel_size": {
+                "x": 0,
+                "y": 13
+              },
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "coverage": [
+              "load_glyph:explicit-s13-g57-f6"
+            ]
+          },
+          {
+            "id": "s20-g36-f7",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "load_glyph:explicit-s20-g36-f7"
+            ]
+          },
+          {
+            "id": "s20-g36-f8",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "load_glyph:explicit-s20-g36-f8"
+            ]
+          },
+          {
+            "id": "s20-g36-f9",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "coverage": [
+              "load_glyph:explicit-s20-g36-f9"
+            ]
+          },
+          {
+            "id": "s20-g57-f10",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "load_glyph:explicit-s20-g57-f10"
+            ]
+          },
+          {
+            "id": "s20-g57-f11",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "load_glyph:explicit-s20-g57-f11"
+            ]
+          },
+          {
+            "id": "s20-g57-f12",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "coverage": [
+              "load_glyph:explicit-s20-g57-f12"
+            ]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftimage",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "slot_format": "FT_GLYPH_FORMAT_OUTLINE",
+          "outline": "FT_Outline descriptor"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].slot_format",
+            "rows[*].outline.n_points",
+            "rows[*].outline.n_contours"
+          ]
+        }
+      }
     },
     {
       "case_id": "ftimage.FT_GLYPH_FORMAT_OUTLINE.outline_payload_matches_format",
@@ -32,9 +363,105 @@
       "operation": "freetype.load_glyph_outline",
       "schema": "outline_result",
       "expect_error": false,
-      "inputs": {"assets": {"font": {"kind": "file", "role": "font", "path": "input/fonts/DejaVuSans.ttf"}}, "params": {"glyph_indices": [36, 43, 57], "compare_cbox": true, "capture_arrays": ["points", "tags", "contours", "flags"]}, "variability": {"axes": ["glyph_indices"]}},
-      "classifiers": ["kind:enum_variant", "header:ftimage", "path:runtime"],
-      "expectation": {"status": "ok", "output_shape": {"slot_format": "FT_GLYPH_FORMAT_OUTLINE", "outline_points": "FT_Vector array", "outline_tags": "bytes", "outline_contours": "short array", "cbox": "FT_BBox"}, "compare": {"mode": "exact", "paths": ["rows[*].slot_format", "rows[*].outline.points", "rows[*].outline.tags", "rows[*].outline.contours", "rows[*].outline.flags", "rows[*].cbox"]}}
+      "inputs": {
+        "variants": [
+          {
+            "id": "g36",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "compare_cbox": true,
+              "capture_arrays": [
+                "points",
+                "tags",
+                "contours",
+                "flags"
+              ],
+              "glyph_index": 36
+            },
+            "coverage": [
+              "freetype.load_glyph_outline:explicit-g36"
+            ]
+          },
+          {
+            "id": "g43",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "compare_cbox": true,
+              "capture_arrays": [
+                "points",
+                "tags",
+                "contours",
+                "flags"
+              ],
+              "glyph_index": 43
+            },
+            "coverage": [
+              "freetype.load_glyph_outline:explicit-g43"
+            ]
+          },
+          {
+            "id": "g57",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "compare_cbox": true,
+              "capture_arrays": [
+                "points",
+                "tags",
+                "contours",
+                "flags"
+              ],
+              "glyph_index": 57
+            },
+            "coverage": [
+              "freetype.load_glyph_outline:explicit-g57"
+            ]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftimage",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "slot_format": "FT_GLYPH_FORMAT_OUTLINE",
+          "outline_points": "FT_Vector array",
+          "outline_tags": "bytes",
+          "outline_contours": "short array",
+          "cbox": "FT_BBox"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].slot_format",
+            "rows[*].outline.points",
+            "rows[*].outline.tags",
+            "rows[*].outline.contours",
+            "rows[*].outline.flags",
+            "rows[*].cbox"
+          ]
+        }
+      }
     }
   ]
 }

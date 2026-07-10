@@ -4,7 +4,7 @@
 //! including text layout or framework-specific packaging, live outside this
 //! crate.
 
-use crate::casts::{i32_from_f32, u32_from_i64, u32_from_usize, usize_from_i32};
+use crate::casts::{i16_from_i32, i32_from_f32, u32_from_i64, u32_from_usize, usize_from_i32};
 
 use crate::error::FontError;
 use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
@@ -309,18 +309,40 @@ impl Font {
         size_pt: f32,
         load_mode: LoadMode,
     ) -> Result<Self, FontError> {
-        let (num_faces, face_offset) = tt::resolve_face_index(data, face_index)?;
+        // FreeType stores a 1-based named-instance selector in bits 16..30;
+        // the low 16 bits still select the collection face (ftobjs.c).
+        let collection_face_index = face_index & 0xFFFF;
+        let (num_faces, face_offset) = tt::resolve_face_index(data, collection_face_index)?;
         let dir = tt::parse_table_directory_at(data, face_offset)?;
+        let fvar = dir
+            .find(data, tag(b"fvar"))
+            .and_then(|bytes| tt::fvar::parse_fvar(bytes).ok());
+        let named_instance = (face_index >> 16) & 0x7FFF;
+        if named_instance != 0
+            && fvar
+                .as_ref()
+                .is_none_or(|table| named_instance > usize::from(table.instance_count))
+        {
+            return Err(FontError::InvalidFont(format!(
+                "named instance {named_instance} is unavailable"
+            )));
+        }
 
         let head_bytes = dir
             .find(data, tag(b"head"))
             .ok_or_else(|| FontError::InvalidFont("missing 'head' table".into()))?;
         let head = tt::head::parse_head(head_bytes)?;
 
-        let maxp_bytes = dir
-            .find(data, tag(b"maxp"))
+        // tt_face_load_maxp reads its optional 26-byte frame from the SFNT
+        // stream after goto_table, without constraining reads to table length.
+        let maxp_record = dir
+            .record(tag(b"maxp"))
             .ok_or_else(|| FontError::InvalidFont("missing 'maxp' table".into()))?;
-        let maxp = tt::maxp::parse_maxp(maxp_bytes)?;
+        let maxp_bytes = data
+            .get(maxp_record.offset as usize..)
+            .ok_or_else(|| FontError::InvalidFont("invalid 'maxp' table offset".into()))?;
+        // sfnt_load_face intentionally continues after a maxp load error.
+        let maxp = tt::maxp::parse_maxp(maxp_bytes).unwrap_or_default();
 
         let cmap_bytes = dir
             .find(data, tag(b"cmap"))
@@ -335,7 +357,10 @@ impl Font {
         let hmtx_bytes = dir
             .find(data, tag(b"hmtx"))
             .ok_or_else(|| FontError::InvalidFont("missing 'hmtx' table".into()))?;
-        let hmtx = tt::hmtx::parse_hmtx(hmtx_bytes, hhea.num_hmetrics, maxp.num_glyphs)?;
+        // tt_face_load_hmtx records the table offset and size; malformed
+        // metrics are observed later as zero advance and bearing values.
+        let hmtx = tt::hmtx::parse_hmtx(hmtx_bytes, hhea.num_hmetrics, maxp.num_glyphs)
+            .unwrap_or_default();
 
         let name = match dir.find(data, tag(b"name")) {
             Some(d) => tt::name::parse_name(d)?,
@@ -349,12 +374,14 @@ impl Font {
 
         let os2 = dir.find(data, tag(b"OS/2")).and_then(tt::os2::parse_os2);
         let post = dir.find(data, tag(b"post")).and_then(tt::post::parse_post);
-        let vhea = dir
-            .find(data, tag(b"vhea"))
-            .and_then(|d| tt::vhea::parse_vhea(d).ok());
+        let vhea = match dir.find(data, tag(b"vhea")) {
+            Some(bytes) => Some(tt::vhea::parse_vhea(bytes)?),
+            None => None,
+        };
         let vmtx = vhea.as_ref().and_then(|vhea| {
-            dir.find(data, tag(b"vmtx"))
-                .and_then(|d| tt::vmtx::parse_vmtx(d, vhea.num_vmetrics, maxp.num_glyphs).ok())
+            dir.find(data, tag(b"vmtx")).map(|d| {
+                tt::vmtx::parse_vmtx(d, vhea.num_vmetrics, maxp.num_glyphs).unwrap_or_default()
+            })
         });
         let hdmx = dir
             .find(data, tag(b"hdmx"))
@@ -390,6 +417,7 @@ impl Font {
             num_faces,
             table_directory: dir,
             cmap,
+            fvar,
             head,
             hhea,
             hmtx,
@@ -462,6 +490,7 @@ impl Font {
 
     /// Return scalar face metadata.
     pub fn face_info(&self) -> FaceInfo {
+        let (ascender, descender, height) = face_metric_values(&self.data);
         FaceInfo {
             num_faces: self.data.num_faces,
             face_index: self.data.face_index,
@@ -477,9 +506,9 @@ impl Font {
                 x_max: i32::from(self.data.head.x_max),
                 y_max: i32::from(self.data.head.y_max),
             },
-            ascender: self.data.hhea.ascent,
-            descender: self.data.hhea.descent,
-            height: self.data.hhea.ascent - self.data.hhea.descent + self.data.hhea.line_gap,
+            ascender: i16_from_i32(ascender),
+            descender: i16_from_i32(descender),
+            height: i16_from_i32(height),
             max_advance_width: i32::from(self.data.hhea.advance_width_max),
             max_advance_height: self
                 .data
@@ -592,7 +621,14 @@ impl Font {
         {
             flags |= FT_FACE_FLAG_FIXED_WIDTH;
         }
-        if self.data.table_directory.record(tag(b"post")).is_some() {
+        // sfobjs.c:1118-1121 exposes glyph names for all valid `post` formats
+        // except format 3, which intentionally contains no glyph names.
+        if self
+            .data
+            .post
+            .as_ref()
+            .is_some_and(|post| post.format_type != 0x0003_0000)
+        {
             flags |= FT_FACE_FLAG_GLYPH_NAMES;
         }
         if self.data.vhea.is_some() && self.data.vmtx.is_some() {
@@ -601,7 +637,7 @@ impl Font {
         if self.data.kern.as_ref().is_some_and(|kern| !kern.is_empty()) {
             flags |= FT_FACE_FLAG_KERNING;
         }
-        if self.data.table_directory.record(tag(b"fvar")).is_some() {
+        if self.data.fvar.is_some() {
             flags |= FT_FACE_FLAG_MULTIPLE_MASTERS;
         }
         if self.data.table_directory.record(tag(b"glyf")).is_some() {
@@ -666,13 +702,19 @@ impl Font {
 
     /// Equivalent to `FT_Set_Pixel_Sizes`.
     pub fn set_pixel_sizes(&mut self, pixel_width: u32, pixel_height: u32) {
-        let height = if pixel_height == 0 {
-            pixel_width
-        } else {
-            pixel_height
-        };
+        // C normalizes a missing dimension from the other one, then clamps
+        // both dimensions to 1..=0xFFFF (ftobjs.c:3574-3588).
+        let mut width = pixel_width;
+        let mut height = pixel_height;
+        if width == 0 {
+            width = height;
+        } else if height == 0 {
+            height = width;
+        }
+        width = width.clamp(1, 0xFFFF);
+        height = height.clamp(1, 0xFFFF);
         self.size_pt = height as f32;
-        self.size_metrics = SizeMetrics::from_pixel_size(pixel_width, height, &self.data);
+        self.size_metrics = SizeMetrics::from_pixel_size(width, height, &self.data);
         self.data.size_pt.set(self.size_pt);
         self.face_globals =
             crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
@@ -952,7 +994,26 @@ impl Font {
         vertical_layout: bool,
         native_hint_mode: NativeHintMode,
     ) -> Result<GlyphSlotLoad, FontError> {
-        let scaled = self.scale_glyph_for_metrics_default_with_mode(glyph, native_hint_mode)?;
+        self.glyph_slot_load_default_with_layout_and_mode_and_hdmx(
+            glyph,
+            vertical_layout,
+            native_hint_mode,
+            true,
+        )
+    }
+
+    pub(crate) fn glyph_slot_load_default_with_layout_and_mode_and_hdmx(
+        &self,
+        glyph: u16,
+        vertical_layout: bool,
+        native_hint_mode: NativeHintMode,
+        use_hdmx: bool,
+    ) -> Result<GlyphSlotLoad, FontError> {
+        let scaled = self.scale_glyph_for_metrics_default_with_mode_and_hdmx(
+            glyph,
+            native_hint_mode,
+            use_hdmx,
+        )?;
         Ok(self.slot_load_from_scaled(glyph, scaled, grid_fit_for_layout(vertical_layout)))
     }
 
@@ -1416,14 +1477,24 @@ impl Font {
         glyph: u16,
         native_hint_mode: NativeHintMode,
     ) -> Result<scaler::ScaledGlyph, FontError> {
+        self.scale_glyph_for_metrics_default_with_mode_and_hdmx(glyph, native_hint_mode, true)
+    }
+
+    fn scale_glyph_for_metrics_default_with_mode_and_hdmx(
+        &self,
+        glyph: u16,
+        native_hint_mode: NativeHintMode,
+        use_hdmx: bool,
+    ) -> Result<scaler::ScaledGlyph, FontError> {
         if self.data.fpgm.is_some() && self.data.cvt.is_some() {
             let bytecode_context = self.native_bytecode_context_for_mode(native_hint_mode)?;
-            let scaled = scaler::scale_glyph_for_metrics_with_bytecode_context_and_mode(
+            let scaled = scaler::scale_glyph_for_metrics_with_bytecode_context_and_mode_and_hdmx(
                 &self.data,
                 glyph,
                 self.is_italic,
                 native_hint_mode,
                 bytecode_context,
+                use_hdmx,
             )?;
             if is_pathological_metrics_cbox(&scaled) || is_pathological_metrics_advance(&scaled) {
                 let metrics_cache = self.face_globals.get_metrics(glyph);
@@ -2165,10 +2236,7 @@ impl SizeMetrics {
     }
 
     fn with_face_metrics(mut self, data: &FontData) -> Self {
-        let ascender = i32::from(data.hhea.ascent);
-        let descender = i32::from(data.hhea.descent);
-        let height = i32::from(data.hhea.ascent) - i32::from(data.hhea.descent)
-            + i32::from(data.hhea.line_gap);
+        let (ascender, descender, height) = face_metric_values(data);
         let max_advance = i32::from(data.hhea.advance_width_max);
 
         self.ascender = ft_pix_ceil(ft_mul_fix(ascender, self.y_scale));
@@ -2264,36 +2332,48 @@ fn ppem_from_scaled_char_size(scaled_26dot6: i32) -> Result<u16, SizeRequestErro
 /// face-level ascender/descender. The descender is converted to a positive
 /// value for the public `(ascent, descent)` pair.
 fn pick_metrics(data: &FontData) -> (i32, i32) {
-    if let Some(pair) = pick_typo_metrics(data) {
-        return pair;
-    }
-    let asc = data.hhea.ascent as i32;
-    let desc = -data.hhea.descent as i32;
-    if asc != 0 || desc != 0 {
-        return (asc, desc);
-    }
-    pick_os2_metrics(data).unwrap_or((asc, desc))
+    let (ascender, descender, _) = face_metric_values(data);
+    (ascender, -descender)
 }
 
-/// Priority 1: OS/2 sTypoAscender / sTypoDescender when USE_TYPO_METRICS is set.
-fn pick_typo_metrics(data: &FontData) -> Option<(i32, i32)> {
-    let os2 = data.os2.as_ref()?;
-    if os2.use_typo_metrics() {
-        Some((os2.s_typo_ascender as i32, (-os2.s_typo_descender) as i32))
-    } else {
-        None
+/// Select the face-level ascender, descender, and height from sfobjs.c.
+fn face_metric_values(data: &FontData) -> (i32, i32, i32) {
+    if let Some(os2) = data.os2.as_ref().filter(|os2| os2.use_typo_metrics()) {
+        let ascender = i32::from(os2.s_typo_ascender);
+        let descender = i32::from(os2.s_typo_descender);
+        return (
+            ascender,
+            descender,
+            ascender - descender + i32::from(os2.s_typo_line_gap),
+        );
     }
-}
 
-/// Priority 2-3: Try OS/2 typo, then usWin fallback (sfobjs.c:1395-1413).
-fn pick_os2_metrics(data: &FontData) -> Option<(i32, i32)> {
-    let os2 = data.os2.as_ref()?;
-    let ta = os2.s_typo_ascender as i32;
-    let td = -os2.s_typo_descender as i32;
-    if ta != 0 || td != 0 {
-        return Some((ta, td));
+    let ascender = i32::from(data.hhea.ascent);
+    let descender = i32::from(data.hhea.descent);
+    if ascender != 0 || descender != 0 {
+        return (
+            ascender,
+            descender,
+            ascender - descender + i32::from(data.hhea.line_gap),
+        );
     }
-    Some((os2.us_win_ascent as i32, os2.us_win_descent as i32))
+
+    let Some(os2) = data.os2.as_ref() else {
+        return (ascender, descender, ascender - descender);
+    };
+    let typo_ascender = i32::from(os2.s_typo_ascender);
+    let typo_descender = i32::from(os2.s_typo_descender);
+    if typo_ascender != 0 || typo_descender != 0 {
+        return (
+            typo_ascender,
+            typo_descender,
+            typo_ascender - typo_descender + i32::from(os2.s_typo_line_gap),
+        );
+    }
+
+    let win_ascender = i32::from(i16::from_be_bytes(os2.us_win_ascent.to_be_bytes()));
+    let win_descender = -i32::from(i16::from_be_bytes(os2.us_win_descent.to_be_bytes()));
+    (win_ascender, win_descender, win_ascender - win_descender)
 }
 
 #[cfg(test)]

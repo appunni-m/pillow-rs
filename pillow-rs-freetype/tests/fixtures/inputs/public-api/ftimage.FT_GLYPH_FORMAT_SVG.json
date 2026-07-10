@@ -1,7 +1,11 @@
 {
   "version": 1,
   "subject": "ftimage.FT_GLYPH_FORMAT_SVG",
-  "manifest_cases": ["value_matches_header", "produced_by_svg_glyph_load_when_enabled", "unsupported_svg_build_classification"],
+  "manifest_cases": [
+    "value_matches_header",
+    "produced_by_svg_glyph_load_when_enabled",
+    "unsupported_svg_build_classification"
+  ],
   "cases": [
     {
       "case_id": "ftimage.FT_GLYPH_FORMAT_SVG.value_matches_header",
@@ -10,9 +14,37 @@
       "operation": "constant",
       "schema": "api_constant",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"include": "<freetype/ftimage.h>", "symbol": "FT_GLYPH_FORMAT_SVG", "enum": "FT_Glyph_Format", "expected_value": 1398163232, "tag": "SVG "}},
-      "classifiers": ["kind:enum_variant", "header:ftimage", "abi:value"],
-      "expectation": {"status": "ok", "output_shape": {"symbol": "FT_GLYPH_FORMAT_SVG", "value_type": "FT_Glyph_Format", "tag": "FT_IMAGE_TAG('S','V','G',' ')"}, "compare": {"mode": "value", "paths": ["symbol", "numeric_value", "tag"]}}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ftimage.h>",
+          "symbol": "FT_GLYPH_FORMAT_SVG",
+          "enum": "FT_Glyph_Format",
+          "expected_value": 1398163232,
+          "tag": "SVG "
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftimage",
+        "abi:value"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "FT_GLYPH_FORMAT_SVG",
+          "value_type": "FT_Glyph_Format",
+          "tag": "FT_IMAGE_TAG('S','V','G',' ')"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "symbol",
+            "numeric_value",
+            "tag"
+          ]
+        }
+      }
     },
     {
       "case_id": "ftimage.FT_GLYPH_FORMAT_SVG.produced_by_svg_glyph_load_when_enabled",
@@ -21,9 +53,74 @@
       "operation": "freetype.load_svg_glyph",
       "schema": "glyph_slot",
       "expect_error": false,
-      "inputs": {"assets": {"svg_font": {"kind": "ref", "id": "fonts/svg/otsvg-glyph.ttf"}}, "params": {"glyph_index": "svg_document_glyph", "load_flag_sets": [["FT_LOAD_COLOR"], ["FT_LOAD_SVG_ONLY"]], "inspect_svg_document": true}, "variability": {"axes": ["load_flags"]}},
-      "classifiers": ["kind:enum_variant", "header:ftimage", "path:runtime"],
-      "expectation": {"status": "build_dependent", "output_shape": {"status": "FT_Error", "slot_format": "FT_GLYPH_FORMAT_SVG", "svg_document_length": "FT_ULong", "svg_document_hash": "hash"}, "compare": {"mode": "hash", "paths": ["status", "slot_format", "svg_document_length", "svg_document_hash"]}, "fixture_requirements": ["Requires an OT-SVG font asset and a build with SVG support."]}
+      "inputs": {
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "svg_font": {
+                "kind": "ref",
+                "id": "fonts/svg/otsvg-glyph.ttf"
+              }
+            },
+            "params": {
+              "glyph_index": "svg_document_glyph",
+              "inspect_svg_document": true,
+              "load_flags": [
+                "FT_LOAD_COLOR"
+              ]
+            },
+            "coverage": [
+              "freetype.load_svg_glyph:explicit-f1"
+            ]
+          },
+          {
+            "id": "f2",
+            "assets": {
+              "svg_font": {
+                "kind": "ref",
+                "id": "fonts/svg/otsvg-glyph.ttf"
+              }
+            },
+            "params": {
+              "glyph_index": "svg_document_glyph",
+              "inspect_svg_document": true,
+              "load_flags": [
+                "FT_LOAD_SVG_ONLY"
+              ]
+            },
+            "coverage": [
+              "freetype.load_svg_glyph:explicit-f2"
+            ]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftimage",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "status": "FT_Error",
+          "slot_format": "FT_GLYPH_FORMAT_SVG",
+          "svg_document_length": "FT_ULong",
+          "svg_document_hash": "hash"
+        },
+        "compare": {
+          "mode": "hash",
+          "paths": [
+            "status",
+            "slot_format",
+            "svg_document_length",
+            "svg_document_hash"
+          ]
+        },
+        "fixture_requirements": [
+          "Requires an OT-SVG font asset and a build with SVG support."
+        ]
+      }
     },
     {
       "case_id": "ftimage.FT_GLYPH_FORMAT_SVG.unsupported_svg_build_classification",
@@ -32,9 +129,45 @@
       "operation": "freetype.load_svg_glyph",
       "schema": "glyph_slot",
       "expect_error": false,
-      "inputs": {"assets": {"svg_font": {"kind": "ref", "id": "fonts/svg/otsvg-glyph.ttf"}, "control_font": {"kind": "file", "role": "font", "path": "input/fonts/DejaVuSans.ttf"}}, "params": {"feature_probe": "FT_CONFIG_OPTION_SVG", "expected_when_disabled": "C oracle fallback or error for same load flags"}},
-      "classifiers": ["kind:enum_variant", "header:ftimage", "path:feature"],
-      "expectation": {"status": "build_dependent", "output_shape": {"svg_feature_enabled": "bool", "status": "FT_Error", "slot_format": "C oracle value"}, "compare": {"mode": "exact", "paths": ["svg_feature_enabled", "status", "slot_format", "classification"]}}
+      "inputs": {
+        "assets": {
+          "svg_font": {
+            "kind": "ref",
+            "id": "fonts/svg/otsvg-glyph.ttf"
+          },
+          "control_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "feature_probe": "FT_CONFIG_OPTION_SVG",
+          "expected_when_disabled": "C oracle fallback or error for same load flags"
+        }
+      },
+      "classifiers": [
+        "kind:enum_variant",
+        "header:ftimage",
+        "path:feature"
+      ],
+      "expectation": {
+        "status": "build_dependent",
+        "output_shape": {
+          "svg_feature_enabled": "bool",
+          "status": "FT_Error",
+          "slot_format": "C oracle value"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "svg_feature_enabled",
+            "status",
+            "slot_format",
+            "classification"
+          ]
+        }
+      }
     }
   ]
 }

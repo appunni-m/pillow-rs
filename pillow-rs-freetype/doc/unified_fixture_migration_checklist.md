@@ -1,13 +1,22 @@
-# Unified Fixture Migration Checklist
+# Unified Fixture Migration Record
 
-Baseline runner/doc commit: `ec027266`
+The original aggregate-axis migration is complete and superseded by explicit
+grouped input variants. This file preserves the historical slice record; it is
+not current input-authoring guidance.
 
-The active source is `tests/fixtures/inputs/public-api/*.json`. Workers process
-30-file slices and commit JSON-only changes from separate worktrees.
+Current contracts:
 
-## Slice Status
+- `doc/unified_fixture_inputs.md` defines the executable JSON format.
+- `doc/FONT_FIXTURE_COVERAGE_PLAN.md` defines fixture-corpus and structural
+  coverage work.
+- `tests/fixtures/inputs/public-api/*.json` contains the only executable public
+  parity inputs.
 
-| Slice | Files | Branch | Status |
+## Historical Slice Status
+
+Baseline runner/doc commit: `ec027266`.
+
+| Slice | Files | Branch | Historical status |
 |---|---:|---|---|
 | 000-029 | 30 | `codex/unified-inputs-000-029` | complete, no changes |
 | 030-059 | 30 | `codex/unified-inputs-030-059` | merged, 1 case |
@@ -19,37 +28,21 @@ The active source is `tests/fixtures/inputs/public-api/*.json`. Workers process
 | 210-239 | 30 | `codex/unified-inputs-210-239-v2` | merged, 18 cases |
 | 240-269 | 30 | `codex/unified-inputs-240-269-v2` | merged, 2 cases |
 | 270-299 | 30 | `codex/unified-inputs-270-299-v2` | merged, 2 cases |
-
-## Remaining Aggregate-Axis Slices
-
-After the initial 300-file pass, an audit found 77 files with 85 aggregate-ish
-cases that still need explicit `inputs.variability.axes`.
-
-| Slice | Files | Branch | Status |
-|---|---:|---|---|
 | remaining-00 | 30 | `codex/unified-inputs-remaining-00` | merged, 35 cases |
 | remaining-01 | 30 | `codex/unified-inputs-remaining-01` | merged, 32 cases |
 | remaining-02 | 17 | `codex/unified-inputs-remaining-02` | merged, 17 cases |
 
-## Single Model Cleanup
+## Final Migration State
 
-After merging the remaining aggregate-axis slices, the runner and inputs were
-normalized to one aggregate model:
+- Top-level `matrix_cases`: removed and rejected.
+- Runtime font-folder discovery: removed and rejected.
+- Runtime all-glyph enumeration: removed.
+- `inputs.variability` axes: removed and rejected.
+- Implicit combinations: zero.
+- Grouped concrete combinations: `inputs.variants` with mandatory coverage
+  intent.
+- Oracle and face cache identity: includes fixture content hashes.
 
-- No top-level `matrix_cases`.
-- No `schema: "scalar"`.
-- No `_matrix` operation or schema names.
-- `load_flag_sets` is the only aggregate load-flag axis field.
-
-## Worker Acceptance Criteria
-
-- Only assigned JSON files are changed.
-- Cases with common aggregate fields declare `inputs.variability.axes`.
-- No per-font, per-size, per-codepoint, or legacy matrix row materialization is
-  added.
-- Do not introduce `_matrix` operation/schema names, `schema: "scalar"`, or
-  `load_flags_matrix`.
-- No expected outputs are committed.
-- Edited JSON files pass `python3 -m json.tool`.
-- `git diff --check` passes in the worker worktree.
-- Worker branch contains a commit when changes were made.
+Do not reopen the old slice workflow. New coverage work changes focused fonts
+and existing public JSON cases directly, then verifies exact C/Rust/C ABI/WASM
+interchangeability.

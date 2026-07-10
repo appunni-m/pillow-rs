@@ -63,33 +63,80 @@
       "schema": "glyph_record",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "g36",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "creation_paths": [
+                "FT_Get_Glyph outline",
+                "FT_Glyph_Copy",
+                "FT_Glyph_Transform"
+              ],
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftglyph.record_inspect:explicit-g36"
+            ]
+          },
+          {
+            "id": "g43",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "creation_paths": [
+                "FT_Get_Glyph outline",
+                "FT_Glyph_Copy",
+                "FT_Glyph_Transform"
+              ],
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "glyph_index": 43
+            },
+            "coverage": [
+              "ftglyph.record_inspect:explicit-g43"
+            ]
+          },
+          {
+            "id": "g74",
+            "assets": {
+              "outline_font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "creation_paths": [
+                "FT_Get_Glyph outline",
+                "FT_Glyph_Copy",
+                "FT_Glyph_Transform"
+              ],
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "glyph_index": 74
+            },
+            "coverage": [
+              "ftglyph.record_inspect:explicit-g74"
+            ]
           }
-        },
-        "params": {
-          "creation_paths": [
-            "FT_Get_Glyph outline",
-            "FT_Glyph_Copy",
-            "FT_Glyph_Transform"
-          ],
-          "glyph_indices": [
-            36,
-            43,
-            74
-          ],
-          "load_flags": [
-            "FT_LOAD_NO_HINTING"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:record",

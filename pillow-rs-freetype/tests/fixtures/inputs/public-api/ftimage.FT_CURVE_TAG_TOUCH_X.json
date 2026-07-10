@@ -57,38 +57,54 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "tt_font": {
-            "kind": "ref",
-            "id": "input/fonts_autohint/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": {
-            "x": 0,
-            "y": 16
+        "variants": [
+          {
+            "id": "a-default",
+            "assets": {
+              "tt_font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "outline/tags:hinted_outline_touch_x_matches_c:a-default"
+            ]
           },
-          "glyph_indices": [
-            36,
-            43,
-            50
-          ],
-          "load_flags": [
-            "FT_LOAD_DEFAULT",
-            "FT_LOAD_NO_AUTOHINT"
-          ],
-          "probe": [
-            "slot.outline.tags[] & FT_CURVE_TAG_TOUCH_X",
-            "slot.outline.points[].x"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices",
-            "load_flags"
-          ]
-        }
+          {
+            "id": "o-no-autohint",
+            "assets": {
+              "tt_font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "glyph_index": 50,
+              "load_flags": [
+                "FT_LOAD_NO_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "outline/tags:hinted_outline_touch_x_matches_c:o-no-autohint"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:tag",

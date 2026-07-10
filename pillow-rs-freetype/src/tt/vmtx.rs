@@ -14,7 +14,7 @@ pub struct LongVerMetric {
 }
 
 /// Parsed 'vmtx' table.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct VmtxTable {
     /// Metrics for the first `num_vmetrics` glyphs.
     pub v_metrics: Vec<LongVerMetric>,

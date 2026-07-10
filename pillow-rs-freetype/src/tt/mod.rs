@@ -6,6 +6,7 @@
 //! hmtx, kern, cmap, name, loca, glyf, OS/2).
 
 pub mod cmap;
+pub mod fvar;
 pub mod glyf;
 pub mod hdmx;
 pub mod head;
@@ -109,7 +110,9 @@ pub fn parse_table_directory_at(data: &[u8], base: usize) -> Result<TableDirecto
         let off = dir_start + i * 16;
         records.push(TableRecord {
             tag: read_u32(font, off),
-            offset: (base as u32) + read_u32(font, off + 8),
+            // In TTC files, table offsets remain absolute from the collection
+            // start (ttload.c:tt_face_load_font_dir); don't add the face base.
+            offset: read_u32(font, off + 8),
             length: read_u32(font, off + 12),
         });
     }
@@ -170,11 +173,6 @@ pub const fn tag(bytes: &[u8; 4]) -> u32 {
 #[inline]
 pub(crate) fn read_u16(data: &[u8], offset: usize) -> u16 {
     u16::from_be_bytes([data[offset], data[offset + 1]])
-}
-
-#[inline]
-pub(crate) fn read_i16(data: &[u8], offset: usize) -> i16 {
-    i16::from_be_bytes([data[offset], data[offset + 1]])
 }
 
 #[inline]

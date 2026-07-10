@@ -126,32 +126,77 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts/name-cmap/iso-8859-1.ttf",
-            "role": "font",
-            "requirements": "SFNT font with deprecated ISO 8859-1 cmap, including mappings for U+0041 and U+00E9 and a miss case for U+0100."
+        "variants": [
+          {
+            "id": "cpU+0041",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/name-cmap/iso-8859-1.ttf",
+                "role": "font",
+                "requirements": "SFNT font with deprecated ISO 8859-1 cmap, including mappings for U+0041 and U+00E9 and a miss case for U+0100."
+              }
+            },
+            "params": {
+              "function_group": "charmap.get_char_index",
+              "face_index": 0,
+              "platform_id": "TT_PLATFORM_ISO",
+              "platform_id_value": 2,
+              "encoding_id": "TT_ISO_ID_8859_1",
+              "encoding_id_value": 2,
+              "char_code": "U+0041"
+            },
+            "coverage": [
+              "charmap.get_char_index:explicit-cpU+0041"
+            ]
+          },
+          {
+            "id": "cpU+00E9",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/name-cmap/iso-8859-1.ttf",
+                "role": "font",
+                "requirements": "SFNT font with deprecated ISO 8859-1 cmap, including mappings for U+0041 and U+00E9 and a miss case for U+0100."
+              }
+            },
+            "params": {
+              "function_group": "charmap.get_char_index",
+              "face_index": 0,
+              "platform_id": "TT_PLATFORM_ISO",
+              "platform_id_value": 2,
+              "encoding_id": "TT_ISO_ID_8859_1",
+              "encoding_id_value": 2,
+              "char_code": "U+00E9"
+            },
+            "coverage": [
+              "charmap.get_char_index:explicit-cpU+00E9"
+            ]
+          },
+          {
+            "id": "cpU+0100",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/name-cmap/iso-8859-1.ttf",
+                "role": "font",
+                "requirements": "SFNT font with deprecated ISO 8859-1 cmap, including mappings for U+0041 and U+00E9 and a miss case for U+0100."
+              }
+            },
+            "params": {
+              "function_group": "charmap.get_char_index",
+              "face_index": 0,
+              "platform_id": "TT_PLATFORM_ISO",
+              "platform_id_value": 2,
+              "encoding_id": "TT_ISO_ID_8859_1",
+              "encoding_id_value": 2,
+              "char_code": "U+0100"
+            },
+            "coverage": [
+              "charmap.get_char_index:explicit-cpU+0100"
+            ]
           }
-        },
-        "params": {
-          "function_group": "charmap.get_char_index",
-          "face_index": 0,
-          "platform_id": "TT_PLATFORM_ISO",
-          "platform_id_value": 2,
-          "encoding_id": "TT_ISO_ID_8859_1",
-          "encoding_id_value": 2,
-          "codepoints": [
-            "U+0041",
-            "U+00E9",
-            "U+0100"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "codepoints"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:constant",

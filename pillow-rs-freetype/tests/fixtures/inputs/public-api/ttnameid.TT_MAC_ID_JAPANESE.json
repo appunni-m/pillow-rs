@@ -126,36 +126,89 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts/name-cmap/mac-japanese.ttf",
-            "role": "font",
-            "requirements": "SFNT font with Macintosh Japanese cmap/name records, languageID TT_MAC_LANGID_JAPANESE, and representative mappings for Hiragana, Katakana, and CJK ideograph codepoints."
+        "variants": [
+          {
+            "id": "cpU+3042",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/name-cmap/mac-japanese.ttf",
+                "role": "font",
+                "requirements": "SFNT font with Macintosh Japanese cmap/name records, languageID TT_MAC_LANGID_JAPANESE, and representative mappings for Hiragana, Katakana, and CJK ideograph codepoints."
+              }
+            },
+            "params": {
+              "function_group": "sfnt.charmap_and_name_metadata",
+              "face_index": 0,
+              "platform_id": "TT_PLATFORM_MACINTOSH",
+              "platform_id_value": 1,
+              "encoding_id": "TT_MAC_ID_JAPANESE",
+              "encoding_id_value": 1,
+              "language_id": "TT_MAC_LANGID_JAPANESE",
+              "language_id_value": 11,
+              "name_id": "TT_NAME_ID_FULL_NAME",
+              "name_id_value": 4,
+              "char_code": "U+3042"
+            },
+            "coverage": [
+              "sfnt.charmap_and_name_metadata:explicit-cpU+3042"
+            ]
+          },
+          {
+            "id": "cpU+30A2",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/name-cmap/mac-japanese.ttf",
+                "role": "font",
+                "requirements": "SFNT font with Macintosh Japanese cmap/name records, languageID TT_MAC_LANGID_JAPANESE, and representative mappings for Hiragana, Katakana, and CJK ideograph codepoints."
+              }
+            },
+            "params": {
+              "function_group": "sfnt.charmap_and_name_metadata",
+              "face_index": 0,
+              "platform_id": "TT_PLATFORM_MACINTOSH",
+              "platform_id_value": 1,
+              "encoding_id": "TT_MAC_ID_JAPANESE",
+              "encoding_id_value": 1,
+              "language_id": "TT_MAC_LANGID_JAPANESE",
+              "language_id_value": 11,
+              "name_id": "TT_NAME_ID_FULL_NAME",
+              "name_id_value": 4,
+              "char_code": "U+30A2"
+            },
+            "coverage": [
+              "sfnt.charmap_and_name_metadata:explicit-cpU+30A2"
+            ]
+          },
+          {
+            "id": "cpU+4E00",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/name-cmap/mac-japanese.ttf",
+                "role": "font",
+                "requirements": "SFNT font with Macintosh Japanese cmap/name records, languageID TT_MAC_LANGID_JAPANESE, and representative mappings for Hiragana, Katakana, and CJK ideograph codepoints."
+              }
+            },
+            "params": {
+              "function_group": "sfnt.charmap_and_name_metadata",
+              "face_index": 0,
+              "platform_id": "TT_PLATFORM_MACINTOSH",
+              "platform_id_value": 1,
+              "encoding_id": "TT_MAC_ID_JAPANESE",
+              "encoding_id_value": 1,
+              "language_id": "TT_MAC_LANGID_JAPANESE",
+              "language_id_value": 11,
+              "name_id": "TT_NAME_ID_FULL_NAME",
+              "name_id_value": 4,
+              "char_code": "U+4E00"
+            },
+            "coverage": [
+              "sfnt.charmap_and_name_metadata:explicit-cpU+4E00"
+            ]
           }
-        },
-        "params": {
-          "function_group": "sfnt.charmap_and_name_metadata",
-          "face_index": 0,
-          "platform_id": "TT_PLATFORM_MACINTOSH",
-          "platform_id_value": 1,
-          "encoding_id": "TT_MAC_ID_JAPANESE",
-          "encoding_id_value": 1,
-          "language_id": "TT_MAC_LANGID_JAPANESE",
-          "language_id_value": 11,
-          "name_id": "TT_NAME_ID_FULL_NAME",
-          "name_id_value": 4,
-          "codepoints": [
-            "U+3042",
-            "U+30A2",
-            "U+4E00"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "codepoints"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:constant",

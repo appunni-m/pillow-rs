@@ -17,39 +17,80 @@
       "schema": "size_metrics",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "sizes": [
-            [
-              0,
-              12
-            ],
-            [
-              12,
-              0
-            ],
-            [
-              12,
-              18
-            ],
-            [
-              20,
-              20
+        "variants": [
+          {
+            "id": "s[0,_12]",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_width": 0,
+              "pixel_height": 12
+            },
+            "coverage": [
+              "set_pixel_sizes:explicit-s[0,_12]"
             ]
-          ]
-        },
-        "variability": {
-          "axes": [
-            "sizes"
-          ]
-        }
+          },
+          {
+            "id": "s[12,_0]",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_width": 12,
+              "pixel_height": 0
+            },
+            "coverage": [
+              "set_pixel_sizes:explicit-s[12,_0]"
+            ]
+          },
+          {
+            "id": "s[12,_18]",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_width": 12,
+              "pixel_height": 18
+            },
+            "coverage": [
+              "set_pixel_sizes:explicit-s[12,_18]"
+            ]
+          },
+          {
+            "id": "s[20,_20]",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_width": 20,
+              "pixel_height": 20
+            },
+            "coverage": [
+              "set_pixel_sizes:explicit-s[20,_20]"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -78,35 +119,62 @@
       "schema": "size_metrics",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "sizes": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              15
-            ],
-            [
-              17,
-              0
+        "variants": [
+          {
+            "id": "s[0,_0]",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_width": 0,
+              "pixel_height": 0
+            },
+            "coverage": [
+              "set_pixel_sizes:explicit-s[0,_0]"
             ]
-          ]
-        },
-        "variability": {
-          "axes": [
-            "sizes"
-          ]
-        }
+          },
+          {
+            "id": "s[0,_15]",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_width": 0,
+              "pixel_height": 15
+            },
+            "coverage": [
+              "set_pixel_sizes:explicit-s[0,_15]"
+            ]
+          },
+          {
+            "id": "s[17,_0]",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_width": 17,
+              "pixel_height": 0
+            },
+            "coverage": [
+              "set_pixel_sizes:explicit-s[17,_0]"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -136,35 +204,62 @@
       "schema": "size_metrics",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "sizes": [
-            [
-              65535,
-              65535
-            ],
-            [
-              70000,
-              20
-            ],
-            [
-              20,
-              70000
+        "variants": [
+          {
+            "id": "s[65535,_65535]",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_width": 65535,
+              "pixel_height": 65535
+            },
+            "coverage": [
+              "set_pixel_sizes:explicit-s[65535,_65535]"
             ]
-          ]
-        },
-        "variability": {
-          "axes": [
-            "sizes"
-          ]
-        }
+          },
+          {
+            "id": "s[70000,_20]",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_width": 70000,
+              "pixel_height": 20
+            },
+            "coverage": [
+              "set_pixel_sizes:explicit-s[70000,_20]"
+            ]
+          },
+          {
+            "id": "s[20,_70000]",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_width": 20,
+              "pixel_height": 70000
+            },
+            "coverage": [
+              "set_pixel_sizes:explicit-s[20,_70000]"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",

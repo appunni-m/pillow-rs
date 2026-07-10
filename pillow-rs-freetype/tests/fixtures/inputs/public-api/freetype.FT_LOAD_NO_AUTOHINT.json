@@ -60,7 +60,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts_autohint/NotoSans-Regular.ttf"
+            "id": "input/fonts/NotoSans-Regular.ttf"
           }
         },
         "params": {

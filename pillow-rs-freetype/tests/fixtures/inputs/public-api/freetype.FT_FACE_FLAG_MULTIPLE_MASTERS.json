@@ -48,18 +48,60 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts_autohint/Ubuntu.ttf"
+        "variants": [
+          {
+            "id": "compact-variable",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/compact-variable.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS",
+              "variation_probe": "FT_Get_MM_Var"
+            },
+            "coverage": [
+              "tt/fvar:valid-header-and-instance-count"
+            ]
+          },
+          {
+            "id": "short-fvar-control",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/fvar-short.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS"
+            },
+            "coverage": [
+              "tt/fvar:short-header-rejected-as-variation-table"
+            ]
+          },
+          {
+            "id": "unsupported-fvar-version-control",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/fvar-version-2.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS"
+            },
+            "coverage": [
+              "tt/fvar:unsupported-major-version"
+            ]
           }
-        },
-        "params": {
-          "open": "FT_New_Memory_Face",
-          "face_index": 0,
-          "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS",
-          "variation_probe": "FT_Get_MM_Var"
-        }
+        ]
       },
       "classifiers": [
         "kind:flag",

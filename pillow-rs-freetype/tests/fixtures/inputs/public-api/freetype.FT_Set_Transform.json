@@ -181,38 +181,68 @@
       "schema": "glyph_load",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "transform": {
-            "matrix": {
-              "xx": 0,
-              "xy": -65536,
-              "yx": 65536,
-              "yy": 0
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
             },
-            "delta": [
-              320,
-              0
+            "params": {
+              "face_index": 0,
+              "transform": {
+                "matrix": {
+                  "xx": 0,
+                  "xy": -65536,
+                  "yx": 65536,
+                  "yy": 0
+                },
+                "delta": [
+                  320,
+                  0
+                ]
+              },
+              "glyph_index": 36,
+              "load_flags": "FT_LOAD_DEFAULT"
+            },
+            "coverage": [
+              "freetype.set_transform:explicit-f1"
             ]
           },
-          "glyph_index": 36,
-          "load_flag_sets": [
-            "FT_LOAD_DEFAULT",
-            "FT_LOAD_IGNORE_TRANSFORM"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+          {
+            "id": "f2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "transform": {
+                "matrix": {
+                  "xx": 0,
+                  "xy": -65536,
+                  "yx": 65536,
+                  "yy": 0
+                },
+                "delta": [
+                  320,
+                  0
+                ]
+              },
+              "glyph_index": 36,
+              "load_flags": "FT_LOAD_IGNORE_TRANSFORM"
+            },
+            "coverage": [
+              "freetype.set_transform:explicit-f2"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",

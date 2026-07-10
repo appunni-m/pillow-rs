@@ -63,34 +63,69 @@
       "schema": "size_record",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "s1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "generic_probe": "set_and_read_client_pointer_identity",
+              "pixel_size": {
+                "pixels": 12
+              }
+            },
+            "coverage": [
+              "freetype.size_record_state:explicit-s1"
+            ]
+          },
+          {
+            "id": "s2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "generic_probe": "set_and_read_client_pointer_identity",
+              "pixel_size": {
+                "pixels": 20
+              }
+            },
+            "coverage": [
+              "freetype.size_record_state:explicit-s2"
+            ]
+          },
+          {
+            "id": "s3",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "generic_probe": "set_and_read_client_pointer_identity",
+              "pixel_size": {
+                "char_size_26_6": 1024,
+                "dpi": 72
+              }
+            },
+            "coverage": [
+              "freetype.size_record_state:explicit-s3"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "sizes": [
-            {
-              "pixels": 12
-            },
-            {
-              "pixels": 20
-            },
-            {
-              "char_size_26_6": 1024,
-              "dpi": 72
-            }
-          ],
-          "generic_probe": "set_and_read_client_pointer_identity"
-        },
-        "variability": {
-          "axes": [
-            "sizes"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:record",

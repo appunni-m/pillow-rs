@@ -14,33 +14,57 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fonts/variable/inter-var.ttf"
+        "variants": [
+          {
+            "id": "first-named-instance",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/inter-var.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_Open_Face",
+              "face_index": "0x00010000",
+              "flag_or_expression": "face_index_named_instance_bits_0x7FFF0000",
+              "post_probe": [
+                "face.face_index",
+                "face.style_flags named-instance count bits"
+              ],
+              "include": "freetype/freetype.h",
+              "macro": "FT_IS_NAMED_INSTANCE",
+              "expected_truth": true,
+              "probe": [
+                "macro_result",
+                "face.face_flags",
+                "face.face_index"
+              ]
+            },
+            "coverage": [
+              "font/named-instance:first-valid-instance"
+            ]
+          },
+          {
+            "id": "instance-past-instance-count",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/inter-var.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_Open_Face",
+              "face_index": "0x000D0000",
+              "flag_or_expression": "face_index_named_instance_bits_0x7FFF0000",
+              "include": "freetype/freetype.h",
+              "macro": "FT_IS_NAMED_INSTANCE"
+            },
+            "expect_error": true,
+            "coverage": [
+              "font/named-instance:index-exceeds-fvar-instance-count"
+            ]
           }
-        },
-        "params": {
-          "open": "FT_Open_Face",
-          "face_index": "0x00010000",
-          "flag_or_expression": "face_index_named_instance_bits_0x7FFF0000",
-          "open_face_indices": [
-            "0x00010000",
-            "0x00030000"
-          ],
-          "post_probe": [
-            "face.face_index",
-            "face.style_flags named-instance count bits"
-          ],
-          "include": "freetype/freetype.h",
-          "macro": "FT_IS_NAMED_INSTANCE",
-          "expected_truth": true,
-          "probe": [
-            "macro_result",
-            "face.face_flags",
-            "face.face_index"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:macro",

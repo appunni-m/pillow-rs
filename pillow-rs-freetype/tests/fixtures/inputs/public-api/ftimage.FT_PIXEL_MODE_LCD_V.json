@@ -61,45 +61,308 @@
       "schema": "glyph_slot_bitmap",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_sizes": [
-            {
-              "x": 0,
-              "y": 18
+        "variants": [
+          {
+            "id": "s18-g36-f1",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
             },
-            {
-              "x": 0,
-              "y": 32
-            }
-          ],
-          "glyph_indices": [
-            36,
-            43,
-            82
-          ],
-          "load_flags": [
-            "FT_LOAD_DEFAULT",
-            "FT_LOAD_NO_HINTING"
-          ],
-          "render_mode": "FT_RENDER_MODE_LCD_V",
-          "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
-          "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256"
-        },
-        "variability": {
-          "axes": [
-            "sizes",
-            "glyph_indices",
-            "load_flags"
-          ]
-        }
+            "params": {
+              "face_index": 0,
+              "load_flags": "FT_LOAD_DEFAULT",
+              "render_mode": "FT_RENDER_MODE_LCD_V",
+              "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
+              "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256",
+              "pixel_size": {
+                "x": 0,
+                "y": 18
+              },
+              "glyph_index": 36
+            },
+            "coverage": [
+              "render_glyph:explicit-s18-g36-f1"
+            ]
+          },
+          {
+            "id": "s18-g36-f2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "render_mode": "FT_RENDER_MODE_LCD_V",
+              "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
+              "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256",
+              "pixel_size": {
+                "x": 0,
+                "y": 18
+              },
+              "glyph_index": 36
+            },
+            "coverage": [
+              "render_glyph:explicit-s18-g36-f2"
+            ]
+          },
+          {
+            "id": "s18-g43-f3",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": "FT_LOAD_DEFAULT",
+              "render_mode": "FT_RENDER_MODE_LCD_V",
+              "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
+              "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256",
+              "pixel_size": {
+                "x": 0,
+                "y": 18
+              },
+              "glyph_index": 43
+            },
+            "coverage": [
+              "render_glyph:explicit-s18-g43-f3"
+            ]
+          },
+          {
+            "id": "s18-g43-f4",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "render_mode": "FT_RENDER_MODE_LCD_V",
+              "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
+              "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256",
+              "pixel_size": {
+                "x": 0,
+                "y": 18
+              },
+              "glyph_index": 43
+            },
+            "coverage": [
+              "render_glyph:explicit-s18-g43-f4"
+            ]
+          },
+          {
+            "id": "s18-g82-f5",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": "FT_LOAD_DEFAULT",
+              "render_mode": "FT_RENDER_MODE_LCD_V",
+              "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
+              "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256",
+              "pixel_size": {
+                "x": 0,
+                "y": 18
+              },
+              "glyph_index": 82
+            },
+            "coverage": [
+              "render_glyph:explicit-s18-g82-f5"
+            ]
+          },
+          {
+            "id": "s18-g82-f6",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "render_mode": "FT_RENDER_MODE_LCD_V",
+              "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
+              "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256",
+              "pixel_size": {
+                "x": 0,
+                "y": 18
+              },
+              "glyph_index": 82
+            },
+            "coverage": [
+              "render_glyph:explicit-s18-g82-f6"
+            ]
+          },
+          {
+            "id": "s32-g36-f7",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": "FT_LOAD_DEFAULT",
+              "render_mode": "FT_RENDER_MODE_LCD_V",
+              "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
+              "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256",
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "glyph_index": 36
+            },
+            "coverage": [
+              "render_glyph:explicit-s32-g36-f7"
+            ]
+          },
+          {
+            "id": "s32-g36-f8",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "render_mode": "FT_RENDER_MODE_LCD_V",
+              "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
+              "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256",
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "glyph_index": 36
+            },
+            "coverage": [
+              "render_glyph:explicit-s32-g36-f8"
+            ]
+          },
+          {
+            "id": "s32-g43-f9",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": "FT_LOAD_DEFAULT",
+              "render_mode": "FT_RENDER_MODE_LCD_V",
+              "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
+              "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256",
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "glyph_index": 43
+            },
+            "coverage": [
+              "render_glyph:explicit-s32-g43-f9"
+            ]
+          },
+          {
+            "id": "s32-g43-f10",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "render_mode": "FT_RENDER_MODE_LCD_V",
+              "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
+              "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256",
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "glyph_index": 43
+            },
+            "coverage": [
+              "render_glyph:explicit-s32-g43-f10"
+            ]
+          },
+          {
+            "id": "s32-g82-f11",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": "FT_LOAD_DEFAULT",
+              "render_mode": "FT_RENDER_MODE_LCD_V",
+              "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
+              "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256",
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "glyph_index": 82
+            },
+            "coverage": [
+              "render_glyph:explicit-s32-g82-f11"
+            ]
+          },
+          {
+            "id": "s32-g82-f12",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "render_mode": "FT_RENDER_MODE_LCD_V",
+              "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
+              "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256",
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "glyph_index": 82
+            },
+            "coverage": [
+              "render_glyph:explicit-s32-g82-f12"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:enum_variant",

@@ -120,35 +120,62 @@
       "schema": "cache_sbit_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "scalable_control_font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "cache": "live_sbit_cache",
-          "image_type": {
-            "face_id": "stable_pointer:dejavu",
-            "width": 16,
-            "height": 16,
-            "flags": [
-              "FT_LOAD_DEFAULT",
-              "FT_LOAD_RENDER"
+        "variants": [
+          {
+            "id": "g36",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "scalable_control_font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "cache": "live_sbit_cache",
+              "image_type": {
+                "face_id": "stable_pointer:dejavu",
+                "width": 16,
+                "height": 16,
+                "flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_RENDER"
+                ]
+              },
+              "anode_output": "null",
+              "glyph_index": 36
+            },
+            "coverage": [
+              "ftcache.sbit_cache_lookup:explicit-g36"
             ]
           },
-          "glyph_indices": [
-            36,
-            68
-          ],
-          "anode_output": "null"
-        },
-        "variability": {
-          "axes": [
-            "glyph_indices"
-          ]
-        }
+          {
+            "id": "g68",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "scalable_control_font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "cache": "live_sbit_cache",
+              "image_type": {
+                "face_id": "stable_pointer:dejavu",
+                "width": 16,
+                "height": 16,
+                "flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_RENDER"
+                ]
+              },
+              "anode_output": "null",
+              "glyph_index": 68
+            },
+            "coverage": [
+              "ftcache.sbit_cache_lookup:explicit-g68"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",

@@ -72,45 +72,1304 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts/LiberationSerif-Regular.ttf"
+        "variants": [
+          {
+            "id": "s12-gA-f1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gA-f1"
+            ]
           },
-          "vertical_font": {
-            "kind": "ref",
-            "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+          {
+            "id": "s12-gA-f2",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gA-f2"
+            ]
+          },
+          {
+            "id": "s12-gA-f3",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gA-f3"
+            ]
+          },
+          {
+            "id": "s12-gA-f4",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_VERTICAL_LAYOUT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gA-f4"
+            ]
+          },
+          {
+            "id": "s12-gspace-f5",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "space"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gspace-f5"
+            ]
+          },
+          {
+            "id": "s12-gspace-f6",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "space"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gspace-f6"
+            ]
+          },
+          {
+            "id": "s12-gspace-f7",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "space"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gspace-f7"
+            ]
+          },
+          {
+            "id": "s12-gspace-f8",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_VERTICAL_LAYOUT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "space"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gspace-f8"
+            ]
+          },
+          {
+            "id": "s12-gaccented-f9",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "accented"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gaccented-f9"
+            ]
+          },
+          {
+            "id": "s12-gaccented-f10",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "accented"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gaccented-f10"
+            ]
+          },
+          {
+            "id": "s12-gaccented-f11",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "accented"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gaccented-f11"
+            ]
+          },
+          {
+            "id": "s12-gaccented-f12",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_VERTICAL_LAYOUT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "accented"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gaccented-f12"
+            ]
+          },
+          {
+            "id": "s12-gvertical_representative-f13",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "vertical_representative"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gvertical_representative-f13"
+            ]
+          },
+          {
+            "id": "s12-gvertical_representative-f14",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "vertical_representative"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gvertical_representative-f14"
+            ]
+          },
+          {
+            "id": "s12-gvertical_representative-f15",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "vertical_representative"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gvertical_representative-f15"
+            ]
+          },
+          {
+            "id": "s12-gvertical_representative-f16",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_VERTICAL_LAYOUT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 12
+              },
+              "glyph_index": "vertical_representative"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s12-gvertical_representative-f16"
+            ]
+          },
+          {
+            "id": "s20-gA-f17",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gA-f17"
+            ]
+          },
+          {
+            "id": "s20-gA-f18",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gA-f18"
+            ]
+          },
+          {
+            "id": "s20-gA-f19",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gA-f19"
+            ]
+          },
+          {
+            "id": "s20-gA-f20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_VERTICAL_LAYOUT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gA-f20"
+            ]
+          },
+          {
+            "id": "s20-gspace-f21",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "space"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gspace-f21"
+            ]
+          },
+          {
+            "id": "s20-gspace-f22",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "space"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gspace-f22"
+            ]
+          },
+          {
+            "id": "s20-gspace-f23",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "space"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gspace-f23"
+            ]
+          },
+          {
+            "id": "s20-gspace-f24",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_VERTICAL_LAYOUT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "space"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gspace-f24"
+            ]
+          },
+          {
+            "id": "s20-gaccented-f25",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "accented"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gaccented-f25"
+            ]
+          },
+          {
+            "id": "s20-gaccented-f26",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "accented"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gaccented-f26"
+            ]
+          },
+          {
+            "id": "s20-gaccented-f27",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "accented"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gaccented-f27"
+            ]
+          },
+          {
+            "id": "s20-gaccented-f28",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_VERTICAL_LAYOUT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "accented"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gaccented-f28"
+            ]
+          },
+          {
+            "id": "s20-gvertical_representative-f29",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "vertical_representative"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gvertical_representative-f29"
+            ]
+          },
+          {
+            "id": "s20-gvertical_representative-f30",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "vertical_representative"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gvertical_representative-f30"
+            ]
+          },
+          {
+            "id": "s20-gvertical_representative-f31",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "vertical_representative"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gvertical_representative-f31"
+            ]
+          },
+          {
+            "id": "s20-gvertical_representative-f32",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_VERTICAL_LAYOUT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": "vertical_representative"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s20-gvertical_representative-f32"
+            ]
+          },
+          {
+            "id": "s48-gA-f33",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gA-f33"
+            ]
+          },
+          {
+            "id": "s48-gA-f34",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gA-f34"
+            ]
+          },
+          {
+            "id": "s48-gA-f35",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gA-f35"
+            ]
+          },
+          {
+            "id": "s48-gA-f36",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_VERTICAL_LAYOUT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gA-f36"
+            ]
+          },
+          {
+            "id": "s48-gspace-f37",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "space"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gspace-f37"
+            ]
+          },
+          {
+            "id": "s48-gspace-f38",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "space"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gspace-f38"
+            ]
+          },
+          {
+            "id": "s48-gspace-f39",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "space"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gspace-f39"
+            ]
+          },
+          {
+            "id": "s48-gspace-f40",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_VERTICAL_LAYOUT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "space"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gspace-f40"
+            ]
+          },
+          {
+            "id": "s48-gaccented-f41",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "accented"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gaccented-f41"
+            ]
+          },
+          {
+            "id": "s48-gaccented-f42",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "accented"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gaccented-f42"
+            ]
+          },
+          {
+            "id": "s48-gaccented-f43",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "accented"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gaccented-f43"
+            ]
+          },
+          {
+            "id": "s48-gaccented-f44",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_VERTICAL_LAYOUT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "accented"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gaccented-f44"
+            ]
+          },
+          {
+            "id": "s48-gvertical_representative-f45",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_DEFAULT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "vertical_representative"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gvertical_representative-f45"
+            ]
+          },
+          {
+            "id": "s48-gvertical_representative-f46",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "vertical_representative"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gvertical_representative-f46"
+            ]
+          },
+          {
+            "id": "s48-gvertical_representative-f47",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_NO_SCALE",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "vertical_representative"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gvertical_representative-f47"
+            ]
+          },
+          {
+            "id": "s48-gvertical_representative-f48",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              },
+              "vertical_font": {
+                "kind": "ref",
+                "id": "fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "load_flags": "FT_LOAD_VERTICAL_LAYOUT",
+              "probe": [
+                "face.glyph.metrics"
+              ],
+              "pixel_size": {
+                "x": 0,
+                "y": 48
+              },
+              "glyph_index": "vertical_representative"
+            },
+            "coverage": [
+              "freetype.inspect_glyph_metrics:explicit-s48-gvertical_representative-f48"
+            ]
           }
-        },
-        "params": {
-          "sizes": [
-            12,
-            20,
-            48
-          ],
-          "glyph_indices": [
-            "A",
-            "space",
-            "accented",
-            "vertical_representative"
-          ],
-          "load_flags": [
-            "FT_LOAD_DEFAULT",
-            "FT_LOAD_NO_HINTING",
-            "FT_LOAD_NO_SCALE",
-            "FT_LOAD_VERTICAL_LAYOUT"
-          ],
-          "probe": [
-            "face.glyph.metrics"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "sizes",
-            "glyph_indices",
-            "load_flags"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:record",

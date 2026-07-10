@@ -66,33 +66,80 @@
       "schema": "glyph_load",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/bitmap/embedded-strike.ttf",
-            "status": "required_future_asset",
-            "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
+        "variants": [
+          {
+            "id": "f1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/bitmap/embedded-strike.ttf",
+                "status": "required_future_asset",
+                "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "strike_index": 0,
+              "glyphs": [
+                "strike_present_glyph",
+                "strike_missing_outline_glyph"
+              ],
+              "load_flags": "FT_LOAD_DEFAULT"
+            },
+            "coverage": [
+              "freetype.select_size:explicit-f1"
+            ]
+          },
+          {
+            "id": "f2",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/bitmap/embedded-strike.ttf",
+                "status": "required_future_asset",
+                "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "strike_index": 0,
+              "glyphs": [
+                "strike_present_glyph",
+                "strike_missing_outline_glyph"
+              ],
+              "load_flags": "FT_LOAD_SBITS_ONLY"
+            },
+            "coverage": [
+              "freetype.select_size:explicit-f2"
+            ]
+          },
+          {
+            "id": "f3",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/bitmap/embedded-strike.ttf",
+                "status": "required_future_asset",
+                "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "strike_index": 0,
+              "glyphs": [
+                "strike_present_glyph",
+                "strike_missing_outline_glyph"
+              ],
+              "load_flags": "FT_LOAD_NO_BITMAP"
+            },
+            "coverage": [
+              "freetype.select_size:explicit-f3"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "strike_index": 0,
-          "glyphs": [
-            "strike_present_glyph",
-            "strike_missing_outline_glyph"
-          ],
-          "load_flag_sets": [
-            "FT_LOAD_DEFAULT",
-            "FT_LOAD_SBITS_ONLY",
-            "FT_LOAD_NO_BITMAP"
-          ]
-        },
-        "variability": {
-          "axes": [
-            "load_flags"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
