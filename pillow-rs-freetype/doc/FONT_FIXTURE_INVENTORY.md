@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 429 | 81 | 348 | 78 | 10.2 MiB |
+| Active fixtures | 431 | 83 | 348 | 80 | 10.2 MiB |
 | Deprecated autohint corpus | 100 | 100 | 0 | 98 | 23 MiB |
 | Compact active autohint set | 5 | 5 | 0 | 5 | 187 KiB |
 
@@ -119,6 +119,8 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `fb3a52457f92` | 1.7 | 1 | `fonts/glyf/glyf-malformed-matrix.ttf` | isolated simple/composite parser failures: short records, contour/flag/delta/instruction overflow, repeat overflow, transform truncation, invalid attachment/reference, and loca beyond glyf |
 | `26a737107a48` | 1.6 | 1 | `fonts/glyf/loca-short-truncated.ttf` | short-loca control with only three bytes, one byte below a complete glyph-0 offset pair |
 | `2868a722bff5` | 1.6 | 1 | `fonts/glyf/loca-long-truncated.ttf` | long-loca control with only seven bytes, one byte below a complete glyph-0 offset pair |
+| `697619c0847e` | 1.6 | 1 | `fonts/glyf/cvt-empty.ttf` | valid TrueType control with a present zero-length cvt table |
+| `6175105e1748` | 1.6 | 1 | `fonts/glyf/cvt-odd-length.ttf` | valid TrueType control with a one-byte cvt table rejected by Rust parsing and ignored by face construction |
 
 ### Active Alias Concentration
 
@@ -161,6 +163,7 @@ listed because they enter different hinting and scaling conditions.
 | `glyf-component-matrix.ttf` | gids 18, 19, 23 | 20 | accepted depth-8 boundary, rejected depth-9 recursion, and non-empty composite with an empty child |
 | `glyf-malformed-matrix.ttf` | gids 1-19 | 20 | one explicitly selected malformed record per simple/composite parser boundary and table/reference error |
 | `loca-short-truncated.ttf`, `loca-long-truncated.ttf` | gid 0 | 20 | one checked truncation failure for each loca record format |
+| `cvt-empty.ttf`, `cvt-odd-length.ttf` | gid 1 | 20 | present-empty and odd-length CVT parser outcomes isolated with no-scale loading |
 
 The custom fonts contain additional glyphs for future focused obligations:
 Latin digits, round/straight/overshoot forms, combining marks, simple and
@@ -371,6 +374,12 @@ and selected-glyph obligations still come from explicit inputs.
     Reading each complete record through one checked slice removes nine
     byte-position-specific regions and avoids ten additional near-duplicate
     fonts; `tt/loca.rs` has 100% function, line, region, and branch coverage.
+
+26. Two 1.6 KiB CVT controls cover present-empty and odd-length table
+    outcomes without executing hint programs. The unused `parse_fpgm` and
+    `parse_prep` byte-copy wrappers were removed because font construction
+    stores those raw tables directly; `tt/hinter/tables.rs` has 100% function,
+    line, region, and branch coverage.
 
 ## Replacement Queue
 
