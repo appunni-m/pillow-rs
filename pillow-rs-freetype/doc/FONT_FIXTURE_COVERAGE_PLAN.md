@@ -371,6 +371,11 @@ the next run hit the same key and both runs passed 6,413 / 6,413.
 
 Expected additions: zero fonts, zero cases.
 
+Status: in progress. The first autohint audit removed 15 uncovered functions:
+the abandoned diagnostic bitmask, a duplicate script detector, and an unused
+blue-character lookup. The retained runtime now has one script-selection path
+through `FaceGlobals`, `STYLE_TABLE`, and `globals::detect_script`.
+
 1. For every uncovered function, identify its public manifest operation and
    current call path.
 2. Remove duplicate or obsolete internal wrappers and diagnostic coverage
@@ -405,8 +410,7 @@ regions and branches after unreachable guards are removed.
 
 #### R2: Autohint Reachability And Script Dispatch
 
-Primary modules: `autohint/script.rs`, `coverage.rs`,
-`globals_data.rs`, `globals.rs`, `types.rs`.
+Primary modules: `autohint/globals_data.rs`, `globals.rs`, `types.rs`.
 
 Expected additions: zero to one font; 10-20 explicit variants.
 
@@ -768,6 +772,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | empty and odd CVT controls | 80 unique hashes | 0 | 6,411 | 6,410 / 6,410 | 1 | 12,364 / 16,321 lines; 17,726 / 23,307 regions; 2,857 / 4,164 branches | hinter table parsing reached 100% structural coverage; removed unused fpgm/prep copy helpers |
 | 2026-07-10 | hinter setup and scan-type controls | 81 unique hashes | 0 | 6,414 | 6,413 / 6,413 | 1 | 12,367 / 16,321 lines; 17,729 / 23,307 regions; 2,858 / 4,164 branches | one 1.8 KiB font covers empty fpgm/prep plus scan types 0 and 2; hinter/mod rises to 275/278 lines and 64/70 branches |
 | 2026-07-10 | content-aware C-oracle cache | 81 unique hashes | 0 | 6,414 | 6,413 / 6,413 | 1 | unchanged | cache v3 hashes resolved file and inline asset bytes; forced refresh and subsequent cache hit both preserve exact parity |
+| 2026-07-10 | Autohint reachability cleanup | 81 unique hashes | 0 | 6,414 | 6,413 / 6,413 | 1 | 12,365 / 16,005 lines; 17,727 / 23,069 regions; 2,857 / 4,124 branches | removed 15 uncovered duplicate or diagnostic functions and 316 unreachable lines; exact parity unchanged |
 
 ## Decision Log
 
@@ -792,6 +797,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Keep raw fpgm/prep storage direct | Font construction already copies these byte streams; unused parser wrappers added functions without behavior and were removed instead of fixture-covered artificially |
 | 2026-07-10 | Keep scan conversion controls in one program font | Empty setup and scan-type variants share tables, geometry, size, and flags; only explicit glyph programs differ, avoiding a font/size/flag product |
 | 2026-07-10 | Hash resolved assets in the C-oracle cache key | JSON paths do not identify mutable fixture contents; path, length, and SHA-256 now prevent stale C output after in-place font mutation |
+| 2026-07-10 | Remove abandoned autohint coverage surfaces | Runtime script selection already uses `FaceGlobals` and `STYLE_TABLE`; an unread diagnostic mask, duplicate detector, and no-caller blue-character table cannot be justified by public fixtures |
 
 ## Immediate Next Actions
 

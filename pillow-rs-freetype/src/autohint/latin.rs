@@ -1225,7 +1225,7 @@ fn extract_widths(hints: &GlyphHints, dim: Dimension) -> (usize, [AfWidth; AF_LA
 
 use super::blue_strings::BlueStringEntry;
 use super::blue_strings::SCRIPT_GREK;
-use super::script::detect_script;
+use super::globals::detect_script;
 
 // Macros for checking blue property bits.
 macro_rules! is_top_blue {
@@ -2731,9 +2731,6 @@ pub fn apply_hints(
     // AF_SCALER_FLAG_NO_HORIZONTAL (afcjk.c:1390-1421).
     if is_italic || (no_horizontal_hinting && !no_advance_hinting) {
         hints.scaler_flags |= AF_SCALER_FLAG_NO_HORIZONTAL;
-        if is_italic {
-            crate::autohint::coverage::record(crate::autohint::coverage::COV_ITALIC_NO_HORZ);
-        }
     }
 
     // Compute ppem for bdelta in compute_stem_width
