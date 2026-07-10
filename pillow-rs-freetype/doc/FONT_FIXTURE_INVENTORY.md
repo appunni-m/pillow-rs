@@ -44,7 +44,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `7078fe9e41a8` | 0.03 | 3 | `assets/fonts/module-dependent-type1.pfa` | intentionally invalid/minimal Type 1 control |
 | `4c44206cbb02` | 17.2 | 72 | `input/fonts/DejaVuSans.ttf` | glyf, 131 glyphs, 18 Unicode, native hinting; compact general control |
 | `e6bc1ae1a7f7` | 11.5 | 1 | `fonts/autohint/basic-latin.ttf` | glyf, 42 glyphs, 45 Unicode mappings, native hinting, GPOS |
-| `2d8a89ad4679` | 2.4 | 1 | `fonts/autohint/cjk-coverage.ttf` | source-backed glyf, 20 glyphs, 32 mappings, vertical metrics, CJK geometry plus Latin adjustment, blue-zone, and serif topologies |
+| `f6fa317b2fbb` | 2.4 | 1 | `fonts/autohint/cjk-coverage.ttf` | source-backed glyf, 20 glyphs, 32 mappings, vertical metrics, CJK geometry plus Latin adjustment, blue-zone, and serif topologies |
 | `38431987e24e` | 11.7 | 1 | `fonts/autohint/indic-coverage.ttf` | glyf, 37 glyphs, 29 mappings, native hinting, Devanagari geometry |
 | `b4ff2e5f559c` | 10.7 | 1 | `fonts/autohint/latin-greek-cyrillic.ttf` | glyf, 39 glyphs, distinct Latin/Greek/Cyrillic geometry |
 | `c454a86ebd36` | 143.3 | 1 | `fonts/native/dejavu-coverage.ttf` | retain-GID glyf, 6,128 slots and 121 Unicode mappings; Latin/Greek blue strings, Cyrillic, emoji, native hinting, legacy kern, GPOS/GSUB/GDEF, MATH, post names; controlled format-4 `idRangeOffset` segment |
@@ -121,7 +121,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `2868a722bff5` | 1.6 | 1 | `fonts/glyf/loca-long-truncated.ttf` | long-loca control with only seven bytes, one byte below a complete glyph-0 offset pair |
 | `697619c0847e` | 1.6 | 1 | `fonts/glyf/cvt-empty.ttf` | valid TrueType control with a present zero-length cvt table |
 | `6175105e1748` | 1.6 | 1 | `fonts/glyf/cvt-odd-length.ttf` | valid TrueType control with a one-byte cvt table rejected by Rust parsing and ignored by face construction |
-| `48737fabc918` | 3.2 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed valid and malformed VM matrix covering state, geometry, control flow, DELTA, and six exact bytecode error classes |
+| `ba4dec81f1f4` | 3.2 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed valid and malformed VM matrix covering state, geometry, control flow, DELTA, and six exact bytecode error classes |
 
 ### Active Alias Concentration
 
