@@ -1800,6 +1800,114 @@
             "coverage": [
               "tt/hinter:function-call-loop-and-conditional-flow"
             ]
+          },
+          {
+            "id": "hinter-error-divide-by-zero",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 35,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-divide-by-zero"]
+          },
+          {
+            "id": "hinter-error-truncated-npushb",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 36,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-truncated-npushb"]
+          },
+          {
+            "id": "hinter-error-truncated-pushw",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 37,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-truncated-pushw"]
+          },
+          {
+            "id": "hinter-error-idef-in-glyph",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 38,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-idef-in-glyph"]
+          },
+          {
+            "id": "hinter-error-unterminated-fdef",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 39,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-unterminated-fdef"]
+          },
+          {
+            "id": "hinter-error-undefined-opcode",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 40,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-undefined-opcode"]
           }
         ]
       },
