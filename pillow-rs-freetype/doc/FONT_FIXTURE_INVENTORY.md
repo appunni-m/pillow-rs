@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 417 | 69 | 348 | 66 | 10.2 MiB |
+| Active fixtures | 425 | 77 | 348 | 74 | 10.2 MiB |
 | Deprecated autohint corpus | 100 | 100 | 0 | 98 | 23 MiB |
 | Compact active autohint set | 5 | 5 | 0 | 5 | 187 KiB |
 
@@ -107,6 +107,14 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `0b66ccbde246` | 0.01 | 1 | `fonts/control/ttc-offset-overflow.ttc` | 12-byte TTC declaring one absent face offset |
 | `1cca599d017f` | 0.02 | 1 | `fonts/control/ttc-face-offset-out-of-range.ttc` | complete one-face TTC header whose selected face offset is outside the stream |
 | `debb925b92a2` | 0.01 | 1 | `fonts/control/otto-empty.otf` | 12-byte zero-table OTTO header; owns the OpenType sfVersion predicate outcome before required-table rejection |
+| `bf004c57a16e` | 1.7 | 1 | `fonts/charmap/format6-range.ttf` | format-6-only trimmed range with mapped and zero glyph entries; owns direct lookup, gap, exhaustion, and wrapping iteration |
+| `251fcf468057` | 2.1 | 1 | `fonts/charmap/cmap-parser-matrix.ttf` | one valid format 6 plus unsupported, out-of-range, and independently malformed format 4/6/12 records |
+| `217751378cbc` | 1.7 | 1 | `fonts/charmap/cmap-record-overflow.ttf` | cmap header declaring one absent encoding record |
+| `93678acbb630` | 1.7 | 1 | `fonts/charmap/cmap-short.ttf` | three-byte cmap short-header control |
+| `b085a0e2a109` | 1.7 | 1 | `fonts/charmap/format6-terminal.ttf` | format 6 range at U+FFFF with a zero glyph; owns terminal iteration |
+| `b089ca982745` | 1.7 | 1 | `fonts/charmap/format12-zero-start.ttf` | format 12 groups beginning at glyph zero; owns within-group zero skipping and single-code zero fallback |
+| `5b3b0195e1d7` | 1.7 | 1 | `fonts/charmap/format4-range-offset.ttf` | valid format 4 range-offset array with zero and mapped entries plus adjacent direct zero/nonzero segments |
+| `19667c565a1b` | 1.7 | 1 | `fonts/charmap/cmap-unsupported-only.ttf` | valid SFNT whose sole cmap record has unsupported format 99; owns the no-active-charmap state |
 
 ### Active Alias Concentration
 
@@ -336,6 +344,12 @@ and selected-glyph obligations still come from explicit inputs.
     TTC table offsets are absolute from the collection start; fixing Rust's
     previous double addition restored second-face parity. `tt/mod.rs` has 100%
     structural coverage.
+23. Eight 1.7–2.1 KiB cmap controls cover format 4, 6, and 12 lookup and
+    iteration boundaries, every parser error, unsupported-only faces, and
+    range-offset validation. They exposed two real differences: format 6 wraps
+    at `0xFFFFFFFF` while formats 4/12 stop, and format 12 advances past a zero
+    start glyph within the same group. `tt/cmap.rs` now has 100% function,
+    line, region, and branch coverage.
 
 ## Replacement Queue
 

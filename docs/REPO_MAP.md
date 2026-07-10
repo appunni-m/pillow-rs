@@ -376,6 +376,7 @@ generated reports, build outputs, and package installs.
 |   |   |-- tables.rs
 |   |   `-- tt/
 |   |       |-- cmap.rs
+|   |       |-- fvar.rs
 |   |       |-- glyf.rs
 |   |       |-- hdmx.rs
 |   |       |-- head.rs

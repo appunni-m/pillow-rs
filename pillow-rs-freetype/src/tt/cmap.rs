@@ -36,7 +36,6 @@ enum CharmapKind {
     Format4(usize),
     Format6(usize),
     Format12(usize),
-    Unsupported,
 }
 
 /// Format 4: Segment mapping for the Unicode BMP.
@@ -110,7 +109,6 @@ impl CmapTable {
                 }
             }
             CharmapKind::Format12(index) => self.format12[index].char_index(codepoint),
-            CharmapKind::Unsupported => None,
         }
     }
 
@@ -126,7 +124,6 @@ impl CmapTable {
             CharmapKind::Format4(index) => self.format4[index].next_char(after),
             CharmapKind::Format6(index) => self.format6[index].next_char(after),
             CharmapKind::Format12(index) => self.format12[index].next_char(after),
-            CharmapKind::Unsupported => None,
         }
     }
 }
@@ -141,18 +138,16 @@ impl Format6Subtable {
     }
 
     fn next_char(&self, after: u32) -> Option<(u32, u16)> {
-        let start = after.saturating_add(1).max(u32::from(self.first_code));
+        // Unlike formats 4 and 12, `tt_cmap6_char_next` advances its
+        // FT_UInt32 before checking the terminal value, so it wraps.
+        let start = after.wrapping_add(1).max(u32::from(self.first_code));
         if start > u16::MAX as u32 {
             return None;
         }
         let mut char_code = u16_from_u32(start);
         loop {
-            let Some(offset) = char_code.checked_sub(self.first_code) else {
-                return None;
-            };
-            let Some(&glyph) = self.glyph_id_array.get(offset as usize) else {
-                return None;
-            };
+            let offset = char_code - self.first_code;
+            let &glyph = self.glyph_id_array.get(offset as usize)?;
             if glyph != 0 {
                 return Some((u32::from(char_code), glyph));
             }
@@ -181,11 +176,16 @@ impl Format12Subtable {
 
     fn next_char(&self, after: u32) -> Option<(u32, u16)> {
         for i in 0..self.start_codes.len() {
-            let candidate = self.start_codes[i].max(after.saturating_add(1));
+            let candidate = self.start_codes[i].max(after.checked_add(1)?);
             if candidate <= self.end_codes[i] {
                 let glyph = self.start_glyph_ids[i] + (candidate - self.start_codes[i]);
                 if glyph != 0 {
                     return Some((candidate, u16_from_u32(glyph)));
+                }
+                // Format 12 groups increment glyph IDs with codepoints.  A
+                // zero group start is skipped, not the remainder of the group.
+                if candidate < self.end_codes[i] {
+                    return Some((candidate + 1, 1));
                 }
             }
         }
@@ -197,42 +197,36 @@ impl Format4Subtable {
     /// Reproduce `tt_cmap4_char_index`: scan segments for the first whose
     /// `endCode >= charCode`, then resolve via delta or idRangeOffset.
     fn char_index(&self, char_code: u16) -> Option<u16> {
-        for seg in 0..self.end_codes.len() {
+        let last = self.end_codes.len() - 1;
+        for seg in 0..last {
             if char_code > self.end_codes[seg] {
                 continue;
             }
-            if char_code < self.start_codes[seg] {
-                return None;
-            }
-            if self.id_range_offsets[seg] == 0 {
-                // glyph = (charCode + delta) mod 65536
-                return Some(char_code.wrapping_add(u16_from_i16(self.id_deltas[seg])));
-            }
-            // idRangeOffset semantics: the offset is *relative to the address of
-            // this very idRangeOffset entry*. C does `glyph_id_array[
-            //   idRangeOffset[i]/2 + (c - startCode[i]) - (numSeg - i) ]`.
-            // We store idRangeOffset relative to the start of the idRangeOffset
-            // array (see parse_format4), so index into glyph_id_array is:
-            let ro = self.id_range_offsets[seg] as usize / 2;
-            let idx = ro
-                .wrapping_sub(self.id_range_offsets.len() - seg)
-                .wrapping_add((char_code - self.start_codes[seg]) as usize);
-            if let Some(&raw) = self.glyph_id_array.get(idx) {
-                if raw == 0 {
-                    return None;
-                }
-                return Some(raw.wrapping_add(u16_from_i16(self.id_deltas[seg])));
-            }
+            return self.char_index_in_segment(seg, char_code);
+        }
+        self.char_index_in_segment(last, char_code)
+    }
+
+    fn char_index_in_segment(&self, seg: usize, char_code: u16) -> Option<u16> {
+        if char_code < self.start_codes[seg] {
             return None;
         }
-        None
+        if self.id_range_offsets[seg] == 0 {
+            return Some(char_code.wrapping_add(u16_from_i16(self.id_deltas[seg])));
+        }
+        // `idRangeOffset` is relative to its own array entry.
+        let ro = self.id_range_offsets[seg] as usize / 2;
+        let idx =
+            ro - (self.id_range_offsets.len() - seg) + (char_code - self.start_codes[seg]) as usize;
+        let raw = self.glyph_id_array[idx];
+        (raw != 0).then(|| raw.wrapping_add(u16_from_i16(self.id_deltas[seg])))
     }
 
     fn next_char(&self, after: u32) -> Option<(u32, u16)> {
-        let start = after.saturating_add(1);
-        if start > u16::MAX as u32 {
+        if after >= u32::from(u16::MAX) {
             return None;
         }
+        let start = after + 1;
         let mut cp = u16_from_u32(start);
         loop {
             if cp == 0xFFFF {
@@ -318,15 +312,8 @@ pub fn parse_cmap(data: &[u8]) -> Result<CmapTable, FontError> {
                 Err(e) => warn!("[cmap] format 12 parse failed: {e}"),
             },
             other => {
-                warn!(
-                    "[cmap] unsupported format {other}: preserving charmap record without lookup"
-                );
-                table.charmaps.push(CharmapRecord {
-                    platform_id: *platform_id,
-                    encoding_id: *encoding_id,
-                    format,
-                    kind: CharmapKind::Unsupported,
-                });
+                // FreeType only exposes charmaps whose format class loads.
+                warn!("[cmap] unsupported format {other}: ignoring charmap record");
             }
         }
     }
@@ -340,9 +327,7 @@ fn parse_format4(
     platform_id: u16,
     encoding_id: u16,
 ) -> Result<Format4Subtable, FontError> {
-    let b = data.get(offset..).ok_or_else(|| {
-        FontError::InvalidFont("cmap format 4: subtable offset out of range".into())
-    })?;
+    let b = &data[offset..];
     if b.len() < 14 {
         return Err(FontError::InvalidFont("cmap format 4: too short".into()));
     }
@@ -362,6 +347,11 @@ fn parse_format4(
     let delta_off = start_off + seg_count * 2;
     let range_off = delta_off + seg_count * 2;
     let glyph_off = range_off + seg_count * 2;
+    if body.len() < glyph_off {
+        return Err(FontError::InvalidFont(
+            "cmap format 4: segment arrays exceed length".into(),
+        ));
+    }
 
     let mut end_codes = Vec::with_capacity(seg_count);
     let mut start_codes = Vec::with_capacity(seg_count);
@@ -393,6 +383,34 @@ fn parse_format4(
         g += 2;
     }
 
+    if end_codes.last() != Some(&u16::MAX) {
+        return Err(FontError::InvalidFont(
+            "cmap format 4: missing terminal segment".into(),
+        ));
+    }
+
+    for seg in 0..seg_count {
+        let range_offset = id_range_offsets[seg];
+        if range_offset == 0 {
+            continue;
+        }
+        let Some(span) = end_codes[seg].checked_sub(start_codes[seg]) else {
+            return Err(FontError::InvalidFont(
+                "cmap format 4: segment end precedes start".into(),
+            ));
+        };
+        let Some(first) = (range_offset as usize / 2).checked_sub(seg_count - seg) else {
+            return Err(FontError::InvalidFont(
+                "cmap format 4: range offset precedes glyph array".into(),
+            ));
+        };
+        if first + span as usize >= glyph_id_array.len() {
+            return Err(FontError::InvalidFont(
+                "cmap format 4: range offset exceeds glyph array".into(),
+            ));
+        }
+    }
+
     Ok(Format4Subtable {
         platform_id,
         encoding_id,
@@ -410,9 +428,7 @@ fn parse_format6(
     platform_id: u16,
     encoding_id: u16,
 ) -> Result<Format6Subtable, FontError> {
-    let b = data.get(offset..).ok_or_else(|| {
-        FontError::InvalidFont("cmap format 6: subtable offset out of range".into())
-    })?;
+    let b = &data[offset..];
     if b.len() < 10 {
         return Err(FontError::InvalidFont("cmap format 6: too short".into()));
     }
@@ -452,9 +468,7 @@ fn parse_format12(
     platform_id: u16,
     encoding_id: u16,
 ) -> Result<Format12Subtable, FontError> {
-    let body = data
-        .get(offset..)
-        .ok_or_else(|| FontError::InvalidFont("cmap format 12: offset out of range".into()))?;
+    let body = &data[offset..];
     if body.len() < 16 {
         return Err(FontError::InvalidFont("cmap format 12: too short".into()));
     }
