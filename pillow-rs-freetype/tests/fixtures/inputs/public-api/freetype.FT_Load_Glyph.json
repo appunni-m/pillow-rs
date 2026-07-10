@@ -1546,6 +1546,70 @@
             "coverage": [
               "tt/hinter/tables:cvt-odd-length"
             ]
+          },
+          {
+            "id": "hinter-empty-font-and-prep-programs",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "tt/hinter:empty-fpgm-and-prep"
+            ]
+          },
+          {
+            "id": "hinter-scan-type-zero",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 24,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "tt/hinter:glyph-entry-vector-reset",
+              "tt/hinter:outline-scan-type-zero"
+            ]
+          },
+          {
+            "id": "hinter-scan-type-default",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 25,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "tt/hinter:outline-scan-type-default"
+            ]
           }
         ]
       },
