@@ -44,7 +44,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `7078fe9e41a8` | 0.03 | 3 | `assets/fonts/module-dependent-type1.pfa` | intentionally invalid/minimal Type 1 control |
 | `4c44206cbb02` | 17.2 | 72 | `input/fonts/DejaVuSans.ttf` | glyf, 131 glyphs, 18 Unicode, native hinting; compact general control |
 | `e6bc1ae1a7f7` | 11.5 | 1 | `fonts/autohint/basic-latin.ttf` | glyf, 42 glyphs, 45 Unicode mappings, native hinting, GPOS |
-| `737944af8ac3` | 2.3 | 1 | `fonts/autohint/cjk-coverage.ttf` | source-backed glyf, 19 glyphs, 27 mappings, vertical metrics, CJK geometry plus Latin adjustment and blue-zone topologies |
+| `0ff76eb98f9b` | 2.3 | 1 | `fonts/autohint/cjk-coverage.ttf` | source-backed glyf, 20 glyphs, 28 mappings, vertical metrics, CJK geometry plus Latin adjustment, blue-zone, and serif topologies |
 | `38431987e24e` | 11.7 | 1 | `fonts/autohint/indic-coverage.ttf` | glyf, 37 glyphs, 29 mappings, native hinting, Devanagari geometry |
 | `b4ff2e5f559c` | 10.7 | 1 | `fonts/autohint/latin-greek-cyrillic.ttf` | glyf, 39 glyphs, distinct Latin/Greek/Cyrillic geometry |
 | `c454a86ebd36` | 143.3 | 1 | `fonts/native/dejavu-coverage.ttf` | retain-GID glyf, 6,128 slots and 121 Unicode mappings; Latin/Greek blue strings, Cyrillic, emoji, native hinting, legacy kern, GPOS/GSUB/GDEF, MATH, post names; controlled format-4 `idRangeOffset` segment |
@@ -165,6 +165,7 @@ listed because they enter different hinting and scaling conditions.
 | `cjk-coverage.ttf` | U+0056 gid 15 | 20 | one strong corner and two weak controls exercise single-reference IUP shifting |
 | `cjk-coverage.ttf` | U+004D gid 16 | 20 | vertical reversals exercise shared-start segment retention and replacement |
 | `cjk-coverage.ttf` | U+004F gid 17, U+006F gid 18 | 20 | distinct capital/lowercase round extrema paired with flat H/n calibration geometry |
+| `cjk-coverage.ttf` | U+0049 gid 19 | 20 | compact four-edge micro-serif with close cross-links and intermediate-edge overlap rejection |
 | `hdmx_observable.ttf` | U+0041 gid 36 (`A`) | 20 | default, compute-metrics, mono hdmx, and mono suppression conditions |
 | `glyf-component-matrix.ttf` | gids 3-10 | 19, 20 | point attachment, word XY arguments, all component transforms, rounded/unrounded offsets, use-my-metrics, and composite instructions |
 | `glyf-component-matrix.ttf` | gids 18, 19, 23 | 20 | accepted depth-8 boundary, rejected depth-9 recursion, and non-empty composite with an empty child |
