@@ -34,6 +34,9 @@
     <GlyphID id="28" name="superRoundMatrix"/>
     <GlyphID id="29" name="instructionControl"/>
     <GlyphID id="30" name="stackStateMatrix"/>
+    <GlyphID id="31" name="pointCoordinateMatrix"/>
+    <GlyphID id="32" name="pointMoveMatrix"/>
+    <GlyphID id="33" name="deltaControlMatrix"/>
   </GlyphOrder>
 
   <head>
@@ -80,7 +83,7 @@
   <maxp>
     <!-- Most of this table will be recalculated by the compiler -->
     <tableVersion value="0x10000"/>
-    <numGlyphs value="31"/>
+    <numGlyphs value="34"/>
     <maxPoints value="4"/>
     <maxContours value="1"/>
     <maxCompositePoints value="6"/>
@@ -179,6 +182,9 @@
     <mtx name="superRoundMatrix" width="700" lsb="0"/>
     <mtx name="instructionControl" width="700" lsb="0"/>
     <mtx name="stackStateMatrix" width="700" lsb="0"/>
+    <mtx name="pointCoordinateMatrix" width="700" lsb="0"/>
+    <mtx name="pointMoveMatrix" width="700" lsb="0"/>
+    <mtx name="deltaControlMatrix" width="700" lsb="0"/>
     <mtx name="transform2x2" width="700" lsb="0"/>
     <mtx name="withInstructions" width="700" lsb="0"/>
   </hmtx>
@@ -216,6 +222,9 @@
       <map code="0xe01b" name="superRoundMatrix"/>
       <map code="0xe01c" name="instructionControl"/>
       <map code="0xe01d" name="stackStateMatrix"/>
+      <map code="0xe01e" name="pointCoordinateMatrix"/>
+      <map code="0xe01f" name="pointMoveMatrix"/>
+      <map code="0xe020" name="deltaControlMatrix"/>
     </cmap_format_4>
     <cmap_format_4 platformID="3" platEncID="1" language="0">
       <map code="0xe000" name="base"/><!-- ???? -->
@@ -248,6 +257,9 @@
       <map code="0xe01b" name="superRoundMatrix"/>
       <map code="0xe01c" name="instructionControl"/>
       <map code="0xe01d" name="stackStateMatrix"/>
+      <map code="0xe01e" name="pointCoordinateMatrix"/>
+      <map code="0xe01f" name="pointMoveMatrix"/>
+      <map code="0xe020" name="deltaControlMatrix"/>
     </cmap_format_4>
   </cmap>
 
@@ -526,6 +538,74 @@
           b1 00 02 81 b1 00 02 82 b1 00 02 81
           b0 00 85 b8 01 14 85 b8 08 13 85
           b0 23 88 21 b8 ff ff 8d
+        </bytecode>
+      </instructions>
+    </TTGlyph>
+
+    <TTGlyph name="pointCoordinateMatrix" xMin="0" yMin="0" xMax="500" yMax="600">
+      <contour>
+        <pt x="0" y="0" on="1"/>
+        <pt x="500" y="0" on="1"/>
+        <pt x="250" y="600" on="1"/>
+      </contour>
+      <instructions>
+        <bytecode>
+          01
+          b1 00 01 49 21 b1 00 01 4a 21
+          b0 00 46 21 b0 00 47 21
+          b1 00 20 48 b1 00 00 48
+          b0 00 2e b0 01 2f
+          b1 00 40 44 b1 00 00 3e b1 01 00 3f
+
+          b1 00 01 06 b1 00 01 07
+          b1 00 01 08 b1 00 01 09
+          b1 00 01 86 b1 00 01 87
+          b9 40 00 00 00 0a b9 40 00 00 00 0b 0e
+          0c 22 0d 22
+
+          b1 00 01 27
+          b4 02 00 02 00 01 0f
+        </bytecode>
+      </instructions>
+    </TTGlyph>
+
+    <TTGlyph name="pointMoveMatrix" xMin="0" yMin="0" xMax="500" yMax="600">
+      <contour>
+        <pt x="0" y="0" on="1"/>
+        <pt x="500" y="0" on="1"/>
+        <pt x="250" y="600" on="1"/>
+      </contour>
+      <instructions>
+        <bytecode>
+          01 b0 00 10 b0 00 11 b0 01 12
+          b0 01 c0 b0 02 dc
+          b1 02 00 e0 b1 01 00 fc
+
+          b0 02 17 b1 01 02 3c
+          b0 01 32 b0 02 33
+          b0 00 34 b0 00 35
+          b0 01 36 b0 01 37
+
+          b1 01 20 38 b1 02 20 38
+          b1 01 20 3a b1 02 20 3b
+
+          b0 00 10 b0 01 11 b0 02 12
+          b0 01 39 30 31
+        </bytecode>
+      </instructions>
+    </TTGlyph>
+
+    <TTGlyph name="deltaControlMatrix" xMin="0" yMin="0" xMax="500" yMax="600">
+      <contour>
+        <pt x="0" y="0" on="1"/>
+        <pt x="500" y="0" on="1"/>
+        <pt x="250" y="600" on="1"/>
+      </contour>
+      <instructions>
+        <bytecode>
+          b0 14 5e b0 03 5f
+          b2 08 01 01 5d b2 08 01 01 71 b2 08 01 01 72
+          b2 08 00 01 73 b2 08 00 01 74 b2 08 00 01 75
         </bytecode>
       </instructions>
     </TTGlyph>
