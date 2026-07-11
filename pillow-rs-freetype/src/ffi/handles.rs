@@ -55,6 +55,9 @@ struct FT_CharMapRecInternal {
     language_id: FT_ULong,
 }
 
+type CharmapMetadata = (FT_Long, FT_ULong, FT_Int);
+type CharmapMetadataRegistry = BTreeMap<usize, CharmapMetadata>;
+
 #[derive(Clone)]
 pub struct FT_GlyphSlot {
     pub glyph_index: FT_UInt,
@@ -593,11 +596,11 @@ pub fn FT_Set_Named_Instance(face: Option<&mut FT_Face>, instance_index: FT_UInt
 }
 
 pub fn FT_Get_CMap_Format(charmap: FT_CharMap) -> FT_Long {
-    registered_charmap_metadata(charmap).map_or(-1, |(format, _)| format)
+    registered_charmap_metadata(charmap).map_or(-1, |(format, _, _)| format)
 }
 
 pub fn FT_Get_CMap_Language_ID(charmap: FT_CharMap) -> FT_ULong {
-    registered_charmap_metadata(charmap).map_or(0, |(_, language_id)| language_id)
+    registered_charmap_metadata(charmap).map_or(0, |(_, language_id, _)| language_id)
 }
 
 pub fn FT_New_Face(
@@ -920,34 +923,35 @@ fn charmaps_to_ffi(face: &api::Face) -> Box<[FT_CharMapRecInternal]> {
     charmaps
 }
 
-fn charmap_metadata_registry() -> &'static Mutex<BTreeMap<usize, (FT_Long, FT_ULong)>> {
-    static REGISTRY: OnceLock<Mutex<BTreeMap<usize, (FT_Long, FT_ULong)>>> = OnceLock::new();
+fn charmap_metadata_registry() -> &'static Mutex<CharmapMetadataRegistry> {
+    static REGISTRY: OnceLock<Mutex<CharmapMetadataRegistry>> = OnceLock::new();
     REGISTRY.get_or_init(|| Mutex::new(BTreeMap::new()))
 }
 
 fn register_charmap_metadata(charmaps: &[FT_CharMapRecInternal]) {
     if let Ok(mut registry) = charmap_metadata_registry().lock() {
-        for record in charmaps {
-            register_charmap_record_locked(&mut registry, record);
+        for (index, record) in charmaps.iter().enumerate() {
+            register_charmap_record_locked(&mut registry, index, record);
         }
     }
 }
 
-fn register_charmap_record(record: &FT_CharMapRecInternal) {
+fn register_charmap_record(index: usize, record: &FT_CharMapRecInternal) {
     if let Ok(mut registry) = charmap_metadata_registry().lock() {
-        register_charmap_record_locked(&mut registry, record);
+        register_charmap_record_locked(&mut registry, index, record);
     }
 }
 
 fn register_charmap_record_locked(
-    registry: &mut BTreeMap<usize, (FT_Long, FT_ULong)>,
+    registry: &mut CharmapMetadataRegistry,
+    index: usize,
     record: &FT_CharMapRecInternal,
 ) {
     let key = (&record.public as *const FT_CharMapRecPublic) as usize;
-    registry.insert(key, (record.format, record.language_id));
+    registry.insert(key, (record.format, record.language_id, index as FT_Int));
 }
 
-fn registered_charmap_metadata(charmap: FT_CharMap) -> Option<(FT_Long, FT_ULong)> {
+fn registered_charmap_metadata(charmap: FT_CharMap) -> Option<CharmapMetadata> {
     if charmap.is_null() {
         return None;
     }
@@ -1150,7 +1154,7 @@ pub fn FT_Face_Charmap(face: &FT_Face, index: FT_UInt) -> FT_CharMap {
         return ptr::null_mut();
     };
     face.charmaps.get(index).map_or(ptr::null_mut(), |record| {
-        register_charmap_record(record);
+        register_charmap_record(index, record);
         (&record.public as *const FT_CharMapRecPublic)
             .cast_mut()
             .cast()
@@ -1184,8 +1188,8 @@ pub fn FT_Charmap_Language_ID(face: &FT_Face, charmap: FT_CharMap) -> Option<FT_
     face.charmaps.get(index).map(|record| record.language_id)
 }
 
-pub fn FT_Get_Charmap_Index(_charmap: FT_CharMap) -> FT_Int {
-    -1
+pub fn FT_Get_Charmap_Index(charmap: FT_CharMap) -> FT_Int {
+    registered_charmap_metadata(charmap).map_or(-1, |(_, _, index)| index)
 }
 
 pub fn FT_Get_Charmap_Index_For_Face(face: &FT_Face, charmap: FT_CharMap) -> FT_Int {

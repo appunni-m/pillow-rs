@@ -1083,10 +1083,14 @@ pub extern "C" fn FT_Get_Charmap_Index(charmap: FT_CharMap) -> FT_Int {
     let Some(state) = face_state(face) else {
         return -1;
     };
-    state
-        .charmap_index(charmap.as_ptr())
-        .and_then(|index| FT_Int::try_from(index).ok())
-        .unwrap_or(-1)
+    let Some(index) = state.charmap_index(charmap.as_ptr()) else {
+        return -1;
+    };
+    let Some(index) = FT_UInt::try_from(index).ok() else {
+        return -1;
+    };
+    let rust_charmap = rust_ffi::FT_Face_Charmap(&state.inner, index);
+    rust_ffi::FT_Get_Charmap_Index(rust_charmap) as FT_Int
 }
 
 #[unsafe(no_mangle)]
