@@ -738,6 +738,18 @@
             ]
           },
           {
+            "id": "cmap-format14-malformed-matrix-valid-format6",
+            "assets": {
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/cmap-format14-malformed-matrix.ttf" }
+            },
+            "params": { "face_index": 0, "char_code": 65 },
+            "coverage": [
+              "tt/cmap:format14-too-short",
+              "tt/cmap:format14-length-too-short",
+              "tt/cmap:format14-records-exceed-length"
+            ]
+          },
+          {
             "id": "format4-range-offset-zero",
             "assets": {
               "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/format4-range-offset.ttf" }
