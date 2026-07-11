@@ -169,7 +169,7 @@
           "request": {
             "type": "FT_SIZE_REQUEST_TYPE_NOMINAL",
             "width": 0,
-            "height": "first_available_size.y_ppem"
+            "height": 768
           },
           "post_load_probe": "embedded_bitmap_glyph"
         }
