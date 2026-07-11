@@ -815,19 +815,9 @@ impl Font {
 
     /// Equivalent to `FT_Set_Pixel_Sizes`.
     pub fn set_pixel_sizes(&mut self, pixel_width: u32, pixel_height: u32) {
-        // C normalizes a missing dimension from the other one, then clamps
-        // both dimensions to 1..=0xFFFF (ftobjs.c:3574-3588).
-        let mut width = pixel_width;
-        let mut height = pixel_height;
-        if width == 0 {
-            width = height;
-        } else if height == 0 {
-            height = width;
-        }
-        width = width.clamp(1, 0xFFFF);
-        height = height.clamp(1, 0xFFFF);
-        self.size_pt = height as f32;
-        self.size_metrics = SizeMetrics::from_pixel_size(width, height, &self.data);
+        let size_metrics = SizeMetrics::from_pixel_size(pixel_width, pixel_height, &self.data);
+        self.size_pt = f32::from(size_metrics.y_ppem);
+        self.size_metrics = size_metrics;
         self.data.size_pt.set(self.size_pt);
         sync_active_size_metrics(&self.data, self.size_metrics);
         self.face_globals =
@@ -2227,16 +2217,20 @@ impl SizeMetrics {
     }
 
     fn from_pixel_size(pixel_width: u32, pixel_height: u32, data: &FontData) -> Self {
-        let width = if pixel_width == 0 {
+        // C normalizes a missing dimension from the other one, then clamps
+        // both dimensions to 1..=0xFFFF (ftobjs.c:3574-3588).
+        let mut width = if pixel_width == 0 {
             pixel_height
         } else {
             pixel_width
         };
-        let height = if pixel_height == 0 {
+        let mut height = if pixel_height == 0 {
             pixel_width
         } else {
             pixel_height
         };
+        width = width.clamp(1, 0xFFFF);
+        height = height.clamp(1, 0xFFFF);
         let units_per_em = i32::from(data.head.units_per_em);
         let x_scale = ft_div_fix((width as i32) << 6, units_per_em);
         let y_scale = ft_div_fix((height as i32) << 6, units_per_em);
