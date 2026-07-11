@@ -1775,12 +1775,7 @@ fn outline_to_ffi_snapshot(outline: &crate::outline::Outline) -> FT_OutlineSnaps
 }
 
 fn bbox_to_ffi(bbox: crate::font::BBox) -> FT_BBox {
-    FT_BBox {
-        xMin: FT_Long::from(bbox.x_min),
-        yMin: FT_Long::from(bbox.y_min),
-        xMax: FT_Long::from(bbox.x_max),
-        yMax: FT_Long::from(bbox.y_max),
-    }
+    bbox.into()
 }
 
 fn advance_fast_path_supported(load_flags: FT_Int32) -> bool {
