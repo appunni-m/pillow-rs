@@ -226,17 +226,17 @@ coordinate parity.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,136 |
-| Concrete explicit cases | 6,606 |
-| Additional grouped variants | 2,470 |
+| Concrete explicit cases | 6,610 |
+| Additional grouped variants | 2,474 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,603 |
-| Exact parity | 6,603 / 6,603 |
+| Runnable parity comparisons | 6,607 |
+| Exact parity | 6,607 / 6,607 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,551 / 17,190 (84.65%) |
+| Covered Rust lines | 14,559 / 17,190 (84.69%) |
 | Rust function coverage | 875 / 1,066 (82.08%) |
 | Rust instantiation coverage | 878 / 1,069 (82.13%) |
-| Rust region coverage | 21,223 / 24,719 (85.86%) |
-| Rust branch/condition coverage | 3,533 / 4,390 (80.48%) |
+| Rust region coverage | 21,233 / 24,719 (85.90%) |
+| Rust branch/condition coverage | 3,539 / 4,390 (80.62%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 140 |
 | Stored active font binaries | 97 files, 772 KiB |
@@ -273,7 +273,7 @@ Current largest uncovered buckets:
 | `src/ffi/handles.rs` | 1,338 / 1,478 | 233 / 280 | 146 / 162 | 1,879 / 2,024 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 839 / 941 | 343 / 426 | 18 / 19 | 1,124 / 1,247 | CJK topology rows in the compact multiscript fixture |
-| `src/api.rs` | 462 / 486 | 67 / 84 | 53 / 54 | 625 / 660 | Public API wrapper rows for render cache and glyph-slot surfaces |
+| `src/api.rs` | 470 / 486 | 73 / 84 | 53 / 54 | 635 / 660 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short
 physical table data plus truncated range arrays. The only remaining uncovered
@@ -512,7 +512,7 @@ The remaining coverage divides exactly into these ownership groups:
 
 | Group | Modules | Missing functions | Missing lines | Missing regions | Missing branches | Primary action |
 |---|---|---:|---:|---:|---:|---|
-| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 105 | 966 | 1,113 | 199 | public routing, wrapper thinness, metadata/state inputs |
+| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 105 | 958 | 1,103 | 193 | public routing, wrapper thinness, metadata/state inputs |
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
 | Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 18 | 722 | 915 | 413 | script reachability audit, then glyph topology rows |
 | TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 66 | 257 | 77 | explicit bytecode-program glyph rows |
@@ -531,7 +531,7 @@ Per-file source gap ledger:
 | `src/ffi/handles.rs` | 140 | 1338/1478 (90.53%) | 16 | 145 | 47 |
 | `src/tt/hinter/exec.rs` | 44 | 1296/1340 (96.72%) | 3 | 225 | 57 |
 | `src/autohint/cjk.rs` | 102 | 839/941 (89.16%) | 1 | 123 | 83 |
-| `src/api.rs` | 24 | 462/486 (95.06%) | 1 | 35 | 17 |
+| `src/api.rs` | 16 | 470/486 (96.71%) | 1 | 25 | 11 |
 | `src/tt/name.rs` | 1 | 293/294 (99.66%) | 1 | 11 | 18 |
 | `src/autohint/types.rs` | 32 | 71/103 (68.93%) | 7 | 25 | 1 |
 | `src/autohint/coverage.rs` | 22 | 6/28 (21.43%) | 5 | 28 | 4 |
@@ -1480,6 +1480,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Safe Rust load-glyph agreement route | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,473 / 17,175 lines; 21,111 / 24,682 regions; 3,529 / 4,380 branches | Seven existing `FT_LOAD_*` rows now assert `Face::load_glyph` matches the Rust FFI `FT_Load_Glyph` slot for compute metrics, force autohint, no hinting, no recurse, no scale, load-time render, and target-light representatives. The output JSON and case count stay unchanged |
 | 2026-07-12 | Render-mode load-flag helper route | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,480 / 17,174 lines; 21,122 / 24,685 regions; 3,529 / 4,380 branches | `FT_Render_Glyph` now carries the returned slot's render target through the shared `load_flag_for_render_mode` helper. Existing explicit render-mode rows cover normal, mono, LCD, LCD_V, and SDF routing with exact Rust FFI, C ABI, and WASM parity; no fonts or cases were added |
 | 2026-07-12 | Public render-cache and pixel-size helper routes | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,551 / 17,190 lines; 21,223 / 24,719 regions; 3,533 / 4,390 branches | Existing `FT_Render_Glyph` public rows now route `Face::render_loaded_glyph` through the shared render-font cache while clearing that cache on face size/charmap/named-instance mutations; existing `FT_Set_Pixel_Sizes` rows now execute `SizeMetrics::from_pixel_size` zero-dimension normalization directly. Exact Rust FFI, C ABI, and WASM parity remains green with no fonts or cases added, and `api.rs` reaches 462 / 486 lines and 53 / 54 functions |
+| 2026-07-12 | Explicit render-cache load-mode variants | 108 unique hashes | 0 | 6,610 | 6,607 / 6,607 | 3 | 14,559 / 17,190 lines; 21,233 / 24,719 regions; 3,539 / 4,390 branches | Four explicit `FT_Render_Glyph.matrix_render` variants reuse existing DejaVu/Noto fonts to cover safe Rust render-cache load-mode selection for force autohint, target light, no autohint, and force-autohint masked by no-autohint. Exact Rust FFI, C ABI, and WASM parity remains green; implicit cases remain zero |
 
 ## Decision Log
 
