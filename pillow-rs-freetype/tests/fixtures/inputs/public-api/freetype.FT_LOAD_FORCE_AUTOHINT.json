@@ -120,6 +120,26 @@
             ]
           },
           {
+            "id": "latin-italic-no-horizontal",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/metadata/style-bold-italic.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 65,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:italic-no-horizontal"
+            ]
+          },
+          {
             "id": "latin-adjust-top-tilde",
             "assets": {
               "font": {
