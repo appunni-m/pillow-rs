@@ -15,19 +15,82 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/names/ot-name-basic.ttf",
-            "status": "active",
-            "requires": "compact SFNT name fixture with deterministic nameID 6 PostScript name"
+        "variants": [
+          {
+            "id": "windows-postscript-name",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/names/ot-name-basic.ttf",
+                "status": "active",
+                "requires": "compact SFNT name fixture with deterministic nameID 6 PostScript name"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "lifetime_probe": "before_done_face"
+            },
+            "coverage": [
+              "tt/name:windows-postscript-name"
+            ]
+          },
+          {
+            "id": "selection-fallbacks",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-selection-fallbacks.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "lifetime_probe": "before_done_face"
+            },
+            "coverage": [
+              "tt/name:unsupported-family-record",
+              "tt/name:bad-apple-family-offset",
+              "tt/name:unicode-family-fallback",
+              "tt/name:mac-roman-subfamily-fallback"
+            ]
+          },
+          {
+            "id": "apple-postscript-name",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-apple-postscript.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "lifetime_probe": "before_done_face"
+            },
+            "coverage": [
+              "tt/name:apple-postscript-fallback"
+            ]
+          },
+          {
+            "id": "odd-windows-postscript-falls-back-to-apple",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-win-postscript-odd-apple.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "lifetime_probe": "before_done_face"
+            },
+            "coverage": [
+              "tt/name:odd-windows-postscript-rejected",
+              "tt/name:apple-postscript-after-windows-failure"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "lifetime_probe": "before_done_face"
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -58,27 +121,53 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/variable/named-instances.ttf",
-            "status": "active",
-            "requires": "compact variable font whose named instances exercise FreeType's PostScript-name construction"
+        "variants": [
+          {
+            "id": "set-named-instance-sequence",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/variable/named-instances.ttf",
+                "status": "active",
+                "requires": "compact variable font whose named instances exercise FreeType's PostScript-name construction"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "named_instances": [
+                "default",
+                1,
+                2
+              ],
+              "call_sequence": [
+                "FT_Set_Named_Instance",
+                "FT_Get_Postscript_Name"
+              ]
+            },
+            "coverage": [
+              "tt/fvar:set-named-instance-postscript-name"
+            ]
+          },
+          {
+            "id": "encoded-apple-prefix-instance",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-apple-prefix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 65536
+            },
+            "coverage": [
+              "tt/name:variation-prefix-apple-english",
+              "tt/name:variation-subfamily-apple-roman",
+              "tt/name:variation-unsupported-record"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "named_instances": [
-            "default",
-            1,
-            2
-          ],
-          "call_sequence": [
-            "FT_Set_Named_Instance",
-            "FT_Get_Postscript_Name"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
