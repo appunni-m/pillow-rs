@@ -290,36 +290,77 @@ variability-axis migration and must be reconciled in Phase 1.
 
 ## Evaluated Remaining Work
 
-Evaluation checkpoint: 2026-07-11, commit `98d75812` plus pending input
-normalization.
+Evaluation checkpoint: 2026-07-11, commit `687b28ef`.
 
-The current unified public API suite has 4,110 logical cases, 6,481 concrete
-explicit cases, 6,481 runnable exact-parity cases, zero implicit cases, and
-zero pending cases. The previous `freetype.request_size:first_available_size`
-pending row now uses an explicit 26.6 height value and participates in the
-normal Rust/C ABI/WASM parity comparison. Core Rust structural coverage is:
+This is the active coverage identification ledger. It supersedes earlier
+percentages in this section but does not replace the historical progress ledger
+below. The unified public API suite currently has 4,110 logical cases, 6,481
+concrete explicit cases, 6,480 runnable exact-parity cases, one pending case,
+and zero implicit cases. The pending case is
+`freetype.FT_Get_Postscript_Name.variation_instance_name_behavior`; it requires
+real `FT_Set_Named_Instance` support before it can become a valid runnable
+parity case.
+
+Core Rust structural coverage from
+`make -C pillow-rs-freetype test-unified-condition-coverage` is:
 
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
-| Functions | 770 | 990 | 220 |
-| Lines | 13,377 | 16,371 | 2,994 |
-| Regions | 19,335 | 23,406 | 4,071 |
-| Branches/conditions | 3,254 | 4,168 | 914 |
+| Functions | 776 | 988 | 212 |
+| Lines | 13,460 | 16,391 | 2,931 |
+| Regions | 19,448 | 23,457 | 4,009 |
+| Branches/conditions | 3,279 | 4,194 | 915 |
 
-The remaining regions and branches divide exactly into five ownership groups:
+Formal MC/DC is not reported by the installed Rust coverage tooling
+(`mcdc.count == 0`). Branch/condition coverage is therefore the instrumented
+measure, and each compound predicate still needs explicit independent-effect
+fixture obligations.
+
+The remaining coverage divides exactly into these ownership groups:
 
 | Group | Modules | Missing functions | Missing lines | Missing regions | Missing branches | Primary action |
 |---|---|---:|---:|---:|---:|---|
-| Autohint | `autohint/latin`, `cjk`, `globals*`, `script`, `coverage`, `types`, `loader` | 49 | 1,372 | 1,913 | 674 | reachability audit, then topology/script fonts |
-| Rendering | `render`, `grays`, `outline` | 64 | 1,021 | 1,442 | 227 | reachability audit, then geometry and render-mode matrix |
-| Face/API/scaler | `font`, `scaler`, `api`, `ffi/handles`, `ffi/convert`, `ffi/types` | 127 | 1,151 | 1,336 | 188 | public-operation routing, wrapper cleanup, focused state inputs |
-| TrueType interpreter | `tt/hinter/exec`, `gs`, `zone`, `mod`, `iup` | 11 | 381 | 853 | 203 | explicit bytecode-program glyph matrix |
-| Math/casts | `fixed`, `casts` | 6 | 29 | 34 | 14 | scalar boundary inputs or dead-helper removal |
+| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs` | 119 | 1,103 | 1,275 | 182 | public routing, wrapper thinness, metadata/state inputs |
+| Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
+| Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 20 | 775 | 1,024 | 423 | script reachability audit, then glyph topology rows |
+| TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `tables.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 7 | 152 | 486 | 137 | explicit bytecode-program glyph rows |
+| Math/casts | `fixed.rs`, `casts.rs` | 6 | 28 | 38 | 14 | scalar boundary rows or semantic cleanup |
+
+Per-file source gap ledger:
+
+| Source | Missing lines | Line coverage | Missing funcs | Missing regions | Missing branches |
+|---|---:|---:|---:|---:|---:|
+| `src/render.rs` | 709 | 1566/2275 (68.84%) | 55 | 959 | 105 |
+| `src/font.rs` | 507 | 1217/1724 (70.59%) | 60 | 693 | 71 |
+| `src/autohint/latin.rs` | 322 | 2506/2828 (88.61%) | 3 | 600 | 308 |
+| `src/scaler.rs` | 286 | 915/1201 (76.19%) | 20 | 207 | 34 |
+| `src/autohint/globals_data.rs` | 268 | 25/293 (8.53%) | 1 | 206 | 0 |
+| `src/ffi/handles.rs` | 175 | 1221/1396 (87.46%) | 25 | 180 | 39 |
+| `src/grays.rs` | 164 | 646/810 (79.75%) | 5 | 227 | 53 |
+| `src/tt/hinter/exec.rs` | 118 | 1222/1340 (91.19%) | 3 | 438 | 113 |
+| `src/autohint/cjk.rs` | 106 | 835/941 (88.74%) | 1 | 129 | 87 |
+| `src/api.rs` | 83 | 321/404 (79.46%) | 8 | 112 | 11 |
+| `src/autohint/types.rs` | 32 | 71/103 (68.93%) | 7 | 25 | 1 |
+| `src/autohint/coverage.rs` | 28 | 0/28 (0.00%) | 7 | 35 | 4 |
+| `src/tt/name.rs` | 25 | 169/194 (87.11%) | 3 | 55 | 25 |
+| `src/fixed.rs` | 25 | 146/171 (85.38%) | 5 | 35 | 8 |
+| `src/ffi/convert.rs` | 22 | 120/142 (84.51%) | 2 | 25 | 2 |
+| `src/tt/hinter/gs.rs` | 14 | 172/186 (92.47%) | 1 | 14 | 2 |
+| `src/autohint/globals.rs` | 14 | 200/214 (93.46%) | 1 | 23 | 18 |
+| `src/tt/hinter/tables.rs` | 6 | 19/25 (76.00%) | 2 | 8 | 0 |
+| `src/ffi/types.rs` | 5 | 0/5 (0.00%) | 1 | 3 | 0 |
+| `src/autohint/loader.rs` | 5 | 222/227 (97.80%) | 0 | 6 | 5 |
+| `src/tt/hinter/mod.rs` | 4 | 274/278 (98.56%) | 0 | 11 | 7 |
+| `src/tt/hinter/iup.rs` | 4 | 98/102 (96.08%) | 0 | 5 | 9 |
+| `src/tt/mod.rs` | 3 | 111/114 (97.37%) | 1 | 4 | 0 |
+| `src/tt/hinter/zone.rs` | 3 | 34/37 (91.89%) | 0 | 6 | 6 |
+| `src/casts.rs` | 3 | 48/51 (94.12%) | 1 | 3 | 6 |
+| `src/outline.rs` | 0 | 3/3 (100.00%) | 0 | 0 | 1 |
 
 This concentration changes the execution strategy. More fonts alone cannot
-close the report. Entire modules such as `autohint/script.rs` and
-`autohint/coverage.rs`, plus many convenience methods in `font.rs`,
-`api.rs`, and `render.rs`, have no covered functions. Each must first be
+close the report. Entire modules such as `autohint/coverage.rs` and
+`ffi/types.rs`, plus many convenience methods in `font.rs`, `api.rs`, and
+`render.rs`, have no covered functions. Each must first be
 classified as one of:
 
 1. Required behavior already exposed by a manifest public operation.
@@ -327,23 +368,41 @@ classified as one of:
    the core implementation.
 3. Private behavior reachable only after a missing font/table/glyph property is
    supplied.
-4. Duplicate, diagnostic-only, test-only, or obsolete code that must be removed
-   or feature-gated rather than artificially called.
+4. Required behavior blocked by incomplete core implementation.
+5. Duplicate, diagnostic-only, test-only, obsolete, or semantically invalid
+   code that must be removed or feature-gated rather than artificially called.
 
-No fixture is accepted for category 4. No new fixture test, JSON generator,
+No fixture is accepted for category 5. No new fixture test, JSON generator,
 runtime discovery, glyph-index scan, or Cartesian axis is allowed.
+
+### False-Green Adapter Ledger
+
+These are not acceptable final coverage paths because the parity runner is
+currently returning modeled values or routing a public ABI surface back to the
+Rust leg. They must become real parity cases or explicit pending/failing work
+before the 100% claim is trustworthy.
+
+| Public operation | Current runner behavior | Why it is unsafe | Required path |
+|---|---|---|---|
+| `freetype.get_glyph_name` | C oracle returns `--value-ok 0`; Rust returns `{"value":0}`; C/WASM ABI legs route to Rust | Masks fonts with real `post` glyph names and never executes core/ABI name copying | Parse supported glyph-name sources, add C oracle command, route Rust/C/WASM through thin public API, update JSON to active glyph-name/no-name fixtures |
+| `freetype.get_name_index` | Same canned zero and ABI fallback as glyph-name | Cannot prove name lookup, not-found, null, duplicate, or format-specific behavior | Share the real glyph-name implementation and compare exact index values across C/Rust/C ABI/WASM |
+| `ftgasp.get_gasp` | C oracle and Rust return canned zero; C/WASM ABI route to Rust | Hides table-present, range, and absent-table behavior | Implement `gasp` table parsing and public result mapping, then add rows for no table, one range, terminal range, and malformed controls |
+| `tttables.get_cmap_language_id` | C oracle and Rust return canned zero; C/WASM ABI route to Rust | Hides cmap-format language field behavior | Add real cmap-format/language inspection for supported subtables and exact absent/unsupported cases |
+| `tttables.get_cmap_format` | C oracle and Rust return `Unimplemented_Feature`; C/WASM ABI route to Rust | Treats an implemented public helper as absent until proven otherwise | Either implement exact format reporting or mark the case visibly incomplete; do not leave it as a silent green error row |
+| Generic `oracle_fallback_args` rows | Returns `Unimplemented_Feature` for unmatched operations | Correct only for intentionally unsupported public surfaces | Audit each remaining fallback row against `manifest.yaml`; real implemented operations need explicit match arms in oracle, Rust, C ABI, and WASM ABI |
 
 ### Remaining Case And Font Budget
 
 The completion budget is deliberately conservative:
 
-| Resource | Current | Maximum addition | Completion ceiling |
-|---|---:|---:|---:|
-| Concrete explicit cases | 6,481 | 433 | 6,914 |
-| New semantic font files | 0 | 6 | 6 |
-| New glyph programs/topologies | 0 | 160 | 160 |
-| Implicit cases | 0 | 0 | 0 |
-| Pending cases | 0 | 0 | 0 |
+| Resource | Current | Completion ceiling | Rule |
+|---|---:|---:|---|
+| Concrete explicit cases | 6,481 | 6,914 | Add only named obligations, not product axes |
+| Runnable parity cases | 6,480 | same as concrete | Pending must go to zero through real implementation |
+| Pending cases | 1 | 0 | No symbolic final rows |
+| New semantic font files | 0 in next pass | 6 | Extend source-backed focused fonts first |
+| New glyph programs/topologies | 0 in next pass | 160 | One glyph role per behavior family, not per glyph index |
+| Implicit cases | 0 | 0 | Hidden discovery remains forbidden |
 
 The 500-case allowance is a ceiling, not a target. A batch must justify every
 variant by a named uncovered behavior. Existing focused fonts should be
@@ -364,7 +423,39 @@ Malformed fixtures may be bundled into TTC collections only when collection
 wrapping does not change the behavior being tested. Physical-EOF and
 top-level-directory corruptions remain standalone.
 
-### Ordered Remaining Batches
+### Clear Path To 100%
+
+The path is ordered so coverage cannot be inflated by fake runners or hidden
+case growth.
+
+| Order | Workstream | Primary files | Expected fixture/input work | Exit gate |
+|---:|---|---|---|---|
+| 0 | Freeze measurement and stale-data guard | coverage target and oracle cache | No new cases | Current JSON regenerated from content-hashed assets; gap table updated |
+| 1 | Remove false-green adapters | `tests/unified_fixture_parity.rs`, core metadata/table helpers, thin C/WASM exports | Real rows for glyph names, name index, gasp, cmap format/language; no new discovery | No runnable public operation returns a canned value unless C also semantically does |
+| 2 | Public route audit | `font.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `scaler.rs` | Reuse existing public API inputs; add variants only for missing states | Every uncovered public wrapper is either delegated, pending on core behavior, or semantically removed |
+| 3 | Rendering/raster matrix | `render.rs`, `grays.rs`, `outline.rs` | Extend the source-backed render topology font; use `FT_Render_Glyph`, `FT_Glyph_To_Bitmap`, `FT_Outline_Render`, and load-with-render rows | All render modes have exact bytes, placement, pitch, metrics, and error parity |
+| 4 | Autohint script and globals | `autohint/globals_data.rs`, `coverage.rs`, `types.rs`, `globals.rs` | Prefer existing Latin/Greek/Cyrillic, CJK, and Indic fonts; add script rows only when geometry differs | One authoritative script path; duplicate diagnostics removed only with semantic proof |
+| 5 | Latin/CJK topology completion | `autohint/latin.rs`, `autohint/cjk.rs`, `loader.rs` | Add named glyph topologies for blue zones, tildes, serifs, linked edges, marks, diagonals, and counters | 100% autohint function/line/region/branch coverage through public force-autohint loads |
+| 6 | TrueType interpreter edge programs | `tt/hinter/exec.rs`, `gs.rs`, `zone.rs`, `iup.rs`, `tables.rs` | Extend `hinter-control-matrix.ttx` with one program per remaining opcode/state family | Interpreter modules reach 100% structural coverage without per-opcode multiplication |
+| 7 | Embedded strikes and named instances | face sizing, render dispatch, variation APIs | One real fixed-strike font; named-instance rows through `FT_Set_Named_Instance` | Pending count is zero and strike/named-instance behavior is real exact parity |
+| 8 | Scalar and residual branch pass | `fixed.rs`, `casts.rs`, small leftover guards | Existing fixed/trigon/vector public inputs plus exact boundary rows | Every small module is complete or has documented semantic cleanup |
+| 9 | Final consolidation | fonts, inputs, docs, validators | Move superseded active fonts to `deprecated/`; no deletion before approval | 100% functions, lines, regions, branches/conditions; zero implicit and pending cases; case count stays below ceiling |
+
+For each workstream, the concrete workflow is:
+
+1. Pick one uncovered family from the ledger above.
+2. Identify the public manifest subject and existing input JSON that should own
+   the behavior.
+3. If the runner is modeled, make oracle/Rust/C ABI/WASM routing real first.
+4. Add or extend the smallest focused font/glyph/table property required.
+5. Add explicit grouped variants; do not add an axis or folder scan.
+6. Run the narrow `make -C pillow-rs-freetype test-case CASE=<subject>` first.
+7. Run full parity, `test-ffi-compat`, no-runtime-FFI, fmt, and nightly
+   condition coverage.
+8. Update this ledger with case delta, pass/pending count, and structural
+   coverage delta before committing.
+
+### Detailed Batch Notes
 
 #### R-1: Oracle Cache Trust Gate
 
@@ -557,15 +648,15 @@ render dispatch.
 
 Expected additions: one fixed-strike font; 8-20 explicit variants.
 
-Status: pending real fixed-strike implementation. The single symbolic
-`first_available_size` expression has been replaced with an explicit value, so
-the suite has zero pending cases and exact parity for the current request-size
-row. This does not complete embedded-strike parity: the current asset is still a
-scalable-font alias, so real fixed-strike support and successful/unavailable
-strike variants remain required. Do not substitute a scalable font for the final
-R7 exit gate.
+Status: pending real fixed-strike implementation and named-instance routing.
+The previous symbolic `first_available_size` expression has been replaced with
+an explicit value, but the suite still has one pending named-instance
+PostScript-name row. The current embedded-strike asset is still a scalable-font
+alias, so real fixed-strike support and successful/unavailable strike variants
+remain required. Do not substitute a scalable font for the final R7 exit gate.
 
-Exit gate: 0 pending cases and exact Rust/C/WASM strike parity.
+Exit gate: 0 pending cases, exact Rust/C/WASM strike parity, and exact
+named-instance PostScript-name parity.
 
 #### R8: Scalar, Cast, And Final Error Boundaries
 
@@ -865,8 +956,9 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | SFNT one-past-table boundary row | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,378 / 16,315 lines; 19,311 / 23,316 regions; 3,260 / 4,150 branches | merged the metadata worker's exact `TTAG_head` offset-55 boundary as a second explicit `FT_Load_Sfnt_Table` offset error case; exact Rust/C/WASM parity remains green and structural coverage is unchanged because the broader executable offset variant already covers the same guard |
 | 2026-07-11 | Rust public render wrapper routing | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,393 / 16,315 lines; 19,332 / 23,316 regions; 3,260 / 4,150 branches | existing `FT_Render_Glyph` fixtures route the Rust leg through `Face::render_loaded_glyph` when the load did not already render the slot; exact Rust/C/WASM parity remains green and `api.rs` reaches 311 / 401 lines, 404 / 532 regions, and 35 / 45 functions |
 | 2026-07-11 | Rust public load-char wrapper routing | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,396 / 16,315 lines; 19,340 / 23,316 regions; 3,260 / 4,150 branches | existing `FT_Load_Char` fixtures route the Rust leg through `Face::load_char` while retaining the same exact C/WASM comparison; `api.rs` reaches 314 / 401 lines, 412 / 532 regions, and 36 / 45 functions |
-| 2026-07-11 | Rust public set-char-size wrapper routing | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,377 / 16,371 lines; 19,335 / 23,406 regions; 3,254 / 4,168 branches | successful `FT_Set_Char_Size` fixtures route the Rust leg through `Face::set_char_size`; exact Rust/C/WASM parity remains green, `api.rs` reaches 318 / 401 lines and 37 / 45 functions, and the current condition run also exposes `autohint/script.rs` in the denominator |
-| 2026-07-11 | Real PostScript-name public API parity | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,434 / 16,447 lines; 19,428 / 23,547 regions; 3,273 / 4,212 branches | `FT_Get_Postscript_Name` no longer uses a fake `{"value":0}` runner path; static and null/no-name rows compare exact borrowed bytes/nullness through C oracle, Rust, C ABI, and WASM ABI. The named-instance row is now the only visible pending row for this subject until `FT_Set_Named_Instance` exists |
+| 2026-07-11 | Rust public set-char-size wrapper routing | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,377 / 16,371 lines; 19,335 / 23,406 regions; 3,254 / 4,168 branches | successful `FT_Set_Char_Size` fixtures route the Rust leg through `Face::set_char_size`; exact Rust/C/WASM parity remains green, `api.rs` reaches 318 / 401 lines and 37 / 45 functions, and that coverage run exposed the need to treat fresh denominators as authoritative |
+| 2026-07-11 | Real PostScript-name public API parity | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,460 / 16,391 lines; 19,448 / 23,457 regions; 3,279 / 4,194 branches | `FT_Get_Postscript_Name` no longer uses a fake `{"value":0}` runner path; static and null/no-name rows compare exact borrowed bytes/nullness through C oracle, Rust, C ABI, and WASM ABI. The named-instance row is now the only visible pending row for this subject until `FT_Set_Named_Instance` exists |
+| 2026-07-11 | Coverage identification refresh | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,460 / 16,391 lines; 19,448 / 23,457 regions; 3,279 / 4,194 branches | recorded the current full gap ledger, grouped ownership totals, false-green adapter list, and ordered path to 100%; no fixture or implementation behavior changed |
 
 ## Decision Log
 
@@ -919,22 +1011,25 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Rebase worker glyph additions onto current fixture glyph order | Worker font-source changes must preserve all previously merged glyph roles; the TT branch-edge glyph moved from id 48 to id 51 because render coverage already owns glyphs 48-50 |
 | 2026-07-11 | Keep exact boundary rows even when broader guards are already covered | The one-past-head-table SFNT row adds no new structural counters after executable offset coverage, but it preserves a precise public boundary case from the metadata worker without multiplying unrelated inputs |
 | 2026-07-11 | Preserve render-load slot semantics in public wrapper coverage | `Face::render_loaded_glyph` strips `FT_LOAD_RENDER` before loading, while C `FT_Render_Glyph` returns an already-rendered bitmap slot unchanged; public wrapper routing must therefore fall back to the FFI-shaped path for rows whose load flags already render |
-| 2026-07-11 | Treat current coverage denominator as authoritative | A fresh non-incremental condition-coverage build lists `autohint/script.rs` as uncovered source; keep it visible as a real obligation instead of relying on stale incremental coverage output |
+| 2026-07-11 | Treat regenerated coverage output as authoritative | The refreshed condition-coverage run is the active denominator: 13,460 / 16,391 lines, 19,448 / 23,457 regions, and 3,279 / 4,194 branches; do not rely on stale incremental coverage artifacts |
 | 2026-07-11 | Treat PostScript-name fixtures as real parity, not value stubs | `FT_Get_Postscript_Name` now compares face-borrowed bytes/nullness through C oracle, Rust, C ABI, and WASM ABI. Pinned FreeType uses `sfnt_get_name_id` plus `sfnt_is_postscript`, so Rust must filter invalid PostScript-name characters while leaving raw `FT_Get_Sfnt_Name` records unchanged |
 
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
 
-1. Complete R0 and classify every uncovered function as public, font-reachable,
-   missing delegation, duplicate with independent proof, or currently
-   unreachable but preserved.
-2. Continue R5 from the remaining uncovered render and gray-raster branches;
-   add cubic/CFF, clipping, dropout, and empty/error roles only as explicit
-   variants with measured structural gain.
-3. Resolve visible pending public rows only with real implementation support:
+1. Remove false-green public adapters before adding more coverage-only rows.
+   Start with `FT_Get_Glyph_Name` and `FT_Get_Name_Index`, then `FT_Get_Gasp`,
+   `TT_Get_CMap_Format`, and `TT_Get_CMap_Language_ID`.
+2. Complete R0 and classify every uncovered function as public, font-reachable,
+   missing delegation, blocked by incomplete implementation, duplicate with
+   independent proof, or currently unreachable but preserved.
+3. Resume explicit fixture expansion in the active order: public route audit,
+   render/raster matrix, autohint script/topology, TrueType interpreter edge
+   programs, then scalar residuals.
+4. Resolve visible pending public rows only with real implementation support:
    embedded-strike request handling needs focused bitmap table support, and
    named-instance PostScript names need explicit `FT_Set_Named_Instance`
    support rather than a modeled `FT_Get_Postscript_Name` shortcut.
-4. Keep the deprecated corpus isolated until final cleanup is separately
+5. Keep the deprecated corpus isolated until final cleanup is separately
    reviewed and approved.
