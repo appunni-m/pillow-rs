@@ -743,6 +743,60 @@
               "render_mode": "FT_RENDER_MODE_MONO"
             },
             "coverage": ["render:mono-scan-type-5-smart-no-stubs"]
+          },
+          {
+            "id": "m30-render-mono-negative-collapse",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 48,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": ["render:mono-negative-x-collapse-bias"]
+          },
+          {
+            "id": "m31-render-mono-low-precision",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 49,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": ["render:mono-low-precision-large-box"]
+          },
+          {
+            "id": "m32-render-mono-negative-y-collapse",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 50,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": ["render:mono-negative-y-collapse-bias"]
           }
         ]
       },
