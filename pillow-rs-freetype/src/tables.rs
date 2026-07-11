@@ -10,6 +10,7 @@ use std::sync::{Arc, OnceLock};
 
 use crate::tt::cmap::CmapTable;
 use crate::tt::fvar::FvarTable;
+use crate::tt::gasp::GaspTable;
 use crate::tt::hdmx::HdmxTable;
 use crate::tt::head::HeadTable;
 use crate::tt::hhea::HheaTable;
@@ -32,6 +33,7 @@ pub struct FontData {
     pub table_directory: crate::tt::TableDirectory,
     pub cmap: CmapTable,
     pub fvar: Option<FvarTable>,
+    pub gasp: Option<GaspTable>,
     pub head: HeadTable,
     pub hhea: HheaTable,
     pub hmtx: HmtxTable,

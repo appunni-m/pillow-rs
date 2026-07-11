@@ -314,6 +314,11 @@ impl Face {
         self.font.get_fstype_flags()
     }
 
+    /// Return `gasp` table flags for a ppem, equivalent to `FT_Get_Gasp`.
+    pub fn get_gasp(&self, ppem: u32) -> i32 {
+        self.font.get_gasp(ppem)
+    }
+
     /// Return kerning vector for two glyph indexes, equivalent to `FT_Get_Kerning`.
     pub fn kerning_by_glyphs(&self, left: u32, right: u32, mode: KerningMode) -> Vector {
         let (x, y) = self.font.kerning_by_glyphs(left, right, mode);

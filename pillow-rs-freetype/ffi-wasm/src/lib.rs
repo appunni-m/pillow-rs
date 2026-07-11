@@ -886,6 +886,11 @@ pub extern "C" fn fontdone_wasm_get_fstype_flags(handle: usize) -> FT_UShort {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_gasp(handle: usize, ppem: FT_UInt) -> FT_Int {
+    rust_ffi::FT_Get_Gasp(face_ref(handle).map(|face| &face.face), ppem)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_glyph_name(
     handle: usize,
     glyph_index: FT_UInt,

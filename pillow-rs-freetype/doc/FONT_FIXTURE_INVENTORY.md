@@ -1,7 +1,7 @@
 # Font Fixture Inventory
 
-Status: baseline inventory  
-Recorded: 2026-07-10  
+Status: active inventory
+Recorded: 2026-07-11
 Coverage plan: `doc/FONT_FIXTURE_COVERAGE_PLAN.md`
 
 This inventory separates file paths, stored binaries, unique contents, cmap
@@ -13,11 +13,11 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 432 | 84 | 348 | 81 | 10.2 MiB |
-| Deprecated autohint corpus | 100 | 100 | 0 | 98 | 23 MiB |
+| Active fixtures | 112 | 69 | 43 | 77 | 642 KiB |
+| Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 5 | 5 | 0 | 5 | 187 KiB |
 
-All 348 active symlinks resolve. `fonts/metrics/fixed-width.ttf` is now an
+All 43 active symlinks resolve. `fonts/metrics/fixed-width.ttf` is now an
 independent focused binary rather than an alias into the deprecated corpus.
 
 ## Inventory Parameters
@@ -412,6 +412,14 @@ and selected-glyph obligations still come from explicit inputs.
     dropout scan modes 0/2/4/5 across normal, mono, LCD, LCD_V, and SDF modes. Its
     inspectable source is `tests/fixtures/font-sources/hinter-control-matrix.ttx`;
     rebuild it with `make font-fixture-hinter`.
+
+28. Four compact 3.8 KiB gasp controls replace the previous
+    `fonts/gasp/*.ttf` symlink aliases to `DejaVuSans.ttf`. They are generated
+    from the source-backed hinter matrix by `scripts/build_gasp_fixtures.py`
+    and rebuilt with `make font-fixture-gasp`. The set covers version 1
+    multi-range selection and after-last sentinel behavior, no `gasp` table,
+    version 0 high-bit masking, and unsupported version 2 optional-table
+    failure while keeping the SFNT face loadable.
 
 ## Replacement Queue
 

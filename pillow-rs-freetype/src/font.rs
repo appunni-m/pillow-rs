@@ -374,6 +374,9 @@ impl Font {
 
         let os2 = dir.find(data, tag(b"OS/2")).and_then(tt::os2::parse_os2);
         let post = dir.find(data, tag(b"post")).and_then(tt::post::parse_post);
+        let gasp = dir
+            .find(data, tag(b"gasp"))
+            .and_then(|d| tt::gasp::parse_gasp(d).ok());
         let vhea = match dir.find(data, tag(b"vhea")) {
             Some(bytes) => Some(tt::vhea::parse_vhea(bytes)?),
             None => None,
@@ -425,6 +428,7 @@ impl Font {
             name,
             os2,
             post,
+            gasp,
             vhea,
             vmtx,
             hdmx,
@@ -570,6 +574,14 @@ impl Font {
     /// Equivalent to `FT_Get_FSType_Flags`.
     pub fn get_fstype_flags(&self) -> u16 {
         self.data.os2.as_ref().map_or(0, |os2| os2.fs_type)
+    }
+
+    /// Equivalent to `FT_Get_Gasp`.
+    pub fn get_gasp(&self, ppem: u32) -> i32 {
+        self.data
+            .gasp
+            .as_ref()
+            .map_or(tt::gasp::FT_GASP_NO_TABLE, |gasp| gasp.get(ppem))
     }
 
     /// Equivalent to `FT_Get_Kerning` for legacy horizontal `kern` tables.
