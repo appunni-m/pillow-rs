@@ -106,9 +106,24 @@
               "height": 1024
             },
             {
+              "type": "FT_SIZE_REQUEST_TYPE_CELL",
+              "width": 2048,
+              "height": 512
+            },
+            {
               "type": "FT_SIZE_REQUEST_TYPE_SCALES",
               "width": 65536,
               "height": 32768
+            },
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_SCALES",
+              "width": 0,
+              "height": 32768
+            },
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_SCALES",
+              "width": 65536,
+              "height": 0
             }
           ]
         }
