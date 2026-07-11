@@ -2111,15 +2111,7 @@ impl BackendComparisonWorker {
                 let face = self.rust_face(case)?;
                 Ok(ok(rust_next_char_output(face, &case.inputs.params)?))
             }
-            "load_char" => {
-                let char_code = u64_param(&case.inputs.params, "char_code")?;
-                let load_flags = load_flags_param(&case.inputs.params)?;
-                let face = self.rust_face(case)?;
-                match FT_Load_Char(face, char_code, load_flags) {
-                    Ok(slot) => Ok(ok(slot_json(&slot))),
-                    Err(err) => Ok(error(err)),
-                }
-            }
+            "load_char" => rust_load_char_public_api(case),
             "load_glyph" => {
                 if load_glyph_num_glyphs_invalid_argument_case(case) {
                     return Ok(error(FT_Err_Invalid_Argument));
@@ -6048,17 +6040,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_filter" => rust_set_lcd_filter(case),
         "ftlcdfil.set_lcd_filter_weights" => rust_set_lcd_filter_weights(case),
         "ftlcdfil.set_lcd_geometry" => rust_set_lcd_geometry(case),
-        "load_char" => {
-            let face = open_face(case)?;
-            match FT_Load_Char(
-                &face,
-                u64_param(&case.inputs.params, "char_code")?,
-                load_flags_param(&case.inputs.params)?,
-            ) {
-                Ok(slot) => Ok(ok(slot_json(&slot))),
-                Err(err) => Ok(error(err)),
-            }
-        }
+        "load_char" => rust_load_char_public_api(case),
         "load_glyph" => {
             if load_glyph_num_glyphs_invalid_argument_case(case) {
                 return Ok(error(FT_Err_Invalid_Argument));
@@ -7614,6 +7596,27 @@ fn rust_render_glyph(
     match loaded.and_then(|slot| FT_Render_Glyph(slot, render_mode)) {
         Ok(slot) => Ok(ok(slot_json(&slot))),
         Err(err) => Ok(error(err)),
+    }
+}
+
+fn rust_load_char_public_api(case: &InputCase) -> Result<RunOutput, String> {
+    let raw_load_flags = load_flags_param(&case.inputs.params)?;
+    let char_code = u64_param(&case.inputs.params, "char_code")?;
+    let Ok(char_code) = u32::try_from(char_code) else {
+        let face = open_face(case)?;
+        return match FT_Load_Char(&face, char_code.into(), raw_load_flags) {
+            Ok(slot) => Ok(ok(slot_json(&slot))),
+            Err(err) => Ok(error(err)),
+        };
+    };
+    let load_flags = match load_flags_to_core(raw_load_flags) {
+        Ok(flags) => flags,
+        Err(err) => return Ok(error(err)),
+    };
+    let face = open_api_face(case)?;
+    match face.load_char(char_code, load_flags) {
+        Ok(slot) => Ok(ok(api_slot_json(&slot))),
+        Err(err) => Ok(error(font_error_to_ft(err))),
     }
 }
 
