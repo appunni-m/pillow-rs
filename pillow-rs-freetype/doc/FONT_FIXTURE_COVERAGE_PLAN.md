@@ -205,7 +205,10 @@ backward-compatibility early-return path after both axes have already
 interpolated. The compact `script-coverage.ttf` public input set now selects
 all 59 generated script glyphs through explicit `FT_LOAD_FORCE_AUTOHINT`
 variants, proving the script coverage table paths without implicit discovery
-or Cartesian expansion.
+or Cartesian expansion. Two compact hhea-zero metric controls now select the
+remaining FreeType face-metric fallback order through public
+`FT_Size_Metrics`: zero hhea with nonzero OS/2 typo metrics, then zero hhea
+and zero OS/2 typo metrics falling through to OS/2 Windows ascent/descent.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -213,22 +216,22 @@ coordinate parity.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,136 |
-| Concrete explicit cases | 6,604 |
-| Additional grouped variants | 2,468 |
+| Concrete explicit cases | 6,606 |
+| Additional grouped variants | 2,470 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,601 |
-| Exact parity | 6,601 / 6,601 |
+| Runnable parity comparisons | 6,603 |
+| Exact parity | 6,603 / 6,603 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,440 / 17,174 (84.08%) |
+| Covered Rust lines | 14,454 / 17,174 (84.16%) |
 | Rust function coverage | 860 / 1,064 (80.83%) |
 | Rust instantiation coverage | 863 / 1,067 (80.88%) |
-| Rust region coverage | 21,032 / 24,673 (85.24%) |
-| Rust branch/condition coverage | 3,523 / 4,380 (80.43%) |
+| Rust region coverage | 21,061 / 24,673 (85.36%) |
+| Rust branch/condition coverage | 3,529 / 4,380 (80.57%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
-| Active fixture font paths | 138 |
-| Stored active font binaries | 95 files, 764 KiB |
+| Active fixture font paths | 140 |
+| Stored active font binaries | 97 files, 772 KiB |
 | Active symlink aliases | 43 |
-| Unique active font contents | 106 SHA-256 identities |
+| Unique active font contents | 108 SHA-256 identities |
 | Deprecated brute-force fonts | 101 files, 99 unique contents, 23 MiB |
 
 The current coverage target is not only line coverage. The maintained
@@ -252,7 +255,7 @@ Current largest uncovered buckets:
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
 | `src/render.rs` | 1,566 / 2,275 | 323 / 428 | 109 / 164 | 2,262 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 1,400 / 1,914 | 170 / 254 | 126 / 186 | 1,892 / 2,603 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/font.rs` | 1,414 / 1,914 | 176 / 254 | 126 / 186 | 1,921 / 2,603 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,510 / 2,828 | 979 / 1,282 | 70 / 73 | 3,611 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
 | `src/scaler.rs` | 934 / 1,220 | 150 / 188 | 41 / 61 | 1,067 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 82 / 234 | Script coverage rows; do not delete lookup data for coverage |
@@ -1461,6 +1464,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | TrueType empty-stack ROLL probe | 106 unique hashes | 0 | 6,563 | 6,560 / 6,560 | 3 | 14,434 / 17,174 lines; 20,989 / 24,673 regions; 3,517 / 4,380 branches | Existing `stackStateMatrix` now executes `ROLL` immediately after a `CLEAR`, covering FreeType-compatible empty-stack no-op behavior without changing glyph output or adding public cases. Exact Rust/C/WASM parity remains green; `tt/hinter/exec.rs` reaches 1,294 / 1,340 lines and 351 / 410 branch outcomes |
 | 2026-07-11 | TrueType repeated IUP compatibility probe | 106 unique hashes | 0 | 6,563 | 6,560 / 6,560 | 3 | 14,436 / 17,174 lines; 20,991 / 24,673 regions; 3,519 / 4,380 branches | Existing `pointMoveMatrix` now repeats `IUP[y]` and `IUP[x]` after both axes have already interpolated. Pinned FreeType returns immediately in backward-compatibility mode once the state reaches `0x7`; exact Rust/C/WASM parity remains green without adding concrete cases, and `tt/hinter/exec.rs` reaches 1,296 / 1,340 lines and 353 / 410 branch outcomes |
 | 2026-07-12 | Full compact script-glyph autohint selection | 106 unique hashes | 0 | 6,604 | 6,601 / 6,601 | 3 | 14,440 / 17,174 lines; 21,032 / 24,673 regions; 3,523 / 4,380 branches | The existing `script-coverage.ttf` public case now selects every generated script probe through explicit `FT_LOAD_FORCE_AUTOHINT` variants. Exact Rust/C ABI/WASM parity remains green while `autohint/globals_data.rs` reaches 117 / 234 regions and the script table paths are explicit instead of reserved hidden coverage |
+| 2026-07-12 | hhea-zero metric fallback controls | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,454 / 17,174 lines; 21,061 / 24,673 regions; 3,529 / 4,380 branches | Two compact `FT_Size_Metrics` variants use generated hhea-zero fonts to prove FreeType's metric fallback order: zero hhea falls to OS/2 typo metrics, then to OS/2 Windows ascent/descent when typo metrics are also zero. Exact Rust/C ABI/WASM parity remains green and `font.rs` gains 14 lines, 29 regions, and 6 branch outcomes without implicit case growth |
 
 ## Decision Log
 
@@ -1476,6 +1480,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Treat malformed metric bytes as deferred lookup data | Pinned FreeType records hmtx/vmtx offsets at face open and returns zero metrics when later reads or declared counts are unusable |
 | 2026-07-10 | Keep the coverage denominator core-only | The parity executable still exercises Rust, C ABI, and WASM ABI for every runnable fixture, while reports exclude the thin wrapper source owned by separate crates |
 | 2026-07-10 | Centralize FreeType face metric selection | Pinned `sfobjs.c` prioritizes OS/2 `USE_TYPO_METRICS`, then nonzero hhea, then OS/2 typo and Windows fallbacks for both face and size metrics |
+| 2026-07-12 | Select hhea-zero metric fallback rows explicitly | The fallback code existed but public fixtures did not select zero hhea ascent/descent. Two generated `FT_Size_Metrics` variants cover OS/2 typo and OS/2 Windows fallback without broadening font discovery or multiplying unrelated metrics cases |
 | 2026-07-11 | Pack no-output TT guard probes into existing branch-edge glyphs | Invalid coordinate reads exercise defensive zone access while preserving the same public `FT_Load_Glyph` output and avoiding extra Cartesian case growth |
 | 2026-07-11 | Prefer no-output VM state probes before new TT rows | Stack-only calls, twilight-zone movement, and no-op prep instructions can cover VM branches through the existing public `FT_Load_Glyph` row when they do not alter glyph output or weaken parity |
 | 2026-07-10 | Require every predicate operand outcome | Line execution alone missed non-Roman Mac and non-Windows fallback records; nightly branch coverage makes both sides of each short-circuit condition visible |
