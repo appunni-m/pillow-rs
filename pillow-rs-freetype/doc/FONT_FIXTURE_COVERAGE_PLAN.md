@@ -449,9 +449,9 @@ Core Rust structural coverage from
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
 | Functions | 853 | 1,060 | 207 |
-| Lines | 14,250 | 17,133 | 2,883 |
-| Regions | 20,599 | 24,593 | 3,994 |
-| Branches/conditions | 3,417 | 4,364 | 947 |
+| Lines | 14,258 | 17,133 | 2,875 |
+| Regions | 20,604 | 24,593 | 3,989 |
+| Branches/conditions | 3,420 | 4,364 | 944 |
 
 Formal MC/DC is not reported by the installed Rust coverage tooling
 (`mcdc.count == 0`). Branch/condition coverage is therefore the instrumented
@@ -462,7 +462,7 @@ The remaining coverage divides exactly into these ownership groups:
 
 | Group | Modules | Missing functions | Missing lines | Missing regions | Missing branches | Primary action |
 |---|---|---:|---:|---:|---:|---|
-| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 119 | 1,084 | 1,292 | 226 | public routing, wrapper thinness, metadata/state inputs |
+| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 119 | 1,076 | 1,287 | 223 | public routing, wrapper thinness, metadata/state inputs |
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
 | Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 20 | 775 | 1,024 | 423 | script reachability audit, then glyph topology rows |
 | TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 139 | 469 | 132 | explicit bytecode-program glyph rows |
@@ -490,7 +490,7 @@ Per-file source gap ledger:
 | `src/tt/fvar.rs` | 7 | 91/98 (92.86%) | 4 | 13 | 1 |
 | `src/tt/hinter/gs.rs` | 14 | 172/186 (92.47%) | 1 | 14 | 2 |
 | `src/autohint/globals.rs` | 14 | 200/214 (93.46%) | 1 | 23 | 18 |
-| `src/tt/cmap.rs` | 11 | 418/429 (97.44%) | 1 | 10 | 3 |
+| `src/tt/cmap.rs` | 3 | 426/429 (99.30%) | 1 | 5 | 0 |
 | `src/ffi/types.rs` | 5 | 0/5 (0.00%) | 1 | 3 | 0 |
 | `src/autohint/loader.rs` | 5 | 222/227 (97.80%) | 0 | 6 | 5 |
 | `src/tt/hinter/mod.rs` | 4 | 274/278 (98.56%) | 0 | 11 | 7 |
@@ -1407,6 +1407,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Missing subfamily variation synthesis | 101 unique hashes | 0 | 6,531 | 6,528 / 6,528 | 3 | 14,236 / 17,125 lines; 20,590 / 24,591 regions; 3,415 / 4,366 branches | one compact variable font adds four encoded named-instance rows where the fvar subfamily IDs have only unsupported name records. The row exposed a real divergence: pinned C returned `MissingVar_100wght`, while Rust previously kept `Ubuntu-Regular`. Core now parses fvar axis defaults and instance coordinates, then matches `sfnt_get_var_ps_name` / `construct_instance_name` for positive, zero, negative, and fractional 16.16 coordinate descriptors plus sanitized axis tags. A compact malformed fvar control covers too-short axis records through `FT_FACE_FLAG_MULTIPLE_MASTERS`. Route audit real-parity rows are now 3,075 |
 | 2026-07-11 | Core vector-length long-domain routing | 101 unique hashes | 0 | 6,531 | 6,528 / 6,528 | 3 | 14,249 / 17,133 lines; 20,596 / 24,593 regions; 3,414 / 4,364 branches | `FT_Vector_Length` now delegates to a core `fixed::ft_vector_length_long` helper that preserves the public `FT_Long` input domain, while the existing 32-bit rasterizer helper delegates through it. Existing public vector-length rows pass exact C/Rust/C-ABI/WASM parity, moving duplicate CORDIC math out of the wrapper without adding cases or fonts |
 | 2026-07-11 | Branch-edge zero stack-vector probes | 101 unique hashes | 0 | 6,531 | 6,528 / 6,528 | 3 | 14,250 / 17,133 lines; 20,599 / 24,593 regions; 3,417 / 4,364 branches | The existing source-backed `branchEdgeMatrix` glyph now packs zero `SPVFS` and `SFVFS` bytecode probes beside its zero-length `SFVTL` control. C `Normalize` returns success without changing vectors for `(0,0)` stack vectors, and exact `FT_Load_Glyph` parity remains green while the shared zero-normalization guard in `fixed.rs` is covered without adding cases |
+| 2026-07-11 | Compact malformed format-14 cmap controls | 102 unique hashes | 0 | 6,532 | 6,529 / 6,529 | 3 | 14,258 / 17,133 lines; 20,604 / 24,593 regions; 3,420 / 4,364 branches | `scripts/build_cmap_fixtures.py` now emits a raw `cmap-format14-malformed-matrix.ttf` with one valid Unicode format 6 subtable plus malformed format 14 short, length-short, and record-array-overflow subtables. One explicit `FT_Get_Char_Index` row proves pinned FreeType, Rust, C ABI, and WASM all ignore the malformed optional format-14 records while preserving the valid charmap, bringing `tt/cmap.rs` to 100% branch coverage without implicit case growth |
 
 ## Decision Log
 
@@ -1468,6 +1469,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Treat glyph-name fixtures as buffer/status parity, not value stubs | `FT_Get_Glyph_Name` must compare the returned `FT_Error` and the caller buffer snapshot. Pinned FreeType clears `buffer[0]` after validating the face and buffer but before invalid-glyph/no-name service errors, and `FT_Get_Name_Index` returns the first matching `post` name or zero for null/unavailable/unknown names |
 | 2026-07-11 | Treat gasp fixtures as table-behavior parity, not value stubs | `FT_Get_Gasp` now reads compact generated SFNT controls instead of `DejaVuSans.ttf` symlink aliases. Pinned `ftgasp.c` returns `FT_GASP_NO_TABLE` for null/no usable table and masks version 0 flags with `& 3`; pinned `ttload.c` treats unsupported `gasp` versions as optional table load failures while keeping the face usable |
 | 2026-07-11 | Treat cmap format/language fixtures as metadata parity, not stubs | `FT_Get_CMap_Format` and `FT_Get_CMap_Language_ID` now use a compact generated SFNT cmap matrix instead of modeled values. Pinned `ftobjs.c` returns `-1` for invalid format probes, `0` for invalid language probes, and `ttcmap.c` reports format 14 language as `0xFFFFFFFF` |
+| 2026-07-11 | Treat malformed format-14 cmap records as load-time parser parity | Pinned FreeType ignores malformed optional format-14 records when another valid Unicode charmap remains usable. Public `FT_Set_Charmap` rejects format 14, so the active format-14 `FT_Get_Char_Index` and char-iteration arms remain public-unreachable rather than coverage rows to force |
 | 2026-07-11 | Match FreeType's `gasp` stream read length | Pinned `tt_face_load_gasp` seeks to the table and reads frames from the stream without using the SFNT record length as a cap. Rust must parse from the table offset to physical stream EOF for this optional table, while genuinely short physical data still degrades to `FT_GASP_NO_TABLE` |
 | 2026-07-11 | Match FreeType's `post` format 2.5 tag and delta behavior | Pinned `ttpost.c` recognizes format 2.5 as `0x00025000`, computes `glyph_index + signed_delta`, and maps out-of-range results to Mac glyph index 0. Format 1.0 only returns Mac standard names when `maxp.numGlyphs == 258`; otherwise the public name stays `.notdef` |
 | 2026-07-11 | Match malformed `post` public fallbacks | Pinned FreeType clears the output buffer and returns `Invalid_Argument` when an unsupported `post` format prevents `FT_HAS_GLYPH_NAMES`, while malformed format 2.0/2.5 name payloads that pass the header flag still return success with `.notdef`. Rust must keep scalar `post` metadata parsed while exposing glyph-name capability only for accepted formats 1.0, 2.0, and 2.5 |
