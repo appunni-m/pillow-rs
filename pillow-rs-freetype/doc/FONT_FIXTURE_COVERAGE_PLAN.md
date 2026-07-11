@@ -243,6 +243,10 @@ outline bbox. The source-backed `hinter-control-matrix.ttf` super-round glyph
 now also packs a no-output S45ROUND clamp probe into the existing
 `hinter-super-round-matrix` public row, covering the positive and negative
 `Round_Super_45` clamp repairs without adding cases or changing glyph output.
+One additional explicit `FT_Set_Transform.load_ignore_transform_behavior`
+variant renders the compact empty glyph under the same non-identity transform,
+covering the transformed render-outline empty guard while keeping exact
+Rust/C ABI/WASM parity.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -250,17 +254,17 @@ coordinate parity.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,137 |
-| Concrete explicit cases | 6,619 |
-| Additional grouped variants | 2,482 |
+| Concrete explicit cases | 6,620 |
+| Additional grouped variants | 2,483 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,616 |
-| Exact parity | 6,616 / 6,616 |
+| Runnable parity comparisons | 6,617 |
+| Exact parity | 6,617 / 6,617 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,628 / 17,230 (84.90%) |
+| Covered Rust lines | 14,629 / 17,230 (84.90%) |
 | Rust function coverage | 878 / 1,066 (82.36%) |
 | Rust instantiation coverage | 881 / 1,069 (82.41%) |
-| Rust region coverage | 21,335 / 24,773 (86.12%) |
-| Rust branch/condition coverage | 3,559 / 4,398 (80.92%) |
+| Rust region coverage | 21,338 / 24,773 (86.13%) |
+| Rust branch/condition coverage | 3,561 / 4,398 (80.97%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 140 |
 | Stored active font binaries | 97 files, 772 KiB |
@@ -1514,6 +1518,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Isolated CJK stem-sort topology row | 108 unique hashes | 0 | 6,614 | 6,611 / 6,611 | 3 | 14,583 / 17,202 lines; 21,265 / 24,735 regions; 3,549 / 4,398 branches | One explicit `FT_LOAD_FORCE_AUTOHINT` variant selects the new `cjkStemSort` glyph in the source-backed compact CJK font at U+519C. The glyph keeps U+7530 unchanged and adds two internal vertical stems with unequal widths, giving additive CJK autohint coverage with exact Rust/C ABI/WASM parity and zero implicit cases |
 | 2026-07-12 | Composite no-recurse and render topology rows | 108 unique hashes | 0 | 6,619 | 6,616 / 6,616 | 3 | 14,626 / 17,230 lines; 21,333 / 24,773 regions; 3,557 / 4,398 branches | Three explicit `FT_Bitmap.public_fields_match_render_output` variants reuse `multiple-charmaps.ttf` glyphs 483 and 380 for mono/SDF off-curve-start and degenerate-conic render topology, the stale `FT_LOAD_NO_RECURSE` composite row now selects DejaVu `Agrave` instead of missing `Aring`, and two explicit `FT_Load_Glyph.matrix_load` variants reuse `hinter-control-matrix.ttf` glyphs 3 and 8 for native composite point attachment and unrounded offsets. The selector correction exposed and fixed composite no-recurse metrics to use the raw composite `glyf` header bbox, matching pinned C, with exact Rust/C ABI/WASM parity and zero implicit cases |
 | 2026-07-12 | S45ROUND clamp probe in super-round glyph | 108 unique hashes | 0 | 6,619 | 6,616 / 6,616 | 3 | 14,628 / 17,230 lines; 21,335 / 24,773 regions; 3,559 / 4,398 branches | The source-backed `hinter-control-matrix.ttf` `superRoundMatrix` glyph now includes a selector `0x71` S45ROUND no-output probe that rounds `0` and `-1`, forcing FreeType's positive and negative clamp repairs while popping the results. The existing `hinter-super-round-matrix` public row keeps exact Rust/C ABI/WASM parity, case count, and implicit count unchanged |
+| 2026-07-12 | Transform-render empty outline row | 108 unique hashes | 0 | 6,620 | 6,617 / 6,617 | 3 | 14,629 / 17,230 lines; 21,338 / 24,773 regions; 3,561 / 4,398 branches | One explicit `FT_Set_Transform.load_ignore_transform_behavior` variant loads `hinter-control-matrix.ttf` glyph 21 with `FT_LOAD_RENDER` under the existing non-identity matrix. It covers the transformed render-outline empty guard in `api.rs` without a new font, discovery axis, or harness path, and exact Rust/C ABI/WASM parity remains green |
 
 ## Decision Log
 
@@ -1544,6 +1549,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Correct stale glyph selectors before adding rows | The no-recurse composite row selected U+00C5 in a trimmed font that lacked that codepoint and only exercised glyph 0; changing it to U+00C0 exposed a real C/Rust metrics mismatch and fixed core behavior to match C's composite-header bbox metrics |
 | 2026-07-12 | Keep render topology rows in the bitmap public case | The `FT_Bitmap.public_fields_match_render_output` case already compares rendered bitmap fields and bytes through the public API legs, so targeted contour-topology variants there expand render coverage without adding a new fixture harness or modeled shortcut |
 | 2026-07-12 | Pack S45ROUND clamp coverage into the existing super-round row | The clamp behavior is bytecode state only and the rounded values are popped immediately, so the existing `FT_Load_Glyph` row can prove the C/Rust interpreter path without adding a redundant glyph-output variant |
+| 2026-07-12 | Cover transform-render guards with explicit glyph topology | The transform-render empty-outline guard belongs to public `FT_Set_Transform` plus `FT_LOAD_RENDER` behavior, so an explicit empty glyph variant in the existing transform case is preferred over a synthetic helper call |
 | 2026-07-10 | Require every predicate operand outcome | Line execution alone missed non-Roman Mac and non-Windows fallback records; nightly branch coverage makes both sides of each short-circuit condition visible |
 | 2026-07-11 | Do not keep C-mismatching name fixtures for coverage | Platform-0 variation-prefix and missing-subfamily candidate rows exposed real C/Rust PostScript-name differences; they remain correctness work rather than passing coverage rows |
 | 2026-07-10 | Treat TTC table offsets as collection-absolute | Pinned `tt_face_load_font_dir` reads table offsets from the TTC stream origin; adding the selected face base a second time breaks every nonzero face |
