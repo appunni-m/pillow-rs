@@ -703,7 +703,7 @@
           b1 01 20 3a b1 02 20 3b
 
           b0 00 10 b0 01 11 b0 02 12
-          b0 01 39 30 31
+          b0 01 39 30 31 30 31
         </bytecode>
       </instructions>
     </TTGlyph>

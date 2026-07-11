@@ -144,7 +144,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `2868a722bff5` | 1.6 | 1 | `fonts/glyf/loca-long-truncated.ttf` | long-loca control with only seven bytes, one byte below a complete glyph-0 offset pair |
 | `697619c0847e` | 1.6 | 1 | `fonts/glyf/cvt-empty.ttf` | valid TrueType control with a present zero-length cvt table |
 | `6175105e1748` | 1.6 | 1 | `fonts/glyf/cvt-odd-length.ttf` | valid TrueType control with a one-byte cvt table rejected by Rust parsing and ignored by face construction |
-| `f70053cf222f` | 3.8 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed VM and render-topology matrix covering state, geometry, control flow, DELTA, invalid coordinate reads, six exact bytecode error classes, conic chains, intersections, thin outlines, mixed winding, degenerate contours, empty outlines, collapsed spans, mono low-precision raster selection, and scan-type dropout modes |
+| `bc5dd5f0757d` | 3.8 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed VM and render-topology matrix covering state, geometry, control flow, DELTA, invalid coordinate reads, repeated post-IUP compatibility return, six exact bytecode error classes, conic chains, intersections, thin outlines, mixed winding, degenerate contours, empty outlines, collapsed spans, mono low-precision raster selection, and scan-type dropout modes |
 
 ### Legacy Alias Concentration
 
@@ -212,7 +212,7 @@ listed because they enter different hinting and scaling conditions.
 | `glyf-malformed-matrix.ttf` | gids 1-19 | 20 | one explicitly selected malformed record per simple/composite parser boundary and table/reference error |
 | `loca-short-truncated.ttf`, `loca-long-truncated.ttf` | gid 0 | 20 | one checked truncation failure for each loca record format |
 | `cvt-empty.ttf`, `cvt-odd-length.ttf` | gid 1 | 20 | present-empty and odd-length CVT parser outcomes isolated with no-scale loading |
-| `hinter-control-matrix.ttf` | gid 1, gids 24-40 | 20 | valid VM family matrices plus empty-stack ROLL no-op, divide-zero, truncated pushes, glyph IDEF, unterminated FDEF, undefined-opcode errors, and mono scan-type 0/2 dropout controls |
+| `hinter-control-matrix.ttf` | gid 1, gids 24-40 | 20 | valid VM family matrices plus empty-stack ROLL no-op, repeated post-IUP compatibility return, divide-zero, truncated pushes, glyph IDEF, unterminated FDEF, undefined-opcode errors, and mono scan-type 0/2 dropout controls |
 | `hinter-control-matrix.ttf` | U+E032 gid 51 | 20 | branch-edge VM control covering zero-length line and stack vectors, invalid stack-index fallback, taken JROF, no-round dispatch, invalid contour shift, invalid coordinate reads, empty twilight-zone SHZ, and positive/negative single-width MDRP cut-in |
 | `hinter-control-matrix.ttf` | gid 21 | 20 | empty outline selected across normal, mono, LCD, LCD_V, and SDF render modes |
 | `hinter-control-matrix.ttf` | U+E028 gid 41 | 20 | off-curve start and consecutive conic controls across normal, mono, LCD, LCD_V, and SDF modes; owns FreeType-compatible SDF conic subdivision |
