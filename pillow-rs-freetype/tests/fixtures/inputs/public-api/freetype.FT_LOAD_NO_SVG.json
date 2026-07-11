@@ -73,11 +73,9 @@
           "glyph_selector": {
             "kind": "svg_glyph"
           },
-          "load_flag_sets": [
-            [
-              "FT_LOAD_COLOR",
-              "FT_LOAD_NO_SVG"
-            ]
+          "load_flags": [
+            "FT_LOAD_COLOR",
+            "FT_LOAD_NO_SVG"
           ]
         }
       },

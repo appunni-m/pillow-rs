@@ -70,11 +70,9 @@
             "y": 20
           },
           "glyph_index": 36,
-          "load_flag_sets": [
-            [
-              "FT_LOAD_RENDER",
-              "FT_LOAD_TARGET_LIGHT"
-            ]
+          "load_flags": [
+            "FT_LOAD_RENDER",
+            "FT_LOAD_TARGET_LIGHT"
           ]
         }
       },

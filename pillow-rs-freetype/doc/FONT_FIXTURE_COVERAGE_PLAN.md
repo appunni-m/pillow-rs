@@ -842,6 +842,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Render topology and SDF conic subdivision | 81 unique hashes | 0 | 6,447 | 6,446 / 6,446 | 1 | 13,236 / 16,301 lines; 19,092 / 23,292 regions; 3,187 / 4,148 branches | three glyphs and nine explicit modes add conic chains, mono/LCD variants, intersections, thin geometry, mixed winding, and degeneracy; the conic SDF case exposed and fixed Rust's non-FreeType subdivision rule with exact bytes across all ABIs |
 | 2026-07-11 | Render empty, collapsed span, and dropout modes | 81 unique hashes | 0 | 6,460 | 6,459 / 6,459 | 1 | 13,255 / 16,301 lines; 19,111 / 23,292 regions; 3,202 / 4,148 branches | one source-backed font mutation adds five empty-outline modes, zero-width and zero-height collapsed spans, and two mono scan/dropout controls; exact Rust/C/WASM parity remains green with zero implicit cases |
 | 2026-07-11 | Smart dropout scan modes | 81 unique hashes | 0 | 6,462 | 6,461 / 6,461 | 1 | 13,257 / 16,301 lines; 19,113 / 23,292 regions; 3,204 / 4,148 branches | two narrow glyph programs add scan types 4 and 5 to reach smart dropout selection without multiplying fonts, sizes, or render modes |
+| 2026-07-11 | Public load-flag input cleanup | 81 unique hashes | 0 | 6,462 | 6,461 / 6,461 | 1 | 13,263 / 16,301 lines; 19,119 / 23,292 regions; 3,214 / 4,148 branches | replaced stale single-entry `load_flag_sets` inputs with executable `load_flags`; exact Rust/C/WASM parity remains green while existing cases now exercise their intended flag paths |
 
 ## Decision Log
 
@@ -882,6 +883,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Preserve embedded TTX timestamps | `ttx` otherwise hashes the source filesystem mtime into the binary, making identical fixture sources produce different fonts and invalidating content-addressed oracle caching |
 | 2026-07-10 | Treat parity as input-scoped evidence | Exact C/Rust/WASM agreement proves behavior only for selected inputs; source paths remain preserved and uncovered paths remain explicit obligations so deleting code cannot silently erase an unrepresented special case |
 | 2026-07-10 | Match FreeType SDF conic subdivision exactly | Pinned `ftsdf.c` chooses bisections from conic deviation, splits every conic at least once, and uses truncating midpoint arithmetic; the previous generic flattener produced many one-byte SDF differences on consecutive off-curve controls |
+| 2026-07-11 | Use executable load flags in direct inputs | `load_flag_sets` is not consumed by the explicit parity runner; single concrete flag combinations must use `load_flags` so coverage and parity measure the intended public API behavior |
 
 ## Immediate Next Actions
 
