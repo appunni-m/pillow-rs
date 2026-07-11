@@ -218,25 +218,29 @@ the core face+charmap metadata helpers agree with the raw public CMap helpers
 for valid, null, and out-of-range charmaps. Selected existing `FT_LOAD_*`
 rows now also verify safe Rust `Face::load_glyph` slot output agrees with the
 Rust FFI `FT_Load_Glyph` slot for representative load flags, without adding
-fonts or cases.
+fonts or cases. The malformed `FT_Load_Glyph` matrix now includes explicit
+no-autohint and force-autohint error rows over the existing compact malformed
+`glyf` fixture, and the selected malformed rows compare safe
+`Face::load_glyph` error parity against `FT_Load_Glyph` instead of checking
+only success slots.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
 
 | Measure | Current |
 |---|---:|
-| Logical public API cases | 4,136 |
-| Concrete explicit cases | 6,610 |
-| Additional grouped variants | 2,474 |
+| Logical public API cases | 4,137 |
+| Concrete explicit cases | 6,613 |
+| Additional grouped variants | 2,476 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,607 |
-| Exact parity | 6,607 / 6,607 |
+| Runnable parity comparisons | 6,610 |
+| Exact parity | 6,610 / 6,610 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,561 / 17,190 (84.71%) |
+| Covered Rust lines | 14,566 / 17,190 (84.74%) |
 | Rust function coverage | 875 / 1,066 (82.08%) |
 | Rust instantiation coverage | 878 / 1,069 (82.13%) |
-| Rust region coverage | 21,235 / 24,719 (85.91%) |
-| Rust branch/condition coverage | 3,541 / 4,390 (80.66%) |
+| Rust region coverage | 21,245 / 24,719 (85.95%) |
+| Rust branch/condition coverage | 3,543 / 4,390 (80.71%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 140 |
 | Stored active font binaries | 97 files, 772 KiB |
@@ -265,7 +269,7 @@ Current largest uncovered buckets:
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
 | `src/render.rs` | 1,568 / 2,275 | 325 / 428 | 109 / 164 | 2,264 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 1,415 / 1,908 | 174 / 250 | 127 / 186 | 1,924 / 2,597 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/font.rs` | 1,417 / 1,908 | 175 / 250 | 127 / 186 | 1,930 / 2,597 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,510 / 2,828 | 980 / 1,282 | 70 / 73 | 3,611 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
 | `src/scaler.rs` | 934 / 1,220 | 150 / 188 | 41 / 61 | 1,067 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
@@ -273,7 +277,7 @@ Current largest uncovered buckets:
 | `src/ffi/handles.rs` | 1,338 / 1,478 | 233 / 280 | 146 / 162 | 1,879 / 2,024 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 839 / 941 | 343 / 426 | 18 / 19 | 1,124 / 1,247 | CJK topology rows in the compact multiscript fixture |
-| `src/api.rs` | 470 / 486 | 73 / 84 | 53 / 54 | 635 / 660 | Public API wrapper rows for render cache and glyph-slot surfaces |
+| `src/api.rs` | 473 / 486 | 74 / 84 | 53 / 54 | 639 / 660 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short
 physical table data plus truncated range arrays. The only remaining uncovered
@@ -1483,6 +1487,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Explicit render-cache load-mode variants | 108 unique hashes | 0 | 6,610 | 6,607 / 6,607 | 3 | 14,559 / 17,190 lines; 21,233 / 24,719 regions; 3,539 / 4,390 branches | Four explicit `FT_Render_Glyph.matrix_render` variants reuse existing DejaVu/Noto fonts to cover safe Rust render-cache load-mode selection for force autohint, target light, no autohint, and force-autohint masked by no-autohint. Exact Rust FFI, C ABI, and WASM parity remains green; implicit cases remain zero |
 | 2026-07-12 | Mono negative-collapse glyph correction | 108 unique hashes | 0 | 6,610 | 6,607 / 6,607 | 3 | 14,561 / 17,190 lines; 21,235 / 24,719 regions; 3,541 / 4,390 branches | The existing source-backed `renderCollapseNegativeX` and `renderCollapseNegativeY` glyphs now sit at 330 font units instead of 375, which scales to a negative 26.6 collapse bias at the existing 20 ppem mono rows. This fixes stale fixture obligations without adding cases or changing the harness, and covers both negative `PixelBox::with_non_collapsed` arms with exact Rust/C ABI/WASM parity |
 | 2026-07-12 | Explicit render-cache repeat row | 108 unique hashes | 0 | 6,611 | 6,608 / 6,608 | 3 | 14,562 / 17,190 lines; 21,237 / 24,719 regions; 3,542 / 4,390 branches | One explicit `FT_Render_Glyph.supported_render_modes_repeat_cache` row renders glyph 41 from `hinter-control-matrix.ttf` twice on the same face. The public C oracle, Rust FFI, C ABI, and WASM ABI compare both slot snapshots, proving the safe Rust `RenderFontCache::get_or_insert_with` cache-hit branch without implicit case growth |
+| 2026-07-12 | Explicit load-glyph malformed facade errors | 108 unique hashes | 0 | 6,613 | 6,610 / 6,610 | 3 | 14,566 / 17,190 lines; 21,245 / 24,719 regions; 3,543 / 4,390 branches | Two explicit `FT_Load_Glyph.matrix_load` variants reuse `glyf-malformed-matrix.ttf` to cover no-autohint and force-autohint malformed glyph errors. Selected malformed rows now compare safe `Face::load_glyph` error parity against `FT_Load_Glyph`, keeping exact Rust/C ABI/WASM parity green and implicit cases at zero |
 
 ## Decision Log
 
@@ -1504,6 +1509,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Reuse selected `FT_LOAD_*` rows for safe API slot agreement | `Face::load_glyph` is a public Rust facade over the same core behavior exposed by `FT_Load_Glyph`; asserting slot equality on representative existing rows covers facade output methods without widening the public input matrix |
 | 2026-07-12 | Route rendered-slot target flags through the shared helper | `FT_Render_Glyph` already validates the public render mode before calling core rendering; preserving the selected render target in the returned slot's internal load flags keeps wrapper state centralized without adding cases or changing public output JSON |
 | 2026-07-12 | Support explicit repeat rows only where stateful public behavior needs them | `repeat_count` is accepted only as a concrete input on existing `FT_Render_Glyph` public rows. It lets one case compare a deliberate sequence across Rust/C/C-ABI/WASM without reintroducing hidden Cartesian discovery or generic fixture generation |
+| 2026-07-12 | Compare safe facade errors through selected public rows | Error-side coverage for `Face::load_glyph` must be proven by the same `FT_Load_Glyph` fixture cases and exact C/Rust/C-ABI/WASM parity, not by synthetic helper calls or broad routing |
 | 2026-07-11 | Pack no-output TT guard probes into existing branch-edge glyphs | Invalid coordinate reads exercise defensive zone access while preserving the same public `FT_Load_Glyph` output and avoiding extra Cartesian case growth |
 | 2026-07-11 | Prefer no-output VM state probes before new TT rows | Stack-only calls, twilight-zone movement, and no-op prep instructions can cover VM branches through the existing public `FT_Load_Glyph` row when they do not alter glyph output or weaken parity |
 | 2026-07-12 | Treat stale fixture obligations as font bugs | When an explicit row claims a structural branch but coverage shows it does not reach that branch, first correct the compact source font or selected glyph parameters instead of adding redundant cases |
