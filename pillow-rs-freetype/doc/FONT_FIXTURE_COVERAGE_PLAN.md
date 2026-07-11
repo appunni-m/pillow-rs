@@ -183,7 +183,9 @@ compact source-backed `cmap-format14-only.ttf` control plus explicit
 prove format-14-only charmaps return zero sentinels for direct lookup and
 iteration, and adding compact generated name-table branch matrices for static
 PostScript-name fallback and variable-font variation-prefix fallback through
-`FT_Get_Postscript_Name`.
+`FT_Get_Postscript_Name`, then extending the compact autohint script font with
+unequal ASCII digit advances so existing force-autohint rows exercise the
+same-width digit false path without adding concrete cases.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -197,11 +199,11 @@ coordinate parity.
 | Runnable parity comparisons | 6,557 |
 | Exact parity | 6,557 / 6,557 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,326 / 17,141 (83.58%) |
+| Covered Rust lines | 14,327 / 17,141 (83.58%) |
 | Rust function coverage | 858 / 1,062 (80.79%) |
 | Rust instantiation coverage | 861 / 1,065 (80.85%) |
-| Rust region coverage | 20,722 / 24,618 (84.17%) |
-| Rust branch/condition coverage | 3,455 / 4,370 (79.06%) |
+| Rust region coverage | 20,723 / 24,618 (84.18%) |
+| Rust branch/condition coverage | 3,457 / 4,370 (79.11%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 138 |
 | Stored active font binaries | 95 files, 764 KiB |
@@ -464,9 +466,9 @@ Core Rust structural coverage from
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
 | Functions | 858 | 1,062 | 204 |
-| Lines | 14,326 | 17,141 | 2,815 |
-| Regions | 20,722 | 24,618 | 3,896 |
-| Branches/conditions | 3,455 | 4,370 | 915 |
+| Lines | 14,327 | 17,141 | 2,814 |
+| Regions | 20,723 | 24,618 | 3,895 |
+| Branches/conditions | 3,457 | 4,370 | 913 |
 
 Formal MC/DC is not reported by the installed Rust coverage tooling
 (`mcdc.count == 0`). Branch/condition coverage is therefore the instrumented
@@ -479,7 +481,7 @@ The remaining coverage divides exactly into these ownership groups:
 |---|---|---:|---:|---:|---:|---|
 | Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 118 | 1,064 | 1,261 | 198 | public routing, wrapper thinness, metadata/state inputs |
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
-| Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 18 | 727 | 957 | 419 | script reachability audit, then glyph topology rows |
+| Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 18 | 726 | 956 | 417 | script reachability audit, then glyph topology rows |
 | TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 139 | 467 | 130 | explicit bytecode-program glyph rows |
 | Math/casts | `fixed.rs`, `casts.rs` | 4 | 12 | 25 | 9 | scalar boundary rows or semantic cleanup |
 
@@ -504,7 +506,7 @@ Per-file source gap ledger:
 | `src/ffi/convert.rs` | 12 | 130/142 (91.55%) | 1 | 12 | 0 |
 | `src/tt/fvar.rs` | 7 | 91/98 (92.86%) | 4 | 13 | 1 |
 | `src/tt/hinter/gs.rs` | 14 | 172/186 (92.47%) | 1 | 14 | 2 |
-| `src/autohint/globals.rs` | 14 | 213/227 (93.83%) | 1 | 21 | 19 |
+| `src/autohint/globals.rs` | 13 | 214/227 (94.27%) | 1 | 20 | 18 |
 | `src/tt/cmap.rs` | 1 | 428/429 (99.77%) | 1 | 3 | 0 |
 | `src/ffi/types.rs` | 5 | 0/5 (0.00%) | 1 | 3 | 0 |
 | `src/autohint/loader.rs` | 5 | 222/227 (97.80%) | 0 | 6 | 5 |
@@ -1430,6 +1432,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Invalid load-target mode parity rows | 103 unique hashes | 0 | 6,555 | 6,552 / 6,552 | 3 | 14,324 / 17,141 lines; 20,709 / 24,618 regions; 3,434 / 4,370 branches | two explicit `FT_LOAD_TARGET_MODE` rows prove pinned FreeType accepts an unknown target nibble for load-only calls but returns `FT_Err_Cannot_Render_Glyph` when `FT_LOAD_RENDER` requests rendering with that invalid mode. Exact Rust, C ABI, and WASM parity remains green; `ffi/convert.rs` no longer has missing branch outcomes |
 | 2026-07-11 | Format-14-only cmap sentinel rows | 104 unique hashes | 0 | 6,558 | 6,555 / 6,555 | 3 | 14,326 / 17,141 lines; 20,711 / 24,618 regions; 3,434 / 4,370 branches | `scripts/build_cmap_fixtures.py` now emits compact `cmap-format14-only.ttf`; explicit `FT_Get_Char_Index`, `FT_Get_First_Char`, and `FT_Get_Next_Char` rows prove pinned C and Rust/C-ABI/WASM return zero sentinels for format-14-only direct lookup and iteration. `tt/cmap.rs` reaches 428 / 429 lines and 100% branch coverage without implicit case growth |
 | 2026-07-11 | Name table branch-matrix controls | 106 unique hashes | 0 | 6,560 | 6,557 / 6,557 | 3 | 14,326 / 17,141 lines; 20,722 / 24,618 regions; 3,455 / 4,370 branches | `scripts/build_name_fixtures.py` now emits compact static and variable branch-matrix controls. Two explicit `FT_Get_Postscript_Name` variants prove pinned C and Rust/C-ABI/WASM agree on empty PostScript records, non-English Windows replacement rejection, invalid Windows filtering, Apple fallback filtering, and variation-prefix fallback synthesis. `tt/name.rs` moves to 470 / 481 regions and 116 / 134 branch outcomes without implicit case growth |
+| 2026-07-11 | Autohint unequal digit-width probes | 106 unique hashes | 0 | 6,560 | 6,557 / 6,557 | 3 | 14,327 / 17,141 lines; 20,723 / 24,618 regions; 3,457 / 4,370 branches | `script-coverage.ttf` now appends two ASCII digit glyphs with unequal advances. Existing explicit `FT_LOAD_FORCE_AUTOHINT` rows prove pinned C and Rust/C-ABI/WASM agree while `FaceGlobals::digits_have_same_width` reaches its false path without increasing the public case count |
 
 ## Decision Log
 
