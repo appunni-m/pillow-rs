@@ -2764,6 +2764,33 @@ fn rust_cmap_output(face: &FT_Face, params: &Value, kind: CmapInfoKind) -> Resul
         let charmap = index.map_or(std::ptr::null_mut(), |index| FT_Face_Charmap(face, index));
         let format = FT_Get_CMap_Format(charmap);
         let language_id = FT_Get_CMap_Language_ID(charmap);
+        let scoped_format = FT_Charmap_Format(face, charmap);
+        let scoped_language_id = FT_Charmap_Language_ID(face, charmap);
+        let scoped_info = FT_Charmap_Info(face, charmap);
+        if charmap.is_null() {
+            if scoped_format.is_some() || scoped_language_id.is_some() || scoped_info.is_some() {
+                return Err(format!(
+                    "rust null cmap variant {variant} returned scoped metadata"
+                ));
+            }
+        } else {
+            if scoped_format != Some(format) {
+                return Err(format!(
+                    "rust cmap format mismatch for {variant}: raw={format} scoped={scoped_format:?}"
+                ));
+            }
+            if scoped_language_id != Some(language_id) {
+                return Err(format!(
+                    "rust cmap language mismatch for {variant}: raw={language_id} scoped={scoped_language_id:?}"
+                ));
+            }
+            let face_info = index.and_then(|index| FT_Face_Charmap_Info(face, index));
+            if scoped_info != face_info {
+                return Err(format!(
+                    "rust cmap info mismatch for {variant}: face={face_info:?} scoped={scoped_info:?}"
+                ));
+            }
+        }
         let metadata = if let Some(index) = index {
             FT_Face_Charmap_Info(face, index).map_or(Value::Null, |info| {
                 cmap_metadata_json(
