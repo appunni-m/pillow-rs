@@ -148,9 +148,12 @@ controls, exercising composite subglyph rows through the compact glyf
 component matrix, and routing the compact `FT_Set_Named_Instance` selection,
 clear, and invalid-index rows through real C oracle, Rust FFI, C ABI, and WASM
 ABI execution, and reusing the shared signed big-endian `tt::read_i16` helper
-from the public `post` table parser. Three named-instance obligations remain
-explicit pending rows: Adobe MM reset behavior, `gvar`/HVAR glyph-output
-deltas, and `FT_MM_Var` namedstyle coordinate parity.
+from the public `post` table parser, routing optional raw `fpgm`/`prep` table
+reads through their parser helpers, and extending the compact branch-edge TT
+program with invalid coordinate reads that reach the zone out-of-range guards.
+Three named-instance obligations remain explicit pending rows: Adobe MM reset
+behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
+coordinate parity.
 
 | Measure | Current |
 |---|---:|
@@ -161,11 +164,11 @@ deltas, and `FT_MM_Var` namedstyle coordinate parity.
 | Runnable parity comparisons | 6,513 |
 | Exact parity | 6,513 / 6,513 |
 | Pending cases | 3 |
-| Covered Rust lines | 13,940 / 16,899 (82.49%) |
-| Rust function coverage | 826 / 1,039 (79.50%) |
-| Rust instantiation coverage | 829 / 1,042 (79.56%) |
-| Rust region coverage | 20,177 / 24,275 (83.12%) |
-| Rust branch/condition coverage | 3,342 / 4,298 (77.76%) |
+| Covered Rust lines | 13,952 / 16,901 (82.55%) |
+| Rust function coverage | 826 / 1,037 (79.65%) |
+| Rust instantiation coverage | 829 / 1,040 (79.71%) |
+| Rust region coverage | 20,186 / 24,271 (83.17%) |
+| Rust branch/condition coverage | 3,347 / 4,298 (77.87%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 125 |
 | Stored active font binaries | 82 files, 686 KiB |
@@ -194,13 +197,13 @@ Current largest uncovered buckets:
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
 | `src/render.rs` | 1,566 / 2,275 | 323 / 428 | 109 / 164 | 2,262 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 1,311 / 1,821 | 143 / 218 | 124 / 184 | 1,749 / 2,456 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/font.rs` | 1,314 / 1,823 | 143 / 218 | 122 / 182 | 1,746 / 2,452 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,506 / 2,828 | 974 / 1,282 | 70 / 73 | 3,607 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
 | `src/scaler.rs` | 915 / 1,201 | 144 / 178 | 40 / 60 | 1,047 / 1,254 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 25 / 293 | 0 / 0 | 1 / 2 | 28 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
-| `src/ffi/handles.rs` | 1,344 / 1,500 | 243 / 290 | 143 / 163 | 1,863 / 2,047 | Public FFI route audit; wrappers stay thin and must delegate to core |
-| `src/tt/hinter/exec.rs` | 1,222 / 1,340 | 297 / 410 | 37 / 40 | 2,463 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
+| `src/ffi/handles.rs` | 1,345 / 1,500 | 243 / 290 | 143 / 163 | 1,866 / 2,047 | Public FFI route audit; wrappers stay thin and must delegate to core |
+| `src/tt/hinter/exec.rs` | 1,223 / 1,340 | 298 / 410 | 37 / 40 | 2,464 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 835 / 941 | 339 / 426 | 18 / 19 | 1,118 / 1,247 | CJK topology rows in the compact multiscript fixture |
 | `src/api.rs` | 335 / 418 | 55 / 66 | 42 / 50 | 447 / 559 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
@@ -396,9 +399,9 @@ Core Rust structural coverage from
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
 | Functions | 826 | 1,037 | 211 |
-| Lines | 13,948 | 16,901 | 2,953 |
-| Regions | 20,181 | 24,271 | 4,090 |
-| Branches/conditions | 3,342 | 4,298 | 956 |
+| Lines | 13,952 | 16,901 | 2,949 |
+| Regions | 20,186 | 24,271 | 4,085 |
+| Branches/conditions | 3,347 | 4,298 | 951 |
 
 Formal MC/DC is not reported by the installed Rust coverage tooling
 (`mcdc.count == 0`). Branch/condition coverage is therefore the instrumented
@@ -412,7 +415,7 @@ The remaining coverage divides exactly into these ownership groups:
 | Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 121 | 1,134 | 1,368 | 223 | public routing, wrapper thinness, metadata/state inputs |
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
 | Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 20 | 775 | 1,024 | 423 | script reachability audit, then glyph topology rows |
-| TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 143 | 474 | 137 | explicit bytecode-program glyph rows |
+| TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 139 | 469 | 132 | explicit bytecode-program glyph rows |
 | Math/casts | `fixed.rs`, `casts.rs` | 6 | 28 | 38 | 14 | scalar boundary rows or semantic cleanup |
 
 Per-file source gap ledger:
@@ -420,13 +423,13 @@ Per-file source gap ledger:
 | Source | Missing lines | Line coverage | Missing funcs | Missing regions | Missing branches |
 |---|---:|---:|---:|---:|---:|
 | `src/render.rs` | 709 | 1566/2275 (68.84%) | 55 | 959 | 105 |
-| `src/font.rs` | 509 | 1312/1821 (72.05%) | 60 | 706 | 75 |
+| `src/font.rs` | 509 | 1314/1823 (72.08%) | 60 | 706 | 75 |
 | `src/autohint/latin.rs` | 322 | 2506/2828 (88.61%) | 3 | 600 | 308 |
 | `src/scaler.rs` | 286 | 915/1201 (76.19%) | 20 | 207 | 34 |
 | `src/autohint/globals_data.rs` | 268 | 25/293 (8.53%) | 1 | 206 | 0 |
 | `src/grays.rs` | 164 | 646/810 (79.75%) | 5 | 227 | 53 |
 | `src/ffi/handles.rs` | 155 | 1345/1500 (89.67%) | 20 | 181 | 47 |
-| `src/tt/hinter/exec.rs` | 118 | 1222/1340 (91.19%) | 3 | 438 | 113 |
+| `src/tt/hinter/exec.rs` | 117 | 1223/1340 (91.27%) | 3 | 437 | 112 |
 | `src/autohint/cjk.rs` | 106 | 835/941 (88.74%) | 1 | 129 | 87 |
 | `src/api.rs` | 83 | 335/418 (80.14%) | 8 | 112 | 11 |
 | `src/tt/name.rs` | 40 | 200/240 (83.33%) | 3 | 83 | 46 |
@@ -443,10 +446,10 @@ Per-file source gap ledger:
 | `src/tt/hinter/mod.rs` | 4 | 274/278 (98.56%) | 0 | 11 | 7 |
 | `src/tt/hinter/iup.rs` | 4 | 98/102 (96.08%) | 0 | 5 | 9 |
 | `src/tt/post.rs` | 3 | 95/98 (96.94%) | 0 | 13 | 2 |
-| `src/tt/hinter/zone.rs` | 3 | 34/37 (91.89%) | 0 | 6 | 6 |
 | `src/casts.rs` | 3 | 48/51 (94.12%) | 1 | 3 | 6 |
 | `src/tt/gasp.rs` | 2 | 45/47 (95.74%) | 2 | 6 | 0 |
 | `src/outline.rs` | 0 | 3/3 (100.00%) | 0 | 0 | 1 |
+| `src/tt/hinter/zone.rs` | 0 | 37/37 (100.00%) | 0 | 2 | 2 |
 
 The exact line-range inspection artifact for the latest run is generated at
 `target/coverage/unified-condition-missing-lines.txt` by
@@ -1303,6 +1306,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Direct `FT_Set_Named_Instance` parity routing | 90 unique hashes | 0 | 6,516 | 6,513 / 6,513 | 3 | 13,937 / 16,899 lines; 20,173 / 24,275 regions; 3,342 / 4,298 branches | `ftmm.set_named_instance` no longer reaches the generic oracle fallback; select, clear, and invalid-index compact variable rows execute pinned C oracle, Rust FFI, C ABI, and WASM ABI. Three rows remain explicit pending: Adobe MM reset, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle coordinates |
 | 2026-07-11 | Shared signed SFNT helper coverage | 90 unique hashes | 0 | 6,516 | 6,513 / 6,513 | 3 | 13,940 / 16,899 lines; 20,177 / 24,275 regions; 3,342 / 4,298 branches | The public `post` table parser now reuses `tt::read_i16` for signed underline fields instead of duplicating byte decoding. Existing `FT_Get_Glyph_Name` post fixtures cover the helper through real C/Rust/C/WASM parity, closing `tt/mod.rs` structural coverage without adding cases or changing font assets |
 | 2026-07-11 | Raw TrueType program table helper coverage | 90 unique hashes | 0 | 6,516 | 6,513 / 6,513 | 3 | 13,948 / 16,901 lines; 20,181 / 24,271 regions; 3,342 / 4,298 branches | Font construction now routes optional `fpgm` and `prep` table reads through the restored byte-copy helpers. Existing `FT_Load_Glyph` rows cover the path through real compact TT program fonts, making `tt/hinter/tables.rs` 100% covered without new cases, font assets, or fixture-only calls |
+| 2026-07-11 | Branch-edge invalid coordinate reads | 90 unique hashes | 0 | 6,516 | 6,513 / 6,513 | 3 | 13,952 / 16,901 lines; 20,186 / 24,271 regions; 3,347 / 4,298 branches | Existing `branchEdgeMatrix` now packs invalid `GC[0]`, `GC[1]`, and `MDRP` point reads into its no-output TT program, reaching `GlyphZone` out-of-range guards through `FT_Load_Glyph` without adding concrete cases or changing parity output |
 
 ## Decision Log
 
@@ -1318,6 +1322,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Treat malformed metric bytes as deferred lookup data | Pinned FreeType records hmtx/vmtx offsets at face open and returns zero metrics when later reads or declared counts are unusable |
 | 2026-07-10 | Keep the coverage denominator core-only | The parity executable still exercises Rust, C ABI, and WASM ABI for every runnable fixture, while reports exclude the thin wrapper source owned by separate crates |
 | 2026-07-10 | Centralize FreeType face metric selection | Pinned `sfobjs.c` prioritizes OS/2 `USE_TYPO_METRICS`, then nonzero hhea, then OS/2 typo and Windows fallbacks for both face and size metrics |
+| 2026-07-11 | Pack no-output TT guard probes into existing branch-edge glyphs | Invalid coordinate reads exercise defensive zone access while preserving the same public `FT_Load_Glyph` output and avoiding extra Cartesian case growth |
 | 2026-07-10 | Require every predicate operand outcome | Line execution alone missed non-Roman Mac and non-Windows fallback records; nightly branch coverage makes both sides of each short-circuit condition visible |
 | 2026-07-10 | Treat TTC table offsets as collection-absolute | Pinned `tt_face_load_font_dir` reads table offsets from the TTC stream origin; adding the selected face base a second time breaks every nonzero face |
 | 2026-07-10 | Keep the embedded-strike request visibly pending | Existing bitmap-named aliases are scalable fonts and core has no embedded-strike table support; substituting a numeric size would falsely satisfy the manifest obligation |
