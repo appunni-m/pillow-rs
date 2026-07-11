@@ -17,26 +17,74 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/kerning/legacy-av-kern.ttf",
-            "status": "required_future_asset",
-            "requires": "SFNT with legacy kern table containing A/V pair and no GPOS-only ambiguity"
+        "variants": [
+          {
+            "id": "default-ppem9",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/kerning/legacy-av-kern.ttf",
+                "status": "required_future_asset",
+                "requires": "SFNT with legacy kern table containing A/V pair and no GPOS-only ambiguity"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size_ppem": 9,
+              "left_glyph_name": "A",
+              "right_glyph_name": "V",
+              "kern_mode": "FT_KERNING_DEFAULT"
+            },
+            "coverage": [
+              "kerning:default-under-25-ppem"
+            ]
+          },
+          {
+            "id": "default-ppem20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/kerning/legacy-av-kern.ttf",
+                "status": "required_future_asset",
+                "requires": "SFNT with legacy kern table containing A/V pair and no GPOS-only ambiguity"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size_ppem": 20,
+              "left_glyph_name": "A",
+              "right_glyph_name": "V",
+              "kern_mode": "FT_KERNING_DEFAULT"
+            },
+            "coverage": [
+              "kerning:default-under-25-ppem"
+            ]
+          },
+          {
+            "id": "default-ppem32",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/kerning/legacy-av-kern.ttf",
+                "status": "required_future_asset",
+                "requires": "SFNT with legacy kern table containing A/V pair and no GPOS-only ambiguity"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size_ppem": 32,
+              "left_glyph_name": "A",
+              "right_glyph_name": "V",
+              "kern_mode": "FT_KERNING_DEFAULT"
+            },
+            "coverage": [
+              "kerning:default-25-plus-ppem"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "size_ppem_values": [
-            9,
-            20,
-            32
-          ],
-          "left_glyph_name": "A",
-          "right_glyph_name": "V",
-          "kern_mode": "FT_KERNING_DEFAULT"
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
