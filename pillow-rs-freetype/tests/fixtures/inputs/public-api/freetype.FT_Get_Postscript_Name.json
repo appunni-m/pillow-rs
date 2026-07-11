@@ -200,6 +200,73 @@
               "tt/name:variation-prefix-odd-windows-rejected",
               "tt/name:variation-prefix-apple-after-windows-failure"
             ]
+          },
+          {
+            "id": "encoded-missing-subfamily-instance",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-missing-subfamily.ttf"
+              }
+            },
+            "params": {
+              "face_index": 65536
+            },
+            "coverage": [
+              "tt/name:variation-subfamily-unsupported-platform",
+              "tt/name:variation-subfamily-missing-synthesized",
+              "tt/fvar:named-instance-coordinates-for-postscript-name"
+            ]
+          },
+          {
+            "id": "encoded-missing-subfamily-zero-coordinate",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-missing-subfamily.ttf"
+              }
+            },
+            "params": {
+              "face_index": 131072
+            },
+            "coverage": [
+              "tt/name:variation-coordinate-zero-synthesized"
+            ]
+          },
+          {
+            "id": "encoded-missing-subfamily-negative-coordinate",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-missing-subfamily.ttf"
+              }
+            },
+            "params": {
+              "face_index": 196608
+            },
+            "coverage": [
+              "tt/name:variation-coordinate-negative-synthesized"
+            ]
+          },
+          {
+            "id": "encoded-missing-subfamily-fractional-coordinate",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-missing-subfamily.ttf"
+              }
+            },
+            "params": {
+              "face_index": 262144
+            },
+            "coverage": [
+              "tt/name:variation-coordinate-fractional-synthesized",
+              "tt/name:variation-axis-tag-sanitized"
+            ]
           }
         ]
       },

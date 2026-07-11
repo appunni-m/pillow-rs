@@ -102,6 +102,23 @@
             ]
           },
           {
+            "id": "short-fvar-axis-record-control",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/fvar-axis-size-short.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS"
+            },
+            "coverage": [
+              "tt/fvar:axis-record-too-short"
+            ]
+          },
+          {
             "id": "short-fvar-instance-array-control",
             "assets": {
               "font": {

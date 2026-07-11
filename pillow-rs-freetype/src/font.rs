@@ -2442,22 +2442,112 @@ fn named_instance_postscript_name(
     fvar: &Option<tt::fvar::FvarTable>,
     named_instance: usize,
 ) -> Option<String> {
-    let instance = fvar
-        .as_ref()?
-        .instances
-        .get(named_instance.checked_sub(1)?)?;
+    let fvar = fvar.as_ref()?;
+    let instance = fvar.instances.get(named_instance.checked_sub(1)?)?;
     if let Some(name_id) = instance.postscript_name_id
         && let Some(name) = tt::name::name_string(name, name_id)
     {
         return Some(name);
     }
     let prefix = tt::name::variations_postscript_prefix(name)?;
-    let subfamily = tt::name::name_string(name, instance.subfamily_name_id)?;
+    let Some(subfamily) = tt::name::name_string(name, instance.subfamily_name_id) else {
+        // FreeType `sfnt_get_var_ps_name` in `src/sfnt/sfdriver.c` falls through
+        // to `construct_instance_name` when a named instance lacks a usable
+        // subfamily name, using non-default fvar coordinates plus axis tags.
+        return Some(synthesize_instance_postscript_name(
+            &prefix,
+            &fvar.axes,
+            &instance.coords,
+        ));
+    };
     let mut result = String::with_capacity(prefix.len() + 1 + subfamily.len());
     result.push_str(&prefix);
     result.push('-');
     result.extend(subfamily.chars().filter(|ch| ch.is_ascii_alphanumeric()));
     Some(result)
+}
+
+fn synthesize_instance_postscript_name(
+    prefix: &str,
+    axes: &[tt::fvar::FvarAxis],
+    coords: &[i32],
+) -> String {
+    let mut result = String::with_capacity(prefix.len() + axes.len() * 16);
+    result.push_str(prefix);
+    for (axis, coord) in axes.iter().zip(coords) {
+        if *coord == axis.default_value {
+            continue;
+        }
+        result.push('_');
+        result.push_str(&fixed_16_16_to_short_decimal(*coord));
+        push_variation_axis_tag(&mut result, axis.tag);
+    }
+    result
+}
+
+fn fixed_16_16_to_short_decimal(value: i32) -> String {
+    if value == 0 {
+        return "0".into();
+    }
+
+    let mut fixed = i64::from(value);
+    let mut result = String::new();
+    if fixed < 0 {
+        result.push('-');
+        fixed = -fixed;
+    }
+
+    let int_part = (fixed >> 16) & 0xFFFF;
+    if int_part != 0 {
+        result.push_str(&int_part.to_string());
+    }
+
+    let mut frac_part = fixed & 0xFFFF;
+    if frac_part == 0 {
+        return result;
+    }
+
+    result.push('.');
+    let point_index = result.len() - 1;
+    frac_part = frac_part * 10 + 5;
+    for _ in 0..5 {
+        let digit = frac_part / 0x10000;
+        result.push(char::from(b'0' + digit as u8));
+        frac_part %= 0x10000;
+        if frac_part == 0 {
+            break;
+        }
+        frac_part *= 10;
+    }
+
+    if result.len() - point_index - 1 == 5 {
+        let mut last = result.pop().unwrap_or('0') as u8;
+        if frac_part < 34480 * 10 && last == b'1' {
+            last = b'0';
+        } else if frac_part == 17232 * 10 && (last - b'0') % 2 == 1 {
+            last -= 1;
+        } else if frac_part < 17232 * 10 && last != b'0' {
+            last -= 1;
+        }
+        result.push(char::from(last));
+    }
+
+    while result.ends_with('0') {
+        result.pop();
+    }
+    if result.ends_with('.') {
+        result.pop();
+    }
+    result
+}
+
+fn push_variation_axis_tag(result: &mut String, tag: u32) {
+    for shift in [24, 16, 8, 0] {
+        let byte = (tag >> shift) as u8;
+        if byte != b' ' && byte.is_ascii_alphanumeric() {
+            result.push(char::from(byte));
+        }
+    }
 }
 
 /// Pick (ascender, descender) as positive font-unit magnitudes.

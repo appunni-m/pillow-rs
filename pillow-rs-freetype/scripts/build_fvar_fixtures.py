@@ -23,6 +23,19 @@ def write_unsupported_version() -> None:
     write_fvar_payload("fvar-version-2.ttf", bytes(payload))
 
 
+def write_axis_size_short() -> None:
+    payload = bytearray(base_fvar_payload())
+    axes_offset = int.from_bytes(payload[4:6], "big")
+    axis_count = int.from_bytes(payload[8:10], "big")
+    instance_count = int.from_bytes(payload[12:14], "big")
+    instance_size = int.from_bytes(payload[14:16], "big")
+    short_axis_size = 19
+    payload[10:12] = short_axis_size.to_bytes(2, "big")
+    instances_offset = axes_offset + axis_count * short_axis_size
+    table_len = instances_offset + instance_count * instance_size
+    write_fvar_payload("fvar-axis-size-short.ttf", bytes(payload[:table_len]))
+
+
 def write_instance_array_short() -> None:
     payload = base_fvar_payload()
     axes_offset = int.from_bytes(payload[4:6], "big")
@@ -157,6 +170,7 @@ def checksum(table_data: bytes | bytearray) -> int:
 def main() -> None:
     write_short_header()
     write_unsupported_version()
+    write_axis_size_short()
     write_instance_array_short()
     write_instance_size_short()
     write_instance_postscript_name()
