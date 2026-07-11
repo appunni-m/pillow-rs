@@ -1940,6 +1940,26 @@
             ]
           },
           {
+            "id": "cjk-stem-sort-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 20892,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:stem-width-sort"
+            ]
+          },
+          {
             "id": "cjk-shared-latin",
             "assets": {
               "font": {
