@@ -107,10 +107,10 @@
     <maxCompositePoints value="6"/>
     <maxCompositeContours value="2"/>
     <maxZones value="2"/>
-    <maxTwilightPoints value="0"/>
+    <maxTwilightPoints value="4"/>
     <maxStorage value="2"/>
     <maxFunctionDefs value="1"/>
-    <maxInstructionDefs value="1"/>
+    <maxInstructionDefs value="2"/>
     <maxStackElements value="16"/>
     <maxSizeOfInstructions value="400"/>
     <maxComponentElements value="2"/>
@@ -336,13 +336,16 @@
   </cmap>
 
   <fpgm>
-    <!-- Define opcode 0x8F and function 1 as PUSH 1; POP bodies. -->
+    <!-- Define opcodes 0x8F/0x93 and function 1 as PUSH 1; POP bodies. -->
     <bytecode>
-      b0 8f 89 b0 01 21 2d b0 01 2c b0 01 21 2d
+      b0 8f 89 b0 01 21 2d b0 93 89 b0 01 21 2d b0 01 2c b0 01 21 2d
     </bytecode>
   </fpgm>
 
   <prep>
+    <bytecode>
+      b1 01 00 8e
+    </bytecode>
   </prep>
 
   <cvt>
@@ -910,8 +913,9 @@
       <instructions>
         <!-- Compact native-TT branch controls: zero-length line and stack
              vectors, invalid stack index fallbacks, taken JROF, no-round
-             dispatch, invalid contour shift, invalid coordinate reads, and an
-             empty twilight-zone SHZ. -->
+             dispatch, invalid contour shift, invalid coordinate reads, empty
+             twilight-zone SHZ, non-output stack calls, clamped delta counts,
+             twilight-zone moves, and unknown-opcode IDEF dispatch. -->
         <bytecode>
           01
           b1 00 00 08
@@ -926,6 +930,22 @@
           b0 09 47 21
           b0 09 c0
           b0 00 15 b0 00 36
+          b0 01 16
+          b2 01 02 03 8a 21 21 21
+          b8 10 00 88 21
+          b0 01 2b
+          b1 01 01 2a
+          b0 07 5f b2 00 09 02 5d
+          b2 00 09 02 73
+          b0 03 5f
+          b0 00 10
+          b0 01 13 b0 00 14 b0 00 c0
+          b1 00 00 e0
+          b1 00 00 3a
+          b0 00 16
+          b4 00 00 00 00 00 0f
+          b0 01 16
+          93
         </bytecode>
       </instructions>
     </TTGlyph>
