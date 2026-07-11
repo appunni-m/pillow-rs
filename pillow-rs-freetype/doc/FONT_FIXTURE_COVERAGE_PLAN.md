@@ -215,7 +215,10 @@ lookup. The C ABI wrapper still owns raw-pointer validation, but delegates the
 actual owned-charmap return value back to core so the ABI remains thin. The
 existing `FT_Get_CMap_Format` and `FT_Get_CMap_Language_ID` rows also verify
 the core face+charmap metadata helpers agree with the raw public CMap helpers
-for valid, null, and out-of-range charmaps.
+for valid, null, and out-of-range charmaps. Selected existing `FT_LOAD_*`
+rows now also verify safe Rust `Face::load_glyph` slot output agrees with the
+Rust FFI `FT_Load_Glyph` slot for representative load flags, without adding
+fonts or cases.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -229,10 +232,10 @@ coordinate parity.
 | Runnable parity comparisons | 6,603 |
 | Exact parity | 6,603 / 6,603 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,470 / 17,175 (84.25%) |
-| Rust function coverage | 864 / 1,064 (81.20%) |
-| Rust instantiation coverage | 867 / 1,067 (81.26%) |
-| Rust region coverage | 21,106 / 24,682 (85.51%) |
+| Covered Rust lines | 14,473 / 17,175 (84.27%) |
+| Rust function coverage | 865 / 1,064 (81.30%) |
+| Rust instantiation coverage | 868 / 1,067 (81.35%) |
+| Rust region coverage | 21,111 / 24,682 (85.53%) |
 | Rust branch/condition coverage | 3,529 / 4,380 (80.57%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 140 |
@@ -270,7 +273,7 @@ Current largest uncovered buckets:
 | `src/ffi/handles.rs` | 1,339 / 1,479 | 233 / 280 | 146 / 162 | 1,876 / 2,021 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 835 / 941 | 339 / 426 | 18 / 19 | 1,118 / 1,247 | CJK topology rows in the compact multiscript fixture |
-| `src/api.rs` | 389 / 464 | 61 / 70 | 44 / 52 | 522 / 620 | Public API wrapper rows for render cache and glyph-slot surfaces |
+| `src/api.rs` | 392 / 464 | 61 / 70 | 45 / 52 | 527 / 620 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short
 physical table data plus truncated range arrays. The only remaining uncovered
@@ -528,7 +531,7 @@ Per-file source gap ledger:
 | `src/ffi/handles.rs` | 155 | 1323/1478 (89.51%) | 20 | 181 | 47 |
 | `src/tt/hinter/exec.rs` | 66 | 1274/1340 (95.07%) | 3 | 279 | 71 |
 | `src/autohint/cjk.rs` | 106 | 835/941 (88.74%) | 1 | 129 | 87 |
-| `src/api.rs` | 75 | 389/464 (83.84%) | 8 | 98 | 9 |
+| `src/api.rs` | 72 | 392/464 (84.48%) | 7 | 93 | 9 |
 | `src/tt/name.rs` | 1 | 293/294 (99.66%) | 1 | 11 | 18 |
 | `src/autohint/types.rs` | 32 | 71/103 (68.93%) | 7 | 25 | 1 |
 | `src/autohint/coverage.rs` | 22 | 6/28 (21.43%) | 5 | 28 | 4 |
@@ -1474,6 +1477,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | hhea-zero metric fallback controls | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,454 / 17,174 lines; 21,061 / 24,673 regions; 3,529 / 4,380 branches | Two compact `FT_Size_Metrics` variants use generated hhea-zero fonts to prove FreeType's metric fallback order: zero hhea falls to OS/2 typo metrics, then to OS/2 Windows ascent/descent when typo metrics are also zero. Exact Rust/C ABI/WASM parity remains green and `font.rs` gains 14 lines, 29 regions, and 6 branch outcomes without implicit case growth |
 | 2026-07-12 | Core `FT_Get_Charmap_Index` route | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,458 / 17,175 lines; 21,073 / 24,682 regions; 3,529 / 4,380 branches | Existing `freetype.FT_Get_Charmap_Index` rows now exercise the core public helper for owned, null, and foreign charmaps. C ABI keeps raw-pointer validation and delegates the owned-charmap index value to core; no fonts or cases were added |
 | 2026-07-12 | Core CMap scoped helper routes | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,470 / 17,175 lines; 21,106 / 24,682 regions; 3,529 / 4,380 branches | Existing `tttables.FT_Get_CMap_Format` and `tttables.FT_Get_CMap_Language_ID` rows now verify `FT_Charmap_Info`, `FT_Charmap_Format`, and `FT_Charmap_Language_ID` agree with raw public CMap helpers for valid, null, and out-of-range charmaps. No fonts or cases were added |
+| 2026-07-12 | Safe Rust load-glyph agreement route | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,473 / 17,175 lines; 21,111 / 24,682 regions; 3,529 / 4,380 branches | Seven existing `FT_LOAD_*` rows now assert `Face::load_glyph` matches the Rust FFI `FT_Load_Glyph` slot for compute metrics, force autohint, no hinting, no recurse, no scale, load-time render, and target-light representatives. The output JSON and case count stay unchanged |
 
 ## Decision Log
 
@@ -1492,6 +1496,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Select hhea-zero metric fallback rows explicitly | The fallback code existed but public fixtures did not select zero hhea ascent/descent. Two generated `FT_Size_Metrics` variants cover OS/2 typo and OS/2 Windows fallback without broadening font discovery or multiplying unrelated metrics cases |
 | 2026-07-12 | Keep charmap raw-pointer validation in ABI, not lookup semantics | `FT_Get_Charmap_Index` needs C ABI raw-pointer and lifetime validation, but the return value for live owned charmaps belongs in core. Existing public rows now call both the raw core helper and face-scoped helper to prove they agree without adding fixture rows |
 | 2026-07-12 | Cover CMap scoped helpers through existing CMap rows | `FT_Charmap_Info`, `FT_Charmap_Format`, and `FT_Charmap_Language_ID` are core facade helpers for the same public CMap metadata already selected by `FT_Get_CMap_Format` and `FT_Get_CMap_Language_ID`; exercising them as agreement checks avoids new cases and keeps route intent explicit |
+| 2026-07-12 | Reuse selected `FT_LOAD_*` rows for safe API slot agreement | `Face::load_glyph` is a public Rust facade over the same core behavior exposed by `FT_Load_Glyph`; asserting slot equality on representative existing rows covers facade output methods without widening the public input matrix |
 | 2026-07-11 | Pack no-output TT guard probes into existing branch-edge glyphs | Invalid coordinate reads exercise defensive zone access while preserving the same public `FT_Load_Glyph` output and avoiding extra Cartesian case growth |
 | 2026-07-11 | Prefer no-output VM state probes before new TT rows | Stack-only calls, twilight-zone movement, and no-op prep instructions can cover VM branches through the existing public `FT_Load_Glyph` row when they do not alter glyph output or weaken parity |
 | 2026-07-10 | Require every predicate operand outcome | Line execution alone missed non-Roman Mac and non-Windows fallback records; nightly branch coverage makes both sides of each short-circuit condition visible |
