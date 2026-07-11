@@ -141,15 +141,27 @@ pub fn FT_Get_Sfnt_LangTag(
     FT_Err_Unimplemented_Feature as FT_Error
 }
 
-pub fn FT_New_Size(_face: Option<&FT_Face>, _size: Option<&mut FT_Size>) -> FT_Error {
+pub fn FT_New_Size(face: Option<&FT_Face>, size: Option<&mut FT_Size>) -> FT_Error {
+    if face.is_none() {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    }
+    if size.is_none() {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
     FT_Err_Unimplemented_Feature as FT_Error
 }
 
-pub fn FT_Done_Size(_size: FT_Size) -> FT_Error {
+pub fn FT_Done_Size(size: FT_Size) -> FT_Error {
+    if size.is_null() {
+        return FT_Err_Invalid_Size_Handle;
+    }
     FT_Err_Unimplemented_Feature as FT_Error
 }
 
-pub fn FT_Activate_Size(_size: FT_Size) -> FT_Error {
+pub fn FT_Activate_Size(size: FT_Size) -> FT_Error {
+    if size.is_null() {
+        return FT_Err_Invalid_Size_Handle;
+    }
     FT_Err_Unimplemented_Feature as FT_Error
 }
 

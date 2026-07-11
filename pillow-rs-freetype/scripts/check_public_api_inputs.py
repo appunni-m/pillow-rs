@@ -636,6 +636,19 @@ def pending_core_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def size_null_validation_reason(row: ConcreteInput) -> str | None:
+    if row.operation == "ftsizes.new_size":
+        if lifecycle_handle(row, "face") == "null":
+            return "FT_New_Size null face validates through pinned C oracle and Rust FFI wrapper"
+        if lifecycle_handle(row, "output") == "null":
+            return "FT_New_Size null output pointer validates through pinned C oracle and Rust FFI wrapper"
+    if row.operation == "ftsizes.done_size" and lifecycle_handle(row, "size") == "null":
+        return "FT_Done_Size null size validates through pinned C oracle and Rust FFI wrapper"
+    if row.operation == "ftsizes.activate_size" and lifecycle_handle(row, "size") == "null":
+        return "FT_Activate_Size null size validates through pinned C oracle and Rust FFI wrapper"
+    return None
+
+
 def list_value(value: object) -> list[object]:
     return value if isinstance(value, list) else []
 
@@ -714,6 +727,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
         return ("explicit-unsupported", "explicit Rust stub returns Unimplemented_Feature")
     if operation_is_compile_contract(row.operation):
         return ("compile-contract", "header, layout, macro, or scalar contract")
+    size_null_reason = size_null_validation_reason(row)
+    if size_null_reason:
+        return ("real-null-validation", size_null_reason)
     if operation_is_real_parity(row.operation):
         return ("real-parity", "explicit C oracle, Rust FFI, C ABI, and WASM route")
     if row.expect_error and not has_runtime_asset(row):

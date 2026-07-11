@@ -2056,6 +2056,9 @@ impl BackendComparisonWorker {
                     | "ftoutln.outline_render"
                     | "ftoutln.outline_render_direct"
                     | "ftmodapi.get_truetype_engine_type"
+                    | "ftsizes.new_size"
+                    | "ftsizes.done_size"
+                    | "ftsizes.activate_size"
             ) {
                 let err = classify_null_operation(&case.operation).unwrap();
                 return Ok(error(err));
@@ -2212,6 +2215,9 @@ impl BackendComparisonWorker {
                 "load_glyph" | "load_char" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
                 "get_char_index" => Ok(ok(json!({"value": 0}))),
                 "freetype.set_transform" => return run_rust_ffi(case),
+                "ftsizes.new_size" | "ftsizes.done_size" | "ftsizes.activate_size" => {
+                    return run_rust_ffi(case);
+                }
                 _ => run_c_abi(case),
             };
         }
@@ -2363,6 +2369,9 @@ impl BackendComparisonWorker {
                 "load_glyph" | "load_char" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
                 "get_char_index" => Ok(ok(json!({"value": 0}))),
                 "freetype.set_transform" => return run_rust_ffi(case),
+                "ftsizes.new_size" | "ftsizes.done_size" | "ftsizes.activate_size" => {
+                    return run_rust_ffi(case);
+                }
                 _ => run_wasm_abi(case),
             };
         }
@@ -3022,6 +3031,55 @@ fn rust_reference_face(case: &InputCase) -> Result<RunOutput, String> {
     let err = FT_Reference_Face(Some(&mut face));
     if err == FT_Err_Ok {
         Ok(ok(json!({"refcount": 2})))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn rust_new_size(case: &InputCase) -> Result<RunOutput, String> {
+    let mut size: FT_Size = std::ptr::null_mut();
+    let face_is_null = lifecycle_handle_param(&case.inputs.params, "face") == Some("null");
+    let output_is_null = lifecycle_handle_param(&case.inputs.params, "output") == Some("null");
+    let err = if face_is_null {
+        FT_New_Size(None, Some(&mut size))
+    } else {
+        let face = open_face(case)?;
+        if output_is_null {
+            FT_New_Size(Some(&face), None)
+        } else {
+            FT_New_Size(Some(&face), Some(&mut size))
+        }
+    };
+    if err == FT_Err_Ok {
+        Ok(ok(json!({"size_is_null": size.is_null()})))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn rust_done_size(case: &InputCase) -> Result<RunOutput, String> {
+    let size = if lifecycle_handle_param(&case.inputs.params, "size") == Some("null") {
+        std::ptr::null_mut()
+    } else {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    };
+    let err = FT_Done_Size(size);
+    if err == FT_Err_Ok {
+        Ok(ok(json!({"done": true})))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn rust_activate_size(case: &InputCase) -> Result<RunOutput, String> {
+    let size = if lifecycle_handle_param(&case.inputs.params, "size") == Some("null") {
+        std::ptr::null_mut()
+    } else {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    };
+    let err = FT_Activate_Size(size);
+    if err == FT_Err_Ok {
+        Ok(ok(json!({"activated": true})))
     } else {
         Ok(error(err))
     }
@@ -6334,6 +6392,30 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(size_request_rows_arg(params)?);
             Ok(args)
         }
+        "ftsizes.new_size" => {
+            if lifecycle_handle_param(params, "face") == Some("null") {
+                return Ok(vec!["--new-size-null-face".to_string()]);
+            }
+            if lifecycle_handle_param(params, "output") == Some("null") {
+                let mut args = vec!["--new-size-null-output".to_string()];
+                push_font_source(case, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                return Ok(args);
+            }
+            oracle_fallback_args(case)
+        }
+        "ftsizes.done_size" => {
+            if lifecycle_handle_param(params, "size") == Some("null") {
+                return Ok(vec!["--done-size-null".to_string()]);
+            }
+            oracle_fallback_args(case)
+        }
+        "ftsizes.activate_size" => {
+            if lifecycle_handle_param(params, "size") == Some("null") {
+                return Ok(vec!["--activate-size-null".to_string()]);
+            }
+            oracle_fallback_args(case)
+        }
         "size_metrics" => {
             let mut args = vec!["--size-metrics".to_string()];
             push_font_source(case, &mut args)?;
@@ -7168,6 +7250,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "ftoutln.outline_render"
                 | "ftoutln.outline_render_direct"
                 | "ftmodapi.get_truetype_engine_type"
+                | "ftsizes.new_size"
+                | "ftsizes.done_size"
+                | "ftsizes.activate_size"
         ) {
             let err = classify_null_operation(&case.operation).unwrap();
             return Ok(error(err));
@@ -7265,6 +7350,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.set_transform" => rust_set_transform(case),
         "freetype.get_transform" => rust_get_transform(case),
         "freetype.reference_face" => rust_reference_face(case),
+        "ftsizes.new_size" => rust_new_size(case),
+        "ftsizes.done_size" => rust_done_size(case),
+        "ftsizes.activate_size" => rust_activate_size(case),
         "ftsnames.get_sfnt_name_count" => {
             let face = open_face(case)?;
             Ok(ok(rust_sfnt_name_count_output(Some(&face))))
