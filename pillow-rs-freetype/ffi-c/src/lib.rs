@@ -2,7 +2,9 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(non_camel_case_types, non_snake_case)]
 
-use std::ffi::{c_int, c_long, c_short, c_uchar, c_uint, c_ulong, c_ushort, c_void};
+use std::ffi::{
+    CStr, CString, c_char, c_int, c_long, c_short, c_uchar, c_uint, c_ulong, c_ushort, c_void,
+};
 use std::ptr::{self, NonNull};
 use std::slice;
 
@@ -218,14 +220,20 @@ struct FaceState {
     inner: rust_ffi::FT_Face,
     charmaps: Box<[FT_CharMapRec]>,
     charmap_ptrs: Box<[FT_CharMap]>,
+    postscript_name: Option<CString>,
 }
 
 impl FaceState {
     fn new(inner: rust_ffi::FT_Face) -> Self {
+        let postscript_name = rust_ffi::FT_Get_Postscript_Name(&inner).and_then(|name| {
+            // FreeType exposes a borrowed NUL-terminated C string owned by the face.
+            CString::new(name).ok()
+        });
         Self {
             inner,
             charmaps: Box::new([]),
             charmap_ptrs: Box::new([]),
+            postscript_name,
         }
     }
 
@@ -264,7 +272,6 @@ impl FaceState {
             .position(|record| ptr::eq(record as *const FT_CharMapRec, charmap.cast_const()))
     }
 
-    #[expect(dead_code)]
     fn charmap_by_index(&self, index: FT_UInt) -> Option<FT_CharMap> {
         let index = usize::try_from(index).ok()?;
         self.charmap_ptrs.get(index).copied()
@@ -306,6 +313,15 @@ pub fn abi_byte_slice(ptr: *const FT_Byte, len: FT_UInt) -> Vec<u8> {
     // SAFETY: test callers pass live FreeType-shaped output pointers with
     // `len` bytes valid for the duration of the snapshot copy.
     unsafe { slice::from_raw_parts(ptr, len).to_vec() }
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_c_string_bytes(ptr: *const c_char) -> Vec<u8> {
+    if ptr.is_null() {
+        return Vec::new();
+    }
+    // SAFETY: test callers pass live FreeType-shaped NUL-terminated strings.
+    unsafe { CStr::from_ptr(ptr).to_bytes().to_vec() }
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -1041,6 +1057,13 @@ pub extern "C" fn FT_Get_Charmap_Index(charmap: FT_CharMap) -> FT_Int {
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_FSType_Flags(face: FT_Face) -> FT_UShort {
     rust_ffi::FT_Get_FSType_Flags(face_state(face).map(|state| &state.inner))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Postscript_Name(face: FT_Face) -> *const c_char {
+    face_state(face)
+        .and_then(|state| state.postscript_name.as_deref())
+        .map_or(ptr::null(), CStr::as_ptr)
 }
 
 #[unsafe(no_mangle)]

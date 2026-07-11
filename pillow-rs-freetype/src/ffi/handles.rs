@@ -521,8 +521,8 @@ pub fn FT_Get_Name_Index(_face: &FT_Face, _glyph_name: &str) -> FT_UInt {
     0
 }
 
-pub fn FT_Get_Postscript_Name(_face: &FT_Face) -> Option<&str> {
-    None
+pub fn FT_Get_Postscript_Name(face: &FT_Face) -> Option<&str> {
+    face.inner.postscript_name()
 }
 
 pub fn FT_Get_CMap_Format(_charmap: FT_CharMap) -> FT_Long {

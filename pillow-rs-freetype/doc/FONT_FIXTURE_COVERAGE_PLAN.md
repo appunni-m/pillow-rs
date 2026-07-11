@@ -866,6 +866,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Rust public render wrapper routing | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,393 / 16,315 lines; 19,332 / 23,316 regions; 3,260 / 4,150 branches | existing `FT_Render_Glyph` fixtures route the Rust leg through `Face::render_loaded_glyph` when the load did not already render the slot; exact Rust/C/WASM parity remains green and `api.rs` reaches 311 / 401 lines, 404 / 532 regions, and 35 / 45 functions |
 | 2026-07-11 | Rust public load-char wrapper routing | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,396 / 16,315 lines; 19,340 / 23,316 regions; 3,260 / 4,150 branches | existing `FT_Load_Char` fixtures route the Rust leg through `Face::load_char` while retaining the same exact C/WASM comparison; `api.rs` reaches 314 / 401 lines, 412 / 532 regions, and 36 / 45 functions |
 | 2026-07-11 | Rust public set-char-size wrapper routing | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,377 / 16,371 lines; 19,335 / 23,406 regions; 3,254 / 4,168 branches | successful `FT_Set_Char_Size` fixtures route the Rust leg through `Face::set_char_size`; exact Rust/C/WASM parity remains green, `api.rs` reaches 318 / 401 lines and 37 / 45 functions, and the current condition run also exposes `autohint/script.rs` in the denominator |
+| 2026-07-11 | Real PostScript-name public API parity | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,434 / 16,447 lines; 19,428 / 23,547 regions; 3,273 / 4,212 branches | `FT_Get_Postscript_Name` no longer uses a fake `{"value":0}` runner path; static and null/no-name rows compare exact borrowed bytes/nullness through C oracle, Rust, C ABI, and WASM ABI. The named-instance row is now the only visible pending row for this subject until `FT_Set_Named_Instance` exists |
 
 ## Decision Log
 
@@ -919,6 +920,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Keep exact boundary rows even when broader guards are already covered | The one-past-head-table SFNT row adds no new structural counters after executable offset coverage, but it preserves a precise public boundary case from the metadata worker without multiplying unrelated inputs |
 | 2026-07-11 | Preserve render-load slot semantics in public wrapper coverage | `Face::render_loaded_glyph` strips `FT_LOAD_RENDER` before loading, while C `FT_Render_Glyph` returns an already-rendered bitmap slot unchanged; public wrapper routing must therefore fall back to the FFI-shaped path for rows whose load flags already render |
 | 2026-07-11 | Treat current coverage denominator as authoritative | A fresh non-incremental condition-coverage build lists `autohint/script.rs` as uncovered source; keep it visible as a real obligation instead of relying on stale incremental coverage output |
+| 2026-07-11 | Treat PostScript-name fixtures as real parity, not value stubs | `FT_Get_Postscript_Name` now compares face-borrowed bytes/nullness through C oracle, Rust, C ABI, and WASM ABI. Pinned FreeType uses `sfnt_get_name_id` plus `sfnt_is_postscript`, so Rust must filter invalid PostScript-name characters while leaving raw `FT_Get_Sfnt_Name` records unchanged |
 
 ## Immediate Next Actions
 
@@ -930,7 +932,9 @@ Work must resume here unless a newer user request changes priority:
 2. Continue R5 from the remaining uncovered render and gray-raster branches;
    add cubic/CFF, clipping, dropout, and empty/error roles only as explicit
    variants with measured structural gain.
-3. Resolve the one visible embedded-strike pending case in R7 when its focused bitmap
-   font and owning core table support are implemented.
+3. Resolve visible pending public rows only with real implementation support:
+   embedded-strike request handling needs focused bitmap table support, and
+   named-instance PostScript names need explicit `FT_Set_Named_Instance`
+   support rather than a modeled `FT_Get_Postscript_Name` shortcut.
 4. Keep the deprecated corpus isolated until final cleanup is separately
    reviewed and approved.

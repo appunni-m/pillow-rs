@@ -1678,6 +1678,17 @@ static void print_sfnt_name_record(FT_UInt index, const FT_SfntName* name) {
     printf("\"}");
 }
 
+static void print_postscript_name_result(const char* name) {
+    if (!name) {
+        printf("{\"null\":true,\"bytes\":\"\",\"length\":0}");
+        return;
+    }
+    size_t len = strlen(name);
+    printf("{\"null\":false,\"bytes\":\"");
+    print_hex_bytes((const unsigned char*)name, (long)len);
+    printf("\",\"length\":%zu}", len);
+}
+
 static void print_charmap_record(FT_CharMap charmap) {
     if (!charmap) {
         printf("null");
@@ -3412,6 +3423,49 @@ static int open_oracle_face(
     return 0;
 }
 
+static int emit_get_postscript_name_variants(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    char* variants = (char*)malloc(strlen(argv[5]) + 1);
+    if (!variants) {
+        return 2;
+    }
+    memcpy(variants, argv[5], strlen(argv[5]) + 1);
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"results\":[");
+    int first = 1;
+    char* token = strtok(variants, ",");
+    while (token) {
+        if (!first) {
+            printf(",");
+        }
+        first = 0;
+        printf("{\"variant\":\"%s\",", token);
+        if (streq(token, "null")) {
+            printf("\"result\":");
+            print_postscript_name_result(FT_Get_Postscript_Name(NULL));
+        } else {
+            OracleFace face;
+            int opened = open_oracle_face(source_kind, source_value, face_index, &face);
+            if (opened != 0) {
+                free(variants);
+                return opened;
+            }
+            printf("\"result\":");
+            print_postscript_name_result(FT_Get_Postscript_Name(face.face));
+            close_oracle_face(&face);
+        }
+        printf("}");
+        token = strtok(NULL, ",");
+    }
+    printf("]}}\n");
+    free(variants);
+    return 0;
+}
+
 static void print_set_charmap_row(
     const char* variant,
     FT_Int charmap_index,
@@ -4655,6 +4709,18 @@ static int emit_face_or_slot(int argc, char** argv) {
         print_status(0);
         printf(",\"output\":");
         print_fstype_flags_result(flags, symbol_name);
+        printf("}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-postscript-name")) {
+        const char* name = FT_Get_Postscript_Name(face);
+        print_status(0);
+        printf(",\"output\":");
+        print_postscript_name_result(name);
         printf("}\n");
         FT_Done_Face(face);
         FT_Done_FreeType(library);
@@ -6077,6 +6143,12 @@ static int dispatch(int argc, char** argv) {
     }
     if ((argc == 7 || argc == 8) && streq(argv[1], "--get-fstype-flags")) {
         return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--get-postscript-name")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--get-postscript-name-variants")) {
+        return emit_get_postscript_name_variants(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--get-sfnt-name-count")) {
         return emit_face_or_slot(argc, argv);

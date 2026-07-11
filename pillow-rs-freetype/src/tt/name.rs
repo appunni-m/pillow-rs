@@ -86,7 +86,7 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
     let subfamily = find_name_string(data, string_offset, &records, NAME_ID_TYPO_SUBFAMILY)
         .or_else(|| find_name_string(data, string_offset, &records, NAME_ID_SUBFAMILY))
         .unwrap_or_else(|| "Regular".into());
-    let postscript_name = find_name_string(data, string_offset, &records, NAME_ID_POSTSCRIPT);
+    let postscript_name = find_postscript_name(data, string_offset, &records);
 
     Ok(NameTable {
         family,
@@ -121,31 +121,120 @@ fn find_name_string(
     records: &[NameRecord],
     name_id: u16,
 ) -> Option<String> {
-    // Priority 1: platform 3 (Windows), encoding 1 (Unicode BMP, UTF-16BE).
-    for r in records {
-        if r.name_id == name_id && r.platform_id == 3 && r.encoding_id == 1 {
-            if let Ok(s) = decode_utf16be(data, string_base, r) {
-                return Some(s);
+    let mut found_apple_roman = None;
+    let mut found_apple_english = None;
+    let mut found_win = None;
+    let mut found_unicode = None;
+    let mut win_is_english = false;
+
+    for (index, record) in records.iter().enumerate() {
+        if record.name_id != name_id || record.length == 0 {
+            continue;
+        }
+        match record.platform_id {
+            0 | 2 => found_unicode = Some(index),
+            1 if record.language_id == 0 => found_apple_english = Some(index),
+            1 if record.encoding_id == 0 => found_apple_roman = Some(index),
+            3 if matches!(record.encoding_id, 0 | 1 | 10)
+                && (found_win.is_none() || (record.language_id & 0x03ff) == 0x0009) =>
+            {
+                win_is_english = (record.language_id & 0x03ff) == 0x0009;
+                found_win = Some(index);
             }
+            _ => {}
         }
     }
-    // Priority 2: platform 1 (Mac), encoding 0 (Roman) — ASCII subset.
-    for r in records {
-        if r.name_id == name_id && r.platform_id == 1 && r.encoding_id == 0 {
-            if let Ok(s) = decode_mac_roman(data, string_base, r) {
-                return Some(s);
-            }
-        }
+
+    let found_apple = found_apple_english.or(found_apple_roman);
+    // Mirrors FreeType `tt_face_get_name`: prefer Windows Unicode names unless
+    // the only Windows candidate is non-English and an Apple name is present.
+    if let Some(index) = found_win
+        && (found_apple.is_none() || win_is_english)
+        && let Ok(name) = decode_utf16be(data, string_base, &records[index])
+    {
+        return Some(name);
     }
-    // Fallback: any platform-3 record.
-    for r in records {
-        if r.name_id == name_id && r.platform_id == 3 {
-            if let Ok(s) = decode_utf16be(data, string_base, r) {
-                return Some(s);
-            }
-        }
+    if let Some(index) = found_apple
+        && let Ok(name) = decode_mac_roman(data, string_base, &records[index])
+    {
+        return Some(name);
+    }
+    if let Some(index) = found_unicode
+        && let Ok(name) = decode_utf16be(data, string_base, &records[index])
+    {
+        return Some(name);
     }
     None
+}
+
+fn find_postscript_name(data: &[u8], string_base: usize, records: &[NameRecord]) -> Option<String> {
+    let mut win = None;
+    let mut apple = None;
+    for (index, record) in records.iter().enumerate() {
+        if record.name_id != NAME_ID_POSTSCRIPT || record.length == 0 {
+            continue;
+        }
+        if record.platform_id == 3
+            && matches!(record.encoding_id, 0 | 1)
+            && (record.language_id == 0x0409 || win.is_none())
+        {
+            win = Some(index);
+        }
+        if record.platform_id == 1
+            && record.encoding_id == 0
+            && (record.language_id == 0 || apple.is_none())
+        {
+            apple = Some(index);
+        }
+    }
+    if let Some(index) = win
+        && let Some(name) = decode_win_postscript(data, string_base, &records[index])
+    {
+        return Some(name);
+    }
+    if let Some(index) = apple
+        && let Some(name) = decode_apple_postscript(data, string_base, &records[index])
+    {
+        return Some(name);
+    }
+    None
+}
+
+fn decode_win_postscript(data: &[u8], base: usize, r: &NameRecord) -> Option<String> {
+    let start = base + r.offset as usize;
+    let end = start + r.length as usize;
+    let bytes = data.get(start..end)?;
+    if !r.length.is_multiple_of(2) {
+        return None;
+    }
+    let mut result = String::new();
+    for pair in bytes.chunks_exact(2) {
+        if pair[0] == 0 && is_postscript_name_byte(pair[1]) {
+            result.push(char::from(pair[1]));
+        }
+    }
+    (!result.is_empty()).then_some(result)
+}
+
+fn decode_apple_postscript(data: &[u8], base: usize, r: &NameRecord) -> Option<String> {
+    let start = base + r.offset as usize;
+    let end = start + r.length as usize;
+    let bytes = data.get(start..end)?;
+    let mut result = String::new();
+    for &byte in bytes {
+        if is_postscript_name_byte(byte) {
+            result.push(char::from(byte));
+        }
+    }
+    (!result.is_empty()).then_some(result)
+}
+
+fn is_postscript_name_byte(byte: u8) -> bool {
+    const SFNT_PS_MAP: [u8; 16] = [
+        0x00, 0x00, 0x00, 0x00, 0xDE, 0x7C, 0xFF, 0xAF, 0xFF, 0xFF, 0xFF, 0xD7, 0xFF, 0xFF, 0xFF,
+        0x57,
+    ];
+    byte < 0x80 && (SFNT_PS_MAP[usize::from(byte >> 3)] & (1 << (byte & 0x07))) != 0
 }
 
 fn decode_utf16be(data: &[u8], base: usize, r: &NameRecord) -> Result<String, FontError> {
