@@ -1055,6 +1055,48 @@ pub extern "C" fn FT_Get_Charmap_Index(charmap: FT_CharMap) -> FT_Int {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_CMap_Format(charmap: FT_CharMap) -> FT_Long {
+    let Some(charmap) = NonNull::new(charmap) else {
+        return -1;
+    };
+    // SAFETY: `charmap` is non-null and callers must pass either a live
+    // `FT_CharMap` from this crate or accept C-like invalid-handle behavior.
+    let face = unsafe { charmap.as_ref().face };
+    let Some(state) = face_state(face) else {
+        return -1;
+    };
+    let Some(index) = state.charmap_index(charmap.as_ptr()) else {
+        return -1;
+    };
+    let Some(index) = FT_UInt::try_from(index).ok() else {
+        return -1;
+    };
+    let rust_charmap = rust_ffi::FT_Face_Charmap(&state.inner, index);
+    rust_ffi::FT_Get_CMap_Format(rust_charmap) as FT_Long
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_CMap_Language_ID(charmap: FT_CharMap) -> FT_ULong {
+    let Some(charmap) = NonNull::new(charmap) else {
+        return 0;
+    };
+    // SAFETY: `charmap` is non-null and callers must pass either a live
+    // `FT_CharMap` from this crate or accept C-like invalid-handle behavior.
+    let face = unsafe { charmap.as_ref().face };
+    let Some(state) = face_state(face) else {
+        return 0;
+    };
+    let Some(index) = state.charmap_index(charmap.as_ptr()) else {
+        return 0;
+    };
+    let Some(index) = FT_UInt::try_from(index).ok() else {
+        return 0;
+    };
+    let rust_charmap = rust_ffi::FT_Face_Charmap(&state.inner, index);
+    rust_ffi::FT_Get_CMap_Language_ID(rust_charmap) as FT_ULong
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_FSType_Flags(face: FT_Face) -> FT_UShort {
     rust_ffi::FT_Get_FSType_Flags(face_state(face).map(|state| &state.inner))
 }

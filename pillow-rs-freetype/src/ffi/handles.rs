@@ -1,6 +1,8 @@
 #![allow(non_camel_case_types, non_snake_case)]
 
+use std::collections::BTreeMap;
 use std::ptr;
+use std::sync::{Mutex, OnceLock};
 
 use crate::api;
 use crate::font::{KerningMode, SizeRequest, SizeRequestError, SizeRequestType};
@@ -39,11 +41,18 @@ pub struct FT_Face {
     sfnt_vhea: Option<Box<TT_VertHeader>>,
     sfnt_post: Option<Box<TT_Postscript>>,
     sfnt_pclt: Option<Box<TT_PCLT>>,
-    charmaps: Box<[FT_CharMapRecPublic]>,
-    charmap_formats: Box<[FT_UShort]>,
+    charmaps: Box<[FT_CharMapRecInternal]>,
     transform_matrix: FT_Matrix,
     transform_delta: FT_Vector,
     refcount: usize,
+}
+
+#[derive(Clone, Copy)]
+#[repr(C)]
+struct FT_CharMapRecInternal {
+    public: FT_CharMapRecPublic,
+    format: FT_Long,
+    language_id: FT_ULong,
 }
 
 #[derive(Clone)]
@@ -550,12 +559,16 @@ pub fn FT_Get_Postscript_Name(face: &FT_Face) -> Option<&str> {
     face.inner.postscript_name()
 }
 
-pub fn FT_Get_CMap_Format(_charmap: FT_CharMap) -> FT_Long {
-    0
+pub fn FT_Get_CMap_Format(charmap: FT_CharMap) -> FT_Long {
+    registered_charmap_metadata(charmap)
+        .map(|(format, _)| format)
+        .unwrap_or(-1)
 }
 
-pub fn FT_Get_CMap_Language_ID(_charmap: FT_CharMap) -> FT_ULong {
-    0
+pub fn FT_Get_CMap_Language_ID(charmap: FT_CharMap) -> FT_ULong {
+    registered_charmap_metadata(charmap)
+        .map(|(_, language_id)| language_id)
+        .unwrap_or(0)
 }
 
 pub fn FT_New_Face(
@@ -616,7 +629,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         .ok()
         .and_then(|data| parse_tt_pclt(&data))
         .map(Box::new);
-    let (charmaps, charmap_formats) = charmaps_to_ffi(&inner);
+    let charmaps = charmaps_to_ffi(&inner);
     FT_Face {
         inner,
         probe_only,
@@ -628,7 +641,6 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         sfnt_post,
         sfnt_pclt,
         charmaps,
-        charmap_formats,
         transform_matrix: FT_Matrix {
             xx: 1 << 16,
             xy: 0,
@@ -859,24 +871,62 @@ fn parse_tt_pclt(data: &[u8]) -> Option<TT_PCLT> {
     })
 }
 
-fn charmaps_to_ffi(face: &api::Face) -> (Box<[FT_CharMapRecPublic]>, Box<[FT_UShort]>) {
+fn charmaps_to_ffi(face: &api::Face) -> Box<[FT_CharMapRecInternal]> {
     let infos = face.font().charmaps();
     let charmaps = infos
         .iter()
-        .map(|info| FT_CharMapRecPublic {
-            face: ptr::null_mut(),
-            encoding: charmap_encoding(info.platform_id, info.encoding_id),
-            platform_id: info.platform_id,
-            encoding_id: info.encoding_id,
+        .map(|info| FT_CharMapRecInternal {
+            public: FT_CharMapRecPublic {
+                face: ptr::null_mut(),
+                encoding: charmap_encoding(info.platform_id, info.encoding_id),
+                platform_id: info.platform_id,
+                encoding_id: info.encoding_id,
+            },
+            format: FT_Long::from(info.format),
+            language_id: FT_ULong::from(info.language_id),
         })
         .collect::<Vec<_>>()
         .into_boxed_slice();
-    let formats = infos
-        .iter()
-        .map(|info| info.format)
-        .collect::<Vec<_>>()
-        .into_boxed_slice();
-    (charmaps, formats)
+    register_charmap_metadata(&charmaps);
+    charmaps
+}
+
+fn charmap_metadata_registry() -> &'static Mutex<BTreeMap<usize, (FT_Long, FT_ULong)>> {
+    static REGISTRY: OnceLock<Mutex<BTreeMap<usize, (FT_Long, FT_ULong)>>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+fn register_charmap_metadata(charmaps: &[FT_CharMapRecInternal]) {
+    if let Ok(mut registry) = charmap_metadata_registry().lock() {
+        for record in charmaps {
+            register_charmap_record_locked(&mut registry, record);
+        }
+    }
+}
+
+fn register_charmap_record(record: &FT_CharMapRecInternal) {
+    if let Ok(mut registry) = charmap_metadata_registry().lock() {
+        register_charmap_record_locked(&mut registry, record);
+    }
+}
+
+fn register_charmap_record_locked(
+    registry: &mut BTreeMap<usize, (FT_Long, FT_ULong)>,
+    record: &FT_CharMapRecInternal,
+) {
+    let key = (&record.public as *const FT_CharMapRecPublic) as usize;
+    registry.insert(key, (record.format, record.language_id));
+}
+
+fn registered_charmap_metadata(charmap: FT_CharMap) -> Option<(FT_Long, FT_ULong)> {
+    if charmap.is_null() {
+        return None;
+    }
+    let key = charmap.cast_const().cast::<FT_CharMapRecPublic>() as usize;
+    charmap_metadata_registry()
+        .lock()
+        .ok()
+        .and_then(|registry| registry.get(&key).copied())
 }
 
 fn charmap_encoding(platform_id: FT_UShort, encoding_id: FT_UShort) -> FT_Encoding {
@@ -1071,13 +1121,16 @@ pub fn FT_Face_Charmap(face: &FT_Face, index: FT_UInt) -> FT_CharMap {
         return ptr::null_mut();
     };
     face.charmaps.get(index).map_or(ptr::null_mut(), |record| {
-        (record as *const FT_CharMapRecPublic).cast_mut().cast()
+        register_charmap_record(record);
+        (&record.public as *const FT_CharMapRecPublic)
+            .cast_mut()
+            .cast()
     })
 }
 
 pub fn FT_Face_Charmap_Info(face: &FT_Face, index: FT_UInt) -> Option<FT_CharMapRecPublic> {
     let index = usize::try_from(index).ok()?;
-    face.charmaps.get(index).copied()
+    face.charmaps.get(index).map(|record| record.public)
 }
 
 pub fn FT_Face_Active_Charmap_Index(face: &FT_Face) -> FT_Int {
@@ -1089,12 +1142,17 @@ pub fn FT_Face_Active_Charmap_Index(face: &FT_Face) -> FT_Int {
 
 pub fn FT_Charmap_Info(face: &FT_Face, charmap: FT_CharMap) -> Option<FT_CharMapRecPublic> {
     let index = charmap_index_in_face(face, charmap)?;
-    face.charmaps.get(index).copied()
+    face.charmaps.get(index).map(|record| record.public)
 }
 
-pub fn FT_Charmap_Format(face: &FT_Face, charmap: FT_CharMap) -> Option<FT_UShort> {
+pub fn FT_Charmap_Format(face: &FT_Face, charmap: FT_CharMap) -> Option<FT_Long> {
     let index = charmap_index_in_face(face, charmap)?;
-    face.charmap_formats.get(index).copied()
+    face.charmaps.get(index).map(|record| record.format)
+}
+
+pub fn FT_Charmap_Language_ID(face: &FT_Face, charmap: FT_CharMap) -> Option<FT_ULong> {
+    let index = charmap_index_in_face(face, charmap)?;
+    face.charmaps.get(index).map(|record| record.language_id)
 }
 
 pub fn FT_Get_Charmap_Index(_charmap: FT_CharMap) -> FT_Int {
@@ -1117,7 +1175,7 @@ pub fn FT_Set_Charmap(face: Option<&mut FT_Face>, charmap: FT_CharMap) -> FT_Err
     let Some(index) = charmap_index_in_face(face, charmap) else {
         return FT_Err_Invalid_Argument;
     };
-    if face.charmap_formats.get(index).copied() == Some(14) {
+    if face.charmaps.get(index).map(|record| record.format) == Some(14) {
         return FT_Err_Invalid_Argument;
     }
     match face.inner.set_charmap(index) {
@@ -1133,7 +1191,7 @@ fn charmap_index_in_face(face: &FT_Face, charmap: FT_CharMap) -> Option<usize> {
     let target = charmap.cast_const().cast::<FT_CharMapRecPublic>();
     face.charmaps
         .iter()
-        .position(|record| ptr::eq(record as *const FT_CharMapRecPublic, target))
+        .position(|record| ptr::eq(&record.public as *const FT_CharMapRecPublic, target))
 }
 
 pub fn FT_Select_Charmap(face: Option<&mut FT_Face>, encoding: FT_Encoding) -> FT_Error {
@@ -1149,7 +1207,7 @@ pub fn FT_Select_Charmap(face: Option<&mut FT_Face>, encoding: FT_Encoding) -> F
             let Some(index) = face
                 .charmaps
                 .iter()
-                .position(|charmap| charmap.encoding == encoding)
+                .position(|charmap| charmap.public.encoding == encoding)
             else {
                 return FT_Err_Invalid_Argument;
             };

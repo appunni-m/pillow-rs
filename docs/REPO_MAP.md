@@ -336,7 +336,9 @@ generated reports, build outputs, and package installs.
 |   |   |-- audit_api_abi.py
 |   |   |-- bench_freetype.py
 |   |   |-- bench_ft_ops.c
+|   |   |-- build_cmap_fixtures.py
 |   |   |-- build_ft.sh
+|   |   |-- build_gasp_fixtures.py
 |   |   |-- build_unified_oracle.py
 |   |   |-- check_public_api_inputs.py
 |   |   |-- extract_blues.py
@@ -377,6 +379,7 @@ generated reports, build outputs, and package installs.
 |   |   `-- tt/
 |   |       |-- cmap.rs
 |   |       |-- fvar.rs
+|   |       |-- gasp.rs
 |   |       |-- glyf.rs
 |   |       |-- hdmx.rs
 |   |       |-- head.rs

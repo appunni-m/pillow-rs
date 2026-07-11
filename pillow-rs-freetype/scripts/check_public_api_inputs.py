@@ -66,6 +66,8 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_charmap_count",
     "fontdone_wasm_get_active_charmap_index",
     "fontdone_wasm_get_charmap",
+    "fontdone_wasm_get_cmap_format",
+    "fontdone_wasm_get_cmap_language_id",
     "fontdone_wasm_set_charmap",
     "fontdone_wasm_set_charmap_from_face",
     "fontdone_wasm_get_fstype_flags",

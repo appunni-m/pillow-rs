@@ -854,6 +854,24 @@ pub extern "C" fn fontdone_wasm_get_charmap(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_cmap_format(handle: usize, index: FT_UInt) -> FT_Long {
+    let Some(face) = face_ref(handle) else {
+        return -1;
+    };
+    let charmap = rust_ffi::FT_Face_Charmap(&face.face, index);
+    rust_ffi::FT_Get_CMap_Format(charmap) as FT_Long
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_cmap_language_id(handle: usize, index: FT_UInt) -> FT_ULong {
+    let Some(face) = face_ref(handle) else {
+        return 0;
+    };
+    let charmap = rust_ffi::FT_Face_Charmap(&face.face, index);
+    rust_ffi::FT_Get_CMap_Language_ID(charmap) as FT_ULong
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_set_charmap(handle: usize, index: FT_UInt) -> FT_Error {
     let Some(face) = face_mut(handle) else {
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;

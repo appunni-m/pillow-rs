@@ -21,6 +21,7 @@ help:
 	@printf "  make setup            Fetch oracle source and regenerate fixtures\n"
 	@printf "  make setup-tools      Install optional audit tooling\n"
 	@printf "  make oracle-fetch     Fetch pinned FreeType C oracle source\n"
+	@printf "  make font-fixture-cmap Rebuild compact cmap table fixtures\n"
 	@printf "  make font-fixture-cjk Rebuild the compact multiscript topology fixture\n"
 	@printf "  make font-fixture-gasp Rebuild compact gasp table fixtures\n"
 	@printf "  make font-fixture-hinter Rebuild the compact TrueType program fixture\n"
@@ -228,6 +229,10 @@ font-fixture-cjk:
 .PHONY: font-fixture-gasp
 font-fixture-gasp: font-fixture-hinter
 	$(PYTHON) scripts/build_gasp_fixtures.py
+
+.PHONY: font-fixture-cmap
+font-fixture-cmap: font-fixture-hinter
+	$(PYTHON) scripts/build_cmap_fixtures.py
 
 .PHONY: fmt
 fmt:

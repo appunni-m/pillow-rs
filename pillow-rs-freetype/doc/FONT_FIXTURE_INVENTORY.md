@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 112 | 69 | 43 | 77 | 642 KiB |
+| Active fixtures | 113 | 70 | 43 | 78 | 646 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 5 | 5 | 0 | 5 | 187 KiB |
 
@@ -108,6 +108,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `1cca599d017f` | 0.02 | 1 | `fonts/control/ttc-face-offset-out-of-range.ttc` | complete one-face TTC header whose selected face offset is outside the stream |
 | `debb925b92a2` | 0.01 | 1 | `fonts/control/otto-empty.otf` | 12-byte zero-table OTTO header; owns the OpenType sfVersion predicate outcome before required-table rejection |
 | `bf004c57a16e` | 1.7 | 1 | `fonts/charmap/format6-range.ttf` | format-6-only trimmed range with mapped and zero glyph entries; owns direct lookup, gap, exhaustion, and wrapping iteration |
+| `c1189f1a3962` | 3.9 | 1 | `fonts/cmap/cmap-format-language-matrix.ttf` | source-backed compact cmap matrix with format 4 language `0x0409`, format 6 language 17, format 12 language `0x12345678`, and format 14 variation-selector metadata |
 | `251fcf468057` | 2.1 | 1 | `fonts/charmap/cmap-parser-matrix.ttf` | one valid format 6 plus unsupported, out-of-range, and independently malformed format 4/6/12 records |
 | `217751378cbc` | 1.7 | 1 | `fonts/charmap/cmap-record-overflow.ttf` | cmap header declaring one absent encoding record |
 | `93678acbb630` | 1.7 | 1 | `fonts/charmap/cmap-short.ttf` | three-byte cmap short-header control |
@@ -420,6 +421,13 @@ and selected-glyph obligations still come from explicit inputs.
     multi-range selection and after-last sentinel behavior, no `gasp` table,
     version 0 high-bit masking, and unsupported version 2 optional-table
     failure while keeping the SFNT face loadable.
+
+29. One compact 3.9 KiB cmap matrix covers the `FT_Get_CMap_Format` and
+    `FT_Get_CMap_Language_ID` public helpers without relying on broad fonts.
+    It is generated from the source-backed hinter matrix by
+    `scripts/build_cmap_fixtures.py` and rebuilt with
+    `make font-fixture-cmap`. The matrix exposes format 4, 6, 12, and 14 rows,
+    including nonzero language IDs and the format 14 `0xFFFFFFFF` sentinel.
 
 ## Replacement Queue
 
