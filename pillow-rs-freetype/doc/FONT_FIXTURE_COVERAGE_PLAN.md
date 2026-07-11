@@ -222,7 +222,11 @@ fonts or cases. The malformed `FT_Load_Glyph` matrix now includes explicit
 no-autohint and force-autohint error rows over the existing compact malformed
 `glyf` fixture, and the selected malformed rows compare safe
 `Face::load_glyph` error parity against `FT_Load_Glyph` instead of checking
-only success slots.
+only success slots. Existing `FT_New_Size`, `FT_Done_Size`, and
+`FT_Activate_Size` null rows now route through pinned C oracle commands and the
+thin Rust FFI validation wrappers for null face, null output, and null size
+handles. Multi-size success lifecycle rows remain visibly unsupported/generic
+until real secondary-size object ownership is implemented.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -236,11 +240,11 @@ coordinate parity.
 | Runnable parity comparisons | 6,610 |
 | Exact parity | 6,610 / 6,610 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,566 / 17,190 (84.74%) |
-| Rust function coverage | 875 / 1,066 (82.08%) |
-| Rust instantiation coverage | 878 / 1,069 (82.13%) |
-| Rust region coverage | 21,245 / 24,719 (85.95%) |
-| Rust branch/condition coverage | 3,543 / 4,390 (80.71%) |
+| Covered Rust lines | 14,581 / 17,202 (84.76%) |
+| Rust function coverage | 878 / 1,066 (82.36%) |
+| Rust instantiation coverage | 881 / 1,069 (82.41%) |
+| Rust region coverage | 21,264 / 24,735 (85.97%) |
+| Rust branch/condition coverage | 3,548 / 4,398 (80.67%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 140 |
 | Stored active font binaries | 97 files, 772 KiB |
@@ -274,7 +278,7 @@ Current largest uncovered buckets:
 | `src/scaler.rs` | 934 / 1,220 | 150 / 188 | 41 / 61 | 1,067 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
-| `src/ffi/handles.rs` | 1,338 / 1,478 | 233 / 280 | 146 / 162 | 1,879 / 2,024 | Public FFI route audit; wrappers stay thin and must delegate to core |
+| `src/ffi/handles.rs` | 1,353 / 1,490 | 238 / 288 | 149 / 162 | 1,898 / 2,040 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 839 / 941 | 343 / 426 | 18 / 19 | 1,124 / 1,247 | CJK topology rows in the compact multiscript fixture |
 | `src/api.rs` | 473 / 486 | 74 / 84 | 53 / 54 | 639 / 660 | Public API wrapper rows for render cache and glyph-slot surfaces |
@@ -630,25 +634,26 @@ from `tests/unified_fixture_parity.rs`; it identifies the remaining categories
 that can still produce a green result without proving the intended public
 behavior.
 
-Updated R0 evidence on 2026-07-11: `make -C pillow-rs-freetype route-audit`
+Updated R0 evidence on 2026-07-12: `make -C pillow-rs-freetype route-audit`
 now generates `target/api-abi-audit/route_audit.json` and
 `target/api-abi-audit/route_audit.md` from the maintained public input JSON.
 The report expands grouped variants into the same concrete row model used by
 the unified fixture runner and classifies each row as real parity,
-compile/header contract, shape-incomplete fallback, generic fallback,
-null-error fallback, void fallback, explicit unsupported, or pending core work.
-This is an audit report only; it does not execute fixtures, generate JSON, or
-change comparisons.
+real null-validation, compile/header contract, shape-incomplete fallback,
+generic fallback, null-error fallback, void fallback, explicit unsupported, or
+pending core work. This is an audit report only; it does not execute fixtures,
+generate JSON, or change comparisons.
 
 Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,075 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,157 | Use these rows for structural coverage evidence. |
+| Real null-validation route | 4 | `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null rows execute pinned C oracle status checks and the Rust FFI wrapper validation path; size lifecycle success remains separate. |
 | Compile/header/scalar contract | 2,248 | Valid for ABI/header contracts, not runtime core coverage. |
 | Shape-incomplete fallback | 38 | Convert to complete explicit variants or mark invalid/pending. |
-| Generic modeled fallback | 986 | Classify operation-by-operation as real parity, unsupported, or pending. |
-| Generic modeled error fallback | 145 | Replace implemented surfaces with real error-path execution. |
+| Generic modeled fallback | 985 | Classify operation-by-operation as real parity, unsupported, or pending. |
+| Generic modeled error fallback | 142 | Replace implemented surfaces with real error-path execution. |
 | Null-error fallback | 21 | Keep only exact null-handle probes; route implemented null cases directly. |
 | Void fallback | 3 | Replace with real null/noop wrapper rows or classify as void API contract. |
 | Explicit unsupported | 12 | Keep only where the public surface is intentionally unsupported. |
@@ -656,7 +661,7 @@ Current route-audit totals:
 | Explicit unsupported stubs | 12 | Implement or keep visibly unsupported; do not count as coverage. |
 | Pending core implementation | 3 | Named-instance Adobe MM, `FT_MM_Var`, and `gvar`/HVAR rows remain pending. |
 
-The first R0 closure bucket is the 41 shape-incomplete rows because these are
+The first R0 closure bucket is the 38 shape-incomplete rows because these are
 usually JSON/input fixes rather than new core features:
 
 | Operation | Rows | First action |
@@ -680,6 +685,7 @@ usually JSON/input fixes rather than new core features:
 | Global Rust `_` fallback | Returns `FT_Err_Unimplemented_Feature` for unmatched operations | Rust core coverage cannot improve through this path and parity is only error agreement | Convert implemented operations to explicit Rust FFI handlers; leave unsupported optional modules visibly unsupported |
 | C ABI / WASM `_other` fallback | Falls through to the Rust FFI runner for unsupported binding operations | Thin-wrapper coverage is not proven when the C/WASM leg never calls its public export | For every retained public C/WASM symbol, add direct wrapper execution or mark the symbol as intentionally Rust-only/test-only |
 | C ABI / WASM explicit Rust delegation | Constants, layout probes, compile probes, several SFNT table routes, transforms, reference-face, unsupported stubs, size helpers, and `freetype.new_face` are routed to Rust | Acceptable for compile-time/header probes; unsafe for runtime public functions that should exercise ABI pointer handling | Split into compile-contract probes versus runtime ABI obligations; runtime functions need direct thin-wrapper rows |
+| `ftsizes` null-validation rows | `FT_New_Size` null face/output and `FT_Done_Size`/`FT_Activate_Size` null size now execute pinned C oracle commands and Rust FFI wrapper validation; C/WASM fixture legs delegate because no exported ABI size lifecycle symbols exist yet | Proves null validation only, not secondary-size allocation, activation, destruction, or direct C/WASM export handling | Keep as resolved null-validation evidence; implement real multi-size lifecycle before moving `*_sequence` rows out of generic fallback |
 | Explicit Rust unsupported stubs | `freetype.face_properties` and `freetype.select_size` return `Unimplemented_Feature` directly | These are public FreeType surfaces; final 100% correctness cannot treat them as covered behavior | Implement exact public behavior or keep manifest rows visibly pending/failing until implementation exists |
 | Shape-incomplete fallback guards | `set_char_size` variants, `ftsnames.get_sfnt_name` without indexes, SFNT variation table requests, `sfnt.load_sfnt_table` missing read selectors, `sfnt.table_info` without index selectors, incomplete load/render glyph rows, and incomplete outline cbox rows intentionally fall back | These usually indicate declarative input that the runner does not execute | Convert valid rows into explicit grouped variants; remove or mark invalid row shapes rather than keeping inert declarations |
 | Closed named-instance row | `freetype.FT_Get_Postscript_Name.variation_instance_name_behavior` now executes real `FT_Set_Named_Instance` before `FT_Get_Postscript_Name` | This removed the last pending row, but also introduced honest `fvar` and named-instance parsing coverage obligations | Continue metadata coverage through explicit named-instance, name table, and malformed-`fvar` rows rather than hiding the new denominator |
@@ -1488,6 +1494,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Mono negative-collapse glyph correction | 108 unique hashes | 0 | 6,610 | 6,607 / 6,607 | 3 | 14,561 / 17,190 lines; 21,235 / 24,719 regions; 3,541 / 4,390 branches | The existing source-backed `renderCollapseNegativeX` and `renderCollapseNegativeY` glyphs now sit at 330 font units instead of 375, which scales to a negative 26.6 collapse bias at the existing 20 ppem mono rows. This fixes stale fixture obligations without adding cases or changing the harness, and covers both negative `PixelBox::with_non_collapsed` arms with exact Rust/C ABI/WASM parity |
 | 2026-07-12 | Explicit render-cache repeat row | 108 unique hashes | 0 | 6,611 | 6,608 / 6,608 | 3 | 14,562 / 17,190 lines; 21,237 / 24,719 regions; 3,542 / 4,390 branches | One explicit `FT_Render_Glyph.supported_render_modes_repeat_cache` row renders glyph 41 from `hinter-control-matrix.ttf` twice on the same face. The public C oracle, Rust FFI, C ABI, and WASM ABI compare both slot snapshots, proving the safe Rust `RenderFontCache::get_or_insert_with` cache-hit branch without implicit case growth |
 | 2026-07-12 | Explicit load-glyph malformed facade errors | 108 unique hashes | 0 | 6,613 | 6,610 / 6,610 | 3 | 14,566 / 17,190 lines; 21,245 / 24,719 regions; 3,543 / 4,390 branches | Two explicit `FT_Load_Glyph.matrix_load` variants reuse `glyf-malformed-matrix.ttf` to cover no-autohint and force-autohint malformed glyph errors. Selected malformed rows now compare safe `Face::load_glyph` error parity against `FT_Load_Glyph`, keeping exact Rust/C ABI/WASM parity green and implicit cases at zero |
+| 2026-07-12 | Size API null-validation routes | 108 unique hashes | 0 | 6,613 | 6,610 / 6,610 | 3 | 14,581 / 17,202 lines; 21,264 / 24,735 regions; 3,548 / 4,398 branches | Existing `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null rows now execute pinned C oracle commands and the Rust FFI wrapper validation path for null face, null output, and null size handles. Exact Rust/C ABI/WASM parity remains green with no new cases; success multi-size lifecycle rows remain visibly unsupported/generic pending real size-object implementation |
 
 ## Decision Log
 
@@ -1510,6 +1517,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Route rendered-slot target flags through the shared helper | `FT_Render_Glyph` already validates the public render mode before calling core rendering; preserving the selected render target in the returned slot's internal load flags keeps wrapper state centralized without adding cases or changing public output JSON |
 | 2026-07-12 | Support explicit repeat rows only where stateful public behavior needs them | `repeat_count` is accepted only as a concrete input on existing `FT_Render_Glyph` public rows. It lets one case compare a deliberate sequence across Rust/C/C-ABI/WASM without reintroducing hidden Cartesian discovery or generic fixture generation |
 | 2026-07-12 | Compare safe facade errors through selected public rows | Error-side coverage for `Face::load_glyph` must be proven by the same `FT_Load_Glyph` fixture cases and exact C/Rust/C-ABI/WASM parity, not by synthetic helper calls or broad routing |
+| 2026-07-12 | Route size null validation before size lifecycle success | Null pointer validation belongs in the thin FFI wrapper and can be proven through existing `ftsizes` public rows. Non-null `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` success lifecycle rows stay generic/unsupported until real multi-size handle ownership is implemented instead of being modeled as C parity |
 | 2026-07-11 | Pack no-output TT guard probes into existing branch-edge glyphs | Invalid coordinate reads exercise defensive zone access while preserving the same public `FT_Load_Glyph` output and avoiding extra Cartesian case growth |
 | 2026-07-11 | Prefer no-output VM state probes before new TT rows | Stack-only calls, twilight-zone movement, and no-op prep instructions can cover VM branches through the existing public `FT_Load_Glyph` row when they do not alter glyph output or weaken parity |
 | 2026-07-12 | Treat stale fixture obligations as font bugs | When an explicit row claims a structural branch but coverage shows it does not reach that branch, first correct the compact source font or selected glyph parameters instead of adding redundant cases |
@@ -1584,9 +1592,11 @@ Work must resume here unless a newer user request changes priority:
    `FT_Get_Glyph_Name`, `FT_Get_Name_Index`, `FT_Get_Gasp`,
    `FT_Get_CMap_Format`, `FT_Get_CMap_Language_ID`, and
    `FT_Get_SubGlyph_Info`, `FT_Get_Postscript_Name`, and
-   `FT_Set_Named_Instance`-driven named-instance selection are now real parity;
-   continue with generic fallback rows and any remaining modeled public
-   surfaces.
+   `FT_Set_Named_Instance`-driven named-instance selection are now real parity.
+   `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null-validation rows
+   are now exact C-oracle/Rust-FFI routes; continue with generic fallback rows,
+   especially the remaining size lifecycle sequences and any other modeled
+   public surfaces.
 2. Complete R0 and classify every uncovered function as public, font-reachable,
    missing delegation, blocked by incomplete implementation, duplicate with
    independent proof, or currently unreachable but preserved.
