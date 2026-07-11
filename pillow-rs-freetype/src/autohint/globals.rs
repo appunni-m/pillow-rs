@@ -245,10 +245,7 @@ impl FaceGlobals {
             }
 
             // Scale
-            let bs = crate::scaler::ScaleMetrics::new(
-                self.font_data.size_pt.get(),
-                self.font_data.head.units_per_em,
-            );
+            let bs = crate::scaler::ScaleMetrics::from_font_data(&self.font_data);
             let (_, ya) = if cjk_writing_system {
                 cjk_metrics_scale(&mut m, bs.x_scale, bs.y_scale, 0, 0)
             } else {

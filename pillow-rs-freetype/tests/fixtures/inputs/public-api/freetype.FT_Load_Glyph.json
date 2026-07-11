@@ -1949,6 +1949,26 @@
               "load_flags": ["FT_LOAD_DEFAULT"]
             },
             "coverage": ["tt/hinter:branch-edge-matrix"]
+          },
+          {
+            "id": "hinter-branch-edge-nonuniform-scale",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 20,
+                "y": 32
+              },
+              "glyph_index": 51,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "coverage": ["tt/hinter:nonuniform-scale-branch-edge"]
           }
         ]
       },

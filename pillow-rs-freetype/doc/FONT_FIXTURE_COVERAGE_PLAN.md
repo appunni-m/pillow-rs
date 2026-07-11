@@ -190,7 +190,13 @@ source-backed branch-edge TrueType glyph and prep program with no-output VM
 probes for `GETINFO`, delta count clamps, twilight-zone movement/intersection,
 IDEF fallback, prep-range `INSTCTRL`, original-distance `MD`, negative-CVT
 `MIRP`, twilight `UTP`/`SCFS`/`IP`, and invalid `ISECT` continuation without
-adding concrete cases.
+adding concrete cases, and adding one explicit non-uniform pixel-size
+`FT_Load_Glyph` variant for the same source-backed branch-edge TrueType glyph.
+That row exposed and fixed a real C/Rust mismatch: pinned C used the active
+20 px horizontal size for the glyph-slot advance (`896`), while Rust rebuilt a
+square scaler from the 32 px height and returned `1408`. The scaler and
+autohint metrics now consume the active FreeType size object's x/y scales and
+TT interpreter ppem/point-size instead of reconstructing them from height.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -198,17 +204,17 @@ coordinate parity.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,136 |
-| Concrete explicit cases | 6,560 |
-| Additional grouped variants | 2,424 |
+| Concrete explicit cases | 6,561 |
+| Additional grouped variants | 2,425 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,557 |
-| Exact parity | 6,557 / 6,557 |
+| Runnable parity comparisons | 6,558 |
+| Exact parity | 6,558 / 6,558 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,378 / 17,141 (83.88%) |
-| Rust function coverage | 858 / 1,062 (80.79%) |
-| Rust instantiation coverage | 861 / 1,065 (80.85%) |
-| Rust region coverage | 20,879 / 24,618 (84.81%) |
-| Rust branch/condition coverage | 3,496 / 4,370 (80.00%) |
+| Covered Rust lines | 14,417 / 17,174 (83.95%) |
+| Rust function coverage | 860 / 1,064 (80.83%) |
+| Rust instantiation coverage | 863 / 1,067 (80.88%) |
+| Rust region coverage | 20,945 / 24,673 (84.89%) |
+| Rust branch/condition coverage | 3,506 / 4,380 (80.05%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 138 |
 | Stored active font binaries | 95 files, 764 KiB |
@@ -237,13 +243,13 @@ Current largest uncovered buckets:
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
 | `src/render.rs` | 1,566 / 2,275 | 323 / 428 | 109 / 164 | 2,262 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 1,381 / 1,898 | 167 / 254 | 125 / 185 | 1,852 / 2,566 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/font.rs` | 1,400 / 1,914 | 170 / 254 | 126 / 186 | 1,892 / 2,603 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,510 / 2,828 | 979 / 1,282 | 70 / 73 | 3,611 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
-| `src/scaler.rs` | 915 / 1,201 | 144 / 178 | 40 / 60 | 1,047 / 1,254 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
+| `src/scaler.rs` | 934 / 1,220 | 150 / 188 | 41 / 61 | 1,067 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 82 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
 | `src/ffi/handles.rs` | 1,323 / 1,478 | 233 / 280 | 142 / 162 | 1,831 / 2,012 | Public FFI route audit; wrappers stay thin and must delegate to core |
-| `src/tt/hinter/exec.rs` | 1,274 / 1,340 | 339 / 410 | 37 / 40 | 2,622 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
+| `src/tt/hinter/exec.rs` | 1,277 / 1,340 | 340 / 410 | 37 / 40 | 2,630 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 835 / 941 | 339 / 426 | 18 / 19 | 1,118 / 1,247 | CJK topology rows in the compact multiscript fixture |
 | `src/api.rs` | 389 / 464 | 61 / 70 | 44 / 52 | 522 / 620 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
@@ -1440,6 +1446,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Autohint unequal digit-width probes | 106 unique hashes | 0 | 6,560 | 6,557 / 6,557 | 3 | 14,327 / 17,141 lines; 20,723 / 24,618 regions; 3,457 / 4,370 branches | `script-coverage.ttf` now appends two ASCII digit glyphs with unequal advances. Existing explicit `FT_LOAD_FORCE_AUTOHINT` rows prove pinned C and Rust/C-ABI/WASM agree while `FaceGlobals::digits_have_same_width` reaches its false path without increasing the public case count |
 | 2026-07-11 | TrueType VM no-output branch probes | 106 unique hashes | 0 | 6,560 | 6,557 / 6,557 | 3 | 14,359 / 17,141 lines; 20,821 / 24,618 regions; 3,476 / 4,370 branches | Existing `branchEdgeMatrix` and its `prep` program now pack `GETINFO`, clamped `DELTAP`/`DELTAC`, twilight-zone `MDRP`/`MIRP`/`MSIRP`/`ISECT`, unknown-opcode IDEF dispatch, and prep-range no-op `INSTCTRL` probes into the source-backed `hinter-control-matrix.ttf`; exact Rust/C/WASM parity remains green with no concrete case growth |
 | 2026-07-11 | TrueType VM twilight/interpolation probes | 106 unique hashes | 0 | 6,560 | 6,557 / 6,557 | 3 | 14,378 / 17,141 lines; 20,879 / 24,618 regions; 3,496 / 4,370 branches | Existing `branchEdgeMatrix` now adds twilight `UTP`, `SCFS`, original-distance `MD[1]`, negative-CVT `MIRP`, twilight `IP`, and invalid `ISECT` continuation probes. They remain no-output state exercises inside the same public `FT_Load_Glyph` row, moving `tt/hinter/exec.rs` to 1,274 / 1,340 lines and 339 / 410 branch outcomes |
+| 2026-07-11 | Non-uniform TrueType size scale | 106 unique hashes | 0 | 6,561 | 6,558 / 6,558 | 3 | 14,417 / 17,174 lines; 20,945 / 24,673 regions; 3,506 / 4,380 branches | One explicit `FT_Load_Glyph.matrix_load` variant loads the source-backed `branchEdgeMatrix` glyph at 20x32 px. It exposed a real C/Rust mismatch where C returned horizontal advance `896` but Rust returned `1408` by rebuilding a square scale from height. Core scaler/autohint now read the active FreeType size metrics; `tt/hinter/exec.rs` reaches 1,277 / 1,340 lines and 340 / 410 branch outcomes |
 
 ## Decision Log
 
