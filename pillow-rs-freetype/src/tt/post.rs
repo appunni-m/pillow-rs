@@ -2,6 +2,8 @@
 //!
 //! Reference: `TT_Postscript` in FreeType's public TrueType table structs.
 
+use super::read_i16;
+
 /// Parsed 'post' table fields used by face metadata.
 #[derive(Debug, Clone)]
 pub struct PostTable {
@@ -30,8 +32,8 @@ pub fn parse_post(data: &[u8]) -> Option<PostTable> {
 
     Some(PostTable {
         format_type,
-        underline_position: i16::from_be_bytes([data[8], data[9]]),
-        underline_thickness: i16::from_be_bytes([data[10], data[11]]),
+        underline_position: read_i16(data, 8),
+        underline_thickness: read_i16(data, 10),
         is_fixed_pitch: u32::from_be_bytes([data[12], data[13], data[14], data[15]]),
         glyph_indices,
         custom_names,
