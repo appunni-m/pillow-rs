@@ -740,6 +740,26 @@
             ]
           },
           {
+            "id": "script-vai",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 42445,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:vai-standard-char"
+            ]
+          },
+          {
             "id": "indic-ka-10",
             "assets": {
               "font": {
