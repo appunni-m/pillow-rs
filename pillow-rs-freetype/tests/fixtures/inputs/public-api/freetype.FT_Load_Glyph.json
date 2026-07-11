@@ -1763,6 +1763,30 @@
             ]
           },
           {
+            "id": "hinter-point-coordinate-nonuniform-scale",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 20,
+                "y": 32
+              },
+              "glyph_index": 31,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "tt/hinter:md-nonuniform-scale"
+            ]
+          },
+          {
             "id": "hinter-point-move-matrix",
             "assets": {
               "font": {
@@ -1781,6 +1805,30 @@
             },
             "coverage": [
               "tt/hinter:point-move-shift-and-interpolation-matrix"
+            ]
+          },
+          {
+            "id": "hinter-point-move-nonuniform-scale",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 20,
+                "y": 32
+              },
+              "glyph_index": 32,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "tt/hinter:ip-nonuniform-scale"
             ]
           },
           {
