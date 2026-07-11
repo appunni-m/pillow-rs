@@ -653,7 +653,12 @@ def shape_fallback_reason(row: ConcreteInput) -> str | None:
         return "render_glyph lacks glyph selector"
     if operation == "set_char_size" and "variants" in params:
         return "set_char_size variants are not routed through the real oracle"
-    if operation == "freetype.request_size" and "requests" not in params and "request" not in params:
+    if (
+        operation == "freetype.request_size"
+        and "requests" not in params
+        and "request" not in params
+        and "variants" not in params
+    ):
         return "request_size lacks request rows"
     if operation == "freetype.set_charmap" and not any(
         key in params for key in ("charmap_indices", "variants")

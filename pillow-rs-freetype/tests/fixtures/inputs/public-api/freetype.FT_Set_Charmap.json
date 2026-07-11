@@ -70,7 +70,12 @@
         },
         "params": {
           "face": "null",
-          "charmap": "valid_charmap_from_fixture"
+          "charmap": "valid_charmap_from_fixture",
+          "variants": [
+            {
+              "charmap": "null"
+            }
+          ]
         }
       },
       "classifiers": [

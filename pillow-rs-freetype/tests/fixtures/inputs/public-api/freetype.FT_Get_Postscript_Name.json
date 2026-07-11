@@ -183,6 +183,23 @@
               "tt/name:variation-prefix-unicode-platform",
               "tt/name:variation-subfamily-unicode-platform"
             ]
+          },
+          {
+            "id": "encoded-odd-windows-prefix-instance",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-odd-win-prefix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 65536
+            },
+            "coverage": [
+              "tt/name:variation-prefix-odd-windows-rejected",
+              "tt/name:variation-prefix-apple-after-windows-failure"
+            ]
           }
         ]
       },
