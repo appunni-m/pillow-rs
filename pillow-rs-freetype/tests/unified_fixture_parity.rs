@@ -2342,6 +2342,7 @@ impl BackendComparisonWorker {
                     glyph_load_input_param(&case.inputs.params)?,
                     load_flags,
                     render_mode,
+                    render_repeat_count_param(&case.inputs.params)?,
                 )
             }
             _ => run_c_abi(case),
@@ -2493,6 +2494,7 @@ impl BackendComparisonWorker {
                     glyph_load_input_param(&case.inputs.params)?,
                     load_flags,
                     render_mode,
+                    render_repeat_count_param(&case.inputs.params)?,
                 )
             }
             _ => run_wasm_abi(case),
@@ -6997,6 +6999,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
             args.push(load_flags_param(params)?.to_string());
             args.push(render_mode_param(params)?.to_string());
+            let repeat_count = render_repeat_count_param(params)?;
+            if repeat_count > 1 {
+                args.push(repeat_count.to_string());
+            }
             Ok(args)
         }
         "ftgasp.get_gasp" => {
@@ -7886,6 +7892,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
                 glyph_load_input_param(&case.inputs.params)?,
                 load_flags_param(&case.inputs.params)?,
                 render_mode_param(&case.inputs.params)?,
+                render_repeat_count_param(&case.inputs.params)?,
             );
             c_done_face(face);
             c_done_library(library);
@@ -8225,6 +8232,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
                 glyph_load_input_param(&case.inputs.params)?,
                 load_flags_param(&case.inputs.params)?,
                 render_mode_param(&case.inputs.params)?,
+                render_repeat_count_param(&case.inputs.params)?,
             );
             wasm_done_face(handle);
             output
@@ -9187,7 +9195,25 @@ fn rust_render_glyph(
     glyph_input: GlyphLoadInput,
     load_flags: i32,
     render_mode: i32,
+    repeat_count: u32,
 ) -> Result<RunOutput, String> {
+    if repeat_count > 1 {
+        let mut rows = Vec::new();
+        for iteration in 0..repeat_count {
+            let loaded = match glyph_input {
+                GlyphLoadInput::CharCode(char_code) => FT_Load_Char(face, char_code, load_flags),
+                GlyphLoadInput::GlyphIndex(glyph_index) => {
+                    FT_Load_Glyph(face, glyph_index, load_flags)
+                }
+            };
+            match loaded.and_then(|slot| FT_Render_Glyph(slot, render_mode)) {
+                Ok(slot) => rows.push(render_glyph_sequence_row(iteration, slot_json(&slot))),
+                Err(err) => return Ok(error(err)),
+            }
+        }
+        return Ok(ok(render_glyph_sequence_json(rows)));
+    }
+
     let loaded = match glyph_input {
         GlyphLoadInput::CharCode(char_code) => FT_Load_Char(face, char_code, load_flags),
         GlyphLoadInput::GlyphIndex(glyph_index) => FT_Load_Glyph(face, glyph_index, load_flags),
@@ -9267,6 +9293,7 @@ fn checks_api_load_glyph_agreement(case: &InputCase) -> bool {
 
 fn rust_render_glyph_public_api(case: &InputCase) -> Result<RunOutput, String> {
     let raw_load_flags = load_flags_param(&case.inputs.params)?;
+    let repeat_count = render_repeat_count_param(&case.inputs.params)?;
     if raw_load_flags & FT_LOAD_RENDER != 0 {
         let face = open_face(case)?;
         return rust_render_glyph(
@@ -9274,6 +9301,7 @@ fn rust_render_glyph_public_api(case: &InputCase) -> Result<RunOutput, String> {
             glyph_load_input_param(&case.inputs.params)?,
             raw_load_flags,
             render_mode_param(&case.inputs.params)?,
+            repeat_count,
         );
     }
     let face = open_api_face(case)?;
@@ -9292,6 +9320,16 @@ fn rust_render_glyph_public_api(case: &InputCase) -> Result<RunOutput, String> {
     let Some(render_mode) = render_mode_to_core(render_mode_param(&case.inputs.params)?) else {
         return Ok(error(FT_Err_Cannot_Render_Glyph));
     };
+    if repeat_count > 1 {
+        let mut rows = Vec::new();
+        for iteration in 0..repeat_count {
+            match face.render_loaded_glyph(glyph_index, load_flags, render_mode) {
+                Ok(slot) => rows.push(render_glyph_sequence_row(iteration, api_slot_json(&slot))),
+                Err(err) => return Ok(error(font_error_to_ft(err))),
+            }
+        }
+        return Ok(ok(render_glyph_sequence_json(rows)));
+    }
     match face.render_loaded_glyph(glyph_index, load_flags, render_mode) {
         Ok(slot) => Ok(ok(api_slot_json(&slot))),
         Err(err) => Ok(error(font_error_to_ft(err))),
@@ -9303,7 +9341,32 @@ fn c_render_glyph(
     glyph_input: GlyphLoadInput,
     load_flags: i32,
     render_mode: i32,
+    repeat_count: u32,
 ) -> Result<RunOutput, String> {
+    if repeat_count > 1 {
+        let mut rows = Vec::new();
+        for iteration in 0..repeat_count {
+            let load_err = match glyph_input {
+                GlyphLoadInput::CharCode(char_code) => {
+                    c_abi::FT_Load_Char(face, char_code, load_flags)
+                }
+                GlyphLoadInput::GlyphIndex(glyph_index) => {
+                    c_abi::FT_Load_Glyph(face, glyph_index, load_flags)
+                }
+            };
+            let err = if load_err == FT_Err_Ok {
+                c_abi::abi_render_glyph_from_face(face, render_mode)
+            } else {
+                load_err
+            };
+            if err != FT_Err_Ok {
+                return Ok(error(err));
+            }
+            rows.push(render_glyph_sequence_row(iteration, c_slot_json(face)?));
+        }
+        return Ok(ok(render_glyph_sequence_json(rows)));
+    }
+
     let load_err = match glyph_input {
         GlyphLoadInput::CharCode(char_code) => c_abi::FT_Load_Char(face, char_code, load_flags),
         GlyphLoadInput::GlyphIndex(glyph_index) => {
@@ -9327,7 +9390,35 @@ fn wasm_render_glyph(
     glyph_input: GlyphLoadInput,
     load_flags: i32,
     render_mode: i32,
+    repeat_count: u32,
 ) -> Result<RunOutput, String> {
+    if repeat_count > 1 {
+        let mut rows = Vec::new();
+        for iteration in 0..repeat_count {
+            let load_err = match glyph_input {
+                GlyphLoadInput::CharCode(char_code) => {
+                    wasm_abi::fontdone_wasm_load_char(handle, char_code, load_flags)
+                }
+                GlyphLoadInput::GlyphIndex(glyph_index) => {
+                    wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags)
+                }
+            };
+            let err = if load_err == FT_Err_Ok {
+                wasm_abi::fontdone_wasm_render_glyph(handle, render_mode)
+            } else {
+                load_err
+            };
+            if err != FT_Err_Ok {
+                return Ok(error(err));
+            }
+            rows.push(render_glyph_sequence_row(
+                iteration,
+                wasm_slot_json(handle)?,
+            ));
+        }
+        return Ok(ok(render_glyph_sequence_json(rows)));
+    }
+
     let load_err = match glyph_input {
         GlyphLoadInput::CharCode(char_code) => {
             wasm_abi::fontdone_wasm_load_char(handle, char_code, load_flags)
@@ -9664,6 +9755,10 @@ fn wasm_slot_output(handle: usize, err: i32) -> Result<RunOutput, String> {
     if err != FT_Err_Ok {
         return Ok(error(err));
     }
+    Ok(ok(wasm_slot_json(handle)?))
+}
+
+fn wasm_slot_json(handle: usize) -> Result<Value, String> {
     let slot = wasm_abi::abi_slot_snapshot(handle)
         .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
     let bitmap = slot.bitmap.as_ref().map_or(Value::Null, |bitmap| {
@@ -9678,7 +9773,7 @@ fn wasm_slot_output(handle: usize, err: i32) -> Result<RunOutput, String> {
             "buffer_hex": hex_bytes(&bitmap.buffer)
         })
     });
-    Ok(ok(json!({
+    Ok(json!({
         "glyph_index": slot.glyph_index,
         "format": slot.format,
         "advance": {"x": slot.advance.x, "y": slot.advance.y},
@@ -9693,7 +9788,7 @@ fn wasm_slot_output(handle: usize, err: i32) -> Result<RunOutput, String> {
             "vertAdvance": slot.metrics.vertAdvance
         },
         "bitmap": bitmap
-    })))
+    }))
 }
 
 fn wasm_done_face(handle: usize) {
@@ -13513,6 +13608,19 @@ fn slot_json(slot: &FT_GlyphSlot) -> Value {
     })
 }
 
+fn render_glyph_sequence_row(iteration: u32, slot: Value) -> Value {
+    json!({
+        "iteration": iteration,
+        "slot": slot
+    })
+}
+
+fn render_glyph_sequence_json(rows: Vec<Value>) -> Value {
+    json!({
+        "rows": rows
+    })
+}
+
 fn api_slot_json(slot: &ApiGlyphSlot) -> Value {
     let pixel_mode = slot.pixel_mode().map(pixel_mode_from_core);
     json!({
@@ -13882,6 +13990,7 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
             require_path(output, "/glyph/library_present", label, case)?;
             require_path(output, "/glyph/clazz_present", label, case)
         }
+        "glyph_render_sequence" => require_path(output, "/rows", label, case),
         "cache_sbit_result" => validate_cache_sbit_output(output, label, case),
         "math_rows" => require_path(output, "/rows", label, case),
         "cache_node_lifecycle" => {
@@ -15756,6 +15865,18 @@ fn render_mode_param(value: &Value) -> Result<i32, String> {
             let mode = i64_value(raw, "render_mode")?;
             i32::try_from(mode).map_err(|err| format!("render_mode does not fit i32: {err}"))
         })
+}
+
+fn render_repeat_count_param(value: &Value) -> Result<u32, String> {
+    let Some(raw) = value.get("repeat_count") else {
+        return Ok(1);
+    };
+    let repeat_count = u32_value(raw, "repeat_count")?;
+    if repeat_count == 0 {
+        Err("repeat_count must be greater than zero".to_string())
+    } else {
+        Ok(repeat_count)
+    }
 }
 
 fn bbox_modes_arg(value: &Value) -> Result<String, String> {

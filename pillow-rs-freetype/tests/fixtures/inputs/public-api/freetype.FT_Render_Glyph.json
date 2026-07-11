@@ -203,6 +203,62 @@
       }
     },
     {
+      "case_id": "freetype.FT_Render_Glyph.supported_render_modes_repeat_cache",
+      "subject": "freetype.FT_Render_Glyph",
+      "case": "supported_render_modes",
+      "operation": "render_glyph",
+      "schema": "glyph_render_sequence",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "fonts/glyf/hinter-control-matrix.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "glyph_index": 41,
+          "load_flags": [
+            "FT_LOAD_NO_HINTING"
+          ],
+          "render_mode": "FT_RENDER_MODE_NORMAL",
+          "repeat_count": 2
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:render-cache"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "rows": [
+            {
+              "iteration": "integer",
+              "slot": "FT_GlyphSlot"
+            }
+          ]
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "rows[*].iteration",
+            "rows[*].slot"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Render_Glyph"
+        ]
+      }
+    },
+    {
       "case_id": "freetype.FT_Render_Glyph.invalid_render_mode",
       "subject": "freetype.FT_Render_Glyph",
       "case": "invalid_render_mode",
