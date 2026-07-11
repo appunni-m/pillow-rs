@@ -10934,8 +10934,15 @@ fn rust_owned_charmap_indexes_output(face: &FT_Face) -> Result<Value, String> {
             let charmap = FT_Face_Charmap(face, index);
             let info = FT_Face_Charmap_Info(face, index)
                 .ok_or_else(|| format!("missing rust charmap info at index {index}"))?;
+            let raw_index = FT_Get_Charmap_Index(charmap);
+            let scoped_index = FT_Get_Charmap_Index_For_Face(face, charmap);
+            if raw_index != scoped_index {
+                return Err(format!(
+                    "rust charmap index mismatch at {index}: raw={raw_index} scoped={scoped_index}"
+                ));
+            }
             Ok(charmap_index_row_json(
-                FT_Get_Charmap_Index_For_Face(face, charmap),
+                raw_index,
                 charmap_inventory_record_json(
                     index,
                     info.encoding,
@@ -11021,10 +11028,26 @@ fn rust_charmap_index_variants_output(
         .iter()
         .map(|variant| {
             let value = match variant.as_str() {
-                "null" => FT_Get_Charmap_Index_For_Face(face, std::ptr::null_mut()),
+                "null" => {
+                    let raw_index = FT_Get_Charmap_Index(std::ptr::null_mut());
+                    let scoped_index = FT_Get_Charmap_Index_For_Face(face, std::ptr::null_mut());
+                    if raw_index != scoped_index {
+                        return Err(format!(
+                            "rust null charmap index mismatch: raw={raw_index} scoped={scoped_index}"
+                        ));
+                    }
+                    raw_index
+                }
                 "foreign_face_charmap" => {
                     let charmap = FT_Face_Charmap(foreign, 0);
-                    FT_Get_Charmap_Index_For_Face(foreign, charmap)
+                    let raw_index = FT_Get_Charmap_Index(charmap);
+                    let scoped_index = FT_Get_Charmap_Index_For_Face(foreign, charmap);
+                    if raw_index != scoped_index {
+                        return Err(format!(
+                            "rust foreign charmap index mismatch: raw={raw_index} scoped={scoped_index}"
+                        ));
+                    }
+                    raw_index
                 }
                 "detached_invalid_pointer_harness_sentinel" => -1,
                 other => return Err(format!("unsupported charmap variant {other}")),
