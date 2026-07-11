@@ -21,7 +21,9 @@ use crate::tt::hinter::NativeHintMode;
 pub struct ScaleMetrics {
     pub x_scale: i32, // 16.16
     pub y_scale: i32, // 16.16
+    pub tt_scale: i32,
     pub ppem: i32,
+    pub point_size: i32,
 }
 
 impl ScaleMetrics {
@@ -39,7 +41,33 @@ impl ScaleMetrics {
         ScaleMetrics {
             x_scale: scale,
             y_scale: scale,
+            tt_scale: scale,
             ppem,
+            point_size: ppem << 6,
+        }
+    }
+
+    pub fn from_font_data(data: &FontData) -> Self {
+        // C stores x/y scale on the active FT_Size_Metrics; non-square
+        // FT_Set_Pixel_Sizes must not rebuild horizontal scale from y ppem
+        // (`ftobjs.c` size request path, `ttobjs.c:tt_size_reset`).
+        let square = Self::new(data.size_pt.get(), data.head.units_per_em);
+        let active = ScaleMetrics {
+            x_scale: data.size_x_scale.get(),
+            y_scale: data.size_y_scale.get(),
+            tt_scale: data.size_tt_scale.get(),
+            ppem: data.size_tt_ppem.get(),
+            point_size: data.size_tt_point_size.get(),
+        };
+        if active.x_scale == square.x_scale
+            && active.y_scale == square.y_scale
+            && active.tt_scale == square.tt_scale
+            && active.ppem == square.ppem
+            && active.point_size == square.point_size
+        {
+            square
+        } else {
+            active
         }
     }
 
@@ -680,7 +708,7 @@ fn scale_glyph_impl_with_context(
     bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
     use_hdmx: bool,
 ) -> Result<(ScaledGlyph, Option<crate::tt::hinter::exec::ExecContext>), FontError> {
-    let scale = ScaleMetrics::new(data.size_pt.get(), data.head.units_per_em);
+    let scale = ScaleMetrics::from_font_data(data);
 
     let h_metric = data.hmtx.get(glyph_index);
     let advance_width = scale.scale_x(h_metric.advance_width as i32);
@@ -976,9 +1004,9 @@ fn scale_glyph_impl_with_context(
             let hs = crate::tt::hinter::HintScale {
                 x_scale: scale.x_scale,
                 y_scale: y_adj,
-                tt_scale: scale.x_scale,
+                tt_scale: scale.tt_scale,
                 ppem: scale.ppem,
-                point_size: scale.ppem << 6,
+                point_size: scale.point_size,
                 storage_size: data.maxp.max_storage as usize,
                 twilight_points: data.maxp.max_twilight_points as usize,
                 is_composite: outline_raw.is_composite,
@@ -1229,7 +1257,7 @@ fn autohint_vertical_metrics(
 
     let vvector_x = ft_mul_fix(
         -(hori_advance_fu / 2),
-        ScaleMetrics::new(data.size_pt.get(), data.head.units_per_em).x_scale,
+        ScaleMetrics::from_font_data(data).x_scale,
     );
     let vvector_y = ft_mul_fix(top_fu - raw_y_max, y_scale);
 
@@ -1247,7 +1275,7 @@ fn empty_autohint_vertical_metrics(
     y_scale: i32,
 ) -> AutohintVerticalMetrics {
     let (top_fu, advance_fu) = vertical_top_and_advance_font_units(data, glyph_index, 0);
-    let x_scale = ScaleMetrics::new(data.size_pt.get(), data.head.units_per_em).x_scale;
+    let x_scale = ScaleMetrics::from_font_data(data).x_scale;
 
     AutohintVerticalMetrics {
         bearing_x: ft_pix_floor(ft_mul_fix(-(hori_advance_fu / 2), x_scale)),

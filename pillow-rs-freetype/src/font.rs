@@ -493,6 +493,11 @@ impl Font {
             loca_data,
             glyf_data,
             size_pt: std::cell::Cell::new(size_pt),
+            size_x_scale: std::cell::Cell::new(0),
+            size_y_scale: std::cell::Cell::new(0),
+            size_tt_scale: std::cell::Cell::new(0),
+            size_tt_ppem: std::cell::Cell::new(0),
+            size_tt_point_size: std::cell::Cell::new(0),
             transform_xx: std::cell::Cell::new(0x1_0000),
             transform_xy: std::cell::Cell::new(0),
             transform_yx: std::cell::Cell::new(0),
@@ -518,6 +523,7 @@ impl Font {
             72,
             font_data.as_ref(),
         );
+        sync_active_size_metrics(&font_data, size_metrics);
 
         let selected_charmap = default_unicode_charmap_index(&font_data.cmap);
 
@@ -797,6 +803,7 @@ impl Font {
         self.size_pt = height as f32 / 64.0;
         self.size_metrics = size_metrics;
         self.data.size_pt.set(self.size_pt);
+        sync_active_size_metrics(&self.data, self.size_metrics);
         self.face_globals =
             crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
         // C keeps TrueType bytecode execution state on the active size object
@@ -822,6 +829,7 @@ impl Font {
         self.size_pt = height as f32;
         self.size_metrics = SizeMetrics::from_pixel_size(width, height, &self.data);
         self.data.size_pt.set(self.size_pt);
+        sync_active_size_metrics(&self.data, self.size_metrics);
         self.face_globals =
             crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
         // C keeps TrueType bytecode execution state on the active size object
@@ -835,6 +843,7 @@ impl Font {
         self.size_metrics = SizeMetrics::from_size_request(request, &self.data)?;
         self.size_pt = f32::from(self.size_metrics.y_ppem);
         self.data.size_pt.set(self.size_pt);
+        sync_active_size_metrics(&self.data, self.size_metrics);
         self.face_globals =
             crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
         // `FT_Request_Size` invalidates the active size's prepared bytecode
@@ -2356,6 +2365,14 @@ impl SizeMetrics {
         self.max_advance = ft_pix_round(ft_mul_fix(max_advance, self.x_scale));
         self
     }
+}
+
+fn sync_active_size_metrics(data: &FontData, metrics: SizeMetrics) {
+    data.size_x_scale.set(metrics.x_scale);
+    data.size_y_scale.set(metrics.y_scale);
+    data.size_tt_scale.set(metrics.tt_scale());
+    data.size_tt_ppem.set(metrics.tt_ppem());
+    data.size_tt_point_size.set(metrics.tt_point_size());
 }
 
 fn request_dimension(value: i64, resolution: u32, _axis: &str) -> Result<i64, SizeRequestError> {
