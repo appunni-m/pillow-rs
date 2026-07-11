@@ -10,6 +10,7 @@
 
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::CString;
 use std::fs;
 use std::io::BufRead;
 use std::mem::{align_of, offset_of, size_of};
@@ -3101,6 +3102,343 @@ where
     Ok(json!({ "results": results }))
 }
 
+#[derive(Debug, Clone)]
+enum GlyphNameSelector {
+    Index(u32),
+    Name(String),
+    NumGlyphs,
+    NumGlyphsPlusOne,
+}
+
+fn glyph_name_selector_param(params: &Value) -> Result<GlyphNameSelector, String> {
+    let raw = params
+        .get("glyph_index")
+        .ok_or_else(|| "missing glyph_index".to_string())?;
+    if let Some(value) = raw.as_u64() {
+        return u32::try_from(value)
+            .map(GlyphNameSelector::Index)
+            .map_err(|err| format!("glyph_index does not fit u32: {err}"));
+    }
+    let Some(value) = raw.as_str() else {
+        return Err(format!("unsupported glyph_index {raw}"));
+    };
+    if value == ".notdef" || value == "glyph0" {
+        return Ok(GlyphNameSelector::Index(0));
+    }
+    if value == "num_glyphs" || value == "face.num_glyphs" {
+        return Ok(GlyphNameSelector::NumGlyphs);
+    }
+    if value == "num_glyphs_plus_1" || value == "face.num_glyphs_plus_1" {
+        return Ok(GlyphNameSelector::NumGlyphsPlusOne);
+    }
+    if let Some(index) = value.strip_prefix("gid:") {
+        return index
+            .parse::<u32>()
+            .map(GlyphNameSelector::Index)
+            .map_err(|err| format!("glyph_index {value}: {err}"));
+    }
+    Ok(GlyphNameSelector::Name(value.to_string()))
+}
+
+fn glyph_name_selector_arg(params: &Value) -> Result<String, String> {
+    match glyph_name_selector_param(params)? {
+        GlyphNameSelector::Index(index) => Ok(format!("gid:{index}")),
+        GlyphNameSelector::Name(name) => Ok(name),
+        GlyphNameSelector::NumGlyphs => Ok("num_glyphs".to_string()),
+        GlyphNameSelector::NumGlyphsPlusOne => Ok("num_glyphs_plus_1".to_string()),
+    }
+}
+
+fn rust_glyph_name_index(face: &FT_Face, params: &Value) -> Result<u32, String> {
+    match glyph_name_selector_param(params)? {
+        GlyphNameSelector::Index(index) => Ok(index),
+        GlyphNameSelector::Name(name) => Ok(FT_Get_Name_Index(Some(face), Some(&name))),
+        GlyphNameSelector::NumGlyphs => u32::try_from(FT_Face_Info(face).num_glyphs)
+            .map_err(|err| format!("face.num_glyphs does not fit u32: {err}")),
+        GlyphNameSelector::NumGlyphsPlusOne => u32::try_from(FT_Face_Info(face).num_glyphs)
+            .map_err(|err| format!("face.num_glyphs does not fit u32: {err}"))?
+            .checked_add(1)
+            .ok_or_else(|| "face.num_glyphs_plus_1 overflowed u32".to_string()),
+    }
+}
+
+fn c_glyph_name_index(face: c_abi::FT_Face, params: &Value) -> Result<u32, String> {
+    match glyph_name_selector_param(params)? {
+        GlyphNameSelector::Index(index) => Ok(index),
+        GlyphNameSelector::Name(name) => {
+            let name = CString::new(name).map_err(|err| format!("glyph name: {err}"))?;
+            Ok(c_abi::FT_Get_Name_Index(face, name.as_ptr()))
+        }
+        GlyphNameSelector::NumGlyphs => c_abi::abi_face_info(face)
+            .ok_or_else(|| "missing c abi face info".to_string())
+            .and_then(|info| {
+                u32::try_from(info.num_glyphs)
+                    .map_err(|err| format!("face.num_glyphs does not fit u32: {err}"))
+            }),
+        GlyphNameSelector::NumGlyphsPlusOne => c_abi::abi_face_info(face)
+            .ok_or_else(|| "missing c abi face info".to_string())
+            .and_then(|info| {
+                u32::try_from(info.num_glyphs)
+                    .map_err(|err| format!("face.num_glyphs does not fit u32: {err}"))
+            })?
+            .checked_add(1)
+            .ok_or_else(|| "face.num_glyphs_plus_1 overflowed u32".to_string()),
+    }
+}
+
+fn wasm_glyph_name_index(handle: usize, params: &Value) -> Result<u32, String> {
+    match glyph_name_selector_param(params)? {
+        GlyphNameSelector::Index(index) => Ok(index),
+        GlyphNameSelector::Name(name) => Ok(wasm_abi::fontdone_wasm_get_name_index(
+            handle,
+            name.as_ptr(),
+            u32::try_from(name.len()).map_err(|err| format!("glyph name length: {err}"))?,
+        )),
+        GlyphNameSelector::NumGlyphs => wasm_abi::abi_face_info(handle)
+            .ok_or_else(|| "missing wasm abi face info".to_string())
+            .and_then(|info| {
+                u32::try_from(info.num_glyphs)
+                    .map_err(|err| format!("face.num_glyphs does not fit u32: {err}"))
+            }),
+        GlyphNameSelector::NumGlyphsPlusOne => wasm_abi::abi_face_info(handle)
+            .ok_or_else(|| "missing wasm abi face info".to_string())
+            .and_then(|info| {
+                u32::try_from(info.num_glyphs)
+                    .map_err(|err| format!("face.num_glyphs does not fit u32: {err}"))
+            })?
+            .checked_add(1)
+            .ok_or_else(|| "face.num_glyphs_plus_1 overflowed u32".to_string()),
+    }
+}
+
+fn glyph_name_buffer_initial(params: &Value) -> Result<u8, String> {
+    let Some(raw) = params.get("buffer_initial") else {
+        return Ok(0xAA);
+    };
+    if let Some(value) = raw.as_u64() {
+        return u8::try_from(value).map_err(|err| format!("buffer_initial: {err}"));
+    }
+    let Some(text) = raw.as_str() else {
+        return Err(format!("unsupported buffer_initial {raw}"));
+    };
+    let text = text.strip_prefix("0x").unwrap_or(text);
+    u8::from_str_radix(text, 16).map_err(|err| format!("buffer_initial {raw}: {err}"))
+}
+
+fn glyph_name_output(
+    glyph_index: u32,
+    buffer_max: u32,
+    status: FT_Error,
+    buffer: Option<&[u8]>,
+) -> Value {
+    json!({
+        "glyph_index": glyph_index,
+        "buffer_max": buffer_max,
+        "status": status,
+        "buffer_hex": buffer.map(hex_bytes)
+    })
+}
+
+fn rust_get_glyph_name(case: &InputCase) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    let face_null = lifecycle_handle_param(params, "face") == Some("null");
+    let buffer_null = lifecycle_handle_param(params, "buffer") == Some("null");
+    let buffer_max = u32_param(params, "buffer_max")?;
+    let fill = glyph_name_buffer_initial(params)?;
+    let mut buffer = if buffer_null {
+        None
+    } else {
+        Some(vec![
+            fill;
+            usize::try_from(buffer_max).map_err(|err| format!(
+                "buffer_max does not fit usize: {err}"
+            ))?
+        ])
+    };
+    if face_null {
+        return Ok(ok(glyph_name_output(
+            0,
+            buffer_max,
+            FT_Err_Invalid_Face_Handle as FT_Error,
+            buffer.as_deref(),
+        )));
+    }
+    let face = open_face(case)?;
+    let glyph_index = rust_glyph_name_index(&face, params)?;
+    let status = if let Some(buffer) = buffer.as_mut() {
+        match FT_Get_Glyph_Name(&face, glyph_index, buffer.as_mut_slice()) {
+            Ok(_) => FT_Err_Ok,
+            Err(err) => err,
+        }
+    } else {
+        FT_Err_Invalid_Argument
+    };
+    Ok(ok(glyph_name_output(
+        glyph_index,
+        buffer_max,
+        status,
+        buffer.as_deref(),
+    )))
+}
+
+fn c_get_glyph_name(case: &InputCase) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    let face_null = lifecycle_handle_param(params, "face") == Some("null");
+    let buffer_null = lifecycle_handle_param(params, "buffer") == Some("null");
+    let buffer_max = u32_param(params, "buffer_max")?;
+    let fill = glyph_name_buffer_initial(params)?;
+    let mut buffer = if buffer_null {
+        None
+    } else {
+        Some(vec![
+            fill;
+            usize::try_from(buffer_max).map_err(|err| format!(
+                "buffer_max does not fit usize: {err}"
+            ))?
+        ])
+    };
+
+    let (library, face) = if face_null {
+        (std::ptr::null_mut(), std::ptr::null_mut())
+    } else {
+        c_new_face_without_size(case)?
+    };
+    let glyph_index = if face_null {
+        0
+    } else {
+        c_glyph_name_index(face, params)?
+    };
+    let buffer_ptr = buffer
+        .as_mut()
+        .map_or(std::ptr::null_mut(), |bytes| bytes.as_mut_ptr().cast());
+    let status = c_abi::FT_Get_Glyph_Name(face, glyph_index, buffer_ptr, buffer_max);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ok(glyph_name_output(
+        glyph_index,
+        buffer_max,
+        status,
+        buffer.as_deref(),
+    )))
+}
+
+fn wasm_get_glyph_name(case: &InputCase) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    let face_null = lifecycle_handle_param(params, "face") == Some("null");
+    let buffer_null = lifecycle_handle_param(params, "buffer") == Some("null");
+    let buffer_max = u32_param(params, "buffer_max")?;
+    let fill = glyph_name_buffer_initial(params)?;
+    let mut buffer = if buffer_null {
+        None
+    } else {
+        Some(vec![
+            fill;
+            usize::try_from(buffer_max).map_err(|err| format!(
+                "buffer_max does not fit usize: {err}"
+            ))?
+        ])
+    };
+
+    let handle = if face_null {
+        0
+    } else {
+        wasm_new_face_without_size(case)?
+    };
+    let glyph_index = if face_null {
+        0
+    } else {
+        wasm_glyph_name_index(handle, params)?
+    };
+    let buffer_ptr = buffer
+        .as_mut()
+        .map_or(std::ptr::null_mut(), Vec::as_mut_ptr);
+    let status =
+        wasm_abi::fontdone_wasm_get_glyph_name(handle, glyph_index, buffer_ptr, buffer_max);
+    wasm_done_face(handle);
+    Ok(ok(glyph_name_output(
+        glyph_index,
+        buffer_max,
+        status,
+        buffer.as_deref(),
+    )))
+}
+
+fn glyph_name_param(params: &Value) -> Result<Option<&str>, String> {
+    let raw = params
+        .get("glyph_name")
+        .ok_or_else(|| "missing glyph_name".to_string())?;
+    if value_is_null_token(raw) {
+        return Ok(None);
+    }
+    raw.as_str()
+        .map(Some)
+        .ok_or_else(|| format!("unsupported glyph_name {raw}"))
+}
+
+fn name_index_output(glyph_index: u32, glyph_name: Option<&str>) -> Value {
+    json!({
+        "return": glyph_index,
+        "glyph_name_bytes": glyph_name.map(|name| hex_bytes(name.as_bytes()))
+    })
+}
+
+fn rust_get_name_index(case: &InputCase) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    let glyph_name = glyph_name_param(params)?;
+    if lifecycle_handle_param(params, "face") == Some("null") {
+        return Ok(ok(name_index_output(
+            FT_Get_Name_Index(None, glyph_name),
+            glyph_name,
+        )));
+    }
+    let face = open_face(case)?;
+    Ok(ok(name_index_output(
+        FT_Get_Name_Index(Some(&face), glyph_name),
+        glyph_name,
+    )))
+}
+
+fn c_get_name_index(case: &InputCase) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    let glyph_name = glyph_name_param(params)?;
+    let (library, face) = if lifecycle_handle_param(params, "face") == Some("null") {
+        (std::ptr::null_mut(), std::ptr::null_mut())
+    } else {
+        c_new_face_without_size(case)?
+    };
+    let glyph_name_c = glyph_name
+        .map(CString::new)
+        .transpose()
+        .map_err(|err| format!("glyph_name: {err}"))?;
+    let glyph_name_ptr = glyph_name_c
+        .as_ref()
+        .map_or(std::ptr::null(), |name| name.as_ptr());
+    let glyph_index = c_abi::FT_Get_Name_Index(face, glyph_name_ptr);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ok(name_index_output(glyph_index, glyph_name)))
+}
+
+fn wasm_get_name_index(case: &InputCase) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    let glyph_name = glyph_name_param(params)?;
+    let handle = if lifecycle_handle_param(params, "face") == Some("null") {
+        0
+    } else {
+        wasm_new_face_without_size(case)?
+    };
+    let (name_ptr, name_len) = match glyph_name {
+        Some(name) => (
+            name.as_ptr(),
+            u32::try_from(name.len()).map_err(|err| format!("glyph_name length: {err}"))?,
+        ),
+        None => (std::ptr::null(), 0),
+    };
+    let glyph_index = wasm_abi::fontdone_wasm_get_name_index(handle, name_ptr, name_len);
+    wasm_done_face(handle);
+    Ok(ok(name_index_output(glyph_index, glyph_name)))
+}
+
 fn rust_sfnt_name_count_output(face: Option<&FT_Face>) -> Value {
     json!({ "return": FT_Get_Sfnt_Name_Count(face) })
 }
@@ -5423,9 +5761,54 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             push_face_size(params, &mut args)?;
             Ok(args)
         }
-        "freetype.get_glyph_name" | "freetype.get_name_index" => {
-            // Stub: returns 0 (no glyph name / not found).
-            Ok(vec!["--value-ok".to_string(), "0".to_string()])
+        "freetype.get_glyph_name" => {
+            let mut args = vec!["--get-glyph-name".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(glyph_name_selector_arg(params)?);
+            args.push(u32_param(params, "buffer_max")?.to_string());
+            args.push(glyph_name_buffer_initial(params)?.to_string());
+            args.push(
+                if lifecycle_handle_param(params, "face") == Some("null") {
+                    "null"
+                } else {
+                    "valid"
+                }
+                .to_string(),
+            );
+            args.push(
+                if lifecycle_handle_param(params, "buffer") == Some("null") {
+                    "null"
+                } else {
+                    "valid"
+                }
+                .to_string(),
+            );
+            Ok(args)
+        }
+        "freetype.get_name_index" => {
+            let mut args = vec!["--get-name-index".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            let glyph_name = glyph_name_param(params)?;
+            args.push(glyph_name.unwrap_or("-").to_string());
+            args.push(
+                if lifecycle_handle_param(params, "face") == Some("null") {
+                    "null"
+                } else {
+                    "valid"
+                }
+                .to_string(),
+            );
+            args.push(
+                if glyph_name.is_none() {
+                    "null"
+                } else {
+                    "valid"
+                }
+                .to_string(),
+            );
+            Ok(args)
         }
         "freetype.new_face" => {
             if lifecycle_handle_param(params, "pathname") == Some("null")
@@ -6248,7 +6631,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             }
             Ok(ok(postscript_name_json(FT_Get_Postscript_Name(&face))))
         }
-        "freetype.get_glyph_name" | "freetype.get_name_index" => Ok(ok(json!({"value": 0}))),
+        "freetype.get_glyph_name" => rust_get_glyph_name(case),
+        "freetype.get_name_index" => rust_get_name_index(case),
         "freetype.new_face" => {
             if lifecycle_handle_param(&case.inputs.params, "pathname") == Some("null") {
                 return Ok(error(FT_Err_Cannot_Open_Resource as FT_Error));
@@ -6360,8 +6744,6 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.set_transform"
         | "freetype.get_transform"
         | "freetype.reference_face"
-        | "freetype.get_glyph_name"
-        | "freetype.get_name_index"
         | "freetype.face_properties"
         | "freetype.get_subglyph_info"
         | "freetype.select_size"
@@ -6529,6 +6911,8 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output.map(ok)
         }
+        "freetype.get_glyph_name" => c_get_glyph_name(case),
+        "freetype.get_name_index" => c_get_name_index(case),
         "freetype.get_kerning" => c_get_kerning(case),
         "ftsnames.get_sfnt_name_count" => {
             let (library, face) = c_open_face(case)?;
@@ -6754,8 +7138,6 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.set_transform"
         | "freetype.get_transform"
         | "freetype.reference_face"
-        | "freetype.get_glyph_name"
-        | "freetype.get_name_index"
         | "freetype.face_properties"
         | "freetype.get_subglyph_info"
         | "freetype.select_size"
@@ -6887,6 +7269,8 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_done_face(handle);
             output.map(ok)
         }
+        "freetype.get_glyph_name" => wasm_get_glyph_name(case),
+        "freetype.get_name_index" => wasm_get_name_index(case),
         "freetype.get_kerning" => wasm_get_kerning(case),
         "ftsnames.get_sfnt_name_count" => {
             let handle = wasm_open_face(case)?;

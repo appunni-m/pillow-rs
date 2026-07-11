@@ -886,6 +886,49 @@ pub extern "C" fn fontdone_wasm_get_fstype_flags(handle: usize) -> FT_UShort {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_glyph_name(
+    handle: usize,
+    glyph_index: FT_UInt,
+    buffer: *mut FT_Byte,
+    buffer_max: FT_UInt,
+) -> FT_Error {
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    if buffer.is_null() || buffer_max == 0 {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    // SAFETY: `buffer` is non-null, and the WASM caller provides a writable
+    // linear-memory range of `buffer_max` bytes.
+    let buffer = unsafe { slice::from_raw_parts_mut(buffer, buffer_max as usize) };
+    match rust_ffi::FT_Get_Glyph_Name(&face.face, glyph_index, buffer) {
+        Ok(_) => rust_ffi::FT_Err_Ok,
+        Err(error) => error,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_name_index(
+    handle: usize,
+    glyph_name: *const FT_Byte,
+    glyph_name_len: FT_UInt,
+) -> FT_UInt {
+    let Some(face) = face_ref(handle) else {
+        return 0;
+    };
+    if glyph_name.is_null() {
+        return 0;
+    }
+    // SAFETY: `glyph_name` is non-null, and the WASM caller provides a
+    // readable linear-memory range of `glyph_name_len` bytes.
+    let bytes = unsafe { slice::from_raw_parts(glyph_name, glyph_name_len as usize) };
+    let Ok(glyph_name) = std::str::from_utf8(bytes) else {
+        return 0;
+    };
+    rust_ffi::FT_Get_Name_Index(Some(&face.face), Some(glyph_name))
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_postscript_name(
     handle: usize,
     out: *mut FontdoneWasmString,

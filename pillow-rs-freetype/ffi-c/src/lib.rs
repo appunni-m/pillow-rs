@@ -1060,6 +1060,45 @@ pub extern "C" fn FT_Get_FSType_Flags(face: FT_Face) -> FT_UShort {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Glyph_Name(
+    face: FT_Face,
+    glyph_index: FT_UInt,
+    buffer: *mut c_void,
+    buffer_max: FT_UInt,
+) -> FT_Error {
+    let Some(state) = face_state(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    if buffer.is_null() || buffer_max == 0 {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    // SAFETY: `buffer` is non-null, and the C caller promises at least
+    // `buffer_max` writable bytes following FreeType's caller-allocated API.
+    let buffer = unsafe { slice::from_raw_parts_mut(buffer.cast::<u8>(), buffer_max as usize) };
+    match rust_ffi::FT_Get_Glyph_Name(&state.inner, glyph_index, buffer) {
+        Ok(_) => rust_ffi::FT_Err_Ok,
+        Err(error) => error,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Name_Index(face: FT_Face, glyph_name: *const c_char) -> FT_UInt {
+    let Some(state) = face_state(face) else {
+        return 0;
+    };
+    if glyph_name.is_null() {
+        return 0;
+    }
+    // SAFETY: `glyph_name` is non-null and follows FreeType's C string
+    // contract for this borrowed input pointer.
+    let glyph_name = unsafe { CStr::from_ptr(glyph_name) };
+    let Ok(glyph_name) = glyph_name.to_str() else {
+        return 0;
+    };
+    rust_ffi::FT_Get_Name_Index(Some(&state.inner), Some(glyph_name))
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_Postscript_Name(face: FT_Face) -> *const c_char {
     face_state(face)
         .and_then(|state| state.postscript_name.as_deref())

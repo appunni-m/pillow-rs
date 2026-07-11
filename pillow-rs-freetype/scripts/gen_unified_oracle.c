@@ -3544,6 +3544,128 @@ static FT_UInt glyph_selector_index(FT_Face face, const char* selector) {
     return FT_Get_Name_Index(face, (FT_String*)selector);
 }
 
+static FT_UInt glyph_name_query_index(FT_Face face, const char* selector) {
+    if (selector && streq(selector, "num_glyphs")) {
+        return face ? (FT_UInt)face->num_glyphs : 0;
+    }
+    if (selector && streq(selector, "num_glyphs_plus_1")) {
+        return face ? (FT_UInt)(face->num_glyphs + 1) : 1;
+    }
+    return glyph_selector_index(face, selector);
+}
+
+static unsigned char parse_fill_byte(const char* text) {
+    if (!text || !text[0] || streq(text, "-")) {
+        return 0xAA;
+    }
+    return (unsigned char)(strtoul(text, NULL, 0) & 0xFF);
+}
+
+static void print_glyph_name_output(
+    FT_UInt glyph_index,
+    FT_UInt buffer_max,
+    FT_Error err,
+    unsigned char* buffer) {
+    printf("{\"glyph_index\":%u,\"buffer_max\":%u,\"status\":%d,\"buffer_hex\":",
+           (unsigned int)glyph_index,
+           (unsigned int)buffer_max,
+           err);
+    if (!buffer) {
+        printf("null");
+    } else {
+        printf("\"");
+        print_hex_bytes(buffer, (long)buffer_max);
+        printf("\"");
+    }
+    printf("}");
+}
+
+static int emit_get_glyph_name(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    const char* glyph_selector = argv[5];
+    FT_UInt buffer_max = (FT_UInt)strtoul(argv[6], NULL, 10);
+    unsigned char fill = parse_fill_byte(argv[7]);
+    int face_null = streq(argv[8], "null");
+    int buffer_null = streq(argv[9], "null");
+
+    OracleFace face = {0};
+    if (!face_null) {
+        int opened = open_oracle_face(source_kind, source_value, face_index, &face);
+        if (opened != 0) {
+            return opened == 1 ? 0 : opened;
+        }
+    }
+
+    FT_Face call_face = face_null ? NULL : face.face;
+    FT_UInt glyph_index = glyph_name_query_index(call_face, glyph_selector);
+    size_t alloc_len = buffer_max == 0 ? 1 : (size_t)buffer_max;
+    unsigned char* buffer = NULL;
+    if (!buffer_null) {
+        buffer = (unsigned char*)malloc(alloc_len);
+        if (!buffer) {
+            close_oracle_face(&face);
+            return 2;
+        }
+        memset(buffer, fill, alloc_len);
+    }
+
+    FT_Error err = FT_Get_Glyph_Name(
+        call_face,
+        glyph_index,
+        buffer_null ? NULL : (FT_Pointer)buffer,
+        buffer_max);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":");
+    print_glyph_name_output(glyph_index, buffer_max, err, buffer_null ? NULL : buffer);
+    printf("}\n");
+    free(buffer);
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_get_name_index(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    const char* glyph_name = argv[5];
+    int face_null = streq(argv[6], "null");
+    int name_null = streq(argv[7], "null");
+
+    OracleFace face = {0};
+    if (!face_null) {
+        int opened = open_oracle_face(source_kind, source_value, face_index, &face);
+        if (opened != 0) {
+            return opened == 1 ? 0 : opened;
+        }
+    }
+
+    FT_Face call_face = face_null ? NULL : face.face;
+    FT_String* name_arg = name_null ? NULL : (FT_String*)glyph_name;
+    FT_UInt glyph_index = FT_Get_Name_Index(call_face, name_arg);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"return\":%u,\"glyph_name_bytes\":",
+           (unsigned int)glyph_index);
+    if (name_null) {
+        printf("null");
+    } else {
+        printf("\"");
+        print_hex_bytes((const unsigned char*)glyph_name, (long)strlen(glyph_name));
+        printf("\"");
+    }
+    printf("}}\n");
+
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_set_charmap_null_face(int argc, char** argv) {
     (void)argc;
     (void)argv;
@@ -6149,6 +6271,12 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 6 && streq(argv[1], "--get-postscript-name-variants")) {
         return emit_get_postscript_name_variants(argc, argv);
+    }
+    if (argc == 10 && streq(argv[1], "--get-glyph-name")) {
+        return emit_get_glyph_name(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--get-name-index")) {
+        return emit_get_name_index(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--get-sfnt-name-count")) {
         return emit_face_or_slot(argc, argv);
