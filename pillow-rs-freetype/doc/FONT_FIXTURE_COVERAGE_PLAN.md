@@ -450,7 +450,7 @@ Per-file source gap ledger:
 | `src/autohint/coverage.rs` | 28 | 0/28 (0.00%) | 7 | 35 | 4 |
 | `src/fixed.rs` | 15 | 180/195 (92.31%) | 3 | 27 | 5 |
 | `src/ffi/convert.rs` | 22 | 120/142 (84.51%) | 2 | 25 | 2 |
-| `src/tt/fvar.rs` | 18 | 50/68 (73.53%) | 4 | 22 | 3 |
+| `src/tt/fvar.rs` | 7 | 61/68 (89.71%) | 4 | 13 | 0 |
 | `src/tt/hinter/gs.rs` | 14 | 172/186 (92.47%) | 1 | 14 | 2 |
 | `src/autohint/globals.rs` | 14 | 200/214 (93.46%) | 1 | 23 | 18 |
 | `src/tt/cmap.rs` | 11 | 418/429 (97.44%) | 1 | 10 | 3 |
@@ -1320,6 +1320,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Shared signed SFNT helper coverage | 90 unique hashes | 0 | 6,516 | 6,513 / 6,513 | 3 | 13,940 / 16,899 lines; 20,177 / 24,275 regions; 3,342 / 4,298 branches | The public `post` table parser now reuses `tt::read_i16` for signed underline fields instead of duplicating byte decoding. Existing `FT_Get_Glyph_Name` post fixtures cover the helper through real C/Rust/C/WASM parity, closing `tt/mod.rs` structural coverage without adding cases or changing font assets |
 | 2026-07-11 | Raw TrueType program table helper coverage | 90 unique hashes | 0 | 6,516 | 6,513 / 6,513 | 3 | 13,948 / 16,901 lines; 20,181 / 24,271 regions; 3,342 / 4,298 branches | Font construction now routes optional `fpgm` and `prep` table reads through the restored byte-copy helpers. Existing `FT_Load_Glyph` rows cover the path through real compact TT program fonts, making `tt/hinter/tables.rs` 100% covered without new cases, font assets, or fixture-only calls |
 | 2026-07-11 | Branch-edge invalid coordinate reads | 90 unique hashes | 0 | 6,516 | 6,513 / 6,513 | 3 | 13,952 / 16,901 lines; 20,186 / 24,271 regions; 3,347 / 4,298 branches | Existing `branchEdgeMatrix` now packs invalid `GC[0]`, `GC[1]`, and `MDRP` point reads into its no-output TT program, reaching `GlyphZone` out-of-range guards through `FT_Load_Glyph` without adding concrete cases or changing parity output |
+| 2026-07-11 | Compact fvar structural controls | 93 unique hashes | 0 | 6,519 | 6,516 / 6,516 | 3 | 13,992 / 16,920 lines; 20,230 / 24,298 regions; 3,345 / 4,290 branches | `scripts/build_fvar_fixtures.py` rebuilds the compact malformed fvar controls and adds three explicit public `FT_FACE_FLAG_MULTIPLE_MASTERS` variants for instance-array EOF, too-short instance records, and instance PostScript IDs. `tt/fvar.rs` reaches full branch coverage; the two remaining lines are the mathematically unreachable u16 instance-count overflow guard |
 
 ## Decision Log
 
@@ -1387,6 +1388,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Make named-instance gaps pending instead of fallback-green | `ftmm.set_named_instance` previously appeared green through the generic modeled-error path. Direct oracle routing proves the compact success/error rows and leaves Adobe MM reset, `FT_MM_Var` namedstyle coordinates, and `gvar`/HVAR glyph-output deltas visible until the core implementation exists |
 | 2026-07-11 | Compare structured error output only by explicit opt-in | Existing expected-error rows intentionally tolerate several Rust/C error-classification differences. Rows that claim post-error state preservation, such as invalid named-instance selection, must set `compare_error_output` and provide matching C oracle, Rust, C ABI, and WASM ABI state snapshots |
 | 2026-07-11 | Prefer shared table readers over duplicated byte decoding | Reusing existing SFNT endian helpers is valid coverage progress when the public parser already reads the same field. It does not remove behavior or add a fake test path, and keeps coverage tied to real public fixture execution |
+| 2026-07-11 | Classify fvar instance-count overflow as unreachable | `instance_count` and `instance_size` are 16-bit SFNT fields, so their product fits in `usize` on supported 32-bit and 64-bit targets. Keep the defensive guard visible for now instead of deleting it to manufacture line coverage |
 
 ## Immediate Next Actions
 

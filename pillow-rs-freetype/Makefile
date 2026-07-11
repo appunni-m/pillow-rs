@@ -24,6 +24,7 @@ help:
 	@printf "  make oracle-fetch     Fetch pinned FreeType C oracle source\n"
 	@printf "  make font-fixture-cmap Rebuild compact cmap table fixtures\n"
 	@printf "  make font-fixture-cjk Rebuild the compact multiscript topology fixture\n"
+	@printf "  make font-fixture-fvar Rebuild compact fvar table fixtures\n"
 	@printf "  make font-fixture-gasp Rebuild compact gasp table fixtures\n"
 	@printf "  make font-fixture-hinter Rebuild the compact TrueType program fixture\n"
 	@printf "  make font-fixture-post Rebuild compact post table fixtures\n"
@@ -243,6 +244,10 @@ font-fixture-cmap: font-fixture-hinter
 .PHONY: font-fixture-post
 font-fixture-post: font-fixture-hinter
 	$(PYTHON) scripts/build_post_fixtures.py
+
+.PHONY: font-fixture-fvar
+font-fixture-fvar:
+	$(PYTHON) scripts/build_fvar_fixtures.py
 
 .PHONY: fmt
 fmt:

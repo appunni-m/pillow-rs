@@ -73,8 +73,11 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `7d4ee1626b98` | 743.4 | 52 | `input/fonts/generated/os2-unicode-ranges.ttf` | broad multiscript cmap and OS/2 Unicode/codepage range source |
 | `b85c38ecea8a` | 555.9 | 1 | `input/fonts/generated/variable/ubuntu-sans-variable.ttf` | glyf font with STAT but no fvar/avar/gvar; retained non-variable control despite filename |
 | `c7ed80798946` | 8.9 | 3 | `fonts/variable/compact-variable.ttf` | 20-glyph variable glyf; fvar/avar/gvar/HVAR/STAT, 2 axes, 12 named instances |
-| `da3228f1bd6a` | 8.7 | 1 | `fonts/variable/fvar-short.ttf` | compact malformed control with an 8-byte truncated fvar header |
-| `7c3e2b23d915` | 8.7 | 1 | `fonts/variable/fvar-version-2.ttf` | compact malformed control with unsupported fvar major version 2 |
+| `7594a1df018a` | 8.7 | 1 | `fonts/variable/fvar-short.ttf` | compact generated malformed control with an 8-byte truncated fvar header |
+| `9aa6f372453b` | 8.7 | 1 | `fonts/variable/fvar-version-2.ttf` | compact generated malformed control with unsupported fvar major version 2 |
+| `3380d1c030f9` | 8.8 | 1 | `fonts/variable/fvar-instance-array-short.ttf` | compact generated malformed control with a declared fvar instance array beyond table EOF |
+| `cc6cc4e2f726` | 8.9 | 1 | `fonts/variable/fvar-instance-size-short.ttf` | compact generated malformed control with an instance record one byte below the two-axis minimum |
+| `487a56138ec6` | 8.9 | 1 | `fonts/variable/fvar-instance-postscript-name.ttf` | compact generated variable control with explicit fvar instance PostScript name IDs |
 | `2b81d81f82a5` | 17.1 | 1 | `fonts/control/maxp-version-05.ttf` | six-byte maxp version 0.5 header; owns the below-1.0 zero-extra-profile path |
 | `1c06b1400c33` | 17.2 | 1 | `fonts/control/maxp-version-2.ttf` | full maxp version 2.0; owns FreeType's version-at-least-1 extra-frame path |
 | `c9a29ffba75b` | 17.1 | 1 | `fonts/control/maxp-v1-header-only.ttf` | version-1 maxp header at physical EOF; load failure is ignored into a zero profile |
@@ -345,9 +348,11 @@ and selected-glyph obligations still come from explicit inputs.
     deprecated Noto font without adding a case or content identity.
 12. A 9.1 KiB, 20-glyph Ubuntu subset preserves two variation axes and all 12
     named instances, replacing the 1.0 MiB source and two false variable aliases.
-13. Two 8.7 KiB malformed derivatives cover truncated and unsupported-version
-    fvar parsing; together with one out-of-range named index, the new fvar parser
-    has 100% function, line, region, and condition coverage.
+13. Five generated fvar derivatives cover truncated headers, unsupported
+    versions, declared instance arrays beyond table EOF, too-short instance
+    records, and explicit instance PostScript name IDs. The remaining uncovered
+    fvar lines are the defensive instance-count overflow closure, which is
+    unreachable with the table's 16-bit count and size fields.
 14. A 143 KiB retain-GID DejaVu fixture replaces the final 760 KiB dependency.
     Its selected outlines cover Latin and Greek blue strings, Cyrillic, emoji,
     touch tags, forced autohinting, face metadata, and native hint programs. Its
