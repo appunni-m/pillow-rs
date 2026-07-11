@@ -185,7 +185,10 @@ iteration, and adding compact generated name-table branch matrices for static
 PostScript-name fallback and variable-font variation-prefix fallback through
 `FT_Get_Postscript_Name`, then extending the compact autohint script font with
 unequal ASCII digit advances so existing force-autohint rows exercise the
-same-width digit false path without adding concrete cases.
+same-width digit false path without adding concrete cases, and extending the
+source-backed branch-edge TrueType glyph and prep program with no-output VM
+probes for `GETINFO`, delta count clamps, twilight-zone movement/intersection,
+IDEF fallback, and prep-range `INSTCTRL` without adding concrete cases.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -199,11 +202,11 @@ coordinate parity.
 | Runnable parity comparisons | 6,557 |
 | Exact parity | 6,557 / 6,557 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,327 / 17,141 (83.58%) |
+| Covered Rust lines | 14,359 / 17,141 (83.77%) |
 | Rust function coverage | 858 / 1,062 (80.79%) |
 | Rust instantiation coverage | 861 / 1,065 (80.85%) |
-| Rust region coverage | 20,723 / 24,618 (84.18%) |
-| Rust branch/condition coverage | 3,457 / 4,370 (79.11%) |
+| Rust region coverage | 20,821 / 24,618 (84.58%) |
+| Rust branch/condition coverage | 3,476 / 4,370 (79.54%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 138 |
 | Stored active font binaries | 95 files, 764 KiB |
@@ -238,7 +241,7 @@ Current largest uncovered buckets:
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 82 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
 | `src/ffi/handles.rs` | 1,323 / 1,478 | 233 / 280 | 142 / 162 | 1,831 / 2,012 | Public FFI route audit; wrappers stay thin and must delegate to core |
-| `src/tt/hinter/exec.rs` | 1,223 / 1,340 | 300 / 410 | 37 / 40 | 2,466 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
+| `src/tt/hinter/exec.rs` | 1,255 / 1,340 | 319 / 410 | 37 / 40 | 2,564 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 835 / 941 | 339 / 426 | 18 / 19 | 1,118 / 1,247 | CJK topology rows in the compact multiscript fixture |
 | `src/api.rs` | 389 / 464 | 61 / 70 | 44 / 52 | 522 / 620 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
@@ -466,9 +469,9 @@ Core Rust structural coverage from
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
 | Functions | 858 | 1,062 | 204 |
-| Lines | 14,327 | 17,141 | 2,814 |
-| Regions | 20,723 | 24,618 | 3,895 |
-| Branches/conditions | 3,457 | 4,370 | 913 |
+| Lines | 14,359 | 17,141 | 2,782 |
+| Regions | 20,821 | 24,618 | 3,797 |
+| Branches/conditions | 3,476 | 4,370 | 894 |
 
 Formal MC/DC is not reported by the installed Rust coverage tooling
 (`mcdc.count == 0`). Branch/condition coverage is therefore the instrumented
@@ -482,7 +485,7 @@ The remaining coverage divides exactly into these ownership groups:
 | Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 118 | 1,064 | 1,261 | 198 | public routing, wrapper thinness, metadata/state inputs |
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
 | Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 18 | 726 | 956 | 417 | script reachability audit, then glyph topology rows |
-| TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 139 | 467 | 130 | explicit bytecode-program glyph rows |
+| TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 107 | 369 | 111 | explicit bytecode-program glyph rows |
 | Math/casts | `fixed.rs`, `casts.rs` | 4 | 12 | 25 | 9 | scalar boundary rows or semantic cleanup |
 
 Per-file source gap ledger:
@@ -496,7 +499,7 @@ Per-file source gap ledger:
 | `src/autohint/globals_data.rs` | 230 | 63/293 (21.50%) | 1 | 152 | 0 |
 | `src/grays.rs` | 164 | 646/810 (79.75%) | 5 | 227 | 53 |
 | `src/ffi/handles.rs` | 155 | 1323/1478 (89.51%) | 20 | 181 | 47 |
-| `src/tt/hinter/exec.rs` | 117 | 1223/1340 (91.27%) | 3 | 435 | 110 |
+| `src/tt/hinter/exec.rs` | 85 | 1255/1340 (93.66%) | 3 | 337 | 91 |
 | `src/autohint/cjk.rs` | 106 | 835/941 (88.74%) | 1 | 129 | 87 |
 | `src/api.rs` | 75 | 389/464 (83.84%) | 8 | 98 | 9 |
 | `src/tt/name.rs` | 1 | 293/294 (99.66%) | 1 | 11 | 18 |
@@ -1433,6 +1436,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Format-14-only cmap sentinel rows | 104 unique hashes | 0 | 6,558 | 6,555 / 6,555 | 3 | 14,326 / 17,141 lines; 20,711 / 24,618 regions; 3,434 / 4,370 branches | `scripts/build_cmap_fixtures.py` now emits compact `cmap-format14-only.ttf`; explicit `FT_Get_Char_Index`, `FT_Get_First_Char`, and `FT_Get_Next_Char` rows prove pinned C and Rust/C-ABI/WASM return zero sentinels for format-14-only direct lookup and iteration. `tt/cmap.rs` reaches 428 / 429 lines and 100% branch coverage without implicit case growth |
 | 2026-07-11 | Name table branch-matrix controls | 106 unique hashes | 0 | 6,560 | 6,557 / 6,557 | 3 | 14,326 / 17,141 lines; 20,722 / 24,618 regions; 3,455 / 4,370 branches | `scripts/build_name_fixtures.py` now emits compact static and variable branch-matrix controls. Two explicit `FT_Get_Postscript_Name` variants prove pinned C and Rust/C-ABI/WASM agree on empty PostScript records, non-English Windows replacement rejection, invalid Windows filtering, Apple fallback filtering, and variation-prefix fallback synthesis. `tt/name.rs` moves to 470 / 481 regions and 116 / 134 branch outcomes without implicit case growth |
 | 2026-07-11 | Autohint unequal digit-width probes | 106 unique hashes | 0 | 6,560 | 6,557 / 6,557 | 3 | 14,327 / 17,141 lines; 20,723 / 24,618 regions; 3,457 / 4,370 branches | `script-coverage.ttf` now appends two ASCII digit glyphs with unequal advances. Existing explicit `FT_LOAD_FORCE_AUTOHINT` rows prove pinned C and Rust/C-ABI/WASM agree while `FaceGlobals::digits_have_same_width` reaches its false path without increasing the public case count |
+| 2026-07-11 | TrueType VM no-output branch probes | 106 unique hashes | 0 | 6,560 | 6,557 / 6,557 | 3 | 14,359 / 17,141 lines; 20,821 / 24,618 regions; 3,476 / 4,370 branches | Existing `branchEdgeMatrix` and its `prep` program now pack `GETINFO`, clamped `DELTAP`/`DELTAC`, twilight-zone `MDRP`/`MIRP`/`MSIRP`/`ISECT`, unknown-opcode IDEF dispatch, and prep-range no-op `INSTCTRL` probes into the source-backed `hinter-control-matrix.ttf`; exact Rust/C/WASM parity remains green with no concrete case growth |
 
 ## Decision Log
 
@@ -1449,6 +1453,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Keep the coverage denominator core-only | The parity executable still exercises Rust, C ABI, and WASM ABI for every runnable fixture, while reports exclude the thin wrapper source owned by separate crates |
 | 2026-07-10 | Centralize FreeType face metric selection | Pinned `sfobjs.c` prioritizes OS/2 `USE_TYPO_METRICS`, then nonzero hhea, then OS/2 typo and Windows fallbacks for both face and size metrics |
 | 2026-07-11 | Pack no-output TT guard probes into existing branch-edge glyphs | Invalid coordinate reads exercise defensive zone access while preserving the same public `FT_Load_Glyph` output and avoiding extra Cartesian case growth |
+| 2026-07-11 | Prefer no-output VM state probes before new TT rows | Stack-only calls, twilight-zone movement, and no-op prep instructions can cover VM branches through the existing public `FT_Load_Glyph` row when they do not alter glyph output or weaken parity |
 | 2026-07-10 | Require every predicate operand outcome | Line execution alone missed non-Roman Mac and non-Windows fallback records; nightly branch coverage makes both sides of each short-circuit condition visible |
 | 2026-07-11 | Do not keep C-mismatching name fixtures for coverage | Platform-0 variation-prefix and missing-subfamily candidate rows exposed real C/Rust PostScript-name differences; they remain correctness work rather than passing coverage rows |
 | 2026-07-10 | Treat TTC table offsets as collection-absolute | Pinned `tt_face_load_font_dir` reads table offsets from the TTC stream origin; adding the selected face base a second time breaks every nonzero face |
