@@ -853,6 +853,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | CJK force-autohint mono render load | 81 unique hashes | 0 | 6,475 | 6,474 / 6,474 | 1 | 13,351 / 16,315 lines; 19,276 / 23,316 regions; 3,243 / 4,150 branches | one explicit `FT_Load_Char` variant reuses `cjk-coverage.ttf` U+7530 with `FT_LOAD_FORCE_AUTOHINT | FT_LOAD_RENDER | FT_LOAD_TARGET_MONO`; exact Rust/C/WASM parity remains green and CJK hint/render target handling gains 5 lines, 7 regions, and 2 branches |
 | 2026-07-11 | Charmap and SFNT executable public paths | 81 unique hashes | 0 | 6,476 | 6,475 / 6,475 | 1 | 13,364 / 16,315 lines; 19,290 / 23,316 regions; 3,249 / 4,150 branches | converted stale SFNT table rows to concrete variants and routed Rust field-based charmap selection through the core path; +13 lines, +14 regions, +6 branches with exact Rust/C/WASM parity |
 | 2026-07-11 | API monochrome target flag combinations | 81 unique hashes | 0 | 6,479 | 6,478 / 6,478 | 1 | 13,364 / 16,315 lines; 19,290 / 23,316 regions; 3,252 / 4,150 branches | three explicit `FT_Load_Glyph` render variants cover `api.rs` monochrome short-circuit outcomes for LCD, LCD_V, and LIGHT targets; exact Rust/C/WASM parity remains green |
+| 2026-07-11 | Rust FFI lifecycle null-handle routing | 81 unique hashes | 0 | 6,479 | 6,478 / 6,478 | 1 | 13,366 / 16,315 lines; 19,292 / 23,316 regions; 3,254 / 4,150 branches | existing `FT_Done_Face` and `FT_Reference_Face` null-handle fixtures now call the thin Rust FFI handlers instead of a modeled shortcut; exact Rust/C/WASM parity remains green and `ffi/handles.rs` reaches 1,218 / 1,396 lines and 1,685 / 1,868 regions |
 
 ## Decision Log
 
@@ -901,6 +902,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Honor exact outline tags in the gray rasterizer | `Outline` already carries FreeType tag bytes; using them lets public outline-render inputs reach cubic control pairs while preserving on-curve fallback behavior for older outlines |
 | 2026-07-11 | Convert declarative charmap/SFNT rows to executable variants | Coverage only counts when the explicit runner consumes the field; ignored arrays such as multi-read SFNT declarations must become concrete variants or a maintained direct helper with exact C/Rust/WASM output parity |
 | 2026-07-11 | Leave transformed render divergence as a core bug bucket | A candidate `FT_Set_Transform` render-after-transform input reached `api.rs` transformed render-outline code but produced Rust/C bitmap byte divergence, so it is not a coverage-only fixture addition |
+| 2026-07-11 | Route null lifecycle fixtures through thin Rust FFI | Existing lifecycle fixtures should execute the same thin Rust FFI handlers as C/WASM for handle validation coverage; modeled error shortcuts are only for surfaces without a maintained direct Rust handler |
 
 ## Immediate Next Actions
 
