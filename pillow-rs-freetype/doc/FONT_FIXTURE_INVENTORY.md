@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 131 | 88 | 43 | 99 | 721 KiB |
+| Active fixtures | 133 | 90 | 43 | 101 | 738 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 5 | 5 | 0 | 5 | 187 KiB |
 
@@ -75,12 +75,14 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `c7ed80798946` | 8.9 | 3 | `fonts/variable/compact-variable.ttf` | 20-glyph variable glyf; fvar/avar/gvar/HVAR/STAT, 2 axes, 12 named instances |
 | `7594a1df018a` | 8.7 | 1 | `fonts/variable/fvar-short.ttf` | compact generated malformed control with an 8-byte truncated fvar header |
 | `9aa6f372453b` | 8.7 | 1 | `fonts/variable/fvar-version-2.ttf` | compact generated malformed control with unsupported fvar major version 2 |
+| `18652ff465b1` | 8.9 | 1 | `fonts/variable/fvar-axis-size-short.ttf` | compact generated malformed control with fvar axis records one byte below the required 20-byte OpenType size |
 | `3380d1c030f9` | 8.8 | 1 | `fonts/variable/fvar-instance-array-short.ttf` | compact generated malformed control with a declared fvar instance array beyond table EOF |
 | `cc6cc4e2f726` | 8.9 | 1 | `fonts/variable/fvar-instance-size-short.ttf` | compact generated malformed control with an instance record one byte below the two-axis minimum |
 | `487a56138ec6` | 8.9 | 1 | `fonts/variable/fvar-instance-postscript-name.ttf` | compact generated variable control with explicit fvar instance PostScript name IDs |
 | `fa98aa0ffd8e` | 7.9 | 1 | `fonts/variable/variable-name-apple-prefix.ttf` | compact generated variable control whose encoded named instance uses Apple-only nameID 25 and subfamily records plus an unsupported name record |
 | `64de26dc0261` | 7.9 | 1 | `fonts/variable/variable-name-unicode-prefix.ttf` | compact generated variable control whose encoded named instance has Unicode-only nameID 25 and subfamily records, proving FreeType ignores the Unicode variation prefix while accepting the Unicode subfamily |
 | `3bd1b44980a3` | 7.9 | 1 | `fonts/variable/variable-name-odd-win-prefix.ttf` | compact generated variable control whose encoded named instance has an odd-length Windows nameID 25 plus Apple Roman fallback, proving invalid Windows variation prefixes fall through |
+| `90c1dadc0242` | 7.9 | 1 | `fonts/variable/variable-name-missing-subfamily.ttf` | compact generated variable control whose encoded named instances lack usable subfamily names and force coordinate-based PostScript synthesis |
 | `2b81d81f82a5` | 17.1 | 1 | `fonts/control/maxp-version-05.ttf` | six-byte maxp version 0.5 header; owns the below-1.0 zero-extra-profile path |
 | `1c06b1400c33` | 17.2 | 1 | `fonts/control/maxp-version-2.ttf` | full maxp version 2.0; owns FreeType's version-at-least-1 extra-frame path |
 | `c9a29ffba75b` | 17.1 | 1 | `fonts/control/maxp-v1-header-only.ttf` | version-1 maxp header at physical EOF; load failure is ignored into a zero profile |
@@ -201,6 +203,7 @@ listed because they enter different hinting and scaling conditions.
 | `variable-name-apple-prefix.ttf` | encoded named instance 1 | name lookup only | Apple-only variation prefix/subfamily records build the encoded named-instance PostScript name through public `FT_Get_Postscript_Name` |
 | `variable-name-unicode-prefix.ttf` | encoded named instance 1 | name lookup only | Unicode-only variation prefix is ignored by FreeType's variation PostScript prefix path, while the Unicode subfamily is accepted through the general name lookup path |
 | `variable-name-odd-win-prefix.ttf` | encoded named instance 1 | name lookup only | odd-length Windows variation prefix is rejected before Apple Roman fallback constructs the encoded named-instance PostScript name |
+| `variable-name-missing-subfamily.ttf` | encoded named instances 1-4 | name lookup and fvar coordinates | unsupported subfamily records force FreeType's normal variation-instance PostScript synthesis for positive, zero, negative, and fractional 16.16 coordinates plus sanitized axis tags |
 | `glyf-component-matrix.ttf` | gids 3-10 | 19, 20 | point attachment, word XY arguments, all component transforms, rounded/unrounded offsets, use-my-metrics, and composite instructions |
 | `glyf-component-matrix.ttf` | gids 18, 19, 23 | 20 | accepted depth-8 boundary, rejected depth-9 recursion, and non-empty composite with an empty child |
 | `glyf-malformed-matrix.ttf` | gids 1-19 | 20 | one explicitly selected malformed record per simple/composite parser boundary and table/reference error |
@@ -360,11 +363,11 @@ and selected-glyph obligations still come from explicit inputs.
     deprecated Noto font without adding a case or content identity.
 12. A 9.1 KiB, 20-glyph Ubuntu subset preserves two variation axes and all 12
     named instances, replacing the 1.0 MiB source and two false variable aliases.
-13. Five generated fvar derivatives cover truncated headers, unsupported
-    versions, declared instance arrays beyond table EOF, too-short instance
-    records, and explicit instance PostScript name IDs. The remaining uncovered
-    fvar lines are the defensive instance-count overflow closure, which is
-    unreachable with the table's 16-bit count and size fields.
+13. Six generated fvar derivatives cover truncated headers, unsupported
+    versions, too-short axis records, declared instance arrays beyond table EOF,
+    too-short instance records, and explicit instance PostScript name IDs. The
+    remaining uncovered fvar lines are the defensive instance-count overflow
+    closure, which is unreachable with the table's 16-bit count and size fields.
 14. A 143 KiB retain-GID DejaVu fixture replaces the final 760 KiB dependency.
     Its selected outlines cover Latin and Greek blue strings, Cyrillic, emoji,
     touch tags, forced autohinting, face metadata, and native hint programs. Its

@@ -144,6 +144,56 @@ def write_variable_odd_windows_prefix() -> None:
     )
 
 
+def write_variable_missing_subfamily() -> None:
+    records = variable_base_without_instance_names()
+    records.extend(
+        [
+            NameRecordSpec(3, 1, 0x0409, 25, utf16be("MissingVar")),
+            NameRecordSpec(5, 0, 0, 259, b"Ignored"),
+            NameRecordSpec(5, 0, 0, 260, b"Ignored"),
+            NameRecordSpec(5, 0, 0, 261, b"Ignored"),
+            NameRecordSpec(5, 0, 0, 262, b"Ignored"),
+        ]
+    )
+    path = VARIABLE_OUT_DIR / "variable-name-missing-subfamily.ttf"
+    write_name_payload(
+        BASE_VARIABLE,
+        path,
+        build_name_table(records),
+    )
+    replace_table_bytes(path, b"fvar", build_missing_subfamily_fvar())
+
+
+def build_missing_subfamily_fvar() -> bytes:
+    payload = bytearray(table_payload(BASE_VARIABLE, b"fvar"))
+    axes_offset = int.from_bytes(payload[4:6], "big")
+    axis_count = int.from_bytes(payload[8:10], "big")
+    axis_size = int.from_bytes(payload[10:12], "big")
+    instance_size = int.from_bytes(payload[14:16], "big")
+    instances_offset = axes_offset + axis_count * axis_size
+
+    axis0 = axes_offset
+    payload[axis0 : axis0 + 4] = b"w d!"
+    payload[axis0 + 4 : axis0 + 8] = (-1 << 16).to_bytes(4, "big", signed=True)
+    payload[axis0 + 8 : axis0 + 12] = (0).to_bytes(4, "big", signed=True)
+    payload[axis0 + 12 : axis0 + 16] = (1 << 16).to_bytes(4, "big", signed=True)
+
+    axis1 = axes_offset + axis_size
+    payload[axis1 + 4 : axis1 + 8] = (-1 << 16).to_bytes(4, "big", signed=True)
+
+    coordinate_rows = [
+        (0, 100 << 16),
+        (0, 0),
+        (0, -1 << 16),
+        (1, 400 << 16),
+    ]
+    for index, (wdth, wght) in enumerate(coordinate_rows):
+        off = instances_offset + index * instance_size
+        payload[off + 4 : off + 8] = wdth.to_bytes(4, "big", signed=True)
+        payload[off + 8 : off + 12] = wght.to_bytes(4, "big", signed=True)
+    return bytes(payload)
+
+
 def build_name_table(records: list[NameRecordSpec]) -> bytes:
     string_offset = 6 + len(records) * 12
     storage = bytearray()
@@ -175,6 +225,14 @@ def write_name_payload(base: Path, path: Path, payload: bytes) -> None:
         path.unlink()
     path.write_bytes(base.read_bytes())
     replace_table_bytes(path, b"name", payload)
+
+
+def table_payload(path: Path, tag: bytes) -> bytes:
+    data = bytearray(path.read_bytes())
+    record = table_records(data)[tag]
+    start = record["offset"]
+    end = start + record["length"]
+    return bytes(data[start:end])
 
 
 def replace_table_bytes(path: Path, tag: bytes, payload: bytes) -> None:
@@ -263,6 +321,7 @@ def main() -> None:
     write_variable_apple_prefix()
     write_variable_unicode_prefix()
     write_variable_odd_windows_prefix()
+    write_variable_missing_subfamily()
 
 
 if __name__ == "__main__":
