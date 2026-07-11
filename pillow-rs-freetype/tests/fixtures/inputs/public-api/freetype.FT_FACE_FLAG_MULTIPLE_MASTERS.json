@@ -100,6 +100,58 @@
             "coverage": [
               "tt/fvar:unsupported-major-version"
             ]
+          },
+          {
+            "id": "short-fvar-instance-array-control",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/fvar-instance-array-short.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS"
+            },
+            "coverage": [
+              "tt/fvar:instance-array-too-short"
+            ]
+          },
+          {
+            "id": "short-fvar-instance-record-control",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/fvar-instance-size-short.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS"
+            },
+            "coverage": [
+              "tt/fvar:instance-record-too-short"
+            ]
+          },
+          {
+            "id": "fvar-instance-postscript-name",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/fvar-instance-postscript-name.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS",
+              "variation_probe": "FT_Get_MM_Var"
+            },
+            "coverage": [
+              "tt/fvar:instance-postscript-name-id"
+            ]
           }
         ]
       },
