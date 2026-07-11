@@ -28,6 +28,7 @@ help:
 	@printf "  make font-fixture-fvar Rebuild compact fvar table fixtures\n"
 	@printf "  make font-fixture-gasp Rebuild compact gasp table fixtures\n"
 	@printf "  make font-fixture-hinter Rebuild the compact TrueType program fixture\n"
+	@printf "  make font-fixture-metrics Rebuild compact face metric fallback fixtures\n"
 	@printf "  make font-fixture-name Rebuild compact name table fixtures\n"
 	@printf "  make font-fixture-post Rebuild compact post table fixtures\n"
 	@printf "\nBuild:\n"
@@ -247,6 +248,10 @@ font-fixture-autohint-scripts:
 .PHONY: font-fixture-gasp
 font-fixture-gasp: font-fixture-hinter
 	$(PYTHON) scripts/build_gasp_fixtures.py
+
+.PHONY: font-fixture-metrics
+font-fixture-metrics: font-fixture-hinter
+	$(PYTHON) scripts/build_metric_fixtures.py
 
 .PHONY: font-fixture-cmap
 font-fixture-cmap: font-fixture-hinter
