@@ -908,13 +908,15 @@
         <pt x="250" y="600" on="1"/>
       </contour>
       <instructions>
-        <!-- Compact native-TT branch controls: zero-length line vector,
-             invalid stack index fallbacks, taken JROF, no-round dispatch,
-             invalid contour shift, invalid coordinate reads, and an empty
-             twilight-zone SHZ. -->
+        <!-- Compact native-TT branch controls: zero-length line and stack
+             vectors, invalid stack index fallbacks, taken JROF, no-round
+             dispatch, invalid contour shift, invalid coordinate reads, and an
+             empty twilight-zone SHZ. -->
         <bytecode>
           01
           b1 00 00 08
+          b1 00 00 0a
+          b1 00 00 0b
           b0 00 25 21
           b0 00 26
           b1 01 00 79
