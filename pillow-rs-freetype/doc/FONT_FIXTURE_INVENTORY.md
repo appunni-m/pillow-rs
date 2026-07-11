@@ -415,10 +415,11 @@ and selected-glyph obligations still come from explicit inputs.
     fonts; `tt/loca.rs` has 100% function, line, region, and branch coverage.
 
 26. Two 1.6 KiB CVT controls cover present-empty and odd-length table
-    outcomes without executing hint programs. The unused `parse_fpgm` and
-    `parse_prep` byte-copy wrappers were removed because font construction
-    stores those raw tables directly; `tt/hinter/tables.rs` has 100% function,
-    line, region, and branch coverage.
+    outcomes without executing hint programs. Font construction now routes
+    present `fpgm` and `prep` byte streams through the restored byte-copy
+    helpers, and the compact TT program font covers those helpers through real
+    `FT_Load_Glyph` execution; `tt/hinter/tables.rs` has 100% function, line,
+    region, and branch coverage.
 
 27. One 3.5 KiB hinter control font combines compact IDEF and FDEF bodies,
     present-empty `prep`, a valid CVT, nineteen focused program glyphs, five
