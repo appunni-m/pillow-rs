@@ -93,7 +93,9 @@
         "params": {
           "open": "FT_New_Memory_Face",
           "face_index": 0,
-          "idx": 0,
+          "indexes": [
+            0
+          ],
           "preserve_raw_bytes": true
         }
       },

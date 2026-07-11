@@ -24,6 +24,11 @@
             "kind": "file",
             "role": "font",
             "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
           }
         },
         "params": {

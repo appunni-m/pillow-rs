@@ -561,6 +561,11 @@
             "kind": "file",
             "role": "font",
             "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
           }
         },
         "params": {
@@ -600,6 +605,13 @@
       "inputs": {
         "assets": {
           "font_bytes": {
+            "kind": "ref",
+            "role": "font",
+            "path": "input/fonts/variable/named-instances.ttf",
+            "status": "required_future_asset",
+            "requires": "Variable font with at least one named instance"
+          },
+          "font": {
             "kind": "ref",
             "role": "font",
             "path": "input/fonts/variable/named-instances.ttf",
