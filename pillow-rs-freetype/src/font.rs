@@ -375,8 +375,12 @@ impl Font {
 
         let os2 = dir.find(data, tag(b"OS/2")).and_then(tt::os2::parse_os2);
         let post = dir.find(data, tag(b"post")).and_then(tt::post::parse_post);
+        // `tt_face_load_gasp` calls `goto_table` with a null length pointer and
+        // then reads frames from the stream, so the SFNT table record length
+        // does not cap readable bytes for this optional table.
         let gasp = dir
-            .find(data, tag(b"gasp"))
+            .record(tag(b"gasp"))
+            .and_then(|record| data.get(record.offset as usize..))
             .and_then(|d| tt::gasp::parse_gasp(d).ok());
         let vhea = match dir.find(data, tag(b"vhea")) {
             Some(bytes) => Some(tt::vhea::parse_vhea(bytes)?),

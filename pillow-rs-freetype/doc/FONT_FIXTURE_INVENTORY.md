@@ -414,13 +414,16 @@ and selected-glyph obligations still come from explicit inputs.
     inspectable source is `tests/fixtures/font-sources/hinter-control-matrix.ttx`;
     rebuild it with `make font-fixture-hinter`.
 
-28. Four compact 3.8 KiB gasp controls replace the previous
+28. Seven compact 3.8 KiB gasp controls replace the previous
     `fonts/gasp/*.ttf` symlink aliases to `DejaVuSans.ttf`. They are generated
     from the source-backed hinter matrix by `scripts/build_gasp_fixtures.py`
     and rebuilt with `make font-fixture-gasp`. The set covers version 1
     multi-range selection and after-last sentinel behavior, no `gasp` table,
     version 0 high-bit masking, and unsupported version 2 optional-table
-    failure while keeping the SFNT face loadable.
+    failure while keeping the SFNT face loadable. It also includes a directory
+    record whose length is shorter than the readable physical `gasp` bytes,
+    matching FreeType's stream-read behavior, plus physical EOF controls for a
+    short header and truncated range array.
 
 29. One compact 3.9 KiB cmap matrix covers the `FT_Get_CMap_Format` and
     `FT_Get_CMap_Language_ID` public helpers without relying on broad fonts.
