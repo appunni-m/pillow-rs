@@ -2169,7 +2169,10 @@ impl BackendComparisonWorker {
                 let face = self.rust_face(case)?;
                 let glyph_index = rust_resolved_glyph_index(face, &case.inputs.params)?;
                 match FT_Load_Glyph(face, glyph_index, load_flags) {
-                    Ok(slot) => Ok(ok(slot_json(&slot))),
+                    Ok(slot) => {
+                        assert_api_load_glyph_agrees(case, &slot)?;
+                        Ok(ok(slot_json(&slot)))
+                    }
                     Err(err) => Ok(error(err)),
                 }
             }
@@ -7321,7 +7324,10 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             let face = open_face(case)?;
             let glyph_index = rust_resolved_glyph_index(&face, &case.inputs.params)?;
             match FT_Load_Glyph(&face, glyph_index, load_flags_param(&case.inputs.params)?) {
-                Ok(slot) => Ok(ok(slot_json(&slot))),
+                Ok(slot) => {
+                    assert_api_load_glyph_agrees(case, &slot)?;
+                    Ok(ok(slot_json(&slot)))
+                }
                 Err(err) => Ok(error(err)),
             }
         }
@@ -9211,6 +9217,52 @@ fn rust_load_char_public_api(case: &InputCase) -> Result<RunOutput, String> {
         Ok(slot) => Ok(ok(api_slot_json(&slot))),
         Err(err) => Ok(error(font_error_to_ft(err))),
     }
+}
+
+fn assert_api_load_glyph_agrees(case: &InputCase, ffi_slot: &FT_GlyphSlot) -> Result<(), String> {
+    if !checks_api_load_glyph_agreement(case) {
+        return Ok(());
+    }
+    let load_flags = match load_flags_to_core(load_flags_param(&case.inputs.params)?) {
+        Ok(flags) => flags,
+        Err(err) => {
+            return Err(format!(
+                "{} load flag conversion failed: {err}",
+                case.case_id
+            ));
+        }
+    };
+    let face = open_api_face(case)?;
+    let api_slot = face
+        .load_glyph(ffi_slot.glyph_index as u16, load_flags)
+        .map_err(|err| {
+            format!(
+                "{} Face::load_glyph({}) returned {err}",
+                case.case_id, ffi_slot.glyph_index
+            )
+        })?;
+    let ffi_json = slot_json(ffi_slot);
+    let api_json = api_slot_json(&api_slot);
+    if api_json != ffi_json {
+        return Err(format!(
+            "{} Face::load_glyph disagrees with FT_Load_Glyph: api={api_json} ffi={ffi_json}",
+            case.case_id
+        ));
+    }
+    Ok(())
+}
+
+fn checks_api_load_glyph_agreement(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "freetype.FT_LOAD_COMPUTE_METRICS.compute_metrics_load_behavior@compute-metrics"
+            | "freetype.FT_LOAD_FORCE_AUTOHINT.load_glyph_force_autohint_behavior"
+            | "freetype.FT_LOAD_NO_HINTING.load_glyph_no_hinting_behavior"
+            | "freetype.FT_LOAD_NO_RECURSE.composite_no_recurse_behavior"
+            | "freetype.FT_LOAD_NO_SCALE.unscaled_load_behavior"
+            | "freetype.FT_LOAD_RENDER.render_during_load"
+            | "freetype.FT_LOAD_TARGET_LIGHT.load_target_behavior"
+    )
 }
 
 fn rust_render_glyph_public_api(case: &InputCase) -> Result<RunOutput, String> {
@@ -13462,6 +13514,7 @@ fn slot_json(slot: &FT_GlyphSlot) -> Value {
 }
 
 fn api_slot_json(slot: &ApiGlyphSlot) -> Value {
+    let pixel_mode = slot.pixel_mode().map(pixel_mode_from_core);
     json!({
         "glyph_index": slot.glyph_index,
         "format": glyph_format_from_core(slot.format),
@@ -13484,7 +13537,7 @@ fn api_slot_json(slot: &ApiGlyphSlot) -> Value {
                 "width": bitmap.width,
                 "rows": bitmap.rows,
                 "pitch": bitmap.pitch,
-                "pixel_mode": pixel_mode_from_core(bitmap.pixel_mode),
+                "pixel_mode": pixel_mode,
                 "num_grays": bitmap.num_grays,
                 "left": slot.bitmap_left,
                 "top": slot.bitmap_top,
