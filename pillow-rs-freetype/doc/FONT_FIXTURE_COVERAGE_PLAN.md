@@ -290,18 +290,21 @@ variability-axis migration and must be reconciled in Phase 1.
 
 ## Evaluated Remaining Work
 
-Evaluation checkpoint: 2026-07-10, commit `2366de79`.
+Evaluation checkpoint: 2026-07-11, commit `98d75812` plus pending input
+normalization.
 
-The current unified public API suite has 4,110 logical cases, 6,414 concrete
-explicit cases, 6,413 runnable exact-parity cases, zero implicit cases, and one
-pending embedded-strike case. Core Rust structural coverage is:
+The current unified public API suite has 4,110 logical cases, 6,481 concrete
+explicit cases, 6,481 runnable exact-parity cases, zero implicit cases, and
+zero pending cases. The previous `freetype.request_size:first_available_size`
+pending row now uses an explicit 26.6 height value and participates in the
+normal Rust/C ABI/WASM parity comparison. Core Rust structural coverage is:
 
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
-| Functions | 732 | 989 | 257 |
-| Lines | 12,367 | 16,321 | 3,954 |
-| Regions | 17,729 | 23,307 | 5,578 |
-| Branches/conditions | 2,858 | 4,164 | 1,306 |
+| Functions | 770 | 990 | 220 |
+| Lines | 13,377 | 16,371 | 2,994 |
+| Regions | 19,335 | 23,406 | 4,071 |
+| Branches/conditions | 3,254 | 4,168 | 914 |
 
 The remaining regions and branches divide exactly into five ownership groups:
 
@@ -336,11 +339,11 @@ The completion budget is deliberately conservative:
 
 | Resource | Current | Maximum addition | Completion ceiling |
 |---|---:|---:|---:|
-| Concrete explicit cases | 6,414 | 500 | 6,914 |
+| Concrete explicit cases | 6,481 | 433 | 6,914 |
 | New semantic font files | 0 | 6 | 6 |
 | New glyph programs/topologies | 0 | 160 | 160 |
 | Implicit cases | 0 | 0 | 0 |
-| Pending cases | 1 | 0 | 0 |
+| Pending cases | 0 | 0 | 0 |
 
 The 500-case allowance is a ceiling, not a target. A batch must justify every
 variant by a named uncovered behavior. Existing focused fonts should be
@@ -554,9 +557,13 @@ render dispatch.
 
 Expected additions: one fixed-strike font; 8-20 explicit variants.
 
-Implement the required bitmap table support in pure Rust, then replace the
-single pending `first_available_size` expression with explicit successful and
-unavailable-strike inputs. Do not substitute a scalable font.
+Status: pending real fixed-strike implementation. The single symbolic
+`first_available_size` expression has been replaced with an explicit value, so
+the suite has zero pending cases and exact parity for the current request-size
+row. This does not complete embedded-strike parity: the current asset is still a
+scalable-font alias, so real fixed-strike support and successful/unavailable
+strike variants remain required. Do not substitute a scalable font for the final
+R7 exit gate.
 
 Exit gate: 0 pending cases and exact Rust/C/WASM strike parity.
 
