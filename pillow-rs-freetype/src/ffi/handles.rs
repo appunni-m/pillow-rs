@@ -61,6 +61,7 @@ pub struct FT_GlyphSlot {
     pub metrics: FT_Glyph_Metrics,
     pub advance: FT_Vector,
     pub format: FT_Glyph_Format,
+    pub num_subglyphs: FT_UInt,
     pub bitmap: Option<FT_Bitmap>,
     pub bitmap_left: FT_Int,
     pub bitmap_top: FT_Int,
@@ -506,16 +507,41 @@ pub fn FT_Select_Size(_face: Option<&mut FT_Face>, _strike_index: FT_Int) -> FT_
 }
 
 pub fn FT_Get_SubGlyph_Info(
-    _glyph: FT_GlyphSlot,
-    _sub_index: FT_UInt,
-    _index: Option<&mut FT_Int>,
-    _flags: Option<&mut FT_UInt>,
-    _glyph1: Option<&mut FT_Int>,
-    _glyph2: Option<&mut FT_Int>,
-    _transform: Option<&mut FT_Matrix>,
-    _delta: Option<&mut FT_Vector>,
+    glyph: Option<&FT_GlyphSlot>,
+    sub_index: FT_UInt,
+    index: Option<&mut FT_Int>,
+    flags: Option<&mut FT_UInt>,
+    glyph1: Option<&mut FT_Int>,
+    glyph2: Option<&mut FT_Int>,
+    transform: Option<&mut FT_Matrix>,
 ) -> FT_Error {
-    FT_Err_Unimplemented_Feature as FT_Error
+    let Some(glyph) = glyph else {
+        return FT_Err_Invalid_Argument;
+    };
+    if glyph.format != FT_GLYPH_FORMAT_COMPOSITE {
+        return FT_Err_Invalid_Argument;
+    }
+    let Ok(sub_index) = usize::try_from(sub_index) else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(subglyph) = glyph.core_slot.subglyphs.get(sub_index) else {
+        return FT_Err_Invalid_Argument;
+    };
+    let (Some(index), Some(flags), Some(glyph1), Some(glyph2), Some(transform)) =
+        (index, flags, glyph1, glyph2, transform)
+    else {
+        return FT_Err_Invalid_Argument;
+    };
+
+    *index = subglyph.index as FT_Int;
+    *flags = subglyph.flags as FT_UInt;
+    *glyph1 = subglyph.arg1 as FT_Int;
+    *glyph2 = subglyph.arg2 as FT_Int;
+    transform.xx = subglyph.transform.xx as FT_Fixed;
+    transform.xy = subglyph.transform.xy as FT_Fixed;
+    transform.yx = subglyph.transform.yx as FT_Fixed;
+    transform.yy = subglyph.transform.yy as FT_Fixed;
+    FT_Err_Ok
 }
 
 pub fn FT_Get_Glyph_Name(
@@ -1682,6 +1708,7 @@ fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags)
     let metrics: FT_Glyph_Metrics = slot.metrics.into();
     let advance: FT_Vector = slot.advance.into();
     let format = glyph_format_from_core(slot.format);
+    let num_subglyphs = FT_UInt::try_from(slot.subglyphs.len()).unwrap_or(FT_UInt::MAX);
     let bitmap = slot.bitmap.clone().map(Into::into);
     let bitmap_left = slot.bitmap_left;
     let bitmap_top = slot.bitmap_top;
@@ -1694,6 +1721,7 @@ fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags)
         metrics,
         advance,
         format,
+        num_subglyphs,
         bitmap,
         bitmap_left,
         bitmap_top,

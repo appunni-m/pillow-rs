@@ -2165,6 +2165,14 @@ impl BackendComparisonWorker {
                 let face = self.rust_face(case)?;
                 rust_inspect_glyph_slot(face, case)
             }
+            "freetype.get_subglyph_info" => {
+                if lifecycle_handle_param(&case.inputs.params, "glyph_slot") == Some("null") {
+                    rust_get_subglyph_info(None, case)
+                } else {
+                    let face = self.rust_face(case)?;
+                    rust_get_subglyph_info(Some(face), case)
+                }
+            }
             "render_glyph" => rust_render_glyph_public_api(case),
             _ => run_rust_ffi(case),
         }
@@ -2300,6 +2308,14 @@ impl BackendComparisonWorker {
             "freetype.inspect_glyph_slot" => {
                 let face = self.c_face(case)?;
                 c_inspect_glyph_slot(face, case)
+            }
+            "freetype.get_subglyph_info" => {
+                if lifecycle_handle_param(&case.inputs.params, "glyph_slot") == Some("null") {
+                    c_get_subglyph_info(std::ptr::null_mut(), case)
+                } else {
+                    let face = self.c_face(case)?;
+                    c_get_subglyph_info(face, case)
+                }
             }
             "render_glyph" => {
                 let load_flags = load_flags_param(&case.inputs.params)?;
@@ -2447,6 +2463,14 @@ impl BackendComparisonWorker {
             "freetype.inspect_glyph_slot" => {
                 let handle = self.wasm_face(case)?;
                 wasm_inspect_glyph_slot(handle, case)
+            }
+            "freetype.get_subglyph_info" => {
+                if lifecycle_handle_param(&case.inputs.params, "glyph_slot") == Some("null") {
+                    wasm_get_subglyph_info(0, case)
+                } else {
+                    let handle = self.wasm_face(case)?;
+                    wasm_get_subglyph_info(handle, case)
+                }
             }
             "render_glyph" => {
                 let load_flags = load_flags_param(&case.inputs.params)?;
@@ -6509,6 +6533,26 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
             Ok(args)
         }
+        "freetype.get_subglyph_info" => {
+            if lifecycle_handle_param(params, "glyph_slot") == Some("null") {
+                return Ok(vec![
+                    "--get-subglyph-info-null-slot".to_string(),
+                    subglyph_single_index_param(params)?.to_string(),
+                ]);
+            }
+            let mut args = vec!["--get-subglyph-info".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(load_flags_param(params)?.to_string());
+            args.push(subglyph_indices_arg(params, "sub_indices", "sub_index")?);
+            args.push(subglyph_indices_arg(
+                params,
+                "invalid_sub_indices",
+                "invalid_sub_index",
+            )?);
+            Ok(args)
+        }
         "freetype.load_glyph_outline" => {
             let mut args = vec!["--load-glyph-outline".to_string()];
             push_font_source(case, &mut args)?;
@@ -7073,7 +7117,14 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             }
             Ok(error(FT_Err_Unimplemented_Feature as FT_Error))
         }
-        "freetype.get_subglyph_info" => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
+        "freetype.get_subglyph_info" => {
+            if lifecycle_handle_param(&case.inputs.params, "glyph_slot") == Some("null") {
+                rust_get_subglyph_info(None, case)
+            } else {
+                let face = open_face(case)?;
+                rust_get_subglyph_info(Some(&face), case)
+            }
+        }
         "freetype.select_size" => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
         "ftgasp.get_gasp" => rust_get_gasp(case),
         "tttables.get_cmap_format" => rust_get_cmap_format(case),
@@ -7151,7 +7202,6 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.get_transform"
         | "freetype.reference_face"
         | "freetype.face_properties"
-        | "freetype.get_subglyph_info"
         | "freetype.select_size"
         | "ftsizes.new_size"
         | "ftsizes.done_size"
@@ -7502,6 +7552,17 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
                 Ok(error(err))
             }
         }
+        "freetype.get_subglyph_info" => {
+            if lifecycle_handle_param(&case.inputs.params, "glyph_slot") == Some("null") {
+                c_get_subglyph_info(std::ptr::null_mut(), case)
+            } else {
+                let (library, face) = c_open_face(case)?;
+                let output = c_get_subglyph_info(face, case);
+                c_done_face(face);
+                c_done_library(library);
+                output
+            }
+        }
         "render_glyph" => {
             let (library, face) = c_open_face(case)?;
             let output = c_render_glyph(
@@ -7545,7 +7606,6 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.get_transform"
         | "freetype.reference_face"
         | "freetype.face_properties"
-        | "freetype.get_subglyph_info"
         | "freetype.select_size"
         | "ftsizes.new_size"
         | "ftsizes.done_size"
@@ -7835,6 +7895,16 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
                 Ok(error(err))
             }
         }
+        "freetype.get_subglyph_info" => {
+            if lifecycle_handle_param(&case.inputs.params, "glyph_slot") == Some("null") {
+                wasm_get_subglyph_info(0, case)
+            } else {
+                let handle = wasm_open_face(case)?;
+                let output = wasm_get_subglyph_info(handle, case);
+                wasm_done_face(handle);
+                output
+            }
+        }
         "render_glyph" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_render_glyph(
@@ -7947,6 +8017,263 @@ fn wasm_inspect_glyph_metrics(handle: usize, case: &InputCase) -> Result<RunOutp
 fn wasm_inspect_glyph_slot(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
     let err = wasm_load_glyph_for_inspection(handle, case, true)?;
     wasm_slot_output(handle, err)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SubGlyphCallResult {
+    error: i32,
+    index: i32,
+    flags: u32,
+    arg1: i32,
+    arg2: i32,
+    transform: [i64; 4],
+}
+
+fn subglyph_status_json(error: i32) -> Value {
+    json!({
+        "kind": if error == FT_Err_Ok { "ok" } else { "error" },
+        "error_code": error
+    })
+}
+
+fn subglyph_call_json(sub_index: u32, result: SubGlyphCallResult) -> Value {
+    if result.error != FT_Err_Ok {
+        return json!({
+            "sub_index": sub_index,
+            "status": subglyph_status_json(result.error),
+            "index": Value::Null,
+            "flags": Value::Null,
+            "arg1": Value::Null,
+            "arg2": Value::Null,
+            "transform": Value::Null
+        });
+    }
+    json!({
+        "sub_index": sub_index,
+        "status": subglyph_status_json(result.error),
+        "index": result.index,
+        "flags": result.flags,
+        "arg1": result.arg1,
+        "arg2": result.arg2,
+        "transform": {
+            "xx": result.transform[0],
+            "xy": result.transform[1],
+            "yx": result.transform[2],
+            "yy": result.transform[3]
+        }
+    })
+}
+
+fn subglyph_info_output(
+    params: &Value,
+    slot_format: i32,
+    num_subglyphs: u32,
+    mut call: impl FnMut(u32) -> SubGlyphCallResult,
+) -> Result<Value, String> {
+    let subglyphs = subglyph_indices_param(params, "sub_indices", "sub_index")?
+        .into_iter()
+        .map(|sub_index| subglyph_call_json(sub_index, call(sub_index)))
+        .collect::<Vec<_>>();
+    let invalid = subglyph_indices_param(params, "invalid_sub_indices", "invalid_sub_index")?
+        .into_iter()
+        .map(|sub_index| subglyph_call_json(sub_index, call(sub_index)))
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "slot_format": slot_format,
+        "num_subglyphs": num_subglyphs,
+        "subglyphs": subglyphs,
+        "invalid": invalid
+    }))
+}
+
+fn rust_get_subglyph_info(face: Option<&FT_Face>, case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "glyph_slot") == Some("null") {
+        let mut index = 0;
+        let mut flags = 0;
+        let mut arg1 = 0;
+        let mut arg2 = 0;
+        let mut transform = FT_Matrix::default();
+        let err = FT_Get_SubGlyph_Info(
+            None,
+            subglyph_single_index_param(&case.inputs.params)?,
+            Some(&mut index),
+            Some(&mut flags),
+            Some(&mut arg1),
+            Some(&mut arg2),
+            Some(&mut transform),
+        );
+        return Ok(if err == FT_Err_Ok {
+            ok(json!({"unexpected_success": true}))
+        } else {
+            error(err)
+        });
+    }
+
+    let face = face.ok_or_else(|| "get_subglyph_info requires a face".to_string())?;
+    match FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    ) {
+        Ok(slot) => Ok(ok(subglyph_info_output(
+            &case.inputs.params,
+            slot.format,
+            slot.num_subglyphs,
+            |sub_index| {
+                let mut index = 0;
+                let mut flags = 0;
+                let mut arg1 = 0;
+                let mut arg2 = 0;
+                let mut transform = FT_Matrix::default();
+                let err = FT_Get_SubGlyph_Info(
+                    Some(&slot),
+                    sub_index,
+                    Some(&mut index),
+                    Some(&mut flags),
+                    Some(&mut arg1),
+                    Some(&mut arg2),
+                    Some(&mut transform),
+                );
+                SubGlyphCallResult {
+                    error: err,
+                    index,
+                    flags,
+                    arg1,
+                    arg2,
+                    transform: [transform.xx, transform.xy, transform.yx, transform.yy],
+                }
+            },
+        )?)),
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn c_get_subglyph_info(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "glyph_slot") == Some("null") {
+        let mut index = 0;
+        let mut flags = 0;
+        let mut arg1 = 0;
+        let mut arg2 = 0;
+        let mut transform = c_abi::FT_Matrix::default();
+        let err = c_abi::FT_Get_SubGlyph_Info(
+            std::ptr::null_mut(),
+            subglyph_single_index_param(&case.inputs.params)?,
+            &mut index,
+            &mut flags,
+            &mut arg1,
+            &mut arg2,
+            &mut transform,
+        );
+        return Ok(if err == FT_Err_Ok {
+            ok(json!({"unexpected_success": true}))
+        } else {
+            error(err)
+        });
+    }
+
+    let load_error = c_abi::FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if load_error != FT_Err_Ok {
+        return Ok(error(load_error));
+    }
+    let slot = c_abi::abi_slot_snapshot(face)
+        .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+    Ok(ok(subglyph_info_output(
+        &case.inputs.params,
+        slot.format,
+        slot.num_subglyphs,
+        |sub_index| {
+            let mut index = 0;
+            let mut flags = 0;
+            let mut arg1 = 0;
+            let mut arg2 = 0;
+            let mut transform = c_abi::FT_Matrix::default();
+            let err = c_abi::abi_get_subglyph_info_from_face(
+                face,
+                sub_index,
+                &mut index,
+                &mut flags,
+                &mut arg1,
+                &mut arg2,
+                &mut transform,
+            );
+            SubGlyphCallResult {
+                error: err,
+                index,
+                flags,
+                arg1,
+                arg2,
+                transform: [transform.xx, transform.xy, transform.yx, transform.yy],
+            }
+        },
+    )?))
+}
+
+fn wasm_get_subglyph_info(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "glyph_slot") == Some("null") {
+        let mut index = 0;
+        let mut flags = 0;
+        let mut arg1 = 0;
+        let mut arg2 = 0;
+        let mut transform = wasm_abi::FontdoneWasmMatrix::default();
+        let err = wasm_abi::fontdone_wasm_get_subglyph_info(
+            0,
+            subglyph_single_index_param(&case.inputs.params)?,
+            &mut index,
+            &mut flags,
+            &mut arg1,
+            &mut arg2,
+            &mut transform,
+        );
+        return Ok(if err == FT_Err_Ok {
+            ok(json!({"unexpected_success": true}))
+        } else {
+            error(err)
+        });
+    }
+
+    let load_error = wasm_abi::fontdone_wasm_load_glyph(
+        handle,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if load_error != FT_Err_Ok {
+        return Ok(error(load_error));
+    }
+    let slot = wasm_abi::abi_slot_snapshot(handle)
+        .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+    Ok(ok(subglyph_info_output(
+        &case.inputs.params,
+        slot.format,
+        slot.num_subglyphs,
+        |sub_index| {
+            let mut index = 0;
+            let mut flags = 0;
+            let mut arg1 = 0;
+            let mut arg2 = 0;
+            let mut transform = wasm_abi::FontdoneWasmMatrix::default();
+            let err = wasm_abi::fontdone_wasm_get_subglyph_info(
+                handle,
+                sub_index,
+                &mut index,
+                &mut flags,
+                &mut arg1,
+                &mut arg2,
+                &mut transform,
+            );
+            SubGlyphCallResult {
+                error: err,
+                index,
+                flags,
+                arg1,
+                arg2,
+                transform: [transform.xx, transform.xy, transform.yx, transform.yy],
+            }
+        },
+    )?))
 }
 
 fn wasm_load_glyph_for_inspection(
@@ -14934,6 +15261,47 @@ fn optional_u32_param_any(value: &Value, keys: &[&str], default: u32) -> Result<
         }
     }
     Ok(default)
+}
+
+fn subglyph_indices_param(
+    params: &Value,
+    array_key: &str,
+    single_key: &str,
+) -> Result<Vec<u32>, String> {
+    if let Some(values) = params.get(array_key).and_then(Value::as_array) {
+        return values
+            .iter()
+            .map(|value| u32_value(value, array_key))
+            .collect();
+    }
+    if let Some(value) = params.get(single_key) {
+        return Ok(vec![u32_value(value, single_key)?]);
+    }
+    Ok(Vec::new())
+}
+
+fn subglyph_indices_arg(
+    params: &Value,
+    array_key: &str,
+    single_key: &str,
+) -> Result<String, String> {
+    let indices = subglyph_indices_param(params, array_key, single_key)?;
+    if indices.is_empty() {
+        Ok("-".to_string())
+    } else {
+        Ok(indices
+            .into_iter()
+            .map(|index| index.to_string())
+            .collect::<Vec<_>>()
+            .join(","))
+    }
+}
+
+fn subglyph_single_index_param(params: &Value) -> Result<u32, String> {
+    subglyph_indices_param(params, "sub_indices", "sub_index")?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "missing sub_index/sub_indices".to_string())
 }
 
 fn load_flags_param(value: &Value) -> Result<i32, String> {

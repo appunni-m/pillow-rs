@@ -285,6 +285,7 @@ pub struct AbiSlotSnapshot {
     pub metrics: FT_Glyph_Metrics,
     pub advance: FT_Vector,
     pub format: FT_Glyph_Format,
+    pub num_subglyphs: FT_UInt,
     pub outline_cbox: FT_BBox,
     pub outline_bbox: FT_BBox,
     pub outline: Option<rust_ffi::FT_OutlineSnapshot>,
@@ -387,6 +388,7 @@ pub fn abi_slot_snapshot(face: FT_Face) -> Option<AbiSlotSnapshot> {
         metrics: slot.metrics,
         advance: slot.advance,
         format: slot.format,
+        num_subglyphs: slot.rust_slot.num_subglyphs,
         outline_cbox: rust_bbox_to_abi(slot.rust_slot.outline_cbox),
         outline_bbox: rust_bbox_to_abi(slot.rust_slot.outline_bbox),
         outline: slot.rust_slot.outline.clone(),
@@ -410,6 +412,30 @@ pub fn abi_render_glyph_from_face(face: FT_Face, render_mode: FT_Render_Mode) ->
         return rust_ffi::FT_Err_Invalid_Argument;
     };
     FT_Render_Glyph(slot.as_ptr(), render_mode)
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_get_subglyph_info_from_face(
+    face: FT_Face,
+    sub_index: FT_UInt,
+    p_index: *mut FT_Int,
+    p_flags: *mut FT_UInt,
+    p_arg1: *mut FT_Int,
+    p_arg2: *mut FT_Int,
+    p_transform: *mut FT_Matrix,
+) -> FT_Error {
+    let Some(slot) = abi_glyph_slot(face) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    FT_Get_SubGlyph_Info(
+        slot.as_ptr(),
+        sub_index,
+        p_index,
+        p_flags,
+        p_arg1,
+        p_arg2,
+        p_transform,
+    )
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -1407,6 +1433,72 @@ pub extern "C" fn FT_Get_Advances(
         }
         Err(error) => error,
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_SubGlyph_Info(
+    slot: FT_GlyphSlot,
+    sub_index: FT_UInt,
+    p_index: *mut FT_Int,
+    p_flags: *mut FT_UInt,
+    p_arg1: *mut FT_Int,
+    p_arg2: *mut FT_Int,
+    p_transform: *mut FT_Matrix,
+) -> FT_Error {
+    let Some(slot_ptr) = non_null_mut(slot) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let (
+        Some(p_index),
+        Some(p_flags),
+        Some(p_arg1),
+        Some(p_arg2),
+        Some(p_transform),
+    ) = (
+        non_null_mut(p_index),
+        non_null_mut(p_flags),
+        non_null_mut(p_arg1),
+        non_null_mut(p_arg2),
+        non_null_mut(p_transform),
+    )
+    else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+
+    // SAFETY: `slot_ptr` is checked non-null and points to a live slot allocated by this crate.
+    let rust_slot = unsafe { &(*slot_ptr.as_ptr()).rust_slot };
+    let mut index = 0;
+    let mut flags = 0;
+    let mut arg1 = 0;
+    let mut arg2 = 0;
+    let mut transform = rust_ffi::FT_Matrix::default();
+    let error = rust_ffi::FT_Get_SubGlyph_Info(
+        Some(rust_slot),
+        sub_index,
+        Some(&mut index),
+        Some(&mut flags),
+        Some(&mut arg1),
+        Some(&mut arg2),
+        Some(&mut transform),
+    );
+    if error != rust_ffi::FT_Err_Ok {
+        return error;
+    }
+
+    // SAFETY: all output pointers are non-null and caller provides writable storage.
+    unsafe {
+        *p_index.as_ptr() = index;
+        *p_flags.as_ptr() = flags;
+        *p_arg1.as_ptr() = arg1;
+        *p_arg2.as_ptr() = arg2;
+        *p_transform.as_ptr() = FT_Matrix {
+            xx: transform.xx,
+            xy: transform.xy,
+            yx: transform.yx,
+            yy: transform.yy,
+        };
+    }
+    rust_ffi::FT_Err_Ok
 }
 
 #[unsafe(no_mangle)]

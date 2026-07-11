@@ -90,6 +90,7 @@ pub struct FontdoneWasmGlyphSlot {
     pub metrics: FontdoneWasmGlyphMetrics,
     pub advance: FontdoneWasmVector,
     pub format: i32,
+    pub num_subglyphs: u32,
     pub bitmap: FontdoneWasmBitmap,
     pub bitmap_left: i32,
     pub bitmap_top: i32,
@@ -201,6 +202,7 @@ pub struct AbiSlotSnapshot {
     pub metrics: FontdoneWasmGlyphMetrics,
     pub advance: FontdoneWasmVector,
     pub format: i32,
+    pub num_subglyphs: u32,
     pub outline_cbox: AbiBBoxSnapshot,
     pub outline_bbox: AbiBBoxSnapshot,
     pub outline: Option<rust_ffi::FT_OutlineSnapshot>,
@@ -263,6 +265,7 @@ pub fn abi_slot_snapshot(handle: usize) -> Option<AbiSlotSnapshot> {
         metrics: slot.metrics,
         advance: slot.advance,
         format: slot.format,
+        num_subglyphs: slot.num_subglyphs,
         outline_cbox: wasm_bbox_snapshot(rust_slot.outline_cbox),
         outline_bbox: wasm_bbox_snapshot(rust_slot.outline_bbox),
         outline: rust_slot.outline.clone(),
@@ -1294,6 +1297,65 @@ pub extern "C" fn fontdone_wasm_get_advances(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_subglyph_info(
+    handle: usize,
+    sub_index: FT_UInt,
+    p_index: *mut FT_Int,
+    p_flags: *mut FT_UInt,
+    p_arg1: *mut FT_Int,
+    p_arg2: *mut FT_Int,
+    p_transform: *mut FontdoneWasmMatrix,
+) -> FT_Error {
+    if p_index.is_null()
+        || p_flags.is_null()
+        || p_arg1.is_null()
+        || p_arg2.is_null()
+        || p_transform.is_null()
+    {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(slot) = face.slot.as_ref() else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+
+    let mut index = 0;
+    let mut flags = 0;
+    let mut arg1 = 0;
+    let mut arg2 = 0;
+    let mut transform = rust_ffi::FT_Matrix::default();
+    let error = rust_ffi::FT_Get_SubGlyph_Info(
+        Some(slot),
+        sub_index,
+        Some(&mut index),
+        Some(&mut flags),
+        Some(&mut arg1),
+        Some(&mut arg2),
+        Some(&mut transform),
+    );
+    if error != rust_ffi::FT_Err_Ok {
+        return error;
+    }
+
+    // SAFETY: output pointers are checked non-null and caller provides writable storage.
+    unsafe {
+        *p_index = index;
+        *p_flags = flags;
+        *p_arg1 = arg1;
+        *p_arg2 = arg2;
+        *p_transform = FontdoneWasmMatrix {
+            xx: transform.xx,
+            xy: transform.xy,
+            yx: transform.yx,
+            yy: transform.yy,
+        };
+    }
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_render_glyph(handle: usize, render_mode: i32) -> FT_Error {
     let Some(face) = face_mut(handle) else {
         return rust_ffi::FT_Err_Invalid_Argument;
@@ -1388,6 +1450,7 @@ fn slot_to_wasm(slot: &rust_ffi::FT_GlyphSlot) -> FontdoneWasmGlyphSlot {
             y: slot.advance.y,
         },
         format: slot.format,
+        num_subglyphs: slot.num_subglyphs,
         bitmap,
         bitmap_left: slot.bitmap_left,
         bitmap_top: slot.bitmap_top,

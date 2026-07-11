@@ -9,7 +9,7 @@
 use crate::error::FontError;
 use crate::font::{
     BBox, FaceInfo, Font, GlyphSlotLoad, GlyphSlotLoadFormat, GlyphSlotMetrics, KerningMode,
-    LoadMode, LoadedOutline, SizeMetrics, SizeRequest, SizeRequestError,
+    LoadMode, LoadedOutline, SizeMetrics, SizeRequest, SizeRequestError, SubGlyphInfo,
 };
 use crate::render::{PixelMode, RenderMode, RenderedBitmap, render_loaded_outline};
 use crate::tt::hinter::NativeHintMode;
@@ -526,6 +526,8 @@ pub struct GlyphSlot {
     pub outline_cbox: BBox,
     /// Exact `FT_Outline_Get_BBox` result for the loaded outline.
     pub outline_bbox: BBox,
+    /// Composite subglyph rows when the slot format is [`GlyphFormat::Composite`].
+    pub subglyphs: Vec<SubGlyphInfo>,
     slot_outline: Option<crate::outline::Outline>,
     loaded_outline: Option<LoadedOutline>,
 }
@@ -541,6 +543,7 @@ impl GlyphSlot {
         let metrics = loaded.metrics;
         let slot_outline = loaded.slot_outline;
         let loaded_outline = loaded.render_outline;
+        let subglyphs = loaded.subglyphs;
         let format = if rendered {
             GlyphFormat::Bitmap
         } else {
@@ -573,6 +576,7 @@ impl GlyphSlot {
             bitmap_top,
             outline_cbox: loaded.outline_cbox,
             outline_bbox: loaded.outline_bbox,
+            subglyphs,
             slot_outline,
             loaded_outline,
         }
