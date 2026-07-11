@@ -216,7 +216,72 @@ pub fn name_string(table: &NameTable, name_id: u16) -> Option<String> {
 
 /// Return the nameID 25 variation PostScript-name prefix, if present.
 pub fn variations_postscript_prefix(table: &NameTable) -> Option<String> {
-    name_string(table, NAME_ID_VARIATIONS_PREFIX)
+    [
+        NAME_ID_VARIATIONS_PREFIX,
+        NAME_ID_TYPO_FAMILY,
+        NAME_ID_FAMILY,
+    ]
+    .into_iter()
+    .find_map(|name_id| postscript_prefix_string(table, name_id))
+}
+
+fn postscript_prefix_string(table: &NameTable, name_id: u16) -> Option<String> {
+    // FreeType `sfnt_get_var_ps_name` in `src/sfnt/sfdriver.c` uses
+    // `sfnt_get_name_id` for the variation prefix, which only accepts
+    // Windows 3/0, Windows 3/1, or Apple Roman names.  Unlike
+    // `tt_face_get_name`, Unicode/ISO name records are not a fallback here.
+    let mut found_win = None;
+    let mut found_apple = None;
+    for (index, record) in table.records.iter().enumerate() {
+        if record.name_id != name_id || record.string.is_empty() {
+            continue;
+        }
+        if record.platform_id == 3
+            && matches!(record.encoding_id, 0 | 1)
+            && (record.language_id == 0x0409 || found_win.is_none())
+        {
+            found_win = Some(index);
+        }
+        if record.platform_id == 1
+            && record.encoding_id == 0
+            && (record.language_id == 0 || found_apple.is_none())
+        {
+            found_apple = Some(index);
+        }
+    }
+
+    if let Some(index) = found_win
+        && let Some(name) = postscript_prefix_win_string(&table.records[index].string)
+    {
+        return Some(name);
+    }
+    if let Some(index) = found_apple {
+        return postscript_prefix_apple_string(&table.records[index].string);
+    }
+    None
+}
+
+fn postscript_prefix_win_string(bytes: &[u8]) -> Option<String> {
+    if !bytes.len().is_multiple_of(2) {
+        return None;
+    }
+    let mut result = String::new();
+    for pair in bytes.chunks_exact(2) {
+        if pair[0] == 0 && pair[1].is_ascii_alphanumeric() {
+            result.push(char::from(pair[1]));
+        }
+    }
+    (!result.is_empty()).then_some(result)
+}
+
+fn postscript_prefix_apple_string(bytes: &[u8]) -> Option<String> {
+    let mut result = String::new();
+    for &byte in bytes {
+        if byte.is_ascii_alphanumeric() {
+            result.push(char::from(byte));
+        }
+    }
+    (!result.is_empty()).then_some(result)
 }
 
 fn find_postscript_name(data: &[u8], string_base: usize, records: &[NameRecord]) -> Option<String> {
