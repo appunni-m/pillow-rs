@@ -1788,7 +1788,8 @@
             },
             "coverage": [
               "tt/hinter:sround-selector-and-sign-matrix",
-              "tt/hinter:s45round-sign-matrix"
+              "tt/hinter:s45round-sign-matrix",
+              "tt/hinter:s45round-clamp-repair"
             ]
           },
           {

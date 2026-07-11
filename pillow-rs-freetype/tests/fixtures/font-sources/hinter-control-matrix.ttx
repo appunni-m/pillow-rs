@@ -572,14 +572,15 @@
         <pt x="250" y="600" on="1"/>
       </contour>
       <instructions>
-        <!-- Four SROUND selectors cover period, phase, and threshold classes;
-             each is consumed by positive and negative ROUND operations. -->
+        <!-- SROUND/S45ROUND selector probes cover period, phase, threshold,
+             sign, and S45ROUND clamp repairs without moving outline points. -->
         <bytecode>
           b0 00 76 b0 30 68 21 b8 ff d0 68 21
           b0 50 76 b0 30 68 21 b8 ff d0 68 21
           b0 a1 76 b0 30 68 21 b8 ff d0 68 21
           b0 f4 76 b0 30 68 21 b8 ff d0 68 21
           b0 54 77 b0 30 68 21 b8 ff d0 68 21
+          b0 71 77 b0 00 68 21 b8 ff ff 68 21
         </bytecode>
       </instructions>
     </TTGlyph>
