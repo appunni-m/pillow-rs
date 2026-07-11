@@ -1322,10 +1322,43 @@ impl Font {
     ) -> Result<GlyphSlotLoad, FontError> {
         let mut loaded = self.glyph_slot_load_no_scale(glyph)?;
         if self.glyph_is_composite(glyph)? {
+            let outline = tt::glyf::load_glyph(
+                &self.data.glyf_data,
+                &self.data.loca_data,
+                self.data.head.index_to_loc_format,
+                glyph,
+                &self.data.hmtx,
+            )?;
+            let x_min = outline.bbox_xmin;
+            let y_min = outline.ymin;
+            let x_max = outline.xmax;
+            let y_max = outline.ymax;
+            let h_metric = self.data.hmtx.get(glyph);
+            let mut metrics = GlyphSlotMetrics {
+                width: x_max - x_min,
+                height: y_max - y_min,
+                hori_bearing_x: x_min,
+                hori_bearing_y: y_max,
+                hori_advance: h_metric.advance_width as i32,
+                vert_bearing_x: 0,
+                vert_bearing_y: 0,
+                vert_advance: 0,
+            };
+            self.fill_no_scale_vertical_metrics(glyph, &outline, &mut metrics);
+            let outline_cbox = BBox {
+                x_min,
+                y_min,
+                x_max,
+                y_max,
+            };
             // C: FT_LOAD_NO_RECURSE leaves composite glyphs in
             // FT_GLYPH_FORMAT_COMPOSITE instead of resolving them to an
-            // outline (`src/truetype/ttgload.c`).  Renderers then reject the
-            // slot with Cannot_Render_Glyph.
+            // outline and computes metrics from the composite glyph header
+            // bbox (`src/truetype/ttgload.c`).  Renderers then reject the slot
+            // with Cannot_Render_Glyph.
+            loaded.metrics = metrics;
+            loaded.outline_cbox = outline_cbox;
+            loaded.outline_bbox = outline_cbox;
             loaded.format = GlyphSlotLoadFormat::Composite;
             loaded.slot_outline = None;
             loaded.render_outline = None;
