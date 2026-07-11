@@ -222,12 +222,32 @@ pub struct GlyphSlotMetrics {
     pub vert_advance: i32,
 }
 
+/// Composite subglyph transform returned by FreeType's `FT_Get_SubGlyph_Info`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SubGlyphTransform {
+    pub xx: i32,
+    pub xy: i32,
+    pub yx: i32,
+    pub yy: i32,
+}
+
+/// Composite subglyph record returned by FreeType's `FT_Get_SubGlyph_Info`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SubGlyphInfo {
+    pub index: u16,
+    pub flags: u16,
+    pub arg1: i32,
+    pub arg2: i32,
+    pub transform: SubGlyphTransform,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GlyphSlotLoad {
     pub metrics: GlyphSlotMetrics,
     pub format: GlyphSlotLoadFormat,
     pub outline_cbox: BBox,
     pub outline_bbox: BBox,
+    pub subglyphs: Vec<SubGlyphInfo>,
     pub slot_outline: Option<Outline>,
     pub render_outline: Option<LoadedOutline>,
 }
@@ -236,6 +256,24 @@ pub(crate) struct GlyphSlotLoad {
 pub(crate) enum GlyphSlotLoadFormat {
     Outline,
     Composite,
+}
+
+fn subglyphs_from_components(components: &[tt::glyf::CompositeComponent]) -> Vec<SubGlyphInfo> {
+    components
+        .iter()
+        .map(|component| SubGlyphInfo {
+            index: component.glyph_index,
+            flags: component.flags,
+            arg1: component.arg1,
+            arg2: component.arg2,
+            transform: SubGlyphTransform {
+                xx: component.transform.xx,
+                xy: component.transform.xy,
+                yx: component.transform.yx,
+                yy: component.transform.yy,
+            },
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1159,6 +1197,7 @@ impl Font {
             glyph,
             &self.data.hmtx,
         )?;
+        let subglyphs = subglyphs_from_components(&outline.components);
         let h_metric = self.data.hmtx.get(glyph);
         let hori_advance = h_metric.advance_width as i32;
         if outline.num_contours == 0 || outline.points.is_empty() {
@@ -1184,6 +1223,7 @@ impl Font {
                 format: GlyphSlotLoadFormat::Outline,
                 outline_cbox,
                 outline_bbox: outline_cbox,
+                subglyphs,
                 slot_outline: Some(Outline::default()),
                 render_outline: Some(LoadedOutline {
                     outline: Outline::default(),
@@ -1236,6 +1276,7 @@ impl Font {
             format: GlyphSlotLoadFormat::Outline,
             outline_cbox,
             outline_bbox: outline_cbox,
+            subglyphs,
             slot_outline: Some(slot_outline),
             render_outline: Some(render_outline),
         })
@@ -1795,6 +1836,7 @@ impl Font {
                 x_max: outline_bbox_x_max,
                 y_max: outline_bbox_y_max,
             },
+            subglyphs: Vec::new(),
             slot_outline: Some(slot_outline),
             render_outline: Some(LoadedOutline {
                 outline,

@@ -87,6 +87,8 @@ impl Affine {
 #[derive(Debug, Clone)]
 pub struct CompositeComponent {
     pub glyph_index: u16,
+    /// Raw TrueType component flags as stored in the glyf table.
+    pub flags: u16,
     /// Translation args (font units when ARGS_ARE_XY_VALUES).
     pub arg1: i32,
     pub arg2: i32,
@@ -659,6 +661,7 @@ fn parse_composite_components(data: &[u8], mut pos: usize) -> Result<CompositeGl
 
         components.push(CompositeComponent {
             glyph_index,
+            flags,
             arg1,
             arg2,
             args_are_xy,

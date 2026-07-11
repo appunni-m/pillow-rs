@@ -65,22 +65,19 @@
           "font": {
             "kind": "file",
             "role": "font",
-            "path": "input/fonts/composite/composite-flags.ttf"
+            "path": "fonts/glyf/glyf-component-matrix.ttf"
           }
         },
         "params": {
           "face_index": 0,
-          "glyph_index": "composite glyph with at least two components",
-          "load_flags": [
-            "FT_LOAD_NO_RECURSE"
-          ],
+          "glyph_index": 10,
+          "load_flags": 1024,
           "sub_indices": [
             0,
-            1,
-            "last"
+            1
           ],
           "invalid_sub_indices": [
-            "num_subglyphs"
+            2
           ]
         }
       },
@@ -111,7 +108,7 @@
           ]
         },
         "fixture_requirements": [
-          "fonts/composite/composite-flags.ttf must contain components using XY args and transform flags"
+          "fonts/glyf/glyf-component-matrix.ttf contains a composite glyph with multiple subglyph records"
         ],
         "source_refs": [
           "freetype/include/freetype/freetype.h",
