@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 125 | 82 | 43 | 90 | 686 KiB |
+| Active fixtures | 129 | 86 | 43 | 97 | 705 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 5 | 5 | 0 | 5 | 187 KiB |
 
@@ -78,6 +78,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `3380d1c030f9` | 8.8 | 1 | `fonts/variable/fvar-instance-array-short.ttf` | compact generated malformed control with a declared fvar instance array beyond table EOF |
 | `cc6cc4e2f726` | 8.9 | 1 | `fonts/variable/fvar-instance-size-short.ttf` | compact generated malformed control with an instance record one byte below the two-axis minimum |
 | `487a56138ec6` | 8.9 | 1 | `fonts/variable/fvar-instance-postscript-name.ttf` | compact generated variable control with explicit fvar instance PostScript name IDs |
+| `fa98aa0ffd8e` | 7.9 | 1 | `fonts/variable/variable-name-apple-prefix.ttf` | compact generated variable control whose encoded named instance uses Apple-only nameID 25 and subfamily records plus an unsupported name record |
 | `2b81d81f82a5` | 17.1 | 1 | `fonts/control/maxp-version-05.ttf` | six-byte maxp version 0.5 header; owns the below-1.0 zero-extra-profile path |
 | `1c06b1400c33` | 17.2 | 1 | `fonts/control/maxp-version-2.ttf` | full maxp version 2.0; owns FreeType's version-at-least-1 extra-frame path |
 | `c9a29ffba75b` | 17.1 | 1 | `fonts/control/maxp-v1-header-only.ttf` | version-1 maxp header at physical EOF; load failure is ignored into a zero profile |
@@ -114,6 +115,9 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `936734c2d182` | 1.5 | 1 | `fonts/names/name-empty.ttf` | valid zero-record name table; owns the `Unknown` family and `Regular` subfamily defaults |
 | `298447f992df` | 1.5 | 1 | `fonts/names/name-short.ttf` | five-byte name table; owns the short-header face-open error |
 | `fad5b6b1057c` | 1.5 | 1 | `fonts/names/name-record-overflow.ttf` | six-byte name header declaring one absent record; owns the record-array overflow error |
+| `ed624513a6fd` | 3.6 | 1 | `fonts/names/name-selection-fallbacks.ttf` | compact generated name-table control with unsupported platform, invalid Apple offset, Unicode family fallback, Apple-Roman subfamily, and Windows PostScript name |
+| `e7ba7ed18dac` | 3.5 | 1 | `fonts/names/name-apple-postscript.ttf` | compact generated name-table control whose PostScript name is Apple Roman only |
+| `4d73600e7fce` | 3.5 | 1 | `fonts/names/name-win-postscript-odd-apple.ttf` | compact generated name-table control with an odd-length Windows PostScript candidate that falls back to Apple Roman |
 | `0a2206bc87ca` | 13.6 | 1 | `fonts/control/multiface-cjk-indic.ttc` | two-face collection combining the compact CJK and Indic fonts; owns TTC offset iteration and second-face selection |
 | `a123d521381f` | 0.01 | 1 | `fonts/control/ttc-short.ttc` | eight-byte TTC short-header control |
 | `0b66ccbde246` | 0.01 | 1 | `fonts/control/ttc-offset-overflow.ttc` | 12-byte TTC declaring one absent face offset |
@@ -189,6 +193,10 @@ listed because they enter different hinting and scaling conditions.
 | `post-format-20-short.ttf`, `post-format-20-zero.ttf` | gid 1 | name lookup only | malformed format 2.0 headers default to `.notdef` with exact public status and buffer parity |
 | `post-format-20-custom-truncated.ttf` | gid 1 | name lookup only | format 2.0 custom name index without string bytes returns `.notdef` like the C oracle |
 | `post-format-25-short.ttf`, `post-format-25-zero.ttf`, `post-format-25-too-many.ttf` | gid 1 | name lookup only | malformed format 2.5 headers and above-limit counts default to `.notdef` with exact public status and buffer parity |
+| `name-selection-fallbacks.ttf` | face open and name lookup only | name table only | unsupported and malformed family-name candidates fall through to Unicode/Mac Roman fallbacks while `FT_Get_Postscript_Name` still returns exact Windows bytes |
+| `name-apple-postscript.ttf` | face open and name lookup only | name table only | Apple Roman nameID 6 is selected by `FT_Get_Postscript_Name` when no Windows PostScript name exists |
+| `name-win-postscript-odd-apple.ttf` | face open and name lookup only | name table only | odd-length Windows nameID 6 is rejected and exact C/Rust/C ABI/WASM parity falls back to Apple Roman |
+| `variable-name-apple-prefix.ttf` | encoded named instance 1 | name lookup only | Apple-only variation prefix/subfamily records build the encoded named-instance PostScript name through public `FT_Get_Postscript_Name` |
 | `glyf-component-matrix.ttf` | gids 3-10 | 19, 20 | point attachment, word XY arguments, all component transforms, rounded/unrounded offsets, use-my-metrics, and composite instructions |
 | `glyf-component-matrix.ttf` | gids 18, 19, 23 | 20 | accepted depth-8 boundary, rejected depth-9 recursion, and non-empty composite with an empty child |
 | `glyf-malformed-matrix.ttf` | gids 1-19 | 20 | one explicitly selected malformed record per simple/composite parser boundary and table/reference error |

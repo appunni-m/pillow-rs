@@ -27,6 +27,7 @@ help:
 	@printf "  make font-fixture-fvar Rebuild compact fvar table fixtures\n"
 	@printf "  make font-fixture-gasp Rebuild compact gasp table fixtures\n"
 	@printf "  make font-fixture-hinter Rebuild the compact TrueType program fixture\n"
+	@printf "  make font-fixture-name Rebuild compact name table fixtures\n"
 	@printf "  make font-fixture-post Rebuild compact post table fixtures\n"
 	@printf "\nBuild:\n"
 	@printf "  make build            Build the crate\n"
@@ -248,6 +249,10 @@ font-fixture-post: font-fixture-hinter
 .PHONY: font-fixture-fvar
 font-fixture-fvar:
 	$(PYTHON) scripts/build_fvar_fixtures.py
+
+.PHONY: font-fixture-name
+font-fixture-name:
+	$(PYTHON) scripts/build_name_fixtures.py
 
 .PHONY: fmt
 fmt:

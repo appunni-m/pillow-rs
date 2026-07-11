@@ -338,7 +338,9 @@ generated reports, build outputs, and package installs.
 |   |   |-- bench_ft_ops.c
 |   |   |-- build_cmap_fixtures.py
 |   |   |-- build_ft.sh
+|   |   |-- build_fvar_fixtures.py
 |   |   |-- build_gasp_fixtures.py
+|   |   |-- build_name_fixtures.py
 |   |   |-- build_post_fixtures.py
 |   |   |-- build_unified_oracle.py
 |   |   |-- check_public_api_inputs.py
