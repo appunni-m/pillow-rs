@@ -89,6 +89,28 @@
               "tt/name:odd-windows-postscript-rejected",
               "tt/name:apple-postscript-after-windows-failure"
             ]
+          },
+          {
+            "id": "postscript-branch-matrix",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-postscript-branch-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "lifetime_probe": "before_done_face"
+            },
+            "coverage": [
+              "tt/name:empty-postscript-record-skipped",
+              "tt/name:windows-nonenglish-replacement-rejected",
+              "tt/name:windows-invalid-postscript-filtered",
+              "tt/name:apple-nonenglish-replacement-rejected",
+              "tt/name:apple-postscript-invalid-byte-filtered",
+              "tt/name:family-nonenglish-windows-defers-to-apple"
+            ]
           }
         ]
       },
@@ -199,6 +221,26 @@
             "coverage": [
               "tt/name:variation-prefix-odd-windows-rejected",
               "tt/name:variation-prefix-apple-after-windows-failure"
+            ]
+          },
+          {
+            "id": "encoded-prefix-branch-matrix-instance",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-prefix-branch-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 65536
+            },
+            "coverage": [
+              "tt/name:variation-prefix-windows-nonenglish-replacement-rejected",
+              "tt/name:variation-prefix-windows-invalid-byte-filtered",
+              "tt/name:variation-prefix-apple-nonenglish-replacement-rejected",
+              "tt/name:variation-prefix-apple-invalid-byte-filtered",
+              "tt/name:variation-prefix-fallback-synthesized-subfamily"
             ]
           },
           {

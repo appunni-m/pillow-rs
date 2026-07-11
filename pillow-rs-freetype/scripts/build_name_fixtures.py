@@ -74,6 +74,29 @@ def write_odd_windows_postscript_with_apple_fallback() -> None:
     )
 
 
+def write_postscript_branch_matrix() -> None:
+    records = [
+        NameRecordSpec(3, 1, 0x0409, 16, b""),
+        NameRecordSpec(1, 1, 2, 16, mac_roman("AppleEncodingIgnored")),
+        NameRecordSpec(3, 1, 0x0411, 16, utf16be("WinJPFamily")),
+        NameRecordSpec(3, 1, 0x0412, 16, utf16be("WinKRFamily")),
+        NameRecordSpec(1, 0, 1, 16, mac_roman("AppleFamily")),
+        NameRecordSpec(3, 1, 0x0409, 17, b""),
+        NameRecordSpec(1, 0, 0, 17, mac_roman("AppleEnglishStyle")),
+        NameRecordSpec(3, 1, 0x0409, 6, b""),
+        NameRecordSpec(3, 1, 0x0411, 6, utf16be("WinJPPS")),
+        NameRecordSpec(3, 1, 0x0412, 6, utf16be("WinKRPS")),
+        NameRecordSpec(3, 1, 0x0409, 6, b"\0 "),
+        NameRecordSpec(1, 0, 1, 6, mac_roman("Apple PS")),
+        NameRecordSpec(1, 0, 2, 6, mac_roman("IgnoredApple")),
+    ]
+    write_name_payload(
+        BASE_STATIC,
+        NAME_OUT_DIR / "name-postscript-branch-matrix.ttf",
+        build_name_table(records),
+    )
+
+
 def variable_base_records() -> list[NameRecordSpec]:
     return [
         NameRecordSpec(3, 1, 0x0409, 1, utf16be("Ubuntu")),
@@ -140,6 +163,25 @@ def write_variable_odd_windows_prefix() -> None:
     write_name_payload(
         BASE_VARIABLE,
         VARIABLE_OUT_DIR / "variable-name-odd-win-prefix.ttf",
+        build_name_table(records),
+    )
+
+
+def write_variable_prefix_branch_matrix() -> None:
+    records = variable_base_without_instance_names()
+    records.extend(
+        [
+            NameRecordSpec(3, 1, 0x0411, 25, utf16be("WinJPVar")),
+            NameRecordSpec(3, 1, 0x0412, 25, utf16be("WinKRVar")),
+            NameRecordSpec(3, 1, 0x0409, 25, b"X\0\0 "),
+            NameRecordSpec(1, 0, 1, 25, mac_roman("Apple Var")),
+            NameRecordSpec(1, 0, 2, 25, mac_roman("IgnoredApple")),
+            NameRecordSpec(5, 0, 0, 259, b"Ignored"),
+        ]
+    )
+    write_name_payload(
+        BASE_VARIABLE,
+        VARIABLE_OUT_DIR / "variable-name-prefix-branch-matrix.ttf",
         build_name_table(records),
     )
 
@@ -318,9 +360,11 @@ def main() -> None:
     write_static_selection_fallbacks()
     write_apple_postscript()
     write_odd_windows_postscript_with_apple_fallback()
+    write_postscript_branch_matrix()
     write_variable_apple_prefix()
     write_variable_unicode_prefix()
     write_variable_odd_windows_prefix()
+    write_variable_prefix_branch_matrix()
     write_variable_missing_subfamily()
 
 
