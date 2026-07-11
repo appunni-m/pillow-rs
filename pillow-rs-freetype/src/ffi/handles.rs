@@ -9,8 +9,8 @@ use crate::font::{KerningMode, SizeRequest, SizeRequestError, SizeRequestType};
 
 use super::constants::*;
 use super::convert::{
-    FT_LOAD_TARGET_MODE, error_to_ft, glyph_format_from_core, load_flags_to_core,
-    render_mode_to_core,
+    FT_LOAD_TARGET_MODE, error_to_ft, glyph_format_from_core, load_flag_for_render_mode,
+    load_flags_to_core, render_mode_to_core,
 };
 use super::types::{
     FT_Angle, FT_BBox, FT_Bitmap, FT_Bool, FT_Byte, FT_Bytes, FT_Char, FT_CharMap,
@@ -1462,11 +1462,9 @@ pub fn FT_Render_Glyph(
     slot.core_slot
         .render(mode)
         .map(|rendered| {
-            slot_to_ffi(
-                &face_to_ffi(source_face, false),
-                rendered,
-                load_flags | api::LoadFlags::RENDER,
-            )
+            let render_flags =
+                load_flags | api::LoadFlags::RENDER | load_flag_for_render_mode(mode);
+            slot_to_ffi(&face_to_ffi(source_face, false), rendered, render_flags)
         })
         .map_err(error_to_ft)
 }

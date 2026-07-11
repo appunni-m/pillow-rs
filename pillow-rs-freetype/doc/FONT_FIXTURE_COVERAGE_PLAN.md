@@ -536,7 +536,7 @@ Per-file source gap ledger:
 | `src/autohint/types.rs` | 32 | 71/103 (68.93%) | 7 | 25 | 1 |
 | `src/autohint/coverage.rs` | 22 | 6/28 (21.43%) | 5 | 28 | 4 |
 | `src/fixed.rs` | 9 | 206/215 (95.81%) | 3 | 22 | 3 |
-| `src/ffi/convert.rs` | 12 | 130/142 (91.55%) | 1 | 12 | 0 |
+| `src/ffi/convert.rs` | 4 | 138/142 (97.18%) | 0 | 4 | 0 |
 | `src/tt/fvar.rs` | 7 | 91/98 (92.86%) | 4 | 13 | 1 |
 | `src/tt/hinter/gs.rs` | 14 | 172/186 (92.47%) | 1 | 14 | 2 |
 | `src/autohint/globals.rs` | 13 | 214/227 (94.27%) | 1 | 20 | 18 |
@@ -1478,6 +1478,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Core `FT_Get_Charmap_Index` route | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,458 / 17,175 lines; 21,073 / 24,682 regions; 3,529 / 4,380 branches | Existing `freetype.FT_Get_Charmap_Index` rows now exercise the core public helper for owned, null, and foreign charmaps. C ABI keeps raw-pointer validation and delegates the owned-charmap index value to core; no fonts or cases were added |
 | 2026-07-12 | Core CMap scoped helper routes | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,470 / 17,175 lines; 21,106 / 24,682 regions; 3,529 / 4,380 branches | Existing `tttables.FT_Get_CMap_Format` and `tttables.FT_Get_CMap_Language_ID` rows now verify `FT_Charmap_Info`, `FT_Charmap_Format`, and `FT_Charmap_Language_ID` agree with raw public CMap helpers for valid, null, and out-of-range charmaps. No fonts or cases were added |
 | 2026-07-12 | Safe Rust load-glyph agreement route | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,473 / 17,175 lines; 21,111 / 24,682 regions; 3,529 / 4,380 branches | Seven existing `FT_LOAD_*` rows now assert `Face::load_glyph` matches the Rust FFI `FT_Load_Glyph` slot for compute metrics, force autohint, no hinting, no recurse, no scale, load-time render, and target-light representatives. The output JSON and case count stay unchanged |
+| 2026-07-12 | Render-mode load-flag helper route | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,482 / 17,176 lines; 21,122 / 24,685 regions; 3,529 / 4,380 branches | `FT_Render_Glyph` now carries the returned slot's render target through the shared `load_flag_for_render_mode` helper. Existing explicit render-mode rows cover normal, mono, LCD, LCD_V, and SDF routing with exact Rust FFI, C ABI, and WASM parity; no fonts or cases were added |
 
 ## Decision Log
 
@@ -1497,6 +1498,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Keep charmap raw-pointer validation in ABI, not lookup semantics | `FT_Get_Charmap_Index` needs C ABI raw-pointer and lifetime validation, but the return value for live owned charmaps belongs in core. Existing public rows now call both the raw core helper and face-scoped helper to prove they agree without adding fixture rows |
 | 2026-07-12 | Cover CMap scoped helpers through existing CMap rows | `FT_Charmap_Info`, `FT_Charmap_Format`, and `FT_Charmap_Language_ID` are core facade helpers for the same public CMap metadata already selected by `FT_Get_CMap_Format` and `FT_Get_CMap_Language_ID`; exercising them as agreement checks avoids new cases and keeps route intent explicit |
 | 2026-07-12 | Reuse selected `FT_LOAD_*` rows for safe API slot agreement | `Face::load_glyph` is a public Rust facade over the same core behavior exposed by `FT_Load_Glyph`; asserting slot equality on representative existing rows covers facade output methods without widening the public input matrix |
+| 2026-07-12 | Route rendered-slot target flags through the shared helper | `FT_Render_Glyph` already validates the public render mode before calling core rendering; preserving the selected render target in the returned slot's internal load flags keeps wrapper state centralized without adding cases or changing public output JSON |
 | 2026-07-11 | Pack no-output TT guard probes into existing branch-edge glyphs | Invalid coordinate reads exercise defensive zone access while preserving the same public `FT_Load_Glyph` output and avoiding extra Cartesian case growth |
 | 2026-07-11 | Prefer no-output VM state probes before new TT rows | Stack-only calls, twilight-zone movement, and no-op prep instructions can cover VM branches through the existing public `FT_Load_Glyph` row when they do not alter glyph output or weaken parity |
 | 2026-07-10 | Require every predicate operand outcome | Line execution alone missed non-Roman Mac and non-Windows fallback records; nightly branch coverage makes both sides of each short-circuit condition visible |
