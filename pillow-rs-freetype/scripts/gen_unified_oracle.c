@@ -2825,7 +2825,8 @@ static int emit_outline_render(int argc, char** argv) {
         return 0;
     }
 
-    FT_Vector points[4];
+    const char* case_id = argc > 3 ? argv[3] : "";
+    FT_Vector points[8];
     points[0].x = 8 * 64;
     points[0].y = 8 * 64;
     points[1].x = 24 * 64;
@@ -2834,28 +2835,75 @@ static int emit_outline_render(int argc, char** argv) {
     points[2].y = 24 * 64;
     points[3].x = 8 * 64;
     points[3].y = 24 * 64;
-    char tags[4] = {
+    char tags[8] = {
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
         FT_CURVE_TAG_ON,
         FT_CURVE_TAG_ON,
         FT_CURVE_TAG_ON,
         FT_CURVE_TAG_ON,
     };
-    short contours[1] = {3};
+    short contours[2] = {3, 7};
+    short n_contours = 1;
+    short n_points = 4;
+    unsigned int bitmap_width = 32;
+    unsigned int bitmap_rows = 32;
+
+    if (strstr(case_id, "@even-odd-overlap")) {
+        points[4].x = 12 * 64;
+        points[4].y = 12 * 64;
+        points[5].x = 28 * 64;
+        points[5].y = 12 * 64;
+        points[6].x = 28 * 64;
+        points[6].y = 28 * 64;
+        points[7].x = 12 * 64;
+        points[7].y = 28 * 64;
+        n_contours = 2;
+        n_points = 8;
+    } else if (strstr(case_id, "@clipped-crossing-lines")) {
+        points[0].x = -8 * 64;
+        points[0].y = 8 * 64;
+        points[1].x = 24 * 64;
+        points[1].y = 8 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 24 * 64;
+        points[3].x = -8 * 64;
+        points[3].y = 24 * 64;
+        bitmap_width = 16;
+        bitmap_rows = 16;
+    } else if (strstr(case_id, "@cubic-closed-loop")) {
+        points[0].x = 8 * 64;
+        points[0].y = 16 * 64;
+        points[1].x = 8 * 64;
+        points[1].y = 28 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 28 * 64;
+        points[3].x = 24 * 64;
+        points[3].y = 16 * 64;
+        tags[1] = FT_CURVE_TAG_CUBIC;
+        tags[2] = FT_CURVE_TAG_CUBIC;
+    }
+
     FT_Outline outline;
-    outline.n_contours = 1;
-    outline.n_points = 4;
+    outline.n_contours = n_contours;
+    outline.n_points = n_points;
     outline.points = points;
     outline.tags = tags;
     outline.contours = contours;
     outline.flags = 0;
+    if (strstr(case_id, "@even-odd-overlap")) {
+        outline.flags = FT_OUTLINE_EVEN_ODD_FILL;
+    }
 
     unsigned char buffer[32 * 32];
     memset(buffer, 0, sizeof(buffer));
     FT_Bitmap bitmap;
     memset(&bitmap, 0, sizeof(bitmap));
-    bitmap.rows = 32;
-    bitmap.width = 32;
-    bitmap.pitch = 32;
+    bitmap.rows = bitmap_rows;
+    bitmap.width = bitmap_width;
+    bitmap.pitch = (int)bitmap_width;
     bitmap.buffer = buffer;
     bitmap.num_grays = 256;
     bitmap.pixel_mode = FT_PIXEL_MODE_GRAY;

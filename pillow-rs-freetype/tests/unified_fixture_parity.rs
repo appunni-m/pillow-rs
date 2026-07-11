@@ -9726,13 +9726,55 @@ fn outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> 
     if case.expect_error {
         return Ok(error(FT_Err_Invalid_Argument));
     }
-    let raster = fontdone::grays::rasterize_in_box(outline_render_square(), 32, 32)
-        .map_err(|err| err.to_string())?;
+    let outline = outline_render_outline(case)?;
+    let (width, height) = outline_render_target_box(&case.inputs.params)?;
+    let raster =
+        fontdone::grays::rasterize_in_box(outline, width, height).map_err(|err| err.to_string())?;
     Ok(ok(outline_render_bitmap_payload(
         raster.width,
         raster.height,
         &raster.pixels,
     )))
+}
+
+fn outline_render_outline(case: &InputCase) -> Result<fontdone::outline::Outline, String> {
+    match outline_asset_id(case).unwrap_or("outlines/render/simple-filled-square.json") {
+        "outlines/render/simple-filled-square.json" => Ok(outline_render_square()),
+        "outlines/render/direct-spans-clipped.json" => Ok(outline_render_square()),
+        "outlines/render/even-odd-overlap.json" => Ok(outline_render_even_odd_overlap()),
+        "outlines/render/clipped-crossing-lines.json" => Ok(outline_render_clipped_crossing()),
+        "outlines/render/cubic-closed-loop.json" => Ok(outline_render_cubic_loop()),
+        _ => Ok(outline_render_square()),
+    }
+}
+
+fn outline_asset_id(case: &InputCase) -> Option<&str> {
+    case.inputs
+        .assets
+        .get("outline")
+        .and_then(|asset| match asset {
+            Asset::Ref { id: Some(id), .. } => Some(id.as_str()),
+            Asset::File { path, .. } => Some(path.as_str()),
+            _ => None,
+        })
+}
+
+fn outline_render_target_box(params: &Value) -> Result<(usize, usize), String> {
+    let Some(box_value) = params.get("target_box") else {
+        return Ok((32, 32));
+    };
+    let width = box_value
+        .get("width")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "target_box.width must be an unsigned integer".to_string())?;
+    let height = box_value
+        .get("height")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "target_box.height must be an unsigned integer".to_string())?;
+    Ok((
+        usize::try_from(width).map_err(|err| err.to_string())?,
+        usize::try_from(height).map_err(|err| err.to_string())?,
+    ))
 }
 
 fn outline_render_square() -> fontdone::outline::Outline {
@@ -9771,13 +9813,116 @@ fn outline_render_square() -> fontdone::outline::Outline {
     }
 }
 
+fn outline_render_even_odd_overlap() -> fontdone::outline::Outline {
+    let mut outline = outline_render_square();
+    outline.n_contours = 2;
+    outline.contours = vec![3, 7];
+    outline.points.extend([
+        fontdone::outline::OutlinePoint {
+            x: 12 * 64,
+            y: 12 * 64,
+            on_curve: true,
+        },
+        fontdone::outline::OutlinePoint {
+            x: 28 * 64,
+            y: 12 * 64,
+            on_curve: true,
+        },
+        fontdone::outline::OutlinePoint {
+            x: 28 * 64,
+            y: 28 * 64,
+            on_curve: true,
+        },
+        fontdone::outline::OutlinePoint {
+            x: 12 * 64,
+            y: 28 * 64,
+            on_curve: true,
+        },
+    ]);
+    outline.tags = vec![1; 8];
+    outline.flags = 0x02;
+    outline
+}
+
+fn outline_render_clipped_crossing() -> fontdone::outline::Outline {
+    fontdone::outline::Outline {
+        n_contours: 1,
+        contours: vec![3],
+        points: vec![
+            fontdone::outline::OutlinePoint {
+                x: -8 * 64,
+                y: 8 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 24 * 64,
+                y: 8 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 24 * 64,
+                y: 24 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: -8 * 64,
+                y: 24 * 64,
+                on_curve: true,
+            },
+        ],
+        tags: vec![1; 4],
+        contour_dropouts: Vec::new(),
+        flags: 0,
+        cbox_x_min: 0,
+        cbox_y_min: 0,
+        cbox_x_max: 16,
+        cbox_y_max: 16,
+    }
+}
+
+fn outline_render_cubic_loop() -> fontdone::outline::Outline {
+    fontdone::outline::Outline {
+        n_contours: 1,
+        contours: vec![3],
+        points: vec![
+            fontdone::outline::OutlinePoint {
+                x: 8 * 64,
+                y: 16 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 8 * 64,
+                y: 28 * 64,
+                on_curve: false,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 24 * 64,
+                y: 28 * 64,
+                on_curve: false,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 24 * 64,
+                y: 16 * 64,
+                on_curve: true,
+            },
+        ],
+        tags: vec![1, 2, 2, 1],
+        contour_dropouts: Vec::new(),
+        flags: 0,
+        cbox_x_min: 0,
+        cbox_y_min: 0,
+        cbox_x_max: 32,
+        cbox_y_max: 32,
+    }
+}
+
 fn outline_render_bitmap_payload(width: usize, height: usize, buffer: &[u8]) -> Value {
     json!({
         "params_source_is_outline": true,
         "bitmap": {
             "width": width,
             "rows": height,
-            "pitch": 32,
+            "pitch": width,
             "pixel_mode": FT_PIXEL_MODE_GRAY,
             "num_grays": 256,
             "buffer_hex": hex_bytes(buffer)
