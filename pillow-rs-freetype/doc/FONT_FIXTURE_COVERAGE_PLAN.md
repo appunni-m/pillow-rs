@@ -507,6 +507,30 @@ Resolved in the 2026-07-11 cmap batch:
 |---|---|---|---|
 | Generic `oracle_fallback_args` rows | Returns `Unimplemented_Feature` for unmatched operations | Correct only for intentionally unsupported public surfaces | Audit each remaining fallback row against `manifest.yaml`; real implemented operations need explicit match arms in oracle, Rust, C ABI, and WASM ABI |
 
+### R0 False-Green Route Audit Snapshot
+
+Recorded after commit `97b131d4`. This is the current source-level route audit
+from `tests/unified_fixture_parity.rs`; it identifies the remaining categories
+that can still produce a green result without proving the intended public
+behavior.
+
+| Route | Current behavior | Coverage risk | Required disposition |
+|---|---|---|---|
+| `oracle_fallback_args` default | Emits a generic FreeType error for any operation that reaches the default `_other` arm | A newly implemented public operation can still pass by agreeing with a modeled error | Every operation that reaches this path must be listed as intentionally unsupported, pending implementation, or converted to a real oracle arm |
+| `oracle_fallback_args` null-operation classifier | No-font `expect_error` rows can be converted into classified null-handle errors | Valid only for pure null-handle probes; unsafe for operations whose failure depends on loaded face state | Keep only when the public C call is exactly a null-handle classification |
+| No-asset non-error void route | Some null/no-asset non-error rows return `--void` / `{"void": true}` | Can hide missing wrapper behavior because no state or output is compared | Audit each row; either route through the real public wrapper or mark as a deliberately void API contract |
+| Global Rust `_` fallback | Returns `FT_Err_Unimplemented_Feature` for unmatched operations | Rust core coverage cannot improve through this path and parity is only error agreement | Convert implemented operations to explicit Rust FFI handlers; leave unsupported optional modules visibly unsupported |
+| C ABI / WASM `_other` fallback | Falls through to the Rust FFI runner for unsupported binding operations | Thin-wrapper coverage is not proven when the C/WASM leg never calls its public export | For every retained public C/WASM symbol, add direct wrapper execution or mark the symbol as intentionally Rust-only/test-only |
+| C ABI / WASM explicit Rust delegation | Constants, layout probes, compile probes, several SFNT table routes, transforms, reference-face, unsupported stubs, size helpers, and `freetype.new_face` are routed to Rust | Acceptable for compile-time/header probes; unsafe for runtime public functions that should exercise ABI pointer handling | Split into compile-contract probes versus runtime ABI obligations; runtime functions need direct thin-wrapper rows |
+| Explicit Rust unsupported stubs | `freetype.face_properties`, `freetype.get_subglyph_info`, and `freetype.select_size` return `Unimplemented_Feature` directly | These are public FreeType surfaces; final 100% correctness cannot treat them as covered behavior | Implement exact public behavior or keep manifest rows visibly pending/failing until implementation exists |
+| Shape-incomplete fallback guards | `set_char_size` variants, `ftsnames.get_sfnt_name` without indexes, SFNT variation table requests, `sfnt.load_sfnt_table` missing read selectors, `sfnt.table_info` without index selectors, incomplete load/render glyph rows, and incomplete outline cbox rows intentionally fall back | These usually indicate declarative input that the runner does not execute | Convert valid rows into explicit grouped variants; remove or mark invalid row shapes rather than keeping inert declarations |
+| Pending named-instance row | `freetype.FT_Get_Postscript_Name.variation_instance_name_behavior` remains pending | It is the only current pending row and blocks final zero-pending coverage | Add real `FT_Set_Named_Instance` support, then make the PostScript-name row runnable |
+
+R0 is not complete until this snapshot is replaced by an operation-by-operation
+table with zero unclassified generic fallback rows for implemented surfaces.
+The false-green audit should be run before any new font expansion batch because
+extra font rows cannot cover code that is bypassed by modeled runner output.
+
 ### Full Coverage Identification Path
 
 The remaining 100% coverage work must proceed in this order. Each item produces
