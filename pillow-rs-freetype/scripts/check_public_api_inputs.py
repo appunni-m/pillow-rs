@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "tests" / "manifest.yaml"
 INPUT_DIR = ROOT / "tests" / "fixtures" / "inputs" / "public-api"
 DEFAULT_AUDIT_JSON = ROOT / "target" / "api-abi-audit" / "api_abi_audit.json"
+DEFAULT_ROUTE_AUDIT_JSON = ROOT / "target" / "api-abi-audit" / "route_audit.json"
+DEFAULT_ROUTE_AUDIT_MD = ROOT / "target" / "api-abi-audit" / "route_audit.md"
 
 API_SURFACE_EXCLUSIONS = {
     # Public header setup hooks, not user-callable API subjects.
@@ -108,6 +110,122 @@ DISALLOWED_FFI_SNIPPETS = (
     "fontdone_test",
 )
 
+COMPILE_CONTRACT_OPERATIONS = {
+    "constant",
+    "constant_map",
+    "record_layout",
+    "abi_type_probe",
+    "abi_type_map_probe",
+    "abi_function_probe",
+    "abi.compile_alias_probe",
+    "abi.value_echo",
+    "macro_eval",
+    "macro_compile_probe",
+    "face_macro_flags",
+    "freetype.ceil_fix",
+    "freetype.floor_fix",
+    "freetype.round_fix",
+    "freetype.mul_div",
+    "freetype.mul_fix",
+    "freetype.div_fix",
+    "freetype.vector_transform",
+    "ftglyph.matrix_multiply",
+    "ftglyph.matrix_invert",
+}
+
+REAL_PARITY_OPERATIONS = {
+    "new_memory_face",
+    "set_pixel_sizes",
+    "set_char_size",
+    "freetype.request_size",
+    "size_metrics",
+    "get_char_index",
+    "charmap.get_char_index",
+    "freetype.select_charmap",
+    "freetype.set_charmap",
+    "freetype.inspect_charmaps",
+    "freetype.charmap_ownership",
+    "freetype.get_charmap_index",
+    "freetype.get_fstype_flags",
+    "freetype.get_kerning",
+    "freetype.get_postscript_name",
+    "ftmm.set_named_instance",
+    "freetype.get_glyph_name",
+    "freetype.get_name_index",
+    "freetype.new_face",
+    "freetype.set_transform",
+    "freetype.get_transform",
+    "freetype.reference_face",
+    "ftsnames.get_sfnt_name_count",
+    "ftsnames.get_sfnt_name",
+    "ftsnames.get_sfnt_name_by_record",
+    "ftsnames.get_sfnt_name_group",
+    "sfnt.get_name",
+    "sfnt.get_sfnt_name",
+    "sfnt.get_os2_unicode_ranges",
+    "sfnt.get_sfnt_table",
+    "sfnt.get_sfnt_table.record",
+    "sfnt.get_sfnt_table.head",
+    "sfnt.get_sfnt_table.maxp",
+    "sfnt.get_sfnt_table.hhea",
+    "sfnt.get_sfnt_table.hhea.after_variation",
+    "sfnt.load_sfnt_table",
+    "sfnt.table_info",
+    "sfnt.mac_encoding_record",
+    "freetype.get_first_char",
+    "freetype.get_next_char",
+    "freetype.library_version",
+    "ftmodapi.get_truetype_engine_type",
+    "freetype.done_freetype",
+    "freetype.done_face",
+    "freetype.face_check_truetype_patents",
+    "freetype.face_set_unpatented_hinting",
+    "ftlcdfil.set_lcd_filter",
+    "ftlcdfil.set_lcd_filter_weights",
+    "ftlcdfil.set_lcd_geometry",
+    "load_char",
+    "load_glyph",
+    "freetype.inspect_glyph_metrics",
+    "freetype.inspect_glyph_slot",
+    "freetype.get_subglyph_info",
+    "freetype.load_glyph_outline",
+    "ftbbox.outline_get_bbox",
+    "ftoutln.outline_get_cbox",
+    "ftglyph.glyph_get_cbox",
+    "ftglyph.glyph_to_bitmap",
+    "ftglyph.get_glyph",
+    "ftglyph.glyph_copy",
+    "ftglyph.record_inspect",
+    "ftcache.sbit_cache_lookup",
+    "ftcache.manager_reset",
+    "ftoutln.outline_render",
+    "ftoutln.outline_render_direct",
+    "ftadvanc.get_advance",
+    "ftadvanc.get_advances",
+    "render_glyph",
+    "ftgasp.get_gasp",
+    "tttables.get_cmap_format",
+    "tttables.get_cmap_language_id",
+}
+
+EXPLICIT_UNSUPPORTED_OPERATIONS = {
+    "freetype.face_properties",
+    "freetype.select_size",
+}
+
+COMPILE_CONTRACT_PREFIXES = (
+    "abi.",
+    "c_compile.",
+    "c_preprocessor.",
+    "cxx_preprocessor.",
+    "fttypes.",
+)
+
+REAL_PARITY_PREFIXES = (
+    "freetype.face_macro",
+    "fttrigon.",
+)
+
 
 @dataclass(frozen=True)
 class ManifestSubject:
@@ -116,6 +234,18 @@ class ManifestSubject:
     symbol: str
     header: str
     cases: set[str]
+
+
+@dataclass(frozen=True)
+class ConcreteInput:
+    subject: str
+    case_id: str
+    case: str
+    operation: str
+    variant_id: str | None
+    expect_error: bool
+    assets: dict[str, object]
+    params: dict[str, object]
 
 
 def filename_for_subject(subject: str) -> str:
@@ -414,10 +544,284 @@ def exported_functions(path: Path) -> set[str]:
     return set(re.findall(pattern, text))
 
 
+def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
+    rows: list[ConcreteInput] = []
+    for subject_id in sorted(items):
+        path = INPUT_DIR / filename_for_subject(subject_id)
+        data = json.loads(path.read_text())
+        for case in data.get("cases", []):
+            inputs = case.get("inputs", {})
+            if not isinstance(inputs, dict):
+                continue
+            variants = inputs.get("variants")
+            if isinstance(variants, list) and variants:
+                for variant in variants:
+                    if not isinstance(variant, dict):
+                        continue
+                    rows.append(
+                        ConcreteInput(
+                            subject=subject_id,
+                            case_id=str(case.get("case_id", "")),
+                            case=str(case.get("case", "")),
+                            operation=str(case.get("operation", "")),
+                            variant_id=str(variant.get("id", "")) or None,
+                            expect_error=bool(variant.get("expect_error", case.get("expect_error", False))),
+                            assets=object_dict(variant.get("assets", {})),
+                            params=object_dict(variant.get("params", {})),
+                        )
+                    )
+            else:
+                rows.append(
+                    ConcreteInput(
+                        subject=subject_id,
+                        case_id=str(case.get("case_id", "")),
+                        case=str(case.get("case", "")),
+                        operation=str(case.get("operation", "")),
+                        variant_id=None,
+                        expect_error=bool(case.get("expect_error", False)),
+                        assets=object_dict(inputs.get("assets", {})),
+                        params=object_dict(inputs.get("params", {})),
+                    )
+                )
+    return rows
+
+
+def object_dict(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
+def operation_is_compile_contract(operation: str) -> bool:
+    return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
+        COMPILE_CONTRACT_PREFIXES
+    )
+
+
+def operation_is_real_parity(operation: str) -> bool:
+    return operation in REAL_PARITY_OPERATIONS or operation.startswith(REAL_PARITY_PREFIXES)
+
+
+def has_runtime_asset(row: ConcreteInput) -> bool:
+    return any(key in row.assets for key in ("font", "fixture", "foreign_font"))
+
+
+def lifecycle_handle(row: ConcreteInput, name: str) -> str | None:
+    value = row.params.get(name)
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        raw = value.get("handle") or value.get("value")
+        return raw if isinstance(raw, str) else None
+    return None
+
+
+def has_null_lifecycle_handle(row: ConcreteInput) -> bool:
+    return any(
+        lifecycle_handle(row, name) == "null"
+        for name in ("face", "library", "slot", "glyph_slot", "pathname", "aface")
+    )
+
+
+def pending_core_reason(row: ConcreteInput) -> str | None:
+    if row.operation != "ftmm.set_named_instance":
+        return None
+    if any(
+        isinstance(item, dict) and item.get("operation") == "FT_Set_MM_Design_Coordinates"
+        for item in list_value(row.params.get("prior_calls"))
+    ):
+        return "Adobe MM named-instance reset requires real Adobe MM support"
+    if "compare_namedstyle_index" in row.params:
+        return "namedstyle coordinate parity requires FT_MM_Var support"
+    if "glyph_index" in row.params:
+        return "named-instance glyph-output parity requires gvar/HVAR support"
+    return None
+
+
+def list_value(value: object) -> list[object]:
+    return value if isinstance(value, list) else []
+
+
+def shape_fallback_reason(row: ConcreteInput) -> str | None:
+    params = row.params
+    operation = row.operation
+    if operation == "load_char" and "char_code" not in params:
+        return "load_char lacks char_code"
+    if operation == "load_glyph" and "glyph_index" not in params and "glyph_selector" not in params:
+        return "load_glyph lacks glyph selector"
+    if operation == "render_glyph" and not any(
+        key in params for key in ("char_code", "glyph_index", "glyph_selector")
+    ):
+        return "render_glyph lacks glyph selector"
+    if operation == "set_char_size" and "variants" in params:
+        return "set_char_size variants are not routed through the real oracle"
+    if operation == "freetype.request_size" and "requests" not in params and "request" not in params:
+        return "request_size lacks request rows"
+    if operation == "freetype.set_charmap" and not any(
+        key in params for key in ("charmap_indices", "variants")
+    ):
+        return "set_charmap lacks charmap selector rows"
+    if operation == "ftoutln.outline_get_cbox" and not any(
+        key in params for key in ("glyph_index", "glyph_indices")
+    ):
+        return "outline_get_cbox lacks glyph selector"
+    if operation == "ftsnames.get_sfnt_name" and "indexes" not in params:
+        return "get_sfnt_name lacks name indexes"
+    if operation.startswith("sfnt.get_sfnt_table") and any(
+        key in params for key in ("variation_sequence", "variation_calls")
+    ):
+        return "sfnt table variation sequence is not routed"
+    if operation == "sfnt.load_sfnt_table" and not any(
+        key in params for key in ("offset", "reads", "tags")
+    ):
+        return "load_sfnt_table lacks offset/read/tag selector"
+    if operation == "sfnt.table_info" and not any(
+        key in params
+        for key in ("table_index", "invalid_index", "table_indices", "table_index_ignored")
+    ):
+        return "table_info lacks table index selector"
+    if operation == "freetype.new_face" and any(
+        lifecycle_handle(row, name) == "null" for name in ("pathname", "library", "aface")
+    ):
+        return "new_face null-handle row uses generic oracle fallback"
+    if operation in {"new_memory_face", "set_pixel_sizes"} and not has_runtime_asset(row):
+        if lifecycle_handle(row, "face") != "null":
+            return f"{operation} lacks runtime font asset"
+    if operation in {"freetype.done_freetype", "freetype.done_face"} and not has_runtime_asset(row):
+        handle_name = "library" if operation == "freetype.done_freetype" else "face"
+        if lifecycle_handle(row, handle_name) != "null":
+            return f"{operation} lacks runtime font asset"
+    if operation == "freetype.face_set_unpatented_hinting" and not any(
+        key in params for key in ("bool_values", "values", "value")
+    ):
+        return "face_set_unpatented_hinting lacks bool values"
+    return None
+
+
+def route_category(row: ConcreteInput) -> tuple[str, str]:
+    pending = pending_core_reason(row)
+    if pending:
+        return ("pending-core", pending)
+    shape_reason = shape_fallback_reason(row)
+    if shape_reason:
+        if row.expect_error and not has_runtime_asset(row):
+            return ("null-error-fallback", shape_reason)
+        return ("shape-incomplete-fallback", shape_reason)
+    if row.operation in EXPLICIT_UNSUPPORTED_OPERATIONS:
+        return ("explicit-unsupported", "explicit Rust stub returns Unimplemented_Feature")
+    if operation_is_compile_contract(row.operation):
+        return ("compile-contract", "header, layout, macro, or scalar contract")
+    if operation_is_real_parity(row.operation):
+        return ("real-parity", "explicit C oracle, Rust FFI, C ABI, and WASM route")
+    if row.expect_error and not has_runtime_asset(row):
+        return ("generic-error-fallback", "no-asset expected-error row")
+    if not row.expect_error and not has_runtime_asset(row) and has_null_lifecycle_handle(row):
+        return ("void-fallback", "no-asset null-handle void row")
+    return ("generic-fallback", "no explicit maintained route classification")
+
+
+def runtime_id(row: ConcreteInput) -> str:
+    if row.variant_id:
+        return f"{row.case_id}@{row.variant_id}"
+    return row.case_id
+
+
+def build_route_audit(items: dict[str, ManifestSubject]) -> dict[str, object]:
+    rows = []
+    for row in concrete_inputs(items):
+        category, reason = route_category(row)
+        rows.append(
+            {
+                "subject": row.subject,
+                "case_id": row.case_id,
+                "runtime_id": runtime_id(row),
+                "case": row.case,
+                "operation": row.operation,
+                "category": category,
+                "reason": reason,
+                "expect_error": row.expect_error,
+            }
+        )
+
+    category_counts: dict[str, int] = {}
+    operation_counts: dict[str, dict[str, int]] = {}
+    examples: dict[tuple[str, str], str] = {}
+    for row in rows:
+        category_counts[row["category"]] = category_counts.get(row["category"], 0) + 1
+        by_category = operation_counts.setdefault(row["operation"], {})
+        by_category[row["category"]] = by_category.get(row["category"], 0) + 1
+        examples.setdefault((row["operation"], row["category"]), row["runtime_id"])
+
+    return {
+        "total_concrete_cases": len(rows),
+        "category_counts": dict(sorted(category_counts.items())),
+        "operation_counts": dict(sorted(operation_counts.items())),
+        "examples": {
+            f"{operation}|{category}": example
+            for (operation, category), example in sorted(examples.items())
+        },
+        "rows": rows,
+    }
+
+
+def write_route_audit(report: dict[str, object], json_path: Path, md_path: Path) -> None:
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    md_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+
+    operation_counts = report["operation_counts"]
+    assert isinstance(operation_counts, dict)
+    examples = report["examples"]
+    assert isinstance(examples, dict)
+
+    lines = [
+        "# Unified Public API Route Audit",
+        "",
+        f"Concrete cases: {report['total_concrete_cases']}",
+        "",
+        "## Category Counts",
+        "",
+        "| Category | Cases |",
+        "|---|---:|",
+    ]
+    category_counts = report["category_counts"]
+    assert isinstance(category_counts, dict)
+    for category, count in category_counts.items():
+        lines.append(f"| {category} | {count} |")
+
+    lines.extend(
+        [
+            "",
+            "## Operations Needing R0 Disposition",
+            "",
+            "| Operation | Category | Cases | Example |",
+            "|---|---|---:|---|",
+        ]
+    )
+    flagged = {
+        "generic-fallback",
+        "generic-error-fallback",
+        "null-error-fallback",
+        "shape-incomplete-fallback",
+        "void-fallback",
+        "explicit-unsupported",
+        "pending-core",
+    }
+    for operation, counts in operation_counts.items():
+        assert isinstance(counts, dict)
+        for category, count in sorted(counts.items()):
+            if category not in flagged:
+                continue
+            example = examples.get(f"{operation}|{category}", "")
+            lines.append(f"| `{operation}` | {category} | {count} | `{example}` |")
+    md_path.write_text("\n".join(lines) + "\n")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("subjects", nargs="*")
     parser.add_argument("--audit-json", type=Path, default=DEFAULT_AUDIT_JSON)
+    parser.add_argument("--route-audit", action="store_true")
+    parser.add_argument("--route-audit-json", type=Path, default=DEFAULT_ROUTE_AUDIT_JSON)
+    parser.add_argument("--route-audit-md", type=Path, default=DEFAULT_ROUTE_AUDIT_MD)
     args = parser.parse_args()
 
     subjects = read_manifest()
@@ -426,6 +830,19 @@ def main() -> int:
         items = {subject: subjects[subject] for subject in selected}
     else:
         items = subjects
+
+    if args.route_audit:
+        report = build_route_audit(items)
+        write_route_audit(report, args.route_audit_json, args.route_audit_md)
+        print(f"wrote route audit json {args.route_audit_json}")
+        print(f"wrote route audit markdown {args.route_audit_md}")
+        print(
+            "route audit concrete_cases={} category_counts={}".format(
+                report["total_concrete_cases"],
+                report["category_counts"],
+            )
+        )
+        return 0
 
     errors: list[str] = []
     if not selected:

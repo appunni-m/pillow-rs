@@ -192,10 +192,16 @@ Run from `pillow-rs-freetype/`:
 
 ```bash
 make api-abi-check
+make route-audit
 make test-unified-fixtures
 make test-unified-coverage
 make test-unified-condition-coverage
 ```
+
+`make route-audit` writes generated R0 false-green route reports under
+`target/api-abi-audit/`. It classifies existing public input rows by whether
+they execute real C/Rust/C-ABI/WASM parity, compile/header contracts, generic
+fallbacks, explicit unsupported stubs, or pending core implementation.
 
 `make test-unified-coverage` records stable function, line, and region coverage.
 `make test-unified-condition-coverage` uses nightly Rust condition

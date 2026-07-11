@@ -45,6 +45,7 @@ help:
 	@printf "  make test-ffi-compat  Run API/ABI coverage and thin-wrapper checks\n"
 	@printf "  make api-abi-audit    Generate C/Servo/fontdone API and ABI surface audit\n"
 	@printf "  make api-abi-check    Check manifest/input coverage and thin FFI ABI surfaces\n"
+	@printf "  make route-audit      Classify public input rows by real, fallback, pending, or unsupported route\n"
 	@printf "\nSingle Feature Testing (<1 min per operation, use for debugging):\n"
 	@printf "  make test-op OP=<op>      Run parity filtered to one operation (always refreshes oracle)\n"
 	@printf "  make test-case CASE=<s>   Run parity filtered to case/subject substring (always refreshes oracle)\n"
@@ -221,6 +222,10 @@ api-abi-audit: oracle-fetch
 .PHONY: api-abi-check
 api-abi-check: api-abi-audit
 	$(PYTHON) scripts/check_public_api_inputs.py --audit-json target/api-abi-audit/api_abi_audit.json
+
+.PHONY: route-audit
+route-audit: api-abi-audit
+	$(PYTHON) scripts/check_public_api_inputs.py --audit-json target/api-abi-audit/api_abi_audit.json --route-audit
 
 .PHONY: font-fixture-hinter
 font-fixture-hinter:

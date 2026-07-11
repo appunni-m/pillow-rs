@@ -567,6 +567,46 @@ from `tests/unified_fixture_parity.rs`; it identifies the remaining categories
 that can still produce a green result without proving the intended public
 behavior.
 
+Updated R0 evidence on 2026-07-11: `make -C pillow-rs-freetype route-audit`
+now generates `target/api-abi-audit/route_audit.json` and
+`target/api-abi-audit/route_audit.md` from the maintained public input JSON.
+The report expands grouped variants into the same concrete row model used by
+the unified fixture runner and classifies each row as real parity,
+compile/header contract, shape-incomplete fallback, generic fallback,
+null-error fallback, void fallback, explicit unsupported, or pending core work.
+This is an audit report only; it does not execute fixtures, generate JSON, or
+change comparisons.
+
+Current route-audit totals:
+
+| Route category | Concrete rows | Required disposition |
+|---|---:|---|
+| Real C/Rust/C-ABI/WASM parity route | 3,062 | Use these rows for structural coverage evidence. |
+| Compile/header/scalar contract | 2,248 | Valid for ABI/header contracts, not runtime core coverage. |
+| Shape-incomplete fallback | 45 | Convert to complete explicit variants or mark invalid/pending. |
+| Generic modeled fallback | 985 | Classify operation-by-operation as real parity, unsupported, or pending. |
+| Generic modeled error fallback | 145 | Replace implemented surfaces with real error-path execution. |
+| Null-error fallback | 21 | Keep only exact null-handle probes; route implemented null cases directly. |
+| Void fallback | 3 | Replace with real null/noop wrapper rows or classify as void API contract. |
+| Explicit unsupported stubs | 12 | Implement or keep visibly unsupported; do not count as coverage. |
+| Pending core implementation | 3 | Named-instance Adobe MM, `FT_MM_Var`, and `gvar`/HVAR rows remain pending. |
+
+The first R0 closure bucket is the 45 shape-incomplete rows because these are
+usually JSON/input fixes rather than new core features:
+
+| Operation | Rows | First action |
+|---|---:|---|
+| `new_memory_face` | 26 | Convert null/error variants to real memory-face rows or explicit null probes. |
+| `ftoutln.outline_get_cbox` | 4 | Add glyph selectors or retire inert declarations. |
+| `load_glyph` | 3 | Add concrete glyph selector rows for invalid/null flag cases. |
+| `render_glyph` | 3 | Add slot/glyph selectors or classify unsupported unloaded-slot cases. |
+| `freetype.request_size` | 2 | Add explicit request rows for null/error variants. |
+| `freetype.set_charmap` | 2 | Add charmap selector rows or classify null-face only. |
+| `ftsnames.get_sfnt_name` | 2 | Add explicit name indexes. |
+| `freetype.face_set_unpatented_hinting` | 1 | Add explicit boolean state rows. |
+| `load_char` | 1 | Add a concrete `char_code` or classify as null-only. |
+| `sfnt.get_sfnt_table.record` | 1 | Replace the inert variation sequence with a real table-read route. |
+
 | Route | Current behavior | Coverage risk | Required disposition |
 |---|---|---|---|
 | `oracle_fallback_args` default | Emits a generic FreeType error for any operation that reaches the default `_other` arm | A newly implemented public operation can still pass by agreeing with a modeled error | Every operation that reaches this path must be listed as intentionally unsupported, pending implementation, or converted to a real oracle arm |
