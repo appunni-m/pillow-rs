@@ -858,6 +858,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | SFNT one-past-table boundary row | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,378 / 16,315 lines; 19,311 / 23,316 regions; 3,260 / 4,150 branches | merged the metadata worker's exact `TTAG_head` offset-55 boundary as a second explicit `FT_Load_Sfnt_Table` offset error case; exact Rust/C/WASM parity remains green and structural coverage is unchanged because the broader executable offset variant already covers the same guard |
 | 2026-07-11 | Rust public render wrapper routing | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,393 / 16,315 lines; 19,332 / 23,316 regions; 3,260 / 4,150 branches | existing `FT_Render_Glyph` fixtures route the Rust leg through `Face::render_loaded_glyph` when the load did not already render the slot; exact Rust/C/WASM parity remains green and `api.rs` reaches 311 / 401 lines, 404 / 532 regions, and 35 / 45 functions |
 | 2026-07-11 | Rust public load-char wrapper routing | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,396 / 16,315 lines; 19,340 / 23,316 regions; 3,260 / 4,150 branches | existing `FT_Load_Char` fixtures route the Rust leg through `Face::load_char` while retaining the same exact C/WASM comparison; `api.rs` reaches 314 / 401 lines, 412 / 532 regions, and 36 / 45 functions |
+| 2026-07-11 | Rust public set-char-size wrapper routing | 81 unique hashes | 0 | 6,481 | 6,480 / 6,480 | 1 | 13,377 / 16,371 lines; 19,335 / 23,406 regions; 3,254 / 4,168 branches | successful `FT_Set_Char_Size` fixtures route the Rust leg through `Face::set_char_size`; exact Rust/C/WASM parity remains green, `api.rs` reaches 318 / 401 lines and 37 / 45 functions, and the current condition run also exposes `autohint/script.rs` in the denominator |
 
 ## Decision Log
 
@@ -910,6 +911,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Rebase worker glyph additions onto current fixture glyph order | Worker font-source changes must preserve all previously merged glyph roles; the TT branch-edge glyph moved from id 48 to id 51 because render coverage already owns glyphs 48-50 |
 | 2026-07-11 | Keep exact boundary rows even when broader guards are already covered | The one-past-head-table SFNT row adds no new structural counters after executable offset coverage, but it preserves a precise public boundary case from the metadata worker without multiplying unrelated inputs |
 | 2026-07-11 | Preserve render-load slot semantics in public wrapper coverage | `Face::render_loaded_glyph` strips `FT_LOAD_RENDER` before loading, while C `FT_Render_Glyph` returns an already-rendered bitmap slot unchanged; public wrapper routing must therefore fall back to the FFI-shaped path for rows whose load flags already render |
+| 2026-07-11 | Treat current coverage denominator as authoritative | A fresh non-incremental condition-coverage build lists `autohint/script.rs` as uncovered source; keep it visible as a real obligation instead of relying on stale incremental coverage output |
 
 ## Immediate Next Actions
 
