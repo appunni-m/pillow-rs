@@ -156,7 +156,10 @@ long-width FreeType helpers exercised by the existing fixed/vector/matrix
 public fixture rows, and adding compact generated name-table controls for
 Unicode/Mac fallback selection, Apple-only PostScript names, odd Windows
 PostScript-name fallback, and Apple-only encoded named-instance PostScript
-prefixes through public `FT_Get_Postscript_Name` variants.
+prefixes through public `FT_Get_Postscript_Name` variants, and adding a
+rendered `FT_Set_Transform` row that exposed and fixed transform rendering of
+the `LoadedOutline` bitmap snapshot in slot coordinates before presetting the
+bitmap box.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -164,17 +167,17 @@ coordinate parity.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,131 |
-| Concrete explicit cases | 6,523 |
-| Additional grouped variants | 2,392 |
+| Concrete explicit cases | 6,524 |
+| Additional grouped variants | 2,393 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,520 |
-| Exact parity | 6,520 / 6,520 |
+| Runnable parity comparisons | 6,521 |
+| Exact parity | 6,521 / 6,521 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,024 / 16,920 (82.88%) |
-| Rust function coverage | 838 / 1,045 (80.19%) |
-| Rust instantiation coverage | 841 / 1,048 (80.25%) |
-| Rust region coverage | 20,290 / 24,298 (83.50%) |
-| Rust branch/condition coverage | 3,360 / 4,290 (78.32%) |
+| Covered Rust lines | 14,078 / 16,966 (82.98%) |
+| Rust function coverage | 840 / 1,047 (80.23%) |
+| Rust instantiation coverage | 843 / 1,050 (80.29%) |
+| Rust region coverage | 20,365 / 24,359 (83.60%) |
+| Rust branch/condition coverage | 3,364 / 4,294 (78.34%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 129 |
 | Stored active font binaries | 86 files, 705 KiB |
@@ -211,7 +214,7 @@ Current largest uncovered buckets:
 | `src/ffi/handles.rs` | 1,340 / 1,495 | 239 / 286 | 142 / 162 | 1,853 / 2,034 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,223 / 1,340 | 298 / 410 | 37 / 40 | 2,464 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 835 / 941 | 339 / 426 | 18 / 19 | 1,118 / 1,247 | CJK topology rows in the compact multiscript fixture |
-| `src/api.rs` | 335 / 418 | 55 / 66 | 42 / 50 | 447 / 559 | Public API wrapper rows for render cache and glyph-slot surfaces |
+| `src/api.rs` | 389 / 464 | 59 / 70 | 44 / 52 | 522 / 620 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short
 physical table data plus truncated range arrays. The only remaining uncovered
@@ -254,6 +257,15 @@ implementation. This is semantic centralization to enforce thin wrappers, not
 coverage-only deletion. Remaining `fixed.rs` lines are private 32-bit wrapper
 helpers plus vector-length and vector-normalization branches that need either
 existing public route inputs or a separate reachability classification.
+
+Immediate transform-render residuals: the compact
+`FT_Set_Transform.load_ignore_transform_behavior@rendered-transformed-load`
+row now covers the public face-transform plus `FT_LOAD_RENDER` path and passes
+exact Rust FFI, C ABI, and WASM ABI parity. The fix was in core behavior, not
+the harness: Rust now reconstructs the render snapshot into glyph-slot
+coordinates, applies the transform there, then presets the bitmap box from the
+transformed control box before rendering, matching pinned FreeType's
+`FT_Load_Glyph` transform and `ft_glyphslot_preset_bitmap` order.
 
 ### Remaining Public Input Dependencies On Deprecated Fonts
 
@@ -412,8 +424,8 @@ Evaluation checkpoint: 2026-07-11, latest verified unified condition-coverage ru
 
 This is the active coverage identification ledger. It supersedes earlier
 percentages in this section but does not replace the historical progress ledger
-below. The unified public API suite currently has 4,131 logical cases, 6,516
-concrete explicit cases, 6,513 runnable exact-parity cases, three explicit
+below. The unified public API suite currently has 4,131 logical cases, 6,524
+concrete explicit cases, 6,521 runnable exact-parity cases, three explicit
 pending named-instance obligations, and zero implicit cases.
 `FT_Get_Postscript_Name.variation_instance_name_behavior` remains an active
 parity row backed by real `FT_Set_Named_Instance` behavior, while
@@ -427,10 +439,10 @@ Core Rust structural coverage from
 
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
-| Functions | 836 | 1,045 | 209 |
-| Lines | 13,981 | 16,920 | 2,939 |
-| Regions | 20,221 | 24,298 | 4,077 |
-| Branches/conditions | 3,342 | 4,290 | 948 |
+| Functions | 840 | 1,047 | 207 |
+| Lines | 14,078 | 16,966 | 2,888 |
+| Regions | 20,365 | 24,359 | 3,994 |
+| Branches/conditions | 3,364 | 4,294 | 930 |
 
 Formal MC/DC is not reported by the installed Rust coverage tooling
 (`mcdc.count == 0`). Branch/condition coverage is therefore the instrumented
@@ -441,7 +453,7 @@ The remaining coverage divides exactly into these ownership groups:
 
 | Group | Modules | Missing functions | Missing lines | Missing regions | Missing branches | Primary action |
 |---|---|---:|---:|---:|---:|---|
-| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 119 | 1,091 | 1,299 | 205 | public routing, wrapper thinness, metadata/state inputs |
+| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 119 | 1,083 | 1,285 | 205 | public routing, wrapper thinness, metadata/state inputs |
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
 | Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 20 | 775 | 1,024 | 423 | script reachability audit, then glyph topology rows |
 | TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 139 | 469 | 132 | explicit bytecode-program glyph rows |
@@ -460,7 +472,7 @@ Per-file source gap ledger:
 | `src/ffi/handles.rs` | 155 | 1340/1495 (89.63%) | 20 | 181 | 47 |
 | `src/tt/hinter/exec.rs` | 117 | 1223/1340 (91.27%) | 3 | 437 | 112 |
 | `src/autohint/cjk.rs` | 106 | 835/941 (88.74%) | 1 | 129 | 87 |
-| `src/api.rs` | 83 | 335/418 (80.14%) | 8 | 112 | 11 |
+| `src/api.rs` | 75 | 389/464 (83.84%) | 8 | 98 | 11 |
 | `src/tt/name.rs` | 8 | 232/240 (96.67%) | 1 | 23 | 31 |
 | `src/autohint/types.rs` | 32 | 71/103 (68.93%) | 7 | 25 | 1 |
 | `src/autohint/coverage.rs` | 28 | 0/28 (0.00%) | 7 | 35 | 4 |
@@ -763,8 +775,8 @@ The completion budget is deliberately conservative:
 
 | Resource | Current | Completion ceiling | Rule |
 |---|---:|---:|---|
-| Concrete explicit cases | 6,516 | 7,016 | Add only named obligations, not product axes |
-| Runnable parity cases | 6,513 | same as concrete | Retire pending rows only through real implementation |
+| Concrete explicit cases | 6,524 | 7,016 | Add only named obligations, not product axes |
+| Runnable parity cases | 6,521 | same as concrete | Retire pending rows only through real implementation |
 | Pending cases | 3 | 0 | No symbolic final rows |
 | New semantic font files | 17 in current metadata pass | review before adding more | Extend source-backed focused fonts first |
 | New glyph programs/topologies | 0 in next pass | 160 | One glyph role per behavior family, not per glyph index |
@@ -774,7 +786,7 @@ The 500-case allowance is a ceiling, not a target. A batch must justify every
 variant by a named uncovered behavior. Existing focused fonts should be
 extended before creating a new content identity.
 
-At completion, consolidate the current 90 active unique font contents toward no
+At completion, consolidate the current 97 active unique font contents toward no
 more than 30 inspectable semantic containers. The target shape is:
 
 - One core TrueType topology/metadata matrix.
@@ -1338,6 +1350,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Branch-edge invalid coordinate reads | 90 unique hashes | 0 | 6,516 | 6,513 / 6,513 | 3 | 13,952 / 16,901 lines; 20,186 / 24,271 regions; 3,347 / 4,298 branches | Existing `branchEdgeMatrix` now packs invalid `GC[0]`, `GC[1]`, and `MDRP` point reads into its no-output TT program, reaching `GlyphZone` out-of-range guards through `FT_Load_Glyph` without adding concrete cases or changing parity output |
 | 2026-07-11 | Compact fvar structural controls | 93 unique hashes | 0 | 6,519 | 6,516 / 6,516 | 3 | 13,992 / 16,920 lines; 20,230 / 24,298 regions; 3,345 / 4,290 branches | `scripts/build_fvar_fixtures.py` rebuilds the compact malformed fvar controls and adds three explicit public `FT_FACE_FLAG_MULTIPLE_MASTERS` variants for instance-array EOF, too-short instance records, and instance PostScript IDs. `tt/fvar.rs` reaches full branch coverage; the two remaining lines are the mathematically unreachable u16 instance-count overflow guard |
 | 2026-07-11 | Compact name selection and PostScript fallback controls | 97 unique hashes | 0 | 6,523 | 6,520 / 6,520 | 3 | 14,024 / 16,920 lines; 20,290 / 24,298 regions; 3,360 / 4,290 branches | `scripts/build_name_fixtures.py` rebuilds four compact name-table controls and `FT_Get_Postscript_Name` now has explicit variants for unsupported/malformed family-name fallback, Apple-only PostScript names, odd Windows PostScript fallback, and Apple-only encoded named-instance prefixes. `tt/name.rs` moves to 232 / 240 lines and the rejected platform-0/missing-subfamily candidates are tracked as correctness buckets |
+| 2026-07-11 | Rendered transform slot coverage | 97 unique hashes | 0 | 6,524 | 6,521 / 6,521 | 3 | 14,078 / 16,966 lines; 20,365 / 24,359 regions; 3,364 / 4,294 branches | one explicit `FT_Set_Transform` variant renders DejaVu glyph 36 after a non-identity matrix and delta. The row exposed a real bitmap-byte divergence; core now transforms the render snapshot in glyph-slot coordinates and recomputes the preset bitmap box before rasterization, matching pinned C FreeType with exact Rust/C/WASM parity |
 
 ## Decision Log
 
@@ -1389,6 +1402,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Honor exact outline tags in the gray rasterizer | `Outline` already carries FreeType tag bytes; using them lets public outline-render inputs reach cubic control pairs while preserving on-curve fallback behavior for older outlines |
 | 2026-07-11 | Convert declarative charmap/SFNT rows to executable variants | Coverage only counts when the explicit runner consumes the field; ignored arrays such as multi-read SFNT declarations must become concrete variants or a maintained direct helper with exact C/Rust/WASM output parity |
 | 2026-07-11 | Leave transformed render divergence as a core bug bucket | A candidate `FT_Set_Transform` render-after-transform input reached `api.rs` transformed render-outline code but produced Rust/C bitmap byte divergence, so it is not a coverage-only fixture addition |
+| 2026-07-11 | Transform rendered snapshots in slot coordinates | Pinned `FT_Load_Glyph` applies the face transform to the slot outline before `ft_glyphslot_preset_bitmap`; Rust must reconstruct `LoadedOutline` back to slot coordinates, apply the transform, then normalize it into the recomputed bitmap box before rasterization |
 | 2026-07-11 | Route null lifecycle fixtures through thin Rust FFI | Existing lifecycle fixtures should execute the same thin Rust FFI handlers as C/WASM for handle validation coverage; modeled error shortcuts are only for surfaces without a maintained direct Rust handler |
 | 2026-07-11 | Rebase worker glyph additions onto current fixture glyph order | Worker font-source changes must preserve all previously merged glyph roles; the TT branch-edge glyph moved from id 48 to id 51 because render coverage already owns glyphs 48-50 |
 | 2026-07-11 | Keep exact boundary rows even when broader guards are already covered | The one-past-head-table SFNT row adds no new structural counters after executable offset coverage, but it preserves a precise public boundary case from the metadata worker without multiplying unrelated inputs |
