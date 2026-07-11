@@ -174,25 +174,28 @@ and extending the source-backed branch-edge TrueType glyph with zero
 18 script standard-character and Indic CJK-writing-system paths, and adding
 explicit `FT_LOAD_NO_AUTOHINT` precedence rows for
 `FORCE_AUTOHINT | NO_AUTOHINT` and `TARGET_LIGHT | NO_AUTOHINT` while routing
-FFI glyph-slot bbox conversion through the shared `From<BBox>` path.
+FFI glyph-slot bbox conversion through the shared `From<BBox>` path, and
+adding explicit `FT_LOAD_TARGET_MODE` rows that prove unknown target nibbles
+are ignored for load-only calls but return `FT_Err_Cannot_Render_Glyph` when
+`FT_LOAD_RENDER` asks the renderer to consume the invalid mode.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
 
 | Measure | Current |
 |---|---:|
-| Logical public API cases | 4,131 |
-| Concrete explicit cases | 6,553 |
+| Logical public API cases | 4,133 |
+| Concrete explicit cases | 6,555 |
 | Additional grouped variants | 2,422 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,550 |
-| Exact parity | 6,550 / 6,550 |
+| Runnable parity comparisons | 6,552 |
+| Exact parity | 6,552 / 6,552 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,322 / 17,141 (83.55%) |
+| Covered Rust lines | 14,324 / 17,141 (83.57%) |
 | Rust function coverage | 858 / 1,062 (80.79%) |
 | Rust instantiation coverage | 861 / 1,065 (80.85%) |
-| Rust region coverage | 20,705 / 24,618 (84.11%) |
-| Rust branch/condition coverage | 3,432 / 4,370 (78.54%) |
+| Rust region coverage | 20,709 / 24,618 (84.12%) |
+| Rust branch/condition coverage | 3,434 / 4,370 (78.58%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 135 |
 | Stored active font binaries | 92 files, 748 KiB |
@@ -438,8 +441,8 @@ Evaluation checkpoint: 2026-07-11, latest verified unified condition-coverage ru
 
 This is the active coverage identification ledger. It supersedes earlier
 percentages in this section but does not replace the historical progress ledger
-below. The unified public API suite currently has 4,131 logical cases, 6,553
-concrete explicit cases, 6,550 runnable exact-parity cases, three explicit
+below. The unified public API suite currently has 4,133 logical cases, 6,555
+concrete explicit cases, 6,552 runnable exact-parity cases, three explicit
 pending named-instance obligations, and zero implicit cases.
 `FT_Get_Postscript_Name.variation_instance_name_behavior` remains an active
 parity row backed by real `FT_Set_Named_Instance` behavior, while
@@ -454,9 +457,9 @@ Core Rust structural coverage from
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
 | Functions | 858 | 1,062 | 204 |
-| Lines | 14,322 | 17,141 | 2,819 |
-| Regions | 20,705 | 24,618 | 3,913 |
-| Branches/conditions | 3,432 | 4,370 | 938 |
+| Lines | 14,324 | 17,141 | 2,817 |
+| Regions | 20,709 | 24,618 | 3,909 |
+| Branches/conditions | 3,434 | 4,370 | 936 |
 
 Formal MC/DC is not reported by the installed Rust coverage tooling
 (`mcdc.count == 0`). Branch/condition coverage is therefore the instrumented
@@ -467,7 +470,7 @@ The remaining coverage divides exactly into these ownership groups:
 
 | Group | Modules | Missing functions | Missing lines | Missing regions | Missing branches | Primary action |
 |---|---|---:|---:|---:|---:|---|
-| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 118 | 1,068 | 1,278 | 221 | public routing, wrapper thinness, metadata/state inputs |
+| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 118 | 1,066 | 1,274 | 219 | public routing, wrapper thinness, metadata/state inputs |
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
 | Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 18 | 727 | 957 | 419 | script reachability audit, then glyph topology rows |
 | TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 139 | 467 | 130 | explicit bytecode-program glyph rows |
@@ -486,12 +489,12 @@ Per-file source gap ledger:
 | `src/ffi/handles.rs` | 155 | 1323/1478 (89.51%) | 20 | 181 | 47 |
 | `src/tt/hinter/exec.rs` | 117 | 1223/1340 (91.27%) | 3 | 435 | 110 |
 | `src/autohint/cjk.rs` | 106 | 835/941 (88.74%) | 1 | 129 | 87 |
-| `src/api.rs` | 75 | 389/464 (83.84%) | 8 | 98 | 11 |
+| `src/api.rs` | 75 | 389/464 (83.84%) | 8 | 98 | 9 |
 | `src/tt/name.rs` | 1 | 293/294 (99.66%) | 1 | 22 | 39 |
 | `src/autohint/types.rs` | 32 | 71/103 (68.93%) | 7 | 25 | 1 |
 | `src/autohint/coverage.rs` | 22 | 6/28 (21.43%) | 5 | 28 | 4 |
 | `src/fixed.rs` | 9 | 206/215 (95.81%) | 3 | 22 | 3 |
-| `src/ffi/convert.rs` | 14 | 128/142 (90.14%) | 1 | 16 | 2 |
+| `src/ffi/convert.rs` | 12 | 130/142 (91.55%) | 1 | 12 | 0 |
 | `src/tt/fvar.rs` | 7 | 91/98 (92.86%) | 4 | 13 | 1 |
 | `src/tt/hinter/gs.rs` | 14 | 172/186 (92.47%) | 1 | 14 | 2 |
 | `src/autohint/globals.rs` | 14 | 213/227 (93.83%) | 1 | 21 | 19 |
@@ -831,8 +834,8 @@ The completion budget is deliberately conservative:
 
 | Resource | Current | Completion ceiling | Rule |
 |---|---:|---:|---|
-| Concrete explicit cases | 6,524 | 7,016 | Add only named obligations, not product axes |
-| Runnable parity cases | 6,521 | same as concrete | Retire pending rows only through real implementation |
+| Concrete explicit cases | 6,555 | 7,016 | Add only named obligations, not product axes |
+| Runnable parity cases | 6,552 | same as concrete | Retire pending rows only through real implementation |
 | Pending cases | 3 | 0 | No symbolic final rows |
 | New semantic font files | 17 in current metadata pass | review before adding more | Extend source-backed focused fonts first |
 | New glyph programs/topologies | 0 in next pass | 160 | One glyph role per behavior family, not per glyph index |
@@ -842,7 +845,7 @@ The 500-case allowance is a ceiling, not a target. A batch must justify every
 variant by a named uncovered behavior. Existing focused fonts should be
 extended before creating a new content identity.
 
-At completion, consolidate the current 97 active unique font contents toward no
+At completion, consolidate the current 103 active unique font contents toward no
 more than 30 inspectable semantic containers. The target shape is:
 
 - One core TrueType topology/metadata matrix.
@@ -1417,6 +1420,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Vai autohint script standard-character row | 103 unique hashes | 0 | 6,546 | 6,543 / 6,543 | 3 | 14,299 / 17,133 lines; 20,659 / 24,593 regions; 3,423 / 4,364 branches | one explicit `FT_LOAD_FORCE_AUTOHINT` row selects `script-coverage.ttf` U+A5CD, covering the Vai standard-character arm with exact Rust/C/WASM parity and no implicit case growth |
 | 2026-07-11 | Indic CJK autohint script rows | 103 unique hashes | 0 | 6,550 | 6,547 / 6,547 | 3 | 14,312 / 17,146 lines; 20,693 / 24,623 regions; 3,428 / 4,370 branches | four explicit `FT_LOAD_FORCE_AUTOHINT` rows select Limbu, Oriya, Syloti Nagri, and Tibetan glyphs in `script-coverage.ttf`. Core now routes FreeType's `STYLE_DEFAULT_INDIC` rows through CJK metrics/hints with no blue zones and rejects standard-character glyphs assigned to another style, matching pinned C/Rust/C-ABI/WASM parity without implicit case growth |
 | 2026-07-11 | No-autohint precedence and shared bbox conversion | 103 unique hashes | 0 | 6,553 | 6,550 / 6,550 | 3 | 14,322 / 17,141 lines; 20,705 / 24,618 regions; 3,432 / 4,370 branches | two explicit `FT_LOAD_NO_AUTOHINT` variants prove `NO_AUTOHINT` masks `FORCE_AUTOHINT` and `TARGET_LIGHT` branch conditions through Rust, C ABI, and WASM `FT_Load_Char`; `bbox_to_ffi` now delegates to the existing `From<BBox>` conversion so public glyph-slot rows cover the shared field-copy path instead of bypassing it |
+| 2026-07-11 | Invalid load-target mode parity rows | 103 unique hashes | 0 | 6,555 | 6,552 / 6,552 | 3 | 14,324 / 17,141 lines; 20,709 / 24,618 regions; 3,434 / 4,370 branches | two explicit `FT_LOAD_TARGET_MODE` rows prove pinned FreeType accepts an unknown target nibble for load-only calls but returns `FT_Err_Cannot_Render_Glyph` when `FT_LOAD_RENDER` requests rendering with that invalid mode. Exact Rust, C ABI, and WASM parity remains green; `ffi/convert.rs` no longer has missing branch outcomes |
 
 ## Decision Log
 
