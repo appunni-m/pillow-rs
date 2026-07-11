@@ -2031,7 +2031,10 @@ impl BackendComparisonWorker {
             let op = case.operation.as_str();
             if !matches!(
                 op,
-                "ftlcdfil.set_lcd_filter"
+                "freetype.done_freetype"
+                    | "freetype.done_face"
+                    | "freetype.reference_face"
+                    | "ftlcdfil.set_lcd_filter"
                     | "ftlcdfil.set_lcd_filter_weights"
                     | "ftlcdfil.set_lcd_geometry"
                     | "ftoutln.outline_render"
@@ -2525,7 +2528,7 @@ fn rust_get_transform(case: &InputCase) -> Result<RunOutput, String> {
 
 fn rust_reference_face(case: &InputCase) -> Result<RunOutput, String> {
     if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
-        return Ok(error(FT_Err_Invalid_Face_Handle as FT_Error));
+        return Ok(error(FT_Reference_Face(None)));
     }
     let mut face = open_face(case)?;
     let err = FT_Reference_Face(Some(&mut face));
@@ -5889,7 +5892,10 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         let op = case.operation.as_str();
         if !matches!(
             op,
-            "ftlcdfil.set_lcd_filter"
+            "freetype.done_freetype"
+                | "freetype.done_face"
+                | "freetype.reference_face"
+                | "ftlcdfil.set_lcd_filter"
                 | "ftlcdfil.set_lcd_filter_weights"
                 | "ftlcdfil.set_lcd_geometry"
                 | "ftoutln.outline_render"
