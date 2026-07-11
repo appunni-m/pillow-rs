@@ -222,23 +222,7 @@ pub fn FT_Vector_Length(vec: Option<&FT_Vector>) -> FT_Fixed {
     let Some(vec) = vec else {
         return 0;
     };
-    let mut vector = *vec;
-    if vector.x == 0 {
-        return ft_abs(vector.y);
-    }
-    if vector.y == 0 {
-        return ft_abs(vector.x);
-    }
-
-    let shift = ft_trig_prenorm(&mut vector);
-    ft_trig_pseudo_polarize(&mut vector);
-    vector.x = ft_trig_downscale(vector.x);
-
-    if shift > 0 {
-        (vector.x + (1 << (shift - 1))) >> shift
-    } else {
-        (vector.x as u64).wrapping_shl((-shift) as u32) as FT_Fixed
-    }
+    crate::fixed::ft_vector_length_long(vec.x, vec.y)
 }
 
 pub fn FT_Vector_Polarize(

@@ -166,7 +166,8 @@ Apple Roman fallback for encoded named-instance PostScript names, and adding a
 missing-subfamily variation control that proves FreeType's coordinate-based
 named-instance PostScript fallback for positive, zero, negative, and fractional
 16.16 coordinates while closing three false-green route-audit shape
-classifications.
+classifications, and moving public `FT_Vector_Length` execution onto a core
+`FT_Long` CORDIC helper while keeping the 32-bit rasterizer helper as a wrapper.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -180,11 +181,11 @@ coordinate parity.
 | Runnable parity comparisons | 6,528 |
 | Exact parity | 6,528 / 6,528 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,236 / 17,125 (83.13%) |
-| Rust function coverage | 848 / 1,055 (80.38%) |
-| Rust instantiation coverage | 851 / 1,058 (80.43%) |
-| Rust region coverage | 20,590 / 24,591 (83.73%) |
-| Rust branch/condition coverage | 3,415 / 4,366 (78.22%) |
+| Covered Rust lines | 14,249 / 17,133 (83.17%) |
+| Rust function coverage | 853 / 1,060 (80.47%) |
+| Rust instantiation coverage | 856 / 1,063 (80.53%) |
+| Rust region coverage | 20,596 / 24,593 (83.75%) |
+| Rust branch/condition coverage | 3,414 / 4,364 (78.23%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 133 |
 | Stored active font binaries | 90 files, 738 KiB |
@@ -430,8 +431,8 @@ Evaluation checkpoint: 2026-07-11, latest verified unified condition-coverage ru
 
 This is the active coverage identification ledger. It supersedes earlier
 percentages in this section but does not replace the historical progress ledger
-below. The unified public API suite currently has 4,131 logical cases, 6,524
-concrete explicit cases, 6,521 runnable exact-parity cases, three explicit
+below. The unified public API suite currently has 4,131 logical cases, 6,531
+concrete explicit cases, 6,528 runnable exact-parity cases, three explicit
 pending named-instance obligations, and zero implicit cases.
 `FT_Get_Postscript_Name.variation_instance_name_behavior` remains an active
 parity row backed by real `FT_Set_Named_Instance` behavior, while
@@ -445,10 +446,10 @@ Core Rust structural coverage from
 
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
-| Functions | 840 | 1,047 | 207 |
-| Lines | 14,078 | 16,966 | 2,888 |
-| Regions | 20,365 | 24,359 | 3,994 |
-| Branches/conditions | 3,364 | 4,294 | 930 |
+| Functions | 853 | 1,060 | 207 |
+| Lines | 14,249 | 17,133 | 2,884 |
+| Regions | 20,596 | 24,593 | 3,997 |
+| Branches/conditions | 3,414 | 4,364 | 950 |
 
 Formal MC/DC is not reported by the installed Rust coverage tooling
 (`mcdc.count == 0`). Branch/condition coverage is therefore the instrumented
@@ -463,7 +464,7 @@ The remaining coverage divides exactly into these ownership groups:
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
 | Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 20 | 775 | 1,024 | 423 | script reachability audit, then glyph topology rows |
 | TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 139 | 469 | 132 | explicit bytecode-program glyph rows |
-| Math/casts | `fixed.rs`, `casts.rs` | 4 | 18 | 30 | 11 | scalar boundary rows or semantic cleanup |
+| Math/casts | `fixed.rs`, `casts.rs` | 4 | 13 | 26 | 10 | scalar boundary rows or semantic cleanup |
 
 Per-file source gap ledger:
 
@@ -482,7 +483,7 @@ Per-file source gap ledger:
 | `src/tt/name.rs` | 1 | 293/294 (99.66%) | 1 | 22 | 39 |
 | `src/autohint/types.rs` | 32 | 71/103 (68.93%) | 7 | 25 | 1 |
 | `src/autohint/coverage.rs` | 28 | 0/28 (0.00%) | 7 | 35 | 4 |
-| `src/fixed.rs` | 15 | 180/195 (92.31%) | 3 | 27 | 5 |
+| `src/fixed.rs` | 10 | 205/215 (95.35%) | 3 | 23 | 4 |
 | `src/ffi/convert.rs` | 22 | 120/142 (84.51%) | 2 | 25 | 2 |
 | `src/tt/fvar.rs` | 7 | 91/98 (92.86%) | 4 | 13 | 1 |
 | `src/tt/hinter/gs.rs` | 14 | 172/186 (92.47%) | 1 | 14 | 2 |
@@ -1402,6 +1403,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Unicode variation prefix parity | 98 unique hashes | 0 | 6,525 | 6,522 / 6,522 | 3 | 14,131 / 17,016 lines; 20,444 / 24,441 regions; 3,385 / 4,326 branches | one compact variable font adds a named-instance row where nameID 25 exists only on Unicode/ISO-style platforms while the instance subfamily is Unicode. The row exposed a real divergence: pinned C returned `Ubuntu-Thin`, while Rust previously returned `UniVar-Thin`. Core now matches `sfnt_get_var_ps_name` by using only Windows 3/0, Windows 3/1, or Apple Roman records for the variation PostScript prefix while retaining general name lookup for the subfamily |
 | 2026-07-11 | Odd Windows variation prefix fallback | 99 unique hashes | 0 | 6,526 | 6,523 / 6,523 | 3 | 14,136 / 17,020 lines; 20,445 / 24,441 regions; 3,387 / 4,326 branches | one compact variable font adds an encoded named-instance row where nameID 25 has an odd-length Windows record plus Apple Roman fallback. Exact C/Rust/C-ABI/WASM parity proves the invalid Windows prefix is rejected and Apple Roman is used, covering the remaining variation-prefix rejection branch. The route audit now also recognizes `FT_Request_Size` variant rows and the null-face `FT_Set_Charmap` row as explicit real routes, moving real-parity routes to 3,071 and shape-incomplete rows down to 38 without case multiplication |
 | 2026-07-11 | Missing subfamily variation synthesis | 101 unique hashes | 0 | 6,531 | 6,528 / 6,528 | 3 | 14,236 / 17,125 lines; 20,590 / 24,591 regions; 3,415 / 4,366 branches | one compact variable font adds four encoded named-instance rows where the fvar subfamily IDs have only unsupported name records. The row exposed a real divergence: pinned C returned `MissingVar_100wght`, while Rust previously kept `Ubuntu-Regular`. Core now parses fvar axis defaults and instance coordinates, then matches `sfnt_get_var_ps_name` / `construct_instance_name` for positive, zero, negative, and fractional 16.16 coordinate descriptors plus sanitized axis tags. A compact malformed fvar control covers too-short axis records through `FT_FACE_FLAG_MULTIPLE_MASTERS`. Route audit real-parity rows are now 3,075 |
+| 2026-07-11 | Core vector-length long-domain routing | 101 unique hashes | 0 | 6,531 | 6,528 / 6,528 | 3 | 14,249 / 17,133 lines; 20,596 / 24,593 regions; 3,414 / 4,364 branches | `FT_Vector_Length` now delegates to a core `fixed::ft_vector_length_long` helper that preserves the public `FT_Long` input domain, while the existing 32-bit rasterizer helper delegates through it. Existing public vector-length rows pass exact C/Rust/C-ABI/WASM parity, moving duplicate CORDIC math out of the wrapper without adding cases or fonts |
 
 ## Decision Log
 
