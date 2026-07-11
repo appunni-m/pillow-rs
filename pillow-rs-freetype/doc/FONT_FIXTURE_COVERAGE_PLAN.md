@@ -159,7 +159,9 @@ PostScript-name fallback, and Apple-only encoded named-instance PostScript
 prefixes through public `FT_Get_Postscript_Name` variants, and adding a
 rendered `FT_Set_Transform` row that exposed and fixed transform rendering of
 the `LoadedOutline` bitmap snapshot in slot coordinates before presetting the
-bitmap box.
+bitmap box, and adding a Unicode-only variation prefix/subfamily named-instance
+control that exposed and fixed FreeType's stricter variation PostScript prefix
+lookup.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -167,22 +169,22 @@ coordinate parity.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,131 |
-| Concrete explicit cases | 6,524 |
-| Additional grouped variants | 2,393 |
+| Concrete explicit cases | 6,525 |
+| Additional grouped variants | 2,394 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,521 |
-| Exact parity | 6,521 / 6,521 |
+| Runnable parity comparisons | 6,522 |
+| Exact parity | 6,522 / 6,522 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,078 / 16,966 (82.98%) |
-| Rust function coverage | 840 / 1,047 (80.23%) |
-| Rust instantiation coverage | 843 / 1,050 (80.29%) |
-| Rust region coverage | 20,365 / 24,359 (83.60%) |
-| Rust branch/condition coverage | 3,364 / 4,294 (78.34%) |
+| Covered Rust lines | 14,131 / 17,016 (83.05%) |
+| Rust function coverage | 844 / 1,051 (80.30%) |
+| Rust instantiation coverage | 847 / 1,054 (80.36%) |
+| Rust region coverage | 20,444 / 24,441 (83.65%) |
+| Rust branch/condition coverage | 3,385 / 4,326 (78.25%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
-| Active fixture font paths | 129 |
-| Stored active font binaries | 86 files, 705 KiB |
+| Active fixture font paths | 130 |
+| Stored active font binaries | 87 files, 713 KiB |
 | Active symlink aliases | 43 |
-| Unique active font contents | 97 SHA-256 identities |
+| Unique active font contents | 98 SHA-256 identities |
 | Deprecated brute-force fonts | 101 files, 99 unique contents, 23 MiB |
 
 The current coverage target is not only line coverage. The maintained
@@ -239,14 +241,15 @@ Immediate `name` residuals: compact public `FT_Get_Postscript_Name` rows now
 cover unsupported name records, invalid Apple string offsets, Unicode family
 fallback, Apple-Roman subfamily fallback, Apple-only PostScript names, odd
 Windows PostScript-name rejection, and Apple-only encoded named-instance
-prefix/subfamily selection. `src/tt/name.rs` is now 232 / 240 lines and
-376 / 399 regions covered. The remaining executable lines are the platform 0/2
-`name_string` fallback and the final no-name return. Candidate rows were tested
-and rejected because they exposed real C/Rust mismatches: pinned C returned
-`Ubuntu-Thin` for a platform-0 variation prefix where Rust returned
-`UniVar-Thin`, and pinned C synthesized `MissingVar_300wght` for a missing
-instance subfamily where Rust kept the base `Ubuntu-Regular` name. Those are
-future correctness buckets, not safe coverage-only fixtures.
+prefix/subfamily selection, including the case where the variation prefix is
+Unicode-only and must be ignored while the Unicode instance subfamily is still
+accepted. `src/tt/name.rs` is now 285 / 290 lines and 455 / 481 regions
+covered. The remaining executable lines are the platform 0/2 `name_string`
+fallback, the final no-name return, and the odd-length Windows variation
+prefix rejection. A missing-instance-subfamily candidate was tested and
+rejected because it exposed a real C/Rust mismatch: pinned C synthesized
+`MissingVar_300wght` where Rust kept the base `Ubuntu-Regular` name. That is a
+future correctness bucket, not a safe coverage-only fixture.
 
 Immediate fixed-math residuals: public `FT_MulDiv`, `FT_MulFix`,
 `FT_DivFix`, `FT_RoundFix`, `FT_CeilFix`, `FT_FloorFix`,
@@ -581,7 +584,7 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,066 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,067 | Use these rows for structural coverage evidence. |
 | Compile/header/scalar contract | 2,248 | Valid for ABI/header contracts, not runtime core coverage. |
 | Shape-incomplete fallback | 41 | Convert to complete explicit variants or mark invalid/pending. |
 | Generic modeled fallback | 985 | Classify operation-by-operation as real parity, unsupported, or pending. |
@@ -1391,6 +1394,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Compact fvar structural controls | 93 unique hashes | 0 | 6,519 | 6,516 / 6,516 | 3 | 13,992 / 16,920 lines; 20,230 / 24,298 regions; 3,345 / 4,290 branches | `scripts/build_fvar_fixtures.py` rebuilds the compact malformed fvar controls and adds three explicit public `FT_FACE_FLAG_MULTIPLE_MASTERS` variants for instance-array EOF, too-short instance records, and instance PostScript IDs. `tt/fvar.rs` reaches full branch coverage; the two remaining lines are the mathematically unreachable u16 instance-count overflow guard |
 | 2026-07-11 | Compact name selection and PostScript fallback controls | 97 unique hashes | 0 | 6,523 | 6,520 / 6,520 | 3 | 14,024 / 16,920 lines; 20,290 / 24,298 regions; 3,360 / 4,290 branches | `scripts/build_name_fixtures.py` rebuilds four compact name-table controls and `FT_Get_Postscript_Name` now has explicit variants for unsupported/malformed family-name fallback, Apple-only PostScript names, odd Windows PostScript fallback, and Apple-only encoded named-instance prefixes. `tt/name.rs` moves to 232 / 240 lines and the rejected platform-0/missing-subfamily candidates are tracked as correctness buckets |
 | 2026-07-11 | Rendered transform slot coverage | 97 unique hashes | 0 | 6,524 | 6,521 / 6,521 | 3 | 14,078 / 16,966 lines; 20,365 / 24,359 regions; 3,364 / 4,294 branches | one explicit `FT_Set_Transform` variant renders DejaVu glyph 36 after a non-identity matrix and delta. The row exposed a real bitmap-byte divergence; core now transforms the render snapshot in glyph-slot coordinates and recomputes the preset bitmap box before rasterization, matching pinned C FreeType with exact Rust/C/WASM parity |
+| 2026-07-11 | Unicode variation prefix parity | 98 unique hashes | 0 | 6,525 | 6,522 / 6,522 | 3 | 14,131 / 17,016 lines; 20,444 / 24,441 regions; 3,385 / 4,326 branches | one compact variable font adds a named-instance row where nameID 25 exists only on Unicode/ISO-style platforms while the instance subfamily is Unicode. The row exposed a real divergence: pinned C returned `Ubuntu-Thin`, while Rust previously returned `UniVar-Thin`. Core now matches `sfnt_get_var_ps_name` by using only Windows 3/0, Windows 3/1, or Apple Roman records for the variation PostScript prefix while retaining general name lookup for the subfamily |
 
 ## Decision Log
 
@@ -1461,6 +1465,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Compare structured error output only by explicit opt-in | Existing expected-error rows intentionally tolerate several Rust/C error-classification differences. Rows that claim post-error state preservation, such as invalid named-instance selection, must set `compare_error_output` and provide matching C oracle, Rust, C ABI, and WASM ABI state snapshots |
 | 2026-07-11 | Prefer shared table readers over duplicated byte decoding | Reusing existing SFNT endian helpers is valid coverage progress when the public parser already reads the same field. It does not remove behavior or add a fake test path, and keeps coverage tied to real public fixture execution |
 | 2026-07-11 | Classify fvar instance-count overflow as unreachable | `instance_count` and `instance_size` are 16-bit SFNT fields, so their product fits in `usize` on supported 32-bit and 64-bit targets. Keep the defensive guard visible for now instead of deleting it to manufacture line coverage |
+| 2026-07-11 | Match variation PostScript prefix platform filtering | Pinned `sfnt_get_var_ps_name` calls `sfnt_get_name_id`, which accepts only Windows 3/0, Windows 3/1, and Apple Roman records for the variation prefix. It does not use the broader Unicode/ISO fallback from `tt_face_get_name`; the named-instance subfamily still uses that general lookup path |
 
 ## Immediate Next Actions
 

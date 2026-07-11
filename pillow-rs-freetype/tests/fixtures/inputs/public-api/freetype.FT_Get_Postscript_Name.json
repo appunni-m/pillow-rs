@@ -166,6 +166,23 @@
               "tt/name:variation-subfamily-apple-roman",
               "tt/name:variation-unsupported-record"
             ]
+          },
+          {
+            "id": "encoded-unicode-prefix-instance",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-unicode-prefix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 65536
+            },
+            "coverage": [
+              "tt/name:variation-prefix-unicode-platform",
+              "tt/name:variation-subfamily-unicode-platform"
+            ]
           }
         ]
       },

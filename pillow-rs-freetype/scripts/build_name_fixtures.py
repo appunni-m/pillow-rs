@@ -84,6 +84,16 @@ def variable_base_records() -> list[NameRecordSpec]:
     ]
 
 
+def variable_base_without_instance_names() -> list[NameRecordSpec]:
+    return [
+        NameRecordSpec(3, 1, 0x0409, 1, utf16be("Ubuntu")),
+        NameRecordSpec(3, 1, 0x0409, 2, utf16be("Regular")),
+        NameRecordSpec(3, 1, 0x0409, 6, utf16be("Ubuntu-Regular")),
+        NameRecordSpec(3, 1, 0x0409, 257, utf16be("Width")),
+        NameRecordSpec(3, 1, 0x0409, 258, utf16be("Weight")),
+    ]
+
+
 def write_variable_apple_prefix() -> None:
     records = variable_base_records()
     records.extend(
@@ -97,6 +107,23 @@ def write_variable_apple_prefix() -> None:
     write_name_payload(
         BASE_VARIABLE,
         VARIABLE_OUT_DIR / "variable-name-apple-prefix.ttf",
+        build_name_table(records),
+    )
+
+
+def write_variable_unicode_prefix() -> None:
+    records = variable_base_without_instance_names()
+    records.extend(
+        [
+            NameRecordSpec(5, 0, 0, 25, b"Ignored"),
+            NameRecordSpec(0, 3, 0, 25, utf16be("UniVar")),
+            NameRecordSpec(0, 3, 0, 259, utf16be("Thin")),
+            NameRecordSpec(0, 3, 0, 260, utf16be("Light")),
+        ]
+    )
+    write_name_payload(
+        BASE_VARIABLE,
+        VARIABLE_OUT_DIR / "variable-name-unicode-prefix.ttf",
         build_name_table(records),
     )
 
@@ -218,6 +245,7 @@ def main() -> None:
     write_apple_postscript()
     write_odd_windows_postscript_with_apple_fallback()
     write_variable_apple_prefix()
+    write_variable_unicode_prefix()
 
 
 if __name__ == "__main__":
