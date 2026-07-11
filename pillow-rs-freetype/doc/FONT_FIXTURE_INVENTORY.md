@@ -212,7 +212,7 @@ listed because they enter different hinting and scaling conditions.
 | `glyf-malformed-matrix.ttf` | gids 1-19 | 20 | one explicitly selected malformed record per simple/composite parser boundary and table/reference error |
 | `loca-short-truncated.ttf`, `loca-long-truncated.ttf` | gid 0 | 20 | one checked truncation failure for each loca record format |
 | `cvt-empty.ttf`, `cvt-odd-length.ttf` | gid 1 | 20 | present-empty and odd-length CVT parser outcomes isolated with no-scale loading |
-| `hinter-control-matrix.ttf` | gid 1, gids 24-40 | 20 | valid VM family matrices plus divide-zero, truncated pushes, glyph IDEF, unterminated FDEF, undefined-opcode errors, and mono scan-type 0/2 dropout controls |
+| `hinter-control-matrix.ttf` | gid 1, gids 24-40 | 20 | valid VM family matrices plus empty-stack ROLL no-op, divide-zero, truncated pushes, glyph IDEF, unterminated FDEF, undefined-opcode errors, and mono scan-type 0/2 dropout controls |
 | `hinter-control-matrix.ttf` | U+E032 gid 51 | 20 | branch-edge VM control covering zero-length line and stack vectors, invalid stack-index fallback, taken JROF, no-round dispatch, invalid contour shift, invalid coordinate reads, empty twilight-zone SHZ, and positive/negative single-width MDRP cut-in |
 | `hinter-control-matrix.ttf` | gid 21 | 20 | empty outline selected across normal, mono, LCD, LCD_V, and SDF render modes |
 | `hinter-control-matrix.ttf` | U+E028 gid 41 | 20 | off-curve start and consecutive conic controls across normal, mono, LCD, LCD_V, and SDF modes; owns FreeType-compatible SDF conic subdivision |

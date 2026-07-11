@@ -609,7 +609,7 @@
         <!-- One deterministic program covers independent VM families. Results
              are consumed immediately; point-tag flips are restored. -->
         <bytecode>
-          40 03 01 02 03 22 41 02 00 40 ff c0 22
+          40 03 01 02 03 22 8a 41 02 00 40 ff c0 22
           b0 05 20 21 21 b1 01 02 23 22
           b2 10 20 01 25 22 b2 10 20 01 26 22
           b2 01 02 03 8a 22 24 21
