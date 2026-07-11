@@ -860,6 +860,826 @@
             ]
           },
           {
+            "id": "script-avestan",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 68352,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:avestan-blue-chars"
+            ]
+          },
+          {
+            "id": "script-bamum",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 42663,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:bamum-blue-chars"
+            ]
+          },
+          {
+            "id": "script-buhid",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 5968,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:buhid-blue-chars"
+            ]
+          },
+          {
+            "id": "script-chakma",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 69891,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:chakma-blue-chars"
+            ]
+          },
+          {
+            "id": "script-canadian-syllabics",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 5596,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:canadian-syllabics-blue-chars"
+            ]
+          },
+          {
+            "id": "script-carian",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 66215,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:carian-blue-chars"
+            ]
+          },
+          {
+            "id": "script-cherokee",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 5062,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:cherokee-blue-chars"
+            ]
+          },
+          {
+            "id": "script-coptic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 11404,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:coptic-blue-chars"
+            ]
+          },
+          {
+            "id": "script-cypriot",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 67597,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:cypriot-blue-chars"
+            ]
+          },
+          {
+            "id": "script-cyrillic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 1041,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:cyrillic-blue-chars"
+            ]
+          },
+          {
+            "id": "script-devanagari",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 2312,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:devanagari-blue-chars"
+            ]
+          },
+          {
+            "id": "script-deseret",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 66562,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:deseret-blue-chars"
+            ]
+          },
+          {
+            "id": "script-ethiopic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 4608,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:ethiopic-blue-chars"
+            ]
+          },
+          {
+            "id": "script-georgian",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 4306,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:georgian-blue-chars"
+            ]
+          },
+          {
+            "id": "script-khutsuri",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 4273,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:khutsuri-blue-chars"
+            ]
+          },
+          {
+            "id": "script-glagolitic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 11269,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:glagolitic-blue-chars"
+            ]
+          },
+          {
+            "id": "script-gothic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 66354,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:gothic-blue-chars"
+            ]
+          },
+          {
+            "id": "script-greek",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 915,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:greek-blue-chars"
+            ]
+          },
+          {
+            "id": "script-gujarati",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 2724,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:gujarati-blue-chars"
+            ]
+          },
+          {
+            "id": "script-han",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 20182,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:han-blue-chars"
+            ]
+          },
+          {
+            "id": "script-kayah",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 43269,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:kayah-blue-chars"
+            ]
+          },
+          {
+            "id": "script-khmer-symbols",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 6624,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:khmer-symbols-blue-chars"
+            ]
+          },
+          {
+            "id": "script-lao",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 3762,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:lao-blue-chars"
+            ]
+          },
+          {
+            "id": "script-latin",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 111,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:latin-blue-chars"
+            ]
+          },
+          {
+            "id": "script-lisu",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 42209,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:lisu-blue-chars"
+            ]
+          },
+          {
+            "id": "script-medefaidrin",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 93760,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:medefaidrin-blue-chars"
+            ]
+          },
+          {
+            "id": "script-myanmar",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 4097,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:myanmar-blue-chars"
+            ]
+          },
+          {
+            "id": "script-nko",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 2000,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:nko-blue-chars"
+            ]
+          },
+          {
+            "id": "script-ol-chiki",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 7259,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:ol-chiki-blue-chars"
+            ]
+          },
+          {
+            "id": "script-old-turkic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 68631,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:old-turkic-blue-chars"
+            ]
+          },
+          {
+            "id": "script-osage",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 66750,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:osage-blue-chars"
+            ]
+          },
+          {
+            "id": "script-osmanya",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 66694,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:osmanya-blue-chars"
+            ]
+          },
+          {
+            "id": "script-rohingya",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 68867,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:rohingya-blue-chars"
+            ]
+          },
+          {
+            "id": "script-saurashtra",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 43164,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:saurashtra-blue-chars"
+            ]
+          },
+          {
+            "id": "script-shavian",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 66645,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:shavian-blue-chars"
+            ]
+          },
+          {
+            "id": "script-sinhala",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 3465,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:sinhala-blue-chars"
+            ]
+          },
+          {
+            "id": "script-sundanese",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 7051,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:sundanese-blue-chars"
+            ]
+          },
+          {
+            "id": "script-tamil",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 2953,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:tamil-blue-chars"
+            ]
+          },
+          {
+            "id": "script-tai-viet",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 43654,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:tai-viet-blue-chars"
+            ]
+          },
+          {
+            "id": "script-telugu",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 3079,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:telugu-blue-chars"
+            ]
+          },
+          {
+            "id": "script-tifinagh",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 11604,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:tifinagh-blue-chars"
+            ]
+          },
+          {
             "id": "indic-ka-10",
             "assets": {
               "font": {
