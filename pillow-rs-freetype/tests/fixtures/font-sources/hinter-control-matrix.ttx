@@ -218,7 +218,7 @@
     <mtx name="transform2x2" width="700" lsb="0"/>
     <mtx name="scanType4" width="700" lsb="0"/>
     <mtx name="scanType5" width="700" lsb="0"/>
-    <mtx name="renderCollapseNegativeX" width="700" lsb="375"/>
+    <mtx name="renderCollapseNegativeX" width="700" lsb="330"/>
     <mtx name="renderLargeMono" width="7000" lsb="0"/>
     <mtx name="renderCollapseNegativeY" width="700" lsb="0"/>
     <mtx name="branchEdgeMatrix" width="700" lsb="0"/>
@@ -878,10 +878,10 @@
       <instructions/>
     </TTGlyph>
 
-    <TTGlyph name="renderCollapseNegativeX" xMin="375" yMin="0" xMax="375" yMax="700">
+    <TTGlyph name="renderCollapseNegativeX" xMin="330" yMin="0" xMax="330" yMax="700">
       <contour>
-        <pt x="375" y="0" on="1"/>
-        <pt x="375" y="700" on="1"/>
+        <pt x="330" y="0" on="1"/>
+        <pt x="330" y="700" on="1"/>
       </contour>
       <instructions/>
     </TTGlyph>
@@ -896,10 +896,10 @@
       <instructions/>
     </TTGlyph>
 
-    <TTGlyph name="renderCollapseNegativeY" xMin="0" yMin="375" xMax="700" yMax="375">
+    <TTGlyph name="renderCollapseNegativeY" xMin="0" yMin="330" xMax="700" yMax="330">
       <contour>
-        <pt x="0" y="375" on="1"/>
-        <pt x="700" y="375" on="1"/>
+        <pt x="0" y="330" on="1"/>
+        <pt x="700" y="330" on="1"/>
       </contour>
       <instructions/>
     </TTGlyph>
