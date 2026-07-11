@@ -1058,8 +1058,14 @@ subjects:
         description: Extracts the four-bit render target mode value from a load flag word.
       - id: load_target_dispatch_behavior
         description: FT_Load_Glyph dispatches the extracted target mode to the corresponding load/render target behavior.
+      - id: load_ignores_invalid_target_mode_without_render
+        description: FT_Load_Glyph accepts unknown extracted target modes when FT_LOAD_RENDER is not set.
+      - id: render_rejects_invalid_target_mode
+        description: FT_Load_Glyph rejects unknown extracted target modes when FT_LOAD_RENDER asks a renderer to consume the mode.
     # needs-input: operation=FT_LOAD_TARGET_MODE; fixture_asset=none; params load_flags values [0, FT_LOAD_RENDER|FT_LOAD_TARGET_NORMAL, FT_LOAD_RENDER|FT_LOAD_TARGET_MONO, FT_LOAD_RENDER|FT_LOAD_TARGET_LCD, FT_LOAD_RENDER|FT_LOAD_TARGET_LCD_V, 0x000F0000, 0x00100000]; expected output shape=signed integer render mode value from pinned C header; comparison=exact numeric equality.
     # needs-input: operation=load_glyph; fixture_asset=input/fonts/DejaVuSans.ttf; params face_index=0, glyph_index=36, size=20pt, load_flags covering FT_LOAD_RENDER combined with NORMAL, MONO, LCD, and LCD_V targets; expected output shape=status, slot format, bitmap pixel_mode, dimensions, pitch, left/top, and bytes; comparison=exact C oracle status and byte equality.
+    # needs-input: operation=load_glyph; fixture_asset=input/fonts/DejaVuSans.ttf; params face_index=0, glyph_index=36, size=20pt, load_flags=FT_LOAD_TARGET_(6) without FT_LOAD_RENDER; expected output shape=slot metrics, advance, format, and bitmap-null state; comparison=exact C oracle values.
+    # needs-input: operation=load_glyph; fixture_asset=input/fonts/DejaVuSans.ttf; params face_index=0, glyph_index=36, size=20pt, load_flags=FT_LOAD_RENDER|FT_LOAD_TARGET_(6); expected output shape=FT_Error status; comparison=exact C oracle FT_Err_Cannot_Render_Glyph.
 
   - id: freetype.FT_LOAD_TARGET_MONO
     kind: flag
