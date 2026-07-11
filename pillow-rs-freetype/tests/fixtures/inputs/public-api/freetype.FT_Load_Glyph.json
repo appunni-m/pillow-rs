@@ -2228,6 +2228,28 @@
             "coverage": [
               "load_glyph:explicit-f6"
             ]
+          },
+          {
+            "id": "cjk-no-scale-vertical-vmtx",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 5,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE",
+                "FT_LOAD_VERTICAL_LAYOUT"
+              ]
+            },
+            "coverage": [
+              "font:no-scale-vmtx-vertical-metrics"
+            ]
           }
         ]
       },
