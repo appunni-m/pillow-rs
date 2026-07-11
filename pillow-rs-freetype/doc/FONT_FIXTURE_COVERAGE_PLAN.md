@@ -605,6 +605,115 @@ Concrete queue from the current denominator:
    the required named-instance route, then add only scalar/cast boundary rows
    and final malformed-table controls.
 
+### R1 Full Coverage Identification Route
+
+The next objective is a closed coverage ledger, not just a higher percentage.
+Every uncovered executable item must have one owner and one disposition before
+it is considered understood. The route is:
+
+1. Regenerate the denominator with
+   `make -C pillow-rs-freetype test-unified-condition-coverage`.
+2. Freeze the generated totals for the batch: lines, functions,
+   instantiations, regions, and branch/condition outcomes.
+3. Classify every generic fallback in the public runner before adding more
+   fonts. A green modeled error is not fixture parity.
+4. For every uncovered function, identify the public subject that should reach
+   it. If no public subject exists, classify it as defensive, obsolete,
+   diagnostic, test-only, or missing public API.
+5. Collapse adjacent uncovered line numbers into behavior families. A behavior
+   family must name the source route, table/glyph/font property, and expected
+   C-oracle comparison.
+6. For every uncovered branch/condition family, write the minimal
+   independent-effect input set. Do not use font or glyph discovery to find
+   combinations at runtime.
+7. Add or adjust only existing public API input JSON rows and compact
+   source-backed fonts. Do not add a second fixture harness and do not
+   reintroduce Cartesian axes.
+8. Run the narrow public case, then the full unified condition coverage suite,
+   then ABI/export gates. Update this document with the closed rows and the new
+   denominator.
+
+An ownership row is closed only when it contains all of:
+
+| Field | Requirement |
+|---|---|
+| Source | File plus line range or function name from the coverage artifact |
+| Public route | Manifest subject and existing/new public input JSON case |
+| ABI surfaces | C oracle, Rust FFI, C ABI, and WASM ABI disposition |
+| Fixture property | Exact font, table, glyph role, size, flags, render mode, transform, or malformed condition |
+| Expected behavior | Success/error shape and exact comparison surface |
+| Coverage kind | Lines, functions, regions, branches/conditions, or defensive-unreachable |
+| Verification | Narrow command and full coverage command that closed the row |
+
+No code may be removed only to improve coverage. Code removal is valid only
+after the route audit proves the code is obsolete, duplicate, test-only,
+diagnostic, or semantically unreachable, and that disposition is documented
+before the change.
+
+#### R1 Blocking Routes
+
+These are the current high-risk blockers that must be resolved before the
+coverage score can be trusted as correctness evidence.
+
+| Blocker | Current state | Required closure |
+|---|---|---|
+| Generic oracle fallback | Any unmatched operation can still return a modeled FreeType error | Produce an operation table where every implemented public operation has a real C oracle arm; unsupported operations remain explicit pending/unsupported rows |
+| Rust `_` fallback | Any unmatched Rust route returns `Unimplemented_Feature` | Add direct Rust FFI execution for implemented surfaces; leave unsupported optional modules visibly unsupported |
+| C ABI/WASM runtime delegation | Several runtime operations still fall through to the Rust leg instead of the public C/WASM wrapper | Split compile/header probes from runtime ABI obligations; runtime symbols must call their thin wrapper |
+| `freetype.get_subglyph_info` | Explicit unsupported stub, despite parsed composite component data existing in `glyf` | Implement exact `FT_Get_SubGlyph_Info` behavior through composite `NO_RECURSE` loads, then add compact composite rows |
+| `freetype.select_size` | Explicit unsupported stub | Add available-size/strike fixture support or keep rows pending until embedded bitmap strikes are represented |
+| `freetype.face_properties` | Explicit unsupported stub | Audit FreeType property tags, implement supported public behavior, and keep unsupported tags exact-error visible |
+| Shape-incomplete JSON rows | Some rows lack selectors such as glyph, offset, size, or index and fall into fallback paths | Convert valid rows into complete explicit variants or mark invalid declarations pending/unsupported |
+| Named-instance PostScript row | The only current pending case | Implement `FT_Set_Named_Instance` route, then make the row runnable |
+| Backend error coercion | Some backend setup errors are converted to `Unimplemented_Feature` | Keep only for documented unsupported backend limitations; real implemented paths must fail loudly |
+
+`FT_Get_SubGlyph_Info` is the preferred first implementation closure because
+the core already parses composite components, the public route is currently a
+known false-green stub, and the required font property is narrow: one compact
+composite glyph with at least word args, xy args, scale, xy scale, two-by-two
+transform, use-my-metrics, and an out-of-range/error control. This is better
+than adding broad render/autohint rows before the runner proves the route.
+
+#### R1 Workstream Order
+
+The implementation work should be split by source ownership after the route
+audit, not by font. Each stream owns one failure class and must update this
+ledger before it adds rows.
+
+| Order | Stream | Primary files | Identification output | Completion gate |
+|---:|---|---|---|---|
+| 0 | Denominator and fallback audit | `tests/unified_fixture_parity.rs`, input JSON, manifest | Operation-by-operation table with zero unclassified generic fallbacks for implemented surfaces | Full suite still 6,509/6,509 runnable passing; pending count understood |
+| 1 | Public wrapper/API closure | `api.rs`, `font.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs` | Missing functions mapped to public subjects or defensive disposition | No modeled runtime wrapper result for implemented C/WASM symbols |
+| 2 | Composite/size/metadata features | `font.rs`, `scaler.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs` | Compact table/glyph rows for subglyphs, strikes, names, charmaps, metadata errors | Real C/Rust/C/WASM parity rows replace stubs |
+| 3 | Render/scaler topology | `render.rs`, `grays.rs`, `scaler.rs`, `outline.rs` | Explicit render-mode/topology rows: gray, mono, LCD/LCD_V, empty, clipped, transformed, cubic/conic/degenerate | Pixel/bitmap/placement parity exact for every added row |
+| 4 | Autohint script coverage | `autohint/latin.rs`, `autohint/cjk.rs`, `autohint/globals_data.rs`, `autohint/types.rs`, `autohint/coverage.rs` | Script and glyph-role matrix: Latin blue/serif/link/diagonal, CJK topology, Indic/other script activation | No deletion of script data; rows prove reachability or document unreachable data |
+| 5 | TrueType VM coverage | `tt/hinter/exec.rs`, `gs.rs`, `zone.rs`, `iup.rs`, `tables.rs` | One bytecode glyph/program role per missing opcode or graphics-state branch | First-divergence parity for metrics/outline/render rows |
+| 6 | Scalar and defensive cleanup | `fixed.rs`, `casts.rs`, residual parser guards | Boundary rows or semantic proof of unreachable overflow/invalid-state guards | Zero unclassified missing lines; cleanup commits explain why code is obsolete/unreachable |
+
+After R1, subagents can be useful, but only with separate worktrees and one
+owned stream each. The main branch should merge only verified commits that
+report before/after counts, exact commands, changed files, and any C behavior
+that shaped the fix.
+
+#### R1 Final Gate
+
+The final 100% claim requires all of these at the same commit:
+
+- `test-unified-condition-coverage` reports zero missed executable lines,
+  functions, regions, and branch/condition outcomes for the maintained core
+  denominator, or every remaining item is documented as impossible to execute
+  and removed/feature-gated in a separate semantic cleanup.
+- Pending public rows are zero.
+- Implemented public operations have no generic fallback or modeled-success
+  route.
+- C oracle, Rust FFI, C ABI, and WASM ABI routes either execute the real public
+  wrapper or are explicitly compile/header-only probes.
+- Active input JSON is explicit and grouped; implicit case count remains zero.
+- New or changed fonts are compact, source-backed, inventoried, and tied to
+  named obligations.
+- `test-ffi-compat`, `fontdone-ffi`, formatting for touched crates, repo-map
+  checks, and narrow parity commands pass.
+
 ### Remaining Case And Font Budget
 
 The completion budget is deliberately conservative:
