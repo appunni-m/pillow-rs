@@ -1482,6 +1482,8 @@ subjects:
       # needs-input: operation FT_Get_Char_Index; fixture asset font with multiple charmaps including Unicode and non-Unicode charmaps; params selected charmap index/encoding and charcodes for present, absent, zero, BMP edge, and supplementary values; expected output shape FT_UInt glyph index; comparison rule exact glyph index parity and exact 0 for undefined/null/no-active-charmap cases.
       - id: active_charmap_present_and_missing_codes
         description: Present and absent character codes are resolved against the currently active charmap, with missing codes returning 0 like C.
+      - id: format14_only_charmap_returns_zero
+        description: A face whose only cmap is format 14 returns the zero glyph sentinel for direct character lookup.
       - id: null_or_no_active_charmap_returns_zero
         description: Null face handles and faces without an active charmap return the same zero result as the C oracle.
 
@@ -1522,6 +1524,8 @@ subjects:
         description: A populated active charmap returns the first mapped character code and writes its glyph index.
       - id: empty_or_no_active_charmap
         description: Empty charmaps, no active charmap, and null face cases return and write the same sentinel values as C.
+      - id: format14_only_charmap_returns_zero
+        description: A face whose only cmap is format 14 returns the same zero sentinel as C for first-character iteration.
       - id: charcode_zero_disambiguated_by_glyph_index
         description: A valid first character code of zero is distinguished from an empty charmap by the written glyph index exactly like C.
 
@@ -1598,6 +1602,8 @@ subjects:
         description: Starting from a mapped code or a gap returns the next strictly greater mapped code exactly like C.
       - id: exhausted_or_no_active_charmap
         description: Exhausted charmaps, null faces, and no active charmap cases return and write the same zero sentinels as C.
+      - id: format14_only_charmap_returns_zero
+        description: A face whose only cmap is format 14 returns the same zero sentinel as C for next-character iteration.
 
   - id: freetype.FT_Get_Postscript_Name
     kind: function

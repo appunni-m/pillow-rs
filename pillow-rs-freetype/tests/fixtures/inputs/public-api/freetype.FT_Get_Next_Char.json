@@ -4,7 +4,8 @@
   "manifest_cases": [
     "iterates_mapped_chars_in_c_order",
     "strict_after_and_gap_behavior",
-    "exhausted_or_no_active_charmap"
+    "exhausted_or_no_active_charmap",
+    "format14_only_charmap_returns_zero"
   ],
   "cases": [
     {
@@ -148,6 +149,64 @@
             "writes.agindex"
           ]
         }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Next_Char.format14_only_charmap_returns_zero",
+      "subject": "freetype.FT_Get_Next_Char",
+      "case": "format14_only_charmap_returns_zero",
+      "operation": "freetype.get_next_char",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/charmap/cmap-format14-only.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "start_charcodes": [
+            0,
+            65,
+            1114111
+          ],
+          "expected_charmap_format": 14
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:charmap-iteration",
+        "coverage:format14"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "rows": [
+            {
+              "start": "FT_ULong",
+              "result": {
+                "return": "FT_ULong zero sentinel",
+                "writes": {
+                  "agindex": "FT_UInt zero sentinel"
+                }
+              }
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:4615-4640",
+          "freetype/src/sfnt/ttcmap.c:3081-3191"
+        ]
       }
     },
     {

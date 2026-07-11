@@ -154,9 +154,24 @@ def build_malformed_format14_font() -> None:
     font.save(out, reorderTables=True)
 
 
+def build_format14_only_font() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    cmap = newTable("cmap")
+    cmap.tableVersion = 0
+    cmap.tables = [variation_selector_subtable()]
+    font["cmap"] = cmap
+
+    CHARMAP_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = CHARMAP_OUT_DIR / "cmap-format14-only.ttf"
+    if out.exists() or out.is_symlink():
+        out.unlink()
+    font.save(out, reorderTables=True)
+
+
 def main() -> None:
     build_matrix_font()
     build_malformed_format14_font()
+    build_format14_only_font()
 
 
 if __name__ == "__main__":
