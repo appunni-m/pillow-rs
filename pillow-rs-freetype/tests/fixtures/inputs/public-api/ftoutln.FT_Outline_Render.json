@@ -10,7 +10,34 @@
       "operation": "ftoutln.outline_render",
       "schema": "bitmap_result",
       "expect_error": false,
-      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/render/simple-filled-square.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}}, "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"}},
+      "inputs": {
+        "variants": [
+          {
+            "id": "simple-filled-square",
+            "assets": {"outline": {"kind": "ref", "id": "outlines/render/simple-filled-square.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
+            "coverage": ["grays:baseline-line-square"]
+          },
+          {
+            "id": "even-odd-overlap",
+            "assets": {"outline": {"kind": "ref", "id": "outlines/render/even-odd-overlap.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
+            "coverage": ["grays:even-odd-fill-overlap"]
+          },
+          {
+            "id": "clipped-crossing-lines",
+            "assets": {"outline": {"kind": "ref", "id": "outlines/render/clipped-crossing-lines.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-16x16.json", "asset_kind": "bitmap_model"}},
+            "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid", "target_box": {"width": 16, "height": 16}},
+            "coverage": ["grays:clip-box-outside-cells"]
+          },
+          {
+            "id": "cubic-closed-loop",
+            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-closed-loop.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
+            "coverage": ["grays:cubic-tagged-outline"]
+          }
+        ]
+      },
       "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "operation:render"],
       "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Render", "kind": "function", "c_signature": "FT_Error FT_Outline_Render(FT_Library library, FT_Outline* outline, FT_Raster_Params* params)"}, "source_behavior": "params->source is overwritten with the outline before raster_render; target bitmap contents are generated at runtime."},
       "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "params_source_is_outline": true, "bitmap": {"pixel_mode": "FT_Pixel_Mode", "rows": "integer", "width": "integer", "pitch": "integer", "buffer_hash": "sha256"}}, "compare": {"mode": "bytes", "paths": ["return", "params_source_is_outline", "bitmap.pixel_mode", "bitmap.rows", "bitmap.width", "bitmap.pitch", "bitmap.buffer"]}, "source_refs": ["freetype/include/freetype/ftoutln.h:466-498", "freetype/src/base/ftoutln.c:606-667"], "fixture_requirements": ["Preallocated gray bitmap target; runtime oracle must render the buffer rather than store generated output."]}
