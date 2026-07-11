@@ -1530,6 +1530,10 @@ subjects:
         description: A valid glyph in a face with glyph names returns success and copies the same zero-terminated ASCII name as C.
       - id: truncates_and_terminates_to_buffer_size
         description: Small buffers receive the same truncated and zero-terminated bytes as the C oracle.
+      - id: post_format_1_default_names
+        description: A compact SFNT with post format 1.0 and a non-258 glyph count returns the same default .notdef names as C.
+      - id: post_format_25_delta_names
+        description: A compact SFNT with post format 2.5 returns Mac names for valid signed deltas and .notdef for out-of-range deltas like C.
       - id: error_no_names_or_invalid_glyph
         description: Faces without glyph names and invalid glyph indexes return the same C error and clear the output name as C.
       - id: error_null_face_or_buffer
@@ -1564,6 +1568,10 @@ subjects:
       # needs-input: operation FT_Get_Name_Index; fixture asset font with post/CFF glyph names and a control font without glyph names; params glyph names '.notdef', 'A' or equivalent, unknown name, NULL; expected output shape FT_UInt glyph index; comparison rule exact glyph index parity and exact 0 for unknown/unavailable/null cases.
       - id: known_glyph_name_success
         description: Known glyph names return the same glyph index as the C oracle.
+      - id: post_format_25_name_index
+        description: Name lookup over post format 2.5 delta names returns the same first matching glyph index as C.
+      - id: post_format_1_default_name_index
+        description: Name lookup over a post format 1.0 face with non-258 glyph count returns the same zero sentinel for unavailable standard names as C.
       - id: unknown_or_unavailable_name_returns_zero
         description: Unknown names, faces without glyph-name support, and unavailable name data return 0 like C.
       - id: null_face_or_name_returns_zero

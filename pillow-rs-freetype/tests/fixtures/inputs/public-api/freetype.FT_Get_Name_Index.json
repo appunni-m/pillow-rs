@@ -3,6 +3,8 @@
   "subject": "freetype.FT_Get_Name_Index",
   "manifest_cases": [
     "known_glyph_name_success",
+    "post_format_25_name_index",
+    "post_format_1_default_name_index",
     "unknown_or_unavailable_name_returns_zero",
     "null_face_or_name_returns_zero"
   ],
@@ -66,6 +68,106 @@
         },
         "compare": {
           "mode": "exact",
+          "paths": [
+            "return"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Name_Index.post_format_25_name_index",
+      "subject": "freetype.FT_Get_Name_Index",
+      "case": "post_format_25_name_index",
+      "operation": "freetype.get_name_index",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "variants": [
+          {
+            "id": "format25_A",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/metadata/post-format-25.ttf",
+                "requires": "SFNT post table format 2.5 with a valid delta mapping gid 36 to Mac name A"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_name": "A",
+              "expected_glyph_index": 36
+            },
+            "coverage": [
+              "post:format-25-name-index"
+            ]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-names",
+        "area:post",
+        "fixture:post-format-25"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_UInt glyph_index"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Name_Index.post_format_1_default_name_index",
+      "subject": "freetype.FT_Get_Name_Index",
+      "case": "post_format_1_default_name_index",
+      "operation": "freetype.get_name_index",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "variants": [
+          {
+            "id": "format1_A_returns_zero",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/metadata/post-format-1.ttf",
+                "requires": "SFNT post table format 1.0 with a non-258 glyph count"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_name": "A",
+              "expected_glyph_index": 0
+            },
+            "coverage": [
+              "post:format-1-nonstandard-count-name-index"
+            ]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-names",
+        "area:post",
+        "fixture:post-format-1"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_UInt zero sentinel"
+        },
+        "compare": {
+          "mode": "value",
           "paths": [
             "return"
           ]

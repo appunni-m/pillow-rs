@@ -4,6 +4,8 @@
   "manifest_cases": [
     "named_glyph_success",
     "truncates_and_terminates_to_buffer_size",
+    "post_format_1_default_names",
+    "post_format_25_delta_names",
     "error_no_names_or_invalid_glyph",
     "error_null_face_or_buffer"
   ],
@@ -160,6 +162,141 @@
         "output_shape": {
           "return": "FT_Error",
           "buffer": "truncated_nul_terminated_bytes"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "buffer_hex"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Glyph_Name.post_format_1_default_names",
+      "subject": "freetype.FT_Get_Glyph_Name",
+      "case": "post_format_1_default_names",
+      "operation": "freetype.get_glyph_name",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "variants": [
+          {
+            "id": "format1_nonstandard_glyph_count_defaults_notdef",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/metadata/post-format-1.ttf",
+                "requires": "SFNT post table format 1.0 with a non-258 glyph count"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "gid:1",
+              "expected_name": ".notdef"
+            },
+            "coverage": [
+              "post:format-1-nonstandard-count-default-name"
+            ]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-names",
+        "area:post",
+        "fixture:post-format-1"
+      ],
+      "metadata": {
+        "source_behavior": "FreeType's tt_face_get_ps_name returns Mac names for post format 1.0 only when maxp.numGlyphs is exactly 258; otherwise it leaves the default .notdef name."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "buffer": "nul_terminated_bytes"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "buffer_hex"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Glyph_Name.post_format_25_delta_names",
+      "subject": "freetype.FT_Get_Glyph_Name",
+      "case": "post_format_25_delta_names",
+      "operation": "freetype.get_glyph_name",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "variants": [
+          {
+            "id": "format25_valid_delta_name",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/metadata/post-format-25.ttf",
+                "requires": "SFNT post table format 2.5 with a valid delta mapping gid 36 to Mac name A"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "gid:36",
+              "expected_name": "A"
+            },
+            "coverage": [
+              "post:format-25-valid-delta-name"
+            ]
+          },
+          {
+            "id": "format25_invalid_negative_delta_defaults_notdef",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/metadata/post-format-25.ttf",
+                "requires": "SFNT post table format 2.5 with an out-of-range negative delta on gid 1"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "gid:1",
+              "expected_name": ".notdef"
+            },
+            "coverage": [
+              "post:format-25-invalid-negative-delta"
+            ]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-names",
+        "area:post",
+        "fixture:post-format-25"
+      ],
+      "metadata": {
+        "source_behavior": "FreeType load_format_25 treats each signed delta as gid + delta and maps out-of-range results to Mac glyph index 0."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "buffer": "nul_terminated_bytes"
         },
         "compare": {
           "mode": "bytes",

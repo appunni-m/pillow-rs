@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 113 | 70 | 43 | 78 | 646 KiB |
+| Active fixtures | 118 | 75 | 43 | 83 | 664 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 5 | 5 | 0 | 5 | 187 KiB |
 
@@ -96,6 +96,8 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `f5a7badf5399` | 1.9 | 1 | `fonts/metrics/hhea-short-eof.ttf` | 35-byte hhea at physical EOF; required-header stream error control |
 | `1eee7f2e8396` | 1.9 | 1 | `fonts/metrics/vhea-short-eof.ttf` | 35-byte vhea at physical EOF; present malformed vertical-header error control |
 | `acb83f0642a9` | 16.9 | 1 | `fonts/metadata/short-os2-post.ttf` | compact glyf with a 77-byte OS/2 table and 15-byte post table; owns both optional short-table fallbacks |
+| `12b8e116037d` | 3.0 | 1 | `fonts/metadata/post-format-1.ttf` | compact glyf with `post` format 1.0 and non-258 glyph count; owns FreeType's default `.notdef` glyph-name behavior |
+| `2571fddb58ac` | 3.1 | 1 | `fonts/metadata/post-format-25.ttf` | compact glyf with FreeType's historical `post` format 2.5 tag `0x00025000`; owns valid signed-delta names and out-of-range deltas mapping to Mac glyph 0 |
 | `9e63ed2c07b6` | 17.2 | 1 | `fonts/metadata/os2-use-typo-metrics.ttf` | compact glyf with `USE_TYPO_METRICS`; owns OS/2 typographic face and size metric selection |
 | `5df1e876cc25` | 1.9 | 1 | `fonts/metadata/head-short-eof.ttf` | 53-byte required head table at physical EOF; owns the short-header face-open error |
 | `4e4f32fced92` | 1.6 | 1 | `fonts/names/name-record-matrix.ttf` | nine-record name table covering Windows decode failures, Mac Roman and arbitrary-Windows fallbacks, invalid ranges, zero lengths, and every preference predicate outcome |
@@ -124,10 +126,12 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `6175105e1748` | 1.6 | 1 | `fonts/glyf/cvt-odd-length.ttf` | valid TrueType control with a one-byte cvt table rejected by Rust parsing and ignored by face construction |
 | `d8561f6ad992` | 3.8 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed VM and render-topology matrix covering state, geometry, control flow, DELTA, six exact bytecode error classes, conic chains, intersections, thin outlines, mixed winding, degenerate contours, empty outlines, collapsed spans, mono low-precision raster selection, and scan-type dropout modes |
 
-### Active Alias Concentration
+### Legacy Alias Concentration
 
-These directories account for most of the 348 aliases and reveal where later
-font compaction has the highest storage and reasoning value.
+These directories account for the historical alias-heavy fixture areas and
+reveal where later cleanup has the highest storage and reasoning value. The
+current active public-input symlink count is 43; this table is cleanup context,
+not the current execution count.
 
 | Alias area | Paths | Primary content role |
 |---|---:|---|
@@ -169,6 +173,8 @@ listed because they enter different hinting and scaling conditions.
 | `cjk-coverage.ttf` | U+004F gid 17, U+006F gid 18 | 20 | distinct capital/lowercase round extrema paired with flat H/n calibration geometry |
 | `cjk-coverage.ttf` | U+0049 gid 19 | 20 | compact four-edge micro-serif with close cross-links and intermediate-edge overlap rejection |
 | `hdmx_observable.ttf` | U+0041 gid 36 (`A`) | 20 | default, compute-metrics, mono hdmx, and mono suppression conditions |
+| `post-format-1.ttf` | gid 1 | name lookup only | `post` format 1.0 with non-258 glyph count returns FreeType's default `.notdef` instead of Mac standard names |
+| `post-format-25.ttf` | gid 36 (`A`), gid 1 | name lookup only | format 2.5 signed-delta rows cover valid Mac-name lookup and invalid negative deltas mapping to `.notdef` / glyph index 0 |
 | `glyf-component-matrix.ttf` | gids 3-10 | 19, 20 | point attachment, word XY arguments, all component transforms, rounded/unrounded offsets, use-my-metrics, and composite instructions |
 | `glyf-component-matrix.ttf` | gids 18, 19, 23 | 20 | accepted depth-8 boundary, rejected depth-9 recursion, and non-empty composite with an empty child |
 | `glyf-malformed-matrix.ttf` | gids 1-19 | 20 | one explicitly selected malformed record per simple/composite parser boundary and table/reference error |
@@ -357,12 +363,14 @@ and selected-glyph obligations still come from explicit inputs.
     Rust now propagates a present malformed vhea like FreeType while retaining
     an empty vmtx for a present but unreadable metrics table; `tt/hhea.rs` and
     `tt/vhea.rs` have 100% structural coverage.
-20. Three metadata controls cover a physically short required head, optional
-    short OS/2 and post tables, and OS/2 `USE_TYPO_METRICS`. FreeType selects
-    typographic metrics first when that bit is set, otherwise hhea when nonzero,
-    then OS/2 typo and Windows fallbacks; Rust now uses that order consistently
-    for face and size metrics. `tt/head.rs`, `tt/post.rs`, and `tt/os2.rs` have
-    100% structural coverage.
+20. Five metadata controls cover a physically short required head, optional
+    short OS/2 and post tables, OS/2 `USE_TYPO_METRICS`, and `post` format
+    1.0/2.5 glyph-name behavior. FreeType selects typographic metrics first
+    when that bit is set, otherwise hhea when nonzero, then OS/2 typo and
+    Windows fallbacks; Rust now uses that order consistently for face and size
+    metrics. `tt/head.rs` and `tt/os2.rs` have 100% structural coverage, while
+    `tt/post.rs` currently has full function coverage with remaining malformed
+    or defensive branch obligations visible in the coverage plan.
 21. Four 1.5–1.6 KiB name controls cover both malformed-table exits, raw-record
     filtering, Windows UTF-16 failures, Mac Roman and arbitrary-Windows
     fallbacks, empty defaults, and each operand outcome in the preference
