@@ -330,6 +330,11 @@ impl Face {
         self.font.sfnt_name(index)
     }
 
+    /// Return the face PostScript name, equivalent to `FT_Get_Postscript_Name`.
+    pub fn postscript_name(&self) -> Option<&str> {
+        self.font.postscript_name()
+    }
+
     /// Return the first mapped character and glyph index for the active charmap.
     pub fn first_char(&self) -> Option<(u32, u16)> {
         self.font.first_char()

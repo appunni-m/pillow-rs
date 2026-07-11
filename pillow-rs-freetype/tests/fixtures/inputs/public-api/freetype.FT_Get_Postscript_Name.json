@@ -19,9 +19,9 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/names/postscript-name.ttf",
-            "status": "required_future_asset",
-            "requires": "font with deterministic PostScript name exposed through POSTSCRIPT_FONT_NAME service"
+            "path": "input/fonts/names/ot-name-basic.ttf",
+            "status": "active",
+            "requires": "compact SFNT name fixture with deterministic nameID 6 PostScript name"
           }
         },
         "params": {
@@ -112,12 +112,13 @@
           "font_without_name": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/names/no-postscript-name.ttf",
-            "status": "required_future_asset",
-            "requires": "accepted font where POSTSCRIPT_FONT_NAME service returns null"
+            "path": "input/fonts/no-glyph-names/no-post-names.ttf",
+            "status": "active",
+            "requires": "accepted compact font where POSTSCRIPT_FONT_NAME service returns null"
           }
         },
         "params": {
+          "face_index": 0,
           "face_variants": [
             "null",
             "live_without_postscript_name"

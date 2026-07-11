@@ -121,6 +121,13 @@ pub struct FontdoneWasmSfntName {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmString {
+    pub string: *const c_uchar,
+    pub string_len: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmCharmap {
     pub index: FT_UInt,
     pub encoding: FT_Encoding,
@@ -876,6 +883,25 @@ pub extern "C" fn fontdone_wasm_set_charmap_from_face(
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_fstype_flags(handle: usize) -> FT_UShort {
     rust_ffi::FT_Get_FSType_Flags(face_ref(handle).map(|face| &face.face))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_postscript_name(
+    handle: usize,
+    out: *mut FontdoneWasmString,
+) -> FT_Bool {
+    // SAFETY: the caller provides writable storage for the output record or null.
+    let Some(out) = (unsafe { out.as_mut() }) else {
+        return 0;
+    };
+    let Some(name) = face_ref(handle).and_then(|face| rust_ffi::FT_Get_Postscript_Name(&face.face))
+    else {
+        *out = FontdoneWasmString::default();
+        return 0;
+    };
+    out.string = name.as_ptr();
+    out.string_len = u32::try_from(name.len()).unwrap_or(u32::MAX);
+    1
 }
 
 #[unsafe(no_mangle)]
