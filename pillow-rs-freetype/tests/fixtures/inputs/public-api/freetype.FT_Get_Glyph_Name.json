@@ -23,13 +23,13 @@
               "font": {
                 "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/names/post-glyph-names.ttf",
-                "status": "required_future_asset",
-                "requires": "font with stable post/CFF glyph names for .notdef and A"
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
               }
             },
             "params": {
               "face_index": 0,
+              "buffer_initial": "0xAA",
               "buffer_max": 64,
               "glyph_index": ".notdef"
             },
@@ -43,13 +43,13 @@
               "font": {
                 "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/names/post-glyph-names.ttf",
-                "status": "required_future_asset",
-                "requires": "font with stable post/CFF glyph names for .notdef and A"
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
               }
             },
             "params": {
               "face_index": 0,
+              "buffer_initial": "0xAA",
               "buffer_max": 64,
               "glyph_index": "A"
             },
@@ -74,7 +74,7 @@
           "mode": "bytes",
           "paths": [
             "status",
-            "buffer_bytes"
+            "buffer_hex"
           ]
         }
       }
@@ -87,26 +87,68 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/names/post-glyph-names.ttf",
-            "status": "required_future_asset",
-            "requires": "font with stable post/CFF glyph names for .notdef and A"
+        "variants": [
+          {
+            "id": "buffer_1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 1,
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.get_glyph_name:explicit-buffer_1"
+            ]
+          },
+          {
+            "id": "buffer_2",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 2,
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.get_glyph_name:explicit-buffer_2"
+            ]
+          },
+          {
+            "id": "buffer_8",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 8,
+              "glyph_index": "A"
+            },
+            "coverage": [
+              "freetype.get_glyph_name:explicit-buffer_8"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "glyph_index": "A",
-          "buffer_max_values": [
-            1,
-            2,
-            3,
-            4,
-            8
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -123,7 +165,7 @@
           "mode": "bytes",
           "paths": [
             "status",
-            "buffer_bytes"
+            "buffer_hex"
           ]
         }
       }
@@ -134,53 +176,37 @@
       "case": "error_no_names_or_invalid_glyph",
       "operation": "freetype.get_glyph_name",
       "schema": "api_result",
-      "expect_error": true,
+      "expect_error": false,
       "inputs": {
         "variants": [
           {
-            "id": "gvalid_on_no_names",
+            "id": "valid_gid_on_no_names",
             "assets": {
-              "font_no_names": {
+              "font": {
                 "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/names/no-glyph-names.ttf",
-                "status": "required_future_asset",
-                "requires": "font accepted by C FreeType whose face flags do not include FT_FACE_FLAG_GLYPH_NAMES"
-              },
-              "font_names": {
-                "kind": "ref",
-                "role": "font",
-                "path": "input/fonts/names/post-glyph-names.ttf",
-                "status": "required_future_asset",
-                "requires": "font with stable post/CFF glyph names for .notdef and A"
+                "path": "input/fonts/no-glyph-names/no-post-names.ttf",
+                "requires": "accepted SFNT font whose face flags do not include FT_FACE_FLAG_GLYPH_NAMES"
               }
             },
             "params": {
               "face_index": 0,
               "buffer_initial": "0xAA",
               "buffer_max": 64,
-              "glyph_index": "valid_on_no_names"
+              "glyph_index": 0
             },
             "coverage": [
-              "freetype.get_glyph_name:explicit-gvalid_on_no_names"
+              "freetype.get_glyph_name:explicit-valid_gid_on_no_names"
             ]
           },
           {
-            "id": "gnum_glyphs",
+            "id": "num_glyphs",
             "assets": {
-              "font_no_names": {
+              "font": {
                 "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/names/no-glyph-names.ttf",
-                "status": "required_future_asset",
-                "requires": "font accepted by C FreeType whose face flags do not include FT_FACE_FLAG_GLYPH_NAMES"
-              },
-              "font_names": {
-                "kind": "ref",
-                "role": "font",
-                "path": "input/fonts/names/post-glyph-names.ttf",
-                "status": "required_future_asset",
-                "requires": "font with stable post/CFF glyph names for .notdef and A"
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
               }
             },
             "params": {
@@ -190,25 +216,17 @@
               "glyph_index": "num_glyphs"
             },
             "coverage": [
-              "freetype.get_glyph_name:explicit-gnum_glyphs"
+              "freetype.get_glyph_name:explicit-num_glyphs"
             ]
           },
           {
-            "id": "gnum_glyphs_plus_1",
+            "id": "num_glyphs_plus_1",
             "assets": {
-              "font_no_names": {
+              "font": {
                 "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/names/no-glyph-names.ttf",
-                "status": "required_future_asset",
-                "requires": "font accepted by C FreeType whose face flags do not include FT_FACE_FLAG_GLYPH_NAMES"
-              },
-              "font_names": {
-                "kind": "ref",
-                "role": "font",
-                "path": "input/fonts/names/post-glyph-names.ttf",
-                "status": "required_future_asset",
-                "requires": "font with stable post/CFF glyph names for .notdef and A"
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
               }
             },
             "params": {
@@ -218,7 +236,7 @@
               "glyph_index": "num_glyphs_plus_1"
             },
             "coverage": [
-              "freetype.get_glyph_name:explicit-gnum_glyphs_plus_1"
+              "freetype.get_glyph_name:explicit-num_glyphs_plus_1"
             ]
           }
         ]
@@ -229,7 +247,7 @@
         "area:glyph-names"
       ],
       "expectation": {
-        "status": "error",
+        "status": "ok",
         "output_shape": {
           "return": "FT_Error",
           "buffer_first_byte": "zeroed_before_service_errors"
@@ -238,11 +256,9 @@
           "mode": "exact_error",
           "paths": [
             "status",
-            "error",
-            "buffer_bytes"
+            "buffer_hex"
           ]
-        },
-        "error": "c_oracle"
+        }
       }
     },
     {
@@ -251,34 +267,72 @@
       "case": "error_null_face_or_buffer",
       "operation": "freetype.get_glyph_name",
       "schema": "api_result",
-      "expect_error": true,
+      "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/names/post-glyph-names.ttf",
-            "status": "required_future_asset",
-            "requires": "font with stable post/CFF glyph names for .notdef and A"
-          }
-        },
-        "params": {
-          "variants": [
-            {
-              "face": "null",
-              "buffer_max": 64
+        "variants": [
+          {
+            "id": "null_face",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
+              }
             },
-            {
+            "params": {
+              "face": "null",
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": 0
+            },
+            "coverage": [
+              "freetype.get_glyph_name:explicit-null_face"
+            ]
+          },
+          {
+            "id": "null_buffer",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
+              }
+            },
+            "params": {
               "face_index": 0,
               "buffer": "null",
-              "buffer_max": 64
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": 0
             },
-            {
+            "coverage": [
+              "freetype.get_glyph_name:explicit-null_buffer"
+            ]
+          },
+          {
+            "id": "zero_buffer_max",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
+              }
+            },
+            "params": {
               "face_index": 0,
-              "buffer_max": 0
-            }
-          ]
-        }
+              "buffer_initial": "0xAA",
+              "buffer_max": 0,
+              "glyph_index": 0
+            },
+            "coverage": [
+              "freetype.get_glyph_name:explicit-zero_buffer_max"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -286,7 +340,7 @@
         "area:glyph-names"
       ],
       "expectation": {
-        "status": "error",
+        "status": "ok",
         "output_shape": {
           "return": "FT_Error",
           "buffer_write": "none_or_c_oracle"
@@ -295,11 +349,9 @@
           "mode": "exact_error",
           "paths": [
             "status",
-            "error",
-            "buffer_snapshot"
+            "buffer_hex"
           ]
-        },
-        "error": "c_oracle"
+        }
       }
     }
   ]

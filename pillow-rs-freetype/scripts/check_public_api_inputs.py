@@ -69,6 +69,8 @@ WASM_EXPORTS = {
     "fontdone_wasm_set_charmap",
     "fontdone_wasm_set_charmap_from_face",
     "fontdone_wasm_get_fstype_flags",
+    "fontdone_wasm_get_glyph_name",
+    "fontdone_wasm_get_name_index",
     "fontdone_wasm_get_postscript_name",
     "fontdone_wasm_get_sfnt_name_count",
     "fontdone_wasm_get_sfnt_name",

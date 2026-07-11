@@ -551,6 +551,22 @@ impl Font {
         self.data.name.postscript_name.as_deref()
     }
 
+    /// Equivalent to `FT_Get_Glyph_Name` for supported SFNT `post` names.
+    pub fn glyph_name(&self, glyph_index: u32) -> Option<&str> {
+        let glyph_index = usize::try_from(glyph_index).ok()?;
+        self.data
+            .post
+            .as_ref()?
+            .glyph_name(glyph_index, self.data.maxp.num_glyphs)
+    }
+
+    /// Equivalent to `FT_Get_Name_Index` for supported SFNT `post` names.
+    pub fn name_index(&self, glyph_name: &str) -> u32 {
+        (0..u32::from(self.data.maxp.num_glyphs))
+            .find(|glyph_index| self.glyph_name(*glyph_index) == Some(glyph_name))
+            .unwrap_or(0)
+    }
+
     /// Equivalent to `FT_Get_FSType_Flags`.
     pub fn get_fstype_flags(&self) -> u16 {
         self.data.os2.as_ref().map_or(0, |os2| os2.fs_type)

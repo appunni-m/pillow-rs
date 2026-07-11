@@ -15,22 +15,44 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/names/post-glyph-names.ttf",
-            "status": "required_future_asset",
-            "requires": "font with stable post/CFF glyph names for .notdef and A"
+        "variants": [
+          {
+            "id": "notdef",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_name": ".notdef"
+            },
+            "coverage": [
+              "freetype.get_name_index:explicit-notdef"
+            ]
+          },
+          {
+            "id": "A",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_name": "A"
+            },
+            "coverage": [
+              "freetype.get_name_index:explicit-A"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "glyph_names": [
-            ".notdef",
-            "A"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -58,29 +80,44 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font_names": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/names/post-glyph-names.ttf",
-            "status": "required_future_asset",
-            "requires": "font with stable post/CFF glyph names for .notdef and A"
+        "variants": [
+          {
+            "id": "unknown_name",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_name": "DefinitelyMissingGlyphName"
+            },
+            "coverage": [
+              "freetype.get_name_index:explicit-unknown_name"
+            ]
           },
-          "font_no_names": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/names/no-glyph-names.ttf",
-            "status": "required_future_asset",
-            "requires": "font accepted by C FreeType whose face flags do not include FT_FACE_FLAG_GLYPH_NAMES"
+          {
+            "id": "known_name_on_no_names",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/no-glyph-names/no-post-names.ttf",
+                "requires": "accepted SFNT font whose face flags do not include FT_FACE_FLAG_GLYPH_NAMES"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_name": "A"
+            },
+            "coverage": [
+              "freetype.get_name_index:explicit-known_name_on_no_names"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "glyph_names": [
-            "DefinitelyMissingGlyphName",
-            "A_on_no_names"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -108,27 +145,45 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/names/post-glyph-names.ttf",
-            "status": "required_future_asset",
-            "requires": "font with stable post/CFF glyph names for .notdef and A"
-          }
-        },
-        "params": {
-          "variants": [
-            {
+        "variants": [
+          {
+            "id": "null_face",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
+              }
+            },
+            "params": {
               "face": "null",
+              "face_index": 0,
               "glyph_name": "A"
             },
-            {
+            "coverage": [
+              "freetype.get_name_index:explicit-null_face"
+            ]
+          },
+          {
+            "id": "null_glyph_name",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/glyph-names/post-glyph-names.otf",
+                "requires": "post table format 2.0 with stable Mac glyph names"
+              }
+            },
+            "params": {
               "face_index": 0,
               "glyph_name": "null"
-            }
-          ]
-        }
+            },
+            "coverage": [
+              "freetype.get_name_index:explicit-null_glyph_name"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",

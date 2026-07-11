@@ -510,15 +510,40 @@ pub fn FT_Get_SubGlyph_Info(
 }
 
 pub fn FT_Get_Glyph_Name(
-    _face: &FT_Face,
-    _glyph_index: FT_UInt,
-    _buffer: &mut [u8],
+    face: &FT_Face,
+    glyph_index: FT_UInt,
+    buffer: &mut [u8],
 ) -> Result<usize, FT_Error> {
-    Err(FT_Err_Unimplemented_Feature)
+    if buffer.is_empty() {
+        return Err(FT_Err_Invalid_Argument);
+    }
+    // FreeType `FT_Get_Glyph_Name` in `src/base/ftobjs.c` clears the first
+    // output byte before invalid-glyph and no-glyph-name service failures.
+    buffer[0] = 0;
+    if glyph_index >= FT_UInt::from(face.inner.info().num_glyphs) {
+        return Err(FT_Err_Invalid_Glyph_Index);
+    }
+    if (face.inner.info().face_flags & (1 << 9)) == 0 {
+        return Err(FT_Err_Invalid_Argument);
+    }
+    let Some(name) = face.inner.glyph_name(glyph_index) else {
+        return Err(FT_Err_Invalid_Argument);
+    };
+    let bytes = name.as_bytes();
+    let copy_len = bytes.len().min(buffer.len().saturating_sub(1));
+    buffer[..copy_len].copy_from_slice(&bytes[..copy_len]);
+    buffer[copy_len] = 0;
+    Ok(copy_len)
 }
 
-pub fn FT_Get_Name_Index(_face: &FT_Face, _glyph_name: &str) -> FT_UInt {
-    0
+pub fn FT_Get_Name_Index(face: Option<&FT_Face>, glyph_name: Option<&str>) -> FT_UInt {
+    let (Some(face), Some(glyph_name)) = (face, glyph_name) else {
+        return 0;
+    };
+    if (face.inner.info().face_flags & (1 << 9)) == 0 {
+        return 0;
+    }
+    face.inner.name_index(glyph_name)
 }
 
 pub fn FT_Get_Postscript_Name(face: &FT_Face) -> Option<&str> {
