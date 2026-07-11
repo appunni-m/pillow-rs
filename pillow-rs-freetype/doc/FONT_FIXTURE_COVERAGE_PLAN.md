@@ -147,9 +147,10 @@ controls, adding compact `post` format 1.0/2.5 plus malformed glyph-name
 controls, exercising composite subglyph rows through the compact glyf
 component matrix, and routing the compact `FT_Set_Named_Instance` selection,
 clear, and invalid-index rows through real C oracle, Rust FFI, C ABI, and WASM
-ABI execution. Three named-instance obligations remain explicit pending rows:
-Adobe MM reset behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var`
-namedstyle coordinate parity.
+ABI execution, and reusing the shared signed big-endian `tt::read_i16` helper
+from the public `post` table parser. Three named-instance obligations remain
+explicit pending rows: Adobe MM reset behavior, `gvar`/HVAR glyph-output
+deltas, and `FT_MM_Var` namedstyle coordinate parity.
 
 | Measure | Current |
 |---|---:|
@@ -160,10 +161,10 @@ namedstyle coordinate parity.
 | Runnable parity comparisons | 6,513 |
 | Exact parity | 6,513 / 6,513 |
 | Pending cases | 3 |
-| Covered Rust lines | 13,937 / 16,899 (82.47%) |
-| Rust function coverage | 825 / 1,039 (79.40%) |
-| Rust instantiation coverage | 828 / 1,042 (79.46%) |
-| Rust region coverage | 20,173 / 24,275 (83.10%) |
+| Covered Rust lines | 13,940 / 16,899 (82.49%) |
+| Rust function coverage | 826 / 1,039 (79.50%) |
+| Rust instantiation coverage | 829 / 1,042 (79.56%) |
+| Rust region coverage | 20,177 / 24,275 (83.12%) |
 | Rust branch/condition coverage | 3,342 / 4,298 (77.76%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 125 |
@@ -394,9 +395,9 @@ Core Rust structural coverage from
 
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
-| Functions | 825 | 1,039 | 214 |
-| Lines | 13,937 | 16,899 | 2,962 |
-| Regions | 20,173 | 24,275 | 4,102 |
+| Functions | 826 | 1,039 | 213 |
+| Lines | 13,940 | 16,899 | 2,959 |
+| Regions | 20,177 | 24,275 | 4,098 |
 | Branches/conditions | 3,342 | 4,298 | 956 |
 
 Formal MC/DC is not reported by the installed Rust coverage tooling
@@ -411,7 +412,7 @@ The remaining coverage divides exactly into these ownership groups:
 | Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 121 | 1,134 | 1,368 | 223 | public routing, wrapper thinness, metadata/state inputs |
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
 | Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 20 | 775 | 1,024 | 423 | script reachability audit, then glyph topology rows |
-| TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `tables.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 7 | 152 | 486 | 137 | explicit bytecode-program glyph rows |
+| TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `tables.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 6 | 149 | 482 | 137 | explicit bytecode-program glyph rows |
 | Math/casts | `fixed.rs`, `casts.rs` | 6 | 28 | 38 | 14 | scalar boundary rows or semantic cleanup |
 
 Per-file source gap ledger:
@@ -443,7 +444,6 @@ Per-file source gap ledger:
 | `src/tt/hinter/mod.rs` | 4 | 274/278 (98.56%) | 0 | 11 | 7 |
 | `src/tt/hinter/iup.rs` | 4 | 98/102 (96.08%) | 0 | 5 | 9 |
 | `src/tt/post.rs` | 3 | 95/98 (96.94%) | 0 | 13 | 2 |
-| `src/tt/mod.rs` | 3 | 111/114 (97.37%) | 1 | 4 | 0 |
 | `src/tt/hinter/zone.rs` | 3 | 34/37 (91.89%) | 0 | 6 | 6 |
 | `src/casts.rs` | 3 | 48/51 (94.12%) | 1 | 3 | 6 |
 | `src/tt/gasp.rs` | 2 | 45/47 (95.74%) | 2 | 6 | 0 |
@@ -1302,6 +1302,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Real subglyph public API parity | 90 unique hashes | 0 | 6,516 | 6,515 / 6,515 | 1 | 13,807 / 16,732 lines; 19,969 / 24,008 regions; 3,330 / 4,256 branches | `FT_Get_SubGlyph_Info` no longer uses an unsupported stub or C/WASM fallback delegation. Nine explicit rows reuse `glyf-component-matrix.ttf` to compare raw component index, flags, args, transform, null-slot errors, non-composite slots, and out-of-range subglyphs through C oracle, Rust core, C ABI, and WASM ABI |
 | 2026-07-11 | Named-instance PostScript parity | 90 unique hashes | 0 | 6,516 | 6,516 / 6,516 | 0 | 13,935 / 16,899 lines; 20,169 / 24,275 regions; 3,342 / 4,298 branches | `FT_Set_Named_Instance` now selects or clears named instances in core and through thin C/WASM wrappers. The existing `FT_Get_Postscript_Name` row uses `named-instances.ttf` and compares `default`, instance 1, and instance 2 through the pinned C oracle, Rust FFI, C ABI, and WASM ABI, removing the final pending row |
 | 2026-07-11 | Direct `FT_Set_Named_Instance` parity routing | 90 unique hashes | 0 | 6,516 | 6,513 / 6,513 | 3 | 13,937 / 16,899 lines; 20,173 / 24,275 regions; 3,342 / 4,298 branches | `ftmm.set_named_instance` no longer reaches the generic oracle fallback; select, clear, and invalid-index compact variable rows execute pinned C oracle, Rust FFI, C ABI, and WASM ABI. Three rows remain explicit pending: Adobe MM reset, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle coordinates |
+| 2026-07-11 | Shared signed SFNT helper coverage | 90 unique hashes | 0 | 6,516 | 6,513 / 6,513 | 3 | 13,940 / 16,899 lines; 20,177 / 24,275 regions; 3,342 / 4,298 branches | The public `post` table parser now reuses `tt::read_i16` for signed underline fields instead of duplicating byte decoding. Existing `FT_Get_Glyph_Name` post fixtures cover the helper through real C/Rust/C/WASM parity, closing `tt/mod.rs` structural coverage without adding cases or changing font assets |
 
 ## Decision Log
 
@@ -1366,6 +1367,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Select named instances through face index high bits | Pinned FreeType stores a 1-based named-instance selector in bits 16..30 of `face_index`; `FT_Set_Named_Instance(0)` clears it. When an `fvar` instance lacks an explicit PostScript name ID, FreeType builds the name from nameID 25 plus a sanitized instance subfamily string |
 | 2026-07-11 | Make named-instance gaps pending instead of fallback-green | `ftmm.set_named_instance` previously appeared green through the generic modeled-error path. Direct oracle routing proves the compact success/error rows and leaves Adobe MM reset, `FT_MM_Var` namedstyle coordinates, and `gvar`/HVAR glyph-output deltas visible until the core implementation exists |
 | 2026-07-11 | Compare structured error output only by explicit opt-in | Existing expected-error rows intentionally tolerate several Rust/C error-classification differences. Rows that claim post-error state preservation, such as invalid named-instance selection, must set `compare_error_output` and provide matching C oracle, Rust, C ABI, and WASM ABI state snapshots |
+| 2026-07-11 | Prefer shared table readers over duplicated byte decoding | Reusing existing SFNT endian helpers is valid coverage progress when the public parser already reads the same field. It does not remove behavior or add a fake test path, and keeps coverage tied to real public fixture execution |
 
 ## Immediate Next Actions
 
