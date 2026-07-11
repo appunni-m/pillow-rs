@@ -3516,6 +3516,114 @@ static int set_charmap_index_selected(FT_Face face, const char* indices_arg, FT_
     return 0;
 }
 
+static FT_Int cmap_variant_index(FT_Face face, const char* variant) {
+    if (!face || !face->charmaps || streq(variant, "null")) {
+        return -1;
+    }
+    if (streq(variant, "out_of_range")) {
+        return face->num_charmaps;
+    }
+    if (strncmp(variant, "format", 6) == 0) {
+        char* end = NULL;
+        long format = strtol(variant + 6, &end, 10);
+        if (!end || *end != '\0') {
+            return -1;
+        }
+        for (FT_Int i = 0; i < face->num_charmaps; i++) {
+            if (FT_Get_CMap_Format(face->charmaps[i]) == format) {
+                return i;
+            }
+        }
+        return -1;
+    }
+    char* end = NULL;
+    long index = strtol(variant, &end, 10);
+    if (!end || *end != '\0' || index < 0 || index > face->num_charmaps) {
+        return -1;
+    }
+    return (FT_Int)index;
+}
+
+static FT_CharMap cmap_for_variant(FT_Face face, const char* variant, FT_Int* index) {
+    *index = cmap_variant_index(face, variant);
+    if (*index < 0 || !face || !face->charmaps || *index >= face->num_charmaps) {
+        return NULL;
+    }
+    return face->charmaps[*index];
+}
+
+static void print_cmap_metadata(FT_CharMap charmap, FT_Int index) {
+    if (!charmap || index < 0) {
+        printf("null");
+        return;
+    }
+    printf("{\"index\":%d,\"encoding\":%ld,\"platform_id\":%u,\"encoding_id\":%u,\"format\":%ld,\"language_id\":%lu}",
+           index,
+           (long)charmap->encoding,
+           (unsigned int)charmap->platform_id,
+           (unsigned int)charmap->encoding_id,
+           (long)FT_Get_CMap_Format(charmap),
+           (unsigned long)FT_Get_CMap_Language_ID(charmap));
+}
+
+static void print_cmap_info_rows(FT_Face face, const char* variants_csv, int language_mode) {
+    char* variants = (char*)malloc(strlen(variants_csv) + 1);
+    if (!variants) {
+        printf("{\"rows\":[],\"returns\":[]}");
+        return;
+    }
+    memcpy(variants, variants_csv, strlen(variants_csv) + 1);
+
+    printf("{\"rows\":[");
+    char* token = strtok(variants, ",");
+    int first = 1;
+    while (token) {
+        FT_Int index = -1;
+        FT_CharMap charmap = cmap_for_variant(face, token, &index);
+        FT_Long format = FT_Get_CMap_Format(charmap);
+        FT_ULong language = FT_Get_CMap_Language_ID(charmap);
+        if (!first) {
+            printf(",");
+        }
+        first = 0;
+        printf("{\"variant\":\"%s\",\"charmap_index\":", token);
+        if (index < 0) {
+            printf("null");
+        } else {
+            printf("%d", index);
+        }
+        printf(",\"charmap_metadata\":");
+        print_cmap_metadata(charmap, index);
+        if (language_mode) {
+            printf(",\"language_id\":%lu,\"return\":%lu}", (unsigned long)language, (unsigned long)language);
+        } else {
+            printf(",\"format\":%ld,\"return\":%ld}", (long)format, (long)format);
+        }
+        token = strtok(NULL, ",");
+    }
+    printf("],\"returns\":[");
+
+    memcpy(variants, variants_csv, strlen(variants_csv) + 1);
+    token = strtok(variants, ",");
+    first = 1;
+    while (token) {
+        FT_Int index = -1;
+        FT_CharMap charmap = cmap_for_variant(face, token, &index);
+        if (!first) {
+            printf(",");
+        }
+        first = 0;
+        if (language_mode) {
+            printf("%lu", (unsigned long)FT_Get_CMap_Language_ID(charmap));
+        } else {
+            printf("%ld", (long)FT_Get_CMap_Format(charmap));
+        }
+        token = strtok(NULL, ",");
+    }
+    printf("]}");
+    free(variants);
+}
+
 static const char* kerning_units(FT_UInt mode) {
     if (mode == FT_KERNING_UNFITTED) {
         return "unfitted_26_6_pixels";
@@ -4844,6 +4952,18 @@ static int emit_face_or_slot(int argc, char** argv) {
         FT_Int value = FT_Get_Gasp(face, ppem);
         print_status(0);
         printf(",\"output\":{\"value\":%d,\"return\":%d,\"ppem\":%u}}\n", value, value, ppem);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-cmap-format") || streq(command, "--get-cmap-language-id")) {
+        const char* variants_csv = argv[7];
+        print_status(0);
+        printf(",\"output\":");
+        print_cmap_info_rows(face, variants_csv, streq(command, "--get-cmap-language-id"));
+        printf("}\n");
         FT_Done_Face(face);
         FT_Done_FreeType(library);
         free(data);
@@ -6289,6 +6409,9 @@ static int dispatch(int argc, char** argv) {
     if (argc == 8 && streq(argv[1], "--get-gasp")) {
         return emit_face_or_slot(argc, argv);
     }
+    if (argc == 8 && (streq(argv[1], "--get-cmap-format") || streq(argv[1], "--get-cmap-language-id"))) {
+        return emit_face_or_slot(argc, argv);
+    }
     if (argc == 7 && streq(argv[1], "--get-postscript-name")) {
         return emit_face_or_slot(argc, argv);
     }
@@ -6361,7 +6484,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 9 && streq(argv[1], "--sbit-cache-lookup")) {
         return emit_face_or_slot(argc, argv);
     }
-    fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | --constant-map SYMBOLS_CSV | --fixed-math OP ROWS | --trigon OP ROWS | --trigon-aggregate OP ROWS | --vector-transform ROWS | --matrix-multiply ROWS | --matrix-invert ROWS | --layout RECORD | --type-probe SYMBOL | --function-probe SYMBOL | --abi-value-echo TYPE ROWS | --compile-alias-probe MACRO TYPEDEF SIGNATURE | --macro-eval CASE_ID | --face-macro SRC_KIND SRC FACE_INDEX MACRO | --face-macro-flags MACRO FACE_INDEX FLAGS_CSV | --library-version PRESENT ROW_MASKS SENTINELS | --face-flags SRC_KIND SRC FACE_INDEX FLAG | --manager-reset-null | --manager-reset SRC_KIND SRC FACE_INDEX PX PY GID | --outline-render MODE CASE_ID | --new-memory-face SRC_KIND SRC FACE_INDEX PX PY | --new-memory-face-variants SRC_KIND SRC ROWS | --set-pixel-sizes SRC_KIND SRC FACE_INDEX PX PY | --set-char-size SRC_KIND SRC FACE_INDEX WIDTH HEIGHT HR VR | --set-char-sizes SRC_KIND SRC FACE_INDEX ROWS | --request-size SRC_KIND SRC FACE_INDEX ROWS | --size-metrics SRC_KIND SRC FACE_INDEX PX PY | --get-char-index SRC_KIND SRC FACE_INDEX PX PY CHAR | --get-kerning SRC_KIND SRC FACE_INDEX PX PY ROWS | --charmap-get-char-index SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING CHAR | --inspect-charmaps SRC_KIND SRC FACE_INDEX PX PY ENCODINGS CHARS | --set-charmap SRC_KIND SRC FACE_INDEX PX PY INDICES CHARS | --set-charmap-null-face | --set-charmap-variants SRC_KIND SRC FACE_INDEX FOREIGN_KIND FOREIGN_SRC FOREIGN_FACE_INDEX VARIANTS | --get-charmap-index SRC_KIND SRC FACE_INDEX PX PY | --get-charmap-index-variants SRC_KIND SRC FACE_INDEX VARIANTS | --select-charmap SRC_KIND SRC FACE_INDEX ENCODING CHARS | --set-lcd-filter LIBRARY_PRESENT FILTERS | --set-lcd-filter-weights LIBRARY_PRESENT WEIGHTS | --set-lcd-geometry LIBRARY_PRESENT GEOMETRY | --get-truetype-engine-type LIBRARY_PRESENT | --done-freetype MODE [SRC_KIND SRC FACE_INDEX] | --done-face MODE [SRC_KIND SRC FACE_INDEX] | --face-check-tt-patents MODE [SRC_KIND SRC FACE_INDEX] | --face-set-unpatented-hinting MODE VALUES [SRC_KIND SRC FACE_INDEX] | --get-fstype-flags SRC_KIND SRC FACE_INDEX PX PY [SYMBOL] | --get-sfnt-name-count SRC_KIND SRC FACE_INDEX PX PY | --get-sfnt-name SRC_KIND SRC FACE_INDEX PX PY INDEXES | --get-sfnt-name-match SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID | --sfnt-mac-encoding-record SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID CODEPOINTS | --get-sfnt-os2-unicode-ranges SRC_KIND SRC FACE_INDEX PX PY CODEPOINTS | --get-first-char SRC_KIND SRC FACE_INDEX PX PY | --get-next-char-sequence SRC_KIND SRC FACE_INDEX PX PY MAX_STEPS | --get-next-char-starts SRC_KIND SRC FACE_INDEX PX PY STARTS_CSV | --load-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --load-glyph-from-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph-num-glyphs SRC_KIND SRC FACE_INDEX PX PY FLAGS | --load-glyph-outline SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-bbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --glyph-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODES | --glyph-to-bitmap SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE DESTROY | --glyph-record SRC_KIND SRC FACE_INDEX PX PY GID FLAGS ACTION | --sbit-cache-lookup SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-metrics SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-slot SRC_KIND SRC FACE_INDEX PX PY GID FLAGS [MODE] | --get-advance SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --get-advances SRC_KIND SRC FACE_INDEX PX PY START COUNT FLAGS | --render-glyph SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS MODE | --render-glyph-index SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE\n");
+    fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | --constant-map SYMBOLS_CSV | --fixed-math OP ROWS | --trigon OP ROWS | --trigon-aggregate OP ROWS | --vector-transform ROWS | --matrix-multiply ROWS | --matrix-invert ROWS | --layout RECORD | --type-probe SYMBOL | --function-probe SYMBOL | --abi-value-echo TYPE ROWS | --compile-alias-probe MACRO TYPEDEF SIGNATURE | --macro-eval CASE_ID | --face-macro SRC_KIND SRC FACE_INDEX MACRO | --face-macro-flags MACRO FACE_INDEX FLAGS_CSV | --library-version PRESENT ROW_MASKS SENTINELS | --face-flags SRC_KIND SRC FACE_INDEX FLAG | --manager-reset-null | --manager-reset SRC_KIND SRC FACE_INDEX PX PY GID | --outline-render MODE CASE_ID | --new-memory-face SRC_KIND SRC FACE_INDEX PX PY | --new-memory-face-variants SRC_KIND SRC ROWS | --set-pixel-sizes SRC_KIND SRC FACE_INDEX PX PY | --set-char-size SRC_KIND SRC FACE_INDEX WIDTH HEIGHT HR VR | --set-char-sizes SRC_KIND SRC FACE_INDEX ROWS | --request-size SRC_KIND SRC FACE_INDEX ROWS | --size-metrics SRC_KIND SRC FACE_INDEX PX PY | --get-char-index SRC_KIND SRC FACE_INDEX PX PY CHAR | --get-kerning SRC_KIND SRC FACE_INDEX PX PY ROWS | --charmap-get-char-index SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING CHAR | --inspect-charmaps SRC_KIND SRC FACE_INDEX PX PY ENCODINGS CHARS | --set-charmap SRC_KIND SRC FACE_INDEX PX PY INDICES CHARS | --set-charmap-null-face | --set-charmap-variants SRC_KIND SRC FACE_INDEX FOREIGN_KIND FOREIGN_SRC FOREIGN_FACE_INDEX VARIANTS | --get-charmap-index SRC_KIND SRC FACE_INDEX PX PY | --get-charmap-index-variants SRC_KIND SRC FACE_INDEX VARIANTS | --get-cmap-format SRC_KIND SRC FACE_INDEX PX PY VARIANTS | --get-cmap-language-id SRC_KIND SRC FACE_INDEX PX PY VARIANTS | --select-charmap SRC_KIND SRC FACE_INDEX ENCODING CHARS | --set-lcd-filter LIBRARY_PRESENT FILTERS | --set-lcd-filter-weights LIBRARY_PRESENT WEIGHTS | --set-lcd-geometry LIBRARY_PRESENT GEOMETRY | --get-truetype-engine-type LIBRARY_PRESENT | --done-freetype MODE [SRC_KIND SRC FACE_INDEX] | --done-face MODE [SRC_KIND SRC FACE_INDEX] | --face-check-tt-patents MODE [SRC_KIND SRC FACE_INDEX] | --face-set-unpatented-hinting MODE VALUES [SRC_KIND SRC FACE_INDEX] | --get-fstype-flags SRC_KIND SRC FACE_INDEX PX PY [SYMBOL] | --get-sfnt-name-count SRC_KIND SRC FACE_INDEX PX PY | --get-sfnt-name SRC_KIND SRC FACE_INDEX PX PY INDEXES | --get-sfnt-name-match SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID | --sfnt-mac-encoding-record SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID CODEPOINTS | --get-sfnt-os2-unicode-ranges SRC_KIND SRC FACE_INDEX PX PY CODEPOINTS | --get-first-char SRC_KIND SRC FACE_INDEX PX PY | --get-next-char-sequence SRC_KIND SRC FACE_INDEX PX PY MAX_STEPS | --get-next-char-starts SRC_KIND SRC FACE_INDEX PX PY STARTS_CSV | --load-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --load-glyph-from-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph-num-glyphs SRC_KIND SRC FACE_INDEX PX PY FLAGS | --load-glyph-outline SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-bbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --glyph-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODES | --glyph-to-bitmap SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE DESTROY | --glyph-record SRC_KIND SRC FACE_INDEX PX PY GID FLAGS ACTION | --sbit-cache-lookup SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-metrics SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-slot SRC_KIND SRC FACE_INDEX PX PY GID FLAGS [MODE] | --get-advance SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --get-advances SRC_KIND SRC FACE_INDEX PX PY START COUNT FLAGS | --render-glyph SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS MODE | --render-glyph-index SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE\n");
     return 2;
 }
 

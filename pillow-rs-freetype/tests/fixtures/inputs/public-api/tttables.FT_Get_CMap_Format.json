@@ -1,1 +1,161 @@
-{"version":1,"subject":"tttables.FT_Get_CMap_Format","manifest_cases":["import_contract","sfnt_charmap_formats","invalid_or_non_sfnt_returns_minus_one"],"cases":[{"case_id":"tttables.FT_Get_CMap_Format.import_contract","subject":"tttables.FT_Get_CMap_Format","case":"import_contract","operation":"abi_function_probe","schema":"api_import","expect_error":false,"inputs":{"assets":{},"params":{"include":"<freetype/tttables.h>","symbol":"FT_Get_CMap_Format","signature":"FT_Long FT_Get_CMap_Format(FT_CharMap charmap)"}},"classifiers":["kind:function","header:tttables","area:cmap","public-api-slice:1520-1543"],"expectation":{"status":"ok","output_shape":{"include_compiles":"bool","function_decl_visible":"bool","return_type":"FT_Long"},"compare":{"mode":"exact","paths":["include_compiles","function_decl_visible","return_type"]},"source_refs":["freetype/include/freetype/tttables.h:834-849"]}},{"case_id":"tttables.FT_Get_CMap_Format.sfnt_charmap_formats","subject":"tttables.FT_Get_CMap_Format","case":"sfnt_charmap_formats","operation":"tttables.get_cmap_format","schema":"api_result","expect_error":false,"inputs":{"assets":{"font":{"kind":"ref","id":"input/fonts/cmap/cmap-format-4-12-14.ttf","role":"font","requirements":"SFNT font with representative cmap subtables, including formats 4, 12, and 14."}},"params":{"face_index":0,"charmap_indices":["format4","format12","format14"],"expected_return_type":"FT_Long"}},"classifiers":["kind:function","header:tttables","runtime:cmap","requires:future-font","public-api-slice:1520-1543"],"metadata":{"source_behavior":"FT_Get_CMap_Format obtains the TT_CMAP service from charmap->face and returns cmap_info.format from get_cmap_info."},"expectation":{"status":"build_dependent","fixture_requirements":["Missing asset: input/fonts/cmap/cmap-format-4-12-14.ttf must contain SFNT cmap subtables for format probes."],"output_shape":{"format":"FT_Long"},"compare":{"mode":"exact","paths":["format"]},"source_refs":["freetype/src/base/ftobjs.c:4451-4471","freetype/include/freetype/tttables.h:834-849"]}},{"case_id":"tttables.FT_Get_CMap_Format.invalid_or_non_sfnt_returns_minus_one","subject":"tttables.FT_Get_CMap_Format","case":"invalid_or_non_sfnt_returns_minus_one","operation":"tttables.get_cmap_format","schema":"api_result","expect_error":false,"inputs":{"assets":{"non_sfnt_face":{"kind":"ref","id":"input/fonts/non-sfnt/type1-basic.pfb","role":"font","requirements":"Non-SFNT face for TT_CMAP service absence probe."}},"params":{"invalid_charmap_kinds":["null","no_face","non_sfnt","synthetic_unicode_without_tt_cmap"],"expected_return":-1}},"classifiers":["kind:function","header:tttables","runtime:cmap","requires:future-font","public-api-slice:1520-1543"],"metadata":{"source_behavior":"FT_Get_CMap_Format returns -1 when charmap is NULL, charmap->face is NULL, TT_CMAP service is absent, or get_cmap_info fails."},"expectation":{"status":"build_dependent","fixture_requirements":["Missing asset: input/fonts/non-sfnt/type1-basic.pfb is needed for the non-SFNT charmap case."],"output_shape":{"format":"FT_Long"},"compare":{"mode":"exact","paths":["format"]},"source_refs":["freetype/src/base/ftobjs.c:4451-4471"]}}]}
+{
+  "version": 1,
+  "subject": "tttables.FT_Get_CMap_Format",
+  "manifest_cases": [
+    "import_contract",
+    "sfnt_charmap_formats",
+    "invalid_or_non_sfnt_returns_minus_one"
+  ],
+  "cases": [
+    {
+      "case_id": "tttables.FT_Get_CMap_Format.import_contract",
+      "subject": "tttables.FT_Get_CMap_Format",
+      "case": "import_contract",
+      "operation": "abi_function_probe",
+      "schema": "api_import",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/tttables.h>",
+          "symbol": "FT_Get_CMap_Format",
+          "signature": "FT_Long FT_Get_CMap_Format(FT_CharMap charmap)"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:tttables",
+        "area:cmap",
+        "public-api-slice:1520-1543"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "include_compiles": "bool",
+          "function_decl_visible": "bool",
+          "return_type": "FT_Long"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "include_compiles",
+            "function_decl_visible",
+            "return_type"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/tttables.h:834-849"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.FT_Get_CMap_Format.sfnt_charmap_formats",
+      "subject": "tttables.FT_Get_CMap_Format",
+      "case": "sfnt_charmap_formats",
+      "operation": "tttables.get_cmap_format",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/cmap/cmap-format-language-matrix.ttf",
+            "role": "font",
+            "requirements": "Compact SFNT font with cmap formats 4, 6, 12, and 14."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "charmap_variants": [
+            "format4",
+            "format6",
+            "format12",
+            "format14"
+          ],
+          "expected_return_type": "FT_Long"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:tttables",
+        "runtime:cmap",
+        "fixture:cmap-format-language-matrix",
+        "public-api-slice:1520-1543"
+      ],
+      "metadata": {
+        "source_behavior": "FT_Get_CMap_Format obtains the TT_CMAP service from charmap->face and returns cmap_info.format from get_cmap_info."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "rows": "array",
+          "returns": "array"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows",
+            "returns"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:4451-4471",
+          "freetype/include/freetype/tttables.h:834-849"
+        ]
+      }
+    },
+    {
+      "case_id": "tttables.FT_Get_CMap_Format.invalid_or_non_sfnt_returns_minus_one",
+      "subject": "tttables.FT_Get_CMap_Format",
+      "case": "invalid_or_non_sfnt_returns_minus_one",
+      "operation": "tttables.get_cmap_format",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/cmap/cmap-format-language-matrix.ttf",
+            "role": "font",
+            "requirements": "Compact SFNT font used to construct a null charmap variant."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "charmap_variants": [
+            "null",
+            "out_of_range"
+          ],
+          "expected_return": -1
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:tttables",
+        "runtime:cmap",
+        "fixture:cmap-format-language-matrix",
+        "public-api-slice:1520-1543"
+      ],
+      "metadata": {
+        "source_behavior": "FT_Get_CMap_Format returns -1 when charmap is NULL, charmap->face is NULL, TT_CMAP service is absent, or get_cmap_info fails."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "rows": "array",
+          "returns": "array"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows",
+            "returns"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:4451-4471"
+        ]
+      }
+    }
+  ]
+}

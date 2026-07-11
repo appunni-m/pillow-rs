@@ -182,6 +182,7 @@ pub struct CharmapInfo {
     pub platform_id: u16,
     pub encoding_id: u16,
     pub format: u16,
+    pub language_id: u32,
 }
 
 /// Raw SFNT table descriptor.
@@ -777,6 +778,7 @@ impl Font {
                 platform_id: record.platform_id,
                 encoding_id: record.encoding_id,
                 format: record.format,
+                language_id: record.language_id,
             })
             .collect()
     }

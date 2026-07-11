@@ -2075,6 +2075,22 @@ impl BackendComparisonWorker {
                     &case.inputs.params,
                 )?))
             }
+            "tttables.get_cmap_format" => {
+                let face = self.rust_face(case)?;
+                Ok(ok(rust_cmap_output(
+                    face,
+                    &case.inputs.params,
+                    CmapInfoKind::Format,
+                )?))
+            }
+            "tttables.get_cmap_language_id" => {
+                let face = self.rust_face(case)?;
+                Ok(ok(rust_cmap_output(
+                    face,
+                    &case.inputs.params,
+                    CmapInfoKind::LanguageId,
+                )?))
+            }
             "freetype.get_postscript_name" => {
                 let face = self.rust_face(case)?;
                 if case.inputs.params.get("face_variants").is_some() {
@@ -2183,6 +2199,22 @@ impl BackendComparisonWorker {
             "freetype.get_fstype_flags" => {
                 let face = self.c_face(case)?;
                 Ok(ok(c_fstype_flags_output(face, &case.inputs.params)?))
+            }
+            "tttables.get_cmap_format" => {
+                let face = self.c_face(case)?;
+                Ok(ok(c_cmap_output(
+                    face,
+                    &case.inputs.params,
+                    CmapInfoKind::Format,
+                )?))
+            }
+            "tttables.get_cmap_language_id" => {
+                let face = self.c_face(case)?;
+                Ok(ok(c_cmap_output(
+                    face,
+                    &case.inputs.params,
+                    CmapInfoKind::LanguageId,
+                )?))
             }
             "freetype.get_postscript_name" => {
                 let face = self.c_face(case)?;
@@ -2318,6 +2350,22 @@ impl BackendComparisonWorker {
             "freetype.get_fstype_flags" => {
                 let handle = self.wasm_face(case)?;
                 Ok(ok(wasm_fstype_flags_output(handle, &case.inputs.params)?))
+            }
+            "tttables.get_cmap_format" => {
+                let handle = self.wasm_face(case)?;
+                Ok(ok(wasm_cmap_output(
+                    handle,
+                    &case.inputs.params,
+                    CmapInfoKind::Format,
+                )?))
+            }
+            "tttables.get_cmap_language_id" => {
+                let handle = self.wasm_face(case)?;
+                Ok(ok(wasm_cmap_output(
+                    handle,
+                    &case.inputs.params,
+                    CmapInfoKind::LanguageId,
+                )?))
             }
             "freetype.get_postscript_name" => {
                 let handle = self.wasm_face(case)?;
@@ -2529,6 +2577,299 @@ fn wasm_get_gasp(case: &InputCase) -> Result<RunOutput, String> {
     }
     let handle = wasm_new_face_without_size(case)?;
     let output = gasp_json(wasm_abi::fontdone_wasm_get_gasp(handle, ppem), ppem);
+    wasm_done_face(handle);
+    Ok(ok(output))
+}
+
+#[derive(Debug, Clone, Copy)]
+enum CmapInfoKind {
+    Format,
+    LanguageId,
+}
+
+fn cmap_variants_param(params: &Value) -> Result<Vec<String>, String> {
+    for key in ["charmap_variants", "charmap_indices"] {
+        if params.get(key).is_some() {
+            return string_array_param(params, key);
+        }
+    }
+    Err("missing charmap_variants param".to_string())
+}
+
+fn cmap_variants_arg(params: &Value) -> Result<String, String> {
+    Ok(cmap_variants_param(params)?.join(","))
+}
+
+fn format_variant_target(variant: &str) -> Option<i64> {
+    variant
+        .strip_prefix("format")
+        .and_then(|suffix| suffix.parse::<i64>().ok())
+}
+
+fn cmap_row_json(
+    kind: CmapInfoKind,
+    variant: &str,
+    index: Option<u32>,
+    metadata: Value,
+    value: Value,
+) -> Value {
+    let index_value = index.map_or(Value::Null, Value::from);
+    match kind {
+        CmapInfoKind::Format => json!({
+            "variant": variant,
+            "charmap_index": index_value,
+            "charmap_metadata": metadata,
+            "format": value.clone(),
+            "return": value
+        }),
+        CmapInfoKind::LanguageId => json!({
+            "variant": variant,
+            "charmap_index": index_value,
+            "charmap_metadata": metadata,
+            "language_id": value.clone(),
+            "return": value
+        }),
+    }
+}
+
+fn cmap_output(rows: Vec<Value>, returns: Vec<Value>) -> Value {
+    json!({
+        "rows": rows,
+        "returns": returns
+    })
+}
+
+fn cmap_metadata_json(
+    index: u32,
+    encoding: i32,
+    platform_id: u16,
+    encoding_id: u16,
+    format: i64,
+    language_id: u64,
+) -> Value {
+    json!({
+        "index": index,
+        "encoding": encoding,
+        "platform_id": platform_id,
+        "encoding_id": encoding_id,
+        "format": format,
+        "language_id": language_id
+    })
+}
+
+fn rust_cmap_index_for_variant(face: &FT_Face, variant: &str) -> Result<Option<u32>, String> {
+    if variant == "null" {
+        return Ok(None);
+    }
+    if variant == "out_of_range" {
+        return Ok(Some(FT_Face_Charmap_Count(face)));
+    }
+    if let Some(format) = format_variant_target(variant) {
+        return (0..FT_Face_Charmap_Count(face))
+            .find(|index| {
+                let charmap = FT_Face_Charmap(face, *index);
+                FT_Get_CMap_Format(charmap) == format
+            })
+            .map(Some)
+            .ok_or_else(|| format!("missing rust charmap variant {variant}"));
+    }
+    let index = variant
+        .parse::<u32>()
+        .map_err(|err| format!("unsupported charmap variant {variant}: {err}"))?;
+    Ok(Some(index))
+}
+
+fn c_cmap_index_for_variant(face: c_abi::FT_Face, variant: &str) -> Result<Option<u32>, String> {
+    if variant == "null" {
+        return Ok(None);
+    }
+    let count =
+        c_abi::abi_charmap_count(face).ok_or_else(|| "missing c charmap count".to_string())?;
+    if variant == "out_of_range" {
+        return Ok(Some(count));
+    }
+    if let Some(format) = format_variant_target(variant) {
+        return (0..count)
+            .find(|index| {
+                c_abi::abi_charmap_by_index(face, *index)
+                    .is_some_and(|charmap| c_abi::FT_Get_CMap_Format(charmap) == format)
+            })
+            .map(Some)
+            .ok_or_else(|| format!("missing c charmap variant {variant}"));
+    }
+    let index = variant
+        .parse::<u32>()
+        .map_err(|err| format!("unsupported charmap variant {variant}: {err}"))?;
+    Ok(Some(index))
+}
+
+fn wasm_cmap_index_for_variant(handle: usize, variant: &str) -> Result<Option<u32>, String> {
+    if variant == "null" {
+        return Ok(None);
+    }
+    let count = wasm_abi::fontdone_wasm_get_charmap_count(handle);
+    if variant == "out_of_range" {
+        return Ok(Some(count));
+    }
+    if let Some(format) = format_variant_target(variant) {
+        return (0..count)
+            .find(|index| wasm_abi::fontdone_wasm_get_cmap_format(handle, *index) == format)
+            .map(Some)
+            .ok_or_else(|| format!("missing wasm charmap variant {variant}"));
+    }
+    let index = variant
+        .parse::<u32>()
+        .map_err(|err| format!("unsupported charmap variant {variant}: {err}"))?;
+    Ok(Some(index))
+}
+
+fn rust_cmap_output(face: &FT_Face, params: &Value, kind: CmapInfoKind) -> Result<Value, String> {
+    let mut rows = Vec::new();
+    let mut returns = Vec::new();
+    for variant in cmap_variants_param(params)? {
+        let index = rust_cmap_index_for_variant(face, &variant)?;
+        let charmap = index.map_or(std::ptr::null_mut(), |index| FT_Face_Charmap(face, index));
+        let format = FT_Get_CMap_Format(charmap);
+        let language_id = FT_Get_CMap_Language_ID(charmap);
+        let metadata = if let Some(index) = index {
+            FT_Face_Charmap_Info(face, index).map_or(Value::Null, |info| {
+                cmap_metadata_json(
+                    index,
+                    info.encoding,
+                    info.platform_id,
+                    info.encoding_id,
+                    format,
+                    language_id,
+                )
+            })
+        } else {
+            Value::Null
+        };
+        let return_value = match kind {
+            CmapInfoKind::Format => Value::from(format),
+            CmapInfoKind::LanguageId => Value::from(language_id),
+        };
+        returns.push(return_value.clone());
+        rows.push(cmap_row_json(kind, &variant, index, metadata, return_value));
+    }
+    Ok(cmap_output(rows, returns))
+}
+
+fn c_cmap_output(
+    face: c_abi::FT_Face,
+    params: &Value,
+    kind: CmapInfoKind,
+) -> Result<Value, String> {
+    let mut rows = Vec::new();
+    let mut returns = Vec::new();
+    for variant in cmap_variants_param(params)? {
+        let index = c_cmap_index_for_variant(face, &variant)?;
+        let charmap = index.and_then(|index| c_abi::abi_charmap_by_index(face, index));
+        let format = c_abi::FT_Get_CMap_Format(charmap.unwrap_or(std::ptr::null_mut()));
+        let language_id = c_abi::FT_Get_CMap_Language_ID(charmap.unwrap_or(std::ptr::null_mut()));
+        let metadata = if let Some(index) = index {
+            c_abi::abi_charmap_info_by_index(face, index).map_or(Value::Null, |info| {
+                cmap_metadata_json(
+                    index,
+                    info.encoding,
+                    info.platform_id,
+                    info.encoding_id,
+                    format,
+                    language_id,
+                )
+            })
+        } else {
+            Value::Null
+        };
+        let return_value = match kind {
+            CmapInfoKind::Format => Value::from(format),
+            CmapInfoKind::LanguageId => Value::from(language_id),
+        };
+        returns.push(return_value.clone());
+        rows.push(cmap_row_json(kind, &variant, index, metadata, return_value));
+    }
+    Ok(cmap_output(rows, returns))
+}
+
+fn wasm_cmap_output(handle: usize, params: &Value, kind: CmapInfoKind) -> Result<Value, String> {
+    let mut rows = Vec::new();
+    let mut returns = Vec::new();
+    for variant in cmap_variants_param(params)? {
+        let index = wasm_cmap_index_for_variant(handle, &variant)?;
+        let wasm_index = index.unwrap_or(u32::MAX);
+        let format = wasm_abi::fontdone_wasm_get_cmap_format(handle, wasm_index);
+        let language_id = wasm_abi::fontdone_wasm_get_cmap_language_id(handle, wasm_index);
+        let metadata = if let Some(index) = index {
+            let mut info = wasm_abi::FontdoneWasmCharmap::default();
+            if wasm_abi::fontdone_wasm_get_charmap(handle, index, &mut info) == FT_Err_Ok {
+                cmap_metadata_json(
+                    info.index,
+                    info.encoding,
+                    info.platform_id,
+                    info.encoding_id,
+                    format,
+                    language_id,
+                )
+            } else {
+                Value::Null
+            }
+        } else {
+            Value::Null
+        };
+        let return_value = match kind {
+            CmapInfoKind::Format => Value::from(format),
+            CmapInfoKind::LanguageId => Value::from(language_id),
+        };
+        returns.push(return_value.clone());
+        rows.push(cmap_row_json(kind, &variant, index, metadata, return_value));
+    }
+    Ok(cmap_output(rows, returns))
+}
+
+fn rust_get_cmap_format(case: &InputCase) -> Result<RunOutput, String> {
+    let face = rust_new_face_without_size(case)?;
+    Ok(ok(rust_cmap_output(
+        &face,
+        &case.inputs.params,
+        CmapInfoKind::Format,
+    )?))
+}
+
+fn rust_get_cmap_language_id(case: &InputCase) -> Result<RunOutput, String> {
+    let face = rust_new_face_without_size(case)?;
+    Ok(ok(rust_cmap_output(
+        &face,
+        &case.inputs.params,
+        CmapInfoKind::LanguageId,
+    )?))
+}
+
+fn c_get_cmap_format(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let output = c_cmap_output(face, &case.inputs.params, CmapInfoKind::Format)?;
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ok(output))
+}
+
+fn c_get_cmap_language_id(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let output = c_cmap_output(face, &case.inputs.params, CmapInfoKind::LanguageId)?;
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ok(output))
+}
+
+fn wasm_get_cmap_format(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let output = wasm_cmap_output(handle, &case.inputs.params, CmapInfoKind::Format)?;
+    wasm_done_face(handle);
+    Ok(ok(output))
+}
+
+fn wasm_get_cmap_language_id(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let output = wasm_cmap_output(handle, &case.inputs.params, CmapInfoKind::LanguageId)?;
     wasm_done_face(handle);
     Ok(ok(output))
 }
@@ -6312,13 +6653,19 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(u32_param(params, "ppem")?.to_string());
             Ok(args)
         }
-        "tttables.get_cmap_language_id" => {
-            // Stub: always returns 0.
-            Ok(vec!["--value-ok".to_string(), "0".to_string()])
-        }
         "tttables.get_cmap_format" => {
-            // Stub: unimplemented, returns error 7.
-            Ok(vec!["--error".to_string(), "7".to_string()])
+            let mut args = vec!["--get-cmap-format".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(cmap_variants_arg(params)?);
+            Ok(args)
+        }
+        "tttables.get_cmap_language_id" => {
+            let mut args = vec!["--get-cmap-language-id".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(cmap_variants_arg(params)?);
+            Ok(args)
         }
         other if case.expect_error && has_no_font_assets(case) => {
             let error_code = classify_null_operation(other)?;
@@ -6729,8 +7076,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.get_subglyph_info" => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
         "freetype.select_size" => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
         "ftgasp.get_gasp" => rust_get_gasp(case),
-        "tttables.get_cmap_format" => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
-        "tttables.get_cmap_language_id" => Ok(ok(json!({"value": 0}))),
+        "tttables.get_cmap_format" => rust_get_cmap_format(case),
+        "tttables.get_cmap_language_id" => rust_get_cmap_language_id(case),
         "render_glyph" => rust_render_glyph_public_api(case),
         _ => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)), // matches _other => oracle_fallback_args(case) in oracle_args
     }
@@ -6806,8 +7153,6 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.face_properties"
         | "freetype.get_subglyph_info"
         | "freetype.select_size"
-        | "tttables.get_cmap_format"
-        | "tttables.get_cmap_language_id"
         | "ftsizes.new_size"
         | "ftsizes.done_size"
         | "ftsizes.activate_size"
@@ -6972,6 +7317,8 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.get_glyph_name" => c_get_glyph_name(case),
         "freetype.get_name_index" => c_get_name_index(case),
         "ftgasp.get_gasp" => c_get_gasp(case),
+        "tttables.get_cmap_format" => c_get_cmap_format(case),
+        "tttables.get_cmap_language_id" => c_get_cmap_language_id(case),
         "freetype.get_kerning" => c_get_kerning(case),
         "ftsnames.get_sfnt_name_count" => {
             let (library, face) = c_open_face(case)?;
@@ -7200,8 +7547,6 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.face_properties"
         | "freetype.get_subglyph_info"
         | "freetype.select_size"
-        | "tttables.get_cmap_format"
-        | "tttables.get_cmap_language_id"
         | "ftsizes.new_size"
         | "ftsizes.done_size"
         | "ftsizes.activate_size"
@@ -7330,6 +7675,8 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.get_glyph_name" => wasm_get_glyph_name(case),
         "freetype.get_name_index" => wasm_get_name_index(case),
         "ftgasp.get_gasp" => wasm_get_gasp(case),
+        "tttables.get_cmap_format" => wasm_get_cmap_format(case),
+        "tttables.get_cmap_language_id" => wasm_get_cmap_language_id(case),
         "freetype.get_kerning" => wasm_get_kerning(case),
         "ftsnames.get_sfnt_name_count" => {
             let handle = wasm_open_face(case)?;

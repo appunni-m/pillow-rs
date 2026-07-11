@@ -20,6 +20,8 @@ pub struct CmapTable {
     pub format6: Vec<Format6Subtable>,
     /// Format 12 subtables (full Unicode, U+0000–U+10FFFF).
     pub format12: Vec<Format12Subtable>,
+    /// Format 14 Unicode variation selector subtables.
+    pub format14: Vec<Format14Subtable>,
 }
 
 /// A selectable charmap entry.
@@ -28,6 +30,7 @@ pub struct CharmapRecord {
     pub platform_id: u16,
     pub encoding_id: u16,
     pub format: u16,
+    pub language_id: u32,
     kind: CharmapKind,
 }
 
@@ -36,6 +39,7 @@ enum CharmapKind {
     Format4(usize),
     Format6(usize),
     Format12(usize),
+    Format14,
 }
 
 /// Format 4: Segment mapping for the Unicode BMP.
@@ -43,6 +47,7 @@ enum CharmapKind {
 pub struct Format4Subtable {
     pub platform_id: u16,
     pub encoding_id: u16,
+    pub language_id: u16,
     pub end_codes: Vec<u16>,
     pub start_codes: Vec<u16>,
     pub id_deltas: Vec<i16>,
@@ -56,6 +61,7 @@ pub struct Format4Subtable {
 pub struct Format6Subtable {
     pub platform_id: u16,
     pub encoding_id: u16,
+    pub language_id: u16,
     pub first_code: u16,
     pub glyph_id_array: Vec<u16>,
 }
@@ -65,9 +71,17 @@ pub struct Format6Subtable {
 pub struct Format12Subtable {
     pub platform_id: u16,
     pub encoding_id: u16,
+    pub language_id: u32,
     pub start_codes: Vec<u32>,
     pub end_codes: Vec<u32>,
     pub start_glyph_ids: Vec<u32>,
+}
+
+/// Format 14: Unicode variation selector metadata.
+#[derive(Debug, Clone)]
+pub struct Format14Subtable {
+    pub platform_id: u16,
+    pub encoding_id: u16,
 }
 
 impl CmapTable {
@@ -109,6 +123,7 @@ impl CmapTable {
                 }
             }
             CharmapKind::Format12(index) => self.format12[index].char_index(codepoint),
+            CharmapKind::Format14 => None,
         }
     }
 
@@ -124,6 +139,7 @@ impl CmapTable {
             CharmapKind::Format4(index) => self.format4[index].next_char(after),
             CharmapKind::Format6(index) => self.format6[index].next_char(after),
             CharmapKind::Format12(index) => self.format12[index].next_char(after),
+            CharmapKind::Format14 => None,
         }
     }
 }
@@ -275,11 +291,13 @@ pub fn parse_cmap(data: &[u8]) -> Result<CmapTable, FontError> {
             4 => match parse_format4(data, sub_off, *platform_id, *encoding_id) {
                 Ok(sub) => {
                     let index = table.format4.len();
+                    let language_id = sub.language_id;
                     table.format4.push(sub);
                     table.charmaps.push(CharmapRecord {
                         platform_id: *platform_id,
                         encoding_id: *encoding_id,
                         format,
+                        language_id: u32::from(language_id),
                         kind: CharmapKind::Format4(index),
                     });
                 }
@@ -288,11 +306,13 @@ pub fn parse_cmap(data: &[u8]) -> Result<CmapTable, FontError> {
             6 => match parse_format6(data, sub_off, *platform_id, *encoding_id) {
                 Ok(sub) => {
                     let index = table.format6.len();
+                    let language_id = sub.language_id;
                     table.format6.push(sub);
                     table.charmaps.push(CharmapRecord {
                         platform_id: *platform_id,
                         encoding_id: *encoding_id,
                         format,
+                        language_id: u32::from(language_id),
                         kind: CharmapKind::Format6(index),
                     });
                 }
@@ -301,15 +321,32 @@ pub fn parse_cmap(data: &[u8]) -> Result<CmapTable, FontError> {
             12 => match parse_format12(data, sub_off, *platform_id, *encoding_id) {
                 Ok(sub) => {
                     let index = table.format12.len();
+                    let language_id = sub.language_id;
                     table.format12.push(sub);
                     table.charmaps.push(CharmapRecord {
                         platform_id: *platform_id,
                         encoding_id: *encoding_id,
                         format,
+                        language_id,
                         kind: CharmapKind::Format12(index),
                     });
                 }
                 Err(e) => warn!("[cmap] format 12 parse failed: {e}"),
+            },
+            14 => match parse_format14(data, sub_off, *platform_id, *encoding_id) {
+                Ok(sub) => {
+                    table.format14.push(sub);
+                    table.charmaps.push(CharmapRecord {
+                        platform_id: *platform_id,
+                        encoding_id: *encoding_id,
+                        format,
+                        // FreeType `tt_cmap14_get_info` reports no language
+                        // field with this sentinel (`src/sfnt/ttcmap.c`).
+                        language_id: 0xFFFF_FFFF,
+                        kind: CharmapKind::Format14,
+                    });
+                }
+                Err(e) => warn!("[cmap] format 14 parse failed: {e}"),
             },
             other => {
                 // FreeType only exposes charmaps whose format class loads.
@@ -335,6 +372,7 @@ fn parse_format4(
     let body = data
         .get(offset..offset + length)
         .ok_or_else(|| FontError::InvalidFont("cmap format 4: length exceeds data".into()))?;
+    let language_id = u16::from_be_bytes([body[4], body[5]]);
     let seg_count = (u16::from_be_bytes([body[6], body[7]]) / 2) as usize;
     if seg_count == 0 {
         return Err(FontError::InvalidFont(
@@ -414,6 +452,7 @@ fn parse_format4(
     Ok(Format4Subtable {
         platform_id,
         encoding_id,
+        language_id,
         end_codes,
         start_codes,
         id_deltas,
@@ -441,6 +480,7 @@ fn parse_format6(
             "cmap format 6: length too short".into(),
         ));
     }
+    let language_id = u16::from_be_bytes([body[4], body[5]]);
     let first_code = u16::from_be_bytes([body[6], body[7]]);
     let entry_count = u16::from_be_bytes([body[8], body[9]]) as usize;
     if 10 + entry_count * 2 > body.len() {
@@ -457,6 +497,7 @@ fn parse_format6(
     Ok(Format6Subtable {
         platform_id,
         encoding_id,
+        language_id,
         first_code,
         glyph_id_array,
     })
@@ -472,6 +513,7 @@ fn parse_format12(
     if body.len() < 16 {
         return Err(FontError::InvalidFont("cmap format 12: too short".into()));
     }
+    let language_id = u32::from_be_bytes([body[8], body[9], body[10], body[11]]);
     let num_groups = u32::from_be_bytes([body[12], body[13], body[14], body[15]]) as usize;
     if 16 + num_groups * 12 > body.len() {
         return Err(FontError::InvalidFont(
@@ -507,8 +549,40 @@ fn parse_format12(
     Ok(Format12Subtable {
         platform_id,
         encoding_id,
+        language_id,
         start_codes,
         end_codes,
         start_glyph_ids,
+    })
+}
+
+fn parse_format14(
+    data: &[u8],
+    offset: usize,
+    platform_id: u16,
+    encoding_id: u16,
+) -> Result<Format14Subtable, FontError> {
+    let b = &data[offset..];
+    if b.len() < 10 {
+        return Err(FontError::InvalidFont("cmap format 14: too short".into()));
+    }
+    let length = u32::from_be_bytes([b[2], b[3], b[4], b[5]]) as usize;
+    if length < 10 {
+        return Err(FontError::InvalidFont(
+            "cmap format 14: length too short".into(),
+        ));
+    }
+    let body = data
+        .get(offset..offset + length)
+        .ok_or_else(|| FontError::InvalidFont("cmap format 14: length exceeds data".into()))?;
+    let num_records = u32::from_be_bytes([body[6], body[7], body[8], body[9]]) as usize;
+    if 10 + num_records * 11 > body.len() {
+        return Err(FontError::InvalidFont(
+            "cmap format 14: variation selector records exceed length".into(),
+        ));
+    }
+    Ok(Format14Subtable {
+        platform_id,
+        encoding_id,
     })
 }
