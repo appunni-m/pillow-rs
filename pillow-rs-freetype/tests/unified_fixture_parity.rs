@@ -8266,6 +8266,9 @@ fn rust_set_pixel_sizes(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn rust_set_char_size(case: &InputCase) -> Result<RunOutput, String> {
+    if !case.expect_error {
+        return rust_set_char_size_public_api(case);
+    }
     let mut face = rust_new_face_without_size(case)?;
     let rows = char_size_rows(&case.inputs.params)?;
     char_size_outputs(rows, |row| {
@@ -8282,6 +8285,31 @@ fn rust_set_char_size(case: &InputCase) -> Result<RunOutput, String> {
             Value::Null
         };
         Ok((err, output))
+    })
+}
+
+fn rust_set_char_size_public_api(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let face_index =
+        usize::try_from(face_index_param(&case.inputs.params)?).map_err(|err| err.to_string())?;
+    let mut face = ApiFace::from_memory(data.as_ref(), face_index, 20.0)
+        .map_err(|err| format!("Face::from_memory returned {err}"))?;
+    let rows = char_size_rows(&case.inputs.params)?;
+    char_size_outputs(rows, |row| {
+        let Ok(char_width) = i32::try_from(row.char_width) else {
+            return Ok((FT_Err_Invalid_Argument, Value::Null));
+        };
+        let Ok(char_height) = i32::try_from(row.char_height) else {
+            return Ok((FT_Err_Invalid_Argument, Value::Null));
+        };
+        face.set_char_size(
+            char_width,
+            char_height,
+            row.horz_resolution,
+            row.vert_resolution,
+        );
+        let metrics: FT_Size_Metrics = face.size_metrics().into();
+        Ok((FT_Err_Ok, size_metrics_json(&metrics)))
     })
 }
 
