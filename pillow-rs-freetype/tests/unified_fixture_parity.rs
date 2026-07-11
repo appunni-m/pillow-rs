@@ -19,8 +19,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use fontdone::Font;
 use fontdone::ffi::*;
+use fontdone::{Face as ApiFace, Font, FontError, GlyphSlot as ApiGlyphSlot};
 use fontdone_ffi_c as c_abi;
 use fontdone_ffi_wasm as wasm_abi;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -2140,17 +2140,7 @@ impl BackendComparisonWorker {
                 let face = self.rust_face(case)?;
                 rust_inspect_glyph_slot(face, case)
             }
-            "render_glyph" => {
-                let load_flags = load_flags_param(&case.inputs.params)?;
-                let render_mode = render_mode_param(&case.inputs.params)?;
-                let face = self.rust_face(case)?;
-                rust_render_glyph(
-                    face,
-                    glyph_load_input_param(&case.inputs.params)?,
-                    load_flags,
-                    render_mode,
-                )
-            }
+            "render_glyph" => rust_render_glyph_public_api(case),
             _ => run_rust_ffi(case),
         }
         .or_else(catch_font_error)
@@ -6178,16 +6168,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftgasp.get_gasp" => Ok(ok(json!({"value": 0}))),
         "tttables.get_cmap_format" => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
         "tttables.get_cmap_language_id" => Ok(ok(json!({"value": 0}))),
-        "render_glyph" => {
-            let face = open_face(case)?;
-            let render_mode = render_mode_param(&case.inputs.params)?;
-            rust_render_glyph(
-                &face,
-                glyph_load_input_param(&case.inputs.params)?,
-                load_flags_param(&case.inputs.params)?,
-                render_mode,
-            )
-        }
+        "render_glyph" => rust_render_glyph_public_api(case),
         _ => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)), // matches _other => oracle_fallback_args(case) in oracle_args
     }
     .or_else(catch_font_error)
@@ -7636,6 +7617,39 @@ fn rust_render_glyph(
     }
 }
 
+fn rust_render_glyph_public_api(case: &InputCase) -> Result<RunOutput, String> {
+    let raw_load_flags = load_flags_param(&case.inputs.params)?;
+    if raw_load_flags & FT_LOAD_RENDER != 0 {
+        let face = open_face(case)?;
+        return rust_render_glyph(
+            &face,
+            glyph_load_input_param(&case.inputs.params)?,
+            raw_load_flags,
+            render_mode_param(&case.inputs.params)?,
+        );
+    }
+    let face = open_api_face(case)?;
+    let glyph_index = match glyph_load_input_param(&case.inputs.params)? {
+        GlyphLoadInput::CharCode(char_code) => {
+            face.get_char_index(u32::try_from(char_code).map_err(|err| err.to_string())?)
+        }
+        GlyphLoadInput::GlyphIndex(glyph_index) => {
+            u16::try_from(glyph_index).map_err(|err| err.to_string())?
+        }
+    };
+    let load_flags = match load_flags_to_core(raw_load_flags) {
+        Ok(flags) => flags,
+        Err(err) => return Ok(error(err)),
+    };
+    let Some(render_mode) = render_mode_to_core(render_mode_param(&case.inputs.params)?) else {
+        return Ok(error(FT_Err_Cannot_Render_Glyph));
+    };
+    match face.render_loaded_glyph(glyph_index, load_flags, render_mode) {
+        Ok(slot) => Ok(ok(api_slot_json(&slot))),
+        Err(err) => Ok(error(font_error_to_ft(err))),
+    }
+}
+
 fn c_render_glyph(
     face: c_abi::FT_Face,
     glyph_input: GlyphLoadInput,
@@ -8213,6 +8227,17 @@ fn open_face_with_size(case: &InputCase, pixel_size: (u32, u32)) -> Result<FT_Fa
     } else {
         Err(format!("FT_Set_Pixel_Sizes returned {err}"))
     }
+}
+
+fn open_api_face(case: &InputCase) -> Result<ApiFace, String> {
+    let data = font_bytes(case)?;
+    let face_index =
+        usize::try_from(face_index_param(&case.inputs.params)?).map_err(|err| err.to_string())?;
+    let mut face = ApiFace::from_memory(data.as_ref(), face_index, 20.0)
+        .map_err(|err| format!("Face::from_memory returned {err}"))?;
+    let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+    face.set_pixel_sizes(pixel_width, pixel_height);
+    Ok(face)
 }
 
 fn rust_set_pixel_sizes(case: &InputCase) -> Result<RunOutput, String> {
@@ -11776,6 +11801,58 @@ fn slot_json(slot: &FT_GlyphSlot) -> Value {
             })
         })
     })
+}
+
+fn api_slot_json(slot: &ApiGlyphSlot) -> Value {
+    json!({
+        "glyph_index": slot.glyph_index,
+        "format": glyph_format_from_core(slot.format),
+        "advance": {
+            "x": slot.advance.x,
+            "y": slot.advance.y
+        },
+        "metrics": {
+            "width": slot.metrics.width,
+            "height": slot.metrics.height,
+            "horiBearingX": slot.metrics.hori_bearing_x,
+            "horiBearingY": slot.metrics.hori_bearing_y,
+            "horiAdvance": slot.metrics.hori_advance,
+            "vertBearingX": slot.metrics.vert_bearing_x,
+            "vertBearingY": slot.metrics.vert_bearing_y,
+            "vertAdvance": slot.metrics.vert_advance
+        },
+        "bitmap": slot.bitmap.as_ref().map(|bitmap| {
+            json!({
+                "width": bitmap.width,
+                "rows": bitmap.rows,
+                "pitch": bitmap.pitch,
+                "pixel_mode": pixel_mode_from_core(bitmap.pixel_mode),
+                "num_grays": bitmap.num_grays,
+                "left": slot.bitmap_left,
+                "top": slot.bitmap_top,
+                "buffer_hex": hex_bytes(&bitmap.buffer)
+            })
+        })
+    })
+}
+
+fn font_error_to_ft(error: FontError) -> FT_Error {
+    match error {
+        FontError::InvalidFont(message) if message.starts_with("data too short") => {
+            FT_Err_Invalid_Stream_Operation as FT_Error
+        }
+        FontError::InvalidFont(message)
+            if message.starts_with("face index ") || message.starts_with("named instance ") =>
+        {
+            FT_Err_Invalid_Argument
+        }
+        FontError::InvalidFont(_) => FT_Err_Invalid_File_Format,
+        FontError::UnsupportedCmapFormat(_) => FT_Err_Invalid_CharMap_Format,
+        FontError::RasterOverflow => FT_Err_Raster_Overflow,
+        FontError::InvalidOutline(_) => FT_Err_Invalid_Outline,
+        FontError::CannotRenderGlyph(_) => FT_Err_Cannot_Render_Glyph,
+        FontError::UnsupportedLoadFlags(_) => FT_Err_Unimplemented_Feature,
+    }
 }
 
 #[derive(Clone, Copy)]
