@@ -232,11 +232,11 @@ coordinate parity.
 | Runnable parity comparisons | 6,607 |
 | Exact parity | 6,607 / 6,607 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,559 / 17,190 (84.69%) |
+| Covered Rust lines | 14,561 / 17,190 (84.71%) |
 | Rust function coverage | 875 / 1,066 (82.08%) |
 | Rust instantiation coverage | 878 / 1,069 (82.13%) |
-| Rust region coverage | 21,233 / 24,719 (85.90%) |
-| Rust branch/condition coverage | 3,539 / 4,390 (80.62%) |
+| Rust region coverage | 21,235 / 24,719 (85.91%) |
+| Rust branch/condition coverage | 3,541 / 4,390 (80.66%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 140 |
 | Stored active font binaries | 97 files, 772 KiB |
@@ -264,7 +264,7 @@ Current largest uncovered buckets:
 
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
-| `src/render.rs` | 1,566 / 2,275 | 323 / 428 | 109 / 164 | 2,262 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
+| `src/render.rs` | 1,568 / 2,275 | 325 / 428 | 109 / 164 | 2,264 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
 | `src/font.rs` | 1,415 / 1,908 | 174 / 250 | 127 / 186 | 1,924 / 2,597 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,510 / 2,828 | 980 / 1,282 | 70 / 73 | 3,611 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
 | `src/scaler.rs` | 934 / 1,220 | 150 / 188 | 41 / 61 | 1,067 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
@@ -1481,6 +1481,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Render-mode load-flag helper route | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,480 / 17,174 lines; 21,122 / 24,685 regions; 3,529 / 4,380 branches | `FT_Render_Glyph` now carries the returned slot's render target through the shared `load_flag_for_render_mode` helper. Existing explicit render-mode rows cover normal, mono, LCD, LCD_V, and SDF routing with exact Rust FFI, C ABI, and WASM parity; no fonts or cases were added |
 | 2026-07-12 | Public render-cache and pixel-size helper routes | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,551 / 17,190 lines; 21,223 / 24,719 regions; 3,533 / 4,390 branches | Existing `FT_Render_Glyph` public rows now route `Face::render_loaded_glyph` through the shared render-font cache while clearing that cache on face size/charmap/named-instance mutations; existing `FT_Set_Pixel_Sizes` rows now execute `SizeMetrics::from_pixel_size` zero-dimension normalization directly. Exact Rust FFI, C ABI, and WASM parity remains green with no fonts or cases added, and `api.rs` reaches 462 / 486 lines and 53 / 54 functions |
 | 2026-07-12 | Explicit render-cache load-mode variants | 108 unique hashes | 0 | 6,610 | 6,607 / 6,607 | 3 | 14,559 / 17,190 lines; 21,233 / 24,719 regions; 3,539 / 4,390 branches | Four explicit `FT_Render_Glyph.matrix_render` variants reuse existing DejaVu/Noto fonts to cover safe Rust render-cache load-mode selection for force autohint, target light, no autohint, and force-autohint masked by no-autohint. Exact Rust FFI, C ABI, and WASM parity remains green; implicit cases remain zero |
+| 2026-07-12 | Mono negative-collapse glyph correction | 108 unique hashes | 0 | 6,610 | 6,607 / 6,607 | 3 | 14,561 / 17,190 lines; 21,235 / 24,719 regions; 3,541 / 4,390 branches | The existing source-backed `renderCollapseNegativeX` and `renderCollapseNegativeY` glyphs now sit at 330 font units instead of 375, which scales to a negative 26.6 collapse bias at the existing 20 ppem mono rows. This fixes stale fixture obligations without adding cases or changing the harness, and covers both negative `PixelBox::with_non_collapsed` arms with exact Rust/C ABI/WASM parity |
 
 ## Decision Log
 
@@ -1503,6 +1504,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Route rendered-slot target flags through the shared helper | `FT_Render_Glyph` already validates the public render mode before calling core rendering; preserving the selected render target in the returned slot's internal load flags keeps wrapper state centralized without adding cases or changing public output JSON |
 | 2026-07-11 | Pack no-output TT guard probes into existing branch-edge glyphs | Invalid coordinate reads exercise defensive zone access while preserving the same public `FT_Load_Glyph` output and avoiding extra Cartesian case growth |
 | 2026-07-11 | Prefer no-output VM state probes before new TT rows | Stack-only calls, twilight-zone movement, and no-op prep instructions can cover VM branches through the existing public `FT_Load_Glyph` row when they do not alter glyph output or weaken parity |
+| 2026-07-12 | Treat stale fixture obligations as font bugs | When an explicit row claims a structural branch but coverage shows it does not reach that branch, first correct the compact source font or selected glyph parameters instead of adding redundant cases |
 | 2026-07-10 | Require every predicate operand outcome | Line execution alone missed non-Roman Mac and non-Windows fallback records; nightly branch coverage makes both sides of each short-circuit condition visible |
 | 2026-07-11 | Do not keep C-mismatching name fixtures for coverage | Platform-0 variation-prefix and missing-subfamily candidate rows exposed real C/Rust PostScript-name differences; they remain correctness work rather than passing coverage rows |
 | 2026-07-10 | Treat TTC table offsets as collection-absolute | Pinned `tt_face_load_font_dir` reads table offsets from the TTC stream origin; adding the selected face base a second time breaks every nonzero face |
