@@ -199,7 +199,10 @@ autohint metrics now consume the active FreeType size object's x/y scales and
 TT interpreter ppem/point-size instead of reconstructing them from height.
 Two additional explicit non-uniform `FT_Load_Glyph` variants for the
 point-coordinate and point-move matrix glyphs then cover the remaining
-non-square `MD[0]` and `IP` interpreter branches.
+non-square `MD[0]` and `IP` interpreter branches, while repeating `IUP[y]`
+and `IUP[x]` inside the existing point-move matrix covers FreeType's
+backward-compatibility early-return path after both axes have already
+interpolated.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -213,11 +216,11 @@ coordinate parity.
 | Runnable parity comparisons | 6,560 |
 | Exact parity | 6,560 / 6,560 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,428 / 17,174 (84.01%) |
+| Covered Rust lines | 14,436 / 17,174 (84.06%) |
 | Rust function coverage | 860 / 1,064 (80.83%) |
 | Rust instantiation coverage | 863 / 1,067 (80.88%) |
-| Rust region coverage | 20,981 / 24,673 (85.04%) |
-| Rust branch/condition coverage | 3,509 / 4,380 (80.11%) |
+| Rust region coverage | 20,991 / 24,673 (85.08%) |
+| Rust branch/condition coverage | 3,519 / 4,380 (80.34%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 138 |
 | Stored active font binaries | 95 files, 764 KiB |
@@ -252,7 +255,7 @@ Current largest uncovered buckets:
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 82 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
 | `src/ffi/handles.rs` | 1,323 / 1,478 | 233 / 280 | 142 / 162 | 1,831 / 2,012 | Public FFI route audit; wrappers stay thin and must delegate to core |
-| `src/tt/hinter/exec.rs` | 1,288 / 1,340 | 343 / 410 | 37 / 40 | 2,666 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
+| `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 835 / 941 | 339 / 426 | 18 / 19 | 1,118 / 1,247 | CJK topology rows in the compact multiscript fixture |
 | `src/api.rs` | 389 / 464 | 61 / 70 | 44 / 52 | 522 / 620 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
@@ -1453,6 +1456,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Non-uniform TrueType MD/IP probes | 106 unique hashes | 0 | 6,563 | 6,560 / 6,560 | 3 | 14,428 / 17,174 lines; 20,981 / 24,673 regions; 3,509 / 4,380 branches | Two explicit `FT_Load_Glyph.matrix_load` variants load the existing point-coordinate and point-move matrix glyphs at 20x32 px. They cover the non-square `MD[0]` and `IP` interpreter branches without adding fonts or implicit expansion; `tt/hinter/exec.rs` reaches 1,288 / 1,340 lines and 343 / 410 branch outcomes |
 | 2026-07-11 | TrueType MDRP single-width cut-in probes | 106 unique hashes | 0 | 6,563 | 6,560 / 6,560 | 3 | 14,433 / 17,174 lines; 20,988 / 24,673 regions; 3,516 / 4,380 branches | Existing `branchEdgeMatrix` now packs positive glyph-zone and negative twilight-zone `MDRP` single-width cut-in probes into its no-output branch program. Exact Rust/C/WASM parity remains green with no concrete case growth; `tt/hinter/exec.rs` reaches 1,293 / 1,340 lines and 350 / 410 branch outcomes |
 | 2026-07-11 | TrueType empty-stack ROLL probe | 106 unique hashes | 0 | 6,563 | 6,560 / 6,560 | 3 | 14,434 / 17,174 lines; 20,989 / 24,673 regions; 3,517 / 4,380 branches | Existing `stackStateMatrix` now executes `ROLL` immediately after a `CLEAR`, covering FreeType-compatible empty-stack no-op behavior without changing glyph output or adding public cases. Exact Rust/C/WASM parity remains green; `tt/hinter/exec.rs` reaches 1,294 / 1,340 lines and 351 / 410 branch outcomes |
+| 2026-07-11 | TrueType repeated IUP compatibility probe | 106 unique hashes | 0 | 6,563 | 6,560 / 6,560 | 3 | 14,436 / 17,174 lines; 20,991 / 24,673 regions; 3,519 / 4,380 branches | Existing `pointMoveMatrix` now repeats `IUP[y]` and `IUP[x]` after both axes have already interpolated. Pinned FreeType returns immediately in backward-compatibility mode once the state reaches `0x7`; exact Rust/C/WASM parity remains green without adding concrete cases, and `tt/hinter/exec.rs` reaches 1,296 / 1,340 lines and 353 / 410 branch outcomes |
 
 ## Decision Log
 
