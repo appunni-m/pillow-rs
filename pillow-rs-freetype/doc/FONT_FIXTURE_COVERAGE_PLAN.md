@@ -246,7 +246,12 @@ now also packs a no-output S45ROUND clamp probe into the existing
 One additional explicit `FT_Set_Transform.load_ignore_transform_behavior`
 variant renders the compact empty glyph under the same non-identity transform,
 covering the transformed render-outline empty guard while keeping exact
-Rust/C ABI/WASM parity.
+Rust/C ABI/WASM parity. The compact CJK autohint source font now also includes
+an additive `cjkSerifM` glyph mapped at U+519D. One explicit
+`FT_LOAD_FORCE_AUTOHINT` public row selects that glyph to exercise FreeType's
+CJK 12-edge serif-`m` horizontal-axis stabilization path; the glyph top is kept
+below the next pixel boundary so the row isolates the x-edge topology without
+introducing an unrelated vertical metrics mismatch.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -254,17 +259,17 @@ coordinate parity.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,137 |
-| Concrete explicit cases | 6,620 |
-| Additional grouped variants | 2,483 |
+| Concrete explicit cases | 6,621 |
+| Additional grouped variants | 2,484 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,617 |
-| Exact parity | 6,617 / 6,617 |
+| Runnable parity comparisons | 6,618 |
+| Exact parity | 6,618 / 6,618 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,629 / 17,230 (84.90%) |
+| Covered Rust lines | 14,641 / 17,230 (84.97%) |
 | Rust function coverage | 878 / 1,066 (82.36%) |
 | Rust instantiation coverage | 881 / 1,069 (82.41%) |
-| Rust region coverage | 21,338 / 24,773 (86.13%) |
-| Rust branch/condition coverage | 3,561 / 4,398 (80.97%) |
+| Rust region coverage | 21,352 / 24,773 (86.19%) |
+| Rust branch/condition coverage | 3,569 / 4,398 (81.15%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 140 |
 | Stored active font binaries | 97 files, 772 KiB |
@@ -300,7 +305,7 @@ Current largest uncovered buckets:
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
 | `src/ffi/handles.rs` | 1,353 / 1,490 | 238 / 288 | 149 / 162 | 1,898 / 2,040 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
-| `src/autohint/cjk.rs` | 841 / 941 | 344 / 426 | 18 / 19 | 1,125 / 1,247 | CJK topology rows in the compact multiscript fixture |
+| `src/autohint/cjk.rs` | 853 / 941 | 352 / 426 | 18 / 19 | 1,139 / 1,247 | CJK topology rows in the compact multiscript fixture |
 | `src/api.rs` | 473 / 486 | 74 / 84 | 53 / 54 | 639 / 660 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short

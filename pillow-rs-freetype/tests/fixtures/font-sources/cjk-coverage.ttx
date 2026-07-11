@@ -24,6 +24,7 @@
     <GlyphID id="18" name="roundBlueSmall"/>
     <GlyphID id="19" name="serifI"/>
     <GlyphID id="20" name="cjkStemSort"/>
+    <GlyphID id="21" name="cjkSerifM"/>
   </GlyphOrder>
 
   <head>
@@ -70,7 +71,7 @@
   <maxp>
     <!-- Most of this table will be recalculated by the compiler -->
     <tableVersion value="0x10000"/>
-    <numGlyphs value="21"/>
+    <numGlyphs value="22"/>
     <maxPoints value="240"/>
     <maxContours value="40"/>
     <maxCompositePoints value="240"/>
@@ -161,6 +162,7 @@
     <mtx name="roundBlueSmall" width="256" lsb="40"/>
     <mtx name="serifI" width="256" lsb="95"/>
     <mtx name="cjkStemSort" width="256" lsb="33"/>
+    <mtx name="cjkSerifM" width="256" lsb="0"/>
   </hmtx>
 
   <cmap>
@@ -187,6 +189,7 @@
       <map code="0x4ed6" name="uni65E5"/><!-- CJK TOP FILL CALIBRATION -->
       <map code="0x519b" name="uni7530"/><!-- CJK TOP FLAT CALIBRATION -->
       <map code="0x519c" name="cjkStemSort"/><!-- CJK STEM WIDTH SORT CALIBRATION -->
+      <map code="0x519d" name="cjkSerifM"/><!-- CJK 12-EDGE SERIF M CALIBRATION -->
       <map code="0x43e" name="A"/><!-- CYRILLIC SMALL LETTER O -->
       <map code="0x915" name="A"/><!-- DEVANAGARI LETTER KA -->
       <map code="0x925" name="A"/><!-- DEVANAGARI LETTER THA -->
@@ -561,6 +564,52 @@
       <instructions/>
     </TTGlyph>
 
+    <TTGlyph name="cjkSerifM" xMin="0" yMin="0" xMax="200" yMax="179">
+      <contour>
+        <pt x="0" y="0" on="1"/>
+        <pt x="40" y="0" on="1"/>
+        <pt x="40" y="20" on="1"/>
+        <pt x="30" y="20" on="1"/>
+        <pt x="30" y="160" on="1"/>
+        <pt x="40" y="160" on="1"/>
+        <pt x="40" y="179" on="1"/>
+        <pt x="0" y="179" on="1"/>
+        <pt x="0" y="160" on="1"/>
+        <pt x="10" y="160" on="1"/>
+        <pt x="10" y="20" on="1"/>
+        <pt x="0" y="20" on="1"/>
+      </contour>
+      <contour>
+        <pt x="80" y="0" on="1"/>
+        <pt x="120" y="0" on="1"/>
+        <pt x="120" y="20" on="1"/>
+        <pt x="110" y="20" on="1"/>
+        <pt x="110" y="160" on="1"/>
+        <pt x="120" y="160" on="1"/>
+        <pt x="120" y="179" on="1"/>
+        <pt x="80" y="179" on="1"/>
+        <pt x="80" y="160" on="1"/>
+        <pt x="90" y="160" on="1"/>
+        <pt x="90" y="20" on="1"/>
+        <pt x="80" y="20" on="1"/>
+      </contour>
+      <contour>
+        <pt x="160" y="0" on="1"/>
+        <pt x="200" y="0" on="1"/>
+        <pt x="200" y="20" on="1"/>
+        <pt x="190" y="20" on="1"/>
+        <pt x="190" y="160" on="1"/>
+        <pt x="200" y="160" on="1"/>
+        <pt x="200" y="179" on="1"/>
+        <pt x="160" y="179" on="1"/>
+        <pt x="160" y="160" on="1"/>
+        <pt x="170" y="160" on="1"/>
+        <pt x="170" y="20" on="1"/>
+        <pt x="160" y="20" on="1"/>
+      </contour>
+      <instructions/>
+    </TTGlyph>
+
     <TTGlyph name="tildeTop" xMin="40" yMin="0" xMax="216" yMax="196">
       <contour>
         <pt x="40" y="180" on="1"/>
@@ -773,6 +822,7 @@
       <ClassDef glyph="uni6C38" class="1"/>
       <ClassDef glyph="uni7530" class="1"/>
       <ClassDef glyph="cjkStemSort" class="1"/>
+      <ClassDef glyph="cjkSerifM" class="1"/>
     </GlyphClassDef>
   </GDEF>
 
@@ -856,6 +906,7 @@
     <mtx name="roundBlueSmall" height="256" tsb="116"/>
     <mtx name="serifI" height="256" tsb="240"/>
     <mtx name="cjkStemSort" height="256" tsb="25"/>
+    <mtx name="cjkSerifM" height="256" tsb="36"/>
   </vmtx>
 
 </ttFont>

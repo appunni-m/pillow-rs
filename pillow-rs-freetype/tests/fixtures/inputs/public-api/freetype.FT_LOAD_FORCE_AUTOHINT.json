@@ -1960,6 +1960,26 @@
             ]
           },
           {
+            "id": "cjk-serif-m-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 20893,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:serif-m-12-edge"
+            ]
+          },
+          {
             "id": "cjk-shared-latin",
             "assets": {
               "font": {
