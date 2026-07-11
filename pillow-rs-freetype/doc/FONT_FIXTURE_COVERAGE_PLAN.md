@@ -225,8 +225,12 @@ no-autohint and force-autohint error rows over the existing compact malformed
 only success slots. Existing `FT_New_Size`, `FT_Done_Size`, and
 `FT_Activate_Size` null rows now route through pinned C oracle commands and the
 thin Rust FFI validation wrappers for null face, null output, and null size
-handles. Multi-size success lifecycle rows remain visibly unsupported/generic
-until real secondary-size object ownership is implemented.
+handles. The compact CJK autohint source font now adds an isolated
+`cjkStemSort` glyph and one explicit `FT_LOAD_FORCE_AUTOHINT` public variant
+for CJK stem-width ordering, preserving the existing U+7530 coverage path while
+adding the new topology as an additive row. Multi-size success lifecycle rows
+remain visibly unsupported/generic until real secondary-size object ownership
+is implemented.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -234,17 +238,17 @@ coordinate parity.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,137 |
-| Concrete explicit cases | 6,613 |
-| Additional grouped variants | 2,476 |
+| Concrete explicit cases | 6,614 |
+| Additional grouped variants | 2,477 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,610 |
-| Exact parity | 6,610 / 6,610 |
+| Runnable parity comparisons | 6,611 |
+| Exact parity | 6,611 / 6,611 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,581 / 17,202 (84.76%) |
+| Covered Rust lines | 14,583 / 17,202 (84.78%) |
 | Rust function coverage | 878 / 1,066 (82.36%) |
 | Rust instantiation coverage | 881 / 1,069 (82.41%) |
-| Rust region coverage | 21,264 / 24,735 (85.97%) |
-| Rust branch/condition coverage | 3,548 / 4,398 (80.67%) |
+| Rust region coverage | 21,265 / 24,735 (85.97%) |
+| Rust branch/condition coverage | 3,549 / 4,398 (80.70%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 140 |
 | Stored active font binaries | 97 files, 772 KiB |
@@ -280,7 +284,7 @@ Current largest uncovered buckets:
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
 | `src/ffi/handles.rs` | 1,353 / 1,490 | 238 / 288 | 149 / 162 | 1,898 / 2,040 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
-| `src/autohint/cjk.rs` | 839 / 941 | 343 / 426 | 18 / 19 | 1,124 / 1,247 | CJK topology rows in the compact multiscript fixture |
+| `src/autohint/cjk.rs` | 841 / 941 | 344 / 426 | 18 / 19 | 1,125 / 1,247 | CJK topology rows in the compact multiscript fixture |
 | `src/api.rs` | 473 / 486 | 74 / 84 | 53 / 54 | 639 / 660 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short
@@ -1495,6 +1499,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Explicit render-cache repeat row | 108 unique hashes | 0 | 6,611 | 6,608 / 6,608 | 3 | 14,562 / 17,190 lines; 21,237 / 24,719 regions; 3,542 / 4,390 branches | One explicit `FT_Render_Glyph.supported_render_modes_repeat_cache` row renders glyph 41 from `hinter-control-matrix.ttf` twice on the same face. The public C oracle, Rust FFI, C ABI, and WASM ABI compare both slot snapshots, proving the safe Rust `RenderFontCache::get_or_insert_with` cache-hit branch without implicit case growth |
 | 2026-07-12 | Explicit load-glyph malformed facade errors | 108 unique hashes | 0 | 6,613 | 6,610 / 6,610 | 3 | 14,566 / 17,190 lines; 21,245 / 24,719 regions; 3,543 / 4,390 branches | Two explicit `FT_Load_Glyph.matrix_load` variants reuse `glyf-malformed-matrix.ttf` to cover no-autohint and force-autohint malformed glyph errors. Selected malformed rows now compare safe `Face::load_glyph` error parity against `FT_Load_Glyph`, keeping exact Rust/C ABI/WASM parity green and implicit cases at zero |
 | 2026-07-12 | Size API null-validation routes | 108 unique hashes | 0 | 6,613 | 6,610 / 6,610 | 3 | 14,581 / 17,202 lines; 21,264 / 24,735 regions; 3,548 / 4,398 branches | Existing `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null rows now execute pinned C oracle commands and the Rust FFI wrapper validation path for null face, null output, and null size handles. Exact Rust/C ABI/WASM parity remains green with no new cases; success multi-size lifecycle rows remain visibly unsupported/generic pending real size-object implementation |
+| 2026-07-12 | Isolated CJK stem-sort topology row | 108 unique hashes | 0 | 6,614 | 6,611 / 6,611 | 3 | 14,583 / 17,202 lines; 21,265 / 24,735 regions; 3,549 / 4,398 branches | One explicit `FT_LOAD_FORCE_AUTOHINT` variant selects the new `cjkStemSort` glyph in the source-backed compact CJK font at U+519C. The glyph keeps U+7530 unchanged and adds two internal vertical stems with unequal widths, giving additive CJK autohint coverage with exact Rust/C ABI/WASM parity and zero implicit cases |
 
 ## Decision Log
 
@@ -1518,6 +1523,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Support explicit repeat rows only where stateful public behavior needs them | `repeat_count` is accepted only as a concrete input on existing `FT_Render_Glyph` public rows. It lets one case compare a deliberate sequence across Rust/C/C-ABI/WASM without reintroducing hidden Cartesian discovery or generic fixture generation |
 | 2026-07-12 | Compare safe facade errors through selected public rows | Error-side coverage for `Face::load_glyph` must be proven by the same `FT_Load_Glyph` fixture cases and exact C/Rust/C-ABI/WASM parity, not by synthetic helper calls or broad routing |
 | 2026-07-12 | Route size null validation before size lifecycle success | Null pointer validation belongs in the thin FFI wrapper and can be proven through existing `ftsizes` public rows. Non-null `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` success lifecycle rows stay generic/unsupported until real multi-size handle ownership is implemented instead of being modeled as C parity |
+| 2026-07-12 | Add new topology glyphs instead of mutating productive rows | Changing the existing U+7530 field glyph reduced net coverage by losing already-covered CJK paths. Additive CJK topology probes must use separate glyphs and explicit public variants so new behavior can only expand the measured union |
 | 2026-07-11 | Pack no-output TT guard probes into existing branch-edge glyphs | Invalid coordinate reads exercise defensive zone access while preserving the same public `FT_Load_Glyph` output and avoiding extra Cartesian case growth |
 | 2026-07-11 | Prefer no-output VM state probes before new TT rows | Stack-only calls, twilight-zone movement, and no-op prep instructions can cover VM branches through the existing public `FT_Load_Glyph` row when they do not alter glyph output or weaken parity |
 | 2026-07-12 | Treat stale fixture obligations as font bugs | When an explicit row claims a structural branch but coverage shows it does not reach that branch, first correct the compact source font or selected glyph parameters instead of adding redundant cases |
