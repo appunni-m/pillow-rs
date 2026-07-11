@@ -173,8 +173,10 @@
       <map code="0x56" name="singleTouch"/><!-- LATIN CAPITAL LETTER V -->
       <map code="0x6e" name="ignoreBlue"/><!-- LATIN SMALL LETTER N -->
       <map code="0x6f" name="roundBlueSmall"/><!-- LATIN SMALL LETTER O -->
+      <map code="0x21" name="glyph00003"/><!-- LATIN NO-HEIGHT-CHECK ADJUSTMENT ALIAS -->
       <map code="0xc3" name="tildeTop"/><!-- LATIN CAPITAL LETTER A WITH TILDE -->
       <map code="0xd8" name="ignoreBlue"/><!-- LATIN CAPITAL LETTER O WITH STROKE -->
+      <map code="0xf8" name="roundBlueSmall"/><!-- LATIN SMALL BLUE-IGNORE ADJUSTMENT ALIAS -->
       <map code="0x393" name="A"/><!-- GREEK CAPITAL LETTER GAMMA -->
       <map code="0x3b1" name="A"/><!-- GREEK SMALL LETTER ALPHA -->
       <map code="0x411" name="A"/><!-- CYRILLIC CAPITAL LETTER BE -->

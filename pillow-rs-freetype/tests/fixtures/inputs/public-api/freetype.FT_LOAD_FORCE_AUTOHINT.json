@@ -160,6 +160,46 @@
             ]
           },
           {
+            "id": "latin-adjust-no-height-check",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 33,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:no-height-check-adjustment"
+            ]
+          },
+          {
+            "id": "latin-ignore-small-blues",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 248,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:ignore-small-blue-edges"
+            ]
+          },
+          {
             "id": "latin-adjust-bottom-tilde",
             "assets": {
               "font": {
