@@ -19,6 +19,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use fontdone::Font;
 use fontdone::ffi::*;
 use fontdone_ffi_c as c_abi;
 use fontdone_ffi_wasm as wasm_abi;
@@ -2741,7 +2742,11 @@ fn os2_unicode_ranges_json(
     })
 }
 
-fn rust_load_sfnt_table_output(face: &FT_Face, params: &Value) -> Result<RunOutput, String> {
+fn rust_load_sfnt_table_output(
+    face: &FT_Face,
+    case: &InputCase,
+    params: &Value,
+) -> Result<RunOutput, String> {
     let tag_hex = load_sfnt_table_tag_hex_arg(params)?;
     let tag = if let Some(hex) = tag_hex.strip_prefix("0x") {
         u32::from_str_radix(hex, 16).map_err(|e| format!("invalid tag hex: {e}"))?
@@ -2751,6 +2756,24 @@ fn rust_load_sfnt_table_output(face: &FT_Face, params: &Value) -> Result<RunOutp
     let offset = load_sfnt_table_offset_arg(params)?
         .parse::<i64>()
         .map_err(|e| e.to_string())?;
+    if let Some(length) = params.get("core_length_request").and_then(Value::as_u64) {
+        let offset = usize::try_from(offset).map_err(|_| {
+            format!("load_sfnt_table core offset must be non-negative, got {offset}")
+        })?;
+        let data = font_bytes(case)?;
+        let face_index = usize::try_from(face_index_param(params)?)
+            .map_err(|err| format!("load_sfnt_table face_index does not fit usize: {err}"))?;
+        let font = Font::truetype_face(data.as_ref(), face_index, 10.0)
+            .map_err(|err| format!("load sfnt core font: {err}"))?;
+        return match font.load_sfnt_table(tag, offset, Some(length as usize)) {
+            Ok(bytes) => Ok(ok(json!({
+                "length_after": bytes.len() as FT_ULong,
+                "bytes_written": hex_bytes(&bytes),
+                "bytes_hash": djb2_hash(&bytes)
+            }))),
+            Err(_) => Ok(error(FT_Err_Invalid_Argument)),
+        };
+    }
     let mut length: FT_ULong = 0;
     // Probe first to get the actual table size.
     match FT_Load_Sfnt_Table(face, tag as FT_ULong, offset as FT_Long, Some(&mut length)) {
@@ -6005,7 +6028,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "sfnt.load_sfnt_table" => {
             let face = open_face(case)?;
-            rust_load_sfnt_table_output(&face, &case.inputs.params)
+            rust_load_sfnt_table_output(&face, case, &case.inputs.params)
         }
         "sfnt.table_info" => {
             let face = open_face(case)?;
@@ -8450,7 +8473,7 @@ fn wasm_size_request_rec(row: SizeRequestRow) -> wasm_abi::FontdoneWasmSizeReque
 
 fn rust_charmap_get_char_index(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = rust_new_face_without_size(case)?;
-    let err = rust_select_charmap_by_fields(&mut face, &case.inputs.params)?;
+    let err = rust_select_charmap_by_fields(&mut face, case)?;
     if err != FT_Err_Ok {
         return Ok(error(err));
     }
@@ -13461,8 +13484,20 @@ fn wasm_find_charmap_index(handle: usize, platform_id: u16, encoding_id: u16) ->
     })
 }
 
-fn rust_select_charmap_by_fields(face: &mut FT_Face, params: &Value) -> Result<i32, String> {
+fn rust_select_charmap_by_fields(face: &mut FT_Face, case: &InputCase) -> Result<i32, String> {
+    let params = &case.inputs.params;
     let fields = required_charmap_fields(params, "charmap selection")?;
+    let data = font_bytes(case)?;
+    let face_index = usize::try_from(face_index_param(params)?)
+        .map_err(|err| format!("charmap face_index does not fit usize: {err}"))?;
+    let mut core_font = Font::truetype_face(data.as_ref(), face_index, 10.0)
+        .map_err(|err| format!("load charmap core font: {err}"))?;
+    if core_font
+        .select_charmap(fields.platform_id, fields.encoding_id)
+        .is_err()
+    {
+        return Ok(FT_Err_Invalid_Argument);
+    }
     let Some(index) = rust_find_charmap_index(face, fields.platform_id, fields.encoding_id) else {
         return Ok(FT_Err_Invalid_Argument);
     };
