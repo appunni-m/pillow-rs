@@ -76,6 +76,13 @@ SCRIPT_PROBES: list[tuple[str, int]] = [
     ("hani", 0x4ED6),
 ]
 
+# ASCII digits are global autohinter metrics probes, not script probes.  Keep
+# them after the script glyphs so existing fixture glyph indices remain stable.
+DIGIT_WIDTH_PROBES: list[tuple[str, int, int]] = [
+    ("digit_zero_wide", 0x0030, 620),
+    ("digit_one_narrow", 0x0031, 520),
+]
+
 STANDARD_CHARS: dict[str, int] = {
     "adlm": 0x1E90C,
     "arab": 0x0644,
@@ -160,6 +167,7 @@ def glyph_name(tag: str) -> str:
 def build_script_coverage() -> None:
     glyph_order = [".notdef", "space"]
     glyph_order.extend(glyph_name(tag) for tag, _ in SCRIPT_PROBES)
+    glyph_order.extend(name for name, _, _ in DIGIT_WIDTH_PROBES)
 
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
@@ -182,6 +190,11 @@ def build_script_coverage() -> None:
         standard = STANDARD_CHARS.get(tag)
         if standard is not None:
             cmap.setdefault(standard, name)
+
+    for name, codepoint, advance in DIGIT_WIDTH_PROBES:
+        glyphs[name] = rectangle_glyph(100, 0, 440, 560)
+        metrics[name] = (advance, 100)
+        cmap[codepoint] = name
 
     font = FontBuilder(UNITS_PER_EM, isTTF=True)
     font.setupGlyphOrder(glyph_order)
