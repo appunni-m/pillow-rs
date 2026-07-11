@@ -797,6 +797,60 @@
               "render_mode": "FT_RENDER_MODE_MONO"
             },
             "coverage": ["render:mono-negative-y-collapse-bias"]
+          },
+          {
+            "id": "m33-render-first-offcurve-last-on-mono",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/charmap/multiple-charmaps.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 483,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": ["render:mono-first-offcurve-last-on"]
+          },
+          {
+            "id": "m34-render-first-offcurve-last-on-sdf",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/charmap/multiple-charmaps.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 483,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": ["render:sdf-first-offcurve-last-on"]
+          },
+          {
+            "id": "m35-render-degenerate-conic-sdf",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/charmap/multiple-charmaps.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 380,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": ["render:sdf-degenerate-conic-line"]
           }
         ]
       },

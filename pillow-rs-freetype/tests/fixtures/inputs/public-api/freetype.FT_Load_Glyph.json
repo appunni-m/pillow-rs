@@ -913,6 +913,54 @@
             ]
           },
           {
+            "id": "hinter-composite-native-point-attachment",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 3,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "scaler:composite-native-point-attachment"
+            ]
+          },
+          {
+            "id": "hinter-composite-native-offset-unrounded",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 19
+              },
+              "glyph_index": 8,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "scaler:composite-native-unrounded-offset"
+            ]
+          },
+          {
             "id": "glyf-depth-boundary-no-scale",
             "assets": {
               "font": {

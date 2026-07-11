@@ -76,9 +76,9 @@
             "FT_Load_Glyph"
           ],
           "glyph_index": {
-            "from_char_code": 197
+            "from_char_code": 192
           },
-          "glyph_name": "composite"
+          "glyph_name": "Agrave"
         }
       },
       "classifiers": [

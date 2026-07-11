@@ -230,7 +230,16 @@ handles. The compact CJK autohint source font now adds an isolated
 for CJK stem-width ordering, preserving the existing U+7530 coverage path while
 adding the new topology as an additive row. Multi-size success lifecycle rows
 remain visibly unsupported/generic until real secondary-size object ownership
-is implemented.
+is implemented. Three explicit `FT_Bitmap.public_fields_match_render_output`
+variants now cover mono/SDF first-offcurve-last-on topology and SDF degenerate
+conic flattening through existing compact charmap glyphs, the stale
+`FT_LOAD_NO_RECURSE` composite selector now targets DejaVu `Agrave` instead of
+a missing `Aring`, and two explicit native composite `FT_Load_Glyph` variants
+cover point attachment and unrounded-offset scaler paths. Correcting the
+no-recurse selector exposed and fixed a real C/Rust metrics mismatch: pinned C
+keeps composite slots in composite format and computes metrics from the raw
+`glyf` composite header bbox, while Rust previously used the resolved component
+outline bbox.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -238,17 +247,17 @@ coordinate parity.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,137 |
-| Concrete explicit cases | 6,614 |
-| Additional grouped variants | 2,477 |
+| Concrete explicit cases | 6,619 |
+| Additional grouped variants | 2,482 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,611 |
-| Exact parity | 6,611 / 6,611 |
+| Runnable parity comparisons | 6,616 |
+| Exact parity | 6,616 / 6,616 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,583 / 17,202 (84.78%) |
+| Covered Rust lines | 14,626 / 17,230 (84.89%) |
 | Rust function coverage | 878 / 1,066 (82.36%) |
 | Rust instantiation coverage | 881 / 1,069 (82.41%) |
-| Rust region coverage | 21,265 / 24,735 (85.97%) |
-| Rust branch/condition coverage | 3,549 / 4,398 (80.70%) |
+| Rust region coverage | 21,333 / 24,773 (86.11%) |
+| Rust branch/condition coverage | 3,557 / 4,398 (80.88%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 140 |
 | Stored active font binaries | 97 files, 772 KiB |
@@ -1500,6 +1509,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Explicit load-glyph malformed facade errors | 108 unique hashes | 0 | 6,613 | 6,610 / 6,610 | 3 | 14,566 / 17,190 lines; 21,245 / 24,719 regions; 3,543 / 4,390 branches | Two explicit `FT_Load_Glyph.matrix_load` variants reuse `glyf-malformed-matrix.ttf` to cover no-autohint and force-autohint malformed glyph errors. Selected malformed rows now compare safe `Face::load_glyph` error parity against `FT_Load_Glyph`, keeping exact Rust/C ABI/WASM parity green and implicit cases at zero |
 | 2026-07-12 | Size API null-validation routes | 108 unique hashes | 0 | 6,613 | 6,610 / 6,610 | 3 | 14,581 / 17,202 lines; 21,264 / 24,735 regions; 3,548 / 4,398 branches | Existing `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null rows now execute pinned C oracle commands and the Rust FFI wrapper validation path for null face, null output, and null size handles. Exact Rust/C ABI/WASM parity remains green with no new cases; success multi-size lifecycle rows remain visibly unsupported/generic pending real size-object implementation |
 | 2026-07-12 | Isolated CJK stem-sort topology row | 108 unique hashes | 0 | 6,614 | 6,611 / 6,611 | 3 | 14,583 / 17,202 lines; 21,265 / 24,735 regions; 3,549 / 4,398 branches | One explicit `FT_LOAD_FORCE_AUTOHINT` variant selects the new `cjkStemSort` glyph in the source-backed compact CJK font at U+519C. The glyph keeps U+7530 unchanged and adds two internal vertical stems with unequal widths, giving additive CJK autohint coverage with exact Rust/C ABI/WASM parity and zero implicit cases |
+| 2026-07-12 | Composite no-recurse and render topology rows | 108 unique hashes | 0 | 6,619 | 6,616 / 6,616 | 3 | 14,626 / 17,230 lines; 21,333 / 24,773 regions; 3,557 / 4,398 branches | Three explicit `FT_Bitmap.public_fields_match_render_output` variants reuse `multiple-charmaps.ttf` glyphs 483 and 380 for mono/SDF off-curve-start and degenerate-conic render topology, the stale `FT_LOAD_NO_RECURSE` composite row now selects DejaVu `Agrave` instead of missing `Aring`, and two explicit `FT_Load_Glyph.matrix_load` variants reuse `hinter-control-matrix.ttf` glyphs 3 and 8 for native composite point attachment and unrounded offsets. The selector correction exposed and fixed composite no-recurse metrics to use the raw composite `glyf` header bbox, matching pinned C, with exact Rust/C ABI/WASM parity and zero implicit cases |
 
 ## Decision Log
 
@@ -1527,6 +1537,8 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Pack no-output TT guard probes into existing branch-edge glyphs | Invalid coordinate reads exercise defensive zone access while preserving the same public `FT_Load_Glyph` output and avoiding extra Cartesian case growth |
 | 2026-07-11 | Prefer no-output VM state probes before new TT rows | Stack-only calls, twilight-zone movement, and no-op prep instructions can cover VM branches through the existing public `FT_Load_Glyph` row when they do not alter glyph output or weaken parity |
 | 2026-07-12 | Treat stale fixture obligations as font bugs | When an explicit row claims a structural branch but coverage shows it does not reach that branch, first correct the compact source font or selected glyph parameters instead of adding redundant cases |
+| 2026-07-12 | Correct stale glyph selectors before adding rows | The no-recurse composite row selected U+00C5 in a trimmed font that lacked that codepoint and only exercised glyph 0; changing it to U+00C0 exposed a real C/Rust metrics mismatch and fixed core behavior to match C's composite-header bbox metrics |
+| 2026-07-12 | Keep render topology rows in the bitmap public case | The `FT_Bitmap.public_fields_match_render_output` case already compares rendered bitmap fields and bytes through the public API legs, so targeted contour-topology variants there expand render coverage without adding a new fixture harness or modeled shortcut |
 | 2026-07-10 | Require every predicate operand outcome | Line execution alone missed non-Roman Mac and non-Windows fallback records; nightly branch coverage makes both sides of each short-circuit condition visible |
 | 2026-07-11 | Do not keep C-mismatching name fixtures for coverage | Platform-0 variation-prefix and missing-subfamily candidate rows exposed real C/Rust PostScript-name differences; they remain correctness work rather than passing coverage rows |
 | 2026-07-10 | Treat TTC table offsets as collection-absolute | Pinned `tt_face_load_font_dir` reads table offsets from the TTC stream origin; adding the selected face base a second time breaks every nonzero face |
