@@ -1534,6 +1534,8 @@ subjects:
         description: A compact SFNT with post format 1.0 and a non-258 glyph count returns the same default .notdef names as C.
       - id: post_format_25_delta_names
         description: A compact SFNT with post format 2.5 returns Mac names for valid signed deltas and .notdef for out-of-range deltas like C.
+      - id: post_malformed_tables_default_names
+        description: Compact malformed and unsupported post tables return the same .notdef fallback or invalid-argument cleared buffer as C.
       - id: error_no_names_or_invalid_glyph
         description: Faces without glyph names and invalid glyph indexes return the same C error and clear the output name as C.
       - id: error_null_face_or_buffer

@@ -57,11 +57,15 @@ impl PostTable {
                         self.custom_names
                             .get(usize::from(*index - 258))
                             .map(String::as_str)
-                            .or(Some(""))
+                            .or(Some(".notdef"))
                     }
                 })
                 .or(Some(".notdef")),
-            _ => None,
+            0x0003_0000 => None,
+            // If a caller bypasses the public face-flag gate, FreeType's
+            // name service leaves the initialized Mac glyph 0 fallback in
+            // place for non-3.0 formats.
+            _ => Some(".notdef"),
         }
     }
 }
@@ -100,7 +104,7 @@ fn parse_format_20_names(data: &[u8]) -> Option<(Vec<u16>, Vec<String>)> {
     let mut cursor = indices_end;
     for _ in 0..custom_count {
         let Some(&len) = data.get(cursor) else {
-            custom_names.push(String::new());
+            custom_names.push(".notdef".to_string());
             continue;
         };
         cursor = cursor.saturating_add(1);

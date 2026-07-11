@@ -6,6 +6,7 @@
     "truncates_and_terminates_to_buffer_size",
     "post_format_1_default_names",
     "post_format_25_delta_names",
+    "post_malformed_tables_default_names",
     "error_no_names_or_invalid_glyph",
     "error_null_face_or_buffer"
   ],
@@ -297,6 +298,189 @@
         "output_shape": {
           "return": "FT_Error",
           "buffer": "nul_terminated_bytes"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "status",
+            "buffer_hex"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Glyph_Name.post_malformed_tables_default_names",
+      "subject": "freetype.FT_Get_Glyph_Name",
+      "case": "post_malformed_tables_default_names",
+      "operation": "freetype.get_glyph_name",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "variants": [
+          {
+            "id": "unsupported_format_invalid_argument_clears_buffer",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/metadata/post-format-unsupported.ttf",
+                "requires": "SFNT post table with an unsupported non-3.0 format tag"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "gid:1",
+              "expected_status": "FT_Err_Invalid_Argument"
+            },
+            "coverage": [
+              "post:unsupported-format-invalid-argument-clears-buffer"
+            ]
+          },
+          {
+            "id": "format20_short_defaults_notdef",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/metadata/post-format-20-short.ttf",
+                "requires": "SFNT post format 2.0 shorter than the glyph-name count field"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "gid:1",
+              "expected_name": ".notdef"
+            },
+            "coverage": [
+              "post:format-20-short-default-name"
+            ]
+          },
+          {
+            "id": "format20_zero_defaults_notdef",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/metadata/post-format-20-zero.ttf",
+                "requires": "SFNT post format 2.0 declaring zero glyph names"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "gid:1",
+              "expected_name": ".notdef"
+            },
+            "coverage": [
+              "post:format-20-zero-default-name"
+            ]
+          },
+          {
+            "id": "format20_truncated_custom_defaults_notdef",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/metadata/post-format-20-custom-truncated.ttf",
+                "requires": "SFNT post format 2.0 whose custom name index has no Pascal string bytes"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "gid:1",
+              "expected_name": ".notdef"
+            },
+            "coverage": [
+              "post:format-20-truncated-custom-default-name"
+            ]
+          },
+          {
+            "id": "format25_short_defaults_notdef",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/metadata/post-format-25-short.ttf",
+                "requires": "SFNT post format 2.5 shorter than the glyph-name count field"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "gid:1",
+              "expected_name": ".notdef"
+            },
+            "coverage": [
+              "post:format-25-short-default-name"
+            ]
+          },
+          {
+            "id": "format25_zero_defaults_notdef",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/metadata/post-format-25-zero.ttf",
+                "requires": "SFNT post format 2.5 declaring zero glyph names"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "gid:1",
+              "expected_name": ".notdef"
+            },
+            "coverage": [
+              "post:format-25-zero-default-name"
+            ]
+          },
+          {
+            "id": "format25_too_many_defaults_notdef",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/metadata/post-format-25-too-many.ttf",
+                "requires": "SFNT post format 2.5 declaring more than FreeType's theoretical delta limit"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "gid:1",
+              "expected_name": ".notdef"
+            },
+            "coverage": [
+              "post:format-25-too-many-default-name"
+            ]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-names",
+        "area:post",
+        "fixture:post-malformed"
+      ],
+      "metadata": {
+        "source_behavior": "FreeType clears the caller buffer and returns Invalid_Argument when an unsupported post format prevents FT_HAS_GLYPH_NAMES. Malformed accepted format 2.0/2.5 payloads that keep glyph-name capability return success with the initialized .notdef fallback."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "buffer": "nul_terminated_bytes_or_cleared_error"
         },
         "compare": {
           "mode": "bytes",
