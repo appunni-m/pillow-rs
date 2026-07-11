@@ -145,8 +145,11 @@ Recorded on 2026-07-11 after converting `FT_Get_Gasp`,
 C ABI, and WASM ABI parity, adding the `gasp` stream-length and malformed-EOF
 controls, adding compact `post` format 1.0/2.5 plus malformed glyph-name
 controls, exercising composite subglyph rows through the compact glyf
-component matrix, and making named-instance PostScript-name selection runnable
-through real `FT_Set_Named_Instance` support.
+component matrix, and routing the compact `FT_Set_Named_Instance` selection,
+clear, and invalid-index rows through real C oracle, Rust FFI, C ABI, and WASM
+ABI execution. Three named-instance obligations remain explicit pending rows:
+Adobe MM reset behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var`
+namedstyle coordinate parity.
 
 | Measure | Current |
 |---|---:|
@@ -154,13 +157,13 @@ through real `FT_Set_Named_Instance` support.
 | Concrete explicit cases | 6,516 |
 | Additional grouped variants | 2,385 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,516 |
-| Exact parity | 6,516 / 6,516 |
-| Pending cases | 0 |
-| Covered Rust lines | 13,935 / 16,899 (82.46%) |
+| Runnable parity comparisons | 6,513 |
+| Exact parity | 6,513 / 6,513 |
+| Pending cases | 3 |
+| Covered Rust lines | 13,937 / 16,899 (82.47%) |
 | Rust function coverage | 825 / 1,039 (79.40%) |
 | Rust instantiation coverage | 828 / 1,042 (79.46%) |
-| Rust region coverage | 20,169 / 24,275 (83.09%) |
+| Rust region coverage | 20,173 / 24,275 (83.10%) |
 | Rust branch/condition coverage | 3,342 / 4,298 (77.76%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 125 |
@@ -377,9 +380,14 @@ Evaluation checkpoint: 2026-07-11, latest verified unified condition-coverage ru
 This is the active coverage identification ledger. It supersedes earlier
 percentages in this section but does not replace the historical progress ledger
 below. The unified public API suite currently has 4,131 logical cases, 6,516
-concrete explicit cases, 6,516 runnable exact-parity cases, zero pending cases,
-and zero implicit cases. `FT_Get_Postscript_Name.variation_instance_name_behavior`
-is now an active parity row backed by real `FT_Set_Named_Instance` behavior.
+concrete explicit cases, 6,513 runnable exact-parity cases, three explicit
+pending named-instance obligations, and zero implicit cases.
+`FT_Get_Postscript_Name.variation_instance_name_behavior` remains an active
+parity row backed by real `FT_Set_Named_Instance` behavior, while
+`ftmm.set_named_instance` now has direct selection, clear, and invalid-index
+parity rows. The pending rows are Adobe MM named-instance reset, namedstyle
+coordinate parity through `FT_MM_Var`, and glyph-output deltas that require
+`gvar`/HVAR support.
 
 Core Rust structural coverage from
 `make -C pillow-rs-freetype test-unified-condition-coverage` is:
@@ -387,8 +395,8 @@ Core Rust structural coverage from
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
 | Functions | 825 | 1,039 | 214 |
-| Lines | 13,935 | 16,899 | 2,964 |
-| Regions | 20,169 | 24,275 | 4,106 |
+| Lines | 13,937 | 16,899 | 2,962 |
+| Regions | 20,173 | 24,275 | 4,102 |
 | Branches/conditions | 3,342 | 4,298 | 956 |
 
 Formal MC/DC is not reported by the installed Rust coverage tooling
@@ -400,7 +408,7 @@ The remaining coverage divides exactly into these ownership groups:
 
 | Group | Modules | Missing functions | Missing lines | Missing regions | Missing branches | Primary action |
 |---|---|---:|---:|---:|---:|---|
-| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 121 | 1,136 | 1,372 | 223 | public routing, wrapper thinness, metadata/state inputs |
+| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 121 | 1,134 | 1,368 | 223 | public routing, wrapper thinness, metadata/state inputs |
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
 | Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 20 | 775 | 1,024 | 423 | script reachability audit, then glyph topology rows |
 | TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `tables.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 7 | 152 | 486 | 137 | explicit bytecode-program glyph rows |
@@ -411,12 +419,12 @@ Per-file source gap ledger:
 | Source | Missing lines | Line coverage | Missing funcs | Missing regions | Missing branches |
 |---|---:|---:|---:|---:|---:|
 | `src/render.rs` | 709 | 1566/2275 (68.84%) | 55 | 959 | 105 |
-| `src/font.rs` | 510 | 1311/1821 (71.99%) | 60 | 707 | 75 |
+| `src/font.rs` | 509 | 1312/1821 (72.05%) | 60 | 706 | 75 |
 | `src/autohint/latin.rs` | 322 | 2506/2828 (88.61%) | 3 | 600 | 308 |
 | `src/scaler.rs` | 286 | 915/1201 (76.19%) | 20 | 207 | 34 |
 | `src/autohint/globals_data.rs` | 268 | 25/293 (8.53%) | 1 | 206 | 0 |
 | `src/grays.rs` | 164 | 646/810 (79.75%) | 5 | 227 | 53 |
-| `src/ffi/handles.rs` | 156 | 1344/1500 (89.60%) | 20 | 184 | 47 |
+| `src/ffi/handles.rs` | 155 | 1345/1500 (89.67%) | 20 | 181 | 47 |
 | `src/tt/hinter/exec.rs` | 118 | 1222/1340 (91.19%) | 3 | 438 | 113 |
 | `src/autohint/cjk.rs` | 106 | 835/941 (88.74%) | 1 | 129 | 87 |
 | `src/api.rs` | 83 | 335/418 (80.14%) | 8 | 112 | 11 |
@@ -527,6 +535,7 @@ behavior.
 | Explicit Rust unsupported stubs | `freetype.face_properties` and `freetype.select_size` return `Unimplemented_Feature` directly | These are public FreeType surfaces; final 100% correctness cannot treat them as covered behavior | Implement exact public behavior or keep manifest rows visibly pending/failing until implementation exists |
 | Shape-incomplete fallback guards | `set_char_size` variants, `ftsnames.get_sfnt_name` without indexes, SFNT variation table requests, `sfnt.load_sfnt_table` missing read selectors, `sfnt.table_info` without index selectors, incomplete load/render glyph rows, and incomplete outline cbox rows intentionally fall back | These usually indicate declarative input that the runner does not execute | Convert valid rows into explicit grouped variants; remove or mark invalid row shapes rather than keeping inert declarations |
 | Closed named-instance row | `freetype.FT_Get_Postscript_Name.variation_instance_name_behavior` now executes real `FT_Set_Named_Instance` before `FT_Get_Postscript_Name` | This removed the last pending row, but also introduced honest `fvar` and named-instance parsing coverage obligations | Continue metadata coverage through explicit named-instance, name table, and malformed-`fvar` rows rather than hiding the new denominator |
+| Direct `ftmm.set_named_instance` rows | Selection, clear, and invalid-index compact variable cases now execute pinned C oracle, Rust FFI, C ABI, and WASM ABI paths | The remaining Adobe MM, `FT_MM_Var`, and glyph-output rows are real implementation gaps, not runner coverage | Keep those rows explicit pending until Adobe MM design coordinates, namedstyle coordinates, and `gvar`/HVAR deltas are implemented in core |
 
 R0 is not complete until this snapshot is replaced by an operation-by-operation
 table with zero unclassified generic fallback rows for implemented surfaces.
@@ -585,7 +594,7 @@ The next identification batch is R0 completion:
 | Uncovered function ledger | For each missing function, record public subject, owning JSON file, and whether it needs input, delegation, font data, core implementation, or semantic cleanup |
 | Uncovered line ledger | For each high-volume file, collapse adjacent lines into behavior families and assign a fixture/font property before adding any rows |
 | Branch/condition ledger | For each compound predicate family, record the minimal independent-effect inputs, not all Cartesian combinations |
-| Pending ledger | Keep pending public rows at zero; any newly identified unsupported surface must be explicit pending/unsupported rather than silently modeled |
+| Pending ledger | Track the current three named-instance pending rows explicitly; any newly identified unsupported surface must be explicit pending/unsupported rather than silently modeled |
 
 Concrete queue from the current denominator:
 
@@ -685,7 +694,7 @@ ledger before it adds rows.
 
 | Order | Stream | Primary files | Identification output | Completion gate |
 |---:|---|---|---|---|
-| 0 | Denominator and fallback audit | `tests/unified_fixture_parity.rs`, input JSON, manifest | Operation-by-operation table with zero unclassified generic fallbacks for implemented surfaces | Full suite still 6,516/6,516 runnable passing; pending count remains zero |
+| 0 | Denominator and fallback audit | `tests/unified_fixture_parity.rs`, input JSON, manifest | Operation-by-operation table with zero unclassified generic fallbacks for implemented surfaces | Full suite keeps exact runnable parity; the current three pending rows remain classified by core implementation gap |
 | 1 | Public wrapper/API closure | `api.rs`, `font.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs` | Missing functions mapped to public subjects or defensive disposition | No modeled runtime wrapper result for implemented C/WASM symbols |
 | 2 | Composite/size/metadata features | `font.rs`, `scaler.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs` | Compact table/glyph rows for subglyphs, strikes, names, charmaps, metadata errors | Real C/Rust/C/WASM parity rows replace stubs |
 | 3 | Render/scaler topology | `render.rs`, `grays.rs`, `scaler.rs`, `outline.rs` | Explicit render-mode/topology rows: gray, mono, LCD/LCD_V, empty, clipped, transformed, cubic/conic/degenerate | Pixel/bitmap/placement parity exact for every added row |
@@ -724,8 +733,8 @@ The completion budget is deliberately conservative:
 | Resource | Current | Completion ceiling | Rule |
 |---|---:|---:|---|
 | Concrete explicit cases | 6,516 | 7,016 | Add only named obligations, not product axes |
-| Runnable parity cases | 6,516 | same as concrete | Keep pending at zero through real implementation |
-| Pending cases | 0 | 0 | No symbolic final rows |
+| Runnable parity cases | 6,513 | same as concrete | Retire pending rows only through real implementation |
+| Pending cases | 3 | 0 | No symbolic final rows |
 | New semantic font files | 17 in current metadata pass | review before adding more | Extend source-backed focused fonts first |
 | New glyph programs/topologies | 0 in next pass | 160 | One glyph role per behavior family, not per glyph index |
 | Implicit cases | 0 | 0 | Hidden discovery remains forbidden |
@@ -1292,6 +1301,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Malformed post name controls | 90 unique hashes | 0 | 6,510 | 6,509 / 6,509 | 1 | 13,753 / 16,687 lines; 19,907 / 23,946 regions; 3,323 / 4,246 branches | seven compact `post` controls cover short and zero-count format 2.0/2.5 tables, truncated format 2.0 custom names, above-limit format 2.5 counts, and unsupported post formats. Exact parity exposed and fixed Rust's unsupported-format glyph-name flag and missing-custom-name fallback |
 | 2026-07-11 | Real subglyph public API parity | 90 unique hashes | 0 | 6,516 | 6,515 / 6,515 | 1 | 13,807 / 16,732 lines; 19,969 / 24,008 regions; 3,330 / 4,256 branches | `FT_Get_SubGlyph_Info` no longer uses an unsupported stub or C/WASM fallback delegation. Nine explicit rows reuse `glyf-component-matrix.ttf` to compare raw component index, flags, args, transform, null-slot errors, non-composite slots, and out-of-range subglyphs through C oracle, Rust core, C ABI, and WASM ABI |
 | 2026-07-11 | Named-instance PostScript parity | 90 unique hashes | 0 | 6,516 | 6,516 / 6,516 | 0 | 13,935 / 16,899 lines; 20,169 / 24,275 regions; 3,342 / 4,298 branches | `FT_Set_Named_Instance` now selects or clears named instances in core and through thin C/WASM wrappers. The existing `FT_Get_Postscript_Name` row uses `named-instances.ttf` and compares `default`, instance 1, and instance 2 through the pinned C oracle, Rust FFI, C ABI, and WASM ABI, removing the final pending row |
+| 2026-07-11 | Direct `FT_Set_Named_Instance` parity routing | 90 unique hashes | 0 | 6,516 | 6,513 / 6,513 | 3 | 13,937 / 16,899 lines; 20,173 / 24,275 regions; 3,342 / 4,298 branches | `ftmm.set_named_instance` no longer reaches the generic oracle fallback; select, clear, and invalid-index compact variable rows execute pinned C oracle, Rust FFI, C ABI, and WASM ABI. Three rows remain explicit pending: Adobe MM reset, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle coordinates |
 
 ## Decision Log
 
@@ -1354,6 +1364,8 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Match malformed `post` public fallbacks | Pinned FreeType clears the output buffer and returns `Invalid_Argument` when an unsupported `post` format prevents `FT_HAS_GLYPH_NAMES`, while malformed format 2.0/2.5 name payloads that pass the header flag still return success with `.notdef`. Rust must keep scalar `post` metadata parsed while exposing glyph-name capability only for accepted formats 1.0, 2.0, and 2.5 |
 | 2026-07-11 | Treat subglyph info as raw composite slot data | Pinned `FT_Get_SubGlyph_Info` succeeds only for a composite glyph slot with loaded subglyph records and a valid sub-index, then returns the raw component flags, args, glyph index, and 16.16 transform. Rust keeps composite flags from `glyf`, exposes them through the core glyph slot, and lets C/WASM wrappers only validate pointers and copy the core result |
 | 2026-07-11 | Select named instances through face index high bits | Pinned FreeType stores a 1-based named-instance selector in bits 16..30 of `face_index`; `FT_Set_Named_Instance(0)` clears it. When an `fvar` instance lacks an explicit PostScript name ID, FreeType builds the name from nameID 25 plus a sanitized instance subfamily string |
+| 2026-07-11 | Make named-instance gaps pending instead of fallback-green | `ftmm.set_named_instance` previously appeared green through the generic modeled-error path. Direct oracle routing proves the compact success/error rows and leaves Adobe MM reset, `FT_MM_Var` namedstyle coordinates, and `gvar`/HVAR glyph-output deltas visible until the core implementation exists |
+| 2026-07-11 | Compare structured error output only by explicit opt-in | Existing expected-error rows intentionally tolerate several Rust/C error-classification differences. Rows that claim post-error state preservation, such as invalid named-instance selection, must set `compare_error_output` and provide matching C oracle, Rust, C ABI, and WASM ABI state snapshots |
 
 ## Immediate Next Actions
 
@@ -1372,7 +1384,9 @@ Work must resume here unless a newer user request changes priority:
 3. Resume explicit fixture expansion in the active order: public route audit,
    render/raster matrix, autohint script/topology, TrueType interpreter edge
    programs, then scalar residuals.
-4. Keep public pending rows at zero. Embedded-strike request handling remains an
-   R7 fixture obligation, but it is not currently a pending runtime row.
+4. Keep the current three named-instance pending rows explicit and do not count
+   them as coverage until the core Adobe MM, `FT_MM_Var`, and `gvar`/HVAR
+   behavior exists. Embedded-strike request handling remains an R7 fixture
+   obligation, but it is not currently a pending runtime row.
 5. Keep the deprecated corpus isolated until final cleanup is separately
    reviewed and approved.

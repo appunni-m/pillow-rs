@@ -96,6 +96,8 @@ struct CaseExpectation {
 struct CompareExpectation {
     #[serde(default)]
     allow_oracle_errors: bool,
+    #[serde(default)]
+    compare_error_output: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -3548,6 +3550,80 @@ fn postscript_name_named_instance_index(
         .map_err(|err| format!("named instance {value} does not fit FT_UInt: {err}"))
 }
 
+fn set_named_instance_index_param(params: &Value) -> Result<FT_UInt, String> {
+    let value = u64_param(params, "instance_index")?;
+    FT_UInt::try_from(value)
+        .map_err(|err| format!("instance_index {value} does not fit FT_UInt: {err}"))
+}
+
+fn prior_named_instance_index_param(params: &Value) -> Result<Option<FT_UInt>, String> {
+    let Ok(prior_calls) = array_param(params, "prior_calls") else {
+        return Ok(None);
+    };
+    for call in prior_calls {
+        let operation = call
+            .get("operation")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if operation != "FT_Set_Named_Instance" {
+            continue;
+        }
+        let value = call
+            .get("instance_index")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| "FT_Set_Named_Instance prior call missing instance_index".to_string())?;
+        return FT_UInt::try_from(value)
+            .map(Some)
+            .map_err(|err| format!("prior instance_index {value} does not fit FT_UInt: {err}"));
+    }
+    Ok(None)
+}
+
+fn set_named_instance_prior_arg(params: &Value) -> Result<String, String> {
+    prior_named_instance_index_param(params).map(|value| {
+        value
+            .map(|instance| instance.to_string())
+            .unwrap_or_else(|| "-".to_string())
+    })
+}
+
+fn has_adobe_mm_prior_call(params: &Value) -> bool {
+    array_param(params, "prior_calls").is_ok_and(|prior_calls| {
+        prior_calls.iter().any(|call| {
+            call.get("operation")
+                .and_then(Value::as_str)
+                .is_some_and(|operation| operation == "FT_Set_MM_Design_Coordinates")
+        })
+    })
+}
+
+fn named_instance_observation_json(
+    status: FT_Error,
+    info: &FT_FaceRecPublic,
+    postscript_name: Value,
+) -> Value {
+    json!({
+        "return": status,
+        "face_index": info.face_index,
+        "face_flags": info.face_flags,
+        "variation_bit_set": (info.face_flags & FT_FACE_FLAG_VARIATION) != 0,
+        "postscript_name": postscript_name
+    })
+}
+
+fn named_instance_run_output(
+    status: FT_Error,
+    info: &FT_FaceRecPublic,
+    postscript_name: Value,
+) -> RunOutput {
+    let output = named_instance_observation_json(status, info, postscript_name);
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
 fn rust_postscript_name_variant_output(
     face: &mut FT_Face,
     params: &Value,
@@ -3618,6 +3694,97 @@ where
         }));
     }
     Ok(json!({ "results": results }))
+}
+
+fn rust_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    if let Some(prior_instance) = prior_named_instance_index_param(&case.inputs.params)? {
+        let err = FT_Set_Named_Instance(Some(&mut face), prior_instance);
+        if err != FT_Err_Ok {
+            return Ok(named_instance_run_output(
+                err,
+                &FT_Face_Info(&face),
+                postscript_name_json(FT_Get_Postscript_Name(&face)),
+            ));
+        }
+    }
+    let err = FT_Set_Named_Instance(
+        Some(&mut face),
+        set_named_instance_index_param(&case.inputs.params)?,
+    );
+    if err != FT_Err_Ok {
+        return Ok(named_instance_run_output(
+            err,
+            &FT_Face_Info(&face),
+            postscript_name_json(FT_Get_Postscript_Name(&face)),
+        ));
+    }
+    Ok(named_instance_run_output(
+        FT_Err_Ok,
+        &FT_Face_Info(&face),
+        postscript_name_json(FT_Get_Postscript_Name(&face)),
+    ))
+}
+
+fn c_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let output = c_set_named_instance_on_face(face, &case.inputs.params);
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
+fn c_set_named_instance_on_face(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
+    if let Some(prior_instance) = prior_named_instance_index_param(params)? {
+        let err = c_abi::FT_Set_Named_Instance(face, prior_instance);
+        if err != FT_Err_Ok {
+            let info =
+                c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+            return Ok(named_instance_run_output(
+                err,
+                &info,
+                c_postscript_name_json(c_abi::FT_Get_Postscript_Name(face)),
+            ));
+        }
+    }
+    let err = c_abi::FT_Set_Named_Instance(face, set_named_instance_index_param(params)?);
+    let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+    Ok(named_instance_run_output(
+        err,
+        &info,
+        c_postscript_name_json(c_abi::FT_Get_Postscript_Name(face)),
+    ))
+}
+
+fn wasm_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let output = wasm_set_named_instance_on_face(handle, &case.inputs.params);
+    wasm_done_face(handle);
+    output
+}
+
+fn wasm_set_named_instance_on_face(handle: usize, params: &Value) -> Result<RunOutput, String> {
+    if let Some(prior_instance) = prior_named_instance_index_param(params)? {
+        let err = wasm_abi::fontdone_wasm_set_named_instance(handle, prior_instance);
+        if err != FT_Err_Ok {
+            let info = wasm_abi::abi_face_info(handle)
+                .ok_or_else(|| "missing wasm face info".to_string())?;
+            return Ok(named_instance_run_output(
+                err,
+                &info,
+                wasm_postscript_name_json(handle),
+            ));
+        }
+    }
+    let err =
+        wasm_abi::fontdone_wasm_set_named_instance(handle, set_named_instance_index_param(params)?);
+    let info =
+        wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+    Ok(named_instance_run_output(
+        err,
+        &info,
+        wasm_postscript_name_json(handle),
+    ))
 }
 
 #[derive(Debug, Clone)]
@@ -6273,6 +6440,27 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             push_face_size(params, &mut args)?;
             Ok(args)
         }
+        "ftmm.set_named_instance" => {
+            if has_adobe_mm_prior_call(params) {
+                return Err(
+                    "Adobe MM named-instance reset requires real Adobe MM support".to_string(),
+                );
+            }
+            if params.get("compare_namedstyle_index").is_some() {
+                return Err("namedstyle coordinate parity requires FT_MM_Var support".to_string());
+            }
+            if params.get("glyph_index").is_some() {
+                return Err(
+                    "named-instance glyph-output parity requires gvar/HVAR support".to_string(),
+                );
+            }
+            let mut args = vec!["--set-named-instance".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(set_named_instance_prior_arg(params)?);
+            args.push(set_named_instance_index_param(params)?.to_string());
+            Ok(args)
+        }
         "freetype.get_glyph_name" => {
             let mut args = vec!["--get-glyph-name".to_string()];
             push_font_source(case, &mut args)?;
@@ -7178,6 +7366,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             }
             Ok(ok(postscript_name_json(FT_Get_Postscript_Name(&face))))
         }
+        "ftmm.set_named_instance" => rust_set_named_instance(case),
         "freetype.get_glyph_name" => rust_get_glyph_name(case),
         "freetype.get_name_index" => rust_get_name_index(case),
         "freetype.new_face" => {
@@ -7457,6 +7646,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output.map(ok)
         }
+        "ftmm.set_named_instance" => c_set_named_instance(case),
         "freetype.get_glyph_name" => c_get_glyph_name(case),
         "freetype.get_name_index" => c_get_name_index(case),
         "ftgasp.get_gasp" => c_get_gasp(case),
@@ -7821,6 +8011,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_done_face(handle);
             output.map(ok)
         }
+        "ftmm.set_named_instance" => wasm_set_named_instance(case),
         "freetype.get_glyph_name" => wasm_get_glyph_name(case),
         "freetype.get_name_index" => wasm_get_name_index(case),
         "ftgasp.get_gasp" => wasm_get_gasp(case),
@@ -13379,7 +13570,11 @@ fn wasm_size_metrics_json(metrics: &wasm_abi::FontdoneWasmSizeMetrics) -> Value 
 fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Result<(), String> {
     // When the case expects an error and the actual (Rust) backend returns an error,
     // accept it as passing — the Rust hinter may catch errors that C silently handles.
-    if case.expect_error && actual.status.kind == StatusKind::Error {
+    if case.expect_error
+        && actual.status.kind == StatusKind::Error
+        && (!case.expectation.compare.compare_error_output
+            || oracle.status.kind != StatusKind::Error)
+    {
         return Ok(());
     }
     // When the case expects an error but both oracle and backends return Ok,
@@ -13750,7 +13945,8 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "freetype.library_version"
             | "ftlcdfil.set_lcd_filter"
             | "ftlcdfil.set_lcd_filter_weights"
-            | "ftlcdfil.set_lcd_geometry" => "api_object",
+            | "ftlcdfil.set_lcd_geometry"
+            | "ftmm.set_named_instance" => "api_object",
             "ftmodapi.get_truetype_engine_type" => "truetype_engine_type",
             "load_char" | "load_glyph" | "render_glyph" => "glyph_slot",
             "freetype.inspect_glyph_metrics" => "glyph_metrics",
