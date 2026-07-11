@@ -241,6 +241,41 @@
             "coverage": [
               "freetype.set_transform:explicit-f2"
             ]
+          },
+          {
+            "id": "rendered-transformed-load",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "transform": {
+                "matrix": {
+                  "xx": 32768,
+                  "xy": 16384,
+                  "yx": -8192,
+                  "yy": 98304
+                },
+                "delta": [
+                  64,
+                  -128
+                ]
+              },
+              "glyph_index": 36,
+              "size_ppem": 20,
+              "load_flags": [
+                "FT_LOAD_RENDER",
+                "FT_LOAD_TARGET_NORMAL"
+              ]
+            },
+            "coverage": [
+              "freetype.set_transform:rendered-transformed-load",
+              "api:load-glyph-transform-render-outline"
+            ]
           }
         ]
       },

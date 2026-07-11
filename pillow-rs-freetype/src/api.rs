@@ -442,15 +442,7 @@ impl Face {
         if let Some((xx, xy, yx, yy, dx, dy)) = transform {
             slot.apply_transform(xx, xy, yx, yy, dx, dy);
             if let Some(lo) = render_lo.as_mut() {
-                let ft_mul = crate::fixed::ft_mul_fix;
-                for pt in &mut lo.outline.points {
-                    let (px, py) = (
-                        ft_mul(pt.x, xx) + ft_mul(pt.y, xy) + dx,
-                        ft_mul(pt.x, yx) + ft_mul(pt.y, yy) + dy,
-                    );
-                    pt.x = px;
-                    pt.y = py;
-                }
+                transform_loaded_outline_for_render(lo, xx, xy, yx, yy, dx, dy);
             }
         }
 
@@ -637,9 +629,9 @@ impl GlyphSlot {
     /// NOTE: C does NOT transform metrics width/height/bearings/advance
     /// for FT_LOAD_DEFAULT with a user-space transform.
     pub fn apply_transform(&mut self, xx: i32, xy: i32, yx: i32, yy: i32, dx: i32, dy: i32) {
-        let ft_mul = crate::fixed::ft_mul_fix;
         // Transform the advance vector (matching C).
         {
+            let ft_mul = crate::fixed::ft_mul_fix;
             let a = &mut self.advance;
             let (ax, ay) = (
                 ft_mul(a.x, xx) + ft_mul(a.y, xy),
@@ -649,21 +641,11 @@ impl GlyphSlot {
             a.y = ay;
         }
         // Transform both slot_outline and loaded_outline points.
-        let transform_points = |pts: &mut [crate::outline::OutlinePoint]| {
-            for pt in pts {
-                let (px, py) = (
-                    ft_mul(pt.x, xx) + ft_mul(pt.y, xy) + dx,
-                    ft_mul(pt.x, yx) + ft_mul(pt.y, yy) + dy,
-                );
-                pt.x = px;
-                pt.y = py;
-            }
-        };
         if let Some(ref mut outline) = self.slot_outline {
-            transform_points(&mut outline.points);
+            transform_outline_points(&mut outline.points, xx, xy, yx, yy, dx, dy);
         }
         if let Some(ref mut lo) = self.loaded_outline {
-            transform_points(&mut lo.outline.points);
+            transform_loaded_outline_for_render(lo, xx, xy, yx, yy, dx, dy);
         }
         // Recompute bbox and cbox from transformed outline.
         let mut new_cbox = crate::font::BBox {
@@ -679,18 +661,9 @@ impl GlyphSlot {
             y_max: 0,
         };
         if let Some(ref outline) = self.slot_outline {
-            if !outline.points.is_empty() {
-                new_cbox.x_min = outline.points[0].x;
-                new_cbox.y_min = outline.points[0].y;
-                new_cbox.x_max = outline.points[0].x;
-                new_cbox.y_max = outline.points[0].y;
-                for pt in &outline.points[1..] {
-                    new_cbox.x_min = new_cbox.x_min.min(pt.x);
-                    new_cbox.y_min = new_cbox.y_min.min(pt.y);
-                    new_cbox.x_max = new_cbox.x_max.max(pt.x);
-                    new_cbox.y_max = new_cbox.y_max.max(pt.y);
-                }
-                new_bbox = new_cbox;
+            if let Some(cbox) = outline_point_cbox(&outline.points) {
+                new_cbox = cbox;
+                new_bbox = cbox;
             }
         }
         self.outline_cbox = new_cbox;
@@ -700,4 +673,88 @@ impl GlyphSlot {
     pub(crate) fn slot_outline(&self) -> Option<&crate::outline::Outline> {
         self.slot_outline.as_ref()
     }
+}
+
+fn transform_outline_points(
+    points: &mut [crate::outline::OutlinePoint],
+    xx: i32,
+    xy: i32,
+    yx: i32,
+    yy: i32,
+    dx: i32,
+    dy: i32,
+) {
+    let ft_mul = crate::fixed::ft_mul_fix;
+    for pt in points {
+        let (px, py) = (
+            ft_mul(pt.x, xx) + ft_mul(pt.y, xy) + dx,
+            ft_mul(pt.x, yx) + ft_mul(pt.y, yy) + dy,
+        );
+        pt.x = px;
+        pt.y = py;
+    }
+}
+
+fn outline_point_cbox(points: &[crate::outline::OutlinePoint]) -> Option<BBox> {
+    let first = points.first()?;
+    let mut cbox = BBox {
+        x_min: first.x,
+        y_min: first.y,
+        x_max: first.x,
+        y_max: first.y,
+    };
+    for point in &points[1..] {
+        cbox.x_min = cbox.x_min.min(point.x);
+        cbox.y_min = cbox.y_min.min(point.y);
+        cbox.x_max = cbox.x_max.max(point.x);
+        cbox.y_max = cbox.y_max.max(point.y);
+    }
+    Some(cbox)
+}
+
+fn transform_loaded_outline_for_render(
+    loaded: &mut LoadedOutline,
+    xx: i32,
+    xy: i32,
+    yx: i32,
+    yy: i32,
+    dx: i32,
+    dy: i32,
+) {
+    if loaded.outline.is_empty() {
+        return;
+    }
+
+    let base_x = loaded.left * 64;
+    let base_y = loaded.bottom * 64;
+    for point in &mut loaded.outline.points {
+        point.x += base_x;
+        point.y += base_y;
+    }
+    transform_outline_points(&mut loaded.outline.points, xx, xy, yx, yy, dx, dy);
+
+    let Some(cbox) = outline_point_cbox(&loaded.outline.points) else {
+        return;
+    };
+    let off_x = crate::scaler::ft_pix_floor(cbox.x_min);
+    let off_y = crate::scaler::ft_pix_floor(cbox.y_min);
+    let px_x_min = off_x >> 6;
+    let px_y_min = off_y >> 6;
+    let px_x_max = crate::scaler::ft_pix_ceil(cbox.x_max) >> 6;
+    let px_y_max = crate::scaler::ft_pix_ceil(cbox.y_max) >> 6;
+
+    // C transforms the slot outline before `ft_glyphslot_preset_bitmap`
+    // recomputes bitmap placement from `FT_Outline_Get_CBox`
+    // (`src/base/ftobjs.c:1129-1178`, `src/smooth/ftsmooth.c:595-619`).
+    for point in &mut loaded.outline.points {
+        point.x -= off_x;
+        point.y -= off_y;
+    }
+    loaded.outline.cbox_x_min = 0;
+    loaded.outline.cbox_y_min = 0;
+    loaded.outline.cbox_x_max = px_x_max - px_x_min;
+    loaded.outline.cbox_y_max = px_y_max - px_y_min;
+    loaded.left = px_x_min;
+    loaded.bottom = px_y_min;
+    loaded.top = px_y_max;
 }
