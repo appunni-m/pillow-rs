@@ -139,7 +139,7 @@ during the coverage phases where their owning operations are addressed.
 
 ## Current Verified Coverage State
 
-Recorded on 2026-07-11 after converting `FT_Get_Gasp`,
+Recorded on 2026-07-12 after converting `FT_Get_Gasp`,
 `FT_Get_CMap_Format`, `FT_Get_CMap_Language_ID`, and
 `FT_Get_SubGlyph_Info` from false-green adapters into real C oracle, Rust FFI,
 C ABI, and WASM ABI parity, adding the `gasp` stream-length and malformed-EOF
@@ -202,7 +202,10 @@ point-coordinate and point-move matrix glyphs then cover the remaining
 non-square `MD[0]` and `IP` interpreter branches, while repeating `IUP[y]`
 and `IUP[x]` inside the existing point-move matrix covers FreeType's
 backward-compatibility early-return path after both axes have already
-interpolated.
+interpolated. The compact `script-coverage.ttf` public input set now selects
+all 59 generated script glyphs through explicit `FT_LOAD_FORCE_AUTOHINT`
+variants, proving the script coverage table paths without implicit discovery
+or Cartesian expansion.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -210,17 +213,17 @@ coordinate parity.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,136 |
-| Concrete explicit cases | 6,563 |
-| Additional grouped variants | 2,427 |
+| Concrete explicit cases | 6,604 |
+| Additional grouped variants | 2,468 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,560 |
-| Exact parity | 6,560 / 6,560 |
+| Runnable parity comparisons | 6,601 |
+| Exact parity | 6,601 / 6,601 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,436 / 17,174 (84.06%) |
+| Covered Rust lines | 14,440 / 17,174 (84.08%) |
 | Rust function coverage | 860 / 1,064 (80.83%) |
 | Rust instantiation coverage | 863 / 1,067 (80.88%) |
-| Rust region coverage | 20,991 / 24,673 (85.08%) |
-| Rust branch/condition coverage | 3,519 / 4,380 (80.34%) |
+| Rust region coverage | 21,032 / 24,673 (85.24%) |
+| Rust branch/condition coverage | 3,523 / 4,380 (80.43%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 138 |
 | Stored active font binaries | 95 files, 764 KiB |
@@ -1457,6 +1460,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | TrueType MDRP single-width cut-in probes | 106 unique hashes | 0 | 6,563 | 6,560 / 6,560 | 3 | 14,433 / 17,174 lines; 20,988 / 24,673 regions; 3,516 / 4,380 branches | Existing `branchEdgeMatrix` now packs positive glyph-zone and negative twilight-zone `MDRP` single-width cut-in probes into its no-output branch program. Exact Rust/C/WASM parity remains green with no concrete case growth; `tt/hinter/exec.rs` reaches 1,293 / 1,340 lines and 350 / 410 branch outcomes |
 | 2026-07-11 | TrueType empty-stack ROLL probe | 106 unique hashes | 0 | 6,563 | 6,560 / 6,560 | 3 | 14,434 / 17,174 lines; 20,989 / 24,673 regions; 3,517 / 4,380 branches | Existing `stackStateMatrix` now executes `ROLL` immediately after a `CLEAR`, covering FreeType-compatible empty-stack no-op behavior without changing glyph output or adding public cases. Exact Rust/C/WASM parity remains green; `tt/hinter/exec.rs` reaches 1,294 / 1,340 lines and 351 / 410 branch outcomes |
 | 2026-07-11 | TrueType repeated IUP compatibility probe | 106 unique hashes | 0 | 6,563 | 6,560 / 6,560 | 3 | 14,436 / 17,174 lines; 20,991 / 24,673 regions; 3,519 / 4,380 branches | Existing `pointMoveMatrix` now repeats `IUP[y]` and `IUP[x]` after both axes have already interpolated. Pinned FreeType returns immediately in backward-compatibility mode once the state reaches `0x7`; exact Rust/C/WASM parity remains green without adding concrete cases, and `tt/hinter/exec.rs` reaches 1,296 / 1,340 lines and 353 / 410 branch outcomes |
+| 2026-07-12 | Full compact script-glyph autohint selection | 106 unique hashes | 0 | 6,604 | 6,601 / 6,601 | 3 | 14,440 / 17,174 lines; 21,032 / 24,673 regions; 3,523 / 4,380 branches | The existing `script-coverage.ttf` public case now selects every generated script probe through explicit `FT_LOAD_FORCE_AUTOHINT` variants. Exact Rust/C ABI/WASM parity remains green while `autohint/globals_data.rs` reaches 117 / 234 regions and the script table paths are explicit instead of reserved hidden coverage |
 
 ## Decision Log
 
@@ -1520,7 +1524,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Treat gasp fixtures as table-behavior parity, not value stubs | `FT_Get_Gasp` now reads compact generated SFNT controls instead of `DejaVuSans.ttf` symlink aliases. Pinned `ftgasp.c` returns `FT_GASP_NO_TABLE` for null/no usable table and masks version 0 flags with `& 3`; pinned `ttload.c` treats unsupported `gasp` versions as optional table load failures while keeping the face usable |
 | 2026-07-11 | Treat cmap format/language fixtures as metadata parity, not stubs | `FT_Get_CMap_Format` and `FT_Get_CMap_Language_ID` now use a compact generated SFNT cmap matrix instead of modeled values. Pinned `ftobjs.c` returns `-1` for invalid format probes, `0` for invalid language probes, and `ttcmap.c` reports format 14 language as `0xFFFFFFFF` |
 | 2026-07-11 | Treat malformed format-14 cmap records as load-time parser parity | Pinned FreeType ignores malformed optional format-14 records when another valid Unicode charmap remains usable. Public `FT_Set_Charmap` rejects format 14, so the active format-14 `FT_Get_Char_Index` and char-iteration arms remain public-unreachable rather than coverage rows to force |
-| 2026-07-11 | Treat autohint script lookup coverage as explicit public rows | `script-coverage.ttf` exists to activate real `FT_LOAD_FORCE_AUTOHINT` script standard-character paths through selected Unicode codepoints. Unselected script-tag glyphs in that font remain future obligations, not hidden coverage or an implicit matrix |
+| 2026-07-12 | Treat autohint script lookup coverage as explicit public rows | `script-coverage.ttf` exists to activate real `FT_LOAD_FORCE_AUTOHINT` script paths through selected Unicode codepoints. All generated script-tag glyphs are now explicit public variants; future work should add new script glyphs only when the generator grows a new documented obligation |
 | 2026-07-11 | Add Tibetan only after the Indic CJK route fix | A candidate `script-coverage.ttf` U+0F40 Tibetan row exposed a real `FT_LOAD_FORCE_AUTOHINT` mismatch before the core fix. The row is now explicit only because Rust matches pinned C by routing `STYLE_DEFAULT_INDIC` through CJK/no-blue hinting and by not borrowing Latin `o` widths for Indic standard-character setup |
 | 2026-07-11 | Match FreeType's `gasp` stream read length | Pinned `tt_face_load_gasp` seeks to the table and reads frames from the stream without using the SFNT record length as a cap. Rust must parse from the table offset to physical stream EOF for this optional table, while genuinely short physical data still degrades to `FT_GASP_NO_TABLE` |
 | 2026-07-11 | Match FreeType's `post` format 2.5 tag and delta behavior | Pinned `ttpost.c` recognizes format 2.5 as `0x00025000`, computes `glyph_index + signed_delta`, and maps out-of-range results to Mac glyph index 0. Format 1.0 only returns Mac standard names when `maxp.numGlyphs == 258`; otherwise the public name stays `.notdef` |
