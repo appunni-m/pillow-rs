@@ -401,7 +401,7 @@ impl Font {
         let hmtx = tt::hmtx::parse_hmtx(hmtx_bytes, hhea.num_hmetrics, maxp.num_glyphs)
             .unwrap_or_default();
 
-        let name = match dir.find(data, tag(b"name")) {
+        let mut name = match dir.find(data, tag(b"name")) {
             Some(d) => tt::name::parse_name(d)?,
             None => crate::tt::name::NameTable {
                 family: "Unknown".into(),
@@ -410,6 +410,13 @@ impl Font {
                 records: Vec::new(),
             },
         };
+        if named_instance != 0 {
+            if let Some(instance_name) =
+                named_instance_postscript_name(&name, &fvar, named_instance)
+            {
+                name.postscript_name = Some(instance_name);
+            }
+        }
 
         let os2 = dir.find(data, tag(b"OS/2")).and_then(tt::os2::parse_os2);
         let post = dir.find(data, tag(b"post")).and_then(tt::post::parse_post);
@@ -456,6 +463,9 @@ impl Font {
             .and_then(|d| crate::tt::hinter::tables::parse_cvt(d).ok());
 
         // Build FontData first, then compute Latin autohinter metrics.
+        // `FaceGlobals` and scaler paths share `FontData` through `Arc`; the
+        // face itself is not a cross-thread type.
+        #[allow(clippy::arc_with_non_send_sync)]
         let font_data = Arc::new(FontData {
             raw_data: data.to_vec(),
             face_offset,
@@ -528,6 +538,27 @@ impl Font {
     /// Return the active face index.
     pub fn face_index(&self) -> usize {
         self.data.face_index
+    }
+
+    /// Select or clear a named instance, equivalent to `FT_Set_Named_Instance`.
+    pub fn set_named_instance(&mut self, instance_index: usize) -> Result<(), FontError> {
+        let base_face_index = self.data.face_index & 0xFFFF;
+        let next_face_index = base_face_index | (instance_index << 16);
+        let mut next = Self::truetype_face_with_load_mode(
+            &self.data.raw_data,
+            next_face_index,
+            self.size_pt,
+            self.load_mode,
+        )?;
+        next.selected_charmap = next
+            .data
+            .cmap
+            .charmaps
+            .len()
+            .checked_sub(1)
+            .map_or(0, |last| self.selected_charmap.min(last));
+        *self = next;
+        Ok(())
     }
 
     /// Return the number of faces in the original font resource.
@@ -2400,6 +2431,29 @@ fn ppem_from_scaled_char_size(scaled_26dot6: i32) -> Result<u16, SizeRequestErro
     let rounded = (i64::from(scaled_26dot6) + 32) & !63;
     let ppem = (rounded >> 6).max(1);
     u16::try_from(ppem).map_err(|_| SizeRequestError::InvalidPixelSize)
+}
+
+fn named_instance_postscript_name(
+    name: &tt::name::NameTable,
+    fvar: &Option<tt::fvar::FvarTable>,
+    named_instance: usize,
+) -> Option<String> {
+    let instance = fvar
+        .as_ref()?
+        .instances
+        .get(named_instance.checked_sub(1)?)?;
+    if let Some(name_id) = instance.postscript_name_id
+        && let Some(name) = tt::name::name_string(name, name_id)
+    {
+        return Some(name);
+    }
+    let prefix = tt::name::variations_postscript_prefix(name)?;
+    let subfamily = tt::name::name_string(name, instance.subfamily_name_id)?;
+    let mut result = String::with_capacity(prefix.len() + 1 + subfamily.len());
+    result.push_str(&prefix);
+    result.push('-');
+    result.extend(subfamily.chars().filter(|ch| ch.is_ascii_alphanumeric()));
+    Some(result)
 }
 
 /// Pick (ascender, descender) as positive font-unit magnitudes.

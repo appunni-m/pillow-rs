@@ -270,7 +270,7 @@ impl Font {
 
         match mode {
             RenderMode::Normal => {
-                render_scaled_normal(scaled, &mut *self.raster_scratch.borrow_mut())
+                render_scaled_normal(scaled, &mut self.raster_scratch.borrow_mut())
             }
             RenderMode::Mono => render_scaled_mono(scaled),
             RenderMode::Lcd => render_scaled_lcd(scaled),
@@ -291,7 +291,7 @@ impl Font {
             scaled.bbox_y_min,
             scaled.bbox_y_max,
             mode,
-            &mut *self.raster_scratch.borrow_mut(),
+            &mut self.raster_scratch.borrow_mut(),
         )
     }
 }

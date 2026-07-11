@@ -31,8 +31,9 @@ pub use handles::{
     FT_Load_Glyph, FT_Load_Sfnt_Table, FT_Matrix_Invert, FT_Matrix_Multiply, FT_MulDiv, FT_MulFix,
     FT_New_Face, FT_New_Memory_Face, FT_New_Size, FT_OpenType_Free, FT_OpenType_Validate,
     FT_Reference_Face, FT_Render_Glyph, FT_Request_Size, FT_RoundFix, FT_Select_Charmap,
-    FT_Select_Size, FT_Set_Char_Size, FT_Set_Charmap, FT_Set_Pixel_Sizes, FT_Set_Transform,
-    FT_Sfnt_Table_Count, FT_Sfnt_Table_Info, FT_Sin, FT_Size_Metrics, FT_Tan, FT_Vector_From_Polar,
-    FT_Vector_Length, FT_Vector_Polarize, FT_Vector_Rotate, FT_Vector_Transform, FT_Vector_Unit,
+    FT_Select_Size, FT_Set_Char_Size, FT_Set_Charmap, FT_Set_Named_Instance, FT_Set_Pixel_Sizes,
+    FT_Set_Transform, FT_Sfnt_Table_Count, FT_Sfnt_Table_Info, FT_Sin, FT_Size_Metrics, FT_Tan,
+    FT_Vector_From_Polar, FT_Vector_Length, FT_Vector_Polarize, FT_Vector_Rotate,
+    FT_Vector_Transform, FT_Vector_Unit,
 };
 pub use types::*;

@@ -721,6 +721,7 @@ fn scale_glyph_impl_with_context(
         // the entire font data (including ~750KB raw_data buffer) per glyph.
         let arc = data.self_arc.get().cloned().unwrap_or_else(|| {
             // Fallback: only reached if self_arc was never set (shouldn't happen).
+            #[allow(clippy::arc_with_non_send_sync)]
             std::sync::Arc::new(data.clone())
         });
         let globals = crate::autohint::globals::FaceGlobals::new(arc, style.is_italic);

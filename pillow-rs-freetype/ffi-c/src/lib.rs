@@ -1,4 +1,5 @@
 #![allow(missing_docs)]
+#![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(non_camel_case_types, non_snake_case)]
 
@@ -225,10 +226,7 @@ struct FaceState {
 
 impl FaceState {
     fn new(inner: rust_ffi::FT_Face) -> Self {
-        let postscript_name = rust_ffi::FT_Get_Postscript_Name(&inner).and_then(|name| {
-            // FreeType exposes a borrowed NUL-terminated C string owned by the face.
-            CString::new(name).ok()
-        });
+        let postscript_name = postscript_name_cstring(&inner);
         Self {
             inner,
             charmaps: Box::new([]),
@@ -263,6 +261,10 @@ impl FaceState {
         self.charmap_ptrs = charmap_ptrs;
     }
 
+    fn refresh_postscript_name(&mut self) {
+        self.postscript_name = postscript_name_cstring(&self.inner);
+    }
+
     fn charmap_index(&self, charmap: FT_CharMap) -> Option<usize> {
         if charmap.is_null() {
             return None;
@@ -276,6 +278,13 @@ impl FaceState {
         let index = usize::try_from(index).ok()?;
         self.charmap_ptrs.get(index).copied()
     }
+}
+
+fn postscript_name_cstring(inner: &rust_ffi::FT_Face) -> Option<CString> {
+    rust_ffi::FT_Get_Postscript_Name(inner).and_then(|name| {
+        // FreeType exposes a borrowed NUL-terminated C string owned by the face.
+        CString::new(name).ok()
+    })
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -1176,6 +1185,19 @@ pub extern "C" fn FT_Get_Postscript_Name(face: FT_Face) -> *const c_char {
     face_state(face)
         .and_then(|state| state.postscript_name.as_deref())
         .map_or(ptr::null(), CStr::as_ptr)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Set_Named_Instance(face: FT_Face, instance_index: FT_UInt) -> FT_Error {
+    let Some(state) = face_state_mut(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let err = rust_ffi::FT_Set_Named_Instance(Some(&mut state.inner), instance_index);
+    if err == rust_ffi::FT_Err_Ok {
+        state.refresh_charmaps(face);
+        state.refresh_postscript_name();
+    }
+    err
 }
 
 #[unsafe(no_mangle)]

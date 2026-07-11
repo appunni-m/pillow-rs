@@ -62,9 +62,9 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/variable/named-instance-postscript.ttf",
-            "status": "required_future_asset",
-            "requires": "variable font whose named instance changes the PostScript name through FT_Set_Named_Instance"
+            "path": "input/fonts/variable/named-instances.ttf",
+            "status": "active",
+            "requires": "compact variable font whose named instances exercise FreeType's PostScript-name construction"
           }
         },
         "params": {
