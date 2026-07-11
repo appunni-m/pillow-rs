@@ -11,6 +11,7 @@
 #include <freetype/ftcolor.h>
 #include <freetype/ftdriver.h>
 #include <freetype/ftglyph.h>
+#include <freetype/ftgasp.h>
 #include <freetype/ftgxval.h>
 #include <freetype/ftimage.h>
 #include <freetype/ftincrem.h>
@@ -4838,6 +4839,17 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
+    if (streq(command, "--get-gasp")) {
+        FT_UInt ppem = (FT_UInt)strtoul(argv[7], NULL, 10);
+        FT_Int value = FT_Get_Gasp(face, ppem);
+        print_status(0);
+        printf(",\"output\":{\"value\":%d,\"return\":%d,\"ppem\":%u}}\n", value, value, ppem);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
     if (streq(command, "--get-postscript-name")) {
         const char* name = FT_Get_Postscript_Name(face);
         print_status(0);
@@ -6088,6 +6100,14 @@ static int dispatch(int argc, char** argv) {
                     printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"value\":0}}\n");
                     return 0;
                 }
+                if (streq(argv[1], "--get-gasp")) {
+                    FT_UInt ppem = (FT_UInt)strtoul(argv[7], NULL, 10);
+                    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"value\":%d,\"return\":%d,\"ppem\":%u}}\n",
+                           FT_GASP_NO_TABLE,
+                           FT_GASP_NO_TABLE,
+                           ppem);
+                    return 0;
+                }
                 // Null-face operations that should succeed silently
                 if (streq(argv[1], "--face-check-tt-patents")) {
                     printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"result\":0}}\n");
@@ -6264,6 +6284,9 @@ static int dispatch(int argc, char** argv) {
         return emit_face_set_unpatented_hinting(argc, argv);
     }
     if ((argc == 7 || argc == 8) && streq(argv[1], "--get-fstype-flags")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--get-gasp")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--get-postscript-name")) {

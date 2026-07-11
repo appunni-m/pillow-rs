@@ -488,8 +488,8 @@ pub fn FT_Reference_Face(face: Option<&mut FT_Face>) -> FT_Error {
 // Stub implementations for unported FreeType features.
 // These return Unimplemented_Feature or sentinel values as documented.
 
-pub fn FT_Get_Gasp(_face: Option<&FT_Face>, _ppem: FT_UInt) -> FT_UInt {
-    0
+pub fn FT_Get_Gasp(face: Option<&FT_Face>, ppem: FT_UInt) -> FT_Int {
+    face.map_or(FT_GASP_NO_TABLE as FT_Int, |face| face.inner.get_gasp(ppem))
 }
 
 pub fn FT_Select_Size(_face: Option<&mut FT_Face>, _strike_index: FT_Int) -> FT_Error {

@@ -1060,6 +1060,11 @@ pub extern "C" fn FT_Get_FSType_Flags(face: FT_Face) -> FT_UShort {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Gasp(face: FT_Face, ppem: FT_UInt) -> FT_Int {
+    rust_ffi::FT_Get_Gasp(face_state(face).map(|state| &state.inner), ppem)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_Glyph_Name(
     face: FT_Face,
     glyph_index: FT_UInt,

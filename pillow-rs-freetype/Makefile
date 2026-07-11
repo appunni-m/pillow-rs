@@ -22,6 +22,7 @@ help:
 	@printf "  make setup-tools      Install optional audit tooling\n"
 	@printf "  make oracle-fetch     Fetch pinned FreeType C oracle source\n"
 	@printf "  make font-fixture-cjk Rebuild the compact multiscript topology fixture\n"
+	@printf "  make font-fixture-gasp Rebuild compact gasp table fixtures\n"
 	@printf "  make font-fixture-hinter Rebuild the compact TrueType program fixture\n"
 	@printf "\nBuild:\n"
 	@printf "  make build            Build the crate\n"
@@ -223,6 +224,10 @@ font-fixture-cjk:
 	@command -v ttx >/dev/null || { echo "fonttools ttx is required" >&2; exit 1; }
 	ttx -q --no-recalc-timestamp -o tests/fixtures/fonts/autohint/cjk-coverage.ttf \
 		tests/fixtures/font-sources/cjk-coverage.ttx
+
+.PHONY: font-fixture-gasp
+font-fixture-gasp: font-fixture-hinter
+	$(PYTHON) scripts/build_gasp_fixtures.py
 
 .PHONY: fmt
 fmt:

@@ -9,7 +9,7 @@
   ],
   "cases": [
     {
-      "case_id": "ftgasp.FT_Get_Gasp.null_face_returns_no_table",
+      "case_id": "ftgasp.FT_Get_Gasp.null_face_ppem_0",
       "subject": "ftgasp.FT_Get_Gasp",
       "case": "null_face_returns_no_table",
       "operation": "ftgasp.get_gasp",
@@ -19,13 +19,8 @@
         "assets": {},
         "params": {
           "face": null,
-          "ppem_values": [
-            0,
-            8,
-            16
-          ],
+          "ppem": 0,
           "expected_return_symbol": "FT_GASP_NO_TABLE",
-          "expected_return_value_from_pinned_header": -1,
           "pinned_source": "freetype/src/base/ftgasp.c:28-51"
         }
       },
@@ -33,29 +28,68 @@
         "kind:function",
         "header:ftgasp",
         "area:gasp",
-        "surface:public-c-api"
+        "surface:public-c-api",
+        "path:null-face"
       ],
       "expectation": {
         "status": "ok",
         "output_shape": {
+          "value": "FT_Int",
           "return": "FT_Int",
           "ppem": "FT_UInt"
         },
         "compare": {
           "mode": "value",
           "paths": [
+            "value",
             "return",
             "ppem"
           ]
-        },
-        "sources_checked": [
-          "freetype/include/freetype/ftgasp.h",
-          "freetype/src/base/ftgasp.c"
-        ]
+        }
       }
     },
     {
-      "case_id": "ftgasp.FT_Get_Gasp.sfnt_face_ppem_ranges_match_c",
+      "case_id": "ftgasp.FT_Get_Gasp.null_face_ppem_16",
+      "subject": "ftgasp.FT_Get_Gasp",
+      "case": "null_face_returns_no_table",
+      "operation": "ftgasp.get_gasp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "face": null,
+          "ppem": 16,
+          "expected_return_symbol": "FT_GASP_NO_TABLE",
+          "pinned_source": "freetype/src/base/ftgasp.c:28-51"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgasp",
+        "area:gasp",
+        "surface:public-c-api",
+        "path:null-face"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_Int",
+          "return": "FT_Int",
+          "ppem": "FT_UInt"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "return",
+            "ppem"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgasp.FT_Get_Gasp.v1_first_range_gridfit",
       "subject": "ftgasp.FT_Get_Gasp",
       "case": "sfnt_face_ppem_ranges_match_c",
       "operation": "ftgasp.get_gasp",
@@ -67,20 +101,15 @@
             "kind": "ref",
             "role": "font",
             "id": "fonts/gasp/gasp-ranges-v1.ttf",
-            "status": "required_future_asset",
-            "requires": "TrueType/OpenType SFNT font with a gasp table containing multiple maxPPEM ranges and version 1 flags."
+            "status": "active"
           }
         },
         "params": {
           "face_index": 0,
-          "ppem_values": [
-            0,
-            8,
-            16,
-            32,
-            "above_last_maxPPEM"
+          "ppem": 5,
+          "expected_flag_bits": [
+            "FT_GASP_DO_GRIDFIT"
           ],
-          "range_selection_rule": "first range whose maxPPEM is >= ppem; return FT_GASP_NO_TABLE after last range",
           "pinned_source": "freetype/src/base/ftgasp.c:32-47"
         }
       },
@@ -89,29 +118,225 @@
         "header:ftgasp",
         "area:gasp",
         "surface:public-c-api",
-        "requires:fixture"
+        "fixture:gasp-ranges-v1",
+        "path:range-select"
       ],
       "expectation": {
         "status": "ok",
-        "fixture_requirements": "Needs SFNT font with deterministic gasp ranges; existing DejaVuSans.ttf may be used only if its gasp table satisfies the required range coverage.",
         "output_shape": {
+          "value": "FT_Int",
           "return": "FT_Int",
-          "ppem": "FT_UInt",
-          "selected_range_index": "integer_or_none",
-          "gasp_flags": "bitmask"
+          "ppem": "FT_UInt"
         },
         "compare": {
           "mode": "value",
           "paths": [
+            "value",
             "return",
-            "selected_range_index",
-            "gasp_flags"
+            "ppem"
           ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgasp.FT_Get_Gasp.v1_second_range_gray",
+      "subject": "ftgasp.FT_Get_Gasp",
+      "case": "sfnt_face_ppem_ranges_match_c",
+      "operation": "ftgasp.get_gasp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/gasp/gasp-ranges-v1.ttf",
+            "status": "active"
+          }
         },
-        "sources_checked": [
-          "freetype/src/base/ftgasp.c",
-          "freetype/include/freetype/ftgasp.h"
-        ]
+        "params": {
+          "face_index": 0,
+          "ppem": 8,
+          "expected_flag_bits": [
+            "FT_GASP_DO_GRAY"
+          ],
+          "pinned_source": "freetype/src/base/ftgasp.c:32-47"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgasp",
+        "area:gasp",
+        "surface:public-c-api",
+        "fixture:gasp-ranges-v1",
+        "path:range-select"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_Int",
+          "return": "FT_Int",
+          "ppem": "FT_UInt"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "return",
+            "ppem"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgasp.FT_Get_Gasp.v1_third_range_symmetric_gridfit",
+      "subject": "ftgasp.FT_Get_Gasp",
+      "case": "sfnt_face_ppem_ranges_match_c",
+      "operation": "ftgasp.get_gasp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/gasp/gasp-ranges-v1.ttf",
+            "status": "active"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "ppem": 16,
+          "expected_flag_bits": [
+            "FT_GASP_SYMMETRIC_GRIDFIT"
+          ],
+          "pinned_source": "freetype/src/base/ftgasp.c:32-47"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgasp",
+        "area:gasp",
+        "surface:public-c-api",
+        "fixture:gasp-ranges-v1",
+        "path:range-select"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_Int",
+          "return": "FT_Int",
+          "ppem": "FT_UInt"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "return",
+            "ppem"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgasp.FT_Get_Gasp.v1_last_range_all_bits",
+      "subject": "ftgasp.FT_Get_Gasp",
+      "case": "sfnt_face_ppem_ranges_match_c",
+      "operation": "ftgasp.get_gasp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/gasp/gasp-ranges-v1.ttf",
+            "status": "active"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "ppem": 17,
+          "expected_flag_bits": [
+            "FT_GASP_DO_GRIDFIT",
+            "FT_GASP_DO_GRAY",
+            "FT_GASP_SYMMETRIC_GRIDFIT",
+            "FT_GASP_SYMMETRIC_SMOOTHING"
+          ],
+          "pinned_source": "freetype/src/base/ftgasp.c:32-47"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgasp",
+        "area:gasp",
+        "surface:public-c-api",
+        "fixture:gasp-ranges-v1",
+        "path:range-select"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_Int",
+          "return": "FT_Int",
+          "ppem": "FT_UInt"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "return",
+            "ppem"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgasp.FT_Get_Gasp.v1_after_last_range_returns_no_table",
+      "subject": "ftgasp.FT_Get_Gasp",
+      "case": "sfnt_face_ppem_ranges_match_c",
+      "operation": "ftgasp.get_gasp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/gasp/gasp-ranges-v1.ttf",
+            "status": "active"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "ppem": 65536,
+          "expected_return_symbol": "FT_GASP_NO_TABLE",
+          "pinned_source": "freetype/src/base/ftgasp.c:37-44"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgasp",
+        "area:gasp",
+        "surface:public-c-api",
+        "fixture:gasp-ranges-v1",
+        "path:after-last-range"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_Int",
+          "return": "FT_Int",
+          "ppem": "FT_UInt"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "return",
+            "ppem"
+          ]
+        }
       }
     },
     {
@@ -127,17 +352,12 @@
             "kind": "ref",
             "role": "font",
             "id": "fonts/gasp/no-gasp-table.ttf",
-            "status": "required_future_asset",
-            "requires": "SFNT font accepted by C FreeType with ttface->gasp.numRanges == 0."
+            "status": "active"
           }
         },
         "params": {
           "face_index": 0,
-          "ppem_values": [
-            8,
-            16,
-            32
-          ],
+          "ppem": 16,
           "expected_return_symbol": "FT_GASP_NO_TABLE",
           "pinned_source": "freetype/src/base/ftgasp.c:32-36"
         }
@@ -147,26 +367,24 @@
         "header:ftgasp",
         "area:gasp",
         "surface:public-c-api",
-        "requires:fixture"
+        "fixture:no-gasp-table",
+        "path:no-table"
       ],
       "expectation": {
         "status": "ok",
-        "fixture_requirements": "Needs SFNT font without a usable gasp table.",
         "output_shape": {
+          "value": "FT_Int",
           "return": "FT_Int",
-          "ppem": "FT_UInt",
-          "gasp_num_ranges": "integer"
+          "ppem": "FT_UInt"
         },
         "compare": {
           "mode": "value",
           "paths": [
+            "value",
             "return",
-            "gasp_num_ranges"
+            "ppem"
           ]
-        },
-        "sources_checked": [
-          "freetype/src/base/ftgasp.c"
-        ]
+        }
       }
     },
     {
@@ -182,16 +400,14 @@
             "kind": "ref",
             "role": "font",
             "id": "fonts/gasp/version0-high-bits.ttf",
-            "status": "required_future_asset",
-            "requires": "Crafted SFNT font with gasp version 0 and a range flag containing bits above 0x03."
+            "status": "active"
           }
         },
         "params": {
           "face_index": 0,
-          "ppem_values": [
-            "range_with_high_bits"
-          ],
-          "mask_rule": "if ttface->gasp.version == 0 then result &= 3",
+          "ppem": 8,
+          "raw_gasp_flag": 15,
+          "expected_masked_return": 3,
           "pinned_source": "freetype/src/base/ftgasp.c:45-47"
         }
       },
@@ -200,27 +416,73 @@
         "header:ftgasp",
         "area:gasp",
         "surface:public-c-api",
-        "requires:fixture"
+        "fixture:version0-high-bits",
+        "path:version-zero-mask"
       ],
       "expectation": {
         "status": "ok",
-        "fixture_requirements": "Needs crafted version 0 gasp table with spurious high bits.",
         "output_shape": {
-          "raw_gasp_flag": "FT_UShort",
+          "value": "FT_Int",
           "return": "FT_Int",
-          "masked_return": "FT_Int"
+          "ppem": "FT_UInt"
         },
         "compare": {
           "mode": "value",
           "paths": [
-            "raw_gasp_flag",
+            "value",
             "return",
-            "masked_return"
+            "ppem"
           ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgasp.FT_Get_Gasp.unsupported_version_returns_no_table",
+      "subject": "ftgasp.FT_Get_Gasp",
+      "case": "sfnt_without_gasp_returns_no_table",
+      "operation": "ftgasp.get_gasp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/gasp/unsupported-version.ttf",
+            "status": "active"
+          }
         },
-        "sources_checked": [
-          "freetype/src/base/ftgasp.c"
-        ]
+        "params": {
+          "face_index": 0,
+          "ppem": 8,
+          "gasp_version": 2,
+          "expected_return_symbol": "FT_GASP_NO_TABLE",
+          "pinned_source": "freetype/src/sfnt/ttload.c:tt_face_load_gasp"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgasp",
+        "area:gasp",
+        "surface:public-c-api",
+        "fixture:unsupported-version",
+        "path:optional-table-load-error"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_Int",
+          "return": "FT_Int",
+          "ppem": "FT_UInt"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "return",
+            "ppem"
+          ]
+        }
       }
     }
   ]

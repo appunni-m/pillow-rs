@@ -2487,6 +2487,52 @@ fn wasm_fstype_flags_output(handle: usize, params: &Value) -> Result<Value, Stri
     fstype_flags_json(wasm_abi::fontdone_wasm_get_fstype_flags(handle), params)
 }
 
+fn gasp_json(value: i32, ppem: u32) -> Value {
+    json!({
+        "value": value,
+        "return": value,
+        "ppem": ppem
+    })
+}
+
+fn rust_get_gasp(case: &InputCase) -> Result<RunOutput, String> {
+    let ppem = u32_param(&case.inputs.params, "ppem")?;
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(ok(gasp_json(FT_Get_Gasp(None, ppem), ppem)));
+    }
+    let face = rust_new_face_without_size(case)?;
+    Ok(ok(gasp_json(FT_Get_Gasp(Some(&face), ppem), ppem)))
+}
+
+fn c_get_gasp(case: &InputCase) -> Result<RunOutput, String> {
+    let ppem = u32_param(&case.inputs.params, "ppem")?;
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(ok(gasp_json(
+            c_abi::FT_Get_Gasp(std::ptr::null_mut(), ppem),
+            ppem,
+        )));
+    }
+    let (library, face) = c_new_face_without_size(case)?;
+    let output = gasp_json(c_abi::FT_Get_Gasp(face, ppem), ppem);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ok(output))
+}
+
+fn wasm_get_gasp(case: &InputCase) -> Result<RunOutput, String> {
+    let ppem = u32_param(&case.inputs.params, "ppem")?;
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(ok(gasp_json(
+            wasm_abi::fontdone_wasm_get_gasp(0, ppem),
+            ppem,
+        )));
+    }
+    let handle = wasm_new_face_without_size(case)?;
+    let output = gasp_json(wasm_abi::fontdone_wasm_get_gasp(handle, ppem), ppem);
+    wasm_done_face(handle);
+    Ok(ok(output))
+}
+
 #[derive(Debug, Clone)]
 struct KerningRow {
     left: String,
@@ -6250,8 +6296,21 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "ftgasp.get_gasp" => {
-            // Stub: always returns no gasp table.
-            Ok(vec!["--value-ok".to_string(), "0".to_string()])
+            let mut args = vec!["--get-gasp".to_string()];
+            if lifecycle_handle_param(params, "face") == Some("null") {
+                args.extend([
+                    "null".to_string(),
+                    "null".to_string(),
+                    "0".to_string(),
+                    "0".to_string(),
+                    "0".to_string(),
+                ]);
+            } else {
+                push_font_source(case, &mut args)?;
+                push_face_size(params, &mut args)?;
+            }
+            args.push(u32_param(params, "ppem")?.to_string());
+            Ok(args)
         }
         "tttables.get_cmap_language_id" => {
             // Stub: always returns 0.
@@ -6669,7 +6728,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "freetype.get_subglyph_info" => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
         "freetype.select_size" => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
-        "ftgasp.get_gasp" => Ok(ok(json!({"value": 0}))),
+        "ftgasp.get_gasp" => rust_get_gasp(case),
         "tttables.get_cmap_format" => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
         "tttables.get_cmap_language_id" => Ok(ok(json!({"value": 0}))),
         "render_glyph" => rust_render_glyph_public_api(case),
@@ -6747,7 +6806,6 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.face_properties"
         | "freetype.get_subglyph_info"
         | "freetype.select_size"
-        | "ftgasp.get_gasp"
         | "tttables.get_cmap_format"
         | "tttables.get_cmap_language_id"
         | "ftsizes.new_size"
@@ -6913,6 +6971,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "freetype.get_glyph_name" => c_get_glyph_name(case),
         "freetype.get_name_index" => c_get_name_index(case),
+        "ftgasp.get_gasp" => c_get_gasp(case),
         "freetype.get_kerning" => c_get_kerning(case),
         "ftsnames.get_sfnt_name_count" => {
             let (library, face) = c_open_face(case)?;
@@ -7141,7 +7200,6 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.face_properties"
         | "freetype.get_subglyph_info"
         | "freetype.select_size"
-        | "ftgasp.get_gasp"
         | "tttables.get_cmap_format"
         | "tttables.get_cmap_language_id"
         | "ftsizes.new_size"
@@ -7271,6 +7329,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "freetype.get_glyph_name" => wasm_get_glyph_name(case),
         "freetype.get_name_index" => wasm_get_name_index(case),
+        "ftgasp.get_gasp" => wasm_get_gasp(case),
         "freetype.get_kerning" => wasm_get_kerning(case),
         "ftsnames.get_sfnt_name_count" => {
             let handle = wasm_open_face(case)?;
