@@ -128,6 +128,22 @@ def write_variable_unicode_prefix() -> None:
     )
 
 
+def write_variable_odd_windows_prefix() -> None:
+    records = variable_base_without_instance_names()
+    records.extend(
+        [
+            NameRecordSpec(3, 1, 0x0409, 25, b"X"),
+            NameRecordSpec(1, 0, 0, 25, mac_roman("AppleVar")),
+            NameRecordSpec(1, 0, 1, 259, mac_roman("Thin")),
+        ]
+    )
+    write_name_payload(
+        BASE_VARIABLE,
+        VARIABLE_OUT_DIR / "variable-name-odd-win-prefix.ttf",
+        build_name_table(records),
+    )
+
+
 def build_name_table(records: list[NameRecordSpec]) -> bytes:
     string_offset = 6 + len(records) * 12
     storage = bytearray()
@@ -246,6 +262,7 @@ def main() -> None:
     write_odd_windows_postscript_with_apple_fallback()
     write_variable_apple_prefix()
     write_variable_unicode_prefix()
+    write_variable_odd_windows_prefix()
 
 
 if __name__ == "__main__":
