@@ -2026,6 +2026,75 @@
             "coverage": [
               "load_glyph:explicit-f4"
             ]
+          },
+          {
+            "id": "f5-monochrome-lcd-target",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_RENDER",
+                "FT_LOAD_MONOCHROME",
+                "FT_LOAD_TARGET_LCD"
+              ]
+            },
+            "coverage": [
+              "api/load_flags:monochrome-render-lcd-target"
+            ]
+          },
+          {
+            "id": "f6-monochrome-lcd-v-target",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_RENDER",
+                "FT_LOAD_MONOCHROME",
+                "FT_LOAD_TARGET_LCD_V"
+              ]
+            },
+            "coverage": [
+              "api/load_flags:monochrome-render-lcd-v-target"
+            ]
+          },
+          {
+            "id": "f7-monochrome-light-target",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_RENDER",
+                "FT_LOAD_MONOCHROME",
+                "FT_LOAD_TARGET_LIGHT"
+              ]
+            },
+            "coverage": [
+              "api/load_flags:monochrome-render-light-target"
+            ]
           }
         ]
       },
