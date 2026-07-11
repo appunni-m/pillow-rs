@@ -2170,10 +2170,13 @@ impl BackendComparisonWorker {
                 let glyph_index = rust_resolved_glyph_index(face, &case.inputs.params)?;
                 match FT_Load_Glyph(face, glyph_index, load_flags) {
                     Ok(slot) => {
-                        assert_api_load_glyph_agrees(case, &slot)?;
+                        assert_api_load_glyph_agrees(case, Ok(&slot))?;
                         Ok(ok(slot_json(&slot)))
                     }
-                    Err(err) => Ok(error(err)),
+                    Err(err) => {
+                        assert_api_load_glyph_agrees(case, Err(err))?;
+                        Ok(error(err))
+                    }
                 }
             }
             "freetype.inspect_glyph_metrics" => {
@@ -7331,10 +7334,13 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             let glyph_index = rust_resolved_glyph_index(&face, &case.inputs.params)?;
             match FT_Load_Glyph(&face, glyph_index, load_flags_param(&case.inputs.params)?) {
                 Ok(slot) => {
-                    assert_api_load_glyph_agrees(case, &slot)?;
+                    assert_api_load_glyph_agrees(case, Ok(&slot))?;
                     Ok(ok(slot_json(&slot)))
                 }
-                Err(err) => Ok(error(err)),
+                Err(err) => {
+                    assert_api_load_glyph_agrees(case, Err(err))?;
+                    Ok(error(err))
+                }
             }
         }
         "freetype.inspect_glyph_metrics" => {
@@ -9245,7 +9251,10 @@ fn rust_load_char_public_api(case: &InputCase) -> Result<RunOutput, String> {
     }
 }
 
-fn assert_api_load_glyph_agrees(case: &InputCase, ffi_slot: &FT_GlyphSlot) -> Result<(), String> {
+fn assert_api_load_glyph_agrees(
+    case: &InputCase,
+    ffi_result: Result<&FT_GlyphSlot, FT_Error>,
+) -> Result<(), String> {
     if !checks_api_load_glyph_agreement(case) {
         return Ok(());
     }
@@ -9258,22 +9267,45 @@ fn assert_api_load_glyph_agrees(case: &InputCase, ffi_slot: &FT_GlyphSlot) -> Re
             ));
         }
     };
+    let ffi_face = open_face(case)?;
+    let glyph_index = u16::try_from(rust_resolved_glyph_index(&ffi_face, &case.inputs.params)?)
+        .map_err(|err| format!("{} glyph_index does not fit u16: {err}", case.case_id))?;
     let face = open_api_face(case)?;
-    let api_slot = face
-        .load_glyph(ffi_slot.glyph_index as u16, load_flags)
-        .map_err(|err| {
-            format!(
-                "{} Face::load_glyph({}) returned {err}",
-                case.case_id, ffi_slot.glyph_index
-            )
-        })?;
-    let ffi_json = slot_json(ffi_slot);
-    let api_json = api_slot_json(&api_slot);
-    if api_json != ffi_json {
-        return Err(format!(
-            "{} Face::load_glyph disagrees with FT_Load_Glyph: api={api_json} ffi={ffi_json}",
-            case.case_id
-        ));
+    let api_result = face
+        .load_glyph(glyph_index, load_flags)
+        .map_err(font_error_to_ft);
+    match (api_result, ffi_result) {
+        (Ok(api_slot), Ok(ffi_slot)) => {
+            let ffi_json = slot_json(ffi_slot);
+            let api_json = api_slot_json(&api_slot);
+            if api_json != ffi_json {
+                return Err(format!(
+                    "{} Face::load_glyph disagrees with FT_Load_Glyph: api={api_json} ffi={ffi_json}",
+                    case.case_id
+                ));
+            }
+        }
+        (Err(api_err), Err(ffi_err)) if api_err == ffi_err => {}
+        (Err(api_err), Err(ffi_err)) => {
+            return Err(format!(
+                "{} Face::load_glyph error disagrees with FT_Load_Glyph: api={api_err} ffi={ffi_err}",
+                case.case_id
+            ));
+        }
+        (Ok(api_slot), Err(ffi_err)) => {
+            let api_json = api_slot_json(&api_slot);
+            return Err(format!(
+                "{} Face::load_glyph succeeded while FT_Load_Glyph returned {ffi_err}: api={api_json}",
+                case.case_id
+            ));
+        }
+        (Err(api_err), Ok(ffi_slot)) => {
+            let ffi_json = slot_json(ffi_slot);
+            return Err(format!(
+                "{} Face::load_glyph returned {api_err} while FT_Load_Glyph succeeded: ffi={ffi_json}",
+                case.case_id
+            ));
+        }
     }
     Ok(())
 }
@@ -9288,6 +9320,11 @@ fn checks_api_load_glyph_agreement(case: &InputCase) -> bool {
             | "freetype.FT_LOAD_NO_SCALE.unscaled_load_behavior"
             | "freetype.FT_LOAD_RENDER.render_during_load"
             | "freetype.FT_LOAD_TARGET_LIGHT.load_target_behavior"
+            | "freetype.FT_Load_Glyph.matrix_load@glyf-malformed-too-short-force-autohint"
+            | "freetype.FT_Load_Glyph.matrix_load@glyf-malformed-too-short-no-autohint"
+            | "freetype.FT_Load_Glyph.matrix_load@glyf-malformed-too-short-no-hinting"
+            | "freetype.FT_Load_Glyph.matrix_load@glyf-malformed-too-short-no-scale"
+            | "freetype.FT_Load_Glyph.matrix_load@hinter-error-divide-by-zero"
     )
 }
 
