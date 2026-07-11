@@ -849,6 +849,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Latin adjustment aliases | 81 unique hashes | 0 | 6,467 | 6,466 / 6,466 | 1 | 13,274 / 16,301 lines; 19,138 / 23,292 regions; 3,223 / 4,148 branches | two cmap aliases in the compact source-backed CJK/autohint font add public `FT_LOAD_FORCE_AUTOHINT` rows for no-height-check and small-blue-ignore adjustment behavior; `latin.rs` gains 3 lines, 6 regions, and 3 branches with exact Rust/C/WASM parity |
 | 2026-07-11 | Scaler conic bbox endpoint topology | 81 unique hashes | 0 | 6,468 | 6,467 / 6,467 | 1 | 13,276 / 16,301 lines; 19,140 / 23,292 regions; 3,224 / 4,148 branches | one explicit `FT_Load_Glyph` variant reuses an existing compact charmap font glyph whose contour starts off-curve and ends on-curve, covering the scaler exact-bbox endpoint branch; `scaler.rs` is now 915 / 1,201 lines, 1,047 / 1,254 regions, and 144 / 178 branches |
 | 2026-07-11 | Render mono low-precision box | 81 unique hashes | 0 | 6,471 | 6,470 / 6,470 | 1 | 13,276 / 16,301 lines; 19,140 / 23,292 regions; 3,225 / 4,148 branches | three narrow `FT_Bitmap` render variants extend the compact hinter-control font with collapsed mono contours and a 130 px mono box; the low-precision mono selector branch is now covered with exact Rust/C/WASM parity |
+| 2026-07-11 | Gray outline topology variants | 81 unique hashes | 0 | 6,474 | 6,473 / 6,473 | 1 | 13,346 / 16,315 lines; 19,269 / 23,316 regions; 3,241 / 4,150 branches | three `FT_Outline_Render` variants cover even-odd overlap, clipped cells, and cubic tags; `grays.rs` moved to 646 / 810 lines, 912 / 1,139 regions, and 131 / 184 branches with exact Rust/C/WASM parity |
 
 ## Decision Log
 
@@ -894,6 +895,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Allow one-case growth when it proves a distinct font table behavior | The no-scale `vmtx` path requires a different font table state from DejaVu; one explicit CJK vertical fixture row is preferable to multiplying every no-scale flag variant |
 | 2026-07-11 | Convert inert scalar lists to explicit variants | Declarative fields such as `size_ppem_values` do not affect execution unless the runner consumes them; public inputs must use concrete variants or supported row arrays so coverage measures the intended cases |
 | 2026-07-11 | Do not alias lower-priority adjustment codepoints onto existing adjustment glyphs | The reverse-cmap adjustment lookup scans `ADJUSTMENT_DATABASE` order by glyph index; mapping lower codepoints such as `U+0122` or `U+01D5` onto the existing tilde glyphs changes pinned public metrics for the established tilde cases |
+| 2026-07-11 | Honor exact outline tags in the gray rasterizer | `Outline` already carries FreeType tag bytes; using them lets public outline-render inputs reach cubic control pairs while preserving on-curve fallback behavior for older outlines |
 
 ## Immediate Next Actions
 

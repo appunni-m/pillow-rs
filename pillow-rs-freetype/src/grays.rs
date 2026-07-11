@@ -93,6 +93,10 @@ fn fill_rule(area: i32, fill: i32) -> i32 {
     }
     if coverage > 255 && (fill & i32::MIN) != 0 {
         coverage = 255;
+    } else if (fill & i32::MIN) == 0 {
+        // ftgrays.c FT_FILL_RULE leaves higher even-odd bytes for the later
+        // unsigned-char store to discard.
+        coverage &= 0xFF;
     }
     #[cfg(debug_assertions)]
     if log::log_enabled!(target: "autohint::rasterizer", log::Level::Trace) {
@@ -365,6 +369,7 @@ pub fn rasterize_shifted_in_box_to_with_scratch(
     );
     worker.convert_glyph(
         &outline.points,
+        &outline.tags,
         &outline.contours,
         outline.n_contours,
         cbox_x_min,
@@ -801,6 +806,7 @@ impl<'a> Worker<'a> {
     fn decompose(
         &mut self,
         pts: &[crate::outline::OutlinePoint],
+        tags: &[u8],
         contours: &[i16],
         n_contours: i32,
     ) -> Result<(), FontError> {
@@ -819,14 +825,14 @@ impl<'a> Worker<'a> {
             let v_last = pts[limit];
             let mut limit_eff = limit;
 
-            let first_tag = curve_tag(pts[first].on_curve);
+            let first_tag = curve_tag_at(pts, tags, first);
             if first_tag == CURVE_TAG_CUBIC {
                 return Err(FontError::InvalidOutline(
                     "outline: contour starts with cubic".into(),
                 ));
             }
             if first_tag == CURVE_TAG_CONIC {
-                if curve_tag(pts[limit].on_curve) == CURVE_TAG_ON {
+                if curve_tag_at(pts, tags, limit) == CURVE_TAG_ON {
                     v_start = v_last;
                     limit_eff = limit.checked_sub(1).ok_or_else(|| {
                         FontError::InvalidOutline("outline: conic start underflow".into())
@@ -847,7 +853,7 @@ impl<'a> Worker<'a> {
             } else {
                 i32_from_usize(first)
             };
-            self.walk_contour(pts, start, i32_from_usize(limit_eff), v_start)?;
+            self.walk_contour(pts, tags, start, i32_from_usize(limit_eff), v_start)?;
         }
         Ok(())
     }
@@ -856,6 +862,7 @@ impl<'a> Worker<'a> {
     fn walk_contour(
         &mut self,
         pts: &[crate::outline::OutlinePoint],
+        tags: &[u8],
         mut cursor: i32,
         limit: i32,
         v_start: crate::outline::OutlinePoint,
@@ -863,7 +870,7 @@ impl<'a> Worker<'a> {
         while cursor < limit {
             cursor += 1;
             let idx = usize_from_i32(cursor);
-            let tag = curve_tag(pts[idx].on_curve);
+            let tag = curve_tag_at(pts, tags, idx);
             match tag {
                 CURVE_TAG_ON => {
                     let vec = pts[idx];
@@ -876,7 +883,7 @@ impl<'a> Worker<'a> {
                             cursor += 1;
                             let idx2 = usize_from_i32(cursor);
                             let vec = pts[idx2];
-                            let ntag = curve_tag(pts[idx2].on_curve);
+                            let ntag = curve_tag_at(pts, tags, idx2);
                             if ntag == CURVE_TAG_ON {
                                 self.render_conic(
                                     v_control.x as i64,
@@ -913,7 +920,7 @@ impl<'a> Worker<'a> {
                 }
                 CURVE_TAG_CUBIC => {
                     if cursor + 2 > limit
-                        || curve_tag(pts[usize_from_i32(cursor + 1)].on_curve) != CURVE_TAG_CUBIC
+                        || curve_tag_at(pts, tags, usize_from_i32(cursor + 1)) != CURVE_TAG_CUBIC
                     {
                         return Err(FontError::InvalidOutline(
                             "outline: bad cubic tag sequence".into(),
@@ -1049,6 +1056,7 @@ impl<'a> Worker<'a> {
     fn convert_glyph(
         &mut self,
         pts: &[crate::outline::OutlinePoint],
+        tags: &[u8],
         contours: &[i16],
         n_contours: i32,
         cbox_x_min: i32,
@@ -1074,7 +1082,7 @@ impl<'a> Worker<'a> {
         self.current_scanline = usize::MAX;
         self.current_idx = usize::MAX;
 
-        self.decompose(pts, contours, n_contours)?;
+        self.decompose(pts, tags, contours, n_contours)?;
         self.sweep();
         Ok(())
     }
@@ -1115,6 +1123,12 @@ fn curve_tag(on_curve: bool) -> u8 {
     } else {
         CURVE_TAG_CONIC
     }
+}
+
+#[inline]
+fn curve_tag_at(pts: &[crate::outline::OutlinePoint], tags: &[u8], index: usize) -> u8 {
+    tags.get(index)
+        .map_or_else(|| curve_tag(pts[index].on_curve), |tag| tag & 3)
 }
 
 const CURVE_TAG_ON: u8 = 1;
