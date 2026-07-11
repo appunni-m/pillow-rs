@@ -845,6 +845,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Public load-flag input cleanup | 81 unique hashes | 0 | 6,462 | 6,461 / 6,461 | 1 | 13,263 / 16,301 lines; 19,119 / 23,292 regions; 3,214 / 4,148 branches | replaced stale single-entry `load_flag_sets` inputs with executable `load_flags`; exact Rust/C/WASM parity remains green while existing cases now exercise their intended flag paths |
 | 2026-07-11 | Request-size scale branch rows | 81 unique hashes | 0 | 6,462 | 6,461 / 6,461 | 1 | 13,267 / 16,301 lines; 19,122 / 23,292 regions; 3,217 / 4,148 branches | added three rows to the existing `FT_Request_Size` type matrix for CELL x-dominant scaling and SCALES single-axis zero fallback; exact Rust/C/WASM parity remains green with no concrete case growth |
 | 2026-07-11 | No-scale vertical vmtx load | 81 unique hashes | 0 | 6,463 | 6,462 / 6,462 | 1 | 13,271 / 16,301 lines; 19,130 / 23,292 regions; 3,218 / 4,148 branches | one explicit `FT_Load_Glyph` variant reuses the compact CJK vertical fixture to prove `FT_LOAD_NO_SCALE | FT_LOAD_VERTICAL_LAYOUT` vmtx metrics; exact Rust/C/WASM parity remains green |
+| 2026-07-11 | Charmap and SFNT executable public paths | 81 unique hashes | 0 | 6,464 | 6,463 / 6,463 | 1 | 13,284 / 16,301 lines; 19,144 / 23,292 regions; 3,224 / 4,148 branches | converted stale SFNT table rows to concrete variants and routed Rust field-based charmap selection through the core path; +13 lines, +14 regions, +6 branches with exact Rust/C/WASM parity |
 
 ## Decision Log
 
@@ -888,6 +889,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Use executable load flags in direct inputs | `load_flag_sets` is not consumed by the explicit parity runner; single concrete flag combinations must use `load_flags` so coverage and parity measure the intended public API behavior |
 | 2026-07-11 | Prefer rows inside existing public API cases for scalar size permutations | `FT_Request_Size` already compares an output list, so adding deliberate request rows covers branch outcomes without adding logical cases or reintroducing Cartesian products |
 | 2026-07-11 | Allow one-case growth when it proves a distinct font table behavior | The no-scale `vmtx` path requires a different font table state from DejaVu; one explicit CJK vertical fixture row is preferable to multiplying every no-scale flag variant |
+| 2026-07-11 | Convert declarative charmap/SFNT rows to executable variants | Coverage only counts when the explicit runner consumes the field; ignored arrays such as multi-read SFNT declarations must become concrete variants or a maintained direct helper with exact C/Rust/WASM output parity |
 
 ## Immediate Next Actions
 
