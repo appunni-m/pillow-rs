@@ -98,6 +98,7 @@ fn trace_one_glyph() {
         false,
         Some(&fd),
         false,
+        0,
     );
 
     let font2 = Font::truetype(&data, size_pt).unwrap();

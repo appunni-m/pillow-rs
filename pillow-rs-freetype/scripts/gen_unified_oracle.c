@@ -3552,6 +3552,13 @@ static int emit_get_postscript_name_variants(int argc, char** argv) {
                 free(variants);
                 return opened;
             }
+            if (!streq(token, "default")) {
+                char* end = NULL;
+                unsigned long instance = strtoul(token, &end, 10);
+                if (end && *end == '\0') {
+                    FT_Set_Named_Instance(face.face, (FT_UInt)instance);
+                }
+            }
             printf("\"result\":");
             print_postscript_name_result(FT_Get_Postscript_Name(face.face));
             close_oracle_face(&face);

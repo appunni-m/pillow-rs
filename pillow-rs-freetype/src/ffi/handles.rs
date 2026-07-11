@@ -585,16 +585,35 @@ pub fn FT_Get_Postscript_Name(face: &FT_Face) -> Option<&str> {
     face.inner.postscript_name()
 }
 
+pub fn FT_Set_Named_Instance(face: Option<&mut FT_Face>, instance_index: FT_UInt) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Ok(instance_index) = usize::try_from(instance_index) else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    match face.inner.set_named_instance(instance_index) {
+        Ok(()) => {
+            let transform_matrix = face.transform_matrix;
+            let transform_delta = face.transform_delta;
+            let refcount = face.refcount;
+            let mut refreshed = face_to_ffi(face.inner.clone(), face.probe_only);
+            refreshed.transform_matrix = transform_matrix;
+            refreshed.transform_delta = transform_delta;
+            refreshed.refcount = refcount;
+            *face = refreshed;
+            FT_Err_Ok
+        }
+        Err(err) => error_to_ft(err) as FT_Error,
+    }
+}
+
 pub fn FT_Get_CMap_Format(charmap: FT_CharMap) -> FT_Long {
-    registered_charmap_metadata(charmap)
-        .map(|(format, _)| format)
-        .unwrap_or(-1)
+    registered_charmap_metadata(charmap).map_or(-1, |(format, _)| format)
 }
 
 pub fn FT_Get_CMap_Language_ID(charmap: FT_CharMap) -> FT_ULong {
-    registered_charmap_metadata(charmap)
-        .map(|(_, language_id)| language_id)
-        .unwrap_or(0)
+    registered_charmap_metadata(charmap).map_or(0, |(_, language_id)| language_id)
 }
 
 pub fn FT_New_Face(
@@ -1472,11 +1491,11 @@ pub fn FT_MulDiv(a: FT_Long, b: FT_Long, c: FT_Long) -> FT_Long {
     let (a, sign) = move_long_sign(a, 1);
     let (b, sign) = move_long_sign(b, sign);
     let (c, sign) = move_long_sign(c, sign);
-    let d = if c > 0 {
-        a.wrapping_mul(b).wrapping_add(c >> 1) / c
-    } else {
-        0x7FFF_FFFF
-    } as FT_Long;
+    let d = a
+        .wrapping_mul(b)
+        .wrapping_add(c >> 1)
+        .checked_div(c)
+        .unwrap_or(0x7FFF_FFFF) as FT_Long;
     if sign < 0 { neg_long(d) } else { d }
 }
 
@@ -1488,11 +1507,11 @@ pub fn FT_MulFix(a: FT_Long, b: FT_Long) -> FT_Long {
 pub fn FT_DivFix(a: FT_Long, b: FT_Long) -> FT_Long {
     let (a, sign) = move_long_sign(a, 1);
     let (b, sign) = move_long_sign(b, sign);
-    let q = if b > 0 {
-        (a.wrapping_shl(16).wrapping_add(b >> 1)) / b
-    } else {
-        0x7FFF_FFFF
-    } as FT_Long;
+    let q = a
+        .wrapping_shl(16)
+        .wrapping_add(b >> 1)
+        .checked_div(b)
+        .unwrap_or(0x7FFF_FFFF) as FT_Long;
     if sign < 0 { neg_long(q) } else { q }
 }
 

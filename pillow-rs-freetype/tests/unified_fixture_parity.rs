@@ -1,9 +1,22 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::collapsible_match)]
 #![allow(clippy::indexing_slicing)]
+#![allow(clippy::map_unwrap_or)]
+#![allow(clippy::match_like_matches_macro)]
+#![allow(clippy::redundant_clone)]
+#![allow(clippy::single_match)]
+#![allow(clippy::too_many_arguments)]
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::unnecessary_cast)]
+#![allow(clippy::unnecessary_map_or)]
+#![allow(clippy::unwrap_in_result)]
 #![allow(dead_code)]
+#![allow(clippy::useless_conversion)]
 #![allow(clippy::unwrap_used)]
 #![allow(missing_docs)]
 #![allow(unused_crate_dependencies)]
@@ -2092,19 +2105,20 @@ impl BackendComparisonWorker {
                 )?))
             }
             "freetype.get_postscript_name" => {
-                let face = self.rust_face(case)?;
-                if case.inputs.params.get("face_variants").is_some() {
+                if has_postscript_name_variants(&case.inputs.params) {
+                    let mut face = open_face(case)?;
                     return Ok(ok(postscript_name_variants_output(
                         &case.inputs.params,
                         |variant| {
-                            if variant == "null" {
-                                Ok(postscript_name_json(None))
-                            } else {
-                                Ok(postscript_name_json(FT_Get_Postscript_Name(face)))
-                            }
+                            rust_postscript_name_variant_output(
+                                &mut face,
+                                &case.inputs.params,
+                                variant,
+                            )
                         },
                     )?));
                 }
+                let face = self.rust_face(case)?;
                 Ok(ok(postscript_name_json(FT_Get_Postscript_Name(face))))
             }
             "freetype.get_kerning" => {
@@ -2225,19 +2239,16 @@ impl BackendComparisonWorker {
                 )?))
             }
             "freetype.get_postscript_name" => {
-                let face = self.c_face(case)?;
-                if case.inputs.params.get("face_variants").is_some() {
-                    return Ok(ok(postscript_name_variants_output(
-                        &case.inputs.params,
-                        |variant| {
-                            if variant == "null" {
-                                Ok(postscript_name_json(None))
-                            } else {
-                                Ok(c_postscript_name_json(c_abi::FT_Get_Postscript_Name(face)))
-                            }
-                        },
-                    )?));
+                if has_postscript_name_variants(&case.inputs.params) {
+                    let (library, face) = c_open_face(case)?;
+                    let output = postscript_name_variants_output(&case.inputs.params, |variant| {
+                        c_postscript_name_variant_output(face, &case.inputs.params, variant)
+                    });
+                    c_done_face(face);
+                    c_done_library(library);
+                    return output.map(ok);
                 }
+                let face = self.c_face(case)?;
                 Ok(ok(c_postscript_name_json(c_abi::FT_Get_Postscript_Name(
                     face,
                 ))))
@@ -2384,19 +2395,15 @@ impl BackendComparisonWorker {
                 )?))
             }
             "freetype.get_postscript_name" => {
-                let handle = self.wasm_face(case)?;
-                if case.inputs.params.get("face_variants").is_some() {
-                    return Ok(ok(postscript_name_variants_output(
-                        &case.inputs.params,
-                        |variant| {
-                            if variant == "null" {
-                                Ok(postscript_name_json(None))
-                            } else {
-                                Ok(wasm_postscript_name_json(handle))
-                            }
-                        },
-                    )?));
+                if has_postscript_name_variants(&case.inputs.params) {
+                    let handle = wasm_open_face(case)?;
+                    let output = postscript_name_variants_output(&case.inputs.params, |variant| {
+                        wasm_postscript_name_variant_output(handle, &case.inputs.params, variant)
+                    });
+                    wasm_done_face(handle);
+                    return output.map(ok);
                 }
+                let handle = self.wasm_face(case)?;
                 Ok(ok(wasm_postscript_name_json(handle)))
             }
             "freetype.get_kerning" => {
@@ -3498,11 +3505,111 @@ fn wasm_postscript_name_json(handle: usize) -> Value {
     })
 }
 
+fn has_postscript_name_variants(params: &Value) -> bool {
+    params.get("face_variants").is_some() || params.get("named_instances").is_some()
+}
+
+fn postscript_name_variant_values(params: &Value) -> Result<Vec<String>, String> {
+    if params.get("face_variants").is_some() {
+        return string_array_param(params, "face_variants");
+    }
+    array_param(params, "named_instances")?
+        .iter()
+        .map(|item| {
+            if let Some(value) = item.as_str() {
+                return Ok(value.to_string());
+            }
+            let Some(value) = item.as_u64() else {
+                return Err(format!("named_instances contains unsupported value {item}"));
+            };
+            Ok(value.to_string())
+        })
+        .collect()
+}
+
+fn postscript_name_named_instance_index(
+    params: &Value,
+    variant: &str,
+) -> Result<Option<FT_UInt>, String> {
+    if params.get("named_instances").is_none() {
+        return Ok(None);
+    }
+    if variant == "null" {
+        return Ok(None);
+    }
+    if variant == "default" {
+        return Ok(Some(0));
+    }
+    let value = variant
+        .parse::<u64>()
+        .map_err(|err| format!("invalid named instance variant {variant}: {err}"))?;
+    FT_UInt::try_from(value)
+        .map(Some)
+        .map_err(|err| format!("named instance {value} does not fit FT_UInt: {err}"))
+}
+
+fn rust_postscript_name_variant_output(
+    face: &mut FT_Face,
+    params: &Value,
+    variant: &str,
+) -> Result<Value, String> {
+    if variant == "null" {
+        return Ok(postscript_name_json(None));
+    }
+    if let Some(instance_index) = postscript_name_named_instance_index(params, variant)? {
+        let err = FT_Set_Named_Instance(Some(face), instance_index);
+        if err != FT_Err_Ok {
+            return Err(format!(
+                "FT_Set_Named_Instance({instance_index}) returned {err}"
+            ));
+        }
+    }
+    Ok(postscript_name_json(FT_Get_Postscript_Name(face)))
+}
+
+fn c_postscript_name_variant_output(
+    face: c_abi::FT_Face,
+    params: &Value,
+    variant: &str,
+) -> Result<Value, String> {
+    if variant == "null" {
+        return Ok(postscript_name_json(None));
+    }
+    if let Some(instance_index) = postscript_name_named_instance_index(params, variant)? {
+        let err = c_abi::FT_Set_Named_Instance(face, instance_index);
+        if err != FT_Err_Ok {
+            return Err(format!(
+                "C ABI FT_Set_Named_Instance({instance_index}) returned {err}"
+            ));
+        }
+    }
+    Ok(c_postscript_name_json(c_abi::FT_Get_Postscript_Name(face)))
+}
+
+fn wasm_postscript_name_variant_output(
+    handle: usize,
+    params: &Value,
+    variant: &str,
+) -> Result<Value, String> {
+    if variant == "null" {
+        return Ok(postscript_name_json(None));
+    }
+    if let Some(instance_index) = postscript_name_named_instance_index(params, variant)? {
+        let err = wasm_abi::fontdone_wasm_set_named_instance(handle, instance_index);
+        if err != FT_Err_Ok {
+            return Err(format!(
+                "WASM ABI fontdone_wasm_set_named_instance({instance_index}) returned {err}"
+            ));
+        }
+    }
+    Ok(wasm_postscript_name_json(handle))
+}
+
 fn postscript_name_variants_output<F>(params: &Value, mut output: F) -> Result<Value, String>
 where
     F: FnMut(&str) -> Result<Value, String>,
 {
-    let variants = string_array_param(params, "face_variants")?;
+    let variants = postscript_name_variant_values(params)?;
     let mut results = Vec::with_capacity(variants.len());
     for variant in variants {
         results.push(json!({
@@ -6154,17 +6261,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "freetype.get_postscript_name" => {
-            if params.get("named_instances").is_some() {
-                return Err(
-                    "named instance PostScript names require FT_Set_Named_Instance support"
-                        .to_string(),
-                );
-            }
-            if let Some(variants) = string_array_param(params, "face_variants").ok() {
+            if has_postscript_name_variants(params) {
                 let mut args = vec!["--get-postscript-name-variants".to_string()];
                 push_font_source(case, &mut args)?;
                 args.push(face_index_param(params).unwrap_or(0).to_string());
-                args.push(variants.join(","));
+                args.push(postscript_name_variant_values(params)?.join(","));
                 return Ok(args);
             }
             let mut args = vec!["--get-postscript-name".to_string()];
@@ -7066,16 +7167,12 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             }
         }
         "freetype.get_postscript_name" => {
-            let face = open_face(case)?;
-            if case.inputs.params.get("face_variants").is_some() {
+            let mut face = open_face(case)?;
+            if has_postscript_name_variants(&case.inputs.params) {
                 return Ok(ok(postscript_name_variants_output(
                     &case.inputs.params,
                     |variant| {
-                        if variant == "null" {
-                            Ok(postscript_name_json(None))
-                        } else {
-                            Ok(postscript_name_json(FT_Get_Postscript_Name(&face)))
-                        }
+                        rust_postscript_name_variant_output(&mut face, &case.inputs.params, variant)
                     },
                 )?));
             }
@@ -7349,13 +7446,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "freetype.get_postscript_name" => {
             let (library, face) = c_open_face(case)?;
-            let output = if case.inputs.params.get("face_variants").is_some() {
+            let output = if has_postscript_name_variants(&case.inputs.params) {
                 postscript_name_variants_output(&case.inputs.params, |variant| {
-                    if variant == "null" {
-                        Ok(postscript_name_json(None))
-                    } else {
-                        Ok(c_postscript_name_json(c_abi::FT_Get_Postscript_Name(face)))
-                    }
+                    c_postscript_name_variant_output(face, &case.inputs.params, variant)
                 })
             } else {
                 Ok(c_postscript_name_json(c_abi::FT_Get_Postscript_Name(face)))
@@ -7718,13 +7811,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "freetype.get_postscript_name" => {
             let handle = wasm_open_face(case)?;
-            let output = if case.inputs.params.get("face_variants").is_some() {
+            let output = if has_postscript_name_variants(&case.inputs.params) {
                 postscript_name_variants_output(&case.inputs.params, |variant| {
-                    if variant == "null" {
-                        Ok(postscript_name_json(None))
-                    } else {
-                        Ok(wasm_postscript_name_json(handle))
-                    }
+                    wasm_postscript_name_variant_output(handle, &case.inputs.params, variant)
                 })
             } else {
                 Ok(wasm_postscript_name_json(handle))

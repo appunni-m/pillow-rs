@@ -1,4 +1,5 @@
 #![allow(missing_docs)]
+#![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(non_camel_case_types, non_snake_case)]
 
@@ -817,16 +818,14 @@ pub extern "C" fn fontdone_wasm_select_charmap(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_charmap_count(handle: usize) -> FT_UInt {
-    face_ref(handle)
-        .map(|face| rust_ffi::FT_Face_Charmap_Count(&face.face))
-        .unwrap_or(0)
+    face_ref(handle).map_or(0, |face| rust_ffi::FT_Face_Charmap_Count(&face.face))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_active_charmap_index(handle: usize) -> FT_Int {
-    face_ref(handle)
-        .map(|face| rust_ffi::FT_Face_Active_Charmap_Index(&face.face))
-        .unwrap_or(-1)
+    face_ref(handle).map_or(-1, |face| {
+        rust_ffi::FT_Face_Active_Charmap_Index(&face.face)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -971,6 +970,21 @@ pub extern "C" fn fontdone_wasm_get_postscript_name(
     out.string = name.as_ptr();
     out.string_len = u32::try_from(name.len()).unwrap_or(u32::MAX);
     1
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_set_named_instance(
+    handle: usize,
+    instance_index: FT_UInt,
+) -> FT_Error {
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let err = rust_ffi::FT_Set_Named_Instance(Some(&mut face.face), instance_index);
+    if err == rust_ffi::FT_Err_Ok {
+        face.slot = None;
+    }
+    err
 }
 
 #[unsafe(no_mangle)]

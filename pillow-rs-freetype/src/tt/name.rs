@@ -31,6 +31,7 @@ pub struct SfntNameRecord {
 const NAME_ID_FAMILY: u16 = 1;
 const NAME_ID_SUBFAMILY: u16 = 2;
 const NAME_ID_POSTSCRIPT: u16 = 6;
+const NAME_ID_VARIATIONS_PREFIX: u16 = 25;
 const NAME_ID_TYPO_FAMILY: u16 = 16;
 const NAME_ID_TYPO_SUBFAMILY: u16 = 17;
 
@@ -167,6 +168,57 @@ fn find_name_string(
     None
 }
 
+/// Return the preferred Unicode name string for a raw name ID.
+pub fn name_string(table: &NameTable, name_id: u16) -> Option<String> {
+    let mut found_apple_roman = None;
+    let mut found_apple_english = None;
+    let mut found_win = None;
+    let mut found_unicode = None;
+    let mut win_is_english = false;
+
+    for (index, record) in table.records.iter().enumerate() {
+        if record.name_id != name_id || record.string.is_empty() {
+            continue;
+        }
+        match record.platform_id {
+            0 | 2 => found_unicode = Some(index),
+            1 if record.language_id == 0 => found_apple_english = Some(index),
+            1 if record.encoding_id == 0 => found_apple_roman = Some(index),
+            3 if matches!(record.encoding_id, 0 | 1 | 10)
+                && (found_win.is_none() || (record.language_id & 0x03ff) == 0x0009) =>
+            {
+                win_is_english = (record.language_id & 0x03ff) == 0x0009;
+                found_win = Some(index);
+            }
+            _ => {}
+        }
+    }
+
+    let found_apple = found_apple_english.or(found_apple_roman);
+    if let Some(index) = found_win
+        && (found_apple.is_none() || win_is_english)
+        && let Ok(name) = decode_utf16be_bytes(&table.records[index].string)
+    {
+        return Some(name);
+    }
+    if let Some(index) = found_apple
+        && let Ok(name) = decode_mac_roman_bytes(&table.records[index].string)
+    {
+        return Some(name);
+    }
+    if let Some(index) = found_unicode
+        && let Ok(name) = decode_utf16be_bytes(&table.records[index].string)
+    {
+        return Some(name);
+    }
+    None
+}
+
+/// Return the nameID 25 variation PostScript-name prefix, if present.
+pub fn variations_postscript_prefix(table: &NameTable) -> Option<String> {
+    name_string(table, NAME_ID_VARIATIONS_PREFIX)
+}
+
 fn find_postscript_name(data: &[u8], string_base: usize, records: &[NameRecord]) -> Option<String> {
     let mut win = None;
     let mut apple = None;
@@ -243,7 +295,11 @@ fn decode_utf16be(data: &[u8], base: usize, r: &NameRecord) -> Result<String, Fo
     let bytes = data
         .get(start..end)
         .ok_or_else(|| FontError::InvalidFont("name: string offset out of range".into()))?;
-    if !r.length.is_multiple_of(2) {
+    decode_utf16be_bytes(bytes)
+}
+
+fn decode_utf16be_bytes(bytes: &[u8]) -> Result<String, FontError> {
+    if !bytes.len().is_multiple_of(2) {
         return Err(FontError::InvalidFont(
             "name: UTF-16BE string has odd length".into(),
         ));
@@ -262,6 +318,10 @@ fn decode_mac_roman(data: &[u8], base: usize, r: &NameRecord) -> Result<String, 
     let bytes = data.get(start..end).ok_or_else(|| {
         FontError::InvalidFont("name: Mac Roman string offset out of range".into())
     })?;
+    decode_mac_roman_bytes(bytes)
+}
+
+fn decode_mac_roman_bytes(bytes: &[u8]) -> Result<String, FontError> {
     // Mac Roman 0x00–0x7F is ASCII; higher bytes would need a table (rare in test fonts).
     Ok(bytes.iter().map(|&b| b as char).collect())
 }

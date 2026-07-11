@@ -340,6 +340,11 @@ impl Face {
         self.font.postscript_name()
     }
 
+    /// Set or clear the current named instance, equivalent to `FT_Set_Named_Instance`.
+    pub fn set_named_instance(&mut self, instance_index: usize) -> Result<(), FontError> {
+        self.font.set_named_instance(instance_index)
+    }
+
     /// Return a glyph's PostScript name when the face exposes glyph names.
     pub fn glyph_name(&self, glyph_index: u32) -> Option<&str> {
         self.font.glyph_name(glyph_index)
@@ -460,7 +465,7 @@ impl Face {
                     lo.bottom,
                     lo.top,
                     mode,
-                    &mut *scratch,
+                    &mut scratch,
                 )?;
                 drop(scratch);
                 slot.set_rendered_bitmap(bmp);
