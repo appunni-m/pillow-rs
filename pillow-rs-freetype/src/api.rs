@@ -205,6 +205,10 @@ impl RenderFontCache {
             .or_insert_with(|| font.clone())
             .clone()
     }
+
+    fn clear(&self) {
+        self.fonts.borrow_mut().clear();
+    }
 }
 
 impl RenderFontKey {
@@ -271,6 +275,7 @@ impl Face {
     pub fn set_char_size(&mut self, char_width: i32, char_height: i32, x_dpi: u32, y_dpi: u32) {
         self.font
             .set_char_size(char_width, char_height, x_dpi, y_dpi);
+        self.render_fonts.clear();
     }
 
     pub(crate) fn try_set_char_size(
@@ -281,17 +286,22 @@ impl Face {
         y_dpi: u32,
     ) -> Result<(), SizeRequestError> {
         self.font
-            .try_set_char_size(char_width, char_height, x_dpi, y_dpi)
+            .try_set_char_size(char_width, char_height, x_dpi, y_dpi)?;
+        self.render_fonts.clear();
+        Ok(())
     }
 
     /// Set the active pixel size, equivalent to `FT_Set_Pixel_Sizes`.
     pub fn set_pixel_sizes(&mut self, pixel_width: u32, pixel_height: u32) {
         self.font.set_pixel_sizes(pixel_width, pixel_height);
+        self.render_fonts.clear();
     }
 
     /// Request the active size, equivalent to `FT_Request_Size`.
     pub fn request_size(&mut self, request: SizeRequest) -> Result<(), SizeRequestError> {
-        self.font.request_size(request)
+        self.font.request_size(request)?;
+        self.render_fonts.clear();
+        Ok(())
     }
 
     /// Return the glyph index for a Unicode scalar value.
@@ -301,12 +311,16 @@ impl Face {
 
     /// Select the best Unicode charmap, equivalent to `FT_Select_Charmap`.
     pub fn select_unicode_charmap(&mut self) -> Result<(), FontError> {
-        self.font.select_unicode_charmap()
+        self.font.select_unicode_charmap()?;
+        self.render_fonts.clear();
+        Ok(())
     }
 
     /// Set the active charmap by face-owned charmap index, equivalent to `FT_Set_Charmap`.
     pub fn set_charmap(&mut self, index: usize) -> Result<(), FontError> {
-        self.font.set_charmap(index)
+        self.font.set_charmap(index)?;
+        self.render_fonts.clear();
+        Ok(())
     }
 
     /// Return OS/2 embedding permission flags, equivalent to `FT_Get_FSType_Flags`.
@@ -342,7 +356,9 @@ impl Face {
 
     /// Set or clear the current named instance, equivalent to `FT_Set_Named_Instance`.
     pub fn set_named_instance(&mut self, instance_index: usize) -> Result<(), FontError> {
-        self.font.set_named_instance(instance_index)
+        self.font.set_named_instance(instance_index)?;
+        self.render_fonts.clear();
+        Ok(())
     }
 
     /// Return a glyph's PostScript name when the face exposes glyph names.
@@ -388,28 +404,36 @@ impl Face {
         flags: LoadFlags,
         transform: Option<(i32, i32, i32, i32, i32, i32)>,
     ) -> Result<GlyphSlot, FontError> {
+        Self::load_glyph_from_font(&self.font, glyph_index, flags, transform)
+    }
+
+    fn load_glyph_from_font(
+        font: &Font,
+        glyph_index: u16,
+        flags: LoadFlags,
+        transform: Option<(i32, i32, i32, i32, i32, i32)>,
+    ) -> Result<GlyphSlot, FontError> {
         let vertical_layout = flags.contains(LoadFlags::VERTICAL_LAYOUT);
         let native_hint_mode = flags.native_hint_mode();
         let mut loaded = if flags.contains(LoadFlags::NO_RECURSE) {
-            self.font.glyph_slot_load_no_recurse(glyph_index)?
+            font.glyph_slot_load_no_recurse(glyph_index)?
         } else if flags.contains(LoadFlags::NO_SCALE) {
-            self.font.glyph_slot_load_no_scale(glyph_index)?
+            font.glyph_slot_load_no_scale(glyph_index)?
         } else if flags.contains(LoadFlags::NO_HINTING) {
-            self.font.glyph_slot_load_no_hinting(glyph_index)?
+            font.glyph_slot_load_no_hinting(glyph_index)?
         } else if flags.contains(LoadFlags::TARGET_LIGHT) && !flags.contains(LoadFlags::NO_AUTOHINT)
         {
-            self.font.glyph_slot_load_target_light(glyph_index)?
+            font.glyph_slot_load_target_light(glyph_index)?
         } else if flags.contains(LoadFlags::FORCE_AUTOHINT)
             && !flags.contains(LoadFlags::NO_AUTOHINT)
         {
-            self.font
-                .glyph_slot_load_force_autohint_with_layout_and_mode(
-                    glyph_index,
-                    vertical_layout,
-                    native_hint_mode,
-                )?
+            font.glyph_slot_load_force_autohint_with_layout_and_mode(
+                glyph_index,
+                vertical_layout,
+                native_hint_mode,
+            )?
         } else if flags.contains(LoadFlags::NO_AUTOHINT) {
-            self.font.glyph_slot_load_no_autohint_with_layout_and_mode(
+            font.glyph_slot_load_no_autohint_with_layout_and_mode(
                 glyph_index,
                 vertical_layout,
                 native_hint_mode,
@@ -417,13 +441,12 @@ impl Face {
         } else {
             // C `tt_loader_init` suppresses `size->widthp` when
             // `FT_LOAD_COMPUTE_METRICS` is set (ttgload.c:2299-2305).
-            self.font
-                .glyph_slot_load_default_with_layout_and_mode_and_hdmx(
-                    glyph_index,
-                    vertical_layout,
-                    native_hint_mode,
-                    !flags.contains(LoadFlags::COMPUTE_METRICS),
-                )?
+            font.glyph_slot_load_default_with_layout_and_mode_and_hdmx(
+                glyph_index,
+                vertical_layout,
+                native_hint_mode,
+                !flags.contains(LoadFlags::COMPUTE_METRICS),
+            )?
         };
 
         let render_requested = flags.contains(LoadFlags::RENDER);
@@ -450,7 +473,7 @@ impl Face {
         if render_requested {
             if let Some(lo) = render_lo {
                 let mode = flags.render_mode();
-                let mut scratch = self.font.raster_scratch.borrow_mut();
+                let mut scratch = font.raster_scratch.borrow_mut();
                 let bmp = crate::render::render_loaded_outline(
                     lo.outline,
                     lo.left,
@@ -474,7 +497,8 @@ impl Face {
         mode: RenderMode,
     ) -> Result<GlyphSlot, FontError> {
         let load_only_flags = load_flags.without(LoadFlags::RENDER);
-        self.load_glyph(glyph_index, load_only_flags)?.render(mode)
+        let font = self.render_font(load_only_flags)?;
+        Self::load_glyph_from_font(&font, glyph_index, load_only_flags, None)?.render(mode)
     }
 
     fn render_font(&self, flags: LoadFlags) -> Result<Font, FontError> {

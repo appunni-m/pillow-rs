@@ -232,11 +232,11 @@ coordinate parity.
 | Runnable parity comparisons | 6,603 |
 | Exact parity | 6,603 / 6,603 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,473 / 17,175 (84.27%) |
-| Rust function coverage | 865 / 1,064 (81.30%) |
-| Rust instantiation coverage | 868 / 1,067 (81.35%) |
-| Rust region coverage | 21,111 / 24,682 (85.53%) |
-| Rust branch/condition coverage | 3,529 / 4,380 (80.57%) |
+| Covered Rust lines | 14,551 / 17,190 (84.65%) |
+| Rust function coverage | 875 / 1,066 (82.08%) |
+| Rust instantiation coverage | 878 / 1,069 (82.13%) |
+| Rust region coverage | 21,223 / 24,719 (85.86%) |
+| Rust branch/condition coverage | 3,533 / 4,390 (80.48%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 140 |
 | Stored active font binaries | 97 files, 772 KiB |
@@ -265,15 +265,15 @@ Current largest uncovered buckets:
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
 | `src/render.rs` | 1,566 / 2,275 | 323 / 428 | 109 / 164 | 2,262 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 1,414 / 1,914 | 176 / 254 | 126 / 186 | 1,921 / 2,603 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
-| `src/autohint/latin.rs` | 2,510 / 2,828 | 979 / 1,282 | 70 / 73 | 3,611 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
+| `src/font.rs` | 1,415 / 1,908 | 174 / 250 | 127 / 186 | 1,924 / 2,597 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/autohint/latin.rs` | 2,510 / 2,828 | 980 / 1,282 | 70 / 73 | 3,611 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
 | `src/scaler.rs` | 934 / 1,220 | 150 / 188 | 41 / 61 | 1,067 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
-| `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 82 / 234 | Script coverage rows; do not delete lookup data for coverage |
+| `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
-| `src/ffi/handles.rs` | 1,339 / 1,479 | 233 / 280 | 146 / 162 | 1,876 / 2,021 | Public FFI route audit; wrappers stay thin and must delegate to core |
+| `src/ffi/handles.rs` | 1,338 / 1,478 | 233 / 280 | 146 / 162 | 1,879 / 2,024 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
-| `src/autohint/cjk.rs` | 835 / 941 | 339 / 426 | 18 / 19 | 1,118 / 1,247 | CJK topology rows in the compact multiscript fixture |
-| `src/api.rs` | 392 / 464 | 61 / 70 | 45 / 52 | 527 / 620 | Public API wrapper rows for render cache and glyph-slot surfaces |
+| `src/autohint/cjk.rs` | 839 / 941 | 343 / 426 | 18 / 19 | 1,124 / 1,247 | CJK topology rows in the compact multiscript fixture |
+| `src/api.rs` | 462 / 486 | 67 / 84 | 53 / 54 | 625 / 660 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short
 physical table data plus truncated range arrays. The only remaining uncovered
@@ -512,10 +512,10 @@ The remaining coverage divides exactly into these ownership groups:
 
 | Group | Modules | Missing functions | Missing lines | Missing regions | Missing branches | Primary action |
 |---|---|---:|---:|---:|---:|---|
-| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 118 | 1,064 | 1,261 | 198 | public routing, wrapper thinness, metadata/state inputs |
+| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 105 | 966 | 1,113 | 199 | public routing, wrapper thinness, metadata/state inputs |
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
-| Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 18 | 726 | 956 | 417 | script reachability audit, then glyph topology rows |
-| TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 88 | 311 | 91 | explicit bytecode-program glyph rows |
+| Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 18 | 722 | 915 | 413 | script reachability audit, then glyph topology rows |
+| TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 66 | 257 | 77 | explicit bytecode-program glyph rows |
 | Math/casts | `fixed.rs`, `casts.rs` | 4 | 12 | 25 | 9 | scalar boundary rows or semantic cleanup |
 
 Per-file source gap ledger:
@@ -523,15 +523,15 @@ Per-file source gap ledger:
 | Source | Missing lines | Line coverage | Missing funcs | Missing regions | Missing branches |
 |---|---:|---:|---:|---:|---:|
 | `src/render.rs` | 709 | 1566/2275 (68.84%) | 55 | 959 | 105 |
-| `src/font.rs` | 517 | 1381/1898 (72.76%) | 60 | 714 | 87 |
-| `src/autohint/latin.rs` | 318 | 2510/2828 (88.76%) | 3 | 596 | 303 |
-| `src/scaler.rs` | 286 | 915/1201 (76.19%) | 20 | 207 | 34 |
-| `src/autohint/globals_data.rs` | 230 | 63/293 (21.50%) | 1 | 152 | 0 |
+| `src/font.rs` | 493 | 1415/1908 (74.16%) | 59 | 673 | 76 |
+| `src/autohint/latin.rs` | 318 | 2510/2828 (88.76%) | 3 | 596 | 302 |
+| `src/scaler.rs` | 286 | 934/1220 (76.56%) | 20 | 207 | 38 |
+| `src/autohint/globals_data.rs` | 230 | 63/293 (21.50%) | 1 | 117 | 0 |
 | `src/grays.rs` | 164 | 646/810 (79.75%) | 5 | 227 | 53 |
-| `src/ffi/handles.rs` | 155 | 1323/1478 (89.51%) | 20 | 181 | 47 |
-| `src/tt/hinter/exec.rs` | 66 | 1274/1340 (95.07%) | 3 | 279 | 71 |
-| `src/autohint/cjk.rs` | 106 | 835/941 (88.74%) | 1 | 129 | 87 |
-| `src/api.rs` | 72 | 392/464 (84.48%) | 7 | 93 | 9 |
+| `src/ffi/handles.rs` | 140 | 1338/1478 (90.53%) | 16 | 145 | 47 |
+| `src/tt/hinter/exec.rs` | 44 | 1296/1340 (96.72%) | 3 | 225 | 57 |
+| `src/autohint/cjk.rs` | 102 | 839/941 (89.16%) | 1 | 123 | 83 |
+| `src/api.rs` | 24 | 462/486 (95.06%) | 1 | 35 | 17 |
 | `src/tt/name.rs` | 1 | 293/294 (99.66%) | 1 | 11 | 18 |
 | `src/autohint/types.rs` | 32 | 71/103 (68.93%) | 7 | 25 | 1 |
 | `src/autohint/coverage.rs` | 22 | 6/28 (21.43%) | 5 | 28 | 4 |
@@ -1478,7 +1478,8 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Core `FT_Get_Charmap_Index` route | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,458 / 17,175 lines; 21,073 / 24,682 regions; 3,529 / 4,380 branches | Existing `freetype.FT_Get_Charmap_Index` rows now exercise the core public helper for owned, null, and foreign charmaps. C ABI keeps raw-pointer validation and delegates the owned-charmap index value to core; no fonts or cases were added |
 | 2026-07-12 | Core CMap scoped helper routes | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,470 / 17,175 lines; 21,106 / 24,682 regions; 3,529 / 4,380 branches | Existing `tttables.FT_Get_CMap_Format` and `tttables.FT_Get_CMap_Language_ID` rows now verify `FT_Charmap_Info`, `FT_Charmap_Format`, and `FT_Charmap_Language_ID` agree with raw public CMap helpers for valid, null, and out-of-range charmaps. No fonts or cases were added |
 | 2026-07-12 | Safe Rust load-glyph agreement route | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,473 / 17,175 lines; 21,111 / 24,682 regions; 3,529 / 4,380 branches | Seven existing `FT_LOAD_*` rows now assert `Face::load_glyph` matches the Rust FFI `FT_Load_Glyph` slot for compute metrics, force autohint, no hinting, no recurse, no scale, load-time render, and target-light representatives. The output JSON and case count stay unchanged |
-| 2026-07-12 | Render-mode load-flag helper route | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,482 / 17,176 lines; 21,122 / 24,685 regions; 3,529 / 4,380 branches | `FT_Render_Glyph` now carries the returned slot's render target through the shared `load_flag_for_render_mode` helper. Existing explicit render-mode rows cover normal, mono, LCD, LCD_V, and SDF routing with exact Rust FFI, C ABI, and WASM parity; no fonts or cases were added |
+| 2026-07-12 | Render-mode load-flag helper route | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,480 / 17,174 lines; 21,122 / 24,685 regions; 3,529 / 4,380 branches | `FT_Render_Glyph` now carries the returned slot's render target through the shared `load_flag_for_render_mode` helper. Existing explicit render-mode rows cover normal, mono, LCD, LCD_V, and SDF routing with exact Rust FFI, C ABI, and WASM parity; no fonts or cases were added |
+| 2026-07-12 | Public render-cache and pixel-size helper routes | 108 unique hashes | 0 | 6,606 | 6,603 / 6,603 | 3 | 14,551 / 17,190 lines; 21,223 / 24,719 regions; 3,533 / 4,390 branches | Existing `FT_Render_Glyph` public rows now route `Face::render_loaded_glyph` through the shared render-font cache while clearing that cache on face size/charmap/named-instance mutations; existing `FT_Set_Pixel_Sizes` rows now execute `SizeMetrics::from_pixel_size` zero-dimension normalization directly. Exact Rust FFI, C ABI, and WASM parity remains green with no fonts or cases added, and `api.rs` reaches 462 / 486 lines and 53 / 54 functions |
 
 ## Decision Log
 
@@ -1548,6 +1549,8 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Treat cmap format/language fixtures as metadata parity, not stubs | `FT_Get_CMap_Format` and `FT_Get_CMap_Language_ID` now use a compact generated SFNT cmap matrix instead of modeled values. Pinned `ftobjs.c` returns `-1` for invalid format probes, `0` for invalid language probes, and `ttcmap.c` reports format 14 language as `0xFFFFFFFF` |
 | 2026-07-11 | Treat malformed format-14 cmap records as load-time parser parity | Pinned FreeType ignores malformed optional format-14 records when another valid Unicode charmap remains usable. Public `FT_Set_Charmap` rejects format 14, so the active format-14 `FT_Get_Char_Index` and char-iteration arms remain public-unreachable rather than coverage rows to force |
 | 2026-07-12 | Treat autohint script lookup coverage as explicit public rows | `script-coverage.ttf` exists to activate real `FT_LOAD_FORCE_AUTOHINT` script paths through selected Unicode codepoints. All generated script-tag glyphs are now explicit public variants; future work should add new script glyphs only when the generator grows a new documented obligation |
+| 2026-07-12 | Reject parity-green rows that do not move coverage | A candidate `FT_Render_Glyph.matrix_render` SDF row using DejaVu glyph 82 at 48 ppem passed exact Rust/C/WASM parity but did not change `render.rs` or total coverage, so it was removed instead of growing the fixture count |
+| 2026-07-12 | Invalidate cached render fonts on face mutations | Routing `Face::render_loaded_glyph` through `RenderFontCache` must clear cached font clones after size, charmap, or named-instance changes; otherwise a later render could reuse a stale font after the same face object mutates |
 | 2026-07-11 | Add Tibetan only after the Indic CJK route fix | A candidate `script-coverage.ttf` U+0F40 Tibetan row exposed a real `FT_LOAD_FORCE_AUTOHINT` mismatch before the core fix. The row is now explicit only because Rust matches pinned C by routing `STYLE_DEFAULT_INDIC` through CJK/no-blue hinting and by not borrowing Latin `o` widths for Indic standard-character setup |
 | 2026-07-11 | Match FreeType's `gasp` stream read length | Pinned `tt_face_load_gasp` seeks to the table and reads frames from the stream without using the SFNT record length as a cap. Rust must parse from the table offset to physical stream EOF for this optional table, while genuinely short physical data still degrades to `FT_GASP_NO_TABLE` |
 | 2026-07-11 | Match FreeType's `post` format 2.5 tag and delta behavior | Pinned `ttpost.c` recognizes format 2.5 as `0x00025000`, computes `glyph_index + signed_delta`, and maps out-of-range results to Mac glyph index 0. Format 1.0 only returns Mac standard names when `maxp.numGlyphs == 258`; otherwise the public name stays `.notdef` |
