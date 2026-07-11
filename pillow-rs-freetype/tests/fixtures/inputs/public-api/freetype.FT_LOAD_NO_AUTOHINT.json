@@ -57,27 +57,91 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts/NotoSans-Regular.ttf"
+        "variants": [
+          {
+            "id": "noto-a-no-autohint",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "load_flags": [
+                "FT_LOAD_NO_AUTOHINT"
+              ],
+              "symbol_under_test": "FT_LOAD_NO_AUTOHINT",
+              "call_sequence": [
+                "FT_New_Memory_Face",
+                "FT_Set_Pixel_Sizes",
+                "FT_Load_Char"
+              ],
+              "char_code": 65,
+              "char_name": "A"
+            },
+            "coverage": [
+              "freetype.load_no_autohint:base-no-autohint"
+            ]
+          },
+          {
+            "id": "noto-a-force-autohint-masked-by-no-autohint",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_NO_AUTOHINT"
+              ],
+              "symbol_under_test": "FT_LOAD_NO_AUTOHINT",
+              "call_sequence": [
+                "FT_New_Memory_Face",
+                "FT_Set_Pixel_Sizes",
+                "FT_Load_Char"
+              ],
+              "char_code": 65,
+              "char_name": "A"
+            },
+            "coverage": [
+              "freetype.load_no_autohint:force-autohint-masked"
+            ]
+          },
+          {
+            "id": "noto-a-target-light-masked-by-no-autohint",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/NotoSans-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "load_flags": [
+                "FT_LOAD_TARGET_LIGHT",
+                "FT_LOAD_NO_AUTOHINT"
+              ],
+              "symbol_under_test": "FT_LOAD_NO_AUTOHINT",
+              "call_sequence": [
+                "FT_New_Memory_Face",
+                "FT_Set_Pixel_Sizes",
+                "FT_Load_Char"
+              ],
+              "char_code": 65,
+              "char_name": "A"
+            },
+            "coverage": [
+              "freetype.load_no_autohint:target-light-masked"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": 20,
-          "load_flags": [
-            "FT_LOAD_NO_AUTOHINT"
-          ],
-          "symbol_under_test": "FT_LOAD_NO_AUTOHINT",
-          "call_sequence": [
-            "FT_New_Memory_Face",
-            "FT_Set_Pixel_Sizes",
-            "FT_Load_Char"
-          ],
-          "char_code": 65,
-          "char_name": "A"
-        }
+        ]
       },
       "classifiers": [
         "kind:flag",

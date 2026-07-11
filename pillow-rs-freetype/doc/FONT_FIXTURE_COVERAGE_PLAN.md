@@ -171,7 +171,10 @@ classifications, and moving public `FT_Vector_Length` execution onto a core
 and extending the source-backed branch-edge TrueType glyph with zero
 `SPVFS`/`SFVFS` stack-vector probes, and adding a compact source-backed
 `script-coverage.ttf` font plus explicit `FT_LOAD_FORCE_AUTOHINT` variants for
-18 script standard-character and Indic CJK-writing-system paths.
+18 script standard-character and Indic CJK-writing-system paths, and adding
+explicit `FT_LOAD_NO_AUTOHINT` precedence rows for
+`FORCE_AUTOHINT | NO_AUTOHINT` and `TARGET_LIGHT | NO_AUTOHINT` while routing
+FFI glyph-slot bbox conversion through the shared `From<BBox>` path.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -179,17 +182,17 @@ coordinate parity.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,131 |
-| Concrete explicit cases | 6,550 |
-| Additional grouped variants | 2,419 |
+| Concrete explicit cases | 6,553 |
+| Additional grouped variants | 2,422 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,547 |
-| Exact parity | 6,547 / 6,547 |
+| Runnable parity comparisons | 6,550 |
+| Exact parity | 6,550 / 6,550 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,312 / 17,146 (83.47%) |
-| Rust function coverage | 855 / 1,062 (80.51%) |
-| Rust instantiation coverage | 858 / 1,065 (80.56%) |
-| Rust region coverage | 20,693 / 24,623 (84.04%) |
-| Rust branch/condition coverage | 3,428 / 4,370 (78.44%) |
+| Covered Rust lines | 14,322 / 17,141 (83.55%) |
+| Rust function coverage | 858 / 1,062 (80.79%) |
+| Rust instantiation coverage | 861 / 1,065 (80.85%) |
+| Rust region coverage | 20,705 / 24,618 (84.11%) |
+| Rust branch/condition coverage | 3,432 / 4,370 (78.54%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 135 |
 | Stored active font binaries | 92 files, 748 KiB |
@@ -219,14 +222,14 @@ Current largest uncovered buckets:
 |---|---:|---:|---:|---:|---|
 | `src/render.rs` | 1,566 / 2,275 | 323 / 428 | 109 / 164 | 2,262 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
 | `src/font.rs` | 1,381 / 1,898 | 167 / 254 | 125 / 185 | 1,852 / 2,566 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
-| `src/autohint/latin.rs` | 2,509 / 2,828 | 977 / 1,282 | 70 / 73 | 3,610 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
+| `src/autohint/latin.rs` | 2,510 / 2,828 | 979 / 1,282 | 70 / 73 | 3,611 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
 | `src/scaler.rs` | 915 / 1,201 | 144 / 178 | 40 / 60 | 1,047 / 1,254 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 82 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
-| `src/ffi/handles.rs` | 1,328 / 1,483 | 233 / 280 | 142 / 162 | 1,836 / 2,017 | Public FFI route audit; wrappers stay thin and must delegate to core |
+| `src/ffi/handles.rs` | 1,323 / 1,478 | 233 / 280 | 142 / 162 | 1,831 / 2,012 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,223 / 1,340 | 300 / 410 | 37 / 40 | 2,466 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 835 / 941 | 339 / 426 | 18 / 19 | 1,118 / 1,247 | CJK topology rows in the compact multiscript fixture |
-| `src/api.rs` | 389 / 464 | 59 / 70 | 44 / 52 | 522 / 620 | Public API wrapper rows for render cache and glyph-slot surfaces |
+| `src/api.rs` | 389 / 464 | 61 / 70 | 44 / 52 | 522 / 620 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short
 physical table data plus truncated range arrays. The only remaining uncovered
@@ -435,8 +438,8 @@ Evaluation checkpoint: 2026-07-11, latest verified unified condition-coverage ru
 
 This is the active coverage identification ledger. It supersedes earlier
 percentages in this section but does not replace the historical progress ledger
-below. The unified public API suite currently has 4,131 logical cases, 6,550
-concrete explicit cases, 6,547 runnable exact-parity cases, three explicit
+below. The unified public API suite currently has 4,131 logical cases, 6,553
+concrete explicit cases, 6,550 runnable exact-parity cases, three explicit
 pending named-instance obligations, and zero implicit cases.
 `FT_Get_Postscript_Name.variation_instance_name_behavior` remains an active
 parity row backed by real `FT_Set_Named_Instance` behavior, while
@@ -450,10 +453,10 @@ Core Rust structural coverage from
 
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
-| Functions | 855 | 1,062 | 207 |
-| Lines | 14,312 | 17,146 | 2,834 |
-| Regions | 20,693 | 24,623 | 3,930 |
-| Branches/conditions | 3,428 | 4,370 | 942 |
+| Functions | 858 | 1,062 | 204 |
+| Lines | 14,322 | 17,141 | 2,819 |
+| Regions | 20,705 | 24,618 | 3,913 |
+| Branches/conditions | 3,432 | 4,370 | 938 |
 
 Formal MC/DC is not reported by the installed Rust coverage tooling
 (`mcdc.count == 0`). Branch/condition coverage is therefore the instrumented
@@ -464,9 +467,9 @@ The remaining coverage divides exactly into these ownership groups:
 
 | Group | Modules | Missing functions | Missing lines | Missing regions | Missing branches | Primary action |
 |---|---|---:|---:|---:|---:|---|
-| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 119 | 1,076 | 1,287 | 223 | public routing, wrapper thinness, metadata/state inputs |
+| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 118 | 1,068 | 1,278 | 221 | public routing, wrapper thinness, metadata/state inputs |
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
-| Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 20 | 734 | 965 | 421 | script reachability audit, then glyph topology rows |
+| Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 18 | 727 | 957 | 419 | script reachability audit, then glyph topology rows |
 | TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 139 | 467 | 130 | explicit bytecode-program glyph rows |
 | Math/casts | `fixed.rs`, `casts.rs` | 4 | 12 | 25 | 9 | scalar boundary rows or semantic cleanup |
 
@@ -476,19 +479,19 @@ Per-file source gap ledger:
 |---|---:|---:|---:|---:|---:|
 | `src/render.rs` | 709 | 1566/2275 (68.84%) | 55 | 959 | 105 |
 | `src/font.rs` | 517 | 1381/1898 (72.76%) | 60 | 714 | 87 |
-| `src/autohint/latin.rs` | 319 | 2509/2828 (88.72%) | 3 | 597 | 305 |
+| `src/autohint/latin.rs` | 318 | 2510/2828 (88.76%) | 3 | 596 | 303 |
 | `src/scaler.rs` | 286 | 915/1201 (76.19%) | 20 | 207 | 34 |
 | `src/autohint/globals_data.rs` | 230 | 63/293 (21.50%) | 1 | 152 | 0 |
 | `src/grays.rs` | 164 | 646/810 (79.75%) | 5 | 227 | 53 |
-| `src/ffi/handles.rs` | 155 | 1328/1483 (89.55%) | 20 | 181 | 47 |
+| `src/ffi/handles.rs` | 155 | 1323/1478 (89.51%) | 20 | 181 | 47 |
 | `src/tt/hinter/exec.rs` | 117 | 1223/1340 (91.27%) | 3 | 435 | 110 |
 | `src/autohint/cjk.rs` | 106 | 835/941 (88.74%) | 1 | 129 | 87 |
 | `src/api.rs` | 75 | 389/464 (83.84%) | 8 | 98 | 11 |
 | `src/tt/name.rs` | 1 | 293/294 (99.66%) | 1 | 22 | 39 |
 | `src/autohint/types.rs` | 32 | 71/103 (68.93%) | 7 | 25 | 1 |
-| `src/autohint/coverage.rs` | 28 | 0/28 (0.00%) | 7 | 35 | 4 |
+| `src/autohint/coverage.rs` | 22 | 6/28 (21.43%) | 5 | 28 | 4 |
 | `src/fixed.rs` | 9 | 206/215 (95.81%) | 3 | 22 | 3 |
-| `src/ffi/convert.rs` | 22 | 120/142 (84.51%) | 2 | 25 | 2 |
+| `src/ffi/convert.rs` | 14 | 128/142 (90.14%) | 1 | 16 | 2 |
 | `src/tt/fvar.rs` | 7 | 91/98 (92.86%) | 4 | 13 | 1 |
 | `src/tt/hinter/gs.rs` | 14 | 172/186 (92.47%) | 1 | 14 | 2 |
 | `src/autohint/globals.rs` | 14 | 213/227 (93.83%) | 1 | 21 | 19 |
@@ -1413,6 +1416,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Compact autohint script standard-character fixture | 103 unique hashes | 0 | 6,545 | 6,542 / 6,542 | 3 | 14,297 / 17,133 lines; 20,656 / 24,593 regions; 3,423 / 4,364 branches | `scripts/build_autohint_script_fixtures.py` emits one 5.5 KiB `script-coverage.ttf` with one glyph per autohint script tag; 13 explicit `FT_LOAD_FORCE_AUTOHINT` variants cover Adlam, Arabic, Armenian, Bengali, Gurmukhi, Hebrew, Khmer, Kannada, Latin sub/superscript, Malayalam, Mongolian, and Thai standard-character rows, moving `globals_data.rs` from 25 / 293 to 61 / 293 lines with exact Rust/C/WASM parity |
 | 2026-07-11 | Vai autohint script standard-character row | 103 unique hashes | 0 | 6,546 | 6,543 / 6,543 | 3 | 14,299 / 17,133 lines; 20,659 / 24,593 regions; 3,423 / 4,364 branches | one explicit `FT_LOAD_FORCE_AUTOHINT` row selects `script-coverage.ttf` U+A5CD, covering the Vai standard-character arm with exact Rust/C/WASM parity and no implicit case growth |
 | 2026-07-11 | Indic CJK autohint script rows | 103 unique hashes | 0 | 6,550 | 6,547 / 6,547 | 3 | 14,312 / 17,146 lines; 20,693 / 24,623 regions; 3,428 / 4,370 branches | four explicit `FT_LOAD_FORCE_AUTOHINT` rows select Limbu, Oriya, Syloti Nagri, and Tibetan glyphs in `script-coverage.ttf`. Core now routes FreeType's `STYLE_DEFAULT_INDIC` rows through CJK metrics/hints with no blue zones and rejects standard-character glyphs assigned to another style, matching pinned C/Rust/C-ABI/WASM parity without implicit case growth |
+| 2026-07-11 | No-autohint precedence and shared bbox conversion | 103 unique hashes | 0 | 6,553 | 6,550 / 6,550 | 3 | 14,322 / 17,141 lines; 20,705 / 24,618 regions; 3,432 / 4,370 branches | two explicit `FT_LOAD_NO_AUTOHINT` variants prove `NO_AUTOHINT` masks `FORCE_AUTOHINT` and `TARGET_LIGHT` branch conditions through Rust, C ABI, and WASM `FT_Load_Char`; `bbox_to_ffi` now delegates to the existing `From<BBox>` conversion so public glyph-slot rows cover the shared field-copy path instead of bypassing it |
 
 ## Decision Log
 
