@@ -220,6 +220,31 @@
       "inputs": {
         "variants": [
           {
+            "id": "cjk-field-force-autohint-render-mono",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 30000,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_RENDER",
+                "FT_LOAD_TARGET_MONO"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:force-autohint-mono-render"
+            ]
+          },
+          {
             "id": "DejaVuSans-s10-cp0-f1",
             "assets": {
               "font": {
