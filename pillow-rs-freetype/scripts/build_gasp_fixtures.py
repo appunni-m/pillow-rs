@@ -37,14 +37,49 @@ def write_font(name: str, gasp_table) -> None:
         patch_gasp_version(out, gasp_table.version)
 
 
+def write_malformed_gasp_font(name: str, gasp_payload: bytes, *, truncate_at_payload: bool) -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    font["gasp"] = make_gasp_table(1, {8: 1})
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = OUT_DIR / name
+    if out.exists() or out.is_symlink():
+        out.unlink()
+    font.save(out, reorderTables=True)
+    patch_table_bytes(out, b"gasp", gasp_payload, truncate_at_payload=truncate_at_payload)
+
+
 def patch_gasp_version(path: Path, version: int) -> None:
+    patch_table_bytes(path, b"gasp", version.to_bytes(2, "big"), replace_prefix=True)
+
+
+def patch_table_bytes(
+    path: Path,
+    tag: bytes,
+    payload: bytes,
+    *,
+    replace_prefix: bool = False,
+    truncate_at_payload: bool = False,
+) -> None:
     data = bytearray(path.read_bytes())
     records = table_records(data)
-    gasp = records[b"gasp"]
-    data[gasp["offset"] : gasp["offset"] + 2] = version.to_bytes(2, "big")
-    data[gasp["record_offset"] + 4 : gasp["record_offset"] + 8] = checksum(
-        data[gasp["offset"] : gasp["offset"] + gasp["length"]]
+    record = records[tag]
+    if replace_prefix:
+        payload_len = record["length"]
+        table_data = bytearray(data[record["offset"] : record["offset"] + payload_len])
+        table_data[: len(payload)] = payload
+    else:
+        payload_len = len(payload)
+        table_data = bytearray(payload)
+    data[record["offset"] : record["offset"] + payload_len] = table_data
+    data[record["record_offset"] + 4 : record["record_offset"] + 8] = checksum(
+        table_data
     ).to_bytes(4, "big")
+    data[record["record_offset"] + 12 : record["record_offset"] + 16] = payload_len.to_bytes(
+        4, "big"
+    )
+    if truncate_at_payload:
+        del data[record["offset"] + payload_len :]
 
     head = records[b"head"]
     data[head["offset"] + 8 : head["offset"] + 12] = b"\0\0\0\0"
@@ -114,6 +149,13 @@ def main() -> None:
                 65535: 3,
             },
         ),
+    )
+    write_malformed_gasp_font("record-length-short.ttf", b"\0", truncate_at_payload=False)
+    write_malformed_gasp_font("short-header.ttf", b"\0", truncate_at_payload=True)
+    write_malformed_gasp_font(
+        "truncated-ranges.ttf",
+        bytes([0, 1, 0, 2, 0, 8, 0, 1]),
+        truncate_at_payload=True,
     )
 
 

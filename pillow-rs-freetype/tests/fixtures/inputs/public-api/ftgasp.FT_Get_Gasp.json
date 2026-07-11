@@ -5,7 +5,9 @@
     "null_face_returns_no_table",
     "sfnt_face_ppem_ranges_match_c",
     "sfnt_without_gasp_returns_no_table",
-    "version_zero_masks_spurious_bits"
+    "version_zero_masks_spurious_bits",
+    "record_length_short_stream_read_matches_c",
+    "malformed_gasp_returns_no_table"
   ],
   "cases": [
     {
@@ -467,6 +469,157 @@
         "surface:public-c-api",
         "fixture:unsupported-version",
         "path:optional-table-load-error"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_Int",
+          "return": "FT_Int",
+          "ppem": "FT_UInt"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "return",
+            "ppem"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgasp.FT_Get_Gasp.record_length_short_stream_read_matches_c",
+      "subject": "ftgasp.FT_Get_Gasp",
+      "case": "record_length_short_stream_read_matches_c",
+      "operation": "ftgasp.get_gasp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/gasp/record-length-short.ttf",
+            "status": "active"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "ppem": 8,
+          "sfnt_record_length": 1,
+          "physical_gasp_bytes": 8,
+          "expected_return": 1,
+          "pinned_source": "freetype/src/sfnt/ttload.c:1467-1496"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgasp",
+        "area:gasp",
+        "surface:public-c-api",
+        "fixture:gasp-record-length-short",
+        "path:gasp-stream-read-ignores-record-length"
+      ],
+      "metadata": {
+        "source_behavior": "tt_face_load_gasp calls goto_table with no length pointer and then FT_FRAME_ENTER reads from the stream, so the gasp table directory length does not cap readable bytes."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_Int",
+          "return": "FT_Int",
+          "ppem": "FT_UInt"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "return",
+            "ppem"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgasp.FT_Get_Gasp.short_header_returns_no_table",
+      "subject": "ftgasp.FT_Get_Gasp",
+      "case": "malformed_gasp_returns_no_table",
+      "operation": "ftgasp.get_gasp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/gasp/short-header.ttf",
+            "status": "active"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "ppem": 8,
+          "malformed_gasp": "short_header",
+          "expected_return_symbol": "FT_GASP_NO_TABLE",
+          "pinned_source": "freetype/src/sfnt/ttload.c:tt_face_load_gasp"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgasp",
+        "area:gasp",
+        "surface:public-c-api",
+        "fixture:gasp-short-header",
+        "path:optional-table-short-header"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "value": "FT_Int",
+          "return": "FT_Int",
+          "ppem": "FT_UInt"
+        },
+        "compare": {
+          "mode": "value",
+          "paths": [
+            "value",
+            "return",
+            "ppem"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "ftgasp.FT_Get_Gasp.truncated_ranges_returns_no_table",
+      "subject": "ftgasp.FT_Get_Gasp",
+      "case": "malformed_gasp_returns_no_table",
+      "operation": "ftgasp.get_gasp",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/gasp/truncated-ranges.ttf",
+            "status": "active"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "ppem": 8,
+          "malformed_gasp": "truncated_ranges",
+          "expected_return_symbol": "FT_GASP_NO_TABLE",
+          "pinned_source": "freetype/src/sfnt/ttload.c:tt_face_load_gasp"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftgasp",
+        "area:gasp",
+        "surface:public-c-api",
+        "fixture:gasp-truncated-ranges",
+        "path:optional-table-truncated-ranges"
       ],
       "expectation": {
         "status": "ok",

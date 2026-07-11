@@ -6021,6 +6021,12 @@ subjects:
       - id: version_zero_masks_spurious_bits
         description: For a version 0 gasp table, verify C masks the result to the low two bits.
         # needs-input: crafted or selected TrueType fixture with version 0 gasp table containing high bits; output shape is signed integer flags.
+      - id: record_length_short_stream_read_matches_c
+        description: Verify FreeType's gasp loader reads from the stream after table seek and does not cap the read to the SFNT table-record length.
+        # needs-input: crafted TrueType fixture whose gasp record length is shorter than the readable physical table bytes; output shape is signed integer return.
+      - id: malformed_gasp_returns_no_table
+        description: Load SFNT fixtures whose optional gasp table is too short or has truncated range records and verify FT_GASP_NO_TABLE.
+        # needs-input: crafted TrueType fixtures with malformed optional gasp tables; output shape is signed integer return from C FreeType, Rust FFI, C FFI, and wasm.
 
   - id: ftglyph.FT_Glyph_BBox_Mode
     kind: enum
