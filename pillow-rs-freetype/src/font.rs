@@ -456,8 +456,12 @@ impl Font {
         // native TrueType path to match FreeType's default load behavior.
         // Missing tables fall back to unhinted scaling (same behavior as FreeType
         // without TT_USE_BYTECODE_INTERPRETER).
-        let fpgm = dir.find(data, tag(b"fpgm")).map(|d| d.to_vec());
-        let prep = dir.find(data, tag(b"prep")).map(|d| d.to_vec());
+        let fpgm = dir
+            .find(data, tag(b"fpgm"))
+            .map(crate::tt::hinter::tables::parse_fpgm);
+        let prep = dir
+            .find(data, tag(b"prep"))
+            .map(crate::tt::hinter::tables::parse_prep);
         let cvt = dir
             .find(data, tag(b"cvt "))
             .and_then(|d| crate::tt::hinter::tables::parse_cvt(d).ok());
