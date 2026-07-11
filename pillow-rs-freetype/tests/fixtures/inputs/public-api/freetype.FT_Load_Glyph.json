@@ -889,6 +889,30 @@
             ]
           },
           {
+            "id": "charmap-conic-first-offcurve-default",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/charmap/multiple-charmaps.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 483,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "scaler:bbox-first-offcurve-last-oncurve"
+            ]
+          },
+          {
             "id": "glyf-depth-boundary-no-scale",
             "assets": {
               "font": {
