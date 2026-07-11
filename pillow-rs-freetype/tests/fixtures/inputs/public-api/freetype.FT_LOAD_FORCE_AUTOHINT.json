@@ -480,6 +480,266 @@
             ]
           },
           {
+            "id": "script-adlam",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 125196,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:adlam-standard-char"
+            ]
+          },
+          {
+            "id": "script-arabic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 1575,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:arabic-standard-char"
+            ]
+          },
+          {
+            "id": "script-armenian",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 1329,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:armenian-standard-char"
+            ]
+          },
+          {
+            "id": "script-bengali",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 2439,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:bengali-top-to-bottom"
+            ]
+          },
+          {
+            "id": "script-gurmukhi",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 2567,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:gurmukhi-top-to-bottom"
+            ]
+          },
+          {
+            "id": "script-hebrew",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 1489,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:hebrew-standard-char"
+            ]
+          },
+          {
+            "id": "script-khmer",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 6017,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:khmer-standard-char"
+            ]
+          },
+          {
+            "id": "script-kannada",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 3207,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:kannada-standard-char"
+            ]
+          },
+          {
+            "id": "script-latin-subscript",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 8320,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:latin-subscript-widths"
+            ]
+          },
+          {
+            "id": "script-latin-superscript",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 8304,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:latin-superscript-widths"
+            ]
+          },
+          {
+            "id": "script-malayalam",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 3346,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:malayalam-standard-char"
+            ]
+          },
+          {
+            "id": "script-mongolian",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 6195,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:mongolian-top-to-bottom"
+            ]
+          },
+          {
+            "id": "script-thai",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 3610,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:thai-standard-char"
+            ]
+          },
+          {
             "id": "indic-ka-10",
             "assets": {
               "font": {
