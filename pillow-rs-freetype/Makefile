@@ -10,6 +10,7 @@ BENCH_PROFILE ?= default
 PARITY_ARGS ?= -- --nocapture
 COVERAGE_OUTPUT ?= target/coverage/unified-summary.json
 CONDITION_COVERAGE_OUTPUT ?= target/coverage/unified-condition-summary.json
+CONDITION_COVERAGE_LINES_OUTPUT ?= target/coverage/unified-condition-missing-lines.txt
 CORE_COVERAGE_IGNORE_REGEX := /(ffi-c|ffi-wasm)/src/
 
 .DEFAULT_GOAL := help
@@ -25,6 +26,7 @@ help:
 	@printf "  make font-fixture-cjk Rebuild the compact multiscript topology fixture\n"
 	@printf "  make font-fixture-gasp Rebuild compact gasp table fixtures\n"
 	@printf "  make font-fixture-hinter Rebuild the compact TrueType program fixture\n"
+	@printf "  make font-fixture-post Rebuild compact post table fixtures\n"
 	@printf "\nBuild:\n"
 	@printf "  make build            Build the crate\n"
 	@printf "  make doc              Build crate documentation\n"
@@ -35,7 +37,7 @@ help:
 	@printf "  make test-unified-fixtures Run full parity test (same as make test)\n"
 	@printf "  make test-unified-fixtures-release Full parity test with Cargo --release\n"
 	@printf "  make test-unified-coverage Run parity and write core Rust llvm-cov JSON\n"
-	@printf "  make test-unified-condition-coverage Run parity with nightly branch/condition coverage\n"
+	@printf "  make test-unified-condition-coverage Run parity with nightly branch/condition coverage and missing lines\n"
 	@printf "  make test-api-abi     Run unified API/ABI fixture and coverage gates\n"
 	@printf "  make test-ffi         Run the no-runtime-FFI guard for core (<1s)\n"
 	@printf "  make test-ffi-compat  Run API/ABI coverage and thin-wrapper checks\n"
@@ -129,6 +131,10 @@ test-unified-condition-coverage: unified-oracle api-abi-check
 		--test unified_fixture_parity --locked --json \
 		--ignore-filename-regex '$(CORE_COVERAGE_IGNORE_REGEX)' \
 		--output-path $(CONDITION_COVERAGE_OUTPUT) -- unified_fixture_parity --nocapture
+	RUSTFLAGS="-Zcoverage-options=condition" $(CARGO) +nightly llvm-cov report \
+		--show-missing-lines \
+		--ignore-filename-regex '$(CORE_COVERAGE_IGNORE_REGEX)' \
+		> $(CONDITION_COVERAGE_LINES_OUTPUT)
 
 .PHONY: test-api-abi
 test-api-abi: test-unified-fixtures test-ffi
@@ -233,6 +239,10 @@ font-fixture-gasp: font-fixture-hinter
 .PHONY: font-fixture-cmap
 font-fixture-cmap: font-fixture-hinter
 	$(PYTHON) scripts/build_cmap_fixtures.py
+
+.PHONY: font-fixture-post
+font-fixture-post: font-fixture-hinter
+	$(PYTHON) scripts/build_post_fixtures.py
 
 .PHONY: fmt
 fmt:
