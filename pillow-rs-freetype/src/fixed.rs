@@ -179,66 +179,100 @@ fn ft_msb(value: u32) -> i32 {
     31 - value.leading_zeros() as i32
 }
 
+const FT_TRIG_SCALE: u64 = 0xDBD9_5B16;
+const FT_TRIG_SAFE_MSB: i32 = 29;
+const FT_TRIG_MAX_ITERS: i32 = 23;
+
+#[inline]
+fn ft_abs_long(value: i64) -> i64 {
+    if value < 0 { ft_neg_long(value) } else { value }
+}
+
+#[inline]
+fn ft_trig_downscale_long(value: i64) -> i64 {
+    let (value, sign) = move_long_sign(value, 1);
+    let value = ((u128::from(value) * u128::from(FT_TRIG_SCALE) + 0x4000_0000) >> 32) as i64;
+    if sign < 0 { ft_neg_long(value) } else { value }
+}
+
+#[inline]
+fn ft_trig_prenorm_long(x: &mut i64, y: &mut i64) -> i32 {
+    let old_x = *x;
+    let old_y = *y;
+    let mut shift = ft_msb((ft_abs_long(old_x) as u32) | (ft_abs_long(old_y) as u32));
+    if shift <= FT_TRIG_SAFE_MSB {
+        shift = FT_TRIG_SAFE_MSB - shift;
+        *x = (old_x as u64).wrapping_shl(shift as u32) as i64;
+        *y = (old_y as u64).wrapping_shl(shift as u32) as i64;
+    } else {
+        shift -= FT_TRIG_SAFE_MSB;
+        *x = old_x >> shift;
+        *y = old_y >> shift;
+        shift = -shift;
+    }
+    shift
+}
+
+#[inline]
+fn ft_trig_pseudo_polarize_length_long(x: &mut i64, y: &mut i64) {
+    if *y > *x {
+        if *y > ft_neg_long(*x) {
+            let old_x = *x;
+            *x = *y;
+            *y = ft_neg_long(old_x);
+        } else {
+            *x = ft_neg_long(*x);
+            *y = ft_neg_long(*y);
+        }
+    } else if *y < ft_neg_long(*x) {
+        let old_x = *x;
+        *x = ft_neg_long(*y);
+        *y = old_x;
+    }
+
+    let mut bias = 1i64;
+    for i in 1..FT_TRIG_MAX_ITERS {
+        let old_x = *x;
+        if *y > 0 {
+            *x += (*y + bias) >> i;
+            *y -= (old_x + bias) >> i;
+        } else {
+            *x -= (*y + bias) >> i;
+            *y += (old_x + bias) >> i;
+        }
+        bias <<= 1;
+    }
+}
+
+/// FreeType `FT_Vector_Length` over the public `FT_Long` domain.
+///
+/// C reference: `fttrigon.c:417-448`. FreeType normalizes with the low
+/// 32 bits of the absolute vector components, then runs fixed-point CORDIC.
+pub(crate) fn ft_vector_length_long(mut x: i64, mut y: i64) -> i64 {
+    if x == 0 {
+        return ft_abs_long(y);
+    }
+    if y == 0 {
+        return ft_abs_long(x);
+    }
+
+    let shift = ft_trig_prenorm_long(&mut x, &mut y);
+    ft_trig_pseudo_polarize_length_long(&mut x, &mut y);
+    x = ft_trig_downscale_long(x);
+
+    if shift > 0 {
+        (x + (1i64 << (shift - 1))) >> shift
+    } else {
+        (x as u64).wrapping_shl((-shift) as u32) as i64
+    }
+}
+
 /// FreeType `FT_Vector_Length` for a signed 32-bit vector.
 ///
 /// C reference: `fttrigon.c:417-448`.  FreeType uses a fixed-point CORDIC
 /// approximation here, so an IEEE-754 hypotenuse can differ by one unit.
-pub fn ft_vector_length(mut x: i32, mut y: i32) -> i32 {
-    if x == 0 {
-        return y.wrapping_abs();
-    }
-    if y == 0 {
-        return x.wrapping_abs();
-    }
-
-    let msb = ft_msb(x.wrapping_abs() as u32 | y.wrapping_abs() as u32);
-    let shift = if msb <= 29 {
-        let shift = 29 - msb;
-        x = ((x as u32) << shift) as i32;
-        y = ((y as u32) << shift) as i32;
-        shift
-    } else {
-        let shift = msb - 29;
-        x >>= shift;
-        y >>= shift;
-        -shift
-    };
-
-    if y > x {
-        if y > x.wrapping_neg() {
-            let old_x = x;
-            x = y;
-            y = old_x.wrapping_neg();
-        } else {
-            x = x.wrapping_neg();
-            y = y.wrapping_neg();
-        }
-    } else if y < x.wrapping_neg() {
-        let old_x = x;
-        x = y.wrapping_neg();
-        y = old_x;
-    }
-
-    let mut bias = 1i32;
-    for i in 1..23 {
-        let old_x = x;
-        if y > 0 {
-            x = x.wrapping_add(y.wrapping_add(bias) >> i);
-            y = y.wrapping_sub(old_x.wrapping_add(bias) >> i);
-        } else {
-            x = x.wrapping_sub(y.wrapping_add(bias) >> i);
-            y = y.wrapping_add(old_x.wrapping_add(bias) >> i);
-        }
-        bias = bias.wrapping_shl(1);
-    }
-
-    let magnitude = x.wrapping_abs() as u64;
-    let downscaled = ((magnitude * 0xDBD9_5B16 + 0x4000_0000) >> 32) as i32;
-    if shift > 0 {
-        downscaled.wrapping_add(1 << (shift - 1)) >> shift
-    } else {
-        ((downscaled as u32) << -shift) as i32
-    }
+pub fn ft_vector_length(x: i32, y: i32) -> i32 {
+    i32_wrap_from_i64(ft_vector_length_long(i64::from(x), i64::from(y)))
 }
 
 /// FreeType `FT_Vector_NormLen` for a signed 32-bit vector.
