@@ -143,27 +143,27 @@ Recorded on 2026-07-11 after converting `FT_Get_Gasp`,
 `FT_Get_CMap_Format`, and `FT_Get_CMap_Language_ID` from false-green adapters
 into real C oracle, Rust FFI, C ABI, and WASM ABI parity, adding the `gasp`
 stream-length and malformed-EOF controls, and adding compact `post` format
-1.0/2.5 glyph-name controls.
+1.0/2.5 plus malformed glyph-name controls.
 
 | Measure | Current |
 |---|---:|
-| Logical public API cases | 4,124 |
-| Concrete explicit cases | 6,503 |
-| Additional grouped variants | 2,379 |
+| Logical public API cases | 4,125 |
+| Concrete explicit cases | 6,510 |
+| Additional grouped variants | 2,385 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,502 |
-| Exact parity | 6,502 / 6,502 |
+| Runnable parity comparisons | 6,509 |
+| Exact parity | 6,509 / 6,509 |
 | Pending cases | 1 |
-| Covered Rust lines | 13,747 / 16,686 (82.39%) |
+| Covered Rust lines | 13,753 / 16,687 (82.42%) |
 | Rust function coverage | 812 / 1,023 (79.37%) |
 | Rust instantiation coverage | 815 / 1,026 (79.43%) |
-| Rust region coverage | 19,898 / 23,944 (83.10%) |
-| Rust branch/condition coverage | 3,317 / 4,246 (78.12%) |
+| Rust region coverage | 19,907 / 23,946 (83.13%) |
+| Rust branch/condition coverage | 3,323 / 4,246 (78.26%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
-| Active fixture font paths | 118 |
-| Stored active font binaries | 75 files, 664 KiB |
+| Active fixture font paths | 125 |
+| Stored active font binaries | 82 files, 686 KiB |
 | Active symlink aliases | 43 |
-| Unique active font contents | 83 SHA-256 identities |
+| Unique active font contents | 90 SHA-256 identities |
 | Deprecated brute-force fonts | 101 files, 99 unique contents, 23 MiB |
 
 The current coverage target is not only line coverage. The maintained
@@ -204,13 +204,17 @@ a `u16` range count. They must stay classified as defensive-unreachable unless
 a separate semantic refactor removes them; do not delete them only to improve
 coverage.
 
-Immediate `post` residuals: `src/tt/post.rs` now covers format 1.0, 2.0, 2.5,
-3.0/no-name, valid deltas, invalid negative deltas, glyph-name lookup, and
-name-index lookup through public parity. Remaining lines are invalid glyph
-index handling, unsupported format fallback, format 2.0 short/zero/custom-name
-truncation, and format 2.5 short/invalid-count guards. These need compact
-malformed `post` controls or an explicit defensive-unreachable classification;
-do not remove the guards for coverage.
+Immediate `post` residuals: `src/tt/post.rs` now covers format 1.0, valid
+format 2.0, valid format 2.5, short format 2.0/2.5 tables, zero format 2.0/2.5
+name counts, format 2.0 missing custom strings, format 2.5 above-limit counts,
+valid deltas, invalid negative deltas, glyph-name lookup, and name-index lookup
+through public parity. The malformed controls exposed two correctness fixes:
+unsupported `post` formats must not set `FT_FACE_FLAG_GLYPH_NAMES`, and missing
+format 2.0 custom names surface as `.notdef`. Remaining lines are the direct
+invalid-index guard plus format 3.0 and unsupported direct fallbacks inside the
+private resolver; current public wrappers validate or reject those states before
+calling into `post.rs`. Keep them classified unless a supported public route is
+identified.
 
 ### Remaining Public Input Dependencies On Deprecated Fonts
 
@@ -369,8 +373,8 @@ Evaluation checkpoint: 2026-07-11, latest verified unified condition-coverage ru
 
 This is the active coverage identification ledger. It supersedes earlier
 percentages in this section but does not replace the historical progress ledger
-below. The unified public API suite currently has 4,124 logical cases, 6,503
-concrete explicit cases, 6,502 runnable exact-parity cases, one pending case,
+below. The unified public API suite currently has 4,125 logical cases, 6,510
+concrete explicit cases, 6,509 runnable exact-parity cases, one pending case,
 and zero implicit cases. The pending case is
 `freetype.FT_Get_Postscript_Name.variation_instance_name_behavior`; it requires
 real `FT_Set_Named_Instance` support before it can become a valid runnable
@@ -382,9 +386,9 @@ Core Rust structural coverage from
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
 | Functions | 812 | 1,023 | 211 |
-| Lines | 13,747 | 16,686 | 2,939 |
-| Regions | 19,898 | 23,944 | 4,046 |
-| Branches/conditions | 3,317 | 4,246 | 929 |
+| Lines | 13,753 | 16,687 | 2,934 |
+| Regions | 19,907 | 23,946 | 4,039 |
+| Branches/conditions | 3,323 | 4,246 | 923 |
 
 Formal MC/DC is not reported by the installed Rust coverage tooling
 (`mcdc.count == 0`). Branch/condition coverage is therefore the instrumented
@@ -395,7 +399,7 @@ The remaining coverage divides exactly into these ownership groups:
 
 | Group | Modules | Missing functions | Missing lines | Missing regions | Missing branches | Primary action |
 |---|---|---:|---:|---:|---:|---|
-| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs` | 118 | 1,111 | 1,312 | 196 | public routing, wrapper thinness, metadata/state inputs |
+| Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs` | 118 | 1,106 | 1,305 | 190 | public routing, wrapper thinness, metadata/state inputs |
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
 | Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 20 | 775 | 1,024 | 423 | script reachability audit, then glyph topology rows |
 | TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `tables.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 7 | 152 | 486 | 137 | explicit bytecode-program glyph rows |
@@ -423,12 +427,12 @@ Per-file source gap ledger:
 | `src/tt/hinter/gs.rs` | 14 | 172/186 (92.47%) | 1 | 14 | 2 |
 | `src/autohint/globals.rs` | 14 | 200/214 (93.46%) | 1 | 23 | 18 |
 | `src/tt/cmap.rs` | 11 | 418/429 (97.44%) | 1 | 10 | 3 |
-| `src/tt/post.rs` | 8 | 89/97 (91.75%) | 0 | 20 | 8 |
 | `src/tt/hinter/tables.rs` | 6 | 19/25 (76.00%) | 2 | 8 | 0 |
 | `src/ffi/types.rs` | 5 | 0/5 (0.00%) | 1 | 3 | 0 |
 | `src/autohint/loader.rs` | 5 | 222/227 (97.80%) | 0 | 6 | 5 |
 | `src/tt/hinter/mod.rs` | 4 | 274/278 (98.56%) | 0 | 11 | 7 |
 | `src/tt/hinter/iup.rs` | 4 | 98/102 (96.08%) | 0 | 5 | 9 |
+| `src/tt/post.rs` | 3 | 95/98 (96.94%) | 0 | 13 | 2 |
 | `src/tt/mod.rs` | 3 | 111/114 (97.37%) | 1 | 4 | 0 |
 | `src/tt/hinter/zone.rs` | 3 | 34/37 (91.89%) | 0 | 6 | 6 |
 | `src/casts.rs` | 3 | 48/51 (94.12%) | 1 | 3 | 6 |
@@ -531,6 +535,32 @@ repo-visible evidence before more fixture rows are added.
    claim requires zero pending public rows and no false-green fallback rows for
    implemented surfaces.
 
+Coverage identification is complete only when this document has a row-level
+owner for every uncovered source line and function. The required fields for
+each ownership row are: source file and line range, public manifest subject,
+existing or new public input case, fixture font or table property, success or
+error behavior, expected C-oracle comparison surface, and one of the five
+classification buckets above. A raw missing-line list is not enough; every
+entry must identify the public route that will execute it or the semantic proof
+for not executing it.
+
+The generated artifact
+`target/coverage/unified-condition-missing-lines.txt` is the line-number input
+for the identification pass. The checked-in output is this plan, not the
+generated target file. After every coverage run, copy only the summarized
+ownership delta into the tables here so the repo records which missing paths are
+still real work.
+
+The next identification batch is R0 completion:
+
+| Artifact | Required output |
+|---|---|
+| False-green route audit | List every remaining `oracle_fallback_args` operation and mark it as implemented-real-parity, intentionally unsupported, or pending implementation |
+| Uncovered function ledger | For each missing function, record public subject, owning JSON file, and whether it needs input, delegation, font data, core implementation, or semantic cleanup |
+| Uncovered line ledger | For each high-volume file, collapse adjacent lines into behavior families and assign a fixture/font property before adding any rows |
+| Branch/condition ledger | For each compound predicate family, record the minimal independent-effect inputs, not all Cartesian combinations |
+| Pending ledger | Resolve `FT_Get_Postscript_Name.variation_instance_name_behavior` through real named-instance support or keep it visibly pending |
+
 Concrete queue from the current denominator:
 
 1. Audit every remaining `oracle_fallback_args` route. If the operation is
@@ -557,10 +587,10 @@ The completion budget is deliberately conservative:
 
 | Resource | Current | Completion ceiling | Rule |
 |---|---:|---:|---|
-| Concrete explicit cases | 6,503 | 6,914 | Add only named obligations, not product axes |
-| Runnable parity cases | 6,502 | same as concrete | Pending must go to zero through real implementation |
+| Concrete explicit cases | 6,510 | 6,914 | Add only named obligations, not product axes |
+| Runnable parity cases | 6,509 | same as concrete | Pending must go to zero through real implementation |
 | Pending cases | 1 | 0 | No symbolic final rows |
-| New semantic font files | 10 in current metadata pass | review before adding more | Extend source-backed focused fonts first |
+| New semantic font files | 17 in current metadata pass | review before adding more | Extend source-backed focused fonts first |
 | New glyph programs/topologies | 0 in next pass | 160 | One glyph role per behavior family, not per glyph index |
 | Implicit cases | 0 | 0 | Hidden discovery remains forbidden |
 
@@ -568,7 +598,7 @@ The 500-case allowance is a ceiling, not a target. A batch must justify every
 variant by a named uncovered behavior. Existing focused fonts should be
 extended before creating a new content identity.
 
-At completion, consolidate the current 83 active unique font contents toward no
+At completion, consolidate the current 90 active unique font contents toward no
 more than 30 inspectable semantic containers. The target shape is:
 
 - One core TrueType topology/metadata matrix.
@@ -1123,6 +1153,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Real gasp and cmap metadata public API parity | 78 unique hashes | 0 | 6,495 | 6,494 / 6,494 | 1 | 13,721 / 16,684 lines; 19,849 / 23,941 regions; 3,310 / 4,246 branches | `FT_Get_Gasp`, `FT_Get_CMap_Format`, and `FT_Get_CMap_Language_ID` now compare exact C oracle, Rust FFI, C ABI, and WASM ABI rows. One 3.9 KiB cmap matrix covers format 4, 6, 12, 14, null, and out-of-range charmap metadata without broad-font multiplication |
 | 2026-07-11 | Gasp stream-length and malformed EOF controls | 81 unique hashes | 0 | 6,498 | 6,497 / 6,497 | 1 | 13,725 / 16,686 lines; 19,856 / 23,944 regions; 3,311 / 4,246 branches | three compact `gasp` controls cover FreeType's stream read beyond SFNT record length, a physical one-byte header, and a truncated range array. The stream-length row exposed and fixed Rust's previous table-length-capped parse; exact Rust/C/WASM parity remains green |
 | 2026-07-11 | Compact post format name controls | 83 unique hashes | 0 | 6,503 | 6,502 / 6,502 | 1 | 13,747 / 16,686 lines; 19,898 / 23,944 regions; 3,317 / 4,246 branches | two compact `post` controls cover format 1.0 non-258-glyph default names and format 2.5 signed-delta name lookup through `FT_Get_Glyph_Name` and `FT_Get_Name_Index`; `tt/post.rs` now has 7/7 functions and 89/97 lines covered with exact Rust/C/WASM parity |
+| 2026-07-11 | Malformed post name controls | 90 unique hashes | 0 | 6,510 | 6,509 / 6,509 | 1 | 13,753 / 16,687 lines; 19,907 / 23,946 regions; 3,323 / 4,246 branches | seven compact `post` controls cover short and zero-count format 2.0/2.5 tables, truncated format 2.0 custom names, above-limit format 2.5 counts, and unsupported post formats. Exact parity exposed and fixed Rust's unsupported-format glyph-name flag and missing-custom-name fallback |
 
 ## Decision Log
 
@@ -1182,6 +1213,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Treat cmap format/language fixtures as metadata parity, not stubs | `FT_Get_CMap_Format` and `FT_Get_CMap_Language_ID` now use a compact generated SFNT cmap matrix instead of modeled values. Pinned `ftobjs.c` returns `-1` for invalid format probes, `0` for invalid language probes, and `ttcmap.c` reports format 14 language as `0xFFFFFFFF` |
 | 2026-07-11 | Match FreeType's `gasp` stream read length | Pinned `tt_face_load_gasp` seeks to the table and reads frames from the stream without using the SFNT record length as a cap. Rust must parse from the table offset to physical stream EOF for this optional table, while genuinely short physical data still degrades to `FT_GASP_NO_TABLE` |
 | 2026-07-11 | Match FreeType's `post` format 2.5 tag and delta behavior | Pinned `ttpost.c` recognizes format 2.5 as `0x00025000`, computes `glyph_index + signed_delta`, and maps out-of-range results to Mac glyph index 0. Format 1.0 only returns Mac standard names when `maxp.numGlyphs == 258`; otherwise the public name stays `.notdef` |
+| 2026-07-11 | Match malformed `post` public fallbacks | Pinned FreeType clears the output buffer and returns `Invalid_Argument` when an unsupported `post` format prevents `FT_HAS_GLYPH_NAMES`, while malformed format 2.0/2.5 name payloads that pass the header flag still return success with `.notdef`. Rust must keep scalar `post` metadata parsed while exposing glyph-name capability only for accepted formats 1.0, 2.0, and 2.5 |
 
 ## Immediate Next Actions
 

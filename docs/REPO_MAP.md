@@ -339,6 +339,7 @@ generated reports, build outputs, and package installs.
 |   |   |-- build_cmap_fixtures.py
 |   |   |-- build_ft.sh
 |   |   |-- build_gasp_fixtures.py
+|   |   |-- build_post_fixtures.py
 |   |   |-- build_unified_oracle.py
 |   |   |-- check_public_api_inputs.py
 |   |   |-- extract_blues.py

@@ -654,13 +654,13 @@ impl Font {
         {
             flags |= FT_FACE_FLAG_FIXED_WIDTH;
         }
-        // sfobjs.c:1118-1121 exposes glyph names for all valid `post` formats
-        // except format 3, which intentionally contains no glyph names.
+        // sfobjs.c:1118-1121 exposes glyph names only if `tt_face_load_post`
+        // accepted the `post` format, and format 3 intentionally has no names.
         if self
             .data
             .post
             .as_ref()
-            .is_some_and(|post| post.format_type != 0x0003_0000)
+            .is_some_and(|post| matches!(post.format_type, 0x0001_0000 | 0x0002_0000 | 0x0002_5000))
         {
             flags |= FT_FACE_FLAG_GLYPH_NAMES;
         }

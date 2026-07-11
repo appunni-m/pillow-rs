@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 118 | 75 | 43 | 83 | 664 KiB |
+| Active fixtures | 125 | 82 | 43 | 90 | 686 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 5 | 5 | 0 | 5 | 187 KiB |
 
@@ -98,6 +98,13 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `acb83f0642a9` | 16.9 | 1 | `fonts/metadata/short-os2-post.ttf` | compact glyf with a 77-byte OS/2 table and 15-byte post table; owns both optional short-table fallbacks |
 | `12b8e116037d` | 3.0 | 1 | `fonts/metadata/post-format-1.ttf` | compact glyf with `post` format 1.0 and non-258 glyph count; owns FreeType's default `.notdef` glyph-name behavior |
 | `2571fddb58ac` | 3.1 | 1 | `fonts/metadata/post-format-25.ttf` | compact glyf with FreeType's historical `post` format 2.5 tag `0x00025000`; owns valid signed-delta names and out-of-range deltas mapping to Mac glyph 0 |
+| `dbe5cef750a9` | 3.0 | 1 | `fonts/metadata/post-format-unsupported.ttf` | compact glyf with unsupported `post` format 4.0; owns C's cleared-buffer `Invalid_Argument` public glyph-name behavior |
+| `18fc60864980` | 3.0 | 1 | `fonts/metadata/post-format-20-short.ttf` | compact glyf with format 2.0 table shorter than the glyph-name count field; owns default-name fallback after ignored load failure |
+| `712b4bbd33d0` | 3.0 | 1 | `fonts/metadata/post-format-20-zero.ttf` | compact glyf with format 2.0 declaring zero glyph names; owns the zero-count default-name path |
+| `401588233b68` | 3.0 | 1 | `fonts/metadata/post-format-20-custom-truncated.ttf` | compact glyf with a format 2.0 custom-name index and no Pascal string bytes; owns the missing-custom-name `.notdef` fallback |
+| `2f50d6f217bd` | 3.0 | 1 | `fonts/metadata/post-format-25-short.ttf` | compact glyf with format 2.5 table shorter than the glyph-name count field; owns default-name fallback after ignored load failure |
+| `86500c6b0a3b` | 3.0 | 1 | `fonts/metadata/post-format-25-zero.ttf` | compact glyf with format 2.5 declaring zero glyph names; owns the zero-count default-name path |
+| `149337a4d1da` | 3.0 | 1 | `fonts/metadata/post-format-25-too-many.ttf` | compact glyf with format 2.5 declaring 387 glyph deltas; owns FreeType's above-theoretical-limit rejection |
 | `9e63ed2c07b6` | 17.2 | 1 | `fonts/metadata/os2-use-typo-metrics.ttf` | compact glyf with `USE_TYPO_METRICS`; owns OS/2 typographic face and size metric selection |
 | `5df1e876cc25` | 1.9 | 1 | `fonts/metadata/head-short-eof.ttf` | 53-byte required head table at physical EOF; owns the short-header face-open error |
 | `4e4f32fced92` | 1.6 | 1 | `fonts/names/name-record-matrix.ttf` | nine-record name table covering Windows decode failures, Mac Roman and arbitrary-Windows fallbacks, invalid ranges, zero lengths, and every preference predicate outcome |
@@ -175,6 +182,10 @@ listed because they enter different hinting and scaling conditions.
 | `hdmx_observable.ttf` | U+0041 gid 36 (`A`) | 20 | default, compute-metrics, mono hdmx, and mono suppression conditions |
 | `post-format-1.ttf` | gid 1 | name lookup only | `post` format 1.0 with non-258 glyph count returns FreeType's default `.notdef` instead of Mac standard names |
 | `post-format-25.ttf` | gid 36 (`A`), gid 1 | name lookup only | format 2.5 signed-delta rows cover valid Mac-name lookup and invalid negative deltas mapping to `.notdef` / glyph index 0 |
+| `post-format-unsupported.ttf` | gid 1 | name lookup only | unsupported non-3.0 format proves the public `FT_HAS_GLYPH_NAMES` / cleared-buffer `Invalid_Argument` path |
+| `post-format-20-short.ttf`, `post-format-20-zero.ttf` | gid 1 | name lookup only | malformed format 2.0 headers default to `.notdef` with exact public status and buffer parity |
+| `post-format-20-custom-truncated.ttf` | gid 1 | name lookup only | format 2.0 custom name index without string bytes returns `.notdef` like the C oracle |
+| `post-format-25-short.ttf`, `post-format-25-zero.ttf`, `post-format-25-too-many.ttf` | gid 1 | name lookup only | malformed format 2.5 headers and above-limit counts default to `.notdef` with exact public status and buffer parity |
 | `glyf-component-matrix.ttf` | gids 3-10 | 19, 20 | point attachment, word XY arguments, all component transforms, rounded/unrounded offsets, use-my-metrics, and composite instructions |
 | `glyf-component-matrix.ttf` | gids 18, 19, 23 | 20 | accepted depth-8 boundary, rejected depth-9 recursion, and non-empty composite with an empty child |
 | `glyf-malformed-matrix.ttf` | gids 1-19 | 20 | one explicitly selected malformed record per simple/composite parser boundary and table/reference error |
@@ -363,14 +374,15 @@ and selected-glyph obligations still come from explicit inputs.
     Rust now propagates a present malformed vhea like FreeType while retaining
     an empty vmtx for a present but unreadable metrics table; `tt/hhea.rs` and
     `tt/vhea.rs` have 100% structural coverage.
-20. Five metadata controls cover a physically short required head, optional
-    short OS/2 and post tables, OS/2 `USE_TYPO_METRICS`, and `post` format
-    1.0/2.5 glyph-name behavior. FreeType selects typographic metrics first
-    when that bit is set, otherwise hhea when nonzero, then OS/2 typo and
-    Windows fallbacks; Rust now uses that order consistently for face and size
-    metrics. `tt/head.rs` and `tt/os2.rs` have 100% structural coverage, while
-    `tt/post.rs` currently has full function coverage with remaining malformed
-    or defensive branch obligations visible in the coverage plan.
+20. Twelve metadata controls cover a physically short required head, optional
+    short OS/2 and post tables, OS/2 `USE_TYPO_METRICS`, valid `post` format
+    1.0/2.5 glyph-name behavior, and malformed format 2.0/2.5 public fallback
+    behavior. FreeType selects typographic metrics first when that bit is set,
+    otherwise hhea when nonzero, then OS/2 typo and Windows fallbacks; Rust now
+    uses that order consistently for face and size metrics. `tt/head.rs` and
+    `tt/os2.rs` have 100% structural coverage, while `tt/post.rs` currently
+    has full function coverage and 95/98 lines with the remaining direct
+    resolver guards classified in the coverage plan.
 21. Four 1.5–1.6 KiB name controls cover both malformed-table exits, raw-record
     filtering, Windows UTF-16 failures, Mac Roman and arbitrary-Windows
     fallbacks, empty defaults, and each operand outcome in the preference

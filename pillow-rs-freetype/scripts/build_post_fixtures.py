@@ -48,6 +48,39 @@ def write_format_25() -> None:
     patch_table_bytes(path, b"post", payload)
 
 
+def write_malformed_controls() -> None:
+    write_post_payload("post-format-unsupported.ttf", 0x0004_0000, b"")
+    write_post_payload("post-format-20-short.ttf", 0x0002_0000, b"", table_len=32)
+    write_post_payload("post-format-20-zero.ttf", 0x0002_0000, (0).to_bytes(2, "big"))
+    write_post_payload(
+        "post-format-20-custom-truncated.ttf",
+        0x0002_0000,
+        (2).to_bytes(2, "big") + (0).to_bytes(2, "big") + (258).to_bytes(2, "big"),
+    )
+    write_post_payload("post-format-25-short.ttf", 0x0002_5000, b"", table_len=32)
+    write_post_payload("post-format-25-zero.ttf", 0x0002_5000, (0).to_bytes(2, "big"))
+    write_post_payload("post-format-25-too-many.ttf", 0x0002_5000, (387).to_bytes(2, "big"))
+
+
+def write_post_payload(
+    name: str, format_type: int, payload_after_header: bytes, table_len: int | None = None
+) -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    font["post"].formatType = 3.0
+    path = OUT_DIR / name
+    save_font(path, font)
+
+    data = bytearray(path.read_bytes())
+    records = table_records(data)
+    post = records[b"post"]
+    header = bytearray(data[post["offset"] : post["offset"] + 32])
+    header[0:4] = format_type.to_bytes(4, "big")
+    payload = bytes(header) + payload_after_header
+    if table_len is not None:
+        payload = payload[:table_len]
+    patch_table_bytes(path, b"post", payload)
+
+
 def patch_table_bytes(path: Path, tag: bytes, payload: bytes) -> None:
     data = bytearray(path.read_bytes())
     records = table_records(data)
@@ -98,6 +131,7 @@ def checksum(table_data: bytes | bytearray) -> int:
 def main() -> None:
     write_format_1()
     write_format_25()
+    write_malformed_controls()
 
 
 if __name__ == "__main__":
