@@ -315,6 +315,27 @@
             "coverage": [
               "sfnt-load-table:offset-beyond-table"
             ]
+          },
+          {
+            "id": "head-offset-one-past-table",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/sfnt/basic-ttf.ttf",
+                "role": "font"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "tag": "TTAG_head",
+              "tag_hex": "0x68656164",
+              "offset": 55,
+              "buffer_kind": "null",
+              "length_state": "zero"
+            },
+            "coverage": [
+              "sfnt-load-table:offset-one-past-head-table"
+            ]
           }
         ]
       },
