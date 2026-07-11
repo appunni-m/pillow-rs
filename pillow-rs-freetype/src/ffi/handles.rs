@@ -1487,52 +1487,54 @@ pub fn FT_Size_Metrics(face: &FT_Face) -> FT_Size_MetricsRec {
     face.inner.size_metrics().into()
 }
 
+#[inline]
+fn ft_long_to_i64(value: FT_Long) -> i64 {
+    // `FT_Long` is `i64` on this host and can be narrower on other targets.
+    // Keep the conversion explicit at the FFI/core boundary without making
+    // host-specific type aliases leak into the fixed-math helpers.
+    #[allow(clippy::useless_conversion)]
+    {
+        i64::from(value)
+    }
+}
+
 pub fn FT_MulDiv(a: FT_Long, b: FT_Long, c: FT_Long) -> FT_Long {
-    let (a, sign) = move_long_sign(a, 1);
-    let (b, sign) = move_long_sign(b, sign);
-    let (c, sign) = move_long_sign(c, sign);
-    let d = a
-        .wrapping_mul(b)
-        .wrapping_add(c >> 1)
-        .checked_div(c)
-        .unwrap_or(0x7FFF_FFFF) as FT_Long;
-    if sign < 0 { neg_long(d) } else { d }
+    crate::fixed::ft_mul_div_long(ft_long_to_i64(a), ft_long_to_i64(b), ft_long_to_i64(c))
+        as FT_Long
 }
 
 pub fn FT_MulFix(a: FT_Long, b: FT_Long) -> FT_Long {
-    let ab = i128::from(a) * i128::from(b);
-    ((ab + 0x8000 + (ab >> 63)) >> 16) as FT_Long
+    crate::fixed::ft_mul_fix_long(ft_long_to_i64(a), ft_long_to_i64(b)) as FT_Long
 }
 
 pub fn FT_DivFix(a: FT_Long, b: FT_Long) -> FT_Long {
-    let (a, sign) = move_long_sign(a, 1);
-    let (b, sign) = move_long_sign(b, sign);
-    let q = a
-        .wrapping_shl(16)
-        .wrapping_add(b >> 1)
-        .checked_div(b)
-        .unwrap_or(0x7FFF_FFFF) as FT_Long;
-    if sign < 0 { neg_long(q) } else { q }
+    crate::fixed::ft_div_fix_long(ft_long_to_i64(a), ft_long_to_i64(b)) as FT_Long
 }
 
 pub fn FT_RoundFix(a: FT_Fixed) -> FT_Fixed {
-    add_long(a, 0x8000 - FT_Fixed::from(a < 0)) & !0xFFFF
+    crate::fixed::ft_round_fix_long(ft_long_to_i64(a)) as FT_Fixed
 }
 
 pub fn FT_CeilFix(a: FT_Fixed) -> FT_Fixed {
-    add_long(a, 0xFFFF) & !0xFFFF
+    crate::fixed::ft_ceil_fix_long(ft_long_to_i64(a)) as FT_Fixed
 }
 
 pub fn FT_FloorFix(a: FT_Fixed) -> FT_Fixed {
-    a & !0xFFFF
+    crate::fixed::ft_floor_fix_long(ft_long_to_i64(a)) as FT_Fixed
 }
 
 pub fn FT_Vector_Transform(vector: Option<&mut FT_Vector>, matrix: Option<&FT_Matrix>) {
     let (Some(vector), Some(matrix)) = (vector, matrix) else {
         return;
     };
-    let xz = FT_MulFix(vector.x, matrix.xx).wrapping_add(FT_MulFix(vector.y, matrix.xy));
-    let yz = FT_MulFix(vector.x, matrix.yx).wrapping_add(FT_MulFix(vector.y, matrix.yy));
+    let xz = crate::fixed::ft_add_long(
+        ft_long_to_i64(FT_MulFix(vector.x, matrix.xx)),
+        ft_long_to_i64(FT_MulFix(vector.y, matrix.xy)),
+    ) as FT_Pos;
+    let yz = crate::fixed::ft_add_long(
+        ft_long_to_i64(FT_MulFix(vector.x, matrix.yx)),
+        ft_long_to_i64(FT_MulFix(vector.y, matrix.yy)),
+    ) as FT_Pos;
     vector.x = xz;
     vector.y = yz;
 }
@@ -1541,10 +1543,22 @@ pub fn FT_Matrix_Multiply(a: Option<&FT_Matrix>, b: Option<&mut FT_Matrix>) {
     let (Some(a), Some(b)) = (a, b) else {
         return;
     };
-    let xx = add_long(FT_MulFix(a.xx, b.xx), FT_MulFix(a.xy, b.yx));
-    let xy = add_long(FT_MulFix(a.xx, b.xy), FT_MulFix(a.xy, b.yy));
-    let yx = add_long(FT_MulFix(a.yx, b.xx), FT_MulFix(a.yy, b.yx));
-    let yy = add_long(FT_MulFix(a.yx, b.xy), FT_MulFix(a.yy, b.yy));
+    let xx = crate::fixed::ft_add_long(
+        ft_long_to_i64(FT_MulFix(a.xx, b.xx)),
+        ft_long_to_i64(FT_MulFix(a.xy, b.yx)),
+    ) as FT_Fixed;
+    let xy = crate::fixed::ft_add_long(
+        ft_long_to_i64(FT_MulFix(a.xx, b.xy)),
+        ft_long_to_i64(FT_MulFix(a.xy, b.yy)),
+    ) as FT_Fixed;
+    let yx = crate::fixed::ft_add_long(
+        ft_long_to_i64(FT_MulFix(a.yx, b.xx)),
+        ft_long_to_i64(FT_MulFix(a.yy, b.yx)),
+    ) as FT_Fixed;
+    let yy = crate::fixed::ft_add_long(
+        ft_long_to_i64(FT_MulFix(a.yx, b.xy)),
+        ft_long_to_i64(FT_MulFix(a.yy, b.yy)),
+    ) as FT_Fixed;
     b.xx = xx;
     b.xy = xy;
     b.yx = yx;
@@ -1555,25 +1569,20 @@ pub fn FT_Matrix_Invert(matrix: Option<&mut FT_Matrix>) -> FT_Error {
     let Some(matrix) = matrix else {
         return FT_Err_Invalid_Argument;
     };
-    let delta = FT_MulFix(matrix.xx, matrix.yy).wrapping_sub(FT_MulFix(matrix.xy, matrix.yx));
+    let delta = crate::fixed::ft_add_long(
+        ft_long_to_i64(FT_MulFix(matrix.xx, matrix.yy)),
+        crate::fixed::ft_neg_long(ft_long_to_i64(FT_MulFix(matrix.xy, matrix.yx))),
+    ) as FT_Fixed;
     if delta == 0 {
         return FT_Err_Invalid_Argument;
     }
     let xx = matrix.xx;
     let yy = matrix.yy;
-    matrix.xy = neg_long(FT_DivFix(matrix.xy, delta));
-    matrix.yx = neg_long(FT_DivFix(matrix.yx, delta));
+    matrix.xy = crate::fixed::ft_neg_long(ft_long_to_i64(FT_DivFix(matrix.xy, delta))) as FT_Fixed;
+    matrix.yx = crate::fixed::ft_neg_long(ft_long_to_i64(FT_DivFix(matrix.yx, delta))) as FT_Fixed;
     matrix.xx = FT_DivFix(yy, delta);
     matrix.yy = FT_DivFix(xx, delta);
     FT_Err_Ok
-}
-
-fn add_long(a: FT_Long, b: FT_Long) -> FT_Long {
-    (a as FT_ULong).wrapping_add(b as FT_ULong) as FT_Long
-}
-
-fn neg_long(a: FT_Long) -> FT_Long {
-    (0 as FT_ULong).wrapping_sub(a as FT_ULong) as FT_Long
 }
 
 fn move_long_sign(value: FT_Long, sign: i32) -> (FT_ULong, i32) {

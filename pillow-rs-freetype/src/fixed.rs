@@ -6,19 +6,96 @@
 //! zero. They avoid floating point so the scaler, auto-hinter, and TrueType VM
 //! share one deterministic arithmetic model.
 
-/// Wrapping 32-bit addition used by FreeType's `ADD_LONG` macro.
+/// Wrapping native-long addition used by FreeType's `ADD_LONG` macro.
 #[inline]
-fn add_long(a: i32, b: i32) -> i32 {
-    a.wrapping_add(b)
+pub(crate) fn ft_add_long(a: i64, b: i64) -> i64 {
+    (a as u64).wrapping_add(b as u64) as i64
 }
 
-/// Wrapping two's-complement negation used by FreeType's `NEG_LONG` macro.
+/// Wrapping native-long two's-complement negation used by FreeType's `NEG_LONG` macro.
 #[inline]
-fn neg_long(a: i32) -> i32 {
-    0i32.wrapping_sub(a)
+pub(crate) fn ft_neg_long(a: i64) -> i64 {
+    0u64.wrapping_sub(a as u64) as i64
 }
 
-use crate::casts::{i32_from_i64, i32_from_u64};
+#[inline]
+fn i32_wrap_from_i64(x: i64) -> i32 {
+    #[allow(clippy::cast_possible_truncation)]
+    {
+        x as i32
+    }
+}
+
+#[inline]
+fn move_long_sign(value: i64, sign: i32) -> (u64, i32) {
+    if value < 0 {
+        (0u64.wrapping_sub(value as u64), -sign)
+    } else {
+        (value as u64, sign)
+    }
+}
+
+/// FreeType `FT_MulDiv` over the public `FT_Long` domain.
+#[inline]
+pub(crate) fn ft_mul_div_long(a: i64, b: i64, c: i64) -> i64 {
+    let (a, sign) = move_long_sign(a, 1);
+    let (b, sign) = move_long_sign(b, sign);
+    let (c, sign) = move_long_sign(c, sign);
+    let d = a
+        .wrapping_mul(b)
+        .wrapping_add(c >> 1)
+        .checked_div(c)
+        .unwrap_or(0x7FFF_FFFF) as i64;
+    if sign < 0 { ft_neg_long(d) } else { d }
+}
+
+/// FreeType `FT_MulDiv_No_Round` over the public `FT_Long` domain.
+#[inline]
+pub(crate) fn ft_mul_div_no_round_long(a: i64, b: i64, c: i64) -> i64 {
+    let (a, sign) = move_long_sign(a, 1);
+    let (b, sign) = move_long_sign(b, sign);
+    let (c, sign) = move_long_sign(c, sign);
+    let d = a.wrapping_mul(b).checked_div(c).unwrap_or(0x7FFF_FFFF) as i64;
+    if sign < 0 { ft_neg_long(d) } else { d }
+}
+
+/// FreeType `FT_MulFix` over the public `FT_Long` domain.
+#[inline]
+pub(crate) fn ft_mul_fix_long(a: i64, b: i64) -> i64 {
+    let ab = (a as u64).wrapping_mul(b as u64) as i64;
+    ft_add_long(ft_add_long(ab, 0x8000), ab >> 63) >> 16
+}
+
+/// FreeType `FT_DivFix` over the public `FT_Long` domain.
+#[inline]
+pub(crate) fn ft_div_fix_long(a: i64, b: i64) -> i64 {
+    let (a, sign) = move_long_sign(a, 1);
+    let (b, sign) = move_long_sign(b, sign);
+    let q = a
+        .wrapping_shl(16)
+        .wrapping_add(b >> 1)
+        .checked_div(b)
+        .unwrap_or(0x7FFF_FFFF) as i64;
+    if sign < 0 { ft_neg_long(q) } else { q }
+}
+
+/// FreeType `FT_RoundFix` over the public `FT_Fixed` domain.
+#[inline]
+pub(crate) fn ft_round_fix_long(a: i64) -> i64 {
+    ft_add_long(a, 0x8000 - i64::from(a < 0)) & !0xFFFF
+}
+
+/// FreeType `FT_CeilFix` over the public `FT_Fixed` domain.
+#[inline]
+pub(crate) fn ft_ceil_fix_long(a: i64) -> i64 {
+    ft_add_long(a, 0xFFFF) & !0xFFFF
+}
+
+/// FreeType `FT_FloorFix` over the public `FT_Fixed` domain.
+#[inline]
+pub(crate) fn ft_floor_fix_long(a: i64) -> i64 {
+    a & !0xFFFF
+}
 
 /// FreeType `FT_MulDiv` with rounded sign-stripped integer division.
 ///
@@ -27,16 +104,7 @@ use crate::casts::{i32_from_i64, i32_from_u64};
 /// Returns FreeType's `0x7fff_ffff` sentinel when `c` is zero.
 #[inline]
 pub fn ft_mul_div(a: i32, b: i32, c: i32) -> i32 {
-    if c == 0 {
-        return 0x7FFFFFFF;
-    }
-    let ua: u64 = (a as i64).unsigned_abs();
-    let ub: u64 = (b as i64).unsigned_abs();
-    let uc: u64 = (c as i64).unsigned_abs();
-    let d = (ua.wrapping_mul(ub) + (uc >> 1)) / uc;
-    let d32 = i32_from_u64(d);
-    let negate = ((a < 0) ^ (b < 0)) ^ (c < 0);
-    if negate { 0i32.wrapping_sub(d32) } else { d32 }
+    i32_wrap_from_i64(ft_mul_div_long(i64::from(a), i64::from(b), i64::from(c)))
 }
 
 /// FT_MulDiv_No_Round — matches C's sign-stripped truncating division.
@@ -45,15 +113,11 @@ pub fn ft_mul_div(a: i32, b: i32, c: i32) -> i32 {
 /// no-round variant, unlike `MUL[]`, which uses rounded `FT_MulDiv`.
 #[inline]
 pub fn ft_mul_div_no_round(a: i32, b: i32, c: i32) -> i32 {
-    if c == 0 {
-        return 0x7FFFFFFF;
-    }
-    let ua: u64 = (a as i64).unsigned_abs();
-    let ub: u64 = (b as i64).unsigned_abs();
-    let uc: u64 = (c as i64).unsigned_abs();
-    let d32 = i32_from_u64(ua.wrapping_mul(ub) / uc);
-    let negate = ((a < 0) ^ (b < 0)) ^ (c < 0);
-    if negate { 0i32.wrapping_sub(d32) } else { d32 }
+    i32_wrap_from_i64(ft_mul_div_no_round_long(
+        i64::from(a),
+        i64::from(b),
+        i64::from(c),
+    ))
 }
 
 /// FreeType `FT_MulFix`: multiply by a 16.16 fixed-point factor.
@@ -63,9 +127,7 @@ pub fn ft_mul_div_no_round(a: i32, b: i32, c: i32) -> i32 {
 /// giving FreeType's rounded-toward-infinity behavior for both sign cases.
 #[inline]
 pub fn ft_mul_fix(a: i32, b: i32) -> i32 {
-    let ab = (a as i64).wrapping_mul(b as i64);
-    let rounded = ab.wrapping_add(0x8000).wrapping_add(ab >> 63);
-    i32_from_i64(rounded >> 16)
+    i32_wrap_from_i64(ft_mul_fix_long(i64::from(a), i64::from(b)))
 }
 
 /// FreeType `FT_DivFix`: divide and return a 16.16 fixed-point quotient.
@@ -85,15 +147,7 @@ pub fn ft_div_fix(a: i32, b: i32) -> i32 {
     // This is NOT the same as signed ((a<<16)+(b>>1))/b because
     // signed division truncates toward zero vs floor behavior of
     // the sign-stripped unsigned path.
-    if b == 0 {
-        return 0x7FFFFFFF;
-    }
-    let ua: u64 = (a as i64).unsigned_abs();
-    let ub: u64 = (b as i64).unsigned_abs();
-    let q = ((ua << 16) + (ub >> 1)) / ub;
-    let q32 = i32_from_u64(q);
-    let negate = (a < 0) ^ (b < 0);
-    if negate { 0i32.wrapping_sub(q32) } else { q32 }
+    i32_wrap_from_i64(ft_div_fix_long(i64::from(a), i64::from(b)))
 }
 
 /// FreeType `FT_RoundFix`: round a 16.16 value to an integral 16.16 value.
@@ -101,8 +155,7 @@ pub fn ft_div_fix(a: i32, b: i32) -> i32 {
 /// `ADD_LONG(a, 0x8000L - (a < 0)) & ~0xFFFFL`.
 #[inline]
 pub fn ft_round_fix(a: i32) -> i32 {
-    let bias = 0x8000i32 - i32::from(a < 0);
-    add_long(a, bias) & !0xFFFFi32
+    i32_wrap_from_i64(ft_round_fix_long(i64::from(a)))
 }
 
 /// FreeType `FT_CeilFix`: ceiling a 16.16 value to an integral 16.16 value.
@@ -110,7 +163,7 @@ pub fn ft_round_fix(a: i32) -> i32 {
 /// Reference: `ftcalc.c:84`. `ADD_LONG(a, 0xFFFFL) & ~0xFFFFL`.
 #[inline]
 pub fn ft_ceil_fix(a: i32) -> i32 {
-    add_long(a, 0xFFFF) & !0xFFFFi32
+    i32_wrap_from_i64(ft_ceil_fix_long(i64::from(a)))
 }
 
 /// FreeType `FT_FloorFix`: floor a 16.16 value to an integral 16.16 value.
@@ -118,7 +171,7 @@ pub fn ft_ceil_fix(a: i32) -> i32 {
 /// Reference: `ftcalc.c:93`. `a & ~0xFFFFL`.
 #[inline]
 pub fn ft_floor_fix(a: i32) -> i32 {
-    a & !0xFFFFi32
+    i32_wrap_from_i64(ft_floor_fix_long(i64::from(a)))
 }
 
 #[inline]

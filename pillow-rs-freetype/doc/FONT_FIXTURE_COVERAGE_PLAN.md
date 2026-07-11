@@ -150,7 +150,10 @@ clear, and invalid-index rows through real C oracle, Rust FFI, C ABI, and WASM
 ABI execution, and reusing the shared signed big-endian `tt::read_i16` helper
 from the public `post` table parser, routing optional raw `fpgm`/`prep` table
 reads through their parser helpers, and extending the compact branch-edge TT
-program with invalid coordinate reads that reach the zone out-of-range guards.
+program with invalid coordinate reads that reach the zone out-of-range guards,
+and centralizing the public fixed-math and matrix wrapper arithmetic on core
+long-width FreeType helpers exercised by the existing fixed/vector/matrix
+public fixture rows.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -164,11 +167,11 @@ coordinate parity.
 | Runnable parity comparisons | 6,513 |
 | Exact parity | 6,513 / 6,513 |
 | Pending cases | 3 |
-| Covered Rust lines | 13,952 / 16,901 (82.55%) |
-| Rust function coverage | 826 / 1,037 (79.65%) |
-| Rust instantiation coverage | 829 / 1,040 (79.71%) |
-| Rust region coverage | 20,186 / 24,271 (83.17%) |
-| Rust branch/condition coverage | 3,347 / 4,298 (77.87%) |
+| Covered Rust lines | 13,981 / 16,920 (82.63%) |
+| Rust function coverage | 836 / 1,045 (80.00%) |
+| Rust instantiation coverage | 839 / 1,048 (80.06%) |
+| Rust region coverage | 20,221 / 24,298 (83.22%) |
+| Rust branch/condition coverage | 3,342 / 4,290 (77.90%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 125 |
 | Stored active font binaries | 82 files, 686 KiB |
@@ -202,7 +205,7 @@ Current largest uncovered buckets:
 | `src/scaler.rs` | 915 / 1,201 | 144 / 178 | 40 / 60 | 1,047 / 1,254 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 25 / 293 | 0 / 0 | 1 / 2 | 28 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
-| `src/ffi/handles.rs` | 1,345 / 1,500 | 243 / 290 | 143 / 163 | 1,866 / 2,047 | Public FFI route audit; wrappers stay thin and must delegate to core |
+| `src/ffi/handles.rs` | 1,340 / 1,495 | 239 / 286 | 142 / 162 | 1,853 / 2,034 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,223 / 1,340 | 298 / 410 | 37 / 40 | 2,464 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 835 / 941 | 339 / 426 | 18 / 19 | 1,118 / 1,247 | CJK topology rows in the compact multiscript fixture |
 | `src/api.rs` | 335 / 418 | 55 / 66 | 42 / 50 | 447 / 559 | Public API wrapper rows for render cache and glyph-slot surfaces |
@@ -225,6 +228,16 @@ invalid-index guard plus format 3.0 and unsupported direct fallbacks inside the
 private resolver; current public wrappers validate or reject those states before
 calling into `post.rs`. Keep them classified unless a supported public route is
 identified.
+
+Immediate fixed-math residuals: public `FT_MulDiv`, `FT_MulFix`,
+`FT_DivFix`, `FT_RoundFix`, `FT_CeilFix`, `FT_FloorFix`,
+`FT_Vector_Transform`, `FT_Matrix_Multiply`, and `FT_Matrix_Invert` now route
+through core long-width helpers and pass exact Rust FFI, C ABI, and WASM ABI
+fixture parity. The FFI wrapper no longer owns a separate arithmetic
+implementation. This is semantic centralization to enforce thin wrappers, not
+coverage-only deletion. Remaining `fixed.rs` lines are private 32-bit wrapper
+helpers plus vector-length and vector-normalization branches that need either
+existing public route inputs or a separate reachability classification.
 
 ### Remaining Public Input Dependencies On Deprecated Fonts
 
@@ -398,10 +411,10 @@ Core Rust structural coverage from
 
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
-| Functions | 826 | 1,037 | 211 |
-| Lines | 13,952 | 16,901 | 2,949 |
-| Regions | 20,186 | 24,271 | 4,085 |
-| Branches/conditions | 3,347 | 4,298 | 951 |
+| Functions | 836 | 1,045 | 209 |
+| Lines | 13,981 | 16,920 | 2,939 |
+| Regions | 20,221 | 24,298 | 4,077 |
+| Branches/conditions | 3,342 | 4,290 | 948 |
 
 Formal MC/DC is not reported by the installed Rust coverage tooling
 (`mcdc.count == 0`). Branch/condition coverage is therefore the instrumented
@@ -416,7 +429,7 @@ The remaining coverage divides exactly into these ownership groups:
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
 | Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 20 | 775 | 1,024 | 423 | script reachability audit, then glyph topology rows |
 | TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 139 | 469 | 132 | explicit bytecode-program glyph rows |
-| Math/casts | `fixed.rs`, `casts.rs` | 6 | 28 | 38 | 14 | scalar boundary rows or semantic cleanup |
+| Math/casts | `fixed.rs`, `casts.rs` | 4 | 18 | 30 | 11 | scalar boundary rows or semantic cleanup |
 
 Per-file source gap ledger:
 
@@ -428,14 +441,14 @@ Per-file source gap ledger:
 | `src/scaler.rs` | 286 | 915/1201 (76.19%) | 20 | 207 | 34 |
 | `src/autohint/globals_data.rs` | 268 | 25/293 (8.53%) | 1 | 206 | 0 |
 | `src/grays.rs` | 164 | 646/810 (79.75%) | 5 | 227 | 53 |
-| `src/ffi/handles.rs` | 155 | 1345/1500 (89.67%) | 20 | 181 | 47 |
+| `src/ffi/handles.rs` | 155 | 1340/1495 (89.63%) | 20 | 181 | 47 |
 | `src/tt/hinter/exec.rs` | 117 | 1223/1340 (91.27%) | 3 | 437 | 112 |
 | `src/autohint/cjk.rs` | 106 | 835/941 (88.74%) | 1 | 129 | 87 |
 | `src/api.rs` | 83 | 335/418 (80.14%) | 8 | 112 | 11 |
 | `src/tt/name.rs` | 40 | 200/240 (83.33%) | 3 | 83 | 46 |
 | `src/autohint/types.rs` | 32 | 71/103 (68.93%) | 7 | 25 | 1 |
 | `src/autohint/coverage.rs` | 28 | 0/28 (0.00%) | 7 | 35 | 4 |
-| `src/fixed.rs` | 25 | 146/171 (85.38%) | 5 | 35 | 8 |
+| `src/fixed.rs` | 15 | 180/195 (92.31%) | 3 | 27 | 5 |
 | `src/ffi/convert.rs` | 22 | 120/142 (84.51%) | 2 | 25 | 2 |
 | `src/tt/fvar.rs` | 18 | 50/68 (73.53%) | 4 | 22 | 3 |
 | `src/tt/hinter/gs.rs` | 14 | 172/186 (92.47%) | 1 | 14 | 2 |
