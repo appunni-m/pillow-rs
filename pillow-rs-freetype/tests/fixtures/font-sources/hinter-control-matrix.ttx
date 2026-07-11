@@ -910,7 +910,8 @@
       <instructions>
         <!-- Compact native-TT branch controls: zero-length line vector,
              invalid stack index fallbacks, taken JROF, no-round dispatch,
-             invalid contour shift, and an empty twilight-zone SHZ. -->
+             invalid contour shift, invalid coordinate reads, and an empty
+             twilight-zone SHZ. -->
         <bytecode>
           01
           b1 00 00 08
@@ -919,6 +920,9 @@
           b1 01 00 79
           b0 20 6c 21
           b0 09 34
+          b0 09 46 21
+          b0 09 47 21
+          b0 09 c0
           b0 00 15 b0 00 36
         </bytecode>
       </instructions>
