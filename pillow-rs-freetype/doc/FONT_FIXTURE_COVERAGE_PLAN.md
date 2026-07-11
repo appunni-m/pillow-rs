@@ -171,7 +171,7 @@ classifications, and moving public `FT_Vector_Length` execution onto a core
 and extending the source-backed branch-edge TrueType glyph with zero
 `SPVFS`/`SFVFS` stack-vector probes, and adding a compact source-backed
 `script-coverage.ttf` font plus explicit `FT_LOAD_FORCE_AUTOHINT` variants for
-14 script standard-character paths.
+18 script standard-character and Indic CJK-writing-system paths.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -179,17 +179,17 @@ coordinate parity.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,131 |
-| Concrete explicit cases | 6,546 |
-| Additional grouped variants | 2,415 |
+| Concrete explicit cases | 6,550 |
+| Additional grouped variants | 2,419 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,543 |
-| Exact parity | 6,543 / 6,543 |
+| Runnable parity comparisons | 6,547 |
+| Exact parity | 6,547 / 6,547 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,299 / 17,133 (83.46%) |
-| Rust function coverage | 853 / 1,060 (80.47%) |
-| Rust instantiation coverage | 856 / 1,063 (80.53%) |
-| Rust region coverage | 20,659 / 24,593 (84.00%) |
-| Rust branch/condition coverage | 3,423 / 4,364 (78.44%) |
+| Covered Rust lines | 14,312 / 17,146 (83.47%) |
+| Rust function coverage | 855 / 1,062 (80.51%) |
+| Rust instantiation coverage | 858 / 1,065 (80.56%) |
+| Rust region coverage | 20,693 / 24,623 (84.04%) |
+| Rust branch/condition coverage | 3,428 / 4,370 (78.44%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 135 |
 | Stored active font binaries | 92 files, 748 KiB |
@@ -221,7 +221,7 @@ Current largest uncovered buckets:
 | `src/font.rs` | 1,381 / 1,898 | 167 / 254 | 125 / 185 | 1,852 / 2,566 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,509 / 2,828 | 977 / 1,282 | 70 / 73 | 3,610 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
 | `src/scaler.rs` | 915 / 1,201 | 144 / 178 | 40 / 60 | 1,047 / 1,254 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
-| `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 78 / 234 | Script coverage rows; do not delete lookup data for coverage |
+| `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 82 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
 | `src/ffi/handles.rs` | 1,328 / 1,483 | 233 / 280 | 142 / 162 | 1,836 / 2,017 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,223 / 1,340 | 300 / 410 | 37 / 40 | 2,466 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
@@ -435,8 +435,8 @@ Evaluation checkpoint: 2026-07-11, latest verified unified condition-coverage ru
 
 This is the active coverage identification ledger. It supersedes earlier
 percentages in this section but does not replace the historical progress ledger
-below. The unified public API suite currently has 4,131 logical cases, 6,546
-concrete explicit cases, 6,543 runnable exact-parity cases, three explicit
+below. The unified public API suite currently has 4,131 logical cases, 6,550
+concrete explicit cases, 6,547 runnable exact-parity cases, three explicit
 pending named-instance obligations, and zero implicit cases.
 `FT_Get_Postscript_Name.variation_instance_name_behavior` remains an active
 parity row backed by real `FT_Set_Named_Instance` behavior, while
@@ -450,10 +450,10 @@ Core Rust structural coverage from
 
 | Measure | Covered | Total | Remaining |
 |---|---:|---:|---:|
-| Functions | 853 | 1,060 | 207 |
-| Lines | 14,299 | 17,133 | 2,834 |
-| Regions | 20,659 | 24,593 | 3,934 |
-| Branches/conditions | 3,423 | 4,364 | 941 |
+| Functions | 855 | 1,062 | 207 |
+| Lines | 14,312 | 17,146 | 2,834 |
+| Regions | 20,693 | 24,623 | 3,930 |
+| Branches/conditions | 3,428 | 4,370 | 942 |
 
 Formal MC/DC is not reported by the installed Rust coverage tooling
 (`mcdc.count == 0`). Branch/condition coverage is therefore the instrumented
@@ -466,7 +466,7 @@ The remaining coverage divides exactly into these ownership groups:
 |---|---|---:|---:|---:|---:|---|
 | Face/API/scaler/FFI/SFNT metadata | `font.rs`, `scaler.rs`, `api.rs`, `ffi/handles.rs`, `ffi/convert.rs`, `ffi/types.rs`, `tt/name.rs`, `tt/post.rs`, `tt/cmap.rs`, `tt/gasp.rs`, `tt/fvar.rs` | 119 | 1,076 | 1,287 | 223 | public routing, wrapper thinness, metadata/state inputs |
 | Rendering | `render.rs`, `grays.rs`, `outline.rs` | 60 | 873 | 1,186 | 159 | render topology, mode, clipping, pitch, SDF, and bitmap rows |
-| Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 20 | 734 | 969 | 420 | script reachability audit, then glyph topology rows |
+| Autohint | `latin.rs`, `cjk.rs`, `globals_data.rs`, `types.rs`, `coverage.rs`, `globals.rs`, `loader.rs` | 20 | 734 | 965 | 421 | script reachability audit, then glyph topology rows |
 | TrueType interpreter | `tt/hinter/exec.rs`, `gs.rs`, `mod.rs`, `zone.rs`, `iup.rs`, `tt/mod.rs` | 4 | 139 | 467 | 130 | explicit bytecode-program glyph rows |
 | Math/casts | `fixed.rs`, `casts.rs` | 4 | 12 | 25 | 9 | scalar boundary rows or semantic cleanup |
 
@@ -478,7 +478,7 @@ Per-file source gap ledger:
 | `src/font.rs` | 517 | 1381/1898 (72.76%) | 60 | 714 | 87 |
 | `src/autohint/latin.rs` | 319 | 2509/2828 (88.72%) | 3 | 597 | 305 |
 | `src/scaler.rs` | 286 | 915/1201 (76.19%) | 20 | 207 | 34 |
-| `src/autohint/globals_data.rs` | 230 | 63/293 (21.50%) | 1 | 156 | 0 |
+| `src/autohint/globals_data.rs` | 230 | 63/293 (21.50%) | 1 | 152 | 0 |
 | `src/grays.rs` | 164 | 646/810 (79.75%) | 5 | 227 | 53 |
 | `src/ffi/handles.rs` | 155 | 1328/1483 (89.55%) | 20 | 181 | 47 |
 | `src/tt/hinter/exec.rs` | 117 | 1223/1340 (91.27%) | 3 | 435 | 110 |
@@ -491,7 +491,7 @@ Per-file source gap ledger:
 | `src/ffi/convert.rs` | 22 | 120/142 (84.51%) | 2 | 25 | 2 |
 | `src/tt/fvar.rs` | 7 | 91/98 (92.86%) | 4 | 13 | 1 |
 | `src/tt/hinter/gs.rs` | 14 | 172/186 (92.47%) | 1 | 14 | 2 |
-| `src/autohint/globals.rs` | 14 | 200/214 (93.46%) | 1 | 23 | 18 |
+| `src/autohint/globals.rs` | 14 | 213/227 (93.83%) | 1 | 21 | 19 |
 | `src/tt/cmap.rs` | 3 | 426/429 (99.30%) | 1 | 5 | 0 |
 | `src/ffi/types.rs` | 5 | 0/5 (0.00%) | 1 | 3 | 0 |
 | `src/autohint/loader.rs` | 5 | 222/227 (97.80%) | 0 | 6 | 5 |
@@ -1412,6 +1412,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Compact malformed format-14 cmap controls | 102 unique hashes | 0 | 6,532 | 6,529 / 6,529 | 3 | 14,258 / 17,133 lines; 20,604 / 24,593 regions; 3,420 / 4,364 branches | `scripts/build_cmap_fixtures.py` now emits a raw `cmap-format14-malformed-matrix.ttf` with one valid Unicode format 6 subtable plus malformed format 14 short, length-short, and record-array-overflow subtables. One explicit `FT_Get_Char_Index` row proves pinned FreeType, Rust, C ABI, and WASM all ignore the malformed optional format-14 records while preserving the valid charmap, bringing `tt/cmap.rs` to 100% branch coverage without implicit case growth |
 | 2026-07-11 | Compact autohint script standard-character fixture | 103 unique hashes | 0 | 6,545 | 6,542 / 6,542 | 3 | 14,297 / 17,133 lines; 20,656 / 24,593 regions; 3,423 / 4,364 branches | `scripts/build_autohint_script_fixtures.py` emits one 5.5 KiB `script-coverage.ttf` with one glyph per autohint script tag; 13 explicit `FT_LOAD_FORCE_AUTOHINT` variants cover Adlam, Arabic, Armenian, Bengali, Gurmukhi, Hebrew, Khmer, Kannada, Latin sub/superscript, Malayalam, Mongolian, and Thai standard-character rows, moving `globals_data.rs` from 25 / 293 to 61 / 293 lines with exact Rust/C/WASM parity |
 | 2026-07-11 | Vai autohint script standard-character row | 103 unique hashes | 0 | 6,546 | 6,543 / 6,543 | 3 | 14,299 / 17,133 lines; 20,659 / 24,593 regions; 3,423 / 4,364 branches | one explicit `FT_LOAD_FORCE_AUTOHINT` row selects `script-coverage.ttf` U+A5CD, covering the Vai standard-character arm with exact Rust/C/WASM parity and no implicit case growth |
+| 2026-07-11 | Indic CJK autohint script rows | 103 unique hashes | 0 | 6,550 | 6,547 / 6,547 | 3 | 14,312 / 17,146 lines; 20,693 / 24,623 regions; 3,428 / 4,370 branches | four explicit `FT_LOAD_FORCE_AUTOHINT` rows select Limbu, Oriya, Syloti Nagri, and Tibetan glyphs in `script-coverage.ttf`. Core now routes FreeType's `STYLE_DEFAULT_INDIC` rows through CJK metrics/hints with no blue zones and rejects standard-character glyphs assigned to another style, matching pinned C/Rust/C-ABI/WASM parity without implicit case growth |
 
 ## Decision Log
 
@@ -1475,7 +1476,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Treat cmap format/language fixtures as metadata parity, not stubs | `FT_Get_CMap_Format` and `FT_Get_CMap_Language_ID` now use a compact generated SFNT cmap matrix instead of modeled values. Pinned `ftobjs.c` returns `-1` for invalid format probes, `0` for invalid language probes, and `ttcmap.c` reports format 14 language as `0xFFFFFFFF` |
 | 2026-07-11 | Treat malformed format-14 cmap records as load-time parser parity | Pinned FreeType ignores malformed optional format-14 records when another valid Unicode charmap remains usable. Public `FT_Set_Charmap` rejects format 14, so the active format-14 `FT_Get_Char_Index` and char-iteration arms remain public-unreachable rather than coverage rows to force |
 | 2026-07-11 | Treat autohint script lookup coverage as explicit public rows | `script-coverage.ttf` exists to activate real `FT_LOAD_FORCE_AUTOHINT` script standard-character paths through selected Unicode codepoints. Unselected script-tag glyphs in that font remain future obligations, not hidden coverage or an implicit matrix |
-| 2026-07-11 | Keep Tibetan as a correctness bucket until fixed | A candidate `script-coverage.ttf` U+0F40 Tibetan row exposed a real `FT_LOAD_FORCE_AUTOHINT` advance mismatch: pinned C returned advance x 896 while Rust returned 960. Do not add that row as passing coverage until the core autohint advance behavior matches C |
+| 2026-07-11 | Add Tibetan only after the Indic CJK route fix | A candidate `script-coverage.ttf` U+0F40 Tibetan row exposed a real `FT_LOAD_FORCE_AUTOHINT` mismatch before the core fix. The row is now explicit only because Rust matches pinned C by routing `STYLE_DEFAULT_INDIC` through CJK/no-blue hinting and by not borrowing Latin `o` widths for Indic standard-character setup |
 | 2026-07-11 | Match FreeType's `gasp` stream read length | Pinned `tt_face_load_gasp` seeks to the table and reads frames from the stream without using the SFNT record length as a cap. Rust must parse from the table offset to physical stream EOF for this optional table, while genuinely short physical data still degrades to `FT_GASP_NO_TABLE` |
 | 2026-07-11 | Match FreeType's `post` format 2.5 tag and delta behavior | Pinned `ttpost.c` recognizes format 2.5 as `0x00025000`, computes `glyph_index + signed_delta`, and maps out-of-range results to Mac glyph index 0. Format 1.0 only returns Mac standard names when `maxp.numGlyphs == 258`; otherwise the public name stays `.notdef` |
 | 2026-07-11 | Match malformed `post` public fallbacks | Pinned FreeType clears the output buffer and returns `Invalid_Argument` when an unsupported `post` format prevents `FT_HAS_GLYPH_NAMES`, while malformed format 2.0/2.5 name payloads that pass the header flag still return success with `.notdef`. Rust must keep scalar `post` metadata parsed while exposing glyph-name capability only for accepted formats 1.0, 2.0, and 2.5 |

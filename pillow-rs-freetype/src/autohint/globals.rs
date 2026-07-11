@@ -135,7 +135,9 @@ impl FaceGlobals {
             let style = &STYLE_TABLE[si];
             let upem = self.font_data.head.units_per_em as i32;
             let mut m = AfLatinMetrics::new(upem, self.glyph_count);
-            m.no_advance_hinting = style.script_tag == "hani";
+            let cjk_writing_system = uses_cjk_writing_system(style.script_tag);
+            let indic_writing_system = uses_indic_writing_system(style.script_tag);
+            m.no_advance_hinting = cjk_writing_system;
             m.digits_have_same_width = digits_have_same_width(&self.font_data);
             m.fixed_width = self
                 .font_data
@@ -193,7 +195,8 @@ impl FaceGlobals {
                     break;
                 }
                 let g = self.font_data.cmap.char_index(sc as u32).unwrap_or(0);
-                if g > 0 {
+                let gi = g as usize;
+                if g > 0 && gi < coverage.glyph_styles.len() && coverage.glyph_styles[gi] == si {
                     char_glyph = g;
                     break;
                 }
@@ -215,7 +218,7 @@ impl FaceGlobals {
                             on_curve: p.on_curve,
                         })
                         .collect();
-                    if style.script_tag == "hani" {
+                    if cjk_writing_system {
                         cjk_metrics_init_widths(&mut m, &outline_raw, &sp);
                     } else {
                         metrics_init_widths(&mut m, char_glyph, &outline_raw, &sp);
@@ -233,6 +236,10 @@ impl FaceGlobals {
             // Blue zones for this script
             if style.script_tag == "hani" {
                 cjk_metrics_init_blues(&mut m, &self.font_data, style.blue_entries);
+            } else if indic_writing_system {
+                // FreeType's STYLE_DEFAULT_INDIC styles (`limb`, `orya`,
+                // `sylo`, `tibt`) use afindic.c, which delegates metrics and
+                // hinting to CJK but intentionally skips blue-zone setup.
             } else {
                 metrics_init_blues_impl(&mut m, &self.font_data, style.blue_entries);
             }
@@ -242,7 +249,7 @@ impl FaceGlobals {
                 self.font_data.size_pt.get(),
                 self.font_data.head.units_per_em,
             );
-            let (_, ya) = if style.script_tag == "hani" {
+            let (_, ya) = if cjk_writing_system {
                 cjk_metrics_scale(&mut m, bs.x_scale, bs.y_scale, 0, 0)
             } else {
                 super::latin::metrics_scale_dim(&mut m, bs.x_scale, bs.y_scale, 0, 0)
@@ -325,6 +332,14 @@ fn digits_have_same_width(font_data: &FontData) -> bool {
     }
 
     true
+}
+
+fn uses_cjk_writing_system(tag: &str) -> bool {
+    matches!(tag, "hani" | "limb" | "orya" | "sylo" | "tibt")
+}
+
+fn uses_indic_writing_system(tag: &str) -> bool {
+    matches!(tag, "limb" | "orya" | "sylo" | "tibt")
 }
 
 // ── Coverage scan ─────────────────────────────────────────────────────────

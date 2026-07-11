@@ -1,7 +1,9 @@
 //! CJK auto-hinter — port of `src/autofit/afcjk.c`.
 //!
-//! CJK/Indic scripts (beng, deva, guru, knda, mong, goth) use
-//! AF_WRITING_SYSTEM_LATIN with top_to_bottom_hinting=true.
+//! Most Indic-style rows in FreeType (beng, deva, guru, knda, mong, goth)
+//! still use AF_WRITING_SYSTEM_LATIN, with top_to_bottom_hinting=true where
+//! configured.  The `STYLE_DEFAULT_INDIC` rows (`limb`, `orya`, `sylo`,
+//! `tibt`) use afindic.c, which delegates metrics and hinting to the CJK path.
 //! The key difference is in metrics computation:
 //!
 //!   af_cjk_metrics_init_widths (afcjk.c:63-270)

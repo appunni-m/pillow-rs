@@ -162,10 +162,12 @@ pub struct AfLatinMetrics {
     /// Disable edge-adjusted advance hinting for styles whose C hint init sets
     /// `AF_SCALER_FLAG_NO_ADVANCE`.
     ///
-    /// C: `afstyles.h` maps `hani_dflt` to the CJK writing system, and
-    /// `af_cjk_hints_init` always sets `AF_SCALER_FLAG_NO_ADVANCE`
-    /// (`afcjk.c:1419`).  The outline can still be hinted, but pp2 is rounded
-    /// from the original phantom instead of edge-adjusted.
+    /// C: `afstyles.h` maps `hani_dflt` to CJK and maps `limb`, `orya`,
+    /// `sylo`, and `tibt` through `STYLE_DEFAULT_INDIC`.  `afindic.c`
+    /// delegates hint init to CJK, where `af_cjk_hints_init` sets
+    /// `AF_SCALER_FLAG_NO_ADVANCE` (`afcjk.c:1419`).  The outline can still be
+    /// hinted, but pp2 is rounded from the original phantom instead of
+    /// edge-adjusted.
     pub no_advance_hinting: bool,
 }
 

@@ -2680,7 +2680,6 @@ pub fn apply_hints(
     }
 
     let no_advance_hinting = hints.metrics.as_ref().is_some_and(|m| m.no_advance_hinting);
-
     // CJK/Hani fallback uses `af_cjk_hints_init`, which always sets
     // AF_SCALER_FLAG_NO_ADVANCE but does not inherit Latin light-mode
     // AF_SCALER_FLAG_NO_HORIZONTAL (afcjk.c:1390-1421).
