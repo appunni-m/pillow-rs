@@ -2000,6 +2000,27 @@
             ]
           },
           {
+            "id": "cjk-empty-standard-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-empty-standard.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 30000,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:empty-standard-width-fallback",
+              "scaler:auto-hint-empty-outline"
+            ]
+          },
+          {
             "id": "cjk-shared-latin",
             "assets": {
               "font": {
