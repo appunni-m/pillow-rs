@@ -2021,6 +2021,28 @@
             ]
           },
           {
+            "id": "cjk-blue-edge-cases-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-blue-edge-cases.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 30000,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:blue-empty-glyph-skip",
+              "autohint/cjk:blue-flat-only-zone",
+              "autohint/cjk:blue-ref-shoot-order-repair"
+            ]
+          },
+          {
             "id": "cjk-shared-latin",
             "assets": {
               "font": {
