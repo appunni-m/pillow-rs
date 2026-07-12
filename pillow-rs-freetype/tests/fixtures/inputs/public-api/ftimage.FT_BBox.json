@@ -345,26 +345,71 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "negative_outline": {
-            "kind": "ref",
-            "id": "outlines/synthetic/negative-descender.json",
-            "asset_kind": "outline"
+        "variants": [
+          {
+            "id": "negative-descender-g77",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "glyph_index": 77
+            },
+            "coverage": [
+              "ftoutln.outline_get_cbox:negative-descender-g77"
+            ]
           },
-          "empty_outline": {
-            "kind": "ref",
-            "id": "outlines/synthetic/empty-outline.json",
-            "asset_kind": "outline"
+          {
+            "id": "empty-outline-g21",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "glyph_index": 21
+            },
+            "coverage": [
+              "ftoutln.outline_get_cbox:empty-outline-g21"
+            ]
+          },
+          {
+            "id": "zero-width-g48",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "load_flags": "FT_LOAD_NO_HINTING",
+              "glyph_index": 48
+            },
+            "coverage": [
+              "ftoutln.outline_get_cbox:zero-width-g48"
+            ]
           }
-        },
-        "params": {
-          "outline_cases": [
-            "negative_descender",
-            "zero_points_zero_contours",
-            "zero_area"
-          ],
-          "expected_behavior": "C preserves signed FT_Pos extrema and reports zero extrema for empty outlines."
-        }
+        ]
       },
       "classifiers": [
         "kind:record",
@@ -375,21 +420,19 @@
       "expectation": {
         "status": "ok",
         "output_shape": {
-          "bbox": "FT_BBox",
-          "status": "FT_Error"
+          "cbox": "FT_BBox"
         },
         "compare": {
           "mode": "exact",
           "paths": [
-            "status",
-            "bbox.xMin",
-            "bbox.yMin",
-            "bbox.xMax",
-            "bbox.yMax"
+            "cbox.xMin",
+            "cbox.yMin",
+            "cbox.xMax",
+            "cbox.yMax"
           ]
         },
         "fixture_requirements": [
-          "Future synthetic negative, empty, and zero-area outline assets."
+          "Source-backed glyphs cover negative signed FT_Pos extrema, a zero-point empty outline, and a zero-width outline."
         ],
         "source_refs": [
           "freetype/include/freetype/ftimage.h:105-117",

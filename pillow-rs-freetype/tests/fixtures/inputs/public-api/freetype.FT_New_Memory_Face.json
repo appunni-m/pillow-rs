@@ -110,6 +110,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/control/maxp-version-05.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/maxp-version-05.ttf"
               }
             },
             "params": {
@@ -127,6 +132,11 @@
             "id": "maxp-version-2",
             "assets": {
               "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/maxp-version-2.ttf"
+              },
+              "font": {
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/control/maxp-version-2.ttf"
@@ -150,6 +160,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/control/maxp-v1-header-only.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/maxp-v1-header-only.ttf"
               }
             },
             "params": {
@@ -167,6 +182,11 @@
             "id": "maxp-too-short-zero-profile",
             "assets": {
               "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/maxp-too-short.ttf"
+              },
+              "font": {
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/control/maxp-too-short.ttf"
@@ -190,6 +210,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/kerning/kern-short.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/kerning/kern-short.ttf"
               }
             },
             "params": {
@@ -204,6 +229,11 @@
             "id": "kern-header-missing",
             "assets": {
               "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/kerning/kern-header-missing.ttf"
+              },
+              "font": {
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/kerning/kern-header-missing.ttf"
@@ -225,6 +255,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/kerning/kern-length-14.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/kerning/kern-length-14.ttf"
               }
             },
             "params": {
@@ -242,6 +277,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/kerning/kern-truncated.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/kerning/kern-truncated.ttf"
               }
             },
             "params": {
@@ -256,6 +296,11 @@
             "id": "kern-format-coverage-matrix",
             "assets": {
               "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/kerning/kern-coverage-matrix.ttf"
+              },
+              "font": {
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/kerning/kern-coverage-matrix.ttf"
@@ -279,6 +324,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/metrics/hdmx-short.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hdmx-short.ttf"
               }
             },
             "params": {
@@ -293,6 +343,11 @@
             "id": "hdmx-high-word-record-size",
             "assets": {
               "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hdmx-high-word-size.ttf"
+              },
+              "font": {
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/metrics/hdmx-high-word-size.ttf"
@@ -313,6 +368,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/metrics/hdmx-zero-records.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hdmx-zero-records.ttf"
               }
             },
             "params": {
@@ -327,6 +387,11 @@
             "id": "hdmx-256-records",
             "assets": {
               "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hdmx-256-records.ttf"
+              },
+              "font": {
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/metrics/hdmx-256-records.ttf"
@@ -347,6 +412,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/metrics/hdmx-size-mismatch.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hdmx-size-mismatch.ttf"
               }
             },
             "params": {
@@ -364,6 +434,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/metrics/hdmx-truncated-record.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hdmx-truncated-record.ttf"
               }
             },
             "params": {
@@ -378,6 +453,11 @@
             "id": "horizontal-vertical-metric-count-zero",
             "assets": {
               "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/metrics-count-zero.ttf"
+              },
+              "font": {
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/metrics/metrics-count-zero.ttf"
@@ -399,6 +479,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/metrics/metrics-count-overflow.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/metrics-count-overflow.ttf"
               }
             },
             "params": {
@@ -414,6 +499,11 @@
             "id": "horizontal-vertical-metric-tables-short",
             "assets": {
               "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/metrics-tables-short.ttf"
+              },
+              "font": {
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/metrics/metrics-tables-short.ttf"
@@ -435,6 +525,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/metadata/short-os2-post.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metadata/short-os2-post.ttf"
               }
             },
             "params": {
@@ -453,6 +548,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/metadata/os2-use-typo-metrics.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metadata/os2-use-typo-metrics.ttf"
               }
             },
             "params": {
@@ -467,6 +567,11 @@
             "id": "name-record-decode-matrix",
             "assets": {
               "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-record-matrix.ttf"
+              },
+              "font": {
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/names/name-record-matrix.ttf"
@@ -490,6 +595,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/names/name-empty.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-empty.ttf"
               }
             },
             "params": {
@@ -505,6 +615,11 @@
             "id": "multiface-cjk-indic-collection",
             "assets": {
               "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/multiface-cjk-indic.ttc"
+              },
+              "font": {
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/control/multiface-cjk-indic.ttc"

@@ -677,10 +677,10 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,168 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,196 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 4 | `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null rows execute pinned C oracle status checks and the Rust FFI wrapper validation path; size lifecycle success remains separate. |
 | Compile/header/scalar contract | 2,248 | Valid for ABI/header contracts, not runtime core coverage. |
-| Shape-incomplete fallback | 37 | Convert to complete explicit variants or mark invalid/pending. |
+| Shape-incomplete fallback | 11 | Convert to complete explicit variants or mark invalid/pending. |
 | Generic modeled fallback | 985 | Classify operation-by-operation as real parity, unsupported, or pending. |
 | Generic modeled error fallback | 142 | Replace implemented surfaces with real error-path execution. |
 | Null-error fallback | 21 | Keep only exact null-handle probes; route implemented null cases directly. |
@@ -690,19 +690,18 @@ Current route-audit totals:
 | Explicit unsupported stubs | 12 | Implement or keep visibly unsupported; do not count as coverage. |
 | Pending core implementation | 3 | Named-instance Adobe MM, `FT_MM_Var`, and `gvar`/HVAR rows remain pending. |
 
-The first R0 closure bucket is the 37 shape-incomplete rows because these are
+The first R0 closure bucket is the 11 shape-incomplete rows because these are
 usually JSON/input fixes rather than new core features:
 
 | Operation | Rows | First action |
 |---|---:|---|
-| `new_memory_face` | 23 | Convert null/error variants to real memory-face rows or explicit null probes. |
-| `ftoutln.outline_get_cbox` | 4 | Add glyph selectors or retire inert declarations. |
-| `load_glyph` | 3 | Add concrete glyph selector rows for invalid/null flag cases. |
-| `render_glyph` | 3 | Add slot/glyph selectors or classify unsupported unloaded-slot cases. |
-| `ftsnames.get_sfnt_name` | 1 | Add explicit name indexes. |
-| `freetype.face_set_unpatented_hinting` | 1 | Add explicit boolean state rows. |
-| `load_char` | 1 | Add a concrete `char_code` or classify as null-only. |
-| `sfnt.get_sfnt_table.record` | 1 | Replace the inert variation sequence with a real table-read route. |
+| `load_glyph` | 3 | Split non-null invalid-index/flag variants into executable rows; null-face and bitmap-missing rows need explicit oracle/fixture support. |
+| `render_glyph` | 3 | Add slot/glyph selectors or classify unsupported unloaded-slot and future overlap-font cases. |
+| `ftoutln.outline_get_cbox` | 1 | Add explicit null outline/acbox route support; do not replace null-noop behavior with a normal glyph row. |
+| `ftsnames.get_sfnt_name` | 1 | Split invalid-index from null-output and non-SFNT error probes, then add explicit name indexes where the oracle can execute. |
+| `freetype.face_set_unpatented_hinting` | 1 | Add route support for toggle-sequence post-load behavior; simple boolean values would not prove this case. |
+| `load_char` | 1 | Add explicit null-face oracle support; adding only `char_code` would lose the null-handle behavior. |
+| `sfnt.get_sfnt_table.record` | 1 | Replace the inert variation sequence with a real table-read route once MVAR variation behavior exists. |
 
 | Route | Current behavior | Coverage risk | Required disposition |
 |---|---|---|---|
@@ -1529,6 +1528,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Hani fallback standard-width order font | 109 unique hashes | 0 | 6,622 | 6,619 / 6,619 | 3 | 14,650 / 17,230 lines; 21,358 / 24,773 regions; 3,572 / 4,398 branches | One minimal `cjk-width-order.ttf` fixture omits U+7530 and maps U+56D7 to a two-stem glyph whose first stem is wider than the second. The explicit `cjk-width-order-20` force-autohint row covers CJK descending width insertion-sort and quantization branches with exact Rust/C ABI/WASM parity and zero implicit cases |
 | 2026-07-12 | SDF self-intersection render topology row | 109 unique hashes | 0 | 6,623 | 6,620 / 6,620 | 3 | 14,651 / 17,230 lines; 21,359 / 24,773 regions; 3,573 / 4,398 branches | One explicit `FT_Bitmap.public_fields_match_render_output` variant reuses `hinter-control-matrix.ttf` glyph 42 in SDF mode. It pairs the existing mono/normal bowtie rows with an SDF self-intersection-thin public comparison, moving `render.rs` by one line, one region, and one branch while preserving exact Rust/C ABI/WASM parity and zero implicit cases |
 | 2026-07-12 | Explicit format-14 `FT_Set_Charmap` rejection | 109 unique hashes | 0 | 6,623 | 6,620 / 6,620 | 3 | 14,652 / 17,230 lines; 21,360 / 24,773 regions; 3,574 / 4,398 branches | The stale future-asset `FT_Set_Charmap.error_format14_charmap` row now reuses active `cmap-format14-only.ttf` with explicit `all_charmaps` selection. It moves one row from shape-incomplete fallback to real Rust/C ABI/WASM parity, keeps case count flat, and covers the thin FFI format-14 rejection branch |
+| 2026-07-12 | CBox and memory-face route cleanup | 109 unique hashes | 0 | 6,625 | 6,622 / 6,622 | 3 | 14,652 / 17,230 lines; 21,360 / 24,773 regions; 3,574 / 4,398 branches | `FT_Outline_Get_CBox` now uses source-backed `hinter-control-matrix.ttf` glyphs 41 and 21 for conic control-point and empty-outline cboxes, `FT_BBox.negative_and_empty_bounds` uses three explicit glyph variants for negative, empty, and zero-width boxes, and the compact `FT_New_Memory_Face.valid_font_bytes` variants expose matching `font` aliases for their memory sources. Structural coverage is unchanged because these parser/cbox paths were already hit, but route audit moves real parity to 3,196 rows and shape-incomplete fallback down to 11 without implicit discovery |
 
 ## Decision Log
 
@@ -1623,6 +1623,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Match variation PostScript prefix platform filtering | Pinned `sfnt_get_var_ps_name` calls `sfnt_get_name_id`, which accepts only Windows 3/0, Windows 3/1, and Apple Roman records for the variation prefix. It does not use the broader Unicode/ISO fallback from `tt_face_get_name`; the named-instance subfamily still uses that general lookup path |
 | 2026-07-11 | Match missing-subfamily named-instance synthesis | Pinned `sfnt_get_var_ps_name` falls through to `construct_instance_name` when a named instance has no explicit PostScript name and no usable subfamily name. The fallback appends each non-default fvar coordinate as a shortest 16.16 decimal followed by sanitized axis-tag characters |
 | 2026-07-11 | Treat route-audit shape as the explicit row contract | `FT_Request_Size` variants are maintained parser rows, and null-face `FT_Set_Charmap` rows still need an explicit selector shape. Audit classification must mirror the maintained runner contract instead of leaving real parity rows in shape fallback |
+| 2026-07-12 | Keep memory-face source aliases route-visible | `FT_New_Memory_Face` parity reads bytes from the public memory source, but the route audit recognizes runnable font assets by `font`/`fixture` keys. Compact malformed font variants should carry a matching `font` alias beside `font_bytes` when both refer to the same source, so the row remains explicit real parity instead of shape fallback |
 
 ## Immediate Next Actions
 
