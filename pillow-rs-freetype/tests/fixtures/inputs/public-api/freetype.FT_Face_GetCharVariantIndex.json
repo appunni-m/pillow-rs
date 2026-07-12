@@ -112,6 +112,24 @@
               "charcode": "U+0041",
               "variant_selector": "U+FE0F"
             }
+          },
+          {
+            "id": "no_unicode_active_charmap",
+            "coverage": [
+              "face_get_char_variant_index:no-unicode-active-charmap"
+            ],
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/charmap/cmap-nonunicode-format6.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "charcode": "U+0041",
+              "variant_selector": "U+FE0F"
+            }
           }
         ]
       },

@@ -242,12 +242,30 @@ def build_malformed_format14_font() -> None:
                 (1, 15, format14_non_default_records_exceed_length_subtable()),
                 (1, 16, format14_non_default_codepoint_exceeds_unicode_subtable()),
                 (1, 17, format14_non_default_mappings_out_of_order_subtable()),
+                (1, 18, format14_physically_short_subtable()),
             ]
         )
     )
 
     CHARMAP_OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = CHARMAP_OUT_DIR / "cmap-format14-malformed-matrix.ttf"
+    if out.exists() or out.is_symlink():
+        out.unlink()
+    font.save(out, reorderTables=True)
+
+
+def build_non_unicode_format6_font() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    font["cmap"] = raw_cmap_table(
+        pack_raw_cmap(
+            [
+                (1, 0, format6_subtable()),
+            ]
+        )
+    )
+
+    CHARMAP_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = CHARMAP_OUT_DIR / "cmap-nonunicode-format6.ttf"
     if out.exists() or out.is_symlink():
         out.unlink()
     font.save(out, reorderTables=True)
@@ -270,6 +288,7 @@ def build_format14_only_font() -> None:
 def main() -> None:
     build_matrix_font()
     build_malformed_format14_font()
+    build_non_unicode_format6_font()
     build_format14_only_font()
 
 
