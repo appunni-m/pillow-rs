@@ -2575,9 +2575,9 @@ fn sdf_line_distance(segment: Segment, point: Point) -> SdfDistance {
     let px = point.x - segment.x0;
     let py = point.y - segment.y0;
     let sq_line_length = (((dx as i64 * dx as i64) / 64) + ((dy as i64 * dy as i64) / 64)) as i32;
-    if sq_line_length == 0 {
-        return SdfDistance::unset();
-    }
+    // C `get_min_distance_line` in `src/sdf/ftsdf.c:1932-1940` lets
+    // `FT_DivFix` handle a truncated-zero squared length, then clamps the
+    // sentinel factor below.  Tiny source-backed contours depend on that.
     let projection = (((px as i64 * dx as i64) / 64) + ((py as i64 * dy as i64) / 64)) as i32;
     let mut factor = ft_div_fix(projection, sq_line_length);
     factor = factor.clamp(0, FT_INT_16D16_ONE);
