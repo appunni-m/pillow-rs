@@ -234,8 +234,8 @@
           "status": "implemented"
         },
         "FT_Face_GetCharVariantIsDefault": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Face::get_char_variant_is_default / Font::char_variant_is_default",
+          "status": "implemented"
         },
         "FT_Face_GetVariantSelectors": {
           "rust": null,

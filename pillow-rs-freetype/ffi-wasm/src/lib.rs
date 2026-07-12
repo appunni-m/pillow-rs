@@ -828,6 +828,18 @@ pub extern "C" fn fontdone_wasm_get_char_variant_index(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_char_variant_is_default(
+    handle: usize,
+    charcode: FT_ULong,
+    variant_selector: FT_ULong,
+) -> FT_Int {
+    let Some(face) = face_ref(handle) else {
+        return -1;
+    };
+    rust_ffi::FT_Face_GetCharVariantIsDefault(Some(&face.face), charcode, variant_selector)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_kerning(
     handle: usize,
     left_glyph: FT_UInt,

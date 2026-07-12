@@ -1203,6 +1203,21 @@ pub fn FT_Face_GetCharVariantIndex(
     )
 }
 
+pub fn FT_Face_GetCharVariantIsDefault(
+    face: Option<&FT_Face>,
+    charcode: FT_ULong,
+    variant_selector: FT_ULong,
+) -> FT_Int {
+    let Some(face) = face else {
+        return -1;
+    };
+    // FreeType `FT_Face_GetCharVariantIsDefault` uses the format-14 selector
+    // charmap directly and truncates both public inputs to `FT_UInt32`
+    // (`src/base/ftobjs.c`, `src/sfnt/ttcmap.c`).
+    face.inner
+        .get_char_variant_is_default(charcode as u32, variant_selector as u32)
+}
+
 pub fn FT_Get_Kerning(
     face: Option<&FT_Face>,
     left_glyph: FT_UInt,
