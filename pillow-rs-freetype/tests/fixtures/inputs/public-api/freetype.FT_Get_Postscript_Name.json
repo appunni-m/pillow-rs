@@ -262,6 +262,41 @@
             ]
           },
           {
+            "id": "encoded-apple-english-subfamily-instance",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-apple-english-subfamily.ttf"
+              }
+            },
+            "params": {
+              "face_index": 65536
+            },
+            "coverage": [
+              "tt/name:variation-subfamily-apple-english",
+              "tt/name:variation-subfamily-apple-unsupported-encoding-skipped"
+            ]
+          },
+          {
+            "id": "encoded-windows-subfamily-fallback-instance",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-windows-subfamily-fallback.ttf"
+              }
+            },
+            "params": {
+              "face_index": 65536
+            },
+            "coverage": [
+              "tt/name:variation-subfamily-windows-unsupported-encoding-skipped",
+              "tt/name:variation-prefix-apple-unsupported-encoding-skipped",
+              "tt/name:variation-subfamily-nonenglish-windows-defers-to-apple"
+            ]
+          },
+          {
             "id": "encoded-missing-subfamily-instance",
             "assets": {
               "font": {
