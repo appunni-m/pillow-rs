@@ -116,12 +116,15 @@
               "face_index": 0,
               "pixel_size": 20,
               "glyph_index": 36,
+              "advance_codepoint": 65,
+              "assert_font_hori_advance_agrees": true,
               "load_flags": [
                 "FT_LOAD_NO_HINTING"
               ]
             },
             "coverage": [
-              "ftadvanc.get_advance:explicit-g36-f5"
+              "ftadvanc.get_advance:explicit-g36-f5",
+              "coverage:font:hori-advance-26dot6"
             ]
           },
           {
