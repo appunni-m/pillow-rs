@@ -2069,6 +2069,7 @@ impl BackendComparisonWorker {
                     | "ftoutln.outline_render"
                     | "ftoutln.outline_render_direct"
                     | "ftmodapi.get_truetype_engine_type"
+                    | "freetype.get_kerning"
                     | "ftsizes.new_size"
                     | "ftsizes.done_size"
                     | "ftsizes.activate_size"
@@ -3138,38 +3139,58 @@ fn rust_activate_size(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn rust_get_kerning(case: &InputCase) -> Result<RunOutput, String> {
-    let face = open_face(case)?;
-    rust_get_kerning_with_face(&face, &case.inputs.params)
+    if kerning_face_is_null(&case.inputs.params) {
+        rust_get_kerning_optional(None, &case.inputs.params)
+    } else {
+        let face = open_face(case)?;
+        rust_get_kerning_optional(Some(&face), &case.inputs.params)
+    }
 }
 
 fn c_get_kerning(case: &InputCase) -> Result<RunOutput, String> {
+    if kerning_face_is_null(&case.inputs.params) {
+        return c_get_kerning_optional(None, &case.inputs.params);
+    }
     let (library, face) = c_open_face(case)?;
-    let output = c_get_kerning_with_face(face, &case.inputs.params);
+    let output = c_get_kerning_optional(Some(face), &case.inputs.params);
     c_done_face(face);
     c_done_library(library);
     output
 }
 
 fn wasm_get_kerning(case: &InputCase) -> Result<RunOutput, String> {
+    if kerning_face_is_null(&case.inputs.params) {
+        return wasm_get_kerning_optional(None, &case.inputs.params);
+    }
     let handle = wasm_open_face(case)?;
-    let output = wasm_get_kerning_with_face(handle, &case.inputs.params);
+    let output = wasm_get_kerning_optional(Some(handle), &case.inputs.params);
     wasm_done_face(handle);
     output
 }
 
 fn rust_get_kerning_with_face(face: &FT_Face, params: &Value) -> Result<RunOutput, String> {
+    rust_get_kerning_optional(Some(face), params)
+}
+
+fn rust_get_kerning_optional(face: Option<&FT_Face>, params: &Value) -> Result<RunOutput, String> {
     let rows = kerning_rows(params)?
         .into_iter()
         .map(|row| {
-            let left_glyph = rust_glyph_selector_index(face, &row.left)?;
-            let right_glyph = rust_glyph_selector_index(face, &row.right)?;
+            let (left_glyph, right_glyph) = if let Some(face) = face {
+                (
+                    rust_glyph_selector_index(face, &row.left)?,
+                    rust_glyph_selector_index(face, &row.right)?,
+                )
+            } else {
+                (0, 0)
+            };
             let mut vector = FT_Vector::default();
             let status = FT_Get_Kerning(
-                Some(face),
+                face,
                 left_glyph,
                 right_glyph,
                 row.mode,
-                Some(&mut vector),
+                (!kerning_akerning_is_null(params)).then_some(&mut vector),
             );
             Ok(KerningOutputRow {
                 input: row,
@@ -3185,14 +3206,37 @@ fn rust_get_kerning_with_face(face: &FT_Face, params: &Value) -> Result<RunOutpu
 }
 
 fn c_get_kerning_with_face(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
+    c_get_kerning_optional(Some(face), params)
+}
+
+fn c_get_kerning_optional(
+    face: Option<c_abi::FT_Face>,
+    params: &Value,
+) -> Result<RunOutput, String> {
     let rows = kerning_rows(params)?
         .into_iter()
         .map(|row| {
-            let left_glyph = c_glyph_selector_index(face, &row.left)?;
-            let right_glyph = c_glyph_selector_index(face, &row.right)?;
+            let (left_glyph, right_glyph) = if let Some(face) = face {
+                (
+                    c_glyph_selector_index(face, &row.left)?,
+                    c_glyph_selector_index(face, &row.right)?,
+                )
+            } else {
+                (0, 0)
+            };
             let mut vector = c_abi::FT_Vector::default();
-            let status =
-                c_abi::FT_Get_Kerning(face, left_glyph, right_glyph, row.mode, &mut vector);
+            let out = if kerning_akerning_is_null(params) {
+                std::ptr::null_mut()
+            } else {
+                &mut vector
+            };
+            let status = c_abi::FT_Get_Kerning(
+                face.unwrap_or(std::ptr::null_mut()),
+                left_glyph,
+                right_glyph,
+                row.mode,
+                out,
+            );
             Ok(KerningOutputRow {
                 input: row,
                 left_glyph,
@@ -3207,18 +3251,33 @@ fn c_get_kerning_with_face(face: c_abi::FT_Face, params: &Value) -> Result<RunOu
 }
 
 fn wasm_get_kerning_with_face(handle: usize, params: &Value) -> Result<RunOutput, String> {
+    wasm_get_kerning_optional(Some(handle), params)
+}
+
+fn wasm_get_kerning_optional(handle: Option<usize>, params: &Value) -> Result<RunOutput, String> {
     let rows = kerning_rows(params)?
         .into_iter()
         .map(|row| {
-            let left_glyph = wasm_glyph_selector_index(handle, &row.left)?;
-            let right_glyph = wasm_glyph_selector_index(handle, &row.right)?;
+            let (left_glyph, right_glyph) = if let Some(handle) = handle {
+                (
+                    wasm_glyph_selector_index(handle, &row.left)?,
+                    wasm_glyph_selector_index(handle, &row.right)?,
+                )
+            } else {
+                (0, 0)
+            };
             let mut vector = wasm_abi::FontdoneWasmVector::default();
+            let out = if kerning_akerning_is_null(params) {
+                std::ptr::null_mut()
+            } else {
+                &mut vector
+            };
             let status = wasm_abi::fontdone_wasm_get_kerning(
-                handle,
+                handle.unwrap_or(0),
                 left_glyph,
                 right_glyph,
                 row.mode,
-                &mut vector,
+                out,
             );
             Ok(KerningOutputRow {
                 input: row,
@@ -6905,6 +6964,25 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "freetype.get_kerning" => {
+            if kerning_face_is_null(params) {
+                let row = single_kerning_row(params)?;
+                return Ok(vec![
+                    "--get-kerning-null-face".to_string(),
+                    row.left,
+                    row.right,
+                    row.mode.to_string(),
+                ]);
+            }
+            if kerning_akerning_is_null(params) {
+                let row = single_kerning_row(params)?;
+                let mut args = vec!["--get-kerning-null-output".to_string()];
+                push_font_source(case, &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(row.left);
+                args.push(row.right);
+                args.push(row.mode.to_string());
+                return Ok(args);
+            }
             let mut args = vec!["--get-kerning".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
@@ -7667,6 +7745,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "ftoutln.outline_render"
                 | "ftoutln.outline_render_direct"
                 | "ftmodapi.get_truetype_engine_type"
+                | "freetype.get_kerning"
                 | "ftsizes.new_size"
                 | "ftsizes.done_size"
                 | "ftsizes.activate_size"
@@ -15772,6 +15851,18 @@ fn kerning_rows_arg(params: &Value) -> Result<String, String> {
         .join(","))
 }
 
+fn single_kerning_row(params: &Value) -> Result<KerningRow, String> {
+    let mut rows = kerning_rows(params)?;
+    if rows.len() != 1 {
+        return Err(format!(
+            "expected exactly one kerning row for pointer validation, got {}",
+            rows.len()
+        ));
+    }
+    rows.pop()
+        .ok_or_else(|| "expected exactly one kerning row".to_string())
+}
+
 fn kerning_rows(params: &Value) -> Result<Vec<KerningRow>, String> {
     let pairs = kerning_pairs(params)?;
     let modes = kerning_modes(params)?;
@@ -15917,6 +16008,14 @@ fn kerning_mode_value(value: &Value, key: &str) -> Result<u32, String> {
         };
     }
     u32_value(value, key)
+}
+
+fn kerning_face_is_null(params: &Value) -> bool {
+    lifecycle_handle_param(params, "face") == Some("null")
+}
+
+fn kerning_akerning_is_null(params: &Value) -> bool {
+    lifecycle_handle_param(params, "akerning") == Some("null")
 }
 
 fn charmap_probe_chars_arg(params: &Value) -> Result<String, String> {
