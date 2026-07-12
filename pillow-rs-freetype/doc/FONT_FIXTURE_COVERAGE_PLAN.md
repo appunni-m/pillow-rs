@@ -399,24 +399,32 @@ selects U+51A0 to exercise the CJK edge cleanup path where a grouped edge has
 both a stem link and a serif candidate; the row removed `src/autohint/cjk.rs`
 line 550 from the missing-line report while preserving exact Rust FFI, C ABI,
 and WASM ABI parity.
+The latest pushed checkpoint also adds one `FT_New_Memory_Face` row for
+`FT_Long::MIN` face-index validation, extends `script-coverage.ttf` with
+Latin/Greek/Cyrillic blue-string aliases plus a three-contour double-top probe,
+declares representative safe `Face::load_glyph` route agreement on existing
+load rows, adds one explicit SDF conic-chain render row, and adds one compact
+no-scale normal render row over `hinter-control-matrix.ttf`. These rows keep
+the corpus explicit, raise the route-audited concrete count to 6,718, and
+preserve exact Rust FFI, C ABI, and WASM ABI parity.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,148 |
-| Concrete explicit cases | 6,700 |
-| Additional grouped variants | 2,552 |
+| Concrete explicit cases | 6,718 |
+| Additional grouped variants | 2,570 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,696 |
-| Exact parity | 6,696 / 6,696 |
+| Runnable parity comparisons | 6,714 |
+| Exact parity | 6,714 / 6,714 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,821 / 17,764 (89.06%) |
-| Rust function coverage | 1,001 / 1,134 (88.27%) |
-| Rust instantiation coverage | 1,004 / 1,137 (88.30%) |
-| Rust region coverage | 22,710 / 25,453 (89.22%) |
-| Rust branch/condition coverage | 3,767 / 4,524 (83.27%) |
+| Covered Rust lines | 15,841 / 17,766 (89.16%) |
+| Rust function coverage | 1,002 / 1,135 (88.28%) |
+| Rust instantiation coverage | 1,005 / 1,138 (88.31%) |
+| Rust region coverage | 22,748 / 25,457 (89.36%) |
+| Rust branch/condition coverage | 3,792 / 4,524 (83.82%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
-| Active fixture font paths | 154 |
-| Stored active font binaries | 110 files, 831 KiB |
+| Active fixture font paths | 164 |
+| Stored active font binaries | 121 files, 854 KiB |
 | Active symlink aliases | 43 |
 | Unique active font contents | 120 SHA-256 identities |
 | Deprecated brute-force fonts | 101 files, 99 unique contents, 23 MiB |
@@ -441,16 +449,16 @@ Current largest uncovered buckets:
 
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
-| `src/render.rs` | 1,698 / 2,275 | 342 / 428 | 120 / 164 | 2,403 / 3,219 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 1,757 / 1,985 | 196 / 252 | 167 / 199 | 2,392 / 2,711 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
-| `src/autohint/latin.rs` | 2,510 / 2,828 | 980 / 1,282 | 70 / 73 | 3,611 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
-| `src/scaler.rs` | 1,066 / 1,220 | 153 / 188 | 48 / 61 | 1,138 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
+| `src/render.rs` | 1,696 / 2,272 | 342 / 426 | 120 / 164 | 2,401 / 3,216 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
+| `src/font.rs` | 1,759 / 1,985 | 198 / 252 | 167 / 199 | 2,394 / 2,711 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/autohint/latin.rs` | 2,516 / 2,828 | 985 / 1,282 | 70 / 73 | 3,621 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
+| `src/scaler.rs` | 1,071 / 1,222 | 156 / 188 | 49 / 62 | 1,145 / 1,276 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
-| `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
-| `src/ffi/handles.rs` | 1,553 / 1,598 | 289 / 322 | 163 / 169 | 2,120 / 2,177 | Public FFI route audit; wrappers stay thin and must delegate to core |
+| `src/grays.rs` | 650 / 810 | 134 / 184 | 30 / 35 | 918 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
+| `src/ffi/handles.rs` | 1,553 / 1,598 | 289 / 322 | 163 / 169 | 2,122 / 2,177 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
-| `src/autohint/cjk.rs` | 892 / 941 | 376 / 426 | 18 / 19 | 1,182 / 1,247 | CJK topology rows in the compact multiscript fixture |
-| `src/api.rs` | 501 / 513 | 80 / 86 | 60 / 61 | 685 / 702 | Public API wrapper rows for render cache and glyph-slot surfaces |
+| `src/autohint/cjk.rs` | 893 / 941 | 378 / 426 | 18 / 19 | 1,184 / 1,247 | CJK topology rows in the compact multiscript fixture |
+| `src/api.rs` | 504 / 516 | 82 / 88 | 60 / 61 | 690 / 707 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short
 physical table data plus truncated range arrays. The only remaining uncovered
@@ -1858,7 +1866,8 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | CJK round-round LIGHT threshold and target-light mask | `FT_Render_Glyph.matrix_render` adds one explicit `FT_LOAD_TARGET_LIGHT | FT_LOAD_NO_AUTOHINT` row, proving the `render_font` target-light condition's masked branch without adding a new axis. `build_autohint_script_fixtures.py` now emits `fonts/autohint/cjk-round-stem-light.ttf`, keeping U+7530 as a standard Hani stem and mapping U+51A2 to a quadratic ring selected by one `FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LIGHT` public row. The CJK row covers the no-stem-adjust round-round threshold for both dimensions. Concrete cases rise to 6,697, implicit cases stay zero, runtime parity is 6,693 / 6,693 with four explicit pending rows, and refreshed condition coverage is 15,803 / 17,764 lines, 22,687 / 25,453 regions, and 3,757 / 4,524 branches |
 | 2026-07-12 | CJK duplicate-edge compatibility rejection | `build_autohint_script_fixtures.py` now emits `fonts/autohint/cjk-duplicate-edge.ttf`, where U+519E has two Hani rectangles sharing the same major edge position while their linked opposite edges are far apart. One explicit `FT_LOAD_FORCE_AUTOHINT` row reaches CJK edge grouping's linked-segment compatibility rejection and same-position major-edge insertion, and also exercises later skipped-edge interpolation from that topology. Concrete cases rise to 6,698, implicit cases stay zero, runtime parity is 6,694 / 6,694 with four explicit pending rows, and refreshed condition coverage is 15,812 / 17,764 lines, 22,699 / 25,453 regions, and 3,763 / 4,524 branches |
 | 2026-07-12 | CJK leading skipped-edge interpolation | `cjk-duplicate-edge.ttf` now also maps U+51A4 to a Hani glyph with a short unlinked leading rectangle before a normal linked stem. One explicit `FT_LOAD_FORCE_AUTOHINT` row reaches the skipped-edge interpolation path where no previous done edge exists and a later done edge anchors the skipped edge. No new font file is added; concrete cases rise to 6,699, implicit cases stay zero, runtime parity is 6,695 / 6,695 with four explicit pending rows, and refreshed condition coverage is 15,820 / 17,764 lines, 22,709 / 25,453 regions, and 3,766 / 4,524 branches |
-| 2026-07-13 | Verified render/scaler/autohint/name/CFF coverage checkpoint | Merged and pushed the compact OTTO metadata row, variable-name metadata rows, Latin small-ignore autohint fixture row, mono composite scaler fix and rows, and SDF tiny-segment render fix and row. Concrete cases are 6,715 with zero implicit rows; runtime parity is 6,711 / 6,711 with four explicit pending rows. Refreshed condition coverage is 15,840 / 17,766 lines, 22,745 / 25,457 regions, and 3,790 / 4,524 branches. Route audit reports real-parity 3,350, compile-contract 2,229, generic-fallback 942, generic-error-fallback 141, pending-core 10, explicit-unsupported 12, real-null-validation 8, null-error-fallback 21, and void-fallback 2 |
+| 2026-07-13 | Verified render/scaler/autohint/name/CFF coverage checkpoint | Merged and pushed the compact OTTO metadata row, variable-name metadata rows, Latin small-ignore autohint fixture row, mono composite scaler fix and rows, SDF tiny-segment render fix and row, FT_Long::MIN face-index row, autohint script blue-string aliases and double-top probe, explicit safe `Face::load_glyph` route declarations, and SDF conic-chain render row. Concrete cases are 6,717 with zero implicit rows; runtime parity is 6,713 / 6,713 with four explicit pending rows. Refreshed condition coverage is 15,840 / 17,766 lines, 22,747 / 25,457 regions, and 3,791 / 4,524 branches. Route audit reports real-parity 3,352, compile-contract 2,229, generic-fallback 942, generic-error-fallback 141, pending-core 10, explicit-unsupported 12, real-null-validation 8, null-error-fallback 21, and void-fallback 2 |
+| 2026-07-13 | No-scale outline render probe | `FT_Render_Glyph.matrix_render` adds one explicit `hinter-control-matrix.ttf` glyph 41 row with `FT_LOAD_NO_SCALE` and normal rendering. This keeps the probe in the existing compact render matrix, adds no font bytes, and covers one additional `grays.rs` scan-conversion line, region, and branch. Concrete cases are 6,718 with zero implicit rows; runtime parity is 6,714 / 6,714 with four explicit pending rows. Refreshed condition coverage is 15,841 / 17,766 lines, 22,748 / 25,457 regions, and 3,792 / 4,524 branches. Route audit reports the new row as real parity, raising real-parity routes to 3,353 |
 
 ## Immediate Next Actions
 
