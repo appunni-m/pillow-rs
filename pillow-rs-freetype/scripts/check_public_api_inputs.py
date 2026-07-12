@@ -720,7 +720,7 @@ def shape_fallback_reason(row: ConcreteInput) -> str | None:
         if lifecycle_handle(row, handle_name) != "null":
             return f"{operation} lacks runtime font asset"
     if operation == "freetype.face_set_unpatented_hinting" and not any(
-        key in params for key in ("bool_values", "values", "value")
+        key in params for key in ("bool_values", "values", "value", "toggle_sequence")
     ):
         return "face_set_unpatented_hinting lacks bool values"
     return None

@@ -5756,6 +5756,45 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
+    if (streq(command, "--face-set-unpatented-hinting-post-load")) {
+        const char* values_arg = argv[7];
+        FT_UInt glyph_index = (FT_UInt)strtoul(argv[8], NULL, 10);
+        FT_Int32 load_flags = (FT_Int32)strtol(argv[9], NULL, 10);
+        char* values = (char*)malloc(strlen(values_arg) + 1);
+        if (!values) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        memcpy(values, values_arg, strlen(values_arg) + 1);
+        FT_Bool result = 0;
+        char* cursor = values;
+        while (cursor && *cursor) {
+            char* next = strchr(cursor, ',');
+            if (next) {
+                *next = '\0';
+            }
+            FT_Bool value = (FT_Bool)strtoul(cursor, NULL, 10);
+            result = FT_Face_SetUnpatentedHinting(face, value);
+            cursor = next ? next + 1 : NULL;
+        }
+        free(values);
+        err = FT_Load_Glyph(face, glyph_index, load_flags);
+        print_status(err);
+        if (err) {
+            printf(",\"output\":null}\n");
+        } else {
+            printf(",\"output\":{\"return\":%u,\"post_toggle_slot\":{", (unsigned)result);
+            print_slot_body(face->glyph, glyph_index);
+            printf("}}}\n");
+        }
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
     FT_UInt glyph_index = 0;
     FT_Int32 load_flags = 0;
     if (streq(command, "--load-char") || streq(command, "--render-glyph") || streq(command, "--load-glyph-from-char")) {
@@ -6874,6 +6913,9 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 9 && (streq(argv[1], "--load-char") || streq(argv[1], "--load-glyph") || streq(argv[1], "--load-glyph-from-char") || streq(argv[1], "--inspect-glyph-metrics") || streq(argv[1], "--inspect-glyph-slot") || streq(argv[1], "--load-glyph-outline") || streq(argv[1], "--outline-get-bbox") || streq(argv[1], "--outline-get-cbox"))) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 10 && streq(argv[1], "--face-set-unpatented-hinting-post-load")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--load-glyph-num-glyphs")) {
