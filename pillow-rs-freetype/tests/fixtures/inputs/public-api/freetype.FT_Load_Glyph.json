@@ -381,6 +381,31 @@
             ]
           },
           {
+            "id": "sfnt-no-os2-force-autohint-vertical",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "input/fonts/sfnt/no-os2.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_VERTICAL_LAYOUT"
+              ]
+            },
+            "coverage": [
+              "scaler:force-autohint-vertical-no-os2"
+            ]
+          },
+          {
             "id": "dejavu-g-no-recurse",
             "assets": {
               "font": {
