@@ -124,6 +124,19 @@ def write_format1_langtag() -> None:
 
 
 def write_format1_langtag_malformed_controls() -> None:
+    # Format-1 name table whose record array is complete but whose language-tag
+    # count field is absent. This reaches the parser's explicit count guard.
+    count_missing = (
+        (1).to_bytes(2, "big")
+        + (0).to_bytes(2, "big")
+        + (6).to_bytes(2, "big")
+    )
+    write_name_payload(
+        BASE_STATIC,
+        ROOT / "tests" / "fixtures" / "fonts" / "sfnt" / "name-format1-langtag-count-missing.ttf",
+        count_missing,
+    )
+
     # Format-1 name table with a language-tag count but a truncated language-tag
     # record array. This reaches the parser's explicit record-overflow guard.
     record_overflow = (
