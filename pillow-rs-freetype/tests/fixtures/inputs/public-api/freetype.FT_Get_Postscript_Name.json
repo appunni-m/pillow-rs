@@ -73,6 +73,24 @@
             ]
           },
           {
+            "id": "apple-postscript-name-oob-null",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-apple-postscript-oob.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "lifetime_probe": "before_done_face"
+            },
+            "coverage": [
+              "tt/name:apple-postscript-string-out-of-range",
+              "tt/name:missing-postscript-name-null"
+            ]
+          },
+          {
             "id": "odd-windows-postscript-falls-back-to-apple",
             "assets": {
               "font": {

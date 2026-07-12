@@ -53,6 +53,22 @@ def write_static_selection_fallbacks() -> None:
     )
 
 
+def write_win_family_oob_apple_fallback() -> None:
+    records = [
+        NameRecordSpec(
+            3, 1, 0x0409, 16, utf16be("BrokenWin"), offset_override=0xFF00
+        ),
+        NameRecordSpec(1, 0, 0, 16, mac_roman("AppleFamily")),
+        NameRecordSpec(3, 1, 0x0409, 17, utf16be("Regular")),
+        NameRecordSpec(3, 1, 0x0409, 6, utf16be("WinOobApple-Regular")),
+    ]
+    write_name_payload(
+        BASE_STATIC,
+        NAME_OUT_DIR / "name-win-family-oob-apple-fallback.ttf",
+        build_name_table(records),
+    )
+
+
 def write_apple_postscript() -> None:
     records = [
         NameRecordSpec(3, 1, 0x0409, 1, utf16be("AppleOnly")),
@@ -62,6 +78,19 @@ def write_apple_postscript() -> None:
     write_name_payload(
         BASE_STATIC,
         NAME_OUT_DIR / "name-apple-postscript.ttf",
+        build_name_table(records),
+    )
+
+
+def write_apple_postscript_oob() -> None:
+    records = [
+        NameRecordSpec(3, 1, 0x0409, 1, utf16be("AppleOob")),
+        NameRecordSpec(3, 1, 0x0409, 2, utf16be("Regular")),
+        NameRecordSpec(1, 0, 0, 6, mac_roman("BrokenPS"), offset_override=0xFF00),
+    ]
+    write_name_payload(
+        BASE_STATIC,
+        NAME_OUT_DIR / "name-apple-postscript-oob.ttf",
         build_name_table(records),
     )
 
@@ -447,7 +476,9 @@ def checksum(table_data: bytes | bytearray) -> int:
 
 def main() -> None:
     write_static_selection_fallbacks()
+    write_win_family_oob_apple_fallback()
     write_apple_postscript()
+    write_apple_postscript_oob()
     write_odd_windows_postscript_with_apple_fallback()
     write_postscript_branch_matrix()
     write_format1_langtag()
