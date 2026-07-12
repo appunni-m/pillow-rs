@@ -762,7 +762,14 @@ impl Font {
         if self.data.kern.as_ref().is_some_and(|kern| !kern.is_empty()) {
             flags |= FT_FACE_FLAG_KERNING;
         }
-        if self.data.fvar.is_some() {
+        // sfobjs.c:642-657 rejects zero-axis `fvar` tables before setting
+        // TT_FACE_FLAG_VAR_FVAR; sfobjs.c:1141-1144 derives the public flag.
+        if self
+            .data
+            .fvar
+            .as_ref()
+            .is_some_and(|fvar| fvar.axis_count != 0)
+        {
             flags |= FT_FACE_FLAG_MULTIPLE_MASTERS;
         }
         if self.data.table_directory.record(tag(b"glyf")).is_some() {

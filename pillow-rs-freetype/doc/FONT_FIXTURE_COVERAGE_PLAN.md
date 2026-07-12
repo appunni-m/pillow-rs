@@ -372,26 +372,32 @@ therefore prove the core bitmap render route across Rust FFI, C ABI, and WASM
 ABI while keeping the wrapper limited to ABI conversion and error mapping. The
 wrapper preserves the original load flags for this no-op path to match pinned
 FreeType's `FT_Render_Glyph_Internal` bitmap behavior.
+The compact generated `fvar-zero-axis.ttf` control now exercises the valid-header
+but zero-axis `fvar` edge through `FT_FACE_FLAG_MULTIPLE_MASTERS`. The row
+exposed and fixed a real C/Rust mismatch: pinned C rejects `num_axes == 0`
+before setting `TT_FACE_FLAG_VAR_FVAR` in `sfobjs.c`, so the public
+`FT_FACE_FLAG_MULTIPLE_MASTERS` bit is clear; Rust previously set the bit for
+any parsed `fvar` table.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,148 |
-| Concrete explicit cases | 6,685 |
-| Additional grouped variants | 2,537 |
+| Concrete explicit cases | 6,686 |
+| Additional grouped variants | 2,538 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,681 |
-| Exact parity | 6,681 / 6,681 |
+| Runnable parity comparisons | 6,682 |
+| Exact parity | 6,682 / 6,682 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,781 / 17,758 (88.87%) |
-| Rust function coverage | 1,000 / 1,133 (88.26%) |
-| Rust instantiation coverage | 1,003 / 1,136 (88.29%) |
-| Rust region coverage | 22,667 / 25,451 (89.06%) |
-| Rust branch/condition coverage | 3,740 / 4,524 (82.67%) |
+| Covered Rust lines | 15,787 / 17,764 (88.87%) |
+| Rust function coverage | 1,001 / 1,134 (88.27%) |
+| Rust instantiation coverage | 1,004 / 1,137 (88.30%) |
+| Rust region coverage | 22,669 / 25,453 (89.06%) |
+| Rust branch/condition coverage | 3,741 / 4,524 (82.69%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
-| Active fixture font paths | 152 |
-| Stored active font binaries | 109 files, 815 KiB |
+| Active fixture font paths | 153 |
+| Stored active font binaries | 110 files, 824 KiB |
 | Active symlink aliases | 43 |
-| Unique active font contents | 118 SHA-256 identities |
+| Unique active font contents | 119 SHA-256 identities |
 | Deprecated brute-force fonts | 101 files, 99 unique contents, 23 MiB |
 
 The current coverage target is not only line coverage. The maintained

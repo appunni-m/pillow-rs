@@ -66,6 +66,14 @@ def write_instance_postscript_name() -> None:
     save_font(OUT_DIR / "fvar-instance-postscript-name.ttf", font)
 
 
+def write_zero_axis() -> None:
+    payload = bytearray(base_fvar_payload()[:16])
+    payload[8:10] = (0).to_bytes(2, "big")
+    payload[12:14] = (0).to_bytes(2, "big")
+    payload[14:16] = (4).to_bytes(2, "big")
+    write_fvar_payload("fvar-zero-axis.ttf", bytes(payload))
+
+
 def save_font(path: Path, font: TTFont) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     if path.exists() or path.is_symlink():
@@ -174,6 +182,7 @@ def main() -> None:
     write_instance_array_short()
     write_instance_size_short()
     write_instance_postscript_name()
+    write_zero_axis()
 
 
 if __name__ == "__main__":
