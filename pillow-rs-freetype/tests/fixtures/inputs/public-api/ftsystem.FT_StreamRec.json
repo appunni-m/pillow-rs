@@ -52,7 +52,7 @@
           "include": "freetype/ftsystem.h",
           "symbol": "FT_StreamRec",
           "fields_in_order": ["base", "size", "pos", "descriptor", "pathname", "read", "close", "memory", "cursor", "limit"],
-          "probe": ["sizeof", "alignof", "offsetof", "field_types", "import_compiles"]
+          "probe": ["sizeof", "alignof", "offsetof", "field_types", "import_compiles", "default_state"]
         }
       },
       "classifiers": ["kind:record", "header:ftsystem", "area:abi_layout", "surface:public-c-api"],
@@ -63,11 +63,19 @@
           "alignof": "usize",
           "offsets": "object<field,usize>",
           "field_types": "object<field,c_type>",
-          "import_compiles": "bool"
+          "import_compiles": "bool",
+          "default_state": {
+            "stream_descriptor_size": "usize",
+            "base_is_null": "bool",
+            "size_is_zero": "bool",
+            "pos_is_zero": "bool",
+            "cursor_is_null": "bool",
+            "limit_is_null": "bool"
+          }
         },
         "compare": {
           "mode": "layout",
-          "paths": ["sizeof", "alignof", "offsets", "field_types", "import_compiles"]
+          "paths": ["sizeof", "alignof", "offsets", "field_types", "import_compiles", "default_state"]
         }
       }
     },

@@ -755,6 +755,7 @@ static int emit_layout(const char* record) {
         FIELD(FT_SvgGlyphRec, transform); printf(",");
         FIELD(FT_SvgGlyphRec, delta);
     } else if (streq(record, "FT_StreamRec")) {
+        FT_StreamRec default_stream = {0};
         printf("\"record\":\"FT_StreamRec\",\"size\":%zu,\"align\":%zu,\"fields\":[", sizeof(FT_StreamRec), _Alignof(FT_StreamRec));
         FIELD(FT_StreamRec, base); printf(",");
         FIELD(FT_StreamRec, size); printf(",");
@@ -766,6 +767,16 @@ static int emit_layout(const char* record) {
         FIELD(FT_StreamRec, memory); printf(",");
         FIELD(FT_StreamRec, cursor); printf(",");
         FIELD(FT_StreamRec, limit);
+        FT_StreamDesc default_descriptor = {0};
+        printf("],\"default_state\":{\"stream_descriptor_size\":%zu,\"base_is_null\":%s,\"size_is_zero\":%s,\"pos_is_zero\":%s,\"cursor_is_null\":%s,\"limit_is_null\":%s}",
+               sizeof(default_descriptor),
+               default_stream.base == NULL ? "true" : "false",
+               default_stream.size == 0 ? "true" : "false",
+               default_stream.pos == 0 ? "true" : "false",
+               default_stream.cursor == NULL ? "true" : "false",
+               default_stream.limit == NULL ? "true" : "false");
+        printf("}}\n");
+        return 0;
     } else if (streq(record, "FT_Bitmap_Size")) {
         printf("\"record\":\"FT_Bitmap_Size\",\"size\":%zu,\"align\":%zu,\"fields\":[", sizeof(FT_Bitmap_Size), _Alignof(FT_Bitmap_Size));
         FIELD(FT_Bitmap_Size, height); printf(",");
