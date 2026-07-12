@@ -117,22 +117,35 @@
       "case_id": "fterrdef.FT_Err_Divide_By_Zero.invalid_size_transform_division_returns_error",
       "subject": "fterrdef.FT_Err_Divide_By_Zero",
       "case": "invalid_size_transform_division_returns_error",
-      "operation": "FT_Request_Size_or_transform_path",
+      "operation": "freetype.request_size",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
         "assets": {
-          "fixture": {
+          "font": {
             "kind": "ref",
             "role": "font",
-            "id": "input/fonts/DejaVuSans.ttf",
-            "requirements": "Existing scalable font plus public size/transform parameters that reach ftobjs.c divide guards without UB."
+            "path": "fonts/glyf/glyf-malformed-matrix.ttf",
+            "requirements": "Existing compact scalable font with zero head bbox width and height, exercising FT_Request_Size BBOX divide guards without UB."
           }
         },
         "params": {
           "expected_error_symbol": "FT_Err_Divide_By_Zero",
           "expected_error_value_source": "pinned fterrdef.h",
-          "pinned_source": "freetype/src/base/ftobjs.c:3304-3316"
+          "pinned_source": "freetype/src/base/ftobjs.c:3301-3317",
+          "face_index": 0,
+          "requests": [
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_BBOX",
+              "width": 0,
+              "height": 768
+            },
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_BBOX",
+              "width": 768,
+              "height": 0
+            }
+          ]
         }
       },
       "classifiers": [
@@ -145,22 +158,24 @@
       "expectation": {
         "status": "error",
         "error": "FT_Err_Divide_By_Zero",
-        "fixture_requirements": "Existing scalable font plus public size/transform parameters that reach ftobjs.c divide guards without UB.",
+        "fixture_requirements": "Compact scalable font whose face bbox has zero width and height, plus BBOX FT_Request_Size rows that reach the height and width divide guards.",
         "output_shape": {
           "error": "FT_Error",
           "error_symbol": "FT_Err_*",
-          "output_face": "pointer_nullness_or_preservation",
-          "slot_state": "mutation_class_if_slot_is_involved",
+          "outputs": [
+            {
+              "status": "FT_Error",
+              "request": "FT_Size_RequestRec",
+              "metrics": "null_on_error"
+            }
+          ],
           "diagnostic_source": "pinned FreeType source location"
         },
         "compare": {
           "mode": "exact_error",
           "paths": [
-            "error",
-            "error_symbol",
-            "output_face.nullness",
-            "output_face.identity_class",
-            "slot_state.mutation_class"
+            "outputs[*].status",
+            "outputs[*].metrics"
           ]
         }
       }
