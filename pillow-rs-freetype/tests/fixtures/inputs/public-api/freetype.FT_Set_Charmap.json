@@ -162,14 +162,15 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/variation-selectors/cmap-format14.otf",
-            "status": "required_future_asset",
-            "requires": "Font with cmap format 14 variation-selector charmap"
+            "id": "fonts/charmap/cmap-format14-only.ttf"
           }
         },
         "params": {
           "face_index": 0,
-          "charmap_format": 14,
+          "charmap_indices": "all_charmaps",
+          "post_probe_chars": [
+            65
+          ],
           "snapshot_before": true
         }
       },
@@ -188,12 +189,14 @@
           "paths": [
             "status",
             "error",
-            "charmap_before_after"
+            "outputs[*].status",
+            "outputs[*].active_charmap_before",
+            "outputs[*].active_charmap_after"
           ]
         },
         "error": "Invalid_Argument",
         "fixture_requirements": [
-          "Format-14 variation selector charmap fixture"
+          "Active compact format-14-only cmap fixture."
         ]
       }
     }
