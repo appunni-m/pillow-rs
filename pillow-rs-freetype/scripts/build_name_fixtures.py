@@ -6,6 +6,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from fontTools.ttLib import TTFont
+
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE_STATIC = ROOT / "tests" / "fixtures" / "fonts" / "glyf" / "hinter-control-matrix.ttf"
@@ -195,6 +197,16 @@ def write_format1_langtag_malformed_controls() -> None:
         ROOT / "tests" / "fixtures" / "fonts" / "sfnt" / "name-format1-langtag-string-oob.ttf",
         string_oob,
     )
+
+
+def write_missing_name_table() -> None:
+    font = TTFont(BASE_STATIC, recalcTimestamp=False)
+    del font["name"]
+    path = NAME_OUT_DIR / "name-missing.ttf"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() or path.is_symlink():
+        path.unlink()
+    font.save(path, reorderTables=True)
 
 
 def variable_base_records() -> list[NameRecordSpec]:
@@ -483,6 +495,7 @@ def main() -> None:
     write_postscript_branch_matrix()
     write_format1_langtag()
     write_format1_langtag_malformed_controls()
+    write_missing_name_table()
     write_variable_apple_prefix()
     write_variable_unicode_prefix()
     write_variable_odd_windows_prefix()

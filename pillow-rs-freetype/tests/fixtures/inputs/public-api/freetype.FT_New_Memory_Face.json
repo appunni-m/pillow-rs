@@ -637,6 +637,28 @@
             ]
           },
           {
+            "id": "name-table-missing-defaults",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-missing.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-missing.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "font:missing-name-table-defaults"
+            ]
+          },
+          {
             "id": "multiface-cjk-indic-collection",
             "assets": {
               "font_bytes": {

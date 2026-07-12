@@ -348,27 +348,30 @@ that safe `Font` charmap accessors and selection helpers agree with the same
 C-oracle-backed charmap metadata rows. Existing render-mode rows now also
 declare `RenderMode::fixture_name` and `PixelMode::fixture_name` obligations
 for normal, mono, LCD, vertical LCD, and SDF render paths without adding fonts
-or concrete cases.
+or concrete cases. `FT_New_Memory_Face.valid_font_bytes` now includes one
+compact generated face with the optional `name` table removed, proving that
+pinned C FreeType, Rust FFI, C ABI, and WASM ABI all accept the constructor
+fallback path.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,148 |
-| Concrete explicit cases | 6,681 |
-| Additional grouped variants | 2,533 |
+| Concrete explicit cases | 6,682 |
+| Additional grouped variants | 2,534 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,677 |
-| Exact parity | 6,677 / 6,677 |
+| Runnable parity comparisons | 6,678 |
+| Exact parity | 6,678 / 6,678 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,608 / 17,759 (87.89%) |
+| Covered Rust lines | 15,616 / 17,759 (87.93%) |
 | Rust function coverage | 989 / 1,133 (87.29%) |
 | Rust instantiation coverage | 992 / 1,136 (87.32%) |
-| Rust region coverage | 22,503 / 25,450 (88.42%) |
+| Rust region coverage | 22,509 / 25,450 (88.44%) |
 | Rust branch/condition coverage | 3,737 / 4,524 (82.60%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
-| Active fixture font paths | 151 |
-| Stored active font binaries | 108 files, 811 KiB |
+| Active fixture font paths | 152 |
+| Stored active font binaries | 109 files, 815 KiB |
 | Active symlink aliases | 43 |
-| Unique active font contents | 117 SHA-256 identities |
+| Unique active font contents | 118 SHA-256 identities |
 | Deprecated brute-force fonts | 101 files, 99 unique contents, 23 MiB |
 
 The current coverage target is not only line coverage. The maintained
@@ -1779,6 +1782,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Cover safe charmap accessor parity | Existing `FT_Get_Charmap_Index.owned_charmap_indexes` now opts into a safe `Font` charmap assertion. The assertion compares `Font::charmaps`, `charmap`, `charmap_index`, and successful `set_charmap`/`select_charmap` against the same public charmap-index rows already compared across pinned C, Rust FFI, C ABI, and WASM ABI, then checks the safe API's explicit invalid index and missing-pair guards. This adds no fonts and no concrete cases; refreshed condition coverage is 15,587 / 17,759 lines, 22,477 / 25,450 regions, and 3,737 / 4,524 branches with 6,677 / 6,677 runtime rows and four explicit pending rows |
 | 2026-07-12 | Cover safe default font constructor and face count helper | Existing `FT_RENDER_MODE_NORMAL.render_glyph_mode_dispatch` now declares safe `Font::truetype` constructor coverage for the default load-mode row and compares `Font::face_count` with the same face's public `FT_FaceRec.num_faces` view while the row continues to compare rendered glyph output across pinned C, Rust FFI, C ABI, and WASM ABI. This adds no fonts and no concrete cases; refreshed condition coverage is 15,593 / 17,759 lines, 22,488 / 25,450 regions, and 3,737 / 4,524 branches with 6,677 / 6,677 runtime rows and four explicit pending rows |
 | 2026-07-12 | Cover public render and pixel fixture-name helpers | Existing render-mode dispatch rows now declare `assert_render_mode_fixture_name` and `assert_pixel_mode_fixture_name` for normal, mono, LCD, vertical LCD, and SDF outputs. The assertions run only from explicit public input rows that already compare the rendered glyph output across pinned C, Rust FFI, C ABI, and WASM ABI, so this adds no fonts and no concrete cases; refreshed condition coverage is 15,608 / 17,759 lines, 22,503 / 25,450 regions, and 3,737 / 4,524 branches with 6,677 / 6,677 runtime rows and four explicit pending rows |
+| 2026-07-12 | Add missing-name-table constructor control | `scripts/build_name_fixtures.py` now generates `fonts/names/name-missing.ttf` by removing the optional `name` table from the compact base TrueType font, and `FT_New_Memory_Face.valid_font_bytes` selects it as one explicit variant. This covers the constructor fallback separate from the existing zero-record `name-empty.ttf` control; concrete cases rise by one to 6,682, and refreshed condition coverage is 15,616 / 17,759 lines, 22,509 / 25,450 regions, and 3,737 / 4,524 branches with 6,678 / 6,678 runtime rows and four explicit pending rows |
 
 ## Immediate Next Actions
 
