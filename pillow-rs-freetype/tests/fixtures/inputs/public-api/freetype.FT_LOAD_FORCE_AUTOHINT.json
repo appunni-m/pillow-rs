@@ -1980,6 +1980,26 @@
             ]
           },
           {
+            "id": "cjk-width-order-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-width-order.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 22231,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:standard-width-descending-order"
+            ]
+          },
+          {
             "id": "cjk-shared-latin",
             "assets": {
               "font": {
