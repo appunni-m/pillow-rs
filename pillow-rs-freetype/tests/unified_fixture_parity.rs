@@ -11011,6 +11011,22 @@ fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result
     let (_, pixel_height) = pixel_size_param(&case.inputs.params)?;
     let font = Font::truetype(data.as_ref(), pixel_height as f32)
         .map_err(|err| format!("{} Font::truetype returned {err}", case.case_id))?;
+    if bool_param(&case.inputs.params, "assert_font_empty_text_render", false)? {
+        let empty_bitmap = font.render_mode("", render_mode).map_err(|err| {
+            format!(
+                "{} Font::render_mode(\"\") returned {}",
+                case.case_id,
+                font_error_to_ft(err)
+            )
+        })?;
+        let empty_json = rendered_bitmap_json(&empty_bitmap);
+        if !is_empty_rendered_bitmap_json(&empty_json) {
+            return Err(format!(
+                "{} Font::render_mode(\"\") returned non-empty bitmap: {empty_json}",
+                case.case_id
+            ));
+        }
+    }
     let ch = text
         .chars()
         .next()
@@ -11037,6 +11053,21 @@ fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result
             case.case_id
         ));
     };
+    if slot_bitmap.is_null() {
+        if !is_empty_rendered_bitmap_json(&char_json) {
+            return Err(format!(
+                "{} Font::render_char_mode returned non-empty bitmap while FT_Render_Glyph exposed no bitmap: font={char_json}",
+                case.case_id
+            ));
+        }
+        if text_json != char_json {
+            return Err(format!(
+                "{} Font::render_mode disagrees with Font::render_char_mode: text={text_json} char={char_json}",
+                case.case_id
+            ));
+        }
+        return Ok(());
+    }
     if &char_json != slot_bitmap {
         return Err(format!(
             "{} Font::render_char_mode disagrees with FT_Render_Glyph: font={char_json} slot={slot_bitmap}",
@@ -11050,6 +11081,15 @@ fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result
         ));
     }
     Ok(())
+}
+
+fn is_empty_rendered_bitmap_json(value: &Value) -> bool {
+    value.get("width").and_then(Value::as_u64) == Some(0)
+        && value.get("rows").and_then(Value::as_u64) == Some(0)
+        && value.get("pitch").and_then(Value::as_i64) == Some(0)
+        && value.get("left").and_then(Value::as_i64) == Some(0)
+        && value.get("top").and_then(Value::as_i64) == Some(0)
+        && value.get("buffer_hex").and_then(Value::as_str) == Some("")
 }
 
 fn c_render_glyph(

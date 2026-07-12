@@ -77,6 +77,33 @@
             "coverage": [
               "render_glyph:explicit-variant-1"
             ]
+          },
+          {
+            "id": "space-empty-outline-safe-render-agreement",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "input/fonts/DejaVuSans.ttf",
+                "requirements": "Scalable outline font where U+0020 maps to an empty outline glyph; used to compare safe LCD_V Font rendering against FT_Render_Glyph empty glyph behavior."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 32,
+              "load_flags": 0,
+              "render_mode": "FT_RENDER_MODE_LCD_V",
+              "representative_load_target": "FT_LOAD_TARGET_LCD_V",
+              "font_render_text": " ",
+              "assert_font_render_mode_agrees": true
+            },
+            "coverage": [
+              "render_glyph:space-empty-outline-safe-render-agreement"
+            ]
           }
         ]
       },
