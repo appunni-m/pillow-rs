@@ -489,12 +489,15 @@ pub fn FT_Set_Transform(
     let Some(face) = face else {
         return;
     };
-    if let Some(matrix) = matrix {
-        face.transform_matrix = *matrix;
-    }
-    if let Some(delta) = delta {
-        face.transform_delta = *delta;
-    }
+    // FreeType `ftobjs.c:791-817` resets null transform pointers to the
+    // identity matrix and zero delta instead of preserving previous values.
+    face.transform_matrix = matrix.copied().unwrap_or(FT_Matrix {
+        xx: 0x10000,
+        xy: 0,
+        yx: 0,
+        yy: 0x10000,
+    });
+    face.transform_delta = delta.copied().unwrap_or(FT_Vector { x: 0, y: 0 });
 }
 
 pub fn FT_Get_Transform(

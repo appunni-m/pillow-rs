@@ -166,7 +166,7 @@
           "side_effects": "none"
         },
         "compare": {
-          "mode": "unsupported_until_runner_added",
+          "mode": "exact",
           "paths": [
             "no_crash"
           ]
