@@ -322,6 +322,40 @@
         "error": "Invalid_Argument",
         "compare": {"mode": "exact_error"}
       }
+    },
+    {
+      "case_id": "freetype.FT_Get_SubGlyph_Info.error_null_outputs",
+      "subject": "freetype.FT_Get_SubGlyph_Info",
+      "case": "error_null_slot_or_outputs",
+      "operation": "freetype.get_subglyph_info",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "fonts/glyf/glyf-component-matrix.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "size": 20,
+          "glyph_index": 4,
+          "load_flags": 1024,
+          "sub_index": 0,
+          "null_output_indices": ["index", "flags", "arg1", "arg2", "transform"]
+        }
+      },
+      "classifiers": ["kind:function", "header:freetype", "area:composite", "error:null-output"],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "rows": "FT_Get_SubGlyph_Info null output error rows"
+        },
+        "error": "Invalid_Argument",
+        "compare": {"mode": "exact_error", "compare_error_output": true}
+      }
     }
   ]
 }

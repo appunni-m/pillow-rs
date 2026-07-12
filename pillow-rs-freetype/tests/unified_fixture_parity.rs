@@ -8167,6 +8167,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                     subglyph_single_index_param(params)?.to_string(),
                 ]);
             }
+            if params.get("null_output_indices").is_some() {
+                let mut args = vec!["--get-subglyph-info-null-outputs".to_string()];
+                push_font_source(case, &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(glyph_index_param(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                args.push(subglyph_single_index_param(params)?.to_string());
+                args.push(subglyph_null_output_labels(params)?.join(","));
+                return Ok(args);
+            }
             let mut args = vec!["--get-subglyph-info".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
@@ -10060,37 +10070,88 @@ fn rust_get_subglyph_info(face: Option<&FT_Face>, case: &InputCase) -> Result<Ru
         glyph_index_param(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     ) {
-        Ok(slot) => Ok(ok(subglyph_info_output(
-            &case.inputs.params,
-            slot.format,
-            slot.num_subglyphs,
-            |sub_index| {
-                let mut index = 0;
-                let mut flags = 0;
-                let mut arg1 = 0;
-                let mut arg2 = 0;
-                let mut transform = FT_Matrix::default();
-                let err = FT_Get_SubGlyph_Info(
-                    Some(&slot),
-                    sub_index,
-                    Some(&mut index),
-                    Some(&mut flags),
-                    Some(&mut arg1),
-                    Some(&mut arg2),
-                    Some(&mut transform),
-                );
-                SubGlyphCallResult {
-                    error: err,
-                    index,
-                    flags,
-                    arg1,
-                    arg2,
-                    transform: [transform.xx, transform.xy, transform.yx, transform.yy],
-                }
-            },
-        )?)),
+        Ok(slot) => {
+            if case.inputs.params.get("null_output_indices").is_some() {
+                let labels = subglyph_null_output_labels(&case.inputs.params)?;
+                let sub_index = subglyph_single_index_param(&case.inputs.params)?;
+                return Ok(subglyph_null_output_rows(&labels, |label| {
+                    let mut index = 0;
+                    let mut flags = 0;
+                    let mut arg1 = 0;
+                    let mut arg2 = 0;
+                    let mut transform = FT_Matrix::default();
+                    FT_Get_SubGlyph_Info(
+                        Some(&slot),
+                        sub_index,
+                        (label != "index").then_some(&mut index),
+                        (label != "flags").then_some(&mut flags),
+                        (label != "arg1").then_some(&mut arg1),
+                        (label != "arg2").then_some(&mut arg2),
+                        (label != "transform").then_some(&mut transform),
+                    )
+                }));
+            }
+            Ok(ok(subglyph_info_output(
+                &case.inputs.params,
+                slot.format,
+                slot.num_subglyphs,
+                |sub_index| {
+                    let mut index = 0;
+                    let mut flags = 0;
+                    let mut arg1 = 0;
+                    let mut arg2 = 0;
+                    let mut transform = FT_Matrix::default();
+                    let err = FT_Get_SubGlyph_Info(
+                        Some(&slot),
+                        sub_index,
+                        Some(&mut index),
+                        Some(&mut flags),
+                        Some(&mut arg1),
+                        Some(&mut arg2),
+                        Some(&mut transform),
+                    );
+                    SubGlyphCallResult {
+                        error: err,
+                        index,
+                        flags,
+                        arg1,
+                        arg2,
+                        transform: [transform.xx, transform.xy, transform.yx, transform.yy],
+                    }
+                },
+            )?))
+        }
         Err(err) => Ok(error(err)),
     }
+}
+
+fn subglyph_null_output_rows<F>(labels: &[String], mut get_subglyph_info: F) -> RunOutput
+where
+    F: FnMut(&str) -> FT_Error,
+{
+    let mut first_error = FT_Err_Ok;
+    let rows = labels
+        .iter()
+        .map(|label| {
+            let err = get_subglyph_info(label);
+            if first_error == FT_Err_Ok {
+                first_error = err;
+            }
+            json!({"null_output_index": label, "error": err})
+        })
+        .collect::<Vec<_>>();
+    error_with_output(first_error, json!({"rows": rows}))
+}
+
+fn subglyph_null_output_labels(params: &Value) -> Result<Vec<String>, String> {
+    let labels = string_array_param(params, "null_output_indices")?;
+    for label in &labels {
+        match label.as_str() {
+            "index" | "flags" | "arg1" | "arg2" | "transform" => {}
+            other => return Err(format!("unsupported subglyph null output label {other}")),
+        }
+    }
+    Ok(labels)
 }
 
 fn c_get_subglyph_info(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
@@ -10123,6 +10184,46 @@ fn c_get_subglyph_info(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutp
     );
     if load_error != FT_Err_Ok {
         return Ok(error(load_error));
+    }
+    if case.inputs.params.get("null_output_indices").is_some() {
+        let labels = subglyph_null_output_labels(&case.inputs.params)?;
+        let sub_index = subglyph_single_index_param(&case.inputs.params)?;
+        return Ok(subglyph_null_output_rows(&labels, |label| {
+            let mut index = 0;
+            let mut flags = 0;
+            let mut arg1 = 0;
+            let mut arg2 = 0;
+            let mut transform = c_abi::FT_Matrix::default();
+            c_abi::abi_get_subglyph_info_from_face(
+                face,
+                sub_index,
+                if label == "index" {
+                    ptr::null_mut()
+                } else {
+                    &mut index
+                },
+                if label == "flags" {
+                    ptr::null_mut()
+                } else {
+                    &mut flags
+                },
+                if label == "arg1" {
+                    ptr::null_mut()
+                } else {
+                    &mut arg1
+                },
+                if label == "arg2" {
+                    ptr::null_mut()
+                } else {
+                    &mut arg2
+                },
+                if label == "transform" {
+                    ptr::null_mut()
+                } else {
+                    &mut transform
+                },
+            )
+        }));
     }
     let slot = c_abi::abi_slot_snapshot(face)
         .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
@@ -10187,6 +10288,46 @@ fn wasm_get_subglyph_info(handle: usize, case: &InputCase) -> Result<RunOutput, 
     );
     if load_error != FT_Err_Ok {
         return Ok(error(load_error));
+    }
+    if case.inputs.params.get("null_output_indices").is_some() {
+        let labels = subglyph_null_output_labels(&case.inputs.params)?;
+        let sub_index = subglyph_single_index_param(&case.inputs.params)?;
+        return Ok(subglyph_null_output_rows(&labels, |label| {
+            let mut index = 0;
+            let mut flags = 0;
+            let mut arg1 = 0;
+            let mut arg2 = 0;
+            let mut transform = wasm_abi::FontdoneWasmMatrix::default();
+            wasm_abi::fontdone_wasm_get_subglyph_info(
+                handle,
+                sub_index,
+                if label == "index" {
+                    ptr::null_mut()
+                } else {
+                    &mut index
+                },
+                if label == "flags" {
+                    ptr::null_mut()
+                } else {
+                    &mut flags
+                },
+                if label == "arg1" {
+                    ptr::null_mut()
+                } else {
+                    &mut arg1
+                },
+                if label == "arg2" {
+                    ptr::null_mut()
+                } else {
+                    &mut arg2
+                },
+                if label == "transform" {
+                    ptr::null_mut()
+                } else {
+                    &mut transform
+                },
+            )
+        }));
     }
     let slot = wasm_abi::abi_slot_snapshot(handle)
         .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
