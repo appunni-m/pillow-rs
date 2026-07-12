@@ -1224,15 +1224,16 @@ named-instance PostScript-name parity.
 
 #### R8: Scalar, Cast, And Final Error Boundaries
 
-Primary modules: `casts.rs`, `fixed.rs` branch residuals, plus residual small
-branches.
+Primary modules: `casts.rs` branch residuals, `fixed.rs` branch residuals, plus
+residual small branches.
 
 Expected additions: no fonts; 15-30 explicit variants.
 
 Use existing fixed-math public API inputs for signed extremes, zero divisors,
 rounding boundaries, normalization axes, and conversion limits. `fixed.rs` is
-line-complete; remaining work there is branch outcome evidence or semantic
-reachability classification, not missing wrapper-line coverage.
+line-complete and `casts.rs` is line/function/region-complete; remaining work
+there is branch outcome evidence or semantic reachability classification, not
+missing wrapper-line coverage.
 
 Exit gate: every remaining small module reaches complete structural coverage.
 
@@ -1593,6 +1594,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Direct unpatented-hinting post-load route | 109 unique hashes | 0 | 6,648 | 6,644 / 6,644 | 4 | 14,695 / 17,264 lines; 21,419 / 24,829 regions; 3,591 / 4,406 branches | `FT_Face_SetUnpatentedHinting.post_toggle_load_behavior` now calls pinned C `FT_Face_SetUnpatentedHinting` for the explicit toggle sequence and then compares the post-toggle `FT_Load_Glyph` slot through Rust FFI, C ABI, and WASM ABI. Pinned FreeType's deprecated function is a no-op returning false, so the row proves unchanged post-toggle load behavior instead of a generic boolean list. Route-audit real parity rises to 3,246 and shape-incomplete fallback drops to 7 without case or coverage growth |
 | 2026-07-12 | Direct outline cbox nullable pointer route | 109 unique hashes | 0 | 6,648 | 6,644 / 6,644 | 4 | 14,720 / 17,289 lines; 21,454 / 24,864 regions; 3,595 / 4,410 branches | `FT_Outline_Get_CBox.null_inputs_noop` now calls pinned C, Rust FFI, C ABI, and WASM ABI pointer no-op shapes directly. Live `ftoutln.outline_get_cbox` glyph rows also call the safe Rust helper and verify it agrees with the loaded slot cbox for control-point and empty-outline cases. Route-audit real parity rises to 3,247 and shape-incomplete fallback drops to 6 without case growth |
 | 2026-07-12 | Native-long fixed-math route parity | 109 unique hashes | 0 | 6,649 | 6,645 / 6,645 | 4 | 14,736 / 17,290 lines; 21,474 / 24,856 regions; 3,600 / 4,406 branches | Existing `FT_RoundFix`, `FT_CeilFix`, `FT_FloorFix`, `FT_MulDiv`, `FT_MulFix`, and `FT_DivFix` rows now classify as real runtime parity instead of compile contracts. The focused `FT_RoundFix.wraparound_matches_c` row exposed that C `FT_Fixed` is a native signed long and returns `2147483648` for the `2147483647` round boundary on this host, while the old core wrapper truncated to `-2147483648`. Rust FFI now delegates unary fixed functions to core native-long wrappers, `fixed.rs` reaches 215 / 215 lines, and route-audit real parity rises to 3,268 without new fonts, cases, or implicit discovery |
+| 2026-07-12 | Shared CORDIC cast helper route | 109 unique hashes | 0 | 6,649 | 6,645 / 6,645 | 4 | 14,739 / 17,290 lines; 21,480 / 24,859 regions; 3,600 / 4,406 branches | Existing `fttrigon.FT_Vector_Length` rows exercise the FreeType CORDIC prenormalization path. The remaining raw `i64 as u32` low-word cast there now uses the shared `casts::u32_from_i64` helper documented for 32-bit parts, moving `casts.rs` to 51 / 51 lines, 14 / 14 functions, and 65 / 65 regions without adding cases, fonts, or test-only hooks |
 
 ## Decision Log
 
