@@ -1106,6 +1106,27 @@ pub extern "C" fn FT_Face_GetVariantSelectors(face: FT_Face) -> *mut FT_UInt32 {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Face_GetVariantsOfChar(face: FT_Face, charcode: FT_ULong) -> *mut FT_UInt32 {
+    let Some(state) = face_state_mut(face) else {
+        return ptr::null_mut();
+    };
+    let values = rust_ffi::FT_Face_GetVariantsOfChar(Some(&state.inner), charcode);
+    state.variant_list_ptr(values)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Face_GetCharsOfVariant(
+    face: FT_Face,
+    variant_selector: FT_ULong,
+) -> *mut FT_UInt32 {
+    let Some(state) = face_state_mut(face) else {
+        return ptr::null_mut();
+    };
+    let values = rust_ffi::FT_Face_GetCharsOfVariant(Some(&state.inner), variant_selector);
+    state.variant_list_ptr(values)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_Kerning(
     face: FT_Face,
     left_glyph: FT_UInt,

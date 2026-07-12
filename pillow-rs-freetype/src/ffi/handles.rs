@@ -1223,6 +1223,22 @@ pub fn FT_Face_GetVariantSelectors(face: Option<&FT_Face>) -> Option<Vec<FT_UInt
     face.inner.get_variant_selectors()
 }
 
+pub fn FT_Face_GetVariantsOfChar(
+    face: Option<&FT_Face>,
+    charcode: FT_ULong,
+) -> Option<Vec<FT_UInt32>> {
+    let face = face?;
+    face.inner.get_variants_of_char(charcode as u32)
+}
+
+pub fn FT_Face_GetCharsOfVariant(
+    face: Option<&FT_Face>,
+    variant_selector: FT_ULong,
+) -> Option<Vec<FT_UInt32>> {
+    let face = face?;
+    face.inner.get_chars_of_variant(variant_selector as u32)
+}
+
 pub fn FT_Get_Kerning(
     face: Option<&FT_Face>,
     left_glyph: FT_UInt,

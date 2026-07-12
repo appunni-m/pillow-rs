@@ -878,6 +878,41 @@ pub extern "C" fn fontdone_wasm_get_variant_selectors(handle: usize) -> *mut FT_
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_variants_of_char(
+    handle: usize,
+    charcode: FT_ULong,
+) -> *mut FT_UInt32 {
+    let Some(face) = face_mut(handle) else {
+        return ptr::null_mut();
+    };
+    let Some(values) = rust_ffi::FT_Face_GetVariantsOfChar(Some(&face.face), charcode) else {
+        face.variant_list.clear();
+        return ptr::null_mut();
+    };
+    face.variant_list = values;
+    face.variant_list.push(0);
+    face.variant_list.as_mut_ptr()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_chars_of_variant(
+    handle: usize,
+    variant_selector: FT_ULong,
+) -> *mut FT_UInt32 {
+    let Some(face) = face_mut(handle) else {
+        return ptr::null_mut();
+    };
+    let Some(values) = rust_ffi::FT_Face_GetCharsOfVariant(Some(&face.face), variant_selector)
+    else {
+        face.variant_list.clear();
+        return ptr::null_mut();
+    };
+    face.variant_list = values;
+    face.variant_list.push(0);
+    face.variant_list.as_mut_ptr()
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_kerning(
     handle: usize,
     left_glyph: FT_UInt,

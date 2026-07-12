@@ -88,6 +88,8 @@ pub struct Format14Subtable {
 #[derive(Debug, Clone)]
 struct VariationSelectorRecord {
     selector: u32,
+    has_default_table: bool,
+    has_non_default_table: bool,
     default_ranges: Vec<VariationDefaultRange>,
     non_default_mappings: Vec<VariationMapping>,
 }
@@ -185,6 +187,29 @@ impl CmapTable {
         for subtable in &self.format14 {
             if subtable.platform_id == 0 && subtable.encoding_id == 5 {
                 return Some(subtable.variant_selectors());
+            }
+        }
+        None
+    }
+
+    /// Equivalent to `FT_Face_GetVariantsOfChar`.
+    pub fn variants_of_char(&self, codepoint: u32) -> Option<Vec<u32>> {
+        for subtable in &self.format14 {
+            if subtable.platform_id == 0 && subtable.encoding_id == 5 {
+                // FreeType `tt_cmap14_char_variants` returns the face-owned
+                // scratch list even when no selector matched, so keep
+                // `Some([])` distinct from a missing format-14 charmap.
+                return Some(subtable.variants_of_char(codepoint));
+            }
+        }
+        None
+    }
+
+    /// Equivalent to `FT_Face_GetCharsOfVariant`.
+    pub fn chars_of_variant(&self, variant_selector: u32) -> Option<Vec<u32>> {
+        for subtable in &self.format14 {
+            if subtable.platform_id == 0 && subtable.encoding_id == 5 {
+                return subtable.chars_of_variant(variant_selector);
             }
         }
         None
@@ -379,6 +404,60 @@ impl Format14Subtable {
 
     fn variant_selectors(&self) -> Vec<u32> {
         self.records.iter().map(|record| record.selector).collect()
+    }
+
+    fn variants_of_char(&self, codepoint: u32) -> Vec<u32> {
+        self.records
+            .iter()
+            .filter(|record| record.contains_codepoint(codepoint))
+            .map(|record| record.selector)
+            .collect()
+    }
+
+    fn chars_of_variant(&self, variant_selector: u32) -> Option<Vec<u32>> {
+        let record = self
+            .records
+            .iter()
+            .find(|record| record.selector == variant_selector)?;
+        // FreeType `tt_cmap14_variant_chars` returns NULL when the selector
+        // record has neither a default nor non-default UVS table.
+        if !record.has_default_table && !record.has_non_default_table {
+            return None;
+        }
+
+        let mut chars = record.default_codepoints();
+        chars.extend(
+            record
+                .non_default_mappings
+                .iter()
+                .filter(|mapping| !record.default_contains(mapping.codepoint))
+                .map(|mapping| mapping.codepoint),
+        );
+        chars.sort_unstable();
+        Some(chars)
+    }
+}
+
+impl VariationSelectorRecord {
+    fn contains_codepoint(&self, codepoint: u32) -> bool {
+        self.default_contains(codepoint)
+            || self
+                .non_default_mappings
+                .iter()
+                .any(|mapping| mapping.codepoint == codepoint && mapping.glyph_id != 0)
+    }
+
+    fn default_contains(&self, codepoint: u32) -> bool {
+        self.default_ranges
+            .iter()
+            .any(|range| codepoint >= range.start && codepoint <= range.end)
+    }
+
+    fn default_codepoints(&self) -> Vec<u32> {
+        self.default_ranges
+            .iter()
+            .flat_map(|range| range.start..=range.end)
+            .collect()
     }
 }
 
@@ -753,6 +832,8 @@ fn parse_format14(
         };
         records.push(VariationSelectorRecord {
             selector,
+            has_default_table: default_offset != 0,
+            has_non_default_table: non_default_offset != 0,
             default_ranges,
             non_default_mappings,
         });

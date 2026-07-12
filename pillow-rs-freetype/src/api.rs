@@ -325,6 +325,16 @@ impl Face {
         self.font.variant_selectors()
     }
 
+    /// Return variation selectors active for a Unicode scalar value.
+    pub fn get_variants_of_char(&self, char_code: u32) -> Option<Vec<u32>> {
+        self.font.variants_of_char(char_code)
+    }
+
+    /// Return Unicode scalar values covered by a variation selector.
+    pub fn get_chars_of_variant(&self, variant_selector: u32) -> Option<Vec<u32>> {
+        self.font.chars_of_variant(variant_selector)
+    }
+
     /// Select the best Unicode charmap, equivalent to `FT_Select_Charmap`.
     pub fn select_unicode_charmap(&mut self) -> Result<(), FontError> {
         self.font.select_unicode_charmap()?;

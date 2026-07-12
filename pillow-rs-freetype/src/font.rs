@@ -948,6 +948,16 @@ impl Font {
         self.data.cmap.variant_selectors()
     }
 
+    /// Equivalent to `FT_Face_GetVariantsOfChar`.
+    pub fn variants_of_char(&self, codepoint: u32) -> Option<Vec<u32>> {
+        self.data.cmap.variants_of_char(codepoint)
+    }
+
+    /// Equivalent to `FT_Face_GetCharsOfVariant`.
+    pub fn chars_of_variant(&self, variant_selector: u32) -> Option<Vec<u32>> {
+        self.data.cmap.chars_of_variant(variant_selector)
+    }
+
     /// Equivalent to `FT_Get_First_Char`.
     pub fn first_char(&self) -> Option<(u32, u16)> {
         self.data.cmap.first_char(self.selected_charmap)
