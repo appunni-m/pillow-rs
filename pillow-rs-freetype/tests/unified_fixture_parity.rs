@@ -3711,6 +3711,71 @@ fn assert_font_getkerning_agrees(case: &InputCase, output: &RunOutput) -> Result
     Ok(())
 }
 
+fn rust_get_advance_with_face(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let output = match FT_Get_Advance(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    ) {
+        Ok(advance) => ok(advance_json(advance)),
+        Err(err) => error(err),
+    };
+    assert_font_hori_advance_agrees(case, &output)?;
+    Ok(output)
+}
+
+fn assert_font_hori_advance_agrees(case: &InputCase, output: &RunOutput) -> Result<(), String> {
+    if !bool_param(
+        &case.inputs.params,
+        "assert_font_hori_advance_agrees",
+        false,
+    )? {
+        return Ok(());
+    }
+    if output.status.kind != StatusKind::Ok {
+        return Err(format!(
+            "{} assert_font_hori_advance_agrees requires successful FT_Get_Advance output",
+            case.case_id
+        ));
+    }
+    let load_flags = load_flags_param(&case.inputs.params)?;
+    if load_flags & (FT_LOAD_VERTICAL_LAYOUT | FT_LOAD_NO_SCALE) != 0
+        || (load_flags & FT_LOAD_NO_HINTING == 0
+            && FT_LOAD_TARGET_MODE(load_flags) != FT_RENDER_MODE_LIGHT)
+    {
+        return Err(format!(
+            "{} assert_font_hori_advance_agrees requires horizontal scaled fast-path flags",
+            case.case_id
+        ));
+    }
+    let codepoint = u32_param(&case.inputs.params, "advance_codepoint")?;
+    let data = font_bytes(case)?;
+    let (_, pixel_height) = pixel_size_param(&case.inputs.params)?;
+    let font =
+        Font::truetype_with_load_mode(data.as_ref(), pixel_height as f32, LoadMode::NoHinting)
+            .map_err(|err| format!("{} Font constructor returned {err}", case.case_id))?;
+    let actual = i64::from(font.glyph_hori_advance_26dot6(codepoint));
+    let expected_16dot16 = output
+        .output
+        .get("advance")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| format!("{} FT_Get_Advance output missing advance", case.case_id))?;
+    if expected_16dot16 < 0 {
+        return Err(format!(
+            "{} assert_font_hori_advance_agrees requires non-negative horizontal advance",
+            case.case_id
+        ));
+    }
+    let expected = (expected_16dot16 + 512) >> 10;
+    if actual != expected {
+        return Err(format!(
+            "{} Font::glyph_hori_advance_26dot6 disagrees with FT_Get_Advance: font={actual} ft_fixed_rounded={expected}",
+            case.case_id
+        ));
+    }
+    Ok(())
+}
+
 fn font_kerning_char_selector(row: &Value, key: &str) -> Result<char, String> {
     let selector = row
         .get(key)
@@ -8718,14 +8783,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftadvanc.get_advance" => {
             let face = open_face(case)?;
-            match FT_Get_Advance(
-                &face,
-                glyph_index_param(&case.inputs.params)?,
-                load_flags_param(&case.inputs.params)?,
-            ) {
-                Ok(advance) => Ok(ok(advance_json(advance))),
-                Err(err) => Ok(error(err)),
-            }
+            rust_get_advance_with_face(&face, case)
         }
         "ftadvanc.get_advances" => {
             let face = open_face(case)?;

@@ -9,8 +9,8 @@ control those code paths. The C FreeType oracle remains the target; Servo
 
 | Area | C symbols and macros | Current fontdone mapping | Status |
 |---|---|---|---|
-| Quick advances | `FT_Get_Advance`, `FT_Get_Advances`, `FT_ADVANCE_FLAG_FAST_ONLY` | `Font::glyph_hori_advance_26dot6`, `Font::getlength`, `Face::load_glyph(...).metrics.hori_advance` | Partial semantic coverage, no C ABI entry point |
-| Pair kerning | `FT_Get_Kerning`, `FT_Kerning_Mode`, `FT_KERNING_DEFAULT`, `FT_KERNING_UNFITTED`, `FT_KERNING_UNSCALED` | `Font::getkerning`, private `Font::glyph_kerning`, `tt::kern::KernTable::get` | Planned C endpoint, partial Rust-only helper |
+| Quick advances | `FT_Get_Advance`, `FT_Get_Advances`, `FT_ADVANCE_FLAG_FAST_ONLY` | `FT_Get_Advance`/`FT_Get_Advances` wrappers plus safe `Font::glyph_hori_advance_26dot6`, `Font::getlength`, and `Face::load_glyph(...).metrics.hori_advance` checks | Implemented for the explicit SFNT fixture set; safe `Font::glyph_hori_advance_26dot6` is covered through a no-hinting public advance row |
+| Pair kerning | `FT_Get_Kerning`, `FT_Kerning_Mode`, `FT_KERNING_DEFAULT`, `FT_KERNING_UNFITTED`, `FT_KERNING_UNSCALED` | `FT_Get_Kerning` wrappers plus safe `Font::getkerning`, private `Font::glyph_kerning`, `tt::kern::KernTable::get` | Implemented for legacy format-0 horizontal `kern` rows; GPOS and Type 1/AFM track kerning remain out of scope |
 | Track kerning | `FT_Get_Track_Kerning` | None | Planned or Type 1/AFM-limited exclusion |
 | Font format alias | `FT_Get_X11_Font_Format` | `Font::font_format` via `FT_Get_Font_Format` mapping | Interface map marks out of scope; ABI alias still needs a deliberate decision |
 | Face/metric helpers | `FT_HAS_HORIZONTAL`, `FT_HAS_VERTICAL`, `FT_HAS_KERNING`, `FT_IS_SCALABLE`, `FT_IS_SFNT`, `FT_IS_FIXED_WIDTH`, `FT_HAS_GLYPH_NAMES` | `Font::face_flags`, `FaceInfo`, `GlyphSlotMetrics`, `SizeMetrics` | Partial; some output-visible flags are not set yet |
@@ -128,7 +128,9 @@ quick-advance 16.16 values.
 Unicode codepoint and scales it with `size_metrics.x_scale`. This is useful for
 horizontal design advance checks, but it takes a codepoint instead of a glyph
 index, has no flags, has no vertical path, and returns 26.6 rather than the
-scaled 16.16 expected by `FT_Get_Advance`.
+scaled 16.16 expected by `FT_Get_Advance`. The public fixture suite covers this
+helper by selecting DejaVuSans `U+0041`/glyph 36 in the no-hinting quick-advance
+row and rounding the oracle-backed 16.16 value back to 26.6 for comparison.
 
 `Font::getlength(text)` sums `glyph_metrics_for_index_default(...).hori_advance`
 for each nonzero glyph without implicit pair kerning. The interface map
