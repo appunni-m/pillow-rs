@@ -134,7 +134,8 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `bf004c57a16e` | 1.7 | 1 | `fonts/charmap/format6-range.ttf` | format-6-only trimmed range with mapped and zero glyph entries; owns direct lookup, gap, exhaustion, and wrapping iteration |
 | `f059f367c976` | 4.2 | 1 | `fonts/cmap/cmap-format-language-matrix.ttf` | source-backed compact cmap matrix with format 4 language `0x0409`, format 6 language 17, format 12 language `0x12345678`, and format 14 `FE00` empty-selector plus `FE0F`/`E0101` default and non-default variation-selector metadata |
 | `251fcf468057` | 2.1 | 1 | `fonts/charmap/cmap-parser-matrix.ttf` | one valid format 6 plus unsupported, out-of-range, and independently malformed format 4/6/12 records |
-| `46cdbccd903d` | 4.4 | 1 | `fonts/charmap/cmap-format14-malformed-matrix.ttf` | raw cmap control with one valid format 6 plus malformed Unicode and non-Unicode format 14 short, offset, selector-order, default-UVS, and non-default-UVS subtables |
+| `3facc94f8e88` | 4.4 | 1 | `fonts/charmap/cmap-format14-malformed-matrix.ttf` | raw cmap control with one valid format 6 plus malformed Unicode and non-Unicode format 14 short, physical-tail short, offset, selector-order, default-UVS, and non-default-UVS subtables |
+| `03f64c98e923` | 4.1 | 1 | `fonts/charmap/cmap-nonunicode-format6.ttf` | compact Macintosh Roman format-6-only control proving public variant-index zero behavior when no active Unicode charmap exists |
 | `1b33f5e1562` | 4.1 | 1 | `fonts/charmap/cmap-format14-only.ttf` | compact format-14-only control with `FE00`, `FE0F`, and `E0101` selector records and no direct Unicode lookup charmap |
 | `217751378cbc` | 1.7 | 1 | `fonts/charmap/cmap-record-overflow.ttf` | cmap header declaring one absent encoding record |
 | `93678acbb630` | 1.7 | 1 | `fonts/charmap/cmap-short.ttf` | three-byte cmap short-header control |
