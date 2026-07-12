@@ -2085,8 +2085,11 @@ impl BackendComparisonWorker {
         {
             if matches!(
                 case.operation.as_str(),
-                "get_char_index" | "freetype.set_transform" | "freetype.get_transform"
+                "freetype.set_transform" | "freetype.get_transform"
             ) {
+                return run_rust_ffi(case);
+            }
+            if matches!(case.operation.as_str(), "get_char_index") {
                 return Ok(ok(json!({"void": true})));
             }
             return run_rust_ffi(case);
@@ -2984,21 +2987,23 @@ struct KerningOutputRow {
 
 fn rust_set_transform(case: &InputCase) -> Result<RunOutput, String> {
     let params = &case.inputs.params;
-    let mut face = open_face(case)?;
     let (xx, xy, yx, yy, dx, dy) = set_transform_matrix_param(params)?;
-    FT_Set_Transform(
-        Some(&mut face),
-        Some(&FT_Matrix {
-            xx: xx as FT_Fixed,
-            xy: xy as FT_Fixed,
-            yx: yx as FT_Fixed,
-            yy: yy as FT_Fixed,
-        }),
-        Some(&FT_Vector {
-            x: dx as FT_Pos,
-            y: dy as FT_Pos,
-        }),
-    );
+    let matrix = FT_Matrix {
+        xx: xx as FT_Fixed,
+        xy: xy as FT_Fixed,
+        yx: yx as FT_Fixed,
+        yy: yy as FT_Fixed,
+    };
+    let delta = FT_Vector {
+        x: dx as FT_Pos,
+        y: dy as FT_Pos,
+    };
+    if lifecycle_handle_param(params, "face") == Some("null") {
+        FT_Set_Transform(None, Some(&matrix), Some(&delta));
+        return Ok(ok(json!({"void": true})));
+    }
+    let mut face = open_face(case)?;
+    FT_Set_Transform(Some(&mut face), Some(&matrix), Some(&delta));
     // Compound operation: load glyph after transform and return slot JSON.
     if set_transform_has_post_load(params) {
         let px = params
@@ -3018,24 +3023,56 @@ fn rust_set_transform(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn rust_get_transform(case: &InputCase) -> Result<RunOutput, String> {
-    let face = open_face(case)?;
-    let mut matrix = FT_Matrix {
-        xx: 0,
-        xy: 0,
-        yx: 0,
-        yy: 0,
+    let params = &case.inputs.params;
+    let rows = get_transform_rows(params)?;
+    let sequence = get_transform_set_sequence(params)?;
+    let needs_live_face = !sequence.is_empty() || rows.iter().any(|row| !row.face_is_null);
+    let mut face = if needs_live_face {
+        Some(open_face(case)?)
+    } else {
+        None
     };
-    let mut delta = FT_Vector { x: 0, y: 0 };
-    FT_Get_Transform(Some(&face), Some(&mut matrix), Some(&mut delta));
-    Ok(ok(json!({
-        "matrix": {
-            "xx": matrix.xx,
-            "xy": matrix.xy,
-            "yx": matrix.yx,
-            "yy": matrix.yy
-        },
-        "delta": {"x": delta.x, "y": delta.y}
-    })))
+
+    if let Some(face) = face.as_mut() {
+        for step in &sequence {
+            let matrix = step.matrix.map(ft_matrix_from_matrix_value);
+            let delta = step.delta.map(ft_vector_from_vector_value);
+            FT_Set_Transform(Some(&mut *face), matrix.as_ref(), delta.as_ref());
+        }
+    }
+
+    let sentinels = get_transform_sentinel_values(params)?;
+    let mut snapshots = Vec::with_capacity(rows.len());
+    for row in &rows {
+        let mut matrix = ft_matrix_from_matrix_value(sentinels.matrix);
+        let mut delta = ft_vector_from_vector_value(sentinels.delta);
+        FT_Get_Transform(
+            if row.face_is_null {
+                None
+            } else {
+                face.as_ref()
+            },
+            if row.matrix_output {
+                Some(&mut matrix)
+            } else {
+                None
+            },
+            if row.delta_output {
+                Some(&mut delta)
+            } else {
+                None
+            },
+        );
+        snapshots.push(transform_snapshot_json(row, &matrix, &delta));
+    }
+    if snapshots.len() == 1 && params.get("variants").is_none() {
+        Ok(ok(json!({
+            "matrix": snapshots[0]["matrix"].clone(),
+            "delta": snapshots[0]["delta"].clone()
+        })))
+    } else {
+        Ok(ok(json!({"rows": snapshots})))
+    }
 }
 
 fn rust_reference_face(case: &InputCase) -> Result<RunOutput, String> {
@@ -6998,12 +7035,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "freetype.get_transform" => {
-            // Use a real face even when params have face=null (the variant just skips writing outputs)
             let mut args = vec!["--get-transform".to_string()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
-            args.push("0".to_string());
-            args.push("0".to_string());
+            args.push(get_transform_set_sequence_arg(params)?);
+            args.push(get_transform_rows_arg(params)?);
+            args.push(get_transform_sentinel_arg(params)?);
             Ok(args)
         }
         "freetype.reference_face" => {
@@ -16725,6 +16762,8 @@ fn set_transform_matrix_param(params: &Value) -> Result<(i32, i32, i32, i32, i32
         arr.first()
             .cloned()
             .ok_or_else(|| "transforms array is empty".to_string())?
+    } else if params.get("matrix").is_some() {
+        params.clone()
     } else {
         // Identity default when no transform specified (simple set-transform case).
         return Ok((0x1_0000, 0, 0, 0x1_0000, 0, 0));
@@ -16778,6 +16817,225 @@ fn set_transform_matrix_param(params: &Value) -> Result<(i32, i32, i32, i32, i32
         (0, 0)
     };
     Ok((xx, xy, yx, yy, dx, dy))
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TransformSetStep {
+    matrix: Option<MatrixValue>,
+    delta: Option<VectorValue>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct GetTransformRow {
+    face_is_null: bool,
+    matrix_output: bool,
+    delta_output: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct GetTransformSentinels {
+    matrix: MatrixValue,
+    delta: VectorValue,
+}
+
+fn get_transform_set_sequence_arg(params: &Value) -> Result<String, String> {
+    let rows = get_transform_set_sequence(params)?;
+    if rows.is_empty() {
+        return Ok("none".to_string());
+    }
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let matrix = row.matrix.unwrap_or(MatrixValue {
+                xx: 0,
+                xy: 0,
+                yx: 0,
+                yy: 0,
+            });
+            let delta = row.delta.unwrap_or(VectorValue { x: 0, y: 0 });
+            [
+                if row.matrix.is_some() { 1 } else { 0 },
+                if row.delta.is_some() { 1 } else { 0 },
+                matrix.xx,
+                matrix.xy,
+                matrix.yx,
+                matrix.yy,
+                delta.x,
+                delta.y,
+            ]
+            .into_iter()
+            .map(|value| value.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+        })
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
+fn get_transform_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(get_transform_rows(params)?
+        .into_iter()
+        .map(|row| {
+            [
+                if row.face_is_null { 1 } else { 0 },
+                if row.matrix_output { 1 } else { 0 },
+                if row.delta_output { 1 } else { 0 },
+            ]
+            .into_iter()
+            .map(|value| value.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+        })
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
+fn get_transform_sentinel_arg(params: &Value) -> Result<String, String> {
+    let sentinels = get_transform_sentinel_values(params)?;
+    Ok([
+        sentinels.matrix.xx,
+        sentinels.matrix.xy,
+        sentinels.matrix.yx,
+        sentinels.matrix.yy,
+        sentinels.delta.x,
+        sentinels.delta.y,
+    ]
+    .into_iter()
+    .map(|value| value.to_string())
+    .collect::<Vec<_>>()
+    .join(","))
+}
+
+fn get_transform_set_sequence(params: &Value) -> Result<Vec<TransformSetStep>, String> {
+    let Some(rows) = params
+        .get("set_transform_sequence")
+        .and_then(Value::as_array)
+    else {
+        return Ok(Vec::new());
+    };
+    rows.iter()
+        .map(|row| {
+            Ok(TransformSetStep {
+                matrix: optional_transform_matrix(row, "matrix")?,
+                delta: optional_transform_delta(row, "delta")?,
+            })
+        })
+        .collect()
+}
+
+fn get_transform_rows(params: &Value) -> Result<Vec<GetTransformRow>, String> {
+    if let Some(rows) = params.get("variants").and_then(Value::as_array) {
+        return rows.iter().map(get_transform_row).collect();
+    }
+    Ok(vec![get_transform_row(params)?])
+}
+
+fn get_transform_row(value: &Value) -> Result<GetTransformRow, String> {
+    Ok(GetTransformRow {
+        face_is_null: lifecycle_handle_param(value, "face") == Some("null"),
+        matrix_output: transform_output_pointer_is_non_null(value, "matrix_output")?,
+        delta_output: transform_output_pointer_is_non_null(value, "delta_output")?,
+    })
+}
+
+fn transform_output_pointer_is_non_null(value: &Value, key: &str) -> Result<bool, String> {
+    match value.get(key) {
+        Some(Value::String(text)) if text == "null" => Ok(false),
+        Some(Value::String(text)) if text == "non_null" => Ok(true),
+        Some(Value::Null) => Ok(false),
+        Some(other) => Err(format!("unsupported {key} value {other}")),
+        None => Ok(true),
+    }
+}
+
+fn get_transform_sentinel_values(params: &Value) -> Result<GetTransformSentinels, String> {
+    let Some(value) = params.get("sentinel_initial_values") else {
+        return Ok(default_get_transform_sentinels());
+    };
+    if value.as_bool().is_some_and(|enabled| enabled) {
+        return Ok(default_get_transform_sentinels());
+    }
+    let values = value
+        .as_array()
+        .ok_or_else(|| "sentinel_initial_values must be true or a six-value array".to_string())?;
+    if values.len() != 6 {
+        return Err("sentinel_initial_values must contain six values".to_string());
+    }
+    Ok(GetTransformSentinels {
+        matrix: MatrixValue {
+            xx: i64_value(&values[0], "sentinel_initial_values[0]")?,
+            xy: i64_value(&values[1], "sentinel_initial_values[1]")?,
+            yx: i64_value(&values[2], "sentinel_initial_values[2]")?,
+            yy: i64_value(&values[3], "sentinel_initial_values[3]")?,
+        },
+        delta: VectorValue {
+            x: i64_value(&values[4], "sentinel_initial_values[4]")?,
+            y: i64_value(&values[5], "sentinel_initial_values[5]")?,
+        },
+    })
+}
+
+fn default_get_transform_sentinels() -> GetTransformSentinels {
+    GetTransformSentinels {
+        matrix: MatrixValue {
+            xx: 11,
+            xy: 22,
+            yx: 33,
+            yy: 44,
+        },
+        delta: VectorValue { x: 55, y: 66 },
+    }
+}
+
+fn optional_transform_matrix(value: &Value, key: &str) -> Result<Option<MatrixValue>, String> {
+    let Some(value) = value.get(key) else {
+        return Ok(None);
+    };
+    if value_is_null_token(value) {
+        return Ok(None);
+    }
+    matrix_value_from_value(value).map(Some)
+}
+
+fn optional_transform_delta(value: &Value, key: &str) -> Result<Option<VectorValue>, String> {
+    let Some(value) = value.get(key) else {
+        return Ok(None);
+    };
+    if value_is_null_token(value) {
+        return Ok(None);
+    }
+    vector_value_from_value(value).map(Some)
+}
+
+fn ft_matrix_from_matrix_value(value: MatrixValue) -> FT_Matrix {
+    FT_Matrix {
+        xx: value.xx as FT_Fixed,
+        xy: value.xy as FT_Fixed,
+        yx: value.yx as FT_Fixed,
+        yy: value.yy as FT_Fixed,
+    }
+}
+
+fn ft_vector_from_vector_value(value: VectorValue) -> FT_Vector {
+    FT_Vector {
+        x: value.x as FT_Pos,
+        y: value.y as FT_Pos,
+    }
+}
+
+fn transform_snapshot_json(row: &GetTransformRow, matrix: &FT_Matrix, delta: &FT_Vector) -> Value {
+    json!({
+        "face": if row.face_is_null { "null" } else { "live" },
+        "matrix_output": if row.matrix_output { "non_null" } else { "null" },
+        "delta_output": if row.delta_output { "non_null" } else { "null" },
+        "matrix": {
+            "xx": matrix.xx,
+            "xy": matrix.xy,
+            "yx": matrix.yx,
+            "yy": matrix.yy
+        },
+        "delta": {"x": delta.x, "y": delta.y}
+    })
 }
 
 /// Return true when the set_transform case should also load a glyph after

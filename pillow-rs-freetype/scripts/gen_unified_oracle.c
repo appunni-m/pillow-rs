@@ -6619,11 +6619,18 @@ static int emit_reference_face(int argc, char** argv) {
     return 0;
 }
 
+static void print_transform_matrix_delta(FT_Matrix matrix, FT_Vector delta) {
+    printf("\"matrix\":{\"xx\":%ld,\"xy\":%ld,\"yx\":%ld,\"yy\":%ld},\"delta\":{\"x\":%ld,\"y\":%ld}",
+           matrix.xx, matrix.xy, matrix.yx, matrix.yy, delta.x, delta.y);
+}
+
 static int emit_get_transform(int argc, char** argv) {
-    // Handle get-transform with file source: load font, return identity matrix.
     const char* source_kind = argv[2];
     const char* source_value = argv[3];
     FT_Long face_index = atol(argv[4]);
+    const char* set_rows_arg = argv[5];
+    const char* output_rows_arg = argv[6];
+    const char* sentinel_arg = argv[7];
 
     unsigned char* data = NULL;
     long data_len = 0;
@@ -6641,15 +6648,130 @@ static int emit_get_transform(int argc, char** argv) {
     FT_Error err = FT_Init_FreeType(&library);
     FT_Face face = NULL;
     if (!err) err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
-    if (!err && face) {
-        FT_Matrix matrix;
-        FT_Vector delta;
-        FT_Get_Transform(face, &matrix, &delta);
-        printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"matrix\":{\"xx\":%ld,\"xy\":%ld,\"yx\":%ld,\"yy\":%ld},\"delta\":{\"x\":%ld,\"y\":%ld}}}\n",
-            matrix.xx, matrix.xy, matrix.yx, matrix.yy, delta.x, delta.y);
-    } else {
+    if (err || !face) {
         printf("{\"status\":{\"kind\":\"error\",\"error_code\":%d},\"output\":null}\n", err);
+        if (face) FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
     }
+
+    if (!streq(set_rows_arg, "none")) {
+        char* set_rows = (char*)malloc(strlen(set_rows_arg) + 1);
+        if (!set_rows) {
+            return 1;
+        }
+        strcpy(set_rows, set_rows_arg);
+        char* cursor = set_rows;
+        while (cursor && *cursor) {
+            char* next = strchr(cursor, ';');
+            if (next) {
+                *next = '\0';
+            }
+            long long values[8] = {0};
+            int value_count = split_fixed_math_row(cursor, values, 8);
+            if (value_count != 8) {
+                fprintf(stderr, "get-transform set row must have 8 values\n");
+                free(set_rows);
+                if (face) FT_Done_Face(face);
+                FT_Done_FreeType(library);
+                free(data);
+                return 2;
+            }
+            FT_Matrix matrix = {
+                (FT_Fixed)values[2],
+                (FT_Fixed)values[3],
+                (FT_Fixed)values[4],
+                (FT_Fixed)values[5],
+            };
+            FT_Vector delta = {(FT_Pos)values[6], (FT_Pos)values[7]};
+            FT_Set_Transform(face, values[0] ? &matrix : NULL, values[1] ? &delta : NULL);
+            cursor = next ? next + 1 : NULL;
+        }
+        free(set_rows);
+    }
+
+    long long sentinel_values[6] = {0};
+    char* sentinel_rows = (char*)malloc(strlen(sentinel_arg) + 1);
+    if (!sentinel_rows) {
+        return 1;
+    }
+    strcpy(sentinel_rows, sentinel_arg);
+    int sentinel_count = split_fixed_math_row(sentinel_rows, sentinel_values, 6);
+    free(sentinel_rows);
+    if (sentinel_count != 6) {
+        fprintf(stderr, "get-transform sentinels must have 6 values\n");
+        if (face) FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 2;
+    }
+
+    char* output_rows = (char*)malloc(strlen(output_rows_arg) + 1);
+    if (!output_rows) {
+        return 1;
+    }
+    strcpy(output_rows, output_rows_arg);
+    int multiple_rows = strchr(output_rows_arg, ';') != NULL;
+    printf("{");
+    print_status(0);
+    printf(",\"output\":");
+    if (multiple_rows) {
+        printf("{\"rows\":[");
+    } else {
+        printf("{");
+    }
+    char* cursor = output_rows;
+    int emitted = 0;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ';');
+        if (next) {
+            *next = '\0';
+        }
+        long long values[3] = {0};
+        int value_count = split_fixed_math_row(cursor, values, 3);
+        if (value_count != 3) {
+            fprintf(stderr, "get-transform output row must have 3 values\n");
+            free(output_rows);
+            if (face) FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        FT_Matrix matrix = {
+            (FT_Fixed)sentinel_values[0],
+            (FT_Fixed)sentinel_values[1],
+            (FT_Fixed)sentinel_values[2],
+            (FT_Fixed)sentinel_values[3],
+        };
+        FT_Vector delta = {(FT_Pos)sentinel_values[4], (FT_Pos)sentinel_values[5]};
+        FT_Get_Transform(
+            values[0] ? NULL : face,
+            values[1] ? &matrix : NULL,
+            values[2] ? &delta : NULL);
+        if (emitted) {
+            printf(",");
+        }
+        if (multiple_rows) {
+            printf("{\"face\":\"%s\",\"matrix_output\":\"%s\",\"delta_output\":\"%s\",",
+                   values[0] ? "null" : "live",
+                   values[1] ? "non_null" : "null",
+                   values[2] ? "non_null" : "null");
+            print_transform_matrix_delta(matrix, delta);
+            printf("}");
+        } else {
+            print_transform_matrix_delta(matrix, delta);
+        }
+        emitted = 1;
+        cursor = next ? next + 1 : NULL;
+    }
+    if (multiple_rows) {
+        printf("]}");
+    } else {
+        printf("}");
+    }
+    printf("}\n");
+    free(output_rows);
     if (face) FT_Done_Face(face);
     FT_Done_FreeType(library);
     free(data);
@@ -6669,7 +6791,7 @@ static int dispatch(int argc, char** argv) {
     if ((argc == 10 || argc == 14) && streq(argv[1], "--set-transform")) {
         return emit_set_transform(argc, argv);
     }
-    if (argc == 7 && streq(argv[1], "--get-transform")) {
+    if (argc == 8 && streq(argv[1], "--get-transform")) {
         return emit_get_transform(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--error")) {
