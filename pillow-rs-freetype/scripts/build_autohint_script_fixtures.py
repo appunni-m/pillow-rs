@@ -576,6 +576,7 @@ def build_cjk_duplicate_edge() -> None:
         "hani_standard",
         "hani_duplicate_edge",
         "hani_leading_skip",
+        "hani_serif_conflict",
     ]
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
@@ -593,6 +594,13 @@ def build_cjk_duplicate_edge() -> None:
                 (80, 20, 130, 460),
             ]
         ),
+        "hani_serif_conflict": rectangles_glyph(
+            [
+                (80, 20, 130, 460),
+                (190, 20, 230, 460),
+                (60, 20, 130, 55),
+            ]
+        ),
     }
     metrics = {
         ".notdef": (600, 80),
@@ -600,10 +608,12 @@ def build_cjk_duplicate_edge() -> None:
         "hani_standard": (700, 100),
         "hani_duplicate_edge": (700, 40),
         "hani_leading_skip": (700, 20),
+        "hani_serif_conflict": (700, 60),
     }
     cmap = {
         0x20: "space",
         0x519E: "hani_duplicate_edge",
+        0x51A0: "hani_serif_conflict",
         0x51A4: "hani_leading_skip",
         0x7530: "hani_standard",
     }

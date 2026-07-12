@@ -393,21 +393,27 @@ exposed and fixed a real C/Rust mismatch: pinned C rejects `num_axes == 0`
 before setting `TT_FACE_FLAG_VAR_FVAR` in `sfobjs.c`, so the public
 `FT_FACE_FLAG_MULTIPLE_MASTERS` bit is clear; Rust previously set the bit for
 any parsed `fvar` table.
+The compact generated `cjk-duplicate-edge.ttf` fixture now also carries a
+`hani_serif_conflict` glyph. One explicit `FT_LOAD_FORCE_AUTOHINT` public row
+selects U+51A0 to exercise the CJK edge cleanup path where a grouped edge has
+both a stem link and a serif candidate; the row removed `src/autohint/cjk.rs`
+line 550 from the missing-line report while preserving exact Rust FFI, C ABI,
+and WASM ABI parity.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,148 |
-| Concrete explicit cases | 6,695 |
-| Additional grouped variants | 2,547 |
+| Concrete explicit cases | 6,700 |
+| Additional grouped variants | 2,552 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,691 |
-| Exact parity | 6,691 / 6,691 |
+| Runnable parity comparisons | 6,696 |
+| Exact parity | 6,696 / 6,696 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,800 / 17,764 (88.94%) |
+| Covered Rust lines | 15,821 / 17,764 (89.06%) |
 | Rust function coverage | 1,001 / 1,134 (88.27%) |
 | Rust instantiation coverage | 1,004 / 1,137 (88.30%) |
-| Rust region coverage | 22,683 / 25,453 (89.12%) |
-| Rust branch/condition coverage | 3,752 / 4,524 (82.94%) |
+| Rust region coverage | 22,710 / 25,453 (89.22%) |
+| Rust branch/condition coverage | 3,767 / 4,524 (83.27%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 154 |
 | Stored active font binaries | 110 files, 831 KiB |
@@ -435,16 +441,16 @@ Current largest uncovered buckets:
 
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
-| `src/render.rs` | 1,698 / 2,275 | 341 / 428 | 120 / 164 | 2,403 / 3,219 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 1,751 / 1,979 | 196 / 252 | 166 / 198 | 2,390 / 2,709 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/render.rs` | 1,698 / 2,275 | 342 / 428 | 120 / 164 | 2,403 / 3,219 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
+| `src/font.rs` | 1,757 / 1,985 | 196 / 252 | 167 / 199 | 2,392 / 2,711 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,510 / 2,828 | 980 / 1,282 | 70 / 73 | 3,611 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
 | `src/scaler.rs` | 1,066 / 1,220 | 153 / 188 | 48 / 61 | 1,138 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
 | `src/ffi/handles.rs` | 1,553 / 1,598 | 289 / 322 | 163 / 169 | 2,120 / 2,177 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
-| `src/autohint/cjk.rs` | 862 / 941 | 355 / 426 | 18 / 19 | 1,145 / 1,247 | CJK topology rows in the compact multiscript fixture |
-| `src/api.rs` | 501 / 513 | 79 / 86 | 60 / 61 | 685 / 702 | Public API wrapper rows for render cache and glyph-slot surfaces |
+| `src/autohint/cjk.rs` | 892 / 941 | 376 / 426 | 18 / 19 | 1,182 / 1,247 | CJK topology rows in the compact multiscript fixture |
+| `src/api.rs` | 501 / 513 | 80 / 86 | 60 / 61 | 685 / 702 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short
 physical table data plus truncated range arrays. The only remaining uncovered
