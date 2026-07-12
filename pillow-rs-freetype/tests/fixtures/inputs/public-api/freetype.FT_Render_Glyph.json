@@ -1283,6 +1283,62 @@
       "schema": "glyph_render",
       "expect_error": true,
       "inputs": {
+        "variants": [
+          {
+            "id": "composite-no-recurse-cannot-render",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 130,
+              "load_flags": [
+                "FT_LOAD_NO_RECURSE"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "api/render_loaded_glyph:error-composite-slot"
+            ]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "slot_mutation": "c_oracle"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error"
+          ]
+        },
+        "error": "Cannot_Render_Glyph"
+      }
+    },
+    {
+      "case_id": "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states",
+      "subject": "freetype.FT_Render_Glyph",
+      "case": "error_unloaded_or_unsupported_slot_format",
+      "operation": "render_glyph",
+      "schema": "glyph_render",
+      "expect_error": true,
+      "inputs": {
         "assets": {
           "font": {
             "kind": "file",
@@ -1322,7 +1378,7 @@
         },
         "error": "c_oracle",
         "fixture_requirements": [
-          "Runner support for new slot before load and synthetic unsupported glyph format"
+          "Runner support for new slot before load and synthetic unsupported glyph format; the composite no-recurse render error is an executable variant above."
         ]
       }
     }
