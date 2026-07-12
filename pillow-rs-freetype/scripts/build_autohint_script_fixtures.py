@@ -162,6 +162,37 @@ def rectangle_glyph(left: int, bottom: int, right: int, top: int):
     return pen.glyph()
 
 
+def ring_glyph(
+    left: int,
+    bottom: int,
+    right: int,
+    top: int,
+    inset_left: int,
+    inset_bottom: int,
+    inset_right: int,
+    inset_top: int,
+):
+    pen = TTGlyphPen(None)
+    mid_x = (left + right) // 2
+    mid_y = (bottom + top) // 2
+    pen.moveTo((mid_x, bottom))
+    pen.qCurveTo((right, bottom), (right, mid_y))
+    pen.qCurveTo((right, top), (mid_x, top))
+    pen.qCurveTo((left, top), (left, mid_y))
+    pen.qCurveTo((left, bottom), (mid_x, bottom))
+    pen.closePath()
+
+    inset_mid_x = (inset_left + inset_right) // 2
+    inset_mid_y = (inset_bottom + inset_top) // 2
+    pen.moveTo((inset_mid_x, inset_bottom))
+    pen.qCurveTo((inset_left, inset_bottom), (inset_left, inset_mid_y))
+    pen.qCurveTo((inset_left, inset_top), (inset_mid_x, inset_top))
+    pen.qCurveTo((inset_right, inset_top), (inset_right, inset_mid_y))
+    pen.qCurveTo((inset_right, inset_bottom), (inset_mid_x, inset_bottom))
+    pen.closePath()
+    return pen.glyph()
+
+
 def one_point_contour_glyph(points: list[tuple[int, int]]):
     glyph = Glyph()
     glyph.numberOfContours = len(points)
@@ -474,12 +505,66 @@ def build_cjk_snap_below_standard() -> None:
     font.save(OUT_DIR / "cjk-snap-below-standard.ttf")
 
 
+def build_cjk_round_stem_light() -> None:
+    glyph_order = [".notdef", "space", "hani_standard", "hani_round_ring"]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -120, 520, 720),
+        "space": empty_glyph(),
+        "hani_standard": rectangle_glyph(100, 0, 200, 560),
+        "hani_round_ring": ring_glyph(80, 20, 520, 460, 180, 120, 420, 360),
+    }
+    metrics = {
+        ".notdef": (600, 80),
+        "space": (300, 0),
+        "hani_standard": (700, 100),
+        "hani_round_ring": (700, 80),
+    }
+    cmap = {
+        0x20: "space",
+        0x51A2: "hani_round_ring",
+        0x7530: "hani_standard",
+    }
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint CJK Round Stem Light",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint CJK Round Stem Light Regular",
+            "fullName": "Autohint CJK Round Stem Light Regular",
+            "psName": "AutohintCJKRoundStemLight-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "cjk-round-stem-light.ttf")
+
+
 def main() -> None:
     build_script_coverage()
     build_cjk_empty_standard()
     build_cjk_blue_edge_cases()
     build_cjk_tiny_stem()
     build_cjk_snap_below_standard()
+    build_cjk_round_stem_light()
 
 
 if __name__ == "__main__":

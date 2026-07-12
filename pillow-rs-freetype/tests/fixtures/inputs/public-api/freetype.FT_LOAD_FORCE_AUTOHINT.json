@@ -2085,6 +2085,27 @@
             ]
           },
           {
+            "id": "cjk-round-stem-light-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-round-stem-light.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 20898,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_LIGHT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:round-round-light-stem-threshold"
+            ]
+          },
+          {
             "id": "cjk-shared-latin",
             "assets": {
               "font": {

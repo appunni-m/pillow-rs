@@ -653,6 +653,34 @@
             ]
           },
           {
+            "id": "dejavu-a-target-light-no-autohint",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_TARGET_LIGHT",
+                "FT_LOAD_NO_AUTOHINT"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL",
+              "font_render_text": "A",
+              "assert_font_render_mode_agrees": true
+            },
+            "coverage": [
+              "api/render_font:target-light-masked-by-no-autohint"
+            ]
+          },
+          {
             "id": "noto-a-no-autohint",
             "assets": {
               "font": {
