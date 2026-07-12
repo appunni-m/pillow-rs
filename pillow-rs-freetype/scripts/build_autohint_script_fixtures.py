@@ -279,9 +279,80 @@ def build_cjk_empty_standard() -> None:
     font.save(OUT_DIR / "cjk-empty-standard.ttf")
 
 
+def build_cjk_blue_edge_cases() -> None:
+    glyph_order = [
+        ".notdef",
+        "space",
+        "hani_standard",
+        "blue_empty",
+        "top_flat",
+        "bottom_fill",
+        "bottom_flat",
+    ]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -120, 520, 720),
+        "space": empty_glyph(),
+        "hani_standard": rectangle_glyph(100, 0, 620, 560),
+        "blue_empty": empty_glyph(),
+        "top_flat": rectangle_glyph(110, 20, 580, 220),
+        "bottom_fill": rectangle_glyph(120, 0, 560, 360),
+        "bottom_flat": rectangle_glyph(120, -80, 560, 360),
+    }
+    metrics = {
+        ".notdef": (600, 80),
+        "space": (300, 0),
+        "hani_standard": (700, 100),
+        "blue_empty": (700, 0),
+        "top_flat": (700, 110),
+        "bottom_fill": (700, 120),
+        "bottom_flat": (700, 120),
+    }
+    cmap = {
+        0x20: "space",
+        0x4E2A: "bottom_fill",
+        0x4E3B: "bottom_flat",
+        0x4ED6: "blue_empty",
+        0x519B: "top_flat",
+        0x7530: "hani_standard",
+    }
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint CJK Blue Edge Cases",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint CJK Blue Edge Cases Regular",
+            "fullName": "Autohint CJK Blue Edge Cases Regular",
+            "psName": "AutohintCJKBlueEdgeCases-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "cjk-blue-edge-cases.ttf")
+
+
 def main() -> None:
     build_script_coverage()
     build_cjk_empty_standard()
+    build_cjk_blue_edge_cases()
 
 
 if __name__ == "__main__":
