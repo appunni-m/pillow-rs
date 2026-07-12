@@ -1679,6 +1679,67 @@ static void print_sfnt_name_record(FT_UInt index, const FT_SfntName* name) {
     printf("\"}");
 }
 
+static int sfnt_name_token_equals(const char* token, size_t len, const char* expected) {
+    return strlen(expected) == len && strncmp(token, expected, len) == 0;
+}
+
+static FT_UInt sfnt_name_index_from_token(const char* token, size_t len, FT_UInt count) {
+    if (sfnt_name_token_equals(token, len, "last_valid_index")) {
+        return count > 0 ? count - 1 : 0;
+    }
+    char buffer[64];
+    size_t copy_len = len < sizeof(buffer) - 1 ? len : sizeof(buffer) - 1;
+    memcpy(buffer, token, copy_len);
+    buffer[copy_len] = '\0';
+    return (FT_UInt)strtoul(buffer, NULL, 10);
+}
+
+static void print_sfnt_name_indexed_result(
+    FT_Face face,
+    const char* indexes_csv,
+    int output_is_null) {
+    FT_UInt count = FT_Get_Sfnt_Name_Count(face);
+    printf("{\"return_sequence\":[");
+    const char* token = indexes_csv;
+    int first_return = 1;
+    while (token && *token) {
+        const char* comma = strchr(token, ',');
+        size_t len = comma ? (size_t)(comma - token) : strlen(token);
+        FT_UInt index = sfnt_name_index_from_token(token, len, count);
+        FT_SfntName name;
+        FT_Error name_error = FT_Get_Sfnt_Name(
+            face,
+            index,
+            output_is_null ? (FT_SfntName*)NULL : &name);
+        if (!first_return) printf(",");
+        first_return = 0;
+        printf("%d", name_error);
+        if (!comma) break;
+        token = comma + 1;
+    }
+
+    printf("],\"names\":[");
+    if (!output_is_null) {
+        token = indexes_csv;
+        int first_name = 1;
+        while (token && *token) {
+            const char* comma = strchr(token, ',');
+            size_t len = comma ? (size_t)(comma - token) : strlen(token);
+            FT_UInt index = sfnt_name_index_from_token(token, len, count);
+            FT_SfntName name;
+            FT_Error name_error = FT_Get_Sfnt_Name(face, index, &name);
+            if (!name_error) {
+                if (!first_name) printf(",");
+                first_name = 0;
+                print_sfnt_name_record(index, &name);
+            }
+            if (!comma) break;
+            token = comma + 1;
+        }
+    }
+    printf("]}");
+}
+
 static void print_postscript_name_result(const char* name) {
     if (!name) {
         printf("{\"null\":true,\"bytes\":\"\",\"length\":0}");
@@ -4800,6 +4861,86 @@ static int emit_face_set_unpatented_hinting(int argc, char** argv) {
     return 0;
 }
 
+static int emit_get_sfnt_name_variant(int argc, char** argv) {
+    const char* face_kind = argv[2];
+    const char* output_kind = argv[3];
+    const char* indexes_csv = argv[4];
+    int output_is_null = streq(output_kind, "null");
+
+    if (streq(face_kind, "null")) {
+        printf("{");
+        print_status(0);
+        printf(",\"output\":");
+        print_sfnt_name_indexed_result(NULL, indexes_csv, output_is_null);
+        printf("}\n");
+        return 0;
+    }
+
+    if (!streq(face_kind, "valid") && !streq(face_kind, "non_sfnt")) {
+        fprintf(stderr, "unsupported sfnt name face kind: %s\n", face_kind);
+        return 2;
+    }
+    if (argc != 10) {
+        fprintf(stderr, "--get-sfnt-name-variant requires font source for non-null face\n");
+        return 2;
+    }
+
+    const char* source_kind = argv[5];
+    const char* source_value = argv[6];
+    FT_Long face_index = atol(argv[7]);
+    FT_UInt pixel_width = (FT_UInt)strtoul(argv[8], NULL, 10);
+    FT_UInt pixel_height = (FT_UInt)strtoul(argv[9], NULL, 10);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        free(data);
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    FT_Face face = NULL;
+    err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    if (!err) {
+        err = FT_Set_Pixel_Sizes(face, pixel_width, pixel_height);
+    }
+    printf("{");
+    if (err) {
+        print_status(err);
+        printf(",\"output\":null}\n");
+    } else {
+        print_status(0);
+        printf(",\"output\":");
+        print_sfnt_name_indexed_result(face, indexes_csv, output_is_null);
+        printf("}\n");
+    }
+    if (face) {
+        FT_Done_Face(face);
+    }
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
 static int emit_face_or_slot(int argc, char** argv) {
     const char* command = argv[1];
     const char* source_kind = argv[2];
@@ -5232,59 +5373,10 @@ static int emit_face_or_slot(int argc, char** argv) {
     }
 
     if (streq(command, "--get-sfnt-name")) {
-        FT_UInt count = FT_Get_Sfnt_Name_Count(face);
-        size_t indexes_len = strlen(argv[7]);
-        char* indexes = (char*)malloc(indexes_len + 1);
-        if (!indexes) {
-            FT_Done_Face(face);
-            FT_Done_FreeType(library);
-            free(data);
-            return 2;
-        }
-        memcpy(indexes, argv[7], indexes_len + 1);
         print_status(0);
-        printf(",\"output\":{\"return_sequence\":[");
-        char* token = strtok(indexes, ",");
-        int first_return = 1;
-        while (token) {
-            FT_UInt index = streq(token, "last_valid_index") && count > 0
-                ? count - 1
-                : (FT_UInt)strtoul(token, NULL, 10);
-            FT_SfntName name;
-            FT_Error name_error = FT_Get_Sfnt_Name(face, index, &name);
-            if (!first_return) printf(",");
-            first_return = 0;
-            printf("%d", name_error);
-            token = strtok(NULL, ",");
-        }
-        printf("],\"names\":[");
-        free(indexes);
-
-        indexes = (char*)malloc(indexes_len + 1);
-        if (!indexes) {
-            FT_Done_Face(face);
-            FT_Done_FreeType(library);
-            free(data);
-            return 2;
-        }
-        memcpy(indexes, argv[7], indexes_len + 1);
-        token = strtok(indexes, ",");
-        int first_name = 1;
-        while (token) {
-            FT_UInt index = streq(token, "last_valid_index") && count > 0
-                ? count - 1
-                : (FT_UInt)strtoul(token, NULL, 10);
-            FT_SfntName name;
-            FT_Error name_error = FT_Get_Sfnt_Name(face, index, &name);
-            if (!name_error) {
-                if (!first_name) printf(",");
-                first_name = 0;
-                print_sfnt_name_record(index, &name);
-            }
-            token = strtok(NULL, ",");
-        }
-        printf("]}}\n");
-        free(indexes);
+        printf(",\"output\":");
+        print_sfnt_name_indexed_result(face, argv[7], 0);
+        printf("}\n");
         FT_Done_Face(face);
         FT_Done_FreeType(library);
         free(data);
@@ -6478,6 +6570,9 @@ static int dispatch(int argc, char** argv) {
     if (argc == 3 && streq(argv[1], "--error")) {
         return handle_error(argc, argv);
     }
+    if ((argc == 5 || argc == 10) && streq(argv[1], "--get-sfnt-name-variant")) {
+        return emit_get_sfnt_name_variant(argc, argv);
+    }
     // Generic null-source handler: intercept commands with "null" in handle-level
     // parameters (source kind, source value, or face).
     // Do NOT intercept when "null" is in task-specific params (tag_ptr, length_ptr, etc.).
@@ -6781,6 +6876,7 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | --constant-map SYMBOLS_CSV | --fixed-math OP ROWS | --trigon OP ROWS | --trigon-aggregate OP ROWS | --vector-transform ROWS | --matrix-multiply ROWS | --matrix-invert ROWS | --layout RECORD | --type-probe SYMBOL | --function-probe SYMBOL | --abi-value-echo TYPE ROWS | --compile-alias-probe MACRO TYPEDEF SIGNATURE | --macro-eval CASE_ID | --face-macro SRC_KIND SRC FACE_INDEX MACRO | --face-macro-flags MACRO FACE_INDEX FLAGS_CSV | --library-version PRESENT ROW_MASKS SENTINELS | --face-flags SRC_KIND SRC FACE_INDEX FLAG | --manager-reset-null | --manager-reset SRC_KIND SRC FACE_INDEX PX PY GID | --outline-render MODE CASE_ID | --new-memory-face SRC_KIND SRC FACE_INDEX PX PY | --new-memory-face-variants SRC_KIND SRC ROWS | --set-pixel-sizes SRC_KIND SRC FACE_INDEX PX PY | --set-char-size SRC_KIND SRC FACE_INDEX WIDTH HEIGHT HR VR | --set-char-sizes SRC_KIND SRC FACE_INDEX ROWS | --request-size SRC_KIND SRC FACE_INDEX ROWS | --new-size-null-face | --new-size-null-output SRC_KIND SRC FACE_INDEX | --done-size-null | --activate-size-null | --size-metrics SRC_KIND SRC FACE_INDEX PX PY | --get-char-index SRC_KIND SRC FACE_INDEX PX PY CHAR | --get-kerning SRC_KIND SRC FACE_INDEX PX PY ROWS | --charmap-get-char-index SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING CHAR | --inspect-charmaps SRC_KIND SRC FACE_INDEX PX PY ENCODINGS CHARS | --set-charmap SRC_KIND SRC FACE_INDEX PX PY INDICES CHARS | --set-charmap-null-face | --set-charmap-variants SRC_KIND SRC FACE_INDEX FOREIGN_KIND FOREIGN_SRC FOREIGN_FACE_INDEX VARIANTS | --get-charmap-index SRC_KIND SRC FACE_INDEX PX PY | --get-charmap-index-variants SRC_KIND SRC FACE_INDEX VARIANTS | --get-cmap-format SRC_KIND SRC FACE_INDEX PX PY VARIANTS | --get-cmap-language-id SRC_KIND SRC FACE_INDEX PX PY VARIANTS | --select-charmap SRC_KIND SRC FACE_INDEX ENCODING CHARS | --set-lcd-filter LIBRARY_PRESENT FILTERS | --set-lcd-filter-weights LIBRARY_PRESENT WEIGHTS | --set-lcd-geometry LIBRARY_PRESENT GEOMETRY | --get-truetype-engine-type LIBRARY_PRESENT | --done-freetype MODE [SRC_KIND SRC FACE_INDEX] | --done-face MODE [SRC_KIND SRC FACE_INDEX] | --face-check-tt-patents MODE [SRC_KIND SRC FACE_INDEX] | --face-set-unpatented-hinting MODE VALUES [SRC_KIND SRC FACE_INDEX] | --get-fstype-flags SRC_KIND SRC FACE_INDEX PX PY [SYMBOL] | --get-postscript-name SRC_KIND SRC FACE_INDEX PX PY | --get-postscript-name-variants SRC_KIND SRC FACE_INDEX VARIANTS | --set-named-instance SRC_KIND SRC FACE_INDEX PRIOR_INSTANCE INSTANCE | --get-sfnt-name-count SRC_KIND SRC FACE_INDEX PX PY | --get-sfnt-name SRC_KIND SRC FACE_INDEX PX PY INDEXES | --get-sfnt-name-match SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID | --sfnt-mac-encoding-record SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID CODEPOINTS | --get-sfnt-os2-unicode-ranges SRC_KIND SRC FACE_INDEX PX PY CODEPOINTS | --get-first-char SRC_KIND SRC FACE_INDEX PX PY | --get-next-char-sequence SRC_KIND SRC FACE_INDEX PX PY MAX_STEPS | --get-next-char-starts SRC_KIND SRC FACE_INDEX PX PY STARTS_CSV | --load-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --load-glyph-from-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph-num-glyphs SRC_KIND SRC FACE_INDEX PX PY FLAGS | --load-glyph-outline SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-bbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --glyph-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODES | --glyph-to-bitmap SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE DESTROY | --glyph-record SRC_KIND SRC FACE_INDEX PX PY GID FLAGS ACTION | --sbit-cache-lookup SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-metrics SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-slot SRC_KIND SRC FACE_INDEX PX PY GID FLAGS [MODE] | --get-advance SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --get-advances SRC_KIND SRC FACE_INDEX PX PY START COUNT FLAGS | --get-subglyph-info-null-slot SUB_INDEX | --get-subglyph-info SRC_KIND SRC FACE_INDEX PX PY GID FLAGS SUB_INDICES INVALID_SUB_INDICES | --render-glyph SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS MODE [REPEAT] | --render-glyph-index SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE [REPEAT]\n");
+    fprintf(stderr, "       --get-sfnt-name-variant FACE_KIND OUTPUT_KIND INDEXES [SRC_KIND SRC FACE_INDEX PX PY]\n");
     return 2;
 }
 
