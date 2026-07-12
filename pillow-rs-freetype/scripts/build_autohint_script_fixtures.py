@@ -7,6 +7,8 @@ from pathlib import Path
 
 from fontTools.fontBuilder import FontBuilder
 from fontTools.pens.ttGlyphPen import TTGlyphPen
+from fontTools.ttLib.tables._g_l_y_f import Glyph, GlyphCoordinates
+from fontTools.ttLib.tables.ttProgram import Program
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -160,6 +162,22 @@ def rectangle_glyph(left: int, bottom: int, right: int, top: int):
     return pen.glyph()
 
 
+def one_point_contour_glyph(points: list[tuple[int, int]]):
+    glyph = Glyph()
+    glyph.numberOfContours = len(points)
+    glyph.coordinates = GlyphCoordinates(points)
+    glyph.endPtsOfContours = list(range(len(points)))
+    glyph.flags = bytearray([1] * len(points))
+    program = Program()
+    program.fromBytecode([])
+    glyph.program = program
+    glyph.xMin = min(x for x, _ in points)
+    glyph.xMax = max(x for x, _ in points)
+    glyph.yMin = min(y for _, y in points)
+    glyph.yMax = max(y for _, y in points)
+    return glyph
+
+
 def glyph_name(tag: str) -> str:
     return f"script_{tag}"
 
@@ -285,6 +303,7 @@ def build_cjk_blue_edge_cases() -> None:
         "space",
         "hani_standard",
         "blue_empty",
+        "blue_degenerate",
         "top_flat",
         "bottom_fill",
         "bottom_flat",
@@ -294,6 +313,7 @@ def build_cjk_blue_edge_cases() -> None:
         "space": empty_glyph(),
         "hani_standard": rectangle_glyph(100, 0, 620, 560),
         "blue_empty": empty_glyph(),
+        "blue_degenerate": one_point_contour_glyph([(160, 40), (260, 120), (360, 200)]),
         "top_flat": rectangle_glyph(110, 20, 580, 220),
         "bottom_fill": rectangle_glyph(120, 0, 560, 360),
         "bottom_flat": rectangle_glyph(120, -80, 560, 360),
@@ -303,6 +323,7 @@ def build_cjk_blue_edge_cases() -> None:
         "space": (300, 0),
         "hani_standard": (700, 100),
         "blue_empty": (700, 0),
+        "blue_degenerate": (700, 160),
         "top_flat": (700, 110),
         "bottom_fill": (700, 120),
         "bottom_flat": (700, 120),
@@ -312,6 +333,7 @@ def build_cjk_blue_edge_cases() -> None:
         0x4E2A: "bottom_fill",
         0x4E3B: "bottom_flat",
         0x4ED6: "blue_empty",
+        0x4EEC: "blue_degenerate",
         0x519B: "top_flat",
         0x7530: "hani_standard",
     }
