@@ -1901,6 +1901,17 @@ source lines. The current split is:
 | Private/no-route helpers | `Font::layout_glyphs`, `Font::layout_bounds`, `layout_bounds_from_glyphs`, `grays::rasterize`, `grays::rasterize_shifted_in_box`, `grays::render_scanline`, and `render::render_loaded_char_mode_for_index` are not selected by the current public FreeType fixtures | Do not call these through synthetic tests; either expose a real public operation with C parity or prove and remove independently of coverage |
 | Coverage instrumentation artifacts | `Font::load_sfnt_table` and several wrapper functions show zero-count closure symbols even while the public body is heavily executed; many missed `api.rs` and `font.rs` lines are trailing call arguments in covered functions | Use function bodies, contiguous blocks, and branch counters to choose cases; do not grow JSON for tail-line artifacts alone |
 
+Readable zero-count functions from `llvm-cxxfilt` fall into this first
+ledger. Treat this as the next owner list, not as deletion evidence:
+
+| Disposition | Zero-count functions or families | Route decision |
+|---|---|---|
+| Implement before fixture parity | `ffi::handles::FT_New_Face`, `FT_GlyphSlot_AdjustWeight`, `FT_GlyphSlot_Embolden`, `FT_GlyphSlot_Oblique`, `FT_GlyphSlot_Slant` | These are public surfaces or public stubs; fixtures must not fake success until core behavior exists and C/WASM ABI wrappers remain thin |
+| Public helper not owned by current FreeType manifest route | `autohint::globals::detect_script`, `globals_data::blue_chars_for_script`, `latin::metrics_init_blues`, `latin::metrics_init_blues_greek`, `Direction::{as_i8,is_horizontal,is_vertical}`, `GlyphHints::num_contours`, `RoundMode::from_u8`, `ExecContext::{fetch_byte,fetch_word}` | Keep visible; either route through an existing public manifest subject with real C parity or decide separately whether these helpers belong in public Rust surface |
+| Private/no-route implementation helpers | `Font::{layout_glyphs,layout_bounds,slot_metrics_from_scaled,native_bytecode_context}`, `layout_bounds_from_glyphs`, `grays::{rasterize,rasterize_shifted_in_box,ft_div_mod,Worker::render_scanline}`, `render::MonoProfileBuilder::*`, `render::rasterize_mono_intersections`, `render::{line_up,line_down,bezier_up_2,bezier_down_2,unpack_mono_row,apply_horizontal_center_edges}` | Do not add synthetic tests. A real public operation must need them, or they need independent semantic cleanup after proving they are duplicate/obsolete |
+| Covered body with closure artifact | `Font::load_sfnt_table` closures, `Font::truetype_face_with_load_mode` closures, `SizeMetrics::from_char_size` closure, `tt::{cmap,fvar,gasp}` checked-overflow closures, `api::GlyphSlot::new` closure | Do not add fixture rows for closure symbols alone. Add rows only if a public error branch or output difference is missing |
+| Fixture/font reachable candidates | `cjk::cjk_mark_round_segments`, `latin::find_second_lowest_contour`, parts of `SdfFlattener`, `MonoOutlineProfileBuilder`, `scaler` metric/composite helpers, and `tt::hinter::exec::run_program` closure | Add compact glyph/topology/program rows only after identifying the exact branch and proving the row moves coverage with exact parity |
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
