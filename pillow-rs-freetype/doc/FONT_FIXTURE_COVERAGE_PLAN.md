@@ -351,7 +351,9 @@ for normal, mono, LCD, vertical LCD, and SDF render paths without adding fonts
 or concrete cases. `FT_New_Memory_Face.valid_font_bytes` now includes one
 compact generated face with the optional `name` table removed, proving that
 pinned C FreeType, Rust FFI, C ABI, and WASM ABI all accept the constructor
-fallback path.
+fallback path. The cached-face execution route for `FT_Get_Kerning` now also
+honors the existing `assert_font_getkerning_agrees` input declaration, so the
+safe `Font::getkerning` helper is reached by the same C-oracle-backed row.
 
 | Measure | Current |
 |---|---:|
@@ -362,10 +364,10 @@ fallback path.
 | Runnable parity comparisons | 6,678 |
 | Exact parity | 6,678 / 6,678 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,616 / 17,759 (87.93%) |
-| Rust function coverage | 989 / 1,133 (87.29%) |
-| Rust instantiation coverage | 992 / 1,136 (87.32%) |
-| Rust region coverage | 22,509 / 25,450 (88.44%) |
+| Covered Rust lines | 15,628 / 17,759 (88.00%) |
+| Rust function coverage | 992 / 1,133 (87.56%) |
+| Rust instantiation coverage | 995 / 1,136 (87.59%) |
+| Rust region coverage | 22,539 / 25,450 (88.56%) |
 | Rust branch/condition coverage | 3,737 / 4,524 (82.60%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 152 |
@@ -1783,6 +1785,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Cover safe default font constructor and face count helper | Existing `FT_RENDER_MODE_NORMAL.render_glyph_mode_dispatch` now declares safe `Font::truetype` constructor coverage for the default load-mode row and compares `Font::face_count` with the same face's public `FT_FaceRec.num_faces` view while the row continues to compare rendered glyph output across pinned C, Rust FFI, C ABI, and WASM ABI. This adds no fonts and no concrete cases; refreshed condition coverage is 15,593 / 17,759 lines, 22,488 / 25,450 regions, and 3,737 / 4,524 branches with 6,677 / 6,677 runtime rows and four explicit pending rows |
 | 2026-07-12 | Cover public render and pixel fixture-name helpers | Existing render-mode dispatch rows now declare `assert_render_mode_fixture_name` and `assert_pixel_mode_fixture_name` for normal, mono, LCD, vertical LCD, and SDF outputs. The assertions run only from explicit public input rows that already compare the rendered glyph output across pinned C, Rust FFI, C ABI, and WASM ABI, so this adds no fonts and no concrete cases; refreshed condition coverage is 15,608 / 17,759 lines, 22,503 / 25,450 regions, and 3,737 / 4,524 branches with 6,677 / 6,677 runtime rows and four explicit pending rows |
 | 2026-07-12 | Add missing-name-table constructor control | `scripts/build_name_fixtures.py` now generates `fonts/names/name-missing.ttf` by removing the optional `name` table from the compact base TrueType font, and `FT_New_Memory_Face.valid_font_bytes` selects it as one explicit variant. This covers the constructor fallback separate from the existing zero-record `name-empty.ttf` control; concrete cases rise by one to 6,682, and refreshed condition coverage is 15,616 / 17,759 lines, 22,509 / 25,450 regions, and 3,737 / 4,524 branches with 6,678 / 6,678 runtime rows and four explicit pending rows |
+| 2026-07-12 | Route safe kerning assertion through cached-face execution | `FT_Get_Kerning.legacy_pair_unfitted_and_unscaled_modes` already declared `assert_font_getkerning_agrees`, but the cached-face runner path bypassed the assertion helper. The Rust route now honors the existing input declaration and compares `Font::getkerning('A', 'V')` with the same `FT_KERNING_UNFITTED` vector returned by pinned C, C ABI, and WASM ABI. This adds no fonts and no concrete cases; refreshed condition coverage is 15,628 / 17,759 lines, 22,539 / 25,450 regions, and 3,737 / 4,524 branches with 6,678 / 6,678 runtime rows and four explicit pending rows |
 
 ## Immediate Next Actions
 

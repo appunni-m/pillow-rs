@@ -2232,7 +2232,7 @@ impl BackendComparisonWorker {
             }
             "freetype.get_kerning" => {
                 let face = self.rust_face(case)?;
-                rust_get_kerning_with_face(face, &case.inputs.params)
+                rust_get_kerning_with_face(face, case)
             }
             "ftsnames.get_sfnt_name_count" => {
                 let face = self.rust_face(case)?;
@@ -3484,8 +3484,10 @@ fn wasm_get_kerning(case: &InputCase) -> Result<RunOutput, String> {
     output
 }
 
-fn rust_get_kerning_with_face(face: &FT_Face, params: &Value) -> Result<RunOutput, String> {
-    rust_get_kerning_optional(Some(face), params)
+fn rust_get_kerning_with_face(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let output = rust_get_kerning_optional(Some(face), &case.inputs.params)?;
+    assert_font_getkerning_agrees(case, &output)?;
+    Ok(output)
 }
 
 fn rust_get_kerning_optional(face: Option<&FT_Face>, params: &Value) -> Result<RunOutput, String> {
