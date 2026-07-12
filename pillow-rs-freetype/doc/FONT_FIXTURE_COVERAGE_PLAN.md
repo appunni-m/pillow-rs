@@ -327,17 +327,17 @@ an out-of-range Apple PostScript-name record returns a null
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,147 |
-| Concrete explicit cases | 6,665 |
-| Additional grouped variants | 2,518 |
+| Concrete explicit cases | 6,667 |
+| Additional grouped variants | 2,520 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,661 |
-| Exact parity | 6,661 / 6,661 |
+| Runnable parity comparisons | 6,663 |
+| Exact parity | 6,663 / 6,663 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,225 / 17,756 (85.75%) |
-| Rust function coverage | 950 / 1,133 (83.85%) |
-| Rust instantiation coverage | 953 / 1,136 (83.89%) |
-| Rust region coverage | 22,092 / 25,444 (86.83%) |
-| Rust branch/condition coverage | 3,686 / 4,522 (81.51%) |
+| Covered Rust lines | 15,275 / 17,761 (86.00%) |
+| Rust function coverage | 954 / 1,133 (84.20%) |
+| Rust instantiation coverage | 957 / 1,136 (84.24%) |
+| Rust region coverage | 22,128 / 25,451 (86.94%) |
+| Rust branch/condition coverage | 3,699 / 4,524 (81.76%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 150 |
 | Stored active font binaries | 107 files, 807 KiB |
@@ -1737,6 +1737,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Expand the malformed format-14 cmap matrix in one public row | The existing `FT_Get_Char_Index` malformed format-14 row now reuses the same compact font but covers offset-out-of-range, selector-order, default-UVS, and non-default-UVS parser errors in addition to the original short/record-array cases. Case count stays flat at 6,665 concrete rows with zero implicit rows; refreshed condition coverage is 15,257 / 17,756 lines, 22,112 / 25,444 regions, and 3,693 / 4,522 branches with 6,661 / 6,661 runtime rows passing and four explicit pending rows |
 | 2026-07-12 | Keep nested malformed format-14 probes from changing default Unicode selection | Pinned `tt_cmap14_validate` checks nested default/non-default UVS payload reads against the whole cmap table limit after requiring offsets below the declared format-14 length. If such records are tagged as Apple Unicode and followed by more cmap bytes, FreeType may register them and default-select a format-14 charmap, changing plain `FT_Get_Char_Index`. Extra nested-malformed parser probes therefore use non-Unicode platform records unless deliberately placed as the final physical cmap subtable |
 | 2026-07-12 | Route cmap residual public zero guards explicitly | `cmap-format14-malformed-matrix.ttf` now ends with a physical short format-14 subtable so Rust reaches the true `b.len() < 10` parser guard instead of reading later cmap bytes. A compact `cmap-nonunicode-format6.ttf` plus one `FT_Face_GetCharVariantIndex` row proves C/Rust/C-ABI/WASM return zero when no Unicode active charmap exists, and one `FT_Face_GetCharVariantIsDefault` row proves absent selector `-1` behavior. Case count is 6,667 concrete rows with zero implicit rows; refreshed condition coverage is 15,260 / 17,756 lines, 22,115 / 25,444 regions, and 3,697 / 4,522 branches with 6,663 / 6,663 runtime rows passing and four explicit pending rows |
+| 2026-07-12 | Route default glyph loads through the core wrapper | Pinned `tt_loader_init` suppresses `size->widthp` only for `FT_LOAD_COMPUTE_METRICS`; normal default loads retain the hdmx path. The public load path now routes non-compute-metrics rows through `glyph_slot_load_default_with_layout_and_mode` while preserving the explicit disabled-hdmx call for compute-metrics rows. Case count remains 6,667 concrete rows with zero implicit rows; refreshed condition coverage is 15,275 / 17,761 lines, 22,128 / 25,451 regions, and 3,699 / 4,524 branches with 6,663 / 6,663 runtime rows passing and four explicit pending rows |
 
 ## Immediate Next Actions
 
