@@ -298,6 +298,41 @@ def write_variable_prefix_branch_matrix() -> None:
     )
 
 
+def write_variable_apple_english_subfamily() -> None:
+    records = variable_base_without_instance_names()
+    records.extend(
+        [
+            NameRecordSpec(3, 1, 0x0409, 25, utf16be("WinVar")),
+            NameRecordSpec(1, 1, 1, 259, mac_roman("IgnoredApple")),
+            NameRecordSpec(1, 0, 0, 259, mac_roman("Thin")),
+        ]
+    )
+    write_name_payload(
+        BASE_VARIABLE,
+        VARIABLE_OUT_DIR / "variable-name-apple-english-subfamily.ttf",
+        build_name_table(records),
+    )
+
+
+def write_variable_windows_subfamily_fallback() -> None:
+    records = variable_base_without_instance_names()
+    records.extend(
+        [
+            NameRecordSpec(3, 1, 0x0409, 25, utf16be("WinVar")),
+            NameRecordSpec(1, 1, 0, 25, mac_roman("IgnoredPrefix")),
+            NameRecordSpec(3, 2, 0x0409, 259, utf16be("IgnoredEncoding")),
+            NameRecordSpec(3, 1, 0x0411, 259, utf16be("WinJP")),
+            NameRecordSpec(3, 1, 0x0412, 259, utf16be("WinKR")),
+            NameRecordSpec(1, 0, 1, 259, mac_roman("AppleFallback")),
+        ]
+    )
+    write_name_payload(
+        BASE_VARIABLE,
+        VARIABLE_OUT_DIR / "variable-name-windows-subfamily-fallback.ttf",
+        build_name_table(records),
+    )
+
+
 def write_variable_missing_subfamily() -> None:
     records = variable_base_without_instance_names()
     records.extend(
@@ -500,6 +535,8 @@ def main() -> None:
     write_variable_unicode_prefix()
     write_variable_odd_windows_prefix()
     write_variable_prefix_branch_matrix()
+    write_variable_apple_english_subfamily()
+    write_variable_windows_subfamily_fallback()
     write_variable_missing_subfamily()
 
 
