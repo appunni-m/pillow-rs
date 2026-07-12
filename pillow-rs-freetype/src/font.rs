@@ -581,11 +581,12 @@ impl Font {
     /// Return scalar face metadata.
     pub fn face_info(&self) -> FaceInfo {
         let (ascender, descender, height) = face_metric_values(&self.data);
+        let (family_name, style_name) = self.getname();
         FaceInfo {
-            num_faces: self.data.num_faces,
-            face_index: self.data.face_index,
-            family_name: self.data.name.family.clone(),
-            style_name: self.data.name.subfamily.clone(),
+            num_faces: self.num_faces(),
+            face_index: self.face_index(),
+            family_name: family_name.to_string(),
+            style_name: style_name.to_string(),
             postscript_name: self.data.name.postscript_name.clone(),
             font_format: self.font_format(),
             units_per_em: self.data.head.units_per_em,

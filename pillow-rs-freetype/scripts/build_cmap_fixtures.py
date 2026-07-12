@@ -167,6 +167,10 @@ def format14_offset_out_of_range_subtable() -> bytes:
     return raw_format14_subtable([(0xFE00, 21, 0)])
 
 
+def format14_empty_selector_subtable(selector: int) -> bytes:
+    return raw_format14_subtable([(selector, 0, 0)])
+
+
 def format14_selectors_out_of_order_subtable() -> bytes:
     return raw_format14_subtable([(0xFE0F, 0, 0), (0xFE00, 0, 0)])
 
@@ -285,11 +289,31 @@ def build_format14_only_font() -> None:
     font.save(out, reorderTables=True)
 
 
+def build_non_uvs_format14_platforms_font() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    font["cmap"] = raw_cmap_table(
+        pack_raw_cmap(
+            [
+                (3, 1, format6_subtable()),
+                (1, 8, format14_empty_selector_subtable(0xFE00)),
+                (0, 6, format14_empty_selector_subtable(0xFE0F)),
+            ]
+        )
+    )
+
+    CHARMAP_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = CHARMAP_OUT_DIR / "cmap-format14-non-uvs-platforms.ttf"
+    if out.exists() or out.is_symlink():
+        out.unlink()
+    font.save(out, reorderTables=True)
+
+
 def main() -> None:
     build_matrix_font()
     build_malformed_format14_font()
     build_non_unicode_format6_font()
     build_format14_only_font()
+    build_non_uvs_format14_platforms_font()
 
 
 if __name__ == "__main__":

@@ -139,6 +139,24 @@
             }
           },
           {
+            "id": "non_uvs_format14_platforms",
+            "coverage": [
+              "face_get_char_variant_is_default:format14-non-public-uvs-platforms"
+            ],
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/charmap/cmap-format14-non-uvs-platforms.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "charcode": "U+0041",
+              "variant_selector": "U+FE0F"
+            }
+          },
+          {
             "id": "no_format14",
             "coverage": [
               "face_get_char_variant_is_default:no-format14-control"
