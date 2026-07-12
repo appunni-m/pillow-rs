@@ -11089,8 +11089,40 @@ fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result
     let data = font_bytes(case)?;
     let (_, pixel_height) = pixel_size_param(&case.inputs.params)?;
     let load_mode = font_load_mode_from_params(&case.inputs.params)?;
-    let font = Font::truetype_with_load_mode(data.as_ref(), pixel_height as f32, load_mode)
-        .map_err(|err| format!("{} Font::truetype returned {err}", case.case_id))?;
+    let font = if bool_param(
+        &case.inputs.params,
+        "assert_font_truetype_constructor_agrees",
+        false,
+    )? {
+        if load_mode != LoadMode::Default {
+            return Err(format!(
+                "{} assert_font_truetype_constructor_agrees requires default load mode",
+                case.case_id
+            ));
+        }
+        Font::truetype(data.as_ref(), pixel_height as f32)
+    } else {
+        Font::truetype_with_load_mode(data.as_ref(), pixel_height as f32, load_mode)
+    }
+    .map_err(|err| format!("{} Font constructor returned {err}", case.case_id))?;
+    if bool_param(&case.inputs.params, "assert_font_face_count_agrees", false)? {
+        let face = open_face(case)?;
+        let expected = usize::try_from(FT_Face_Info(&face).num_faces)
+            .map_err(|err| format!("{} FT_FaceRec.num_faces invalid: {err}", case.case_id))?;
+        let actual = Font::face_count(data.as_ref()).map_err(|err| {
+            format!(
+                "{} Font::face_count returned {}",
+                case.case_id,
+                font_error_to_ft(err)
+            )
+        })?;
+        if actual != expected {
+            return Err(format!(
+                "{} Font::face_count disagrees with FT_FaceRec.num_faces: font={actual} face={expected}",
+                case.case_id
+            ));
+        }
+    }
     if bool_param(&case.inputs.params, "assert_font_empty_text_render", false)? {
         let empty_bitmap = font.render_mode("", render_mode).map_err(|err| {
             format!(

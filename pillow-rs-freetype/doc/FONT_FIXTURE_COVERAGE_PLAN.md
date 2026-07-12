@@ -356,10 +356,10 @@ C-oracle-backed charmap metadata rows.
 | Runnable parity comparisons | 6,677 |
 | Exact parity | 6,677 / 6,677 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,587 / 17,759 (87.77%) |
-| Rust function coverage | 985 / 1,133 (86.94%) |
-| Rust instantiation coverage | 988 / 1,136 (86.97%) |
-| Rust region coverage | 22,477 / 25,450 (88.32%) |
+| Covered Rust lines | 15,593 / 17,759 (87.80%) |
+| Rust function coverage | 987 / 1,133 (87.11%) |
+| Rust instantiation coverage | 990 / 1,136 (87.15%) |
+| Rust region coverage | 22,488 / 25,450 (88.36%) |
 | Rust branch/condition coverage | 3,737 / 4,524 (82.60%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 151 |
@@ -1774,6 +1774,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Declare safe `Font` convenience parity on existing rows | Existing `FT_RENDER_MODE_NORMAL.render_glyph_mode_dispatch` variants now opt into safe `Font::getmetrics`, `getlength`, `getbbox`, `getmask`, and empty-text mask agreement checks using the same C-oracle-backed size metrics, glyph slot advance, and normal rendered bitmap already produced by the row. Existing `FT_Get_Kerning.legacy_pair_unfitted_and_unscaled_modes` now opts into `Font::getkerning` agreement against the row's `FT_KERNING_UNFITTED` vector. This adds no fonts and no concrete cases; refreshed condition coverage is 15,574 / 17,759 lines, 22,460 / 25,450 regions, and 3,735 / 4,524 branches with 6,676 / 6,676 runtime rows and four explicit pending rows |
 | 2026-07-12 | Cover safe glyph metrics and monochrome render-target declarations | The existing normal render row now also compares `Font::glyph_metrics('A')` with the same C-oracle-backed glyph-slot metrics already produced by `FT_Render_Glyph`. `FT_Load_Glyph.render_and_target_modes` adds the missing normal `FT_LOAD_RENDER` + `FT_LOAD_MONOCHROME` variant and marks all four monochrome target combinations for safe `Face::load_glyph` agreement. This adds one concrete input and no fonts; refreshed condition coverage is 15,578 / 17,759 lines, 22,469 / 25,450 regions, and 3,735 / 4,524 branches with 6,677 / 6,677 runtime rows and four explicit pending rows |
 | 2026-07-12 | Cover safe charmap accessor parity | Existing `FT_Get_Charmap_Index.owned_charmap_indexes` now opts into a safe `Font` charmap assertion. The assertion compares `Font::charmaps`, `charmap`, `charmap_index`, and successful `set_charmap`/`select_charmap` against the same public charmap-index rows already compared across pinned C, Rust FFI, C ABI, and WASM ABI, then checks the safe API's explicit invalid index and missing-pair guards. This adds no fonts and no concrete cases; refreshed condition coverage is 15,587 / 17,759 lines, 22,477 / 25,450 regions, and 3,737 / 4,524 branches with 6,677 / 6,677 runtime rows and four explicit pending rows |
+| 2026-07-12 | Cover safe default font constructor and face count helper | Existing `FT_RENDER_MODE_NORMAL.render_glyph_mode_dispatch` now declares safe `Font::truetype` constructor coverage for the default load-mode row and compares `Font::face_count` with the same face's public `FT_FaceRec.num_faces` view while the row continues to compare rendered glyph output across pinned C, Rust FFI, C ABI, and WASM ABI. This adds no fonts and no concrete cases; refreshed condition coverage is 15,593 / 17,759 lines, 22,488 / 25,450 regions, and 3,737 / 4,524 branches with 6,677 / 6,677 runtime rows and four explicit pending rows |
 
 ## Immediate Next Actions
 
