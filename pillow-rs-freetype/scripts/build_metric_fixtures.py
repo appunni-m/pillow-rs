@@ -59,9 +59,17 @@ def write_hhea_zero_win_fallback() -> None:
     save_font("hhea-zero-win-fallback.ttf", font)
 
 
+def write_hhea_zero_no_os2_fallback() -> None:
+    font = base_font()
+    clear_hhea_metrics(font)
+    del font["OS/2"]
+    save_font("hhea-zero-no-os2-fallback.ttf", font)
+
+
 def main() -> None:
     write_hhea_zero_typo_fallback()
     write_hhea_zero_win_fallback()
+    write_hhea_zero_no_os2_fallback()
 
 
 if __name__ == "__main__":
