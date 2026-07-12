@@ -1585,16 +1585,17 @@ pub fn FT_Render_Glyph(
     render_mode: FT_Render_Mode,
 ) -> Result<FT_GlyphSlot, FT_Error> {
     let mode = render_mode_to_core(render_mode).ok_or(FT_Err_Cannot_Render_Glyph)?;
-    if slot.format == FT_GLYPH_FORMAT_BITMAP {
-        return Ok(slot);
-    }
+    let was_bitmap = slot.format == FT_GLYPH_FORMAT_BITMAP;
     let source_face = slot.source_face.clone();
     let load_flags = slot.load_flags;
     slot.core_slot
         .render(mode)
         .map(|rendered| {
-            let render_flags =
-                load_flags | api::LoadFlags::RENDER | load_flag_for_render_mode(mode);
+            let render_flags = if was_bitmap {
+                load_flags
+            } else {
+                load_flags | api::LoadFlags::RENDER | load_flag_for_render_mode(mode)
+            };
             slot_to_ffi(&face_to_ffi(source_face, false), rendered, render_flags)
         })
         .map_err(error_to_ft)
