@@ -327,17 +327,17 @@ an out-of-range Apple PostScript-name record returns a null
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,147 |
-| Concrete explicit cases | 6,671 |
-| Additional grouped variants | 2,524 |
+| Concrete explicit cases | 6,672 |
+| Additional grouped variants | 2,525 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,667 |
-| Exact parity | 6,667 / 6,667 |
+| Runnable parity comparisons | 6,668 |
+| Exact parity | 6,668 / 6,668 |
 | Pending cases | 4 |
 | Covered Rust lines | 15,289 / 17,762 (86.08%) |
 | Rust function coverage | 957 / 1,133 (84.47%) |
 | Rust instantiation coverage | 960 / 1,136 (84.51%) |
-| Rust region coverage | 22,146 / 25,456 (87.00%) |
-| Rust branch/condition coverage | 3,707 / 4,524 (81.94%) |
+| Rust region coverage | 22,147 / 25,456 (87.00%) |
+| Rust branch/condition coverage | 3,710 / 4,524 (82.01%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 151 |
 | Stored active font binaries | 108 files, 811 KiB |
@@ -1740,6 +1740,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Route default glyph loads through the core wrapper | Pinned `tt_loader_init` suppresses `size->widthp` only for `FT_LOAD_COMPUTE_METRICS`; normal default loads retain the hdmx path. The public load path now routes non-compute-metrics rows through `glyph_slot_load_default_with_layout_and_mode` while preserving the explicit disabled-hdmx call for compute-metrics rows. Case count remains 6,667 concrete rows with zero implicit rows; refreshed condition coverage is 15,275 / 17,761 lines, 22,128 / 25,451 regions, and 3,699 / 4,524 branches with 6,663 / 6,663 runtime rows passing and four explicit pending rows |
 | 2026-07-12 | Route face metadata through public helpers | Existing `FT_FaceRec` rows already compare scalar face metadata across Rust, C ABI, and WASM ABI. `Font::face_info` now delegates `num_faces`, `face_index`, and family/style names through the public helper methods instead of duplicating field access. Case count is unchanged and refreshed condition coverage reaches 15,285 / 17,762 lines, 22,142 / 25,456 regions, and 3,699 / 4,524 branches with 6,663 / 6,663 runtime rows passing and four explicit pending rows |
 | 2026-07-12 | Add non-public format-14 platform controls | `cmap-format14-non-uvs-platforms.ttf` is generated from `build_cmap_fixtures.py` with a valid base Unicode cmap plus valid format-14 subtables on platform/encoding pairs other than Apple Unicode variation selectors `0/5`. Four explicit public UVS variants prove pinned C and Rust ignore those subtables for `FT_Face_GetCharVariantIsDefault`, `FT_Face_GetVariantSelectors`, `FT_Face_GetVariantsOfChar`, and `FT_Face_GetCharsOfVariant`. Case count rises only to 6,671 concrete rows with zero implicit rows; refreshed condition coverage is 15,289 / 17,762 lines, 22,146 / 25,456 regions, and 3,707 / 4,524 branches with 6,667 / 6,667 runtime rows passing and four explicit pending rows |
+| 2026-07-12 | Split variants-of-char default and non-default UVS inputs | The existing `FT_Face_GetVariantsOfChar.char_with_variants_returns_selector_list` row now has explicit grouped variants for U+0041 default UVS coverage and U+0042 non-default UVS coverage in the same compact `cmap-format-language-matrix.ttf` fixture. This adds one concrete row and no font bytes, covering the non-default `glyph_id != 0` predicate in the public format-14 char-variants path. Refreshed condition coverage is 15,289 / 17,762 lines, 22,147 / 25,456 regions, and 3,710 / 4,524 branches with 6,668 / 6,668 runtime rows passing and four explicit pending rows |
 
 ## Immediate Next Actions
 
