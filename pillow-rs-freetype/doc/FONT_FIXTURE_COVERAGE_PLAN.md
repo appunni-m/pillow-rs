@@ -298,21 +298,28 @@ to the raw stream position instead of clamping to the table record, and a null
 length pointer performs a full copy without mutating caller length state. The
 C ABI and WASM legs call their public wrappers directly for these rows, so the
 wrappers remain thin pointer/handle surfaces over the Rust core behavior.
+`FT_Sfnt_Table_Info` now also has explicit variants for nullable tag/length
+out-pointers and table-index selection. Pinned C returns the table count when
+`tag == NULL`, ignores `table_index` in that count-query mode, rejects
+`length == NULL` with `FT_Err_Invalid_Argument`, and returns
+`FT_Err_Table_Missing` for out-of-range table indexes when `tag` is non-null.
+Rust FFI, C ABI, and WASM ABI now route through that same public pointer
+contract instead of using a Rust-only modeled tuple helper.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,145 |
-| Concrete explicit cases | 6,643 |
-| Additional grouped variants | 2,498 |
+| Concrete explicit cases | 6,646 |
+| Additional grouped variants | 2,501 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,640 |
-| Exact parity | 6,640 / 6,640 |
+| Runnable parity comparisons | 6,643 |
+| Exact parity | 6,643 / 6,643 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,679 / 17,253 (85.08%) |
+| Covered Rust lines | 14,693 / 17,264 (85.11%) |
 | Rust function coverage | 881 / 1,071 (82.26%) |
 | Rust instantiation coverage | 884 / 1,074 (82.31%) |
-| Rust region coverage | 21,407 / 24,819 (86.25%) |
-| Rust branch/condition coverage | 3,582 / 4,398 (81.45%) |
+| Rust region coverage | 21,417 / 24,829 (86.26%) |
+| Rust branch/condition coverage | 3,589 / 4,406 (81.46%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 141 |
 | Stored active font binaries | 98 files, 773 KiB |
@@ -752,7 +759,7 @@ usually JSON/input fixes rather than new core features:
 | C ABI / WASM explicit Rust delegation | Constants, layout probes, compile probes, several SFNT table routes, transforms, reference-face, unsupported stubs, size helpers, and `freetype.new_face` are routed to Rust | Acceptable for compile-time/header probes; unsafe for runtime public functions that should exercise ABI pointer handling | Split into compile-contract probes versus runtime ABI obligations; runtime functions need direct thin-wrapper rows |
 | `ftsizes` null-validation rows | `FT_New_Size` null face/output and `FT_Done_Size`/`FT_Activate_Size` null size now execute pinned C oracle commands and Rust FFI wrapper validation; C/WASM fixture legs delegate because no exported ABI size lifecycle symbols exist yet | Proves null validation only, not secondary-size allocation, activation, destruction, or direct C/WASM export handling | Keep as resolved null-validation evidence; implement real multi-size lifecycle before moving `*_sequence` rows out of generic fallback |
 | Explicit Rust unsupported stubs | `freetype.face_properties` and `freetype.select_size` return `Unimplemented_Feature` directly | These are public FreeType surfaces; final 100% correctness cannot treat them as covered behavior | Implement exact public behavior or keep manifest rows visibly pending/failing until implementation exists |
-| Shape-incomplete fallback guards | `set_char_size` variants, `ftsnames.get_sfnt_name` without indexes, SFNT variation table requests, `sfnt.load_sfnt_table` missing read selectors, `sfnt.table_info` without index selectors, incomplete load/render glyph rows, and incomplete outline cbox rows intentionally fall back | These usually indicate declarative input that the runner does not execute | Convert valid rows into explicit grouped variants; remove or mark invalid row shapes rather than keeping inert declarations |
+| Shape-incomplete fallback guards | `set_char_size` variants, `ftsnames.get_sfnt_name` without indexes, SFNT variation table requests, `sfnt.load_sfnt_table` missing read selectors, incomplete load/render glyph rows, and incomplete outline cbox rows intentionally fall back | These usually indicate declarative input that the runner does not execute | Convert valid rows into explicit grouped variants; remove or mark invalid row shapes rather than keeping inert declarations |
 | Closed named-instance row | `freetype.FT_Get_Postscript_Name.variation_instance_name_behavior` now executes real `FT_Set_Named_Instance` before `FT_Get_Postscript_Name` | This removed the last pending row, but also introduced honest `fvar` and named-instance parsing coverage obligations | Continue metadata coverage through explicit named-instance, name table, and malformed-`fvar` rows rather than hiding the new denominator |
 | Direct `ftmm.set_named_instance` rows | Selection, clear, and invalid-index compact variable cases now execute pinned C oracle, Rust FFI, C ABI, and WASM ABI paths | The remaining Adobe MM, `FT_MM_Var`, and glyph-output rows are real implementation gaps, not runner coverage | Keep those rows explicit pending until Adobe MM design coordinates, namedstyle coordinates, and `gvar`/HVAR deltas are implemented in core |
 
@@ -1574,6 +1581,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Size error and probe-face rows | 109 unique hashes | 0 | 6,635 | 6,632 / 6,632 | 3 | 14,658 / 17,230 lines; 21,366 / 24,773 regions; 3,580 / 4,398 branches | `FT_Set_Char_Size.error_oversized_dimensions` now has three executable DejaVu variants for ppem-too-large, width-over-core-range, and height-over-core-range requests; `FT_Set_Char_Size.error_probe_face_invalid_size_handle` and `FT_Request_Size.error_probe_face_invalid_size_handle` use negative face-index probe handles. Pinned C returns `FT_Err_Invalid_Pixel_Size` for oversized char-size requests and `FT_Err_Invalid_Size_Handle` for probe handles. Rust FFI, C ABI, and WASM ABI match exactly, route-audit real parity rises to 3,230, and implicit cases remain zero |
 | 2026-07-12 | Direct pixel-size probe route | 109 unique hashes | 0 | 6,636 | 6,633 / 6,633 | 3 | 14,659 / 17,230 lines; 21,367 / 24,773 regions; 3,581 / 4,398 branches | `FT_Set_Pixel_Sizes` C ABI and WASM parity now open the face without pre-sizing, call the public pixel-size function directly, and read metrics only after success. One explicit negative face-index probe row compares pinned C's `FT_Err_Invalid_Size_Handle` through Rust FFI, C ABI, and WASM ABI. Route-audit real parity rises to 3,231, the probe-only branch in `ffi/handles.rs` is covered, and implicit cases remain zero |
 | 2026-07-12 | Exact SFNT load-table stream semantics | 109 unique hashes | 0 | 6,643 | 6,640 / 6,640 | 3 | 14,679 / 17,253 lines; 21,407 / 24,819 regions; 3,582 / 4,398 branches | `FT_Load_Sfnt_Table` now has explicit whole-font, table-directory, signed-offset, raw-stream read, null-length, and oversized-tag variants. Core matches pinned `tt_face_load_any` stream behavior, Rust FFI maps missing tables and stream errors separately, and C ABI/WASM rows call their public wrappers directly with exact C/Rust parity and zero implicit cases |
+| 2026-07-12 | Direct SFNT table-info pointer semantics | 109 unique hashes | 0 | 6,646 | 6,643 / 6,643 | 3 | 14,693 / 17,264 lines; 21,417 / 24,829 regions; 3,589 / 4,406 branches | `FT_Sfnt_Table_Info` now has explicit tag-null count-query, table-index 0/1, missing-index, and null-length variants. Rust FFI mirrors the public out-pointer contract, C ABI and WASM rows call their exported wrappers directly, route-audit real parity rises to 3,241, and implicit cases remain zero |
 
 ## Decision Log
 
@@ -1672,6 +1680,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Keep memory-face source aliases route-visible | `FT_New_Memory_Face` parity reads bytes from the public memory source, but the route audit recognizes runnable font assets by `font`/`fixture` keys. Compact malformed font variants should carry a matching `font` alias beside `font_bytes` when both refer to the same source, so the row remains explicit real parity instead of shape fallback |
 | 2026-07-12 | Match size-error codes from the C oracle | Pinned `FT_Set_Char_Size` reaches `FT_Request_Metrics` and returns `FT_Err_Invalid_Pixel_Size` for oversized ppem results, including host-width values that Rust core cannot store as `i32`. Negative face-index probe handles return `FT_Err_Invalid_Size_Handle` through `FT_Set_Char_Size` and `FT_Request_Size`; these are public parity rows, not generic invalid-argument shortcuts |
 | 2026-07-12 | Route pixel-size parity through the public function | `FT_Set_Pixel_Sizes` rows should open the face, call the public size setter, and then inspect metrics only after success. Opening with size already applied hides public setter errors in C/WASM legs and cannot prove negative face-index probe behavior |
+| 2026-07-12 | Match `FT_Sfnt_Table_Info` nullable out-pointer behavior | Pinned `sfnt_table_info` rejects `length == NULL` before table lookup, treats `tag == NULL` as a table-count query that ignores `table_index`, and returns `Table_Missing` for out-of-range indexes only when `tag` is non-null. Public inputs must keep these as explicit variants because pointer-state arrays are not executable coverage |
 
 ## Immediate Next Actions
 

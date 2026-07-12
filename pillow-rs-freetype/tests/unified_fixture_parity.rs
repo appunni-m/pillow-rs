@@ -3569,24 +3569,87 @@ fn rust_sfnt_get_table_output(face: &FT_Face, params: &Value) -> Result<RunOutpu
 fn rust_sfnt_table_info_output(face: &FT_Face, params: &Value) -> Result<RunOutput, String> {
     let tag_ptr_state = sfnt_table_info_tag_ptr_arg(params)?;
     let length_ptr_state = sfnt_table_info_length_ptr_arg(params)?;
-    // Count-query mode: when tag_ptr is null and length_ptr is non-null,
-    // FreeType returns the table count in *length regardless of table_index.
-    if tag_ptr_state == "null" && length_ptr_state == "non_null" {
-        let count = FT_Sfnt_Table_Count(face);
-        return Ok(ok(json!({
-            "tag_after": 0 as FT_ULong,
-            "length_after": count as FT_ULong
-        })));
-    }
     let index = sfnt_table_info_index_arg(params)?
         .parse::<u32>()
         .map_err(|e| e.to_string())?;
-    match FT_Sfnt_Table_Info(face, index as FT_UInt) {
-        Ok((tag, length)) => Ok(ok(json!({
-            "tag_after": tag,
-            "length_after": length
-        }))),
-        Err(err) => Ok(error(err)),
+    let mut tag_after: FT_ULong = 0;
+    let mut length_after: FT_ULong = 0;
+    let tag_ptr = if tag_ptr_state == "non_null" {
+        Some(&mut tag_after)
+    } else {
+        None
+    };
+    let length_ptr = if length_ptr_state == "non_null" {
+        Some(&mut length_after)
+    } else {
+        None
+    };
+    let err = FT_Sfnt_Table_Info(face, index as FT_UInt, tag_ptr, length_ptr);
+    sfnt_table_info_result(err, tag_after, length_after)
+}
+
+fn c_sfnt_table_info_output(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let tag_ptr_state = sfnt_table_info_tag_ptr_arg(params)?;
+    let length_ptr_state = sfnt_table_info_length_ptr_arg(params)?;
+    let index = sfnt_table_info_index_arg(params)?
+        .parse::<u32>()
+        .map_err(|e| e.to_string())?;
+    let mut tag_after: c_abi::FT_ULong = 0;
+    let mut length_after: c_abi::FT_ULong = 0;
+    let tag_ptr = if tag_ptr_state == "non_null" {
+        (&mut tag_after) as *mut c_abi::FT_ULong
+    } else {
+        ptr::null_mut()
+    };
+    let length_ptr = if length_ptr_state == "non_null" {
+        (&mut length_after) as *mut c_abi::FT_ULong
+    } else {
+        ptr::null_mut()
+    };
+    let err = c_abi::FT_Sfnt_Table_Info(face, index as c_abi::FT_UInt, tag_ptr, length_ptr);
+    sfnt_table_info_result(err, tag_after, length_after)
+}
+
+fn wasm_sfnt_table_info_output(handle: usize, params: &Value) -> Result<RunOutput, String> {
+    let tag_ptr_state = sfnt_table_info_tag_ptr_arg(params)?;
+    let length_ptr_state = sfnt_table_info_length_ptr_arg(params)?;
+    let index = sfnt_table_info_index_arg(params)?
+        .parse::<u32>()
+        .map_err(|e| e.to_string())?;
+    let mut tag_after: wasm_abi::FT_ULong = 0;
+    let mut length_after: wasm_abi::FT_ULong = 0;
+    let tag_ptr = if tag_ptr_state == "non_null" {
+        (&mut tag_after) as *mut wasm_abi::FT_ULong
+    } else {
+        ptr::null_mut()
+    };
+    let length_ptr = if length_ptr_state == "non_null" {
+        (&mut length_after) as *mut wasm_abi::FT_ULong
+    } else {
+        ptr::null_mut()
+    };
+    let err = wasm_abi::fontdone_wasm_sfnt_table_info(
+        handle,
+        index as wasm_abi::FT_UInt,
+        tag_ptr,
+        length_ptr,
+    );
+    sfnt_table_info_result(err, tag_after, length_after)
+}
+
+fn sfnt_table_info_result(
+    err: FT_Error,
+    tag_after: FT_ULong,
+    length_after: FT_ULong,
+) -> Result<RunOutput, String> {
+    let output = json!({
+        "tag_after": tag_after,
+        "length_after": length_after
+    });
+    if err == FT_Err_Ok {
+        Ok(ok(output))
+    } else {
+        Ok(error_with_output(err, output))
     }
 }
 
@@ -7762,7 +7825,6 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "sfnt.get_sfnt_table.maxp"
         | "sfnt.get_sfnt_table.hhea"
         | "sfnt.get_sfnt_table.hhea.after_variation"
-        | "sfnt.table_info"
         | "freetype.set_transform"
         | "freetype.get_transform"
         | "freetype.reference_face"
@@ -7983,6 +8045,13 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output
         }
+        "sfnt.table_info" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_sfnt_table_info_output(face, &case.inputs.params);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
         "freetype.library_version" => Ok(ok(c_library_version_output(&case.inputs.params)?)),
         "ftmodapi.get_truetype_engine_type" => {
             Ok(ok(c_truetype_engine_output(&case.inputs.params)?))
@@ -8176,7 +8245,6 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "sfnt.get_sfnt_table.maxp"
         | "sfnt.get_sfnt_table.hhea"
         | "sfnt.get_sfnt_table.hhea.after_variation"
-        | "sfnt.table_info"
         | "freetype.set_transform"
         | "freetype.get_transform"
         | "freetype.reference_face"
@@ -8353,6 +8421,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "sfnt.load_sfnt_table" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_load_sfnt_table_output(handle, &case.inputs.params);
+            wasm_done_face(handle);
+            output
+        }
+        "sfnt.table_info" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_sfnt_table_info_output(handle, &case.inputs.params);
             wasm_done_face(handle);
             output
         }
@@ -12838,8 +12912,12 @@ fn rust_function_probe(symbol: &str) -> Result<Value, String> {
             Ok(function_probe_json(symbol))
         }
         "FT_Sfnt_Table_Info" => {
-            let _function: fn(&FT_Face, FT_UInt) -> Result<(FT_ULong, FT_ULong), FT_Error> =
-                FT_Sfnt_Table_Info;
+            let _function: fn(
+                &FT_Face,
+                FT_UInt,
+                Option<&mut FT_ULong>,
+                Option<&mut FT_ULong>,
+            ) -> FT_Error = FT_Sfnt_Table_Info;
             Ok(function_probe_json(symbol))
         }
         "FT_OpenType_Free" => {
