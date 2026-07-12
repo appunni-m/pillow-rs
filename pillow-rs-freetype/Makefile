@@ -23,6 +23,7 @@ help:
 	@printf "  make setup-tools      Install optional audit tooling\n"
 	@printf "  make oracle-fetch     Fetch pinned FreeType C oracle source\n"
 	@printf "  make font-fixture-autohint-scripts Rebuild compact autohint script fixture\n"
+	@printf "  make font-fixture-cff Rebuild compact CFF/OpenType fixtures\n"
 	@printf "  make font-fixture-cmap Rebuild compact cmap table fixtures\n"
 	@printf "  make font-fixture-cjk Rebuild the compact multiscript topology fixture\n"
 	@printf "  make font-fixture-fvar Rebuild compact fvar table fixtures\n"
@@ -247,6 +248,10 @@ font-fixture-cjk:
 .PHONY: font-fixture-autohint-scripts
 font-fixture-autohint-scripts:
 	$(PYTHON) scripts/build_autohint_script_fixtures.py
+
+.PHONY: font-fixture-cff
+font-fixture-cff:
+	$(PYTHON) scripts/build_cff_fixtures.py
 
 .PHONY: font-fixture-gasp
 font-fixture-gasp: font-fixture-hinter
