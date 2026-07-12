@@ -260,20 +260,28 @@ Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
 
+The latest R0 route cleanup splits executable invalid-argument rows out of
+previously inert aggregate declarations for `FT_Get_Sfnt_Name`,
+`FT_Load_Glyph`, and `FT_Load_Char`. Invalid index and reserved load-flag
+behavior now compares exact C oracle, Rust FFI, C ABI, and WASM ABI output.
+Null-handle, null-output, non-SFNT, and bitmap-missing residuals stay visible
+as shape-incomplete or pending route work instead of being replaced by normal
+loaded-face rows.
+
 | Measure | Current |
 |---|---:|
-| Logical public API cases | 4,137 |
-| Concrete explicit cases | 6,623 |
-| Additional grouped variants | 2,486 |
+| Logical public API cases | 4,140 |
+| Concrete explicit cases | 6,629 |
+| Additional grouped variants | 2,489 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,620 |
-| Exact parity | 6,620 / 6,620 |
+| Runnable parity comparisons | 6,626 |
+| Exact parity | 6,626 / 6,626 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,651 / 17,230 (85.03%) |
+| Covered Rust lines | 14,654 / 17,230 (85.05%) |
 | Rust function coverage | 878 / 1,066 (82.36%) |
 | Rust instantiation coverage | 881 / 1,069 (82.41%) |
-| Rust region coverage | 21,359 / 24,773 (86.22%) |
-| Rust branch/condition coverage | 3,573 / 4,398 (81.24%) |
+| Rust region coverage | 21,362 / 24,773 (86.23%) |
+| Rust branch/condition coverage | 3,576 / 4,398 (81.31%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 141 |
 | Stored active font binaries | 98 files, 773 KiB |
@@ -677,7 +685,7 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,196 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,200 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 4 | `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null rows execute pinned C oracle status checks and the Rust FFI wrapper validation path; size lifecycle success remains separate. |
 | Compile/header/scalar contract | 2,248 | Valid for ABI/header contracts, not runtime core coverage. |
 | Shape-incomplete fallback | 11 | Convert to complete explicit variants or mark invalid/pending. |
@@ -695,12 +703,12 @@ usually JSON/input fixes rather than new core features:
 
 | Operation | Rows | First action |
 |---|---:|---|
-| `load_glyph` | 3 | Split non-null invalid-index/flag variants into executable rows; null-face and bitmap-missing rows need explicit oracle/fixture support. |
+| `load_glyph` | 3 | Non-null invalid-index and reserved-flag probes are now executable; null-face and bitmap-missing rows still need explicit oracle/fixture support. |
 | `render_glyph` | 3 | Add slot/glyph selectors or classify unsupported unloaded-slot and future overlap-font cases. |
 | `ftoutln.outline_get_cbox` | 1 | Add explicit null outline/acbox route support; do not replace null-noop behavior with a normal glyph row. |
-| `ftsnames.get_sfnt_name` | 1 | Split invalid-index from null-output and non-SFNT error probes, then add explicit name indexes where the oracle can execute. |
+| `ftsnames.get_sfnt_name` | 1 | Invalid-index probing is now executable through explicit indexes; null-output and non-SFNT error probes still need explicit route support. |
 | `freetype.face_set_unpatented_hinting` | 1 | Add route support for toggle-sequence post-load behavior; simple boolean values would not prove this case. |
-| `load_char` | 1 | Add explicit null-face oracle support; adding only `char_code` would lose the null-handle behavior. |
+| `load_char` | 1 | Reserved invalid-load-flag probing is now executable; null-face still needs explicit oracle support because adding only `char_code` would lose null-handle behavior. |
 | `sfnt.get_sfnt_table.record` | 1 | Replace the inert variation sequence with a real table-read route once MVAR variation behavior exists. |
 
 | Route | Current behavior | Coverage risk | Required disposition |
@@ -1529,6 +1537,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | SDF self-intersection render topology row | 109 unique hashes | 0 | 6,623 | 6,620 / 6,620 | 3 | 14,651 / 17,230 lines; 21,359 / 24,773 regions; 3,573 / 4,398 branches | One explicit `FT_Bitmap.public_fields_match_render_output` variant reuses `hinter-control-matrix.ttf` glyph 42 in SDF mode. It pairs the existing mono/normal bowtie rows with an SDF self-intersection-thin public comparison, moving `render.rs` by one line, one region, and one branch while preserving exact Rust/C ABI/WASM parity and zero implicit cases |
 | 2026-07-12 | Explicit format-14 `FT_Set_Charmap` rejection | 109 unique hashes | 0 | 6,623 | 6,620 / 6,620 | 3 | 14,652 / 17,230 lines; 21,360 / 24,773 regions; 3,574 / 4,398 branches | The stale future-asset `FT_Set_Charmap.error_format14_charmap` row now reuses active `cmap-format14-only.ttf` with explicit `all_charmaps` selection. It moves one row from shape-incomplete fallback to real Rust/C ABI/WASM parity, keeps case count flat, and covers the thin FFI format-14 rejection branch |
 | 2026-07-12 | CBox and memory-face route cleanup | 109 unique hashes | 0 | 6,625 | 6,622 / 6,622 | 3 | 14,652 / 17,230 lines; 21,360 / 24,773 regions; 3,574 / 4,398 branches | `FT_Outline_Get_CBox` now uses source-backed `hinter-control-matrix.ttf` glyphs 41 and 21 for conic control-point and empty-outline cboxes, `FT_BBox.negative_and_empty_bounds` uses three explicit glyph variants for negative, empty, and zero-width boxes, and the compact `FT_New_Memory_Face.valid_font_bytes` variants expose matching `font` aliases for their memory sources. Structural coverage is unchanged because these parser/cbox paths were already hit, but route audit moves real parity to 3,196 rows and shape-incomplete fallback down to 11 without implicit discovery |
+| 2026-07-12 | Executable invalid-error route split | 109 unique hashes | 0 | 6,629 | 6,626 / 6,626 | 3 | 14,654 / 17,230 lines; 21,362 / 24,773 regions; 3,576 / 4,398 branches | `FT_Get_Sfnt_Name.invalid_argument_errors` now executes an explicit invalid name index while preserving null-output and non-SFNT residuals as incomplete route work; `FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags` now executes out-of-range glyph and reserved-load-flag variants while preserving null-face as unrouted; `FT_Load_Char.error_null_face_or_invalid_flags` now executes the reserved-load-flag row while preserving null-face as unrouted. Exact Rust/C ABI/WASM parity remains green, route audit real parity moves to 3,200 rows, and implicit cases remain zero |
 
 ## Decision Log
 

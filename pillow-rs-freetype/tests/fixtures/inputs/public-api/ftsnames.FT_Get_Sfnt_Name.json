@@ -114,6 +114,55 @@
       "case": "invalid_argument_errors",
       "operation": "ftsnames.get_sfnt_name",
       "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "indexes": [
+            9999
+          ],
+          "probe_string_bytes": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsnames",
+        "area:error_path"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return_sequence": "array<FT_Error>",
+          "names": "array<FT_SfntName_with_string_bytes>"
+        },
+        "compare": {
+          "mode": "bytes",
+          "paths": [
+            "return_sequence",
+            "names[].platform_id",
+            "names[].encoding_id",
+            "names[].language_id",
+            "names[].name_id",
+            "names[].string_len",
+            "names[].string_bytes"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
+    },
+    {
+      "case_id": "ftsnames.FT_Get_Sfnt_Name.invalid_argument_errors.unrouted_null_and_non_sfnt_errors",
+      "subject": "ftsnames.FT_Get_Sfnt_Name",
+      "case": "invalid_argument_errors",
+      "operation": "ftsnames.get_sfnt_name",
+      "schema": "api_result",
       "expect_error": true,
       "inputs": {
         "assets": {
@@ -137,11 +186,6 @@
               "face": "valid",
               "idx": 0,
               "output": "null"
-            },
-            {
-              "face": "valid",
-              "idx": "name_count",
-              "output": "valid_pointer"
             },
             {
               "face": "non_sfnt",
@@ -170,7 +214,7 @@
         },
         "error": "Invalid_Argument",
         "fixture_requirements": [
-          "Non-SFNT face fixture such as Type 1 PFA/PFB to exercise FT_IS_SFNT false"
+          "Explicit null-output and non-SFNT FT_Get_Sfnt_Name route support; the indexed invalid-name row above covers the executable invalid-index path."
         ]
       }
     }

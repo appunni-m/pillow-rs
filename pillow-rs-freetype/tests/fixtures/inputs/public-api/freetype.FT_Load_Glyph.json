@@ -2556,6 +2556,81 @@
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
+        "variants": [
+          {
+            "id": "num-glyphs-index",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_index": "num_glyphs",
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "size": 20
+            },
+            "coverage": [
+              "load_glyph:error-num-glyphs-index"
+            ]
+          },
+          {
+            "id": "reserved-load-flag",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_index": 36,
+              "load_flags": [
+                8388608
+              ],
+              "size": 20
+            },
+            "coverage": [
+              "load_glyph:error-reserved-load-flag"
+            ]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-load"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "slot_mutation": "cleared_then_driver_or_c_oracle"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error",
+            "slot_snapshot"
+          ]
+        },
+        "error": "c_oracle"
+      }
+    },
+    {
+      "case_id": "freetype.FT_Load_Glyph.error_null_face_or_invalid_flags.null_face_unrouted",
+      "subject": "freetype.FT_Load_Glyph",
+      "case": "error_out_of_range_null_face_or_invalid_flags",
+      "operation": "load_glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
         "assets": {
           "font": {
             "kind": "file",
@@ -2570,20 +2645,6 @@
               "glyph_index": 36,
               "load_flags": [
                 "FT_LOAD_DEFAULT"
-              ]
-            },
-            {
-              "face_index": 0,
-              "glyph_index": "num_glyphs",
-              "load_flags": [
-                "FT_LOAD_DEFAULT"
-              ]
-            },
-            {
-              "face_index": 0,
-              "glyph_index": 36,
-              "load_flags": [
-                "reserved_high_bits"
               ]
             }
           ],
@@ -2609,7 +2670,10 @@
             "slot_snapshot"
           ]
         },
-        "error": "c_oracle"
+        "error": "c_oracle",
+        "fixture_requirements": [
+          "Explicit FT_Load_Glyph null-face oracle and wrapper route support; non-null invalid index and reserved-flag probes are executable variants above."
+        ]
       }
     }
   ]
