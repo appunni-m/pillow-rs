@@ -1062,10 +1062,13 @@ pub fn FT_Set_Char_Size(
         return FT_Err_Invalid_Size_Handle;
     }
     let Ok(char_width) = i32::try_from(char_width) else {
-        return FT_Err_Invalid_Argument;
+        // FreeType reaches FT_Request_Metrics and reports Invalid_Pixel_Size
+        // for host-width dimensions that produce an oversized ppem.
+        // See freetype/src/base/ftobjs.c:3355-3356.
+        return FT_Err_Invalid_Pixel_Size;
     };
     let Ok(char_height) = i32::try_from(char_height) else {
-        return FT_Err_Invalid_Argument;
+        return FT_Err_Invalid_Pixel_Size;
     };
     match face
         .inner
