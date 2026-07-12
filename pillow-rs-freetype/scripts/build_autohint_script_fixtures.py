@@ -570,7 +570,13 @@ def build_cjk_round_stem_light() -> None:
 
 
 def build_cjk_duplicate_edge() -> None:
-    glyph_order = [".notdef", "space", "hani_standard", "hani_duplicate_edge"]
+    glyph_order = [
+        ".notdef",
+        "space",
+        "hani_standard",
+        "hani_duplicate_edge",
+        "hani_leading_skip",
+    ]
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
         "space": empty_glyph(),
@@ -581,16 +587,24 @@ def build_cjk_duplicate_edge() -> None:
                 (40, 260, 320, 460),
             ]
         ),
+        "hani_leading_skip": rectangles_glyph(
+            [
+                (20, 20, 30, 22),
+                (80, 20, 130, 460),
+            ]
+        ),
     }
     metrics = {
         ".notdef": (600, 80),
         "space": (300, 0),
         "hani_standard": (700, 100),
         "hani_duplicate_edge": (700, 40),
+        "hani_leading_skip": (700, 20),
     }
     cmap = {
         0x20: "space",
         0x519E: "hani_duplicate_edge",
+        0x51A4: "hani_leading_skip",
         0x7530: "hani_standard",
     }
 
