@@ -75,6 +75,35 @@
             "coverage": [
               "render_glyph:explicit-variant-1"
             ]
+          },
+          {
+            "id": "target-mono-safe-render-agreement",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "input/fonts/DejaVuSans.ttf",
+                "requirements": "Scalable outline font with glyph U+0041; loaded with FT_LOAD_TARGET_MONO so the direct C render row matches Font::render_char_mode(Mono)."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 65,
+              "load_flags": [
+                "FT_LOAD_TARGET_MONO"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO",
+              "representative_load_target": "FT_LOAD_TARGET_MONO",
+              "font_render_text": "A",
+              "assert_font_render_mode_agrees": true
+            },
+            "coverage": [
+              "render_glyph:target-mono-safe-render-agreement"
+            ]
           }
         ]
       },
