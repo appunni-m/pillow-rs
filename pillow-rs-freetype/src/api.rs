@@ -477,12 +477,20 @@ impl Face {
         } else {
             // C `tt_loader_init` suppresses `size->widthp` when
             // `FT_LOAD_COMPUTE_METRICS` is set (ttgload.c:2299-2305).
-            font.glyph_slot_load_default_with_layout_and_mode_and_hdmx(
-                glyph_index,
-                vertical_layout,
-                native_hint_mode,
-                !flags.contains(LoadFlags::COMPUTE_METRICS),
-            )?
+            if flags.contains(LoadFlags::COMPUTE_METRICS) {
+                font.glyph_slot_load_default_with_layout_and_mode_and_hdmx(
+                    glyph_index,
+                    vertical_layout,
+                    native_hint_mode,
+                    false,
+                )?
+            } else {
+                font.glyph_slot_load_default_with_layout_and_mode(
+                    glyph_index,
+                    vertical_layout,
+                    native_hint_mode,
+                )?
+            }
         };
 
         let render_requested = flags.contains(LoadFlags::RENDER);
