@@ -307,7 +307,7 @@ Current largest uncovered buckets:
 | `src/scaler.rs` | 941 / 1,220 | 153 / 188 | 41 / 61 | 1,081 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
-| `src/ffi/handles.rs` | 1,353 / 1,490 | 238 / 288 | 149 / 162 | 1,898 / 2,040 | Public FFI route audit; wrappers stay thin and must delegate to core |
+| `src/ffi/handles.rs` | 1,354 / 1,490 | 239 / 288 | 149 / 162 | 1,899 / 2,040 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 862 / 941 | 355 / 426 | 18 / 19 | 1,145 / 1,247 | CJK topology rows in the compact multiscript fixture |
 | `src/api.rs` | 474 / 486 | 76 / 84 | 53 / 54 | 642 / 660 | Public API wrapper rows for render cache and glyph-slot surfaces |
@@ -658,10 +658,10 @@ Resolved in the 2026-07-11 cmap batch:
 
 ### R0 False-Green Route Audit Snapshot
 
-Recorded after commit `97b131d4`. This is the current source-level route audit
-from `tests/unified_fixture_parity.rs`; it identifies the remaining categories
-that can still produce a green result without proving the intended public
-behavior.
+Recorded from the active public input JSON on 2026-07-12. This is the current
+source-level route audit from `tests/unified_fixture_parity.rs`; it identifies
+the remaining categories that can still produce a green result without proving
+the intended public behavior.
 
 Updated R0 evidence on 2026-07-12: `make -C pillow-rs-freetype route-audit`
 now generates `target/api-abi-audit/route_audit.json` and
@@ -677,10 +677,10 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,157 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,168 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 4 | `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null rows execute pinned C oracle status checks and the Rust FFI wrapper validation path; size lifecycle success remains separate. |
 | Compile/header/scalar contract | 2,248 | Valid for ABI/header contracts, not runtime core coverage. |
-| Shape-incomplete fallback | 38 | Convert to complete explicit variants or mark invalid/pending. |
+| Shape-incomplete fallback | 37 | Convert to complete explicit variants or mark invalid/pending. |
 | Generic modeled fallback | 985 | Classify operation-by-operation as real parity, unsupported, or pending. |
 | Generic modeled error fallback | 142 | Replace implemented surfaces with real error-path execution. |
 | Null-error fallback | 21 | Keep only exact null-handle probes; route implemented null cases directly. |
@@ -690,7 +690,7 @@ Current route-audit totals:
 | Explicit unsupported stubs | 12 | Implement or keep visibly unsupported; do not count as coverage. |
 | Pending core implementation | 3 | Named-instance Adobe MM, `FT_MM_Var`, and `gvar`/HVAR rows remain pending. |
 
-The first R0 closure bucket is the 38 shape-incomplete rows because these are
+The first R0 closure bucket is the 37 shape-incomplete rows because these are
 usually JSON/input fixes rather than new core features:
 
 | Operation | Rows | First action |
@@ -699,8 +699,6 @@ usually JSON/input fixes rather than new core features:
 | `ftoutln.outline_get_cbox` | 4 | Add glyph selectors or retire inert declarations. |
 | `load_glyph` | 3 | Add concrete glyph selector rows for invalid/null flag cases. |
 | `render_glyph` | 3 | Add slot/glyph selectors or classify unsupported unloaded-slot cases. |
-| `freetype.request_size` | 2 | Add explicit request rows for null/error variants. |
-| `freetype.set_charmap` | 2 | Add charmap selector rows or classify null-face only. |
 | `ftsnames.get_sfnt_name` | 1 | Add explicit name indexes. |
 | `freetype.face_set_unpatented_hinting` | 1 | Add explicit boolean state rows. |
 | `load_char` | 1 | Add a concrete `char_code` or classify as null-only. |
@@ -1530,6 +1528,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Transform-render empty outline row | 108 unique hashes | 0 | 6,620 | 6,617 / 6,617 | 3 | 14,629 / 17,230 lines; 21,338 / 24,773 regions; 3,561 / 4,398 branches | One explicit `FT_Set_Transform.load_ignore_transform_behavior` variant loads `hinter-control-matrix.ttf` glyph 21 with `FT_LOAD_RENDER` under the existing non-identity matrix. It covers the transformed render-outline empty guard in `api.rs` without a new font, discovery axis, or harness path, and exact Rust/C ABI/WASM parity remains green |
 | 2026-07-12 | Hani fallback standard-width order font | 109 unique hashes | 0 | 6,622 | 6,619 / 6,619 | 3 | 14,650 / 17,230 lines; 21,358 / 24,773 regions; 3,572 / 4,398 branches | One minimal `cjk-width-order.ttf` fixture omits U+7530 and maps U+56D7 to a two-stem glyph whose first stem is wider than the second. The explicit `cjk-width-order-20` force-autohint row covers CJK descending width insertion-sort and quantization branches with exact Rust/C ABI/WASM parity and zero implicit cases |
 | 2026-07-12 | SDF self-intersection render topology row | 109 unique hashes | 0 | 6,623 | 6,620 / 6,620 | 3 | 14,651 / 17,230 lines; 21,359 / 24,773 regions; 3,573 / 4,398 branches | One explicit `FT_Bitmap.public_fields_match_render_output` variant reuses `hinter-control-matrix.ttf` glyph 42 in SDF mode. It pairs the existing mono/normal bowtie rows with an SDF self-intersection-thin public comparison, moving `render.rs` by one line, one region, and one branch while preserving exact Rust/C ABI/WASM parity and zero implicit cases |
+| 2026-07-12 | Explicit format-14 `FT_Set_Charmap` rejection | 109 unique hashes | 0 | 6,623 | 6,620 / 6,620 | 3 | 14,652 / 17,230 lines; 21,360 / 24,773 regions; 3,574 / 4,398 branches | The stale future-asset `FT_Set_Charmap.error_format14_charmap` row now reuses active `cmap-format14-only.ttf` with explicit `all_charmaps` selection. It moves one row from shape-incomplete fallback to real Rust/C ABI/WASM parity, keeps case count flat, and covers the thin FFI format-14 rejection branch |
 
 ## Decision Log
 
@@ -1607,7 +1606,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Treat glyph-name fixtures as buffer/status parity, not value stubs | `FT_Get_Glyph_Name` must compare the returned `FT_Error` and the caller buffer snapshot. Pinned FreeType clears `buffer[0]` after validating the face and buffer but before invalid-glyph/no-name service errors, and `FT_Get_Name_Index` returns the first matching `post` name or zero for null/unavailable/unknown names |
 | 2026-07-11 | Treat gasp fixtures as table-behavior parity, not value stubs | `FT_Get_Gasp` now reads compact generated SFNT controls instead of `DejaVuSans.ttf` symlink aliases. Pinned `ftgasp.c` returns `FT_GASP_NO_TABLE` for null/no usable table and masks version 0 flags with `& 3`; pinned `ttload.c` treats unsupported `gasp` versions as optional table load failures while keeping the face usable |
 | 2026-07-11 | Treat cmap format/language fixtures as metadata parity, not stubs | `FT_Get_CMap_Format` and `FT_Get_CMap_Language_ID` now use a compact generated SFNT cmap matrix instead of modeled values. Pinned `ftobjs.c` returns `-1` for invalid format probes, `0` for invalid language probes, and `ttcmap.c` reports format 14 language as `0xFFFFFFFF` |
-| 2026-07-11 | Treat malformed format-14 cmap records as load-time parser parity | Pinned FreeType ignores malformed optional format-14 records when another valid Unicode charmap remains usable. Public `FT_Set_Charmap` rejects format 14, so the active format-14 `FT_Get_Char_Index` and char-iteration arms remain public-unreachable rather than coverage rows to force |
+| 2026-07-11 | Treat malformed format-14 cmap records as load-time parser parity | Pinned FreeType ignores malformed optional format-14 records when another valid Unicode charmap remains usable. Public `FT_Set_Charmap` rejects format 14; the compact format-14-only font now proves that rejection explicitly, while direct lookup and char-iteration rows still prove zero-sentinel behavior |
 | 2026-07-12 | Treat autohint script lookup coverage as explicit public rows | `script-coverage.ttf` exists to activate real `FT_LOAD_FORCE_AUTOHINT` script paths through selected Unicode codepoints. All generated script-tag glyphs are now explicit public variants; future work should add new script glyphs only when the generator grows a new documented obligation |
 | 2026-07-12 | Reject parity-green rows that do not move coverage | A candidate `FT_Render_Glyph.matrix_render` SDF row using DejaVu glyph 82 at 48 ppem passed exact Rust/C/WASM parity but did not change `render.rs` or total coverage, so it was removed instead of growing the fixture count |
 | 2026-07-12 | Invalidate cached render fonts on face mutations | Routing `Face::render_loaded_glyph` through `RenderFontCache` must clear cached font clones after size, charmap, or named-instance changes; otherwise a later render could reuse a stale font after the same face object mutates |
