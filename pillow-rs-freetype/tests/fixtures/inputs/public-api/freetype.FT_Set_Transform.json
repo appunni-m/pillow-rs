@@ -311,6 +311,40 @@
               "freetype.set_transform:rendered-transformed-empty-outline",
               "api:load-glyph-transform-empty-render-outline"
             ]
+          },
+          {
+            "id": "composite-no-recurse-without-slot-outline",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "transform": {
+                "matrix": {
+                  "xx": 32768,
+                  "xy": 16384,
+                  "yx": -8192,
+                  "yy": 98304
+                },
+                "delta": [
+                  64,
+                  -128
+                ]
+              },
+              "glyph_index": 130,
+              "size_ppem": 20,
+              "load_flags": [
+                "FT_LOAD_NO_RECURSE"
+              ]
+            },
+            "coverage": [
+              "freetype.set_transform:composite-no-recurse-without-slot-outline",
+              "api:load-glyph-transform-no-slot-outline"
+            ]
           }
         ]
       },
