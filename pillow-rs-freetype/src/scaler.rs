@@ -1058,20 +1058,20 @@ fn scale_glyph_impl_with_context(
                         slot_advance_width = outcome.advance_width;
                     }
                     if outline_raw.is_composite && outline_raw.instructions.is_empty() {
-                        // C does not run composite-parent instructions here,
-                        // so final outline translation uses the scaled but
-                        // unrounded top-level pp1.x (`ttgload.c:1908,2582`).
-                        // The VM call above preserves existing phantom/advance
-                        // behavior; this delta fixes only outline placement.
-                        let parent_pp1_x = scale.scale_x(top_level_pp1x_fu);
-                        let outline_delta = outcome.pp1_x - parent_pp1_x;
+                        // C keeps the selected component phantoms when
+                        // `USE_MY_METRICS` is set; otherwise it restores the
+                        // parent phantoms before final `-loader.pp1.x`
+                        // translation (`ttgload.c:1838-1869, 2578-2583`).
+                        let final_pp1_x = composite_use_my_metrics_phantoms
+                            .map_or_else(|| scale.scale_x(top_level_pp1x_fu), |(pp1, _)| pp1);
+                        let outline_delta = outcome.pp1_x - final_pp1_x;
                         if outline_delta != 0 {
                             for point in &mut scaled {
                                 point.x += outline_delta;
                             }
                         }
-                        phantom_pp1_x = parent_pp1_x;
-                        phantom_pp2_x = parent_pp1_x.wrapping_add(outcome.advance_width);
+                        phantom_pp1_x = final_pp1_x;
+                        phantom_pp2_x = final_pp1_x.wrapping_add(outcome.advance_width);
                     }
                     final_hint_context = Some(outcome.context);
                 }
