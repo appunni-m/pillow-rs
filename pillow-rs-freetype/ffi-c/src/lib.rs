@@ -1257,7 +1257,19 @@ pub extern "C" fn FT_Load_Sfnt_Table(
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
     let Some(len_ptr) = non_null_mut(length) else {
-        return rust_ffi::FT_Err_Invalid_Argument as FT_Error;
+        return match rust_ffi::FT_Load_Sfnt_Table(&state.inner, tag, offset, None) {
+            Ok(Some(bytes)) => {
+                if let Some(buf) = non_null_mut(buffer) {
+                    // SAFETY: caller provides a buffer large enough for the selected table.
+                    unsafe {
+                        ptr::copy_nonoverlapping(bytes.as_ptr(), buf.as_ptr().cast(), bytes.len());
+                    }
+                }
+                rust_ffi::FT_Err_Ok as FT_Error
+            }
+            Ok(None) => rust_ffi::FT_Err_Ok as FT_Error,
+            Err(err) => err as FT_Error,
+        };
     };
     // SAFETY: caller-provided writable FT_ULong or NULL (caught above).
     let mut len_val = unsafe { *len_ptr.as_ptr() };

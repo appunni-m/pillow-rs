@@ -1100,7 +1100,19 @@ pub extern "C" fn fontdone_wasm_load_sfnt_table(
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
     if out_length.is_null() {
-        return rust_ffi::FT_Err_Invalid_Argument as FT_Error;
+        return match rust_ffi::FT_Load_Sfnt_Table(&face.face, tag, offset, None) {
+            Ok(Some(bytes)) => {
+                if !out_buffer.is_null() {
+                    // SAFETY: out_buffer has enough space for the selected table bytes.
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(bytes.as_ptr(), out_buffer, bytes.len());
+                    }
+                }
+                rust_ffi::FT_Err_Ok as FT_Error
+            }
+            Ok(None) => rust_ffi::FT_Err_Ok as FT_Error,
+            Err(err) => err as FT_Error,
+        };
     }
     // SAFETY: caller provides a writable FT_ULong.
     let mut len_val = unsafe { *out_length };

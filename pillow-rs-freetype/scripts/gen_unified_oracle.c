@@ -5446,10 +5446,15 @@ static int emit_face_or_slot(int argc, char** argv) {
         const char* buffer_kind = argv[9];
         const char* length_state = argv[10];
         FT_ULong length = 0;
+        FT_ULong* length_ptr = &length;
+        FT_ULong null_length_size = 0;
         FT_Byte buffer[65536];
         FT_Byte* buf_ptr = NULL;
         if (streq(length_state, "zero")) {
             length = 0;
+        } else if (streq(length_state, "null")) {
+            length_ptr = NULL;
+            (void)FT_Load_Sfnt_Table(face, tag, 0, NULL, &null_length_size);
         } else if (streq(length_state, "full")) {
             length = sizeof(buffer);
         } else {
@@ -5458,17 +5463,25 @@ static int emit_face_or_slot(int argc, char** argv) {
         if (streq(buffer_kind, "allocated")) {
             buf_ptr = buffer;
         }
-        FT_Error ft_err = FT_Load_Sfnt_Table(face, tag, offset, buf_ptr, &length);
+        FT_Error ft_err = FT_Load_Sfnt_Table(face, tag, offset, buf_ptr, length_ptr);
         print_status(ft_err);
-        printf(",\"output\":{\"length_after\":%lu", (unsigned long)length);
-        if (buf_ptr && length > 0 && ft_err == 0) {
+        if (length_ptr) {
+            printf(",\"output\":{\"length_after\":%lu", (unsigned long)length);
+        } else {
+            printf(",\"output\":{\"length_after\":null");
+        }
+        FT_ULong bytes_len = length_ptr ? length : 0;
+        if (!length_ptr && buf_ptr && ft_err == 0) {
+            bytes_len = null_length_size;
+        }
+        if (buf_ptr && bytes_len > 0 && ft_err == 0) {
             unsigned long hash = 5381;
-            for (FT_ULong i = 0; i < length; i++) {
+            for (FT_ULong i = 0; i < bytes_len; i++) {
                 hash = ((hash << 5) + hash) + buf_ptr[i];
             }
             printf(",\"bytes_hash\":\"%lx\"", hash);
             printf(",\"bytes_written\":\"");
-            print_hex_bytes(buf_ptr, (long)length);
+            print_hex_bytes(buf_ptr, (long)bytes_len);
             printf("\"");
         }
         printf("}}\n");

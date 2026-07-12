@@ -961,30 +961,47 @@ impl Font {
     pub fn load_sfnt_table(
         &self,
         tag: u32,
-        offset: usize,
+        offset: i64,
         length: Option<usize>,
     ) -> Result<Vec<u8>, FontError> {
-        let record =
-            self.data.table_directory.record(tag).ok_or_else(|| {
-                FontError::InvalidFont(format!("SFNT table 0x{tag:08X} not found"))
-            })?;
-        let start = record.offset as usize + offset;
-        let table_end = record.offset as usize + record.length as usize;
-        if start > table_end {
-            return Err(FontError::InvalidFont(format!(
-                "SFNT table offset {offset} exceeds table length {}",
-                record.length
-            )));
-        }
-        let end = match length {
-            Some(length) => start + length,
-            None => table_end,
-        };
+        let (base, table_len) = self.sfnt_table_read_base_and_len(tag)?;
+        let start = base
+            .checked_add(offset)
+            .ok_or_else(|| FontError::InvalidFont("SFNT table read offset overflows".into()))?;
+        let start = usize::try_from(start)
+            .map_err(|_| FontError::InvalidFont("SFNT table read offset before stream".into()))?;
+        let read_len = length.unwrap_or(table_len);
+        let end = start
+            .checked_add(read_len)
+            .ok_or_else(|| FontError::InvalidFont("SFNT table read length overflows".into()))?;
         self.data
             .raw_data
             .get(start..end)
             .map(|bytes| bytes.to_vec())
             .ok_or_else(|| FontError::InvalidFont("SFNT table read exceeds data".into()))
+    }
+
+    /// Size reported by `FT_Load_Sfnt_Table` when the caller passes `*length == 0`.
+    pub fn sfnt_table_len(&self, tag: u32) -> Result<usize, FontError> {
+        self.sfnt_table_read_base_and_len(tag)
+            .map(|(_base, table_len)| table_len)
+    }
+
+    fn sfnt_table_read_base_and_len(&self, tag: u32) -> Result<(i64, usize), FontError> {
+        if tag == 0 {
+            return Ok((0, self.data.raw_data.len()));
+        }
+        if tag == 1 {
+            return Ok((
+                self.data.face_offset as i64,
+                12 + self.data.table_directory.records.len() * 16,
+            ));
+        }
+        let record =
+            self.data.table_directory.record(tag).ok_or_else(|| {
+                FontError::InvalidFont(format!("SFNT table 0x{tag:08X} not found"))
+            })?;
+        Ok((i64::from(record.offset), record.length as usize))
     }
 
     /// `getname()` → `(family, style)`.

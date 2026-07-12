@@ -29,6 +29,7 @@ use std::io::BufRead;
 use std::mem::{align_of, offset_of, size_of};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::ptr;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -3295,36 +3296,52 @@ fn rust_load_sfnt_table_output(
     case: &InputCase,
     params: &Value,
 ) -> Result<RunOutput, String> {
-    let tag_hex = load_sfnt_table_tag_hex_arg(params)?;
-    let tag = if let Some(hex) = tag_hex.strip_prefix("0x") {
-        u32::from_str_radix(hex, 16).map_err(|e| format!("invalid tag hex: {e}"))?
-    } else {
-        u32::from_str_radix(&tag_hex, 16).map_err(|e| format!("invalid tag: {e}"))?
-    };
+    let tag = load_sfnt_table_tag_value(params)?;
     let offset = load_sfnt_table_offset_arg(params)?
         .parse::<i64>()
         .map_err(|e| e.to_string())?;
+    if load_sfnt_table_length_state_arg(params)? == "null" {
+        return match FT_Load_Sfnt_Table(face, tag, offset as FT_Long, None) {
+            Ok(Some(bytes)) => Ok(ok(json!({
+                "length_after": Value::Null,
+                "bytes_written": hex_bytes(&bytes),
+                "bytes_hash": djb2_hash(&bytes)
+            }))),
+            Ok(None) => Ok(ok(json!({
+                "length_after": Value::Null
+            }))),
+            Err(err) => Ok(error_with_output(
+                err,
+                json!({
+                    "length_after": Value::Null
+                }),
+            )),
+        };
+    }
     if let Some(length) = params.get("core_length_request").and_then(Value::as_u64) {
-        let offset = usize::try_from(offset).map_err(|_| {
-            format!("load_sfnt_table core offset must be non-negative, got {offset}")
-        })?;
         let data = font_bytes(case)?;
         let face_index = usize::try_from(face_index_param(params)?)
             .map_err(|err| format!("load_sfnt_table face_index does not fit usize: {err}"))?;
         let font = Font::truetype_face(data.as_ref(), face_index, 10.0)
             .map_err(|err| format!("load sfnt core font: {err}"))?;
+        let Ok(tag) = u32::try_from(tag) else {
+            return Ok(error(FT_Err_Table_Missing as FT_Error));
+        };
         return match font.load_sfnt_table(tag, offset, Some(length as usize)) {
             Ok(bytes) => Ok(ok(json!({
                 "length_after": bytes.len() as FT_ULong,
                 "bytes_written": hex_bytes(&bytes),
                 "bytes_hash": djb2_hash(&bytes)
             }))),
-            Err(_) => Ok(error(FT_Err_Invalid_Argument)),
+            Err(_) if font.sfnt_table_len(tag).is_err() => {
+                Ok(error(FT_Err_Table_Missing as FT_Error))
+            }
+            Err(_) => Ok(error(FT_Err_Invalid_Stream_Operation as FT_Error)),
         };
     }
     let mut length: FT_ULong = 0;
     // Probe first to get the actual table size.
-    match FT_Load_Sfnt_Table(face, tag as FT_ULong, offset as FT_Long, Some(&mut length)) {
+    match FT_Load_Sfnt_Table(face, tag, offset as FT_Long, Some(&mut length)) {
         Ok(None) => {
             // Length probe succeeded; length now holds the remaining table size.
             let copy_len = load_sfnt_table_copy_len(params);
@@ -3332,8 +3349,7 @@ fn rust_load_sfnt_table_output(
                 // Fixture specifies a length_request: perform a second call
                 // to actually copy the bytes and produce a hash.
                 let mut want = wanted.min(length);
-                let result =
-                    FT_Load_Sfnt_Table(face, tag as FT_ULong, offset as FT_Long, Some(&mut want));
+                let result = FT_Load_Sfnt_Table(face, tag, offset as FT_Long, Some(&mut want));
                 match result {
                     Ok(Some(bytes)) => {
                         let hash = djb2_hash(&bytes);
@@ -3346,7 +3362,12 @@ fn rust_load_sfnt_table_output(
                     Ok(None) => Ok(ok(json!({
                         "length_after": want
                     }))),
-                    Err(err) => Ok(error(err)),
+                    Err(err) => Ok(error_with_output(
+                        err,
+                        json!({
+                            "length_after": want
+                        }),
+                    )),
                 }
             } else {
                 // No length_request: return probe result only.
@@ -3355,9 +3376,131 @@ fn rust_load_sfnt_table_output(
                 })))
             }
         }
-        Err(err) => Ok(error(err)),
+        Err(err) => Ok(error_with_output(
+            err,
+            json!({
+                "length_after": length
+            }),
+        )),
         _ => unreachable!(),
     }
+}
+
+fn c_load_sfnt_table_output(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let tag = load_sfnt_table_tag_value(params)?;
+    let offset = load_sfnt_table_offset_arg(params)?
+        .parse::<i64>()
+        .map_err(|e| e.to_string())? as c_abi::FT_Long;
+    let length_state = load_sfnt_table_initial_length(params)?;
+    if length_state.is_none() {
+        let buffer_kind = load_sfnt_table_buffer_kind_arg(params)?;
+        let mut probe_len: c_abi::FT_ULong = 0;
+        let _ = c_abi::FT_Load_Sfnt_Table(face, tag, 0, ptr::null_mut(), &mut probe_len);
+        let mut buffer = vec![0u8; usize::try_from(probe_len).unwrap_or(0).max(1)];
+        let buffer_ptr = if buffer_kind == "allocated" {
+            buffer.as_mut_ptr()
+        } else {
+            ptr::null_mut()
+        };
+        let err = c_abi::FT_Load_Sfnt_Table(face, tag, offset, buffer_ptr, ptr::null_mut());
+        return sfnt_table_bytes_output(
+            err,
+            None,
+            &buffer,
+            Some(probe_len),
+            buffer_kind == "allocated",
+        );
+    }
+    let mut length = length_state.unwrap_or(0);
+    let buffer_kind = load_sfnt_table_buffer_kind_arg(params)?;
+    let mut buffer = vec![0u8; usize::try_from(length).unwrap_or(0).max(1)];
+    let buffer_ptr = if buffer_kind == "allocated" {
+        buffer.as_mut_ptr()
+    } else {
+        ptr::null_mut()
+    };
+    let err = c_abi::FT_Load_Sfnt_Table(face, tag, offset, buffer_ptr, &mut length);
+    sfnt_table_bytes_output(err, Some(length), &buffer, None, buffer_kind == "allocated")
+}
+
+fn wasm_load_sfnt_table_output(handle: usize, params: &Value) -> Result<RunOutput, String> {
+    let tag = load_sfnt_table_tag_value(params)?;
+    let offset = load_sfnt_table_offset_arg(params)?
+        .parse::<i64>()
+        .map_err(|e| e.to_string())? as wasm_abi::FT_Long;
+    let length_state = load_sfnt_table_initial_length(params)?;
+    if length_state.is_none() {
+        let buffer_kind = load_sfnt_table_buffer_kind_arg(params)?;
+        let mut probe_len: wasm_abi::FT_ULong = 0;
+        let _ = wasm_abi::fontdone_wasm_load_sfnt_table(
+            handle,
+            tag,
+            0,
+            ptr::null_mut(),
+            &mut probe_len,
+        );
+        let mut buffer = vec![0u8; usize::try_from(probe_len).unwrap_or(0).max(1)];
+        let buffer_ptr = if buffer_kind == "allocated" {
+            buffer.as_mut_ptr()
+        } else {
+            ptr::null_mut()
+        };
+        let err = wasm_abi::fontdone_wasm_load_sfnt_table(
+            handle,
+            tag,
+            offset,
+            buffer_ptr,
+            ptr::null_mut(),
+        );
+        return sfnt_table_bytes_output(
+            err,
+            None,
+            &buffer,
+            Some(probe_len),
+            buffer_kind == "allocated",
+        );
+    }
+    let mut length = length_state.unwrap_or(0);
+    let buffer_kind = load_sfnt_table_buffer_kind_arg(params)?;
+    let mut buffer = vec![0u8; usize::try_from(length).unwrap_or(0).max(1)];
+    let buffer_ptr = if buffer_kind == "allocated" {
+        buffer.as_mut_ptr()
+    } else {
+        ptr::null_mut()
+    };
+    let err = wasm_abi::fontdone_wasm_load_sfnt_table(handle, tag, offset, buffer_ptr, &mut length);
+    sfnt_table_bytes_output(err, Some(length), &buffer, None, buffer_kind == "allocated")
+}
+
+fn sfnt_table_bytes_output(
+    err: FT_Error,
+    length_after: Option<FT_ULong>,
+    buffer: &[u8],
+    copied_len: Option<FT_ULong>,
+    buffer_allocated: bool,
+) -> Result<RunOutput, String> {
+    let length_json = length_after.map_or(Value::Null, |length| json!(length));
+    if err != FT_Err_Ok {
+        return Ok(error_with_output(
+            err,
+            json!({
+                "length_after": length_json
+            }),
+        ));
+    }
+    let mut output = json!({
+        "length_after": length_json
+    });
+    let bytes_len = copied_len.or(length_after).unwrap_or(0);
+    if buffer_allocated && bytes_len > 0 {
+        let bytes_len = usize::try_from(bytes_len).map_err(|err| err.to_string())?;
+        let bytes = buffer
+            .get(..bytes_len)
+            .ok_or_else(|| format!("sfnt copied length {bytes_len} exceeds buffer"))?;
+        output["bytes_written"] = json!(hex_bytes(bytes));
+        output["bytes_hash"] = json!(djb2_hash(bytes));
+    }
+    Ok(ok(output))
 }
 
 fn load_sfnt_table_copy_len(params: &Value) -> Option<FT_ULong> {
@@ -3377,6 +3520,11 @@ fn load_sfnt_table_copy_len(params: &Value) -> Option<FT_ULong> {
                     }
                 }
             }
+        }
+    }
+    if let Some(state) = params.get("length_state").and_then(Value::as_str) {
+        if let Ok(n) = state.parse::<u64>() {
+            return Some(n as FT_ULong);
         }
     }
     None
@@ -7614,7 +7762,6 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "sfnt.get_sfnt_table.maxp"
         | "sfnt.get_sfnt_table.hhea"
         | "sfnt.get_sfnt_table.hhea.after_variation"
-        | "sfnt.load_sfnt_table"
         | "sfnt.table_info"
         | "freetype.set_transform"
         | "freetype.get_transform"
@@ -7829,6 +7976,13 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output.map(ok)
         }
+        "sfnt.load_sfnt_table" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_load_sfnt_table_output(face, &case.inputs.params);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
         "freetype.library_version" => Ok(ok(c_library_version_output(&case.inputs.params)?)),
         "ftmodapi.get_truetype_engine_type" => {
             Ok(ok(c_truetype_engine_output(&case.inputs.params)?))
@@ -8022,7 +8176,6 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "sfnt.get_sfnt_table.maxp"
         | "sfnt.get_sfnt_table.hhea"
         | "sfnt.get_sfnt_table.hhea.after_variation"
-        | "sfnt.load_sfnt_table"
         | "sfnt.table_info"
         | "freetype.set_transform"
         | "freetype.get_transform"
@@ -8196,6 +8349,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             let output = wasm_sfnt_mac_encoding_record_output(handle, &case.inputs.params);
             wasm_done_face(handle);
             output.map(ok)
+        }
+        "sfnt.load_sfnt_table" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_load_sfnt_table_output(handle, &case.inputs.params);
+            wasm_done_face(handle);
+            output
         }
         "freetype.library_version" => Ok(ok(wasm_library_version_output(&case.inputs.params)?)),
         "ftmodapi.get_truetype_engine_type" => {
@@ -13960,6 +14119,15 @@ fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Res
         ));
     }
     if oracle.status != actual.status && !case.expectation.is_build_dependent() {
+        if case.expectation.compare.compare_error_output
+            && oracle.status.kind == StatusKind::Error
+            && actual.status.kind == StatusKind::Error
+        {
+            return Err(format!(
+                "{} error status mismatch: oracle={:?} actual={:?}",
+                case.case_id, oracle.status, actual.status
+            ));
+        }
         // When both return errors, accept any error code match.
         // Different error codes (e.g. 6 vs 7) for unimplemented features
         // are expected divergence, not true parity failures.
@@ -15345,6 +15513,15 @@ fn load_sfnt_table_tag_hex_arg(params: &Value) -> Result<String, String> {
     Err("load_sfnt_table: missing tag_hex param".to_string())
 }
 
+fn load_sfnt_table_tag_value(params: &Value) -> Result<FT_ULong, String> {
+    let tag_hex = load_sfnt_table_tag_hex_arg(params)?;
+    if let Some(hex) = tag_hex.strip_prefix("0x") {
+        FT_ULong::from_str_radix(hex, 16).map_err(|e| format!("invalid tag hex: {e}"))
+    } else {
+        FT_ULong::from_str_radix(&tag_hex, 16).map_err(|e| format!("invalid tag: {e}"))
+    }
+}
+
 fn load_sfnt_table_offset_arg(params: &Value) -> Result<String, String> {
     if let Some(offset) = params.get("offset").and_then(Value::as_i64) {
         return Ok(offset.to_string());
@@ -15372,6 +15549,18 @@ fn load_sfnt_table_buffer_kind_arg(params: &Value) -> Result<String, String> {
         return Ok(kind.to_string());
     }
     Ok("null".to_string())
+}
+
+fn load_sfnt_table_initial_length(params: &Value) -> Result<Option<FT_ULong>, String> {
+    match load_sfnt_table_length_state_arg(params)?.as_str() {
+        "null" => Ok(None),
+        "zero" => Ok(Some(0)),
+        "full" => Ok(Some(65_536)),
+        state => state
+            .parse::<FT_ULong>()
+            .map(Some)
+            .map_err(|err| format!("invalid load_sfnt_table length_state {state}: {err}")),
+    }
 }
 
 fn load_sfnt_table_length_state_arg(params: &Value) -> Result<String, String> {
