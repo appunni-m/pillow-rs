@@ -6,10 +6,10 @@ selector queries.
 
 This is mostly a planning slice for the future C ABI replacement layer.  The
 current `fontdone` Rust facade does not expose Multiple Master or OpenType
-variation state APIs.  It does expose `FT_Face_GetCharVariantIndex` through a
-compact cmap format-14 parser/query path; the other UVS list/default APIs remain
-planned.  Servo `rust-freetype` is a binding reference only; parity must be
-proven against the pinned C FreeType oracle.
+variation state APIs.  It does expose `FT_Face_GetCharVariantIndex` and
+`FT_Face_GetCharVariantIsDefault` through a compact cmap format-14 parser/query
+path; the UVS list APIs remain planned.  Servo `rust-freetype` is a binding
+reference only; parity must be proven against the pinned C FreeType oracle.
 
 ## C Symbols
 
@@ -31,13 +31,14 @@ proven against the pinned C FreeType oracle.
 | `FT_Set_MM_WeightVector` | `freetype/ftmm.h` | `FT_Error FT_Set_MM_WeightVector(FT_Face face, FT_UInt len, FT_Fixed *weightvector)` | Planned; Adobe MM only; TrueType driver service is `NULL` in C FreeType. |
 | `FT_Get_MM_WeightVector` | `freetype/ftmm.h` | `FT_Error FT_Get_MM_WeightVector(FT_Face face, FT_UInt *len, FT_Fixed *weightvector)` | Planned; Adobe MM only; requires exact C length/error behavior. |
 | `FT_Face_GetCharVariantIndex` | `freetype/freetype.h` | `FT_UInt FT_Face_GetCharVariantIndex(FT_Face face, FT_ULong charcode, FT_ULong variantSelector)` | Implemented for scalar glyph-index lookup through the active Unicode charmap and cmap format 14 default/non-default UVS records. |
-| `FT_Face_GetCharVariantIsDefault` | `freetype/freetype.h` | `FT_Int FT_Face_GetCharVariantIsDefault(FT_Face face, FT_ULong charcode, FT_ULong variantSelector)` | Planned; cmap format 14 parser exists, but this public query is not exposed. |
+| `FT_Face_GetCharVariantIsDefault` | `freetype/freetype.h` | `FT_Int FT_Face_GetCharVariantIsDefault(FT_Face face, FT_ULong charcode, FT_ULong variantSelector)` | Implemented for scalar cmap format 14 default/non-default UVS classification through the selector charmap. |
 | `FT_Face_GetVariantSelectors` | `freetype/freetype.h` | `FT_UInt32 *FT_Face_GetVariantSelectors(FT_Face face)` | Planned; no face-owned zero-terminated result buffer. |
 | `FT_Face_GetVariantsOfChar` | `freetype/freetype.h` | `FT_UInt32 *FT_Face_GetVariantsOfChar(FT_Face face, FT_ULong charcode)` | Planned; no face-owned zero-terminated result buffer. |
 | `FT_Face_GetCharsOfVariant` | `freetype/freetype.h` | `FT_UInt32 *FT_Face_GetCharsOfVariant(FT_Face face, FT_ULong variantSelector)` | Planned; no face-owned zero-terminated result buffer. |
 
-The audit inventory tracks `FT_Face_GetCharVariantIndex` as implemented and the
-remaining symbols in this slice as planned.
+The audit inventory tracks `FT_Face_GetCharVariantIndex` and
+`FT_Face_GetCharVariantIsDefault` as implemented and the remaining symbols in
+this slice as planned.
 
 ## ABI Records
 

@@ -170,6 +170,16 @@ impl CmapTable {
         0
     }
 
+    /// Equivalent to `FT_Face_GetCharVariantIsDefault`.
+    pub fn char_variant_is_default(&self, codepoint: u32, variant_selector: u32) -> i32 {
+        for subtable in &self.format14 {
+            if subtable.platform_id == 0 && subtable.encoding_id == 5 {
+                return subtable.char_variant_is_default(codepoint, variant_selector);
+            }
+        }
+        -1
+    }
+
     /// Return the first mapped codepoint and glyph index for a charmap.
     pub fn first_char(&self, charmap_index: usize) -> Option<(u32, u16)> {
         self.next_char(charmap_index, 0)
@@ -330,6 +340,31 @@ impl Format14Subtable {
             .iter()
             .find(|mapping| mapping.codepoint == codepoint)
             .map(|mapping| mapping.glyph_id)
+    }
+
+    fn char_variant_is_default(&self, codepoint: u32, variant_selector: u32) -> i32 {
+        let Some(record) = self
+            .records
+            .iter()
+            .find(|record| record.selector == variant_selector)
+        else {
+            return -1;
+        };
+        if record
+            .default_ranges
+            .iter()
+            .any(|range| codepoint >= range.start && codepoint <= range.end)
+        {
+            return 1;
+        }
+        if record
+            .non_default_mappings
+            .iter()
+            .any(|mapping| mapping.codepoint == codepoint && mapping.glyph_id != 0)
+        {
+            return 0;
+        }
+        -1
     }
 }
 

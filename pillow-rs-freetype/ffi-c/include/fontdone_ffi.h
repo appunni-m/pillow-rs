@@ -223,6 +223,7 @@ FT_Error FT_Set_Pixel_Sizes(FT_Face face, FT_UInt pixel_width, FT_UInt pixel_hei
 FT_Error FT_Request_Size(FT_Face face, FT_Size_Request req);
 FT_UInt FT_Get_Char_Index(FT_Face face, FT_ULong char_code);
 FT_UInt FT_Face_GetCharVariantIndex(FT_Face face, FT_ULong charcode, FT_ULong variant_selector);
+FT_Int FT_Face_GetCharVariantIsDefault(FT_Face face, FT_ULong charcode, FT_ULong variant_selector);
 FT_Error FT_Get_Kerning(FT_Face face, FT_UInt left_glyph, FT_UInt right_glyph, FT_UInt kern_mode, FT_Vector* akerning);
 FT_Error FT_Select_Charmap(FT_Face face, FT_Encoding encoding);
 FT_Error FT_Set_Charmap(FT_Face face, FT_CharMap charmap);

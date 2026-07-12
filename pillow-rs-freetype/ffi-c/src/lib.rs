@@ -1055,6 +1055,18 @@ pub extern "C" fn FT_Face_GetCharVariantIndex(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Face_GetCharVariantIsDefault(
+    face: FT_Face,
+    charcode: FT_ULong,
+    variant_selector: FT_ULong,
+) -> FT_Int {
+    let Some(state) = face_state(face) else {
+        return -1;
+    };
+    rust_ffi::FT_Face_GetCharVariantIsDefault(Some(&state.inner), charcode, variant_selector)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_Kerning(
     face: FT_Face,
     left_glyph: FT_UInt,

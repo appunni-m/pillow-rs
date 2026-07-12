@@ -3690,6 +3690,10 @@ static void print_char_variant_index_output(FT_UInt value) {
     printf("{\"result\":%u,\"value\":%u}", value, value);
 }
 
+static void print_char_variant_default_output(FT_Int value) {
+    printf("{\"result\":%d,\"value\":%d}", value, value);
+}
+
 static int emit_face_get_char_variant_index_null(int argc, char** argv) {
     FT_ULong charcode = strtoul(argv[2], NULL, 10);
     FT_ULong variant_selector = strtoul(argv[3], NULL, 10);
@@ -3699,6 +3703,20 @@ static int emit_face_get_char_variant_index_null(int argc, char** argv) {
     printf(",\"output\":");
     print_char_variant_index_output(
         FT_Face_GetCharVariantIndex(NULL, charcode, variant_selector)
+    );
+    printf("}\n");
+    return 0;
+}
+
+static int emit_face_get_char_variant_is_default_null(int argc, char** argv) {
+    FT_ULong charcode = strtoul(argv[2], NULL, 10);
+    FT_ULong variant_selector = strtoul(argv[3], NULL, 10);
+    (void)argc;
+    printf("{");
+    print_status(0);
+    printf(",\"output\":");
+    print_char_variant_default_output(
+        FT_Face_GetCharVariantIsDefault(NULL, charcode, variant_selector)
     );
     printf("}\n");
     return 0;
@@ -5224,6 +5242,21 @@ static int emit_face_or_slot(int argc, char** argv) {
         printf(",\"output\":");
         print_char_variant_index_output(
             FT_Face_GetCharVariantIndex(face, charcode, variant_selector)
+        );
+        printf("}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--face-get-char-variant-is-default")) {
+        FT_ULong charcode = strtoul(argv[7], NULL, 10);
+        FT_ULong variant_selector = strtoul(argv[8], NULL, 10);
+        print_status(0);
+        printf(",\"output\":");
+        print_char_variant_default_output(
+            FT_Face_GetCharVariantIsDefault(face, charcode, variant_selector)
         );
         printf("}\n");
         FT_Done_Face(face);
@@ -7181,6 +7214,12 @@ static int dispatch(int argc, char** argv) {
         return emit_face_get_char_variant_index_null(argc, argv);
     }
     if (argc == 9 && streq(argv[1], "--face-get-char-variant-index")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--face-get-char-variant-is-default-null")) {
+        return emit_face_get_char_variant_is_default_null(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--face-get-char-variant-is-default")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-kerning")) {
