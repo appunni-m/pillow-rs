@@ -541,6 +541,27 @@
             ]
           },
           {
+            "id": "otto_num_glyphs",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/cff/hybrid-otto-face-info.otf",
+                "requires": "compact OTTO/CFF face that also carries glyf/loca for Rust metadata-only parsing"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "num_glyphs"
+            },
+            "coverage": [
+              "font:font-format-cff",
+              "freetype.get_glyph_name:explicit-otto-num_glyphs"
+            ]
+          },
+          {
             "id": "num_glyphs_plus_1",
             "assets": {
               "font": {
