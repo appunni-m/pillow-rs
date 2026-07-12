@@ -35,7 +35,10 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use fontdone::ffi::*;
-use fontdone::{Face as ApiFace, Font, FontError, GlyphSlot as ApiGlyphSlot};
+use fontdone::{
+    Face as ApiFace, Font, FontError, GlyphSlot as ApiGlyphSlot, LoadMode, RenderMode,
+    RenderedBitmap,
+};
 use fontdone_ffi_c as c_abi;
 use fontdone_ffi_wasm as wasm_abi;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -3454,7 +3457,9 @@ fn rust_get_kerning(case: &InputCase) -> Result<RunOutput, String> {
         rust_get_kerning_optional(None, &case.inputs.params)
     } else {
         let face = open_face(case)?;
-        rust_get_kerning_optional(Some(&face), &case.inputs.params)
+        let output = rust_get_kerning_optional(Some(&face), &case.inputs.params)?;
+        assert_font_getkerning_agrees(case, &output)?;
+        Ok(output)
     }
 }
 
@@ -3651,6 +3656,80 @@ fn kerning_units(mode: u32) -> &'static str {
         mode if mode == FT_KERNING_UNSCALED as u32 => "font_units",
         _ => "grid_fitted_26_6_pixels",
     }
+}
+
+fn assert_font_getkerning_agrees(case: &InputCase, output: &RunOutput) -> Result<(), String> {
+    if !bool_param(&case.inputs.params, "assert_font_getkerning_agrees", false)? {
+        return Ok(());
+    }
+    let data = font_bytes(case)?;
+    let (_, pixel_height) = pixel_size_param(&case.inputs.params)?;
+    let font = Font::truetype(data.as_ref(), pixel_height as f32)
+        .map_err(|err| format!("{} Font::truetype returned {err}", case.case_id))?;
+    let rows = output
+        .output
+        .get("kerning_vectors")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            format!(
+                "{} assert_font_getkerning_agrees requires kerning_vectors output",
+                case.case_id
+            )
+        })?;
+    let mut checked = 0usize;
+    for row in rows {
+        if row.get("mode").and_then(Value::as_i64) != Some(i64::from(FT_KERNING_UNFITTED)) {
+            continue;
+        }
+        let left = font_kerning_char_selector(row, "left")?;
+        let right = font_kerning_char_selector(row, "right")?;
+        let expected_x = row
+            .pointer("/akerning/x")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| format!("{} kerning row missing akerning.x", case.case_id))?;
+        let expected_y = row
+            .pointer("/akerning/y")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| format!("{} kerning row missing akerning.y", case.case_id))?;
+        let actual_x = i64::from(font.getkerning(left, right));
+        if actual_x != expected_x || expected_y != 0 {
+            return Err(format!(
+                "{} Font::getkerning disagrees with FT_Get_Kerning(UNFITTED): pair={left}/{right} font=({}, 0) ffi=({}, {})",
+                case.case_id, actual_x, expected_x, expected_y
+            ));
+        }
+        checked += 1;
+    }
+    if checked == 0 {
+        return Err(format!(
+            "{} assert_font_getkerning_agrees found no FT_KERNING_UNFITTED rows",
+            case.case_id
+        ));
+    }
+    Ok(())
+}
+
+fn font_kerning_char_selector(row: &Value, key: &str) -> Result<char, String> {
+    let selector = row
+        .get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("kerning row missing {key} selector"))?;
+    if let Some(hex) = selector.strip_prefix("U+") {
+        let value = u32::from_str_radix(hex, 16)
+            .map_err(|err| format!("invalid Unicode selector {selector}: {err}"))?;
+        return char::from_u32(value)
+            .ok_or_else(|| format!("invalid Unicode scalar selector {selector}"));
+    }
+    let mut chars = selector.chars();
+    let ch = chars
+        .next()
+        .ok_or_else(|| format!("empty kerning selector {key}"))?;
+    if chars.next().is_some() {
+        return Err(format!(
+            "Font::getkerning assertion requires one-character selectors, got {selector}"
+        ));
+    }
+    Ok(ch)
 }
 
 fn rust_glyph_selector_index(face: &FT_Face, selector: &str) -> Result<u32, String> {
@@ -11009,7 +11088,8 @@ fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result
         })?;
     let data = font_bytes(case)?;
     let (_, pixel_height) = pixel_size_param(&case.inputs.params)?;
-    let font = Font::truetype(data.as_ref(), pixel_height as f32)
+    let load_mode = font_load_mode_from_params(&case.inputs.params)?;
+    let font = Font::truetype_with_load_mode(data.as_ref(), pixel_height as f32, load_mode)
         .map_err(|err| format!("{} Font::truetype returned {err}", case.case_id))?;
     if bool_param(&case.inputs.params, "assert_font_empty_text_render", false)? {
         let empty_bitmap = font.render_mode("", render_mode).map_err(|err| {
@@ -11047,6 +11127,7 @@ fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result
     })?;
     let char_json = rendered_bitmap_json(&char_bitmap);
     let text_json = rendered_bitmap_json(&text_bitmap);
+    assert_font_convenience_helpers_agree(case, &font, text, render_mode, &char_bitmap, slot_json)?;
     let Some(slot_bitmap) = slot_json.get("bitmap") else {
         return Err(format!(
             "{} slot output missing bitmap for Font render comparison",
@@ -11081,6 +11162,155 @@ fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result
         ));
     }
     Ok(())
+}
+
+fn font_load_mode_from_params(params: &Value) -> Result<LoadMode, String> {
+    let load_flags = load_flags_param(params)?;
+    let no_autohint = load_flags & FT_LOAD_NO_AUTOHINT != 0;
+    if load_flags & FT_LOAD_NO_HINTING != 0
+        || load_flags & (FT_LOAD_NO_SCALE | FT_LOAD_NO_RECURSE) != 0
+    {
+        Ok(LoadMode::NoHinting)
+    } else if FT_LOAD_TARGET_MODE(load_flags) == FT_RENDER_MODE_LIGHT && !no_autohint {
+        Ok(LoadMode::TargetLight)
+    } else if load_flags & FT_LOAD_FORCE_AUTOHINT != 0 {
+        if no_autohint {
+            Ok(LoadMode::NoAutoHint)
+        } else {
+            Ok(LoadMode::ForceAutoHint)
+        }
+    } else if no_autohint {
+        Ok(LoadMode::NoAutoHint)
+    } else {
+        Ok(LoadMode::Default)
+    }
+}
+
+fn assert_font_convenience_helpers_agree(
+    case: &InputCase,
+    font: &Font,
+    text: &str,
+    render_mode: RenderMode,
+    rendered: &RenderedBitmap,
+    slot_json: &Value,
+) -> Result<(), String> {
+    if bool_param(&case.inputs.params, "assert_font_getmetrics_agrees", false)? {
+        let face = open_face(case)?;
+        let metrics = FT_Size_Metrics(&face);
+        let expected = (
+            u32_from_positive_26dot6(metrics.ascender, "ascender")?,
+            u32_from_positive_26dot6(-metrics.descender, "descender")?,
+        );
+        let actual = font.getmetrics();
+        if actual != expected {
+            return Err(format!(
+                "{} Font::getmetrics disagrees with FT_Size_Metrics: font={actual:?} size_metrics={expected:?}",
+                case.case_id
+            ));
+        }
+    }
+
+    if bool_param(&case.inputs.params, "assert_font_getlength_agrees", false)? {
+        let expected_advance = slot_json
+            .pointer("/metrics/horiAdvance")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| {
+                format!(
+                    "{} assert_font_getlength_agrees requires slot metrics.horiAdvance",
+                    case.case_id
+                )
+            })?;
+        let actual = font.getlength(text);
+        let expected = expected_advance as f32 / 64.0;
+        if (actual - expected).abs() > 0.001 {
+            return Err(format!(
+                "{} Font::getlength disagrees with glyph-slot advance: font={actual} slot={expected}",
+                case.case_id
+            ));
+        }
+    }
+
+    if bool_param(&case.inputs.params, "assert_font_getmask_agrees", false)? {
+        if render_mode != RenderMode::Normal {
+            return Err(format!(
+                "{} assert_font_getmask_agrees requires FT_RENDER_MODE_NORMAL",
+                case.case_id
+            ));
+        }
+        let bbox = font.getbbox(text);
+        let mask = font.getmask(text).map_err(|err| {
+            format!(
+                "{} Font::getmask returned {}",
+                case.case_id,
+                font_error_to_ft(err)
+            )
+        })?;
+        let expected_len = usize::try_from(mask.width)
+            .ok()
+            .and_then(|width| {
+                usize::try_from(mask.height)
+                    .ok()
+                    .and_then(|height| width.checked_mul(height))
+            })
+            .ok_or_else(|| format!("{} Font::getmask dimensions overflow", case.case_id))?;
+        if mask.pixels.len() != expected_len {
+            return Err(format!(
+                "{} Font::getmask pixel length disagrees with dimensions: len={} width={} height={}",
+                case.case_id,
+                mask.pixels.len(),
+                mask.width,
+                mask.height
+            ));
+        }
+        if (mask.xmin, mask.ymin) != (bbox.0, bbox.1) {
+            return Err(format!(
+                "{} Font::getbbox offset disagrees with Font::getmask: bbox={bbox:?} mask=({}, {})",
+                case.case_id, mask.xmin, mask.ymin
+            ));
+        }
+        if mask.width != rendered.width
+            || mask.height != rendered.rows
+            || mask.pixels != rendered.buffer
+        {
+            return Err(format!(
+                "{} Font::getmask disagrees with Font::render_mode(Normal): mask={}x{} rendered={}x{}",
+                case.case_id, mask.width, mask.height, rendered.width, rendered.rows
+            ));
+        }
+    }
+
+    if bool_param(&case.inputs.params, "assert_font_empty_text_mask", false)? {
+        let bbox = font.getbbox("");
+        let mask = font.getmask("").map_err(|err| {
+            format!(
+                "{} Font::getmask(\"\") returned {}",
+                case.case_id,
+                font_error_to_ft(err)
+            )
+        })?;
+        if bbox != (0, 0, 0, 0)
+            || mask.width != 0
+            || mask.height != 0
+            || !mask.pixels.is_empty()
+            || mask.xmin != 0
+            || mask.ymin != 0
+            || mask.advance_width != 0
+        {
+            return Err(format!(
+                "{} empty Font bbox/mask was not empty: bbox={bbox:?} mask={}x{} len={}",
+                case.case_id,
+                mask.width,
+                mask.height,
+                mask.pixels.len()
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn u32_from_positive_26dot6(value: i64, label: &str) -> Result<u32, String> {
+    u32::try_from(value >> 6).map_err(|err| format!("{label} does not fit u32 pixels: {err}"))
 }
 
 fn is_empty_rendered_bitmap_json(value: &Value) -> bool {
