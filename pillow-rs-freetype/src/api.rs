@@ -449,6 +449,13 @@ impl Face {
         flags: LoadFlags,
         transform: Option<(i32, i32, i32, i32, i32, i32)>,
     ) -> Result<GlyphSlot, FontError> {
+        // FreeType makes `FT_LOAD_NO_RECURSE` imply
+        // `FT_LOAD_IGNORE_TRANSFORM` before driver load (ftobjs.c:939-941).
+        let transform = if flags.contains(LoadFlags::NO_RECURSE) {
+            None
+        } else {
+            transform
+        };
         let vertical_layout = flags.contains(LoadFlags::VERTICAL_LAYOUT);
         let native_hint_mode = flags.native_hint_mode();
         let mut loaded = if flags.contains(LoadFlags::NO_RECURSE) {
