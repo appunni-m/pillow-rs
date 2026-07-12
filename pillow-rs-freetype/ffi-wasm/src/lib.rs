@@ -816,6 +816,18 @@ pub extern "C" fn fontdone_wasm_get_char_index(handle: usize, char_code: FT_ULon
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_char_variant_index(
+    handle: usize,
+    charcode: FT_ULong,
+    variant_selector: FT_ULong,
+) -> FT_UInt {
+    let Some(face) = face_ref(handle) else {
+        return 0;
+    };
+    rust_ffi::FT_Face_GetCharVariantIndex(Some(&face.face), charcode, variant_selector)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_kerning(
     handle: usize,
     left_glyph: FT_UInt,

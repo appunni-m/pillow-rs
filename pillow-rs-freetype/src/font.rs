@@ -929,6 +929,13 @@ impl Font {
             .unwrap_or(0)
     }
 
+    /// Equivalent to `FT_Face_GetCharVariantIndex`.
+    pub fn char_variant_index(&self, codepoint: u32, variant_selector: u32) -> u16 {
+        self.data
+            .cmap
+            .char_variant_index(self.selected_charmap, codepoint, variant_selector)
+    }
+
     /// Equivalent to `FT_Get_First_Char`.
     pub fn first_char(&self) -> Option<(u32, u16)> {
         self.data.cmap.first_char(self.selected_charmap)

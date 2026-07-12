@@ -230,8 +230,8 @@
           "status": "planned"
         },
         "FT_Face_GetCharVariantIndex": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Face::get_char_variant_index / Font::char_variant_index",
+          "status": "implemented"
         },
         "FT_Face_GetCharVariantIsDefault": {
           "rust": null,

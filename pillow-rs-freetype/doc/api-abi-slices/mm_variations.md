@@ -4,11 +4,12 @@ Scope: FreeType 2.14.3 public C API compatibility for `ftmm.h` Multiple
 Master/OpenType variation entry points and `freetype.h` Unicode variation
 selector queries.
 
-This is a planning slice for the future C ABI replacement layer.  The current
-`fontdone` Rust facade does not expose these endpoints, and the core parser
-does not yet parse variation tables or cmap format 14.  Servo `rust-freetype`
-is a binding reference only; parity must be proven against the pinned C
-FreeType oracle.
+This is mostly a planning slice for the future C ABI replacement layer.  The
+current `fontdone` Rust facade does not expose Multiple Master or OpenType
+variation state APIs.  It does expose `FT_Face_GetCharVariantIndex` through a
+compact cmap format-14 parser/query path; the other UVS list/default APIs remain
+planned.  Servo `rust-freetype` is a binding reference only; parity must be
+proven against the pinned C FreeType oracle.
 
 ## C Symbols
 
@@ -29,14 +30,14 @@ FreeType oracle.
 | `FT_Get_Var_Axis_Flags` | `freetype/ftmm.h` | `FT_Error FT_Get_Var_Axis_Flags(FT_MM_Var *master, FT_UInt axis_index, FT_UInt *flags)` | Planned; no `FT_MM_Var` ABI record or axis flags storage. |
 | `FT_Set_MM_WeightVector` | `freetype/ftmm.h` | `FT_Error FT_Set_MM_WeightVector(FT_Face face, FT_UInt len, FT_Fixed *weightvector)` | Planned; Adobe MM only; TrueType driver service is `NULL` in C FreeType. |
 | `FT_Get_MM_WeightVector` | `freetype/ftmm.h` | `FT_Error FT_Get_MM_WeightVector(FT_Face face, FT_UInt *len, FT_Fixed *weightvector)` | Planned; Adobe MM only; requires exact C length/error behavior. |
-| `FT_Face_GetCharVariantIndex` | `freetype/freetype.h` | `FT_UInt FT_Face_GetCharVariantIndex(FT_Face face, FT_ULong charcode, FT_ULong variantSelector)` | Planned; no cmap format 14 parser/query path. |
-| `FT_Face_GetCharVariantIsDefault` | `freetype/freetype.h` | `FT_Int FT_Face_GetCharVariantIsDefault(FT_Face face, FT_ULong charcode, FT_ULong variantSelector)` | Planned; no cmap format 14 parser/query path. |
+| `FT_Face_GetCharVariantIndex` | `freetype/freetype.h` | `FT_UInt FT_Face_GetCharVariantIndex(FT_Face face, FT_ULong charcode, FT_ULong variantSelector)` | Implemented for scalar glyph-index lookup through the active Unicode charmap and cmap format 14 default/non-default UVS records. |
+| `FT_Face_GetCharVariantIsDefault` | `freetype/freetype.h` | `FT_Int FT_Face_GetCharVariantIsDefault(FT_Face face, FT_ULong charcode, FT_ULong variantSelector)` | Planned; cmap format 14 parser exists, but this public query is not exposed. |
 | `FT_Face_GetVariantSelectors` | `freetype/freetype.h` | `FT_UInt32 *FT_Face_GetVariantSelectors(FT_Face face)` | Planned; no face-owned zero-terminated result buffer. |
 | `FT_Face_GetVariantsOfChar` | `freetype/freetype.h` | `FT_UInt32 *FT_Face_GetVariantsOfChar(FT_Face face, FT_ULong charcode)` | Planned; no face-owned zero-terminated result buffer. |
 | `FT_Face_GetCharsOfVariant` | `freetype/freetype.h` | `FT_UInt32 *FT_Face_GetCharsOfVariant(FT_Face face, FT_ULong variantSelector)` | Planned; no face-owned zero-terminated result buffer. |
 
-The audit inventory currently lists all symbols above as `planned` with
-`rust: null` in `tests/data/interface_map.json`.
+The audit inventory tracks `FT_Face_GetCharVariantIndex` as implemented and the
+remaining symbols in this slice as planned.
 
 ## ABI Records
 
@@ -116,9 +117,10 @@ symbols can become more than stubs:
 - Preserve FreeType `face_index` named-instance encoding: bits 16-30 hold the
   selected instance index, bit 31 stays clear, and direct coordinate changes do
   not update the named instance bits.
-- Parse cmap format 14 and expose the five UVS queries with Unicode-charmap
+- Complete the remaining cmap format 14 UVS queries with Unicode-charmap
   checks, default/non-default distinction, sorted zero-terminated result lists,
-  and face-owned scratch-buffer lifetime.
+  and face-owned scratch-buffer lifetime.  Scalar glyph-index lookup is already
+  routed through `FT_Face_GetCharVariantIndex`.
 - Add the C ABI allocation boundary for `FT_Get_MM_Var` and
   `FT_Done_MM_Var`; safe Rust wrappers may own `Vec`/`String` data, but ABI
   callers must see stable C pointers until `FT_Done_MM_Var`.

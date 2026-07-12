@@ -1186,6 +1186,23 @@ pub fn FT_Get_Char_Index(face: &FT_Face, char_code: FT_ULong) -> FT_UInt {
     u32::from(face.inner.get_char_index(char_code))
 }
 
+pub fn FT_Face_GetCharVariantIndex(
+    face: Option<&FT_Face>,
+    charcode: FT_ULong,
+    variant_selector: FT_ULong,
+) -> FT_UInt {
+    let Some(face) = face else {
+        return 0;
+    };
+    // FreeType `FT_Face_GetCharVariantIndex` truncates both public
+    // `FT_ULong` inputs to `FT_UInt32` before calling the cmap format-14 query
+    // (`src/base/ftobjs.c`, `src/sfnt/ttcmap.c`).
+    u32::from(
+        face.inner
+            .get_char_variant_index(charcode as u32, variant_selector as u32),
+    )
+}
+
 pub fn FT_Get_Kerning(
     face: Option<&FT_Face>,
     left_glyph: FT_UInt,
