@@ -1568,8 +1568,8 @@ subjects:
       # needs-input: operation FT_Get_Kerning; fixture asset font with GPOS-only pair kerning and no legacy kern table; params representative LTR and RTL pair glyphs, all three kerning modes; expected output shape FT_Error plus FT_Vector{x,y}; comparison rule exact C build behavior, including zero if TT_CONFIG_OPTION_GPOS_KERNING is disabled or unsupported for the pair.
       - id: gpos_only_pair_build_option_behavior
         description: GPOS-only pair kerning follows the pinned C build behavior and does not assume legacy kern fallback.
-      - id: error_invalid_mode_or_null_output
-        description: Invalid kern_mode, null face, and null output pointer cases match the pinned C error and write behavior.
+      - id: error_null_face_or_output
+        description: Null face and null output pointer cases match the pinned C error and write behavior.
 
   - id: freetype.FT_Get_Name_Index
     kind: function

@@ -6,7 +6,7 @@
     "legacy_pair_unfitted_and_unscaled_modes",
     "missing_pair_or_no_kerning_success_zero",
     "gpos_only_pair_build_option_behavior",
-    "error_invalid_mode_or_null_output"
+    "error_null_face_or_output"
   ],
   "cases": [
     {
@@ -265,40 +265,49 @@
       }
     },
     {
-      "case_id": "freetype.FT_Get_Kerning.error_invalid_mode_or_null_output",
+      "case_id": "freetype.FT_Get_Kerning.error_null_face_or_output",
       "subject": "freetype.FT_Get_Kerning",
-      "case": "error_invalid_mode_or_null_output",
+      "case": "error_null_face_or_output",
       "operation": "freetype.get_kerning",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/kerning/legacy-av-kern.ttf",
-            "status": "required_future_asset",
-            "requires": "SFNT with legacy kern table containing A/V pair and no GPOS-only ambiguity"
-          }
-        },
-        "params": {
-          "variants": [
-            {
+        "variants": [
+          {
+            "id": "null-face",
+            "params": {
               "face": "null",
-              "akerning": "non_null"
+              "akerning": "non_null",
+              "pair": "A/V",
+              "kern_mode": "FT_KERNING_DEFAULT"
             },
-            {
-              "face_index": 0,
-              "akerning": "null"
+            "coverage": [
+              "kerning:error-null-face"
+            ]
+          },
+          {
+            "id": "null-output",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "input/fonts/kerning/legacy-av-kern.ttf",
+                "status": "required_future_asset",
+                "requires": "SFNT with legacy kern table containing A/V pair and no GPOS-only ambiguity"
+              }
             },
-            {
+            "params": {
               "face_index": 0,
-              "kern_mode": 9999,
-              "akerning": "non_null"
-            }
-          ],
-          "pair": "A/V"
-        }
+              "size_ppem": 20,
+              "akerning": "null",
+              "pair": "A/V",
+              "kern_mode": "FT_KERNING_DEFAULT"
+            },
+            "coverage": [
+              "kerning:error-null-output"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -309,7 +318,7 @@
         "status": "error",
         "output_shape": {
           "return": "FT_Error",
-          "akerning_write": "none_or_c_oracle"
+          "akerning_write": "none"
         },
         "compare": {
           "mode": "exact_error",

@@ -3973,6 +3973,62 @@ static const char* kerning_units(FT_UInt mode) {
     return "grid_fitted_26_6_pixels";
 }
 
+static void print_kerning_single_output(const char* left,
+                                        const char* right,
+                                        FT_UInt mode,
+                                        FT_UInt left_glyph,
+                                        FT_UInt right_glyph,
+                                        FT_Error err,
+                                        FT_Vector kerning,
+                                        int open_object) {
+    if (open_object) {
+        printf("{");
+    }
+    print_status(err);
+    printf(",\"output\":{\"status\":%d,\"kerning_vectors\":["
+           "{\"left\":\"%s\",\"right\":\"%s\",\"mode\":%u,"
+           "\"left_glyph\":%u,\"right_glyph\":%u,\"status\":%d,"
+           "\"akerning\":{\"x\":%ld,\"y\":%ld},"
+           "\"kerning\":{\"x\":%ld,\"y\":%ld},"
+           "\"x_26_6\":%ld,\"y_26_6\":%ld,\"units\":\"%s\"}],"
+           "\"glyph_indexes\":[{\"left\":%u,\"right\":%u}],"
+           "\"akerning\":{\"x\":%ld,\"y\":%ld},"
+           "\"kerning\":{\"x\":%ld,\"y\":%ld}}}\n",
+           err,
+           left,
+           right,
+           mode,
+           left_glyph,
+           right_glyph,
+           err,
+           kerning.x,
+           kerning.y,
+           kerning.x,
+           kerning.y,
+           kerning.x,
+           kerning.y,
+           kerning_units(mode),
+           left_glyph,
+           right_glyph,
+           kerning.x,
+           kerning.y,
+           kerning.x,
+           kerning.y);
+}
+
+static int emit_get_kerning_null_face(int argc, char** argv) {
+    (void)argc;
+    const char* left = argv[2];
+    const char* right = argv[3];
+    FT_UInt mode = (FT_UInt)strtoul(argv[4], NULL, 10);
+    FT_Vector kerning;
+    kerning.x = 0;
+    kerning.y = 0;
+    FT_Error err = FT_Get_Kerning(NULL, 0, 0, mode, &kerning);
+    print_kerning_single_output(left, right, mode, 0, 0, err, kerning, 1);
+    return 0;
+}
+
 static FT_UInt glyph_selector_index(FT_Face face, const char* selector) {
     if (!face || !selector) {
         return 0;
@@ -5180,6 +5236,23 @@ static int emit_face_or_slot(int argc, char** argv) {
                first_vector.x,
                first_vector.y);
         free(rows);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-kerning-null-output")) {
+        const char* left = argv[7];
+        const char* right = argv[8];
+        FT_UInt mode = (FT_UInt)strtoul(argv[9], NULL, 10);
+        FT_UInt left_glyph = glyph_selector_index(face, left);
+        FT_UInt right_glyph = glyph_selector_index(face, right);
+        FT_Vector kerning;
+        kerning.x = 0;
+        kerning.y = 0;
+        FT_Error err = FT_Get_Kerning(face, left_glyph, right_glyph, mode, NULL);
+        print_kerning_single_output(left, right, mode, left_glyph, right_glyph, err, kerning, 0);
         FT_Done_Face(face);
         FT_Done_FreeType(library);
         free(data);
@@ -6962,6 +7035,12 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-kerning")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--get-kerning-null-face")) {
+        return emit_get_kerning_null_face(argc, argv);
+    }
+    if (argc == 10 && streq(argv[1], "--get-kerning-null-output")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 10 && streq(argv[1], "--charmap-get-char-index")) {
