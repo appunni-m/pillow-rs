@@ -1886,6 +1886,20 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-13 | Add explicit subglyph null-output wrapper validation | `FT_Get_SubGlyph_Info.error_null_outputs` reuses `glyf-component-matrix.ttf` glyph 4 and explicitly passes null `index`, `flags`, `arg1`, `arg2`, and `transform` outputs one at a time. Pinned `ftobjs.c:5690-5719` dereferences all output pointers after validating a composite slot, so the native C oracle first proves the subglyph with non-null outputs and then classifies the null-output behavior as Rust FFI/C ABI/WASM ABI wrapper validation rather than native-C parity. Concrete cases are 6,722 with zero implicit rows; runtime comparison is 6,718 / 6,718 with four explicit pending rows. Refreshed condition coverage is 15,849 / 17,766 lines, 22,760 / 25,457 regions, and 3,798 / 4,524 branches. Route audit reports `wrapper-null-validation: 1` and keeps real-parity routes at 3,356 |
 | 2026-07-13 | Route `FT_Select_Size` unsupported rows through the core stub | Existing `FT_Select_Size` rows remain `explicit-unsupported` because the core function is still an unimplemented stub and C/WASM ABI exports do not exist yet. The unified Rust runner now calls `FT_Select_Size(None, strike_index)` instead of returning a synthetic error, so the fixture covers the real preserved stub without claiming native-C parity or adding fonts/cases. Concrete cases remain 6,722 with zero implicit rows; runtime comparison is 6,718 / 6,718 with four explicit pending rows. Refreshed condition coverage is 15,852 / 17,766 lines, 22,763 / 25,457 regions, 3,798 / 4,524 branches, and 1,003 / 1,135 functions |
 | 2026-07-13 | Cover public `FT_StreamDesc` default construction | Existing `ftsystem.FT_StreamRec.layout_matches_c` now declares and compares a `default_state` object from both the C oracle and Rust layout route. The Rust path safely constructs `FT_StreamDesc::default` and `FT_StreamRec::default` without reading union arms, proving the ABI default constructor path while preserving `#![deny(unsafe_code)]`. No fonts or concrete cases were added. Runtime comparison remains 6,718 / 6,718 with four explicit pending rows. Refreshed condition coverage is 15,857 / 17,766 lines, 22,766 / 25,457 regions, 3,798 / 4,524 branches, and 1,004 / 1,135 functions; `src/ffi/types.rs` is now 5 / 5 lines and 1 / 1 functions |
+| 2026-07-13 | Extend render-target safe load assertions | Existing `FT_Load_Glyph.render_and_target_modes` variants for direct mono, LCD, and vertical LCD render-load now assert safe `Face::load_glyph` slot equality against the same C-oracle-backed Rust FFI, C ABI, and WASM ABI row. No fonts or concrete cases were added. The filtered case passed 8 / 8, and refreshed full condition coverage remained 15,857 / 17,766 lines, 22,766 / 25,457 regions, 3,798 / 4,524 branches, and 1,004 / 1,135 functions with 6,718 / 6,718 runtime rows and four explicit pending rows. The unchanged structural counters show this is correctness hardening, not a coverage-denominator shortcut |
+
+## Residual Coverage Classification - 2026-07-13
+
+Fresh `test-unified-condition-coverage` still reports 1,909 uncovered core
+source lines. The current split is:
+
+| Bucket | Evidence | Action |
+|---|---|---|
+| Fixture/font reachable | `autohint/latin.rs`, `autohint/cjk.rs`, `scaler.rs`, `tt/hinter/exec.rs`, and parts of `render.rs` still have real branch gaps tied to glyph topology, script selection, bytecode state, or render geometry | Add or extend compact source-backed fonts and explicit public rows only when the selected glyph moves the measured branch or line |
+| Public unsupported implementation paths | `FT_New_Size`, `FT_Done_Size`, `FT_Activate_Size`, `FT_OpenType_Validate`, and `FT_GlyphSlot_*` synth functions have non-null or mutation paths that return preserved stubs today | Implement the real public behavior first, then add parity rows; do not add fake success fixtures |
+| Public-construction unreachable guards | Short required `head`/`hhea` tables fail face construction before `face_to_ffi`; short optional `vhea` currently fails in `Font::truetype`; `tt/cmap.rs` format-14 and `tt/fvar.rs` checked-multiply overflow closures cannot overflow on 64-bit from their u32/u16 counts | Leave visible and documented unless parser semantics change or a true public route appears |
+| Private/no-route helpers | `Font::layout_glyphs`, `Font::layout_bounds`, `layout_bounds_from_glyphs`, `grays::rasterize`, `grays::rasterize_shifted_in_box`, `grays::render_scanline`, and `render::render_loaded_char_mode_for_index` are not selected by the current public FreeType fixtures | Do not call these through synthetic tests; either expose a real public operation with C parity or prove and remove independently of coverage |
+| Coverage instrumentation artifacts | `Font::load_sfnt_table` and several wrapper functions show zero-count closure symbols even while the public body is heavily executed; many missed `api.rs` and `font.rs` lines are trailing call arguments in covered functions | Use function bodies, contiguous blocks, and branch counters to choose cases; do not grow JSON for tail-line artifacts alone |
 
 ## Immediate Next Actions
 
@@ -1903,9 +1917,10 @@ Work must resume here unless a newer user request changes priority:
    C-oracle/Rust-FFI routes; continue with generic fallback rows, especially
    the remaining size lifecycle sequences and any other modeled public
    surfaces.
-2. Complete R0 and classify every uncovered function as public, font-reachable,
-   missing delegation, blocked by incomplete implementation, duplicate with
-   independent proof, or currently unreachable but preserved.
+2. Complete R0 by turning the residual classification above into a per-function
+   table: public, font-reachable, missing delegation, blocked by incomplete
+   implementation, duplicate with independent proof, private/no-route, or
+   currently unreachable but preserved.
 3. Resume explicit fixture expansion in the active order: public route audit,
    render/raster matrix, autohint script/topology, TrueType interpreter edge
    programs, then scalar residuals. The safe LCD empty-outline divergence and
