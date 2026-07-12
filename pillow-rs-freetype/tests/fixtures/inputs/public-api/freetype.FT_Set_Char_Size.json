@@ -209,6 +209,148 @@
       }
     },
     {
+      "case_id": "freetype.FT_Set_Char_Size.error_oversized_dimensions",
+      "subject": "freetype.FT_Set_Char_Size",
+      "case": "error_invalid_or_unscalable_face",
+      "operation": "set_char_size",
+      "schema": "size_metrics",
+      "expect_error": true,
+      "inputs": {
+        "variants": [
+          {
+            "id": "ppem-too-large",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "request": {
+                "char_width": 1073741824,
+                "char_height": 1073741824,
+                "horz_resolution": 72,
+                "vert_resolution": 72
+              }
+            },
+            "coverage": [
+              "FT_Set_Char_Size forwards oversized ppem rejection from core"
+            ]
+          },
+          {
+            "id": "width-exceeds-core-range",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "request": {
+                "char_width": 2147483648,
+                "char_height": 768,
+                "horz_resolution": 72,
+                "vert_resolution": 72
+              }
+            },
+            "coverage": [
+              "FT_Set_Char_Size maps oversized width to C FreeType Invalid_Pixel_Size"
+            ]
+          },
+          {
+            "id": "height-exceeds-core-range",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "request": {
+                "char_width": 768,
+                "char_height": 2147483648,
+                "horz_resolution": 72,
+                "vert_resolution": 72
+              }
+            },
+            "coverage": [
+              "FT_Set_Char_Size maps oversized height to C FreeType Invalid_Pixel_Size"
+            ]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "active_size_after_error": "unchanged"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].output"
+          ]
+        },
+        "error": "FT_Err_Invalid_Pixel_Size"
+      }
+    },
+    {
+      "case_id": "freetype.FT_Set_Char_Size.error_probe_face_invalid_size_handle",
+      "subject": "freetype.FT_Set_Char_Size",
+      "case": "error_invalid_or_unscalable_face",
+      "operation": "set_char_size",
+      "schema": "size_metrics",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": -1,
+          "request": {
+            "char_width": 768,
+            "char_height": 768,
+            "horz_resolution": 72,
+            "vert_resolution": 72
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "probe_face": "negative face index opened for face-count probing"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].output"
+          ]
+        },
+        "error": "FT_Err_Invalid_Size_Handle"
+      }
+    },
+    {
       "case_id": "freetype.FT_Set_Char_Size.error_invalid_or_unscalable_face",
       "subject": "freetype.FT_Set_Char_Size",
       "case": "error_invalid_or_unscalable_face",
@@ -241,10 +383,6 @@
             },
             {
               "font": "malformed"
-            },
-            {
-              "char_width": 1073741824,
-              "char_height": 1073741824
             }
           ]
         }

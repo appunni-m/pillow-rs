@@ -255,6 +255,52 @@
       }
     },
     {
+      "case_id": "freetype.FT_Request_Size.error_probe_face_invalid_size_handle",
+      "subject": "freetype.FT_Request_Size",
+      "case": "error_invalid_request_or_unavailable_strike",
+      "operation": "freetype.request_size",
+      "schema": "size_metrics",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": -1,
+          "request": {
+            "type": "FT_SIZE_REQUEST_TYPE_NOMINAL",
+            "width": 768,
+            "height": 768,
+            "horiResolution": 72,
+            "vertResolution": 72
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "probe_face": "negative face index opened for face-count probing"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].metrics"
+          ]
+        },
+        "error": "FT_Err_Invalid_Size_Handle"
+      }
+    },
+    {
       "case_id": "freetype.FT_Request_Size.error_invalid_request_or_unavailable_strike",
       "subject": "freetype.FT_Request_Size",
       "case": "error_invalid_request_or_unavailable_strike",

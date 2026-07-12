@@ -818,8 +818,7 @@ fn request_size_runtime_supported(case: &InputCase) -> bool {
 }
 
 fn set_char_size_runtime_supported(case: &InputCase) -> bool {
-    !case.expect_error
-        && has_runtime_font_source(case)
+    has_runtime_font_source(case)
         && assets_are_runtime_resolved(case)
         && !has_probe_params(case)
         && char_size_rows(&case.inputs.params).is_ok_and(|rows| !rows.is_empty())

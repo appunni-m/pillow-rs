@@ -276,21 +276,29 @@ one executable public error row: rendering DejaVu `Agrave` after
 `FT_LOAD_NO_RECURSE` leaves a composite slot, and pinned C returns
 `FT_Err_Cannot_Render_Glyph`. The genuinely synthetic unloaded/unsupported
 slot states remain separate route work.
+`FT_Set_Char_Size` and `FT_Request_Size` now also split real public size-error
+rows out of inert/future buckets. DejaVu oversized char-size requests compare
+FreeType's `FT_Err_Invalid_Pixel_Size` through Rust FFI, C ABI, and WASM ABI,
+including host-width values that exceed the core `i32` input range. Negative
+face-index probe handles compare FreeType's `FT_Err_Invalid_Size_Handle` for
+`FT_Set_Char_Size` and `FT_Request_Size`, covering the probe-only wrapper
+guards without adding hidden route logic. The bitmap/malformed residuals
+remain visible as future fixture work.
 
 | Measure | Current |
 |---|---:|
-| Logical public API cases | 4,141 |
-| Concrete explicit cases | 6,630 |
-| Additional grouped variants | 2,489 |
+| Logical public API cases | 4,144 |
+| Concrete explicit cases | 6,635 |
+| Additional grouped variants | 2,491 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,627 |
-| Exact parity | 6,627 / 6,627 |
+| Runnable parity comparisons | 6,632 |
+| Exact parity | 6,632 / 6,632 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,654 / 17,230 (85.05%) |
+| Covered Rust lines | 14,658 / 17,230 (85.07%) |
 | Rust function coverage | 878 / 1,066 (82.36%) |
 | Rust instantiation coverage | 881 / 1,069 (82.41%) |
-| Rust region coverage | 21,362 / 24,773 (86.23%) |
-| Rust branch/condition coverage | 3,576 / 4,398 (81.31%) |
+| Rust region coverage | 21,366 / 24,773 (86.25%) |
+| Rust branch/condition coverage | 3,580 / 4,398 (81.40%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 141 |
 | Stored active font binaries | 98 files, 773 KiB |
@@ -324,7 +332,7 @@ Current largest uncovered buckets:
 | `src/scaler.rs` | 941 / 1,220 | 153 / 188 | 41 / 61 | 1,081 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
-| `src/ffi/handles.rs` | 1,354 / 1,490 | 239 / 288 | 149 / 162 | 1,899 / 2,040 | Public FFI route audit; wrappers stay thin and must delegate to core |
+| `src/ffi/handles.rs` | 1,360 / 1,490 | 245 / 288 | 149 / 162 | 1,905 / 2,040 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 862 / 941 | 355 / 426 | 18 / 19 | 1,145 / 1,247 | CJK topology rows in the compact multiscript fixture |
 | `src/api.rs` | 474 / 486 | 76 / 84 | 53 / 54 | 642 / 660 | Public API wrapper rows for render cache and glyph-slot surfaces |
@@ -694,7 +702,7 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,225 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,230 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 4 | `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null rows execute pinned C oracle status checks and the Rust FFI wrapper validation path; size lifecycle success remains separate. |
 | Compile/header/scalar contract | 2,248 | Valid for ABI/header contracts, not runtime core coverage. |
 | Shape-incomplete fallback | 11 | Convert to complete explicit variants or mark invalid/pending. |
@@ -1549,6 +1557,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Executable invalid-error route split | 109 unique hashes | 0 | 6,629 | 6,626 / 6,626 | 3 | 14,654 / 17,230 lines; 21,362 / 24,773 regions; 3,576 / 4,398 branches | `FT_Get_Sfnt_Name.invalid_argument_errors` now executes an explicit invalid name index while preserving null-output and non-SFNT residuals as incomplete route work; `FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags` now executes out-of-range glyph and reserved-load-flag variants while preserving null-face as unrouted; `FT_Load_Char.error_null_face_or_invalid_flags` now executes the reserved-load-flag row while preserving null-face as unrouted. Exact Rust/C ABI/WASM parity remains green, route audit real parity moves to 3,200 rows, and implicit cases remain zero |
 | 2026-07-12 | Face-flag route-audit classification | 109 unique hashes | 0 | 6,629 | 6,626 / 6,626 | 3 | unchanged | The 24 `freetype.face_flags` concrete rows already execute pinned C `--face-flags`, Rust FFI, C ABI, and WASM ABI routes; `check_public_api_inputs.py` now classifies that operation as real parity instead of generic fallback. Focused face-flag parity passes 45 / 45, route audit real parity rises to 3,224, and generic fallback drops to 961 without changing fixture outputs or coverage denominator |
 | 2026-07-12 | Render composite-slot error split | 109 unique hashes | 0 | 6,630 | 6,627 / 6,627 | 3 | unchanged | `FT_Render_Glyph.error_unloaded_or_unsupported_slot_format` now has an executable `FT_LOAD_NO_RECURSE` DejaVu `Agrave` variant that compares pinned C's `FT_Err_Cannot_Render_Glyph` against Rust FFI, C ABI, and WASM ABI. The synthetic unloaded and unsupported-slot probes remain visibly unrouted. This moves route-audit real parity to 3,225 with no structural coverage delta, proving the old aggregate contained one real public error path and residual synthetic route work |
+| 2026-07-12 | Size error and probe-face rows | 109 unique hashes | 0 | 6,635 | 6,632 / 6,632 | 3 | 14,658 / 17,230 lines; 21,366 / 24,773 regions; 3,580 / 4,398 branches | `FT_Set_Char_Size.error_oversized_dimensions` now has three executable DejaVu variants for ppem-too-large, width-over-core-range, and height-over-core-range requests; `FT_Set_Char_Size.error_probe_face_invalid_size_handle` and `FT_Request_Size.error_probe_face_invalid_size_handle` use negative face-index probe handles. Pinned C returns `FT_Err_Invalid_Pixel_Size` for oversized char-size requests and `FT_Err_Invalid_Size_Handle` for probe handles. Rust FFI, C ABI, and WASM ABI match exactly, route-audit real parity rises to 3,230, and implicit cases remain zero |
 
 ## Decision Log
 
@@ -1644,6 +1653,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Match missing-subfamily named-instance synthesis | Pinned `sfnt_get_var_ps_name` falls through to `construct_instance_name` when a named instance has no explicit PostScript name and no usable subfamily name. The fallback appends each non-default fvar coordinate as a shortest 16.16 decimal followed by sanitized axis-tag characters |
 | 2026-07-11 | Treat route-audit shape as the explicit row contract | `FT_Request_Size` variants are maintained parser rows, and null-face `FT_Set_Charmap` rows still need an explicit selector shape. Audit classification must mirror the maintained runner contract instead of leaving real parity rows in shape fallback |
 | 2026-07-12 | Keep memory-face source aliases route-visible | `FT_New_Memory_Face` parity reads bytes from the public memory source, but the route audit recognizes runnable font assets by `font`/`fixture` keys. Compact malformed font variants should carry a matching `font` alias beside `font_bytes` when both refer to the same source, so the row remains explicit real parity instead of shape fallback |
+| 2026-07-12 | Match size-error codes from the C oracle | Pinned `FT_Set_Char_Size` reaches `FT_Request_Metrics` and returns `FT_Err_Invalid_Pixel_Size` for oversized ppem results, including host-width values that Rust core cannot store as `i32`. Negative face-index probe handles return `FT_Err_Invalid_Size_Handle` through `FT_Set_Char_Size` and `FT_Request_Size`; these are public parity rows, not generic invalid-argument shortcuts |
 
 ## Immediate Next Actions
 
