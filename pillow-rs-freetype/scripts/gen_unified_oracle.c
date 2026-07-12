@@ -3897,6 +3897,104 @@ static int emit_activate_size_null(int argc, char** argv) {
     return 0;
 }
 
+static int emit_open_type_validate_null_face(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    FT_Bytes base = NULL;
+    FT_Bytes gdef = NULL;
+    FT_Bytes gpos = NULL;
+    FT_Bytes gsub = NULL;
+    FT_Bytes jstf = NULL;
+    FT_Error err = FT_OpenType_Validate(NULL, FT_VALIDATE_BASE, &base, &gdef, &gpos, &gsub, &jstf);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":{\"outputs_touched\":");
+    print_json_bool(base || gdef || gpos || gsub || jstf);
+    printf("}}\n");
+    return 0;
+}
+
+static void print_open_type_validate_null_output_rows(FT_Face face, const char* labels_csv) {
+    char* labels = (char*)malloc(strlen(labels_csv) + 1);
+    if (!labels) {
+        printf("[]");
+        return;
+    }
+    memcpy(labels, labels_csv, strlen(labels_csv) + 1);
+    printf("[");
+    char* token = strtok(labels, ",");
+    int first = 1;
+    while (token) {
+        FT_Bytes base = NULL;
+        FT_Bytes gdef = NULL;
+        FT_Bytes gpos = NULL;
+        FT_Bytes gsub = NULL;
+        FT_Bytes jstf = NULL;
+        FT_Bytes* base_ptr = streq(token, "BASE") ? NULL : &base;
+        FT_Bytes* gdef_ptr = streq(token, "GDEF") ? NULL : &gdef;
+        FT_Bytes* gpos_ptr = streq(token, "GPOS") ? NULL : &gpos;
+        FT_Bytes* gsub_ptr = streq(token, "GSUB") ? NULL : &gsub;
+        FT_Bytes* jstf_ptr = streq(token, "JSTF") ? NULL : &jstf;
+        FT_Error err = FT_OpenType_Validate(
+            face,
+            FT_VALIDATE_BASE,
+            base_ptr,
+            gdef_ptr,
+            gpos_ptr,
+            gsub_ptr,
+            jstf_ptr);
+        if (!first) {
+            printf(",");
+        }
+        first = 0;
+        printf("{\"null_output_index\":\"%s\",\"error\":%d}", token, err);
+        token = strtok(NULL, ",");
+    }
+    printf("]");
+    free(labels);
+}
+
+static int emit_open_type_validate_null_outputs(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    printf("{");
+    print_status(FT_Err_Invalid_Argument);
+    printf(",\"output\":{\"rows\":");
+    print_open_type_validate_null_output_rows(face.face, argv[5]);
+    printf("}}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_open_type_free_null_face(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    FT_OpenType_Free(NULL, (FT_Bytes)1);
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"free_event_count\":0,\"table_pointer_observed\":\"non_null_sentinel\"}}\n");
+    return 0;
+}
+
+static int emit_open_type_free_null_table(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_OpenType_Free(face.face, NULL);
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"free_event_count\":0}}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_get_postscript_name_variants(int argc, char** argv) {
     (void)argc;
     const char* source_kind = argv[2];
@@ -7304,6 +7402,18 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--activate-size-null")) {
         return emit_activate_size_null(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--open-type-validate-null-face")) {
+        return emit_open_type_validate_null_face(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--open-type-validate-null-outputs")) {
+        return emit_open_type_validate_null_outputs(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--open-type-free-null-face")) {
+        return emit_open_type_free_null_face(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--open-type-free-null-table")) {
+        return emit_open_type_free_null_table(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-char-index")) {
         return emit_face_or_slot(argc, argv);

@@ -109,6 +109,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "error",
             "outputs_touched"
@@ -162,6 +163,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "rows[*].error",
             "rows[*].null_output_index"

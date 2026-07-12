@@ -1714,6 +1714,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Route request-size divide guards through real parity | The existing `fonts/glyf/glyf-malformed-matrix.ttf` compact font has a zero head bbox. Two explicit `FT_SIZE_REQUEST_TYPE_BBOX` rows now drive pinned `ftobjs.c:3301-3317` height and width divide guards through `FT_Request_Size`, covering the Rust `SizeRequestError::DivideByZero` mapping without increasing concrete cases. Route audit moves real parity to 3,249 and generic fallback to 960; refreshed condition coverage is 14,727 / 17,290 lines, 21,462 / 24,862 regions, and 3,600 / 4,406 branches with 6,645 / 6,645 runtime rows passing and four explicit pending rows |
 | 2026-07-12 | Route `FT_Get_Sfnt_LangTag` through real format-1 name data | Pinned `ftsnames.c` requires `langID > 0x8000` but indexes `langTags[langID - 0x8000]`, making language-tag record zero unreachable through the public API. The compact fixture therefore carries two records and selects `0x8001`; null output, format-0, `0x8000`, and upper-bound rows must call the real public function instead of generic fallback |
 | 2026-07-12 | Retire stale public operation names only when an equivalent maintained route exists | The `FT_Load_Sfnt_Table` table-missing row now uses `sfnt.load_sfnt_table` with the existing compact SFNT input, moving one row from generic fallback to real parity without runtime-code changes or weakened comparison shape. Pathname-driven rows such as missing-resource and zero-byte `FT_New_Face`, plus missing-post `FT_Get_Glyph_Name`, stay generic until their exact C source path has a compact fixture and route-equivalent output shape |
+| 2026-07-12 | Route OpenType validation null contracts through real parity | `FT_OpenType_Validate` now matches pinned `ftotval.c` early exits for null face and null output pointers, with exact error-output comparison enabled on those public rows. `FT_OpenType_Free` null-face and null-table rows now call pinned C and the Rust FFI wrapper instead of falling through generic modeled errors. Route audit moves real-null-validation to 8, generic fallback to 942, and generic-error fallback to 141; refreshed condition coverage is 15,216 / 17,756 lines, 22,079 / 25,444 regions, and 3,684 / 4,522 branches with 6,656 / 6,656 runtime rows passing and four explicit pending rows |
 
 ## Immediate Next Actions
 
@@ -1726,10 +1727,11 @@ Work must resume here unless a newer user request changes priority:
    `FT_Load_Char`, `FT_Load_Glyph`, `FT_Face_SetUnpatentedHinting`, and
    `FT_Outline_Get_CBox`, `FT_Get_Sfnt_LangTag`, and
    `FT_Set_Named_Instance`-driven named-instance selection are now real parity.
-   `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null-validation rows
-   are now exact C-oracle/Rust-FFI routes; continue with generic fallback rows,
-   especially the remaining size lifecycle sequences and any other modeled
-   public surfaces.
+   `FT_New_Size`, `FT_Done_Size`, `FT_Activate_Size`, `FT_OpenType_Validate`,
+   and `FT_OpenType_Free` null-validation rows are now exact
+   C-oracle/Rust-FFI routes; continue with generic fallback rows, especially
+   the remaining size lifecycle sequences and any other modeled public
+   surfaces.
 2. Complete R0 and classify every uncovered function as public, font-reachable,
    missing delegation, blocked by incomplete implementation, duplicate with
    independent proof, or currently unreachable but preserved.

@@ -2070,6 +2070,7 @@ impl BackendComparisonWorker {
                     | "ftoutln.outline_render_direct"
                     | "ftmodapi.get_truetype_engine_type"
                     | "freetype.get_kerning"
+                    | "ftotval.open_type_validate"
                     | "ftsizes.new_size"
                     | "ftsizes.done_size"
                     | "ftsizes.activate_size"
@@ -2307,6 +2308,8 @@ impl BackendComparisonWorker {
                     rust_get_subglyph_info(Some(face), case)
                 }
             }
+            "ftotval.open_type_validate" => rust_open_type_validate(case),
+            "ftotval.open_type_free" => rust_open_type_free(case),
             "render_glyph" => rust_render_glyph_public_api(case),
             _ => run_rust_ffi(case),
         }
@@ -3363,6 +3366,87 @@ fn rust_activate_size(case: &InputCase) -> Result<RunOutput, String> {
     } else {
         Ok(error(err))
     }
+}
+
+fn otvalid_null_face_output(err: FT_Error) -> RunOutput {
+    error_with_output(err, json!({"outputs_touched": false}))
+}
+
+fn otvalid_null_output_rows<F>(labels: &[String], mut validate: F) -> RunOutput
+where
+    F: FnMut(&str) -> FT_Error,
+{
+    let mut first_error = FT_Err_Ok;
+    let rows = labels
+        .iter()
+        .map(|label| {
+            let err = validate(label);
+            if first_error == FT_Err_Ok {
+                first_error = err;
+            }
+            json!({"null_output_index": label, "error": err})
+        })
+        .collect::<Vec<_>>();
+    error_with_output(first_error, json!({"rows": rows}))
+}
+
+fn rust_open_type_validate(case: &InputCase) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    let mut base = ptr::null();
+    let mut gdef = ptr::null();
+    let mut gpos = ptr::null();
+    let mut gsub = ptr::null();
+    let mut jstf = ptr::null();
+    if param_is_null(params, "face") {
+        let err = FT_OpenType_Validate(
+            None,
+            0,
+            Some(&mut base),
+            Some(&mut gdef),
+            Some(&mut gpos),
+            Some(&mut gsub),
+            Some(&mut jstf),
+        );
+        return Ok(otvalid_null_face_output(err));
+    }
+    if let Ok(labels) = string_array_param(params, "null_output_indices") {
+        let face = open_face(case)?;
+        return Ok(otvalid_null_output_rows(&labels, |label| {
+            let mut base = ptr::null();
+            let mut gdef = ptr::null();
+            let mut gpos = ptr::null();
+            let mut gsub = ptr::null();
+            let mut jstf = ptr::null();
+            FT_OpenType_Validate(
+                Some(&face),
+                0,
+                (label != "BASE").then_some(&mut base),
+                (label != "GDEF").then_some(&mut gdef),
+                (label != "GPOS").then_some(&mut gpos),
+                (label != "GSUB").then_some(&mut gsub),
+                (label != "JSTF").then_some(&mut jstf),
+            )
+        }));
+    }
+    Ok(error(FT_Err_Unimplemented_Feature as FT_Error))
+}
+
+fn rust_open_type_free(case: &InputCase) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    if param_is_null(params, "face") {
+        let sentinel = 1usize as FT_Bytes;
+        FT_OpenType_Free(None, sentinel);
+        return Ok(ok(json!({
+            "free_event_count": 0,
+            "table_pointer_observed": "non_null_sentinel"
+        })));
+    }
+    if param_is_null(params, "table") {
+        let face = open_face(case)?;
+        FT_OpenType_Free(Some(&face), ptr::null());
+        return Ok(ok(json!({"free_event_count": 0})));
+    }
+    Ok(error(FT_Err_Unimplemented_Feature as FT_Error))
 }
 
 fn rust_get_kerning(case: &InputCase) -> Result<RunOutput, String> {
@@ -7231,6 +7315,31 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
             oracle_fallback_args(case)
         }
+        "ftotval.open_type_validate" => {
+            if param_is_null(params, "face") {
+                return Ok(vec!["--open-type-validate-null-face".to_string()]);
+            }
+            if params.get("null_output_indices").is_some() {
+                let mut args = vec!["--open-type-validate-null-outputs".to_string()];
+                push_font_source(case, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                args.push(string_array_param(params, "null_output_indices")?.join(","));
+                return Ok(args);
+            }
+            oracle_fallback_args(case)
+        }
+        "ftotval.open_type_free" => {
+            if param_is_null(params, "face") {
+                return Ok(vec!["--open-type-free-null-face".to_string()]);
+            }
+            if param_is_null(params, "table") {
+                let mut args = vec!["--open-type-free-null-table".to_string()];
+                push_font_source(case, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                return Ok(args);
+            }
+            oracle_fallback_args(case)
+        }
         "size_metrics" => {
             let mut args = vec!["--size-metrics".to_string()];
             push_font_source(case, &mut args)?;
@@ -8222,6 +8331,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "ftoutln.outline_render_direct"
                 | "ftmodapi.get_truetype_engine_type"
                 | "freetype.get_kerning"
+                | "ftotval.open_type_validate"
                 | "ftsizes.new_size"
                 | "ftsizes.done_size"
                 | "ftsizes.activate_size"
@@ -8244,6 +8354,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             "ftmodapi.get_truetype_engine_type"
                 | "freetype.face_check_truetype_patents"
                 | "freetype.face_set_unpatented_hinting"
+                | "ftotval.open_type_free"
                 | "freetype.face_get_char_variant_index"
                 | "freetype.face_get_char_variant_is_default"
                 | "freetype.face_get_variant_selectors"
@@ -8592,6 +8703,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             }
             Ok(error(FT_Err_Unimplemented_Feature as FT_Error))
         }
+        "ftotval.open_type_validate" => rust_open_type_validate(case),
+        "ftotval.open_type_free" => rust_open_type_free(case),
         "freetype.get_subglyph_info" => {
             if lifecycle_handle_param(&case.inputs.params, "glyph_slot") == Some("null") {
                 rust_get_subglyph_info(None, case)
@@ -8676,6 +8789,8 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.reference_face"
         | "freetype.face_properties"
         | "freetype.select_size"
+        | "ftotval.open_type_validate"
+        | "ftotval.open_type_free"
         | "ftsizes.new_size"
         | "ftsizes.done_size"
         | "ftsizes.activate_size"
@@ -9186,6 +9301,8 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.reference_face"
         | "freetype.face_properties"
         | "freetype.select_size"
+        | "ftotval.open_type_validate"
+        | "ftotval.open_type_free"
         | "ftsizes.new_size"
         | "ftsizes.done_size"
         | "ftsizes.activate_size"
@@ -15958,6 +16075,10 @@ fn string_param<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
 
 fn lifecycle_handle_param<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
     value.get(key).and_then(Value::as_str)
+}
+
+fn param_is_null(value: &Value, key: &str) -> bool {
+    value.get(key).is_some_and(Value::is_null) || lifecycle_handle_param(value, key) == Some("null")
 }
 
 fn patent_bool_values(params: &Value) -> Result<Vec<FT_Bool>, String> {
