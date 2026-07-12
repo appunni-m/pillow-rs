@@ -2251,7 +2251,8 @@
                 "FT_LOAD_RENDER",
                 "FT_LOAD_MONOCHROME",
                 "FT_LOAD_TARGET_LCD"
-              ]
+              ],
+              "assert_api_load_glyph_agrees": true
             },
             "coverage": [
               "api/load_flags:monochrome-render-lcd-target"
@@ -2274,7 +2275,8 @@
                 "FT_LOAD_RENDER",
                 "FT_LOAD_MONOCHROME",
                 "FT_LOAD_TARGET_LCD_V"
-              ]
+              ],
+              "assert_api_load_glyph_agrees": true
             },
             "coverage": [
               "api/load_flags:monochrome-render-lcd-v-target"
@@ -2297,10 +2299,34 @@
                 "FT_LOAD_RENDER",
                 "FT_LOAD_MONOCHROME",
                 "FT_LOAD_TARGET_LIGHT"
-              ]
+              ],
+              "assert_api_load_glyph_agrees": true
             },
             "coverage": [
               "api/load_flags:monochrome-render-light-target"
+            ]
+          },
+          {
+            "id": "f8-monochrome-normal-target",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_RENDER",
+                "FT_LOAD_MONOCHROME"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "coverage": [
+              "api/load_flags:monochrome-render-normal-target"
             ]
           }
         ]

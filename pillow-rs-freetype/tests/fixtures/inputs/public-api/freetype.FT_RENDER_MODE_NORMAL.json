@@ -76,6 +76,7 @@
               "assert_font_render_mode_agrees": true,
               "assert_font_getmetrics_agrees": true,
               "assert_font_getlength_agrees": true,
+              "assert_font_glyph_metrics_agrees": true,
               "assert_font_getmask_agrees": true
             },
             "coverage": [
