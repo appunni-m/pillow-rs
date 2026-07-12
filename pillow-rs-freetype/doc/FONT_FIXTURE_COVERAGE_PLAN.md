@@ -289,21 +289,30 @@ Rust FFI, C ABI, and WASM ABI: open the face without pre-sizing, call
 `FT_Set_Pixel_Sizes`, then read metrics only on success. This keeps the normal
 rows equivalent while allowing a negative face-index probe row to compare
 FreeType's `FT_Err_Invalid_Size_Handle` through all public legs.
+`FT_Load_Sfnt_Table` now has exact public rows for the pinned FreeType SFNT
+table reader semantics instead of treating it as a modeled table lookup:
+tag `0` reports and reads the whole font stream, tag `1` reports and reads
+the table directory, oversized host tags return `FT_Err_Table_Missing`,
+`*length == 0` probes ignore `offset`, nonzero reads apply the signed offset
+to the raw stream position instead of clamping to the table record, and a null
+length pointer performs a full copy without mutating caller length state. The
+C ABI and WASM legs call their public wrappers directly for these rows, so the
+wrappers remain thin pointer/handle surfaces over the Rust core behavior.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,145 |
-| Concrete explicit cases | 6,636 |
-| Additional grouped variants | 2,491 |
+| Concrete explicit cases | 6,643 |
+| Additional grouped variants | 2,498 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,633 |
-| Exact parity | 6,633 / 6,633 |
+| Runnable parity comparisons | 6,640 |
+| Exact parity | 6,640 / 6,640 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,659 / 17,230 (85.08%) |
-| Rust function coverage | 878 / 1,066 (82.36%) |
-| Rust instantiation coverage | 881 / 1,069 (82.41%) |
-| Rust region coverage | 21,367 / 24,773 (86.25%) |
-| Rust branch/condition coverage | 3,581 / 4,398 (81.42%) |
+| Covered Rust lines | 14,679 / 17,253 (85.08%) |
+| Rust function coverage | 881 / 1,071 (82.26%) |
+| Rust instantiation coverage | 884 / 1,074 (82.31%) |
+| Rust region coverage | 21,407 / 24,819 (86.25%) |
+| Rust branch/condition coverage | 3,582 / 4,398 (81.45%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 141 |
 | Stored active font binaries | 98 files, 773 KiB |
@@ -1564,6 +1573,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Render composite-slot error split | 109 unique hashes | 0 | 6,630 | 6,627 / 6,627 | 3 | unchanged | `FT_Render_Glyph.error_unloaded_or_unsupported_slot_format` now has an executable `FT_LOAD_NO_RECURSE` DejaVu `Agrave` variant that compares pinned C's `FT_Err_Cannot_Render_Glyph` against Rust FFI, C ABI, and WASM ABI. The synthetic unloaded and unsupported-slot probes remain visibly unrouted. This moves route-audit real parity to 3,225 with no structural coverage delta, proving the old aggregate contained one real public error path and residual synthetic route work |
 | 2026-07-12 | Size error and probe-face rows | 109 unique hashes | 0 | 6,635 | 6,632 / 6,632 | 3 | 14,658 / 17,230 lines; 21,366 / 24,773 regions; 3,580 / 4,398 branches | `FT_Set_Char_Size.error_oversized_dimensions` now has three executable DejaVu variants for ppem-too-large, width-over-core-range, and height-over-core-range requests; `FT_Set_Char_Size.error_probe_face_invalid_size_handle` and `FT_Request_Size.error_probe_face_invalid_size_handle` use negative face-index probe handles. Pinned C returns `FT_Err_Invalid_Pixel_Size` for oversized char-size requests and `FT_Err_Invalid_Size_Handle` for probe handles. Rust FFI, C ABI, and WASM ABI match exactly, route-audit real parity rises to 3,230, and implicit cases remain zero |
 | 2026-07-12 | Direct pixel-size probe route | 109 unique hashes | 0 | 6,636 | 6,633 / 6,633 | 3 | 14,659 / 17,230 lines; 21,367 / 24,773 regions; 3,581 / 4,398 branches | `FT_Set_Pixel_Sizes` C ABI and WASM parity now open the face without pre-sizing, call the public pixel-size function directly, and read metrics only after success. One explicit negative face-index probe row compares pinned C's `FT_Err_Invalid_Size_Handle` through Rust FFI, C ABI, and WASM ABI. Route-audit real parity rises to 3,231, the probe-only branch in `ffi/handles.rs` is covered, and implicit cases remain zero |
+| 2026-07-12 | Exact SFNT load-table stream semantics | 109 unique hashes | 0 | 6,643 | 6,640 / 6,640 | 3 | 14,679 / 17,253 lines; 21,407 / 24,819 regions; 3,582 / 4,398 branches | `FT_Load_Sfnt_Table` now has explicit whole-font, table-directory, signed-offset, raw-stream read, null-length, and oversized-tag variants. Core matches pinned `tt_face_load_any` stream behavior, Rust FFI maps missing tables and stream errors separately, and C ABI/WASM rows call their public wrappers directly with exact C/Rust parity and zero implicit cases |
 
 ## Decision Log
 
@@ -1583,6 +1593,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Keep charmap raw-pointer validation in ABI, not lookup semantics | `FT_Get_Charmap_Index` needs C ABI raw-pointer and lifetime validation, but the return value for live owned charmaps belongs in core. Existing public rows now call both the raw core helper and face-scoped helper to prove they agree without adding fixture rows |
 | 2026-07-12 | Cover CMap scoped helpers through existing CMap rows | `FT_Charmap_Info`, `FT_Charmap_Format`, and `FT_Charmap_Language_ID` are core facade helpers for the same public CMap metadata already selected by `FT_Get_CMap_Format` and `FT_Get_CMap_Language_ID`; exercising them as agreement checks avoids new cases and keeps route intent explicit |
 | 2026-07-12 | Reuse selected `FT_LOAD_*` rows for safe API slot agreement | `Face::load_glyph` is a public Rust facade over the same core behavior exposed by `FT_Load_Glyph`; asserting slot equality on representative existing rows covers facade output methods without widening the public input matrix |
+| 2026-07-12 | Match `FT_Load_Sfnt_Table` raw stream behavior exactly | Pinned `tt_face_load_any` handles tag `0` as the whole stream, tag `1` as the directory, reports table size before applying offset on zero-length probes, then performs signed-offset reads against the stream rather than a table-clamped slice. Public inputs must include these boundary rows instead of relying on a generic table accessor |
 | 2026-07-12 | Route rendered-slot target flags through the shared helper | `FT_Render_Glyph` already validates the public render mode before calling core rendering; preserving the selected render target in the returned slot's internal load flags keeps wrapper state centralized without adding cases or changing public output JSON |
 | 2026-07-12 | Support explicit repeat rows only where stateful public behavior needs them | `repeat_count` is accepted only as a concrete input on existing `FT_Render_Glyph` public rows. It lets one case compare a deliberate sequence across Rust/C/C-ABI/WASM without reintroducing hidden Cartesian discovery or generic fixture generation |
 | 2026-07-12 | Compare safe facade errors through selected public rows | Error-side coverage for `Face::load_glyph` must be proven by the same `FT_Load_Glyph` fixture cases and exact C/Rust/C-ABI/WASM parity, not by synthetic helper calls or broad routing |
@@ -1652,7 +1663,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-11 | Treat subglyph info as raw composite slot data | Pinned `FT_Get_SubGlyph_Info` succeeds only for a composite glyph slot with loaded subglyph records and a valid sub-index, then returns the raw component flags, args, glyph index, and 16.16 transform. Rust keeps composite flags from `glyf`, exposes them through the core glyph slot, and lets C/WASM wrappers only validate pointers and copy the core result |
 | 2026-07-11 | Select named instances through face index high bits | Pinned FreeType stores a 1-based named-instance selector in bits 16..30 of `face_index`; `FT_Set_Named_Instance(0)` clears it. When an `fvar` instance lacks an explicit PostScript name ID, FreeType builds the name from nameID 25 plus a sanitized instance subfamily string |
 | 2026-07-11 | Make named-instance gaps pending instead of fallback-green | `ftmm.set_named_instance` previously appeared green through the generic modeled-error path. Direct oracle routing proves the compact success/error rows and leaves Adobe MM reset, `FT_MM_Var` namedstyle coordinates, and `gvar`/HVAR glyph-output deltas visible until the core implementation exists |
-| 2026-07-11 | Compare structured error output only by explicit opt-in | Existing expected-error rows intentionally tolerate several Rust/C error-classification differences. Rows that claim post-error state preservation, such as invalid named-instance selection, must set `compare_error_output` and provide matching C oracle, Rust, C ABI, and WASM ABI state snapshots |
+| 2026-07-11 | Compare structured error output only by explicit opt-in | Existing expected-error rows intentionally tolerate several Rust/C error-classification differences. Rows that claim post-error state preservation or exact error classification, such as invalid named-instance selection and SFNT stream-boundary reads, must set `compare_error_output` and provide matching C oracle, Rust, C ABI, and WASM ABI error codes plus state snapshots |
 | 2026-07-11 | Prefer shared table readers over duplicated byte decoding | Reusing existing SFNT endian helpers is valid coverage progress when the public parser already reads the same field. It does not remove behavior or add a fake test path, and keeps coverage tied to real public fixture execution |
 | 2026-07-11 | Classify fvar instance-count overflow as unreachable | `instance_count` and `instance_size` are 16-bit SFNT fields, so their product fits in `usize` on supported 32-bit and 64-bit targets. Keep the defensive guard visible for now instead of deleting it to manufacture line coverage |
 | 2026-07-11 | Match variation PostScript prefix platform filtering | Pinned `sfnt_get_var_ps_name` calls `sfnt_get_name_id`, which accepts only Windows 3/0, Windows 3/1, and Apple Roman records for the variation prefix. It does not use the broader Unicode/ISO fallback from `tt_face_get_name`; the named-instance subfamily still uses that general lookup path |

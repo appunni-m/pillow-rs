@@ -1680,30 +1680,35 @@ pub fn FT_Load_Sfnt_Table(
 ) -> Result<Option<Vec<u8>>, FT_Error> {
     let tag_u32 = match u32::try_from(tag) {
         Ok(t) => t,
-        Err(_) => return Err(FT_Err_Invalid_Argument),
-    };
-    let offset_usize = match usize::try_from(offset) {
-        Ok(o) => o,
-        Err(_) => return Err(FT_Err_Invalid_Argument),
+        Err(_) => return Err(FT_Err_Table_Missing as FT_Error),
     };
     let font = face.inner.font();
-    let data = match font.load_sfnt_table(tag_u32, offset_usize, None) {
-        Ok(d) => d,
-        Err(_) => return Err(FT_Err_Invalid_Argument),
+    let table_len = match font.sfnt_table_len(tag_u32) {
+        Ok(len) => len,
+        Err(_) => return Err(FT_Err_Table_Missing as FT_Error),
     };
     match length {
-        Some(len) if *len == 0 || *len as usize > data.len() => {
-            // Length probe or buffer too small: return the full remaining length.
-            *len = data.len() as FT_ULong;
+        Some(len) if *len == 0 => {
+            // C `tt_face_load_any` returns the table/font size before using
+            // `offset` when `*length == 0` (sfnt/ttload.c:617-621).
+            *len = table_len as FT_ULong;
             Ok(None)
         }
         Some(len) => {
-            let copy_len = *len as usize;
+            let data =
+                match font.load_sfnt_table(tag_u32, ft_long_to_i64(offset), Some(*len as usize)) {
+                    Ok(data) => data,
+                    Err(_) => return Err(FT_Err_Invalid_Stream_Operation as FT_Error),
+                };
+            let copy_len = data.len();
             let bytes = data[..copy_len].to_vec();
             *len = copy_len as FT_ULong;
             Ok(Some(bytes))
         }
-        None => Err(FT_Err_Invalid_Argument),
+        None => match font.load_sfnt_table(tag_u32, ft_long_to_i64(offset), None) {
+            Ok(data) => Ok(Some(data)),
+            Err(_) => Err(FT_Err_Invalid_Stream_Operation as FT_Error),
+        },
     }
 }
 
