@@ -707,6 +707,16 @@ def otvalid_null_validation_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def wrapper_null_validation_reason(row: ConcreteInput) -> str | None:
+    if row.operation == "freetype.get_subglyph_info" and "null_output_indices" in row.params:
+        return (
+            "FT_Get_SubGlyph_Info native C dereferences valid-slot output pointers; "
+            "the row validates Rust FFI, C ABI, and WASM ABI null-output policy "
+            "after proving the subglyph is native-C-callable with non-null outputs"
+        )
+    return None
+
+
 def list_value(value: object) -> list[object]:
     return value if isinstance(value, list) else []
 
@@ -791,6 +801,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     otvalid_null_reason = otvalid_null_validation_reason(row)
     if otvalid_null_reason:
         return ("real-null-validation", otvalid_null_reason)
+    wrapper_null_reason = wrapper_null_validation_reason(row)
+    if wrapper_null_reason:
+        return ("wrapper-null-validation", wrapper_null_reason)
     if operation_is_real_parity(row.operation):
         return ("real-parity", "explicit C oracle, Rust FFI, C ABI, and WASM route")
     if row.expect_error and not has_runtime_asset(row):

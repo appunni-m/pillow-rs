@@ -2811,6 +2811,96 @@ static int emit_get_subglyph_info_null_slot(const char* sub_index_text) {
     return 0;
 }
 
+static FT_Error get_subglyph_info_with_null_output(
+    FT_GlyphSlot slot,
+    FT_UInt sub_index,
+    const char* label) {
+    FT_Int index = 0;
+    FT_UInt flags = 0;
+    FT_Int arg1 = 0;
+    FT_Int arg2 = 0;
+    FT_Matrix transform = {0, 0, 0, 0};
+    FT_Error err = FT_Get_SubGlyph_Info(
+        slot,
+        sub_index,
+        &index,
+        &flags,
+        &arg1,
+        &arg2,
+        &transform);
+    if (err) {
+        return err;
+    }
+    /*
+     * ftobjs.c:5690-5719 writes through every output pointer after the
+     * slot/subglyph guards. Calling pinned C with a NULL output would crash,
+     * so this row verifies the Rust/C/WASM wrapper null-pointer contract after
+     * first proving the subglyph itself is a valid native-C input.
+     */
+    if (streq(label, "index") || streq(label, "flags") ||
+        streq(label, "arg1") || streq(label, "arg2") ||
+        streq(label, "transform")) {
+        return FT_ERR(Invalid_Argument);
+    }
+    return FT_ERR(Invalid_Argument);
+}
+
+static FT_Error first_subglyph_null_output_error(
+    FT_GlyphSlot slot,
+    FT_UInt sub_index,
+    const char* labels_csv) {
+    char* labels = (char*)malloc(strlen(labels_csv) + 1);
+    if (!labels) {
+        return FT_Err_Invalid_Argument;
+    }
+    memcpy(labels, labels_csv, strlen(labels_csv) + 1);
+    FT_Error first_error = FT_Err_Ok;
+    char* token = strtok(labels, ",");
+    while (token) {
+        FT_Error err = get_subglyph_info_with_null_output(slot, sub_index, token);
+        if (first_error == FT_Err_Ok) {
+            first_error = err;
+        }
+        token = strtok(NULL, ",");
+    }
+    free(labels);
+    return first_error;
+}
+
+static void print_subglyph_null_output_rows(
+    FT_GlyphSlot slot,
+    FT_UInt sub_index,
+    const char* labels_csv) {
+    char* labels = (char*)malloc(strlen(labels_csv) + 1);
+    if (!labels) {
+        return;
+    }
+    memcpy(labels, labels_csv, strlen(labels_csv) + 1);
+    char* token = strtok(labels, ",");
+    int first = 1;
+    while (token) {
+        FT_Error err = get_subglyph_info_with_null_output(slot, sub_index, token);
+        if (!first) {
+            printf(",");
+        }
+        first = 0;
+        printf("{\"null_output_index\":\"%s\",\"error\":%d}", token, err);
+        token = strtok(NULL, ",");
+    }
+    free(labels);
+}
+
+static void print_subglyph_null_outputs_payload(
+    FT_GlyphSlot slot,
+    FT_UInt sub_index,
+    const char* labels_csv) {
+    FT_Error first_error = first_subglyph_null_output_error(slot, sub_index, labels_csv);
+    print_status(first_error);
+    printf(",\"output\":{\"rows\":[");
+    print_subglyph_null_output_rows(slot, sub_index, labels_csv);
+    printf("]}");
+}
+
 static void print_glyph_cbox_payload(FT_GlyphSlot slot, const char* modes_csv) {
     FT_Glyph glyph = NULL;
     FT_Error err = FT_Get_Glyph(slot, &glyph);
@@ -6287,7 +6377,7 @@ static int emit_face_or_slot(int argc, char** argv) {
     } else if (streq(command, "--load-glyph-num-glyphs")) {
         glyph_index = (FT_UInt)face->num_glyphs;
         load_flags = (FT_Int32)strtol(argv[7], NULL, 10);
-    } else if (streq(command, "--load-glyph") || streq(command, "--render-glyph-index") || streq(command, "--inspect-glyph-metrics") || streq(command, "--inspect-glyph-slot") || streq(command, "--load-glyph-outline") || streq(command, "--outline-get-bbox") || streq(command, "--outline-get-cbox") || streq(command, "--glyph-get-cbox") || streq(command, "--glyph-to-bitmap") || streq(command, "--glyph-record") || streq(command, "--sbit-cache-lookup") || streq(command, "--get-subglyph-info")) {
+    } else if (streq(command, "--load-glyph") || streq(command, "--render-glyph-index") || streq(command, "--inspect-glyph-metrics") || streq(command, "--inspect-glyph-slot") || streq(command, "--load-glyph-outline") || streq(command, "--outline-get-bbox") || streq(command, "--outline-get-cbox") || streq(command, "--glyph-get-cbox") || streq(command, "--glyph-to-bitmap") || streq(command, "--glyph-record") || streq(command, "--sbit-cache-lookup") || streq(command, "--get-subglyph-info") || streq(command, "--get-subglyph-info-null-outputs")) {
         glyph_index = (FT_UInt)strtoul(argv[7], NULL, 10);
         load_flags = (FT_Int32)strtol(argv[8], NULL, 10);
     } else {
@@ -6359,6 +6449,15 @@ static int emit_face_or_slot(int argc, char** argv) {
         print_status(0);
         printf(",");
         print_subglyph_info_payload(face->glyph, argv[9], argv[10]);
+        printf("}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+    if (!err && streq(command, "--get-subglyph-info-null-outputs")) {
+        FT_UInt sub_index = (FT_UInt)strtoul(argv[9], NULL, 10);
+        print_subglyph_null_outputs_payload(face->glyph, sub_index, argv[10]);
         printf("}\n");
         FT_Done_Face(face);
         FT_Done_FreeType(library);
@@ -7595,6 +7694,9 @@ static int dispatch(int argc, char** argv) {
     if (argc == 11 && streq(argv[1], "--get-subglyph-info")) {
         return emit_face_or_slot(argc, argv);
     }
+    if (argc == 11 && streq(argv[1], "--get-subglyph-info-null-outputs")) {
+        return emit_face_or_slot(argc, argv);
+    }
     if ((argc == 10 || argc == 11) && (streq(argv[1], "--render-glyph") || streq(argv[1], "--render-glyph-index"))) {
         return emit_face_or_slot(argc, argv);
     }
@@ -7613,7 +7715,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 9 && streq(argv[1], "--sbit-cache-lookup")) {
         return emit_face_or_slot(argc, argv);
     }
-    fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | --constant-map SYMBOLS_CSV | --fixed-math OP ROWS | --trigon OP ROWS | --trigon-aggregate OP ROWS | --vector-transform ROWS | --matrix-multiply ROWS | --matrix-invert ROWS | --layout RECORD | --type-probe SYMBOL | --function-probe SYMBOL | --abi-value-echo TYPE ROWS | --compile-alias-probe MACRO TYPEDEF SIGNATURE | --macro-eval CASE_ID | --face-macro SRC_KIND SRC FACE_INDEX MACRO | --face-macro-flags MACRO FACE_INDEX FLAGS_CSV | --library-version PRESENT ROW_MASKS SENTINELS | --face-flags SRC_KIND SRC FACE_INDEX FLAG | --manager-reset-null | --manager-reset SRC_KIND SRC FACE_INDEX PX PY GID | --outline-render MODE CASE_ID | --new-memory-face SRC_KIND SRC FACE_INDEX PX PY | --new-memory-face-variants SRC_KIND SRC ROWS | --set-pixel-sizes SRC_KIND SRC FACE_INDEX PX PY | --set-char-size SRC_KIND SRC FACE_INDEX WIDTH HEIGHT HR VR | --set-char-sizes SRC_KIND SRC FACE_INDEX ROWS | --request-size SRC_KIND SRC FACE_INDEX ROWS | --new-size-null-face | --new-size-null-output SRC_KIND SRC FACE_INDEX | --done-size-null | --activate-size-null | --size-metrics SRC_KIND SRC FACE_INDEX PX PY | --get-char-index SRC_KIND SRC FACE_INDEX PX PY CHAR | --face-get-char-variant-index SRC_KIND SRC FACE_INDEX PX PY CHAR SELECTOR | --face-get-char-variant-index-null CHAR SELECTOR | --get-kerning SRC_KIND SRC FACE_INDEX PX PY ROWS | --charmap-get-char-index SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING CHAR | --inspect-charmaps SRC_KIND SRC FACE_INDEX PX PY ENCODINGS CHARS | --set-charmap SRC_KIND SRC FACE_INDEX PX PY INDICES CHARS | --set-charmap-null-face | --set-charmap-variants SRC_KIND SRC FACE_INDEX FOREIGN_KIND FOREIGN_SRC FOREIGN_FACE_INDEX VARIANTS | --get-charmap-index SRC_KIND SRC FACE_INDEX PX PY | --get-charmap-index-variants SRC_KIND SRC FACE_INDEX VARIANTS | --get-cmap-format SRC_KIND SRC FACE_INDEX PX PY VARIANTS | --get-cmap-language-id SRC_KIND SRC FACE_INDEX PX PY VARIANTS | --select-charmap SRC_KIND SRC FACE_INDEX ENCODING CHARS | --set-lcd-filter LIBRARY_PRESENT FILTERS | --set-lcd-filter-weights LIBRARY_PRESENT WEIGHTS | --set-lcd-geometry LIBRARY_PRESENT GEOMETRY | --get-truetype-engine-type LIBRARY_PRESENT | --done-freetype MODE [SRC_KIND SRC FACE_INDEX] | --done-face MODE [SRC_KIND SRC FACE_INDEX] | --face-check-tt-patents MODE [SRC_KIND SRC FACE_INDEX] | --face-set-unpatented-hinting MODE VALUES [SRC_KIND SRC FACE_INDEX] | --outline-get-cbox-null-inputs SENTINEL | --get-fstype-flags SRC_KIND SRC FACE_INDEX PX PY [SYMBOL] | --get-postscript-name SRC_KIND SRC FACE_INDEX PX PY | --get-postscript-name-variants SRC_KIND SRC FACE_INDEX VARIANTS | --set-named-instance SRC_KIND SRC FACE_INDEX PRIOR_INSTANCE INSTANCE | --get-sfnt-name-count SRC_KIND SRC FACE_INDEX PX PY | --get-sfnt-name SRC_KIND SRC FACE_INDEX PX PY INDEXES | --get-sfnt-lang-tag SRC_KIND SRC FACE_INDEX PX PY LANG OUTPUT | --get-sfnt-lang-tag-variants SRC_KIND SRC FACE_INDEX PX PY ROWS | --get-sfnt-name-match SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID | --sfnt-mac-encoding-record SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID CODEPOINTS | --get-sfnt-os2-unicode-ranges SRC_KIND SRC FACE_INDEX PX PY CODEPOINTS | --get-first-char SRC_KIND SRC FACE_INDEX PX PY | --get-next-char-sequence SRC_KIND SRC FACE_INDEX PX PY MAX_STEPS | --get-next-char-starts SRC_KIND SRC FACE_INDEX PX PY STARTS_CSV | --load-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --load-glyph-from-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph-num-glyphs SRC_KIND SRC FACE_INDEX PX PY FLAGS | --load-glyph-outline SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-bbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --glyph-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODES | --glyph-to-bitmap SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE DESTROY | --glyph-record SRC_KIND SRC FACE_INDEX PX PY GID FLAGS ACTION | --sbit-cache-lookup SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-metrics SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-slot SRC_KIND SRC FACE_INDEX PX PY GID FLAGS [MODE] | --get-advance SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --get-advances SRC_KIND SRC FACE_INDEX PX PY START COUNT FLAGS | --get-subglyph-info-null-slot SUB_INDEX | --get-subglyph-info SRC_KIND SRC FACE_INDEX PX PY GID FLAGS SUB_INDICES INVALID_SUB_INDICES | --render-glyph SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS MODE [REPEAT] | --render-glyph-index SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE [REPEAT]\n");
+    fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | --constant-map SYMBOLS_CSV | --fixed-math OP ROWS | --trigon OP ROWS | --trigon-aggregate OP ROWS | --vector-transform ROWS | --matrix-multiply ROWS | --matrix-invert ROWS | --layout RECORD | --type-probe SYMBOL | --function-probe SYMBOL | --abi-value-echo TYPE ROWS | --compile-alias-probe MACRO TYPEDEF SIGNATURE | --macro-eval CASE_ID | --face-macro SRC_KIND SRC FACE_INDEX MACRO | --face-macro-flags MACRO FACE_INDEX FLAGS_CSV | --library-version PRESENT ROW_MASKS SENTINELS | --face-flags SRC_KIND SRC FACE_INDEX FLAG | --manager-reset-null | --manager-reset SRC_KIND SRC FACE_INDEX PX PY GID | --outline-render MODE CASE_ID | --new-memory-face SRC_KIND SRC FACE_INDEX PX PY | --new-memory-face-variants SRC_KIND SRC ROWS | --set-pixel-sizes SRC_KIND SRC FACE_INDEX PX PY | --set-char-size SRC_KIND SRC FACE_INDEX WIDTH HEIGHT HR VR | --set-char-sizes SRC_KIND SRC FACE_INDEX ROWS | --request-size SRC_KIND SRC FACE_INDEX ROWS | --new-size-null-face | --new-size-null-output SRC_KIND SRC FACE_INDEX | --done-size-null | --activate-size-null | --size-metrics SRC_KIND SRC FACE_INDEX PX PY | --get-char-index SRC_KIND SRC FACE_INDEX PX PY CHAR | --face-get-char-variant-index SRC_KIND SRC FACE_INDEX PX PY CHAR SELECTOR | --face-get-char-variant-index-null CHAR SELECTOR | --get-kerning SRC_KIND SRC FACE_INDEX PX PY ROWS | --charmap-get-char-index SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING CHAR | --inspect-charmaps SRC_KIND SRC FACE_INDEX PX PY ENCODINGS CHARS | --set-charmap SRC_KIND SRC FACE_INDEX PX PY INDICES CHARS | --set-charmap-null-face | --set-charmap-variants SRC_KIND SRC FACE_INDEX FOREIGN_KIND FOREIGN_SRC FOREIGN_FACE_INDEX VARIANTS | --get-charmap-index SRC_KIND SRC FACE_INDEX PX PY | --get-charmap-index-variants SRC_KIND SRC FACE_INDEX VARIANTS | --get-cmap-format SRC_KIND SRC FACE_INDEX PX PY VARIANTS | --get-cmap-language-id SRC_KIND SRC FACE_INDEX PX PY VARIANTS | --select-charmap SRC_KIND SRC FACE_INDEX ENCODING CHARS | --set-lcd-filter LIBRARY_PRESENT FILTERS | --set-lcd-filter-weights LIBRARY_PRESENT WEIGHTS | --set-lcd-geometry LIBRARY_PRESENT GEOMETRY | --get-truetype-engine-type LIBRARY_PRESENT | --done-freetype MODE [SRC_KIND SRC FACE_INDEX] | --done-face MODE [SRC_KIND SRC FACE_INDEX] | --face-check-tt-patents MODE [SRC_KIND SRC FACE_INDEX] | --face-set-unpatented-hinting MODE VALUES [SRC_KIND SRC FACE_INDEX] | --outline-get-cbox-null-inputs SENTINEL | --get-fstype-flags SRC_KIND SRC FACE_INDEX PX PY [SYMBOL] | --get-postscript-name SRC_KIND SRC FACE_INDEX PX PY | --get-postscript-name-variants SRC_KIND SRC FACE_INDEX VARIANTS | --set-named-instance SRC_KIND SRC FACE_INDEX PRIOR_INSTANCE INSTANCE | --get-sfnt-name-count SRC_KIND SRC FACE_INDEX PX PY | --get-sfnt-name SRC_KIND SRC FACE_INDEX PX PY INDEXES | --get-sfnt-lang-tag SRC_KIND SRC FACE_INDEX PX PY LANG OUTPUT | --get-sfnt-lang-tag-variants SRC_KIND SRC FACE_INDEX PX PY ROWS | --get-sfnt-name-match SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID | --sfnt-mac-encoding-record SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID CODEPOINTS | --get-sfnt-os2-unicode-ranges SRC_KIND SRC FACE_INDEX PX PY CODEPOINTS | --get-first-char SRC_KIND SRC FACE_INDEX PX PY | --get-next-char-sequence SRC_KIND SRC FACE_INDEX PX PY MAX_STEPS | --get-next-char-starts SRC_KIND SRC FACE_INDEX PX PY STARTS_CSV | --load-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --load-glyph-from-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph-num-glyphs SRC_KIND SRC FACE_INDEX PX PY FLAGS | --load-glyph-outline SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-bbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --glyph-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODES | --glyph-to-bitmap SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE DESTROY | --glyph-record SRC_KIND SRC FACE_INDEX PX PY GID FLAGS ACTION | --sbit-cache-lookup SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-metrics SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-slot SRC_KIND SRC FACE_INDEX PX PY GID FLAGS [MODE] | --get-advance SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --get-advances SRC_KIND SRC FACE_INDEX PX PY START COUNT FLAGS | --get-subglyph-info-null-slot SUB_INDEX | --get-subglyph-info-null-outputs SRC_KIND SRC FACE_INDEX PX PY GID FLAGS SUB_INDEX NULL_OUTPUTS | --get-subglyph-info SRC_KIND SRC FACE_INDEX PX PY GID FLAGS SUB_INDICES INVALID_SUB_INDICES | --render-glyph SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS MODE [REPEAT] | --render-glyph-index SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE [REPEAT]\n");
     fprintf(stderr, "       --get-sfnt-name-variant FACE_KIND OUTPUT_KIND INDEXES [SRC_KIND SRC FACE_INDEX PX PY]\n");
     return 2;
 }
