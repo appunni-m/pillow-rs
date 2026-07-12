@@ -8864,7 +8864,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 rust_get_subglyph_info(Some(&face), case)
             }
         }
-        "freetype.select_size" => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
+        "freetype.select_size" => rust_select_size(case),
         "ftgasp.get_gasp" => rust_get_gasp(case),
         "tttables.get_cmap_format" => rust_get_cmap_format(case),
         "tttables.get_cmap_language_id" => rust_get_cmap_language_id(case),
@@ -10360,6 +10360,37 @@ fn wasm_get_subglyph_info(handle: usize, case: &InputCase) -> Result<RunOutput, 
             }
         },
     )?))
+}
+
+fn rust_select_size(case: &InputCase) -> Result<RunOutput, String> {
+    let strike_index = select_size_strike_index_param(&case.inputs.params)?;
+    Ok(error(FT_Select_Size(None, strike_index)))
+}
+
+fn select_size_strike_index_param(params: &Value) -> Result<FT_Int, String> {
+    if let Some(value) = params.get("strike_index") {
+        return ft_int_value(value, "strike_index");
+    }
+    if let Some(value) = params
+        .get("strike_indices")
+        .and_then(Value::as_array)
+        .and_then(|values| values.first())
+    {
+        return ft_int_value(value, "strike_indices[0]");
+    }
+    if let Some(value) = params
+        .get("variants")
+        .and_then(Value::as_array)
+        .and_then(|values| values.first())
+    {
+        return select_size_strike_index_param(value);
+    }
+    Ok(0)
+}
+
+fn ft_int_value(value: &Value, key: &str) -> Result<FT_Int, String> {
+    let raw = i64_value(value, key)?;
+    FT_Int::try_from(raw).map_err(|err| format!("{key} does not fit FT_Int: {err}"))
 }
 
 fn wasm_load_glyph_for_inspection(
