@@ -1755,6 +1755,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Route safe `Font::render_char_mode` through existing render-mode rows | Three existing render-mode dispatch rows (`NORMAL`, `LCD`, `LCD_V`) now declare `assert_font_render_mode_agrees` and compare `Font::render_char_mode("A", mode)` against the same C-oracle-backed `FT_Render_Glyph` bitmap JSON. The `MONO` direct render row is deliberately not opted in because `Font::render_char_mode(Mono)` loads with mono hinting while `FT_Render_Glyph(..., MONO)` renders the already-loaded default-hinted slot. Case count stays flat at 6,674 concrete rows with zero implicit rows; refreshed condition coverage is 15,391 / 17,759 lines, 22,245 / 25,452 regions, and 3,715 / 4,524 branches with 6,670 / 6,670 runtime rows and four explicit pending rows |
 | 2026-07-12 | Add SDF and target-mono safe render agreement | The existing SDF render-mode row now opts into the safe render agreement hook, and `FT_RENDER_MODE_MONO` adds one explicit grouped variant that loads with `FT_LOAD_TARGET_MONO` before rendering so it matches `Font::render_char_mode(Mono)` semantics. The hook now compares both public safe render entry points, `Font::render_char_mode` and non-empty `Font::render_mode`, against the same C-oracle-backed bitmap JSON. Case count is 6,675 concrete rows with zero implicit rows; refreshed condition coverage is 15,408 / 17,759 lines, 22,271 / 25,452 regions, and 3,716 / 4,524 branches with 6,671 / 6,671 runtime rows and four explicit pending rows |
 | 2026-07-12 | Add empty-outline safe render rows | Four explicit render-mode variants reuse DejaVuSans U+0020 to exercise safe `Font` empty-outline rendering for NORMAL, MONO, LCD_V, and SDF. C `FT_Render_Glyph` exposes no bitmap for the zero-sized modes, so the agreement hook now treats C `bitmap == null` as an explicit canonical-empty safe API assertion instead of byte equality; MONO remains strict bitmap equality. The same NORMAL row asserts `Font::render_mode("")` returns the canonical empty bitmap. The attempted LCD empty-outline row is intentionally not added: safe `Font::render_char_mode(' ', Lcd)` currently returns an LCD-shaped zero-row bitmap while C exposes no bitmap, which is a correctness item to evaluate separately. Case count is 6,679 concrete rows with zero implicit rows; refreshed condition coverage is 15,444 / 17,759 lines, 22,288 / 25,452 regions, and 3,722 / 4,524 branches with 6,675 / 6,675 runtime rows and four explicit pending rows |
+| 2026-07-12 | Cover LCD empty-outline safe render parity | One explicit `FT_RENDER_MODE_LCD.render_glyph_mode_dispatch` variant reuses DejaVuSans U+0020 and opts into the safe `Font` render agreement hook. The row exposed the previously tracked divergence where `Font::render_char_mode(' ', Lcd)` returned an LCD-shaped zero-row bitmap while C `FT_Render_Glyph` exposed no bitmap; core now routes empty LCD safe rendering through the same canonical empty-outline result as loaded-outline rendering. Case count is 6,680 concrete rows with zero implicit rows; refreshed condition coverage is 15,445 / 17,759 lines, 22,290 / 25,450 regions, and 3,723 / 4,524 branches with 6,676 / 6,676 runtime rows and four explicit pending rows |
 
 ## Immediate Next Actions
 
@@ -1777,10 +1778,9 @@ Work must resume here unless a newer user request changes priority:
    independent proof, or currently unreachable but preserved.
 3. Resume explicit fixture expansion in the active order: public route audit,
    render/raster matrix, autohint script/topology, TrueType interpreter edge
-   programs, then scalar residuals.
-   Track the safe LCD empty-outline divergence separately: C exposes no bitmap
-   for the space glyph rendered in LCD mode, while `Font::render_char_mode`
-   currently returns an LCD-shaped zero-row bitmap.
+   programs, then scalar residuals. The safe LCD empty-outline divergence is
+   now fixed and covered by an explicit public render-mode row; do not add
+   another hidden render dimension for it.
 4. Keep the current four pending rows explicit and do not count them as
    coverage until the core Adobe MM, `FT_MM_Var`, `gvar`/HVAR, and live
    non-SFNT-face behavior exists. Embedded-strike request handling remains an
