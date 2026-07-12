@@ -439,6 +439,27 @@
             ]
           },
           {
+            "id": "head-null-length-beyond-stream",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/sfnt/basic-ttf.ttf",
+                "role": "font"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "tag": "TTAG_head",
+              "tag_hex": "0x68656164",
+              "offset": 999999,
+              "buffer_kind": "allocated",
+              "length_state": "null"
+            },
+            "coverage": [
+              "sfnt-load-table:null-length-stream-read-error"
+            ]
+          },
+          {
             "id": "head-offset-beyond-stream-copy",
             "assets": {
               "font": {

@@ -296,9 +296,11 @@ tag `0` reports and reads the whole font stream, tag `1` reports and reads
 the table directory, oversized host tags return `FT_Err_Table_Missing`,
 `*length == 0` probes ignore `offset`, nonzero reads apply the signed offset
 to the raw stream position instead of clamping to the table record, and a null
-length pointer performs a full copy without mutating caller length state. The
-C ABI and WASM legs call their public wrappers directly for these rows, so the
-wrappers remain thin pointer/handle surfaces over the Rust core behavior.
+length pointer performs a full copy without mutating caller length state. A
+separate null-length out-of-stream row now covers the matching stream-error
+return path. The C ABI and WASM legs call their public wrappers directly for
+these rows, so the wrappers remain thin pointer/handle surfaces over the Rust
+core behavior.
 `FT_Sfnt_Table_Info` now also has explicit variants for nullable tag/length
 out-pointers and table-index selection. Pinned C returns the table count when
 `tag == NULL`, ignores `table_index` in that count-query mode, rejects
@@ -333,16 +335,16 @@ returned success.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,148 |
-| Concrete explicit cases | 6,673 |
-| Additional grouped variants | 2,525 |
+| Concrete explicit cases | 6,674 |
+| Additional grouped variants | 2,526 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,669 |
-| Exact parity | 6,669 / 6,669 |
+| Runnable parity comparisons | 6,670 |
+| Exact parity | 6,670 / 6,670 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,290 / 17,759 (86.10%) |
+| Covered Rust lines | 15,291 / 17,759 (86.10%) |
 | Rust function coverage | 957 / 1,133 (84.47%) |
 | Rust instantiation coverage | 960 / 1,136 (84.51%) |
-| Rust region coverage | 22,146 / 25,452 (87.01%) |
+| Rust region coverage | 22,147 / 25,452 (87.01%) |
 | Rust branch/condition coverage | 3,711 / 4,524 (82.03%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 151 |
@@ -1747,6 +1749,8 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Route face metadata through public helpers | Existing `FT_FaceRec` rows already compare scalar face metadata across Rust, C ABI, and WASM ABI. `Font::face_info` now delegates `num_faces`, `face_index`, and family/style names through the public helper methods instead of duplicating field access. Case count is unchanged and refreshed condition coverage reaches 15,285 / 17,762 lines, 22,142 / 25,456 regions, and 3,699 / 4,524 branches with 6,663 / 6,663 runtime rows passing and four explicit pending rows |
 | 2026-07-12 | Add non-public format-14 platform controls | `cmap-format14-non-uvs-platforms.ttf` is generated from `build_cmap_fixtures.py` with a valid base Unicode cmap plus valid format-14 subtables on platform/encoding pairs other than Apple Unicode variation selectors `0/5`. Four explicit public UVS variants prove pinned C and Rust ignore those subtables for `FT_Face_GetCharVariantIsDefault`, `FT_Face_GetVariantSelectors`, `FT_Face_GetVariantsOfChar`, and `FT_Face_GetCharsOfVariant`. Case count rises only to 6,671 concrete rows with zero implicit rows; refreshed condition coverage is 15,289 / 17,762 lines, 22,146 / 25,456 regions, and 3,707 / 4,524 branches with 6,667 / 6,667 runtime rows passing and four explicit pending rows |
 | 2026-07-12 | Split variants-of-char default and non-default UVS inputs | The existing `FT_Face_GetVariantsOfChar.char_with_variants_returns_selector_list` row now has explicit grouped variants for U+0041 default UVS coverage and U+0042 non-default UVS coverage in the same compact `cmap-format-language-matrix.ttf` fixture. This adds one concrete row and no font bytes, covering the non-default `glyph_id != 0` predicate in the public format-14 char-variants path. Refreshed condition coverage is 15,289 / 17,762 lines, 22,147 / 25,456 regions, and 3,710 / 4,524 branches with 6,668 / 6,668 runtime rows passing and four explicit pending rows |
+| 2026-07-12 | Unicode charmap missing-selection parity | One explicit `FT_Select_Charmap.error_missing_encoding` row reuses `cmap-nonunicode-format6.ttf` and requests `FT_ENCODING_UNICODE`. Pinned C returns `FT_Err_Invalid_CharMap_Handle` through `find_unicode_charmap`; Rust previously returned success by falling back to charmap index 0. Core now separates constructor fallback from explicit Unicode selection, the FFI wrapper maps the missing Unicode selection to the C error code, and exact Rust/C ABI/WASM parity passes with 6,669 / 6,669 runtime rows. Refreshed condition coverage is 15,290 / 17,759 lines, 22,146 / 25,452 regions, and 3,711 / 4,524 branches with zero implicit rows and four explicit pending rows |
+| 2026-07-12 | SFNT null-length stream-error row | One explicit `FT_Load_Sfnt_Table.offset_and_length_errors` variant reuses `basic-ttf.ttf` with `TTAG_head`, `length == NULL`, an allocated buffer, and an out-of-stream offset. The row covers the null-length stream-error return in the Rust FFI wrapper and compares pinned C, Rust FFI, C ABI, and WASM ABI output exactly. Refreshed condition coverage is 15,291 / 17,759 lines, 22,147 / 25,452 regions, and 3,711 / 4,524 branches with 6,670 / 6,670 runtime rows, zero implicit rows, and four explicit pending rows |
 
 ## Immediate Next Actions
 
