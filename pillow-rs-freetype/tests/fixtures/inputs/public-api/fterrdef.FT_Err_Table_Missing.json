@@ -55,7 +55,7 @@
       "case_id": "fterrdef.FT_Err_Table_Missing.sfnt_required_table_missing",
       "subject": "fterrdef.FT_Err_Table_Missing",
       "case": "sfnt_required_table_missing",
-      "operation": "FT_Load_Sfnt_Table",
+      "operation": "sfnt.load_sfnt_table",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -63,16 +63,17 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "id": "generated/sfnt/missing-requested-table.ttf",
-            "requirements": "Synthetic SFNT that opens, then lacks a requested optional table or a required table path that C reports as Table_Missing before specialized translation."
+            "id": "input/fonts/sfnt/basic-ttf.ttf",
+            "requirements": "Valid SFNT font that opens successfully and lacks the requested synthetic table tag."
           }
         },
         "params": {
           "expected_error_symbol": "FT_Err_Table_Missing",
           "face_index": 0,
-          "table_tag": "kern",
+          "missing_tag_hex": "0x5A5A5A5A",
           "offset": 0,
-          "length_probe": true,
+          "buffer_kind": "null",
+          "length_state": "zero",
           "pinned_sources": [
             "freetype/src/sfnt/ttload.c:150",
             "freetype/src/sfnt/ttload.c:264",
@@ -86,8 +87,10 @@
         "kind:error",
         "header:fterrdef",
         "area:sfnt",
+        "runtime:sfnt-load-table",
         "error-trigger",
-        "requires:fixture"
+        "requires:fixture",
+        "public-api-slice:1520-1543"
       ],
       "expectation": {
         "status": "error",
@@ -96,16 +99,14 @@
         "output_shape": {
           "error": "FT_Error",
           "error_symbol": "FT_Err_*",
-          "table_buffer": "length_and_mutation_class",
+          "length_after": "FT_ULong",
           "diagnostic_source": "pinned FreeType source location"
         },
         "compare": {
           "mode": "exact_error",
           "paths": [
             "error",
-            "error_symbol",
-            "table_buffer.length",
-            "table_buffer.mutation_class"
+            "length_after"
           ]
         }
       }
