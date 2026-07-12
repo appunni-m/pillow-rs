@@ -323,21 +323,27 @@ malformed name strings: an out-of-range English Windows typographic family
 record falls back to Apple Roman family text through `FT_New_Memory_Face`, and
 an out-of-range Apple PostScript-name record returns a null
 `FT_Get_Postscript_Name` result.
+`FT_Select_Charmap.error_missing_encoding` now has an explicit non-Unicode
+format-6 font row for `FT_ENCODING_UNICODE`. That row exposed and fixed a real
+C/Rust mismatch: pinned C `find_unicode_charmap` returns
+`FT_Err_Invalid_CharMap_Handle` when no charmap is tagged
+`FT_ENCODING_UNICODE`, while Rust previously fell back to charmap index 0 and
+returned success.
 
 | Measure | Current |
 |---|---:|
-| Logical public API cases | 4,147 |
-| Concrete explicit cases | 6,672 |
+| Logical public API cases | 4,148 |
+| Concrete explicit cases | 6,673 |
 | Additional grouped variants | 2,525 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,668 |
-| Exact parity | 6,668 / 6,668 |
+| Runnable parity comparisons | 6,669 |
+| Exact parity | 6,669 / 6,669 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,289 / 17,762 (86.08%) |
+| Covered Rust lines | 15,290 / 17,759 (86.10%) |
 | Rust function coverage | 957 / 1,133 (84.47%) |
 | Rust instantiation coverage | 960 / 1,136 (84.51%) |
-| Rust region coverage | 22,147 / 25,456 (87.00%) |
-| Rust branch/condition coverage | 3,710 / 4,524 (82.01%) |
+| Rust region coverage | 22,146 / 25,452 (87.01%) |
+| Rust branch/condition coverage | 3,711 / 4,524 (82.03%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 151 |
 | Stored active font binaries | 108 files, 811 KiB |

@@ -1365,7 +1365,7 @@ pub fn FT_Select_Charmap(face: Option<&mut FT_Face>, encoding: FT_Encoding) -> F
     match i64::from(encoding) {
         FT_ENCODING_UNICODE => match face.inner.select_unicode_charmap() {
             Ok(()) => FT_Err_Ok,
-            Err(_) => FT_Err_Invalid_Argument,
+            Err(_) => FT_Err_Invalid_CharMap_Handle,
         },
         _ => {
             let Some(index) = face
