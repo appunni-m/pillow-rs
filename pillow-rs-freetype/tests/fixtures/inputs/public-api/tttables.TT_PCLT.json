@@ -425,6 +425,63 @@
           "pillow-rs-freetype/freetype/src/sfnt/ttload.c:1361-1401"
         ]
       }
+    },
+    {
+      "case_id": "tttables.TT_PCLT.sfnt_table_short_runtime",
+      "subject": "tttables.TT_PCLT",
+      "case": "sfnt_table_missing_runtime",
+      "operation": "sfnt.get_sfnt_table.record",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sfnt/pclt-short.ttf",
+            "role": "font",
+            "requirements": "SFNT font with a PCLT directory entry shorter than FreeType's 54-byte TT_PCLT frame."
+          }
+        },
+        "params": {
+          "function": "FT_Get_Sfnt_Table",
+          "face_index": 0,
+          "sfnt_tag": "FT_SFNT_PCLT",
+          "record": "TT_PCLT",
+          "short_table": "PCLT"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:tttables",
+        "runtime:sfnt-table",
+        "record:TT_PCLT",
+        "public-api-slice:1540-1543"
+      ],
+      "metadata": {
+        "source_behavior": "The optional PCLT loader can fail while face load continues; FT_SFNT_PCLT then returns NULL because ttface->pclt.Version remains zero."
+      },
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": [
+          "input/fonts/sfnt/pclt-short.ttf must load as SFNT while exposing a short PCLT table."
+        ],
+        "output_shape": {
+          "face_load_status": "FT_Error",
+          "pointer_null": "bool",
+          "record": "null"
+        },
+        "compare": {
+          "mode": "nullness",
+          "paths": [
+            "face_load_status",
+            "pointer_null"
+          ]
+        },
+        "source_refs": [
+          "pillow-rs-freetype/freetype/src/sfnt/sfdriver.c:135-137",
+          "pillow-rs-freetype/freetype/src/sfnt/ttload.c:1393-1431"
+        ]
+      }
     }
   ]
 }
