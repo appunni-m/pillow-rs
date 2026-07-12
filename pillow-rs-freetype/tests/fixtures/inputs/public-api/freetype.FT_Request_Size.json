@@ -358,6 +358,54 @@
         },
         "error": "c_oracle"
       }
+    },
+    {
+      "case_id": "freetype.FT_Request_Size.error_ppem_overflow",
+      "subject": "freetype.FT_Request_Size",
+      "case": "error_invalid_request_or_unavailable_strike",
+      "operation": "freetype.request_size",
+      "schema": "size_metrics",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "request": {
+            "type": "FT_SIZE_REQUEST_TYPE_NOMINAL",
+            "width": 4194304,
+            "height": 4194304,
+            "horiResolution": 72,
+            "vertResolution": 72
+          }
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "coverage:font:size-request-ppem-overflow"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "active_size_after_error": "unchanged"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].error",
+            "outputs[*].size_snapshot_before_after"
+          ]
+        },
+        "error": "FT_Err_Invalid_Pixel_Size"
+      }
     }
   ]
 }
