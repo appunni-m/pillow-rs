@@ -559,7 +559,22 @@ fn flag_value(value: &Value, key: &str) -> Result<i32, String> {
     i32::try_from(raw).map_err(|err| format!("{key} does not fit i32: {err}"))
 }
 
+fn build_dependent_runtime_reason(case: &InputCase) -> Option<&'static str> {
+    if case.expectation.is_build_dependent()
+        && case.operation == "ftsnames.get_sfnt_name"
+        && lifecycle_handle_param(&case.inputs.params, "face") == Some("non_sfnt")
+    {
+        return Some("non-SFNT face fixture must open before FT_Get_Sfnt_Name");
+    }
+    None
+}
+
 fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness {
+    if let Some(reason) = build_dependent_runtime_reason(case) {
+        return RuntimeReadiness::Pending {
+            reason: format!("{operation}:{reason}"),
+        };
+    }
     if !is_supported_runtime_operation(case, operation) {
         return RuntimeReadiness::Pending {
             reason: operation.to_string(),
@@ -2135,6 +2150,12 @@ impl BackendComparisonWorker {
                 Ok(ok(rust_sfnt_name_count_output(Some(face))))
             }
             "ftsnames.get_sfnt_name" => {
+                if sfnt_name_face_is_null(&case.inputs.params) {
+                    return Ok(ok(rust_sfnt_name_indexed_optional_output(
+                        None,
+                        &case.inputs.params,
+                    )?));
+                }
                 let face = self.rust_face(case)?;
                 Ok(ok(rust_sfnt_name_indexed_output(
                     face,
@@ -2276,6 +2297,12 @@ impl BackendComparisonWorker {
                 Ok(ok(c_sfnt_name_count_output(face)))
             }
             "ftsnames.get_sfnt_name" => {
+                if sfnt_name_face_is_null(&case.inputs.params) {
+                    return Ok(ok(c_sfnt_name_indexed_output(
+                        std::ptr::null_mut(),
+                        &case.inputs.params,
+                    )?));
+                }
                 let face = self.c_face(case)?;
                 Ok(ok(c_sfnt_name_indexed_output(face, &case.inputs.params)?))
             }
@@ -2433,6 +2460,9 @@ impl BackendComparisonWorker {
                 Ok(ok(wasm_sfnt_name_count_output(handle)))
             }
             "ftsnames.get_sfnt_name" => {
+                if sfnt_name_face_is_null(&case.inputs.params) {
+                    return Ok(ok(wasm_sfnt_name_indexed_output(0, &case.inputs.params)?));
+                }
                 let handle = self.wasm_face(case)?;
                 Ok(ok(wasm_sfnt_name_indexed_output(
                     handle,
@@ -4439,14 +4469,34 @@ fn wasm_sfnt_name_count_output(handle: usize) -> Value {
     json!({ "return": wasm_abi::fontdone_wasm_get_sfnt_name_count(handle) })
 }
 
+fn sfnt_name_face_is_null(params: &Value) -> bool {
+    lifecycle_handle_param(params, "face") == Some("null")
+}
+
+fn sfnt_name_output_is_null(params: &Value) -> bool {
+    lifecycle_handle_param(params, "output") == Some("null")
+}
+
 fn rust_sfnt_name_indexed_output(face: &FT_Face, params: &Value) -> Result<Value, String> {
-    let count = FT_Get_Sfnt_Name_Count(Some(face));
+    rust_sfnt_name_indexed_optional_output(Some(face), params)
+}
+
+fn rust_sfnt_name_indexed_optional_output(
+    face: Option<&FT_Face>,
+    params: &Value,
+) -> Result<Value, String> {
+    let count = FT_Get_Sfnt_Name_Count(face);
     let indexes = resolved_sfnt_name_indexes(params, count)?;
+    let output_is_null = sfnt_name_output_is_null(params);
     let mut return_sequence = Vec::with_capacity(indexes.len());
     let mut names = Vec::new();
     for index in indexes {
         let mut name = FT_SfntName::default();
-        let error = FT_Get_Sfnt_Name(Some(face), index, Some(&mut name));
+        let error = if output_is_null {
+            FT_Get_Sfnt_Name(face, index, None)
+        } else {
+            FT_Get_Sfnt_Name(face, index, Some(&mut name))
+        };
         return_sequence.push(error);
         if error == FT_Err_Ok {
             names.push(rust_sfnt_name_record_json(index, &name));
@@ -4458,11 +4508,16 @@ fn rust_sfnt_name_indexed_output(face: &FT_Face, params: &Value) -> Result<Value
 fn c_sfnt_name_indexed_output(face: c_abi::FT_Face, params: &Value) -> Result<Value, String> {
     let count = c_abi::FT_Get_Sfnt_Name_Count(face);
     let indexes = resolved_sfnt_name_indexes(params, count)?;
+    let output_is_null = sfnt_name_output_is_null(params);
     let mut return_sequence = Vec::with_capacity(indexes.len());
     let mut names = Vec::new();
     for index in indexes {
         let mut name = c_abi::FT_SfntName::default();
-        let error = c_abi::FT_Get_Sfnt_Name(face, index, &mut name);
+        let error = if output_is_null {
+            c_abi::FT_Get_Sfnt_Name(face, index, std::ptr::null_mut())
+        } else {
+            c_abi::FT_Get_Sfnt_Name(face, index, &mut name)
+        };
         return_sequence.push(error);
         if error == FT_Err_Ok {
             names.push(c_sfnt_name_record_json(index, &name));
@@ -4474,11 +4529,16 @@ fn c_sfnt_name_indexed_output(face: c_abi::FT_Face, params: &Value) -> Result<Va
 fn wasm_sfnt_name_indexed_output(handle: usize, params: &Value) -> Result<Value, String> {
     let count = wasm_abi::fontdone_wasm_get_sfnt_name_count(handle);
     let indexes = resolved_sfnt_name_indexes(params, count)?;
+    let output_is_null = sfnt_name_output_is_null(params);
     let mut return_sequence = Vec::with_capacity(indexes.len());
     let mut names = Vec::new();
     for index in indexes {
         let mut name = wasm_abi::FontdoneWasmSfntName::default();
-        let error = wasm_abi::fontdone_wasm_get_sfnt_name(handle, index, &mut name);
+        let error = if output_is_null {
+            wasm_abi::fontdone_wasm_get_sfnt_name(handle, index, std::ptr::null_mut())
+        } else {
+            wasm_abi::fontdone_wasm_get_sfnt_name(handle, index, &mut name)
+        };
         return_sequence.push(error);
         if error == FT_Err_Ok {
             names.push(wasm_sfnt_name_record_json(index, &name));
@@ -6907,6 +6967,23 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if params.get("indexes").is_none() {
                 return oracle_fallback_args(case);
             }
+            if sfnt_name_face_is_null(params) || sfnt_name_output_is_null(params) {
+                let mut args = vec![
+                    "--get-sfnt-name-variant".to_string(),
+                    lifecycle_handle_param(params, "face")
+                        .unwrap_or("valid")
+                        .to_string(),
+                    lifecycle_handle_param(params, "output")
+                        .unwrap_or("valid_pointer")
+                        .to_string(),
+                    sfnt_name_indexes_arg(params)?,
+                ];
+                if !sfnt_name_face_is_null(params) {
+                    push_font_source(case, &mut args)?;
+                    push_face_size(params, &mut args)?;
+                }
+                return Ok(args);
+            }
             let mut args = vec!["--get-sfnt-name".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
@@ -7568,6 +7645,12 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             Ok(ok(rust_sfnt_name_count_output(Some(&face))))
         }
         "ftsnames.get_sfnt_name" => {
+            if sfnt_name_face_is_null(&case.inputs.params) {
+                return Ok(ok(rust_sfnt_name_indexed_optional_output(
+                    None,
+                    &case.inputs.params,
+                )?));
+            }
             let face = open_face(case)?;
             Ok(ok(rust_sfnt_name_indexed_output(
                 &face,
@@ -8008,6 +8091,12 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             Ok(ok(output))
         }
         "ftsnames.get_sfnt_name" => {
+            if sfnt_name_face_is_null(&case.inputs.params) {
+                return Ok(ok(c_sfnt_name_indexed_output(
+                    std::ptr::null_mut(),
+                    &case.inputs.params,
+                )?));
+            }
             let (library, face) = c_open_face(case)?;
             let output = c_sfnt_name_indexed_output(face, &case.inputs.params);
             c_done_face(face);
@@ -8392,6 +8481,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             Ok(ok(output))
         }
         "ftsnames.get_sfnt_name" => {
+            if sfnt_name_face_is_null(&case.inputs.params) {
+                return Ok(ok(wasm_sfnt_name_indexed_output(0, &case.inputs.params)?));
+            }
             let handle = wasm_open_face(case)?;
             let output = wasm_sfnt_name_indexed_output(handle, &case.inputs.params);
             wasm_done_face(handle);

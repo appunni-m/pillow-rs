@@ -245,6 +245,7 @@ class ConcreteInput:
     operation: str
     variant_id: str | None
     expect_error: bool
+    expectation_status: str
     assets: dict[str, object]
     params: dict[str, object]
 
@@ -551,6 +552,8 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
         path = INPUT_DIR / filename_for_subject(subject_id)
         data = json.loads(path.read_text())
         for case in data.get("cases", []):
+            expectation = object_dict(case.get("expectation", {}))
+            expectation_status = str(expectation.get("status", ""))
             inputs = case.get("inputs", {})
             if not isinstance(inputs, dict):
                 continue
@@ -567,6 +570,7 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
                             operation=str(case.get("operation", "")),
                             variant_id=str(variant.get("id", "")) or None,
                             expect_error=bool(variant.get("expect_error", case.get("expect_error", False))),
+                            expectation_status=expectation_status,
                             assets=object_dict(variant.get("assets", {})),
                             params=object_dict(variant.get("params", {})),
                         )
@@ -580,6 +584,7 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
                         operation=str(case.get("operation", "")),
                         variant_id=None,
                         expect_error=bool(case.get("expect_error", False)),
+                        expectation_status=expectation_status,
                         assets=object_dict(inputs.get("assets", {})),
                         params=object_dict(inputs.get("params", {})),
                     )
@@ -623,6 +628,12 @@ def has_null_lifecycle_handle(row: ConcreteInput) -> bool:
 
 
 def pending_core_reason(row: ConcreteInput) -> str | None:
+    if (
+        row.operation == "ftsnames.get_sfnt_name"
+        and row.expectation_status == "build_dependent"
+        and lifecycle_handle(row, "face") == "non_sfnt"
+    ):
+        return "non-SFNT face fixture must open before FT_Get_Sfnt_Name"
     if row.operation != "ftmm.set_named_instance":
         return None
     if any(
@@ -760,6 +771,7 @@ def build_route_audit(items: dict[str, ManifestSubject]) -> dict[str, object]:
                 "category": category,
                 "reason": reason,
                 "expect_error": row.expect_error,
+                "expectation_status": row.expectation_status,
             }
         )
 
