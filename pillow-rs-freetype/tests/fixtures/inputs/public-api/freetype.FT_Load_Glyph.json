@@ -594,7 +594,8 @@
               "load_flags": [
                 "FT_LOAD_RENDER",
                 "FT_LOAD_TARGET_MONO"
-              ]
+              ],
+              "assert_api_load_glyph_agrees": true
             },
             "coverage": [
               "render:serif-composite-mono"
@@ -643,7 +644,8 @@
               "load_flags": [
                 "FT_LOAD_RENDER",
                 "FT_LOAD_TARGET_LCD"
-              ]
+              ],
+              "assert_api_load_glyph_agrees": true
             },
             "coverage": [
               "render:noto-lcd"
@@ -668,7 +670,8 @@
               "load_flags": [
                 "FT_LOAD_RENDER",
                 "FT_LOAD_TARGET_LCD_V"
-              ]
+              ],
+              "assert_api_load_glyph_agrees": true
             },
             "coverage": [
               "render:noto-lcd-v"
