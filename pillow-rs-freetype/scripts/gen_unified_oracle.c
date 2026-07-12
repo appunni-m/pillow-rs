@@ -3765,6 +3765,26 @@ static int emit_face_get_variant_selectors_null(int argc, char** argv) {
     return 0;
 }
 
+static int emit_face_get_variants_of_char_null(int argc, char** argv) {
+    FT_ULong charcode = strtoul(argv[2], NULL, 10);
+    printf("{");
+    print_status(0);
+    printf(",\"output\":");
+    print_uint32_list_output(FT_Face_GetVariantsOfChar(NULL, charcode));
+    printf("}\n");
+    return 0;
+}
+
+static int emit_face_get_chars_of_variant_null(int argc, char** argv) {
+    FT_ULong variant_selector = strtoul(argv[2], NULL, 10);
+    printf("{");
+    print_status(0);
+    printf(",\"output\":");
+    print_uint32_list_output(FT_Face_GetCharsOfVariant(NULL, variant_selector));
+    printf("}\n");
+    return 0;
+}
+
 typedef struct OracleFace {
     FT_Library library;
     FT_Face face;
@@ -5312,6 +5332,30 @@ static int emit_face_or_slot(int argc, char** argv) {
         print_status(0);
         printf(",\"output\":");
         print_uint32_list_output(FT_Face_GetVariantSelectors(face));
+        printf("}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--face-get-variants-of-char")) {
+        FT_ULong charcode = strtoul(argv[7], NULL, 10);
+        print_status(0);
+        printf(",\"output\":");
+        print_uint32_list_output(FT_Face_GetVariantsOfChar(face, charcode));
+        printf("}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--face-get-chars-of-variant")) {
+        FT_ULong variant_selector = strtoul(argv[7], NULL, 10);
+        print_status(0);
+        printf(",\"output\":");
+        print_uint32_list_output(FT_Face_GetCharsOfVariant(face, variant_selector));
         printf("}\n");
         FT_Done_Face(face);
         FT_Done_FreeType(library);
@@ -7280,6 +7324,18 @@ static int dispatch(int argc, char** argv) {
         return emit_face_get_variant_selectors_null(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--face-get-variant-selectors")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--face-get-variants-of-char-null")) {
+        return emit_face_get_variants_of_char_null(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--face-get-variants-of-char")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--face-get-chars-of-variant-null")) {
+        return emit_face_get_chars_of_variant_null(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--face-get-chars-of-variant")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-kerning")) {

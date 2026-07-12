@@ -19,9 +19,7 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/variation-selectors/cmap-format14.otf",
-            "status": "required_future_asset",
-            "requires": "OpenType/CFF or TrueType font with Unicode charmap plus cmap format 14 default and non-default UVS records"
+            "path": "fonts/cmap/cmap-format-language-matrix.ttf"
           }
         },
         "params": {
@@ -61,37 +59,70 @@
       "schema": "api_array",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/variation-selectors/cmap-format14.otf",
-            "status": "required_future_asset",
-            "requires": "OpenType/CFF or TrueType font with Unicode charmap plus cmap format 14 default and non-default UVS records"
+        "variants": [
+          {
+            "id": "empty_selector",
+            "coverage": [
+              "face_get_chars_of_variant:present-empty-selector"
+            ],
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/cmap/cmap-format-language-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "variant_selector": "U+FE00"
+            }
           },
-          "fallback_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "probes": [
-            {
-              "variant_selector": "U+E01EF",
-              "kind": "absent_selector"
+          {
+            "id": "absent_selector",
+            "coverage": [
+              "face_get_chars_of_variant:absent-selector"
+            ],
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/cmap/cmap-format-language-matrix.ttf"
+              }
             },
-            {
-              "font": "fallback_font",
-              "variant_selector": "U+FE00",
-              "kind": "no_format14"
+            "params": {
+              "face_index": 0,
+              "variant_selector": "U+E01EF"
+            }
+          },
+          {
+            "id": "no_format14",
+            "coverage": [
+              "face_get_chars_of_variant:no-format14-control"
+            ],
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
             },
-            {
+            "params": {
+              "face_index": 0,
+              "variant_selector": "U+FE00"
+            }
+          },
+          {
+            "id": "null_face",
+            "coverage": [
+              "face_get_chars_of_variant:null-face"
+            ],
+            "assets": {},
+            "params": {
               "face": "null",
               "variant_selector": "U+FE00"
             }
-          ]
-        }
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -104,13 +135,15 @@
           "return": "FT_UInt32*"
         },
         "compare": {
-          "mode": "nullness",
+          "mode": "exact",
           "paths": [
-            "outputs[*].result"
+            "result.nullness",
+            "result.values",
+            "result.terminator"
           ]
         },
         "fixture_requirements": [
-          "Format-14 fixture plus plain font without format 14"
+          "Format-14 fixture plus absent selector, plain font, and null-face controls"
         ]
       }
     },
@@ -126,9 +159,7 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/variation-selectors/cmap-format14.otf",
-            "status": "required_future_asset",
-            "requires": "OpenType/CFF or TrueType font with Unicode charmap plus cmap format 14 default and non-default UVS records"
+            "path": "fonts/cmap/cmap-format-language-matrix.ttf"
           }
         },
         "params": {
@@ -154,14 +185,14 @@
           "lifetime": "face-owned until next FreeType call"
         },
         "compare": {
-          "mode": "unsupported_until_runner_added",
+          "mode": "exact",
           "paths": [
             "copied_values_before_invalidation",
             "pointer_identity_class"
           ]
         },
         "fixture_requirements": [
-          "Runner support for lifetime-safe pointer copy before invalidating call"
+          "Copy zero-terminated face-owned charcode buffer before invalidating calls"
         ]
       }
     }

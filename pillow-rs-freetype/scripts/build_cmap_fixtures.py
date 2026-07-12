@@ -40,6 +40,7 @@ def variation_selector_subtable():
     table.platEncID = 5
     table.cmap = {}
     table.uvsDict = {
+        0xFE00: [],
         0xFE0F: [
             (0x0041, None),
             (0x0042, "base"),

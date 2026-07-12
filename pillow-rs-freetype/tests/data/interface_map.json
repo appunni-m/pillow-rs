@@ -242,12 +242,12 @@
           "status": "implemented"
         },
         "FT_Face_GetVariantsOfChar": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Face::get_variants_of_char / Font::variants_of_char",
+          "status": "implemented"
         },
         "FT_Face_GetCharsOfVariant": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Face::get_chars_of_variant / Font::chars_of_variant",
+          "status": "implemented"
         },
         "FT_Get_Multi_Master": {
           "rust": null,

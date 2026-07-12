@@ -1387,7 +1387,7 @@ subjects:
       - id: present_selector_returns_char_list
         description: A selector present in cmap format 14 returns the same ordered zero-terminated character list as the C oracle.
       - id: absent_or_empty_selector_returns_null
-        description: Absent selectors, empty lists, missing format 14 subtables, and null face cases return NULL like the C oracle.
+        description: Absent selectors, empty selector records, missing format 14 subtables, and null face cases return NULL like the C oracle.
       - id: result_buffer_lifetime
         description: Returned face-owned arrays remain valid only until the next FreeType call according to the C oracle lifetime rule.
 
@@ -1417,7 +1417,7 @@ subjects:
       - id: char_with_variants_returns_selector_list
         description: A character with variation selector entries returns the same ordered zero-terminated selector list as the C oracle.
       - id: char_without_variants_returns_null
-        description: Characters without variation selector entries, missing format 14 subtables, and null face cases return NULL like the C oracle.
+        description: Characters without variation selector entries, missing format 14 subtables, and null face cases preserve the C oracle's non-null empty-list versus NULL distinction.
       - id: result_buffer_lifetime
         description: Returned face-owned arrays remain valid only until the next FreeType call according to the C oracle lifetime rule.
   - id: freetype.FT_Face_Properties
