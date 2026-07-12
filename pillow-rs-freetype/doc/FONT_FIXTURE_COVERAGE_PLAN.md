@@ -365,6 +365,13 @@ the same rendered glyphs already compared across pinned C, Rust FFI, C ABI, and
 WASM ABI. The same matrix now includes explicit force-autohint target-mode rows
 for MONO, LCD, and LCD_V, proving safe `Font` render agreement against
 C-oracle-backed rendered glyphs without adding fonts or implicit cases.
+The thin C ABI `FT_Render_Glyph` wrapper now delegates already-rendered bitmap
+slots into the core `GlyphSlot::render` no-op path instead of carrying a
+duplicate wrapper short-circuit. Existing pre-rendered public render rows
+therefore prove the core bitmap render route across Rust FFI, C ABI, and WASM
+ABI while keeping the wrapper limited to ABI conversion and error mapping. The
+wrapper preserves the original load flags for this no-op path to match pinned
+FreeType's `FT_Render_Glyph_Internal` bitmap behavior.
 
 | Measure | Current |
 |---|---:|
@@ -375,11 +382,11 @@ C-oracle-backed rendered glyphs without adding fonts or implicit cases.
 | Runnable parity comparisons | 6,681 |
 | Exact parity | 6,681 / 6,681 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,781 / 17,759 (88.86%) |
+| Covered Rust lines | 15,781 / 17,758 (88.87%) |
 | Rust function coverage | 1,000 / 1,133 (88.26%) |
 | Rust instantiation coverage | 1,003 / 1,136 (88.29%) |
-| Rust region coverage | 22,665 / 25,450 (89.06%) |
-| Rust branch/condition coverage | 3,739 / 4,524 (82.65%) |
+| Rust region coverage | 22,667 / 25,451 (89.06%) |
+| Rust branch/condition coverage | 3,740 / 4,524 (82.67%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 152 |
 | Stored active font binaries | 109 files, 815 KiB |
@@ -413,10 +420,10 @@ Current largest uncovered buckets:
 | `src/scaler.rs` | 1,066 / 1,220 | 153 / 188 | 48 / 61 | 1,138 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
-| `src/ffi/handles.rs` | 1,554 / 1,599 | 289 / 322 | 163 / 169 | 2,119 / 2,176 | Public FFI route audit; wrappers stay thin and must delegate to core |
+| `src/ffi/handles.rs` | 1,553 / 1,598 | 289 / 322 | 163 / 169 | 2,120 / 2,177 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 862 / 941 | 355 / 426 | 18 / 19 | 1,145 / 1,247 | CJK topology rows in the compact multiscript fixture |
-| `src/api.rs` | 500 / 513 | 78 / 86 | 60 / 61 | 684 / 702 | Public API wrapper rows for render cache and glyph-slot surfaces |
+| `src/api.rs` | 501 / 513 | 79 / 86 | 60 / 61 | 685 / 702 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short
 physical table data plus truncated range arrays. The only remaining uncovered
@@ -1802,6 +1809,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Cover safe horizontal advance helper from public advance row | Existing `FT_Get_Advance.success_horizontal_scaled_advance` now marks the DejaVuSans `A` no-hinting variant with `assert_font_hori_advance_agrees` and `advance_codepoint: 65`. The Rust runner compares `Font::glyph_hori_advance_26dot6(U+0041)` with the same C-oracle-backed `FT_Get_Advance` 16.16 value rounded to 26.6, while keeping C ABI and WASM ABI wrappers unchanged. This adds no fonts and no concrete cases; refreshed condition coverage is 15,636 / 17,759 lines, 22,556 / 25,450 regions, and 3,737 / 4,524 branches with 6,678 / 6,678 runtime rows and four explicit pending rows |
 | 2026-07-12 | Route safe load-mode rendering through public render matrix | Existing `FT_Render_Glyph.matrix_render` variants for no-hinting, force-autohint, target-light, and no-autohint now declare `assert_font_render_mode_agrees` with matching `font_render_text` values. The assertions compare safe `Font::render_char_mode` and `Font::render_mode` through the same load modes against the already C-oracle-backed rendered glyph rows, adding no fonts and no concrete cases. Refreshed condition coverage is 15,706 / 17,759 lines, 22,620 / 25,450 regions, and 3,739 / 4,524 branches with 6,678 / 6,678 runtime rows and four explicit pending rows |
 | 2026-07-12 | Route force-autohint target render modes through public render matrix | `FT_Render_Glyph.matrix_render` adds three explicit DejaVuSans `A` variants for `FT_LOAD_FORCE_AUTOHINT` combined with `FT_LOAD_TARGET_MONO`, `FT_LOAD_TARGET_LCD`, and `FT_LOAD_TARGET_LCD_V`, each asserting safe `Font` render agreement against the same C-oracle-backed rendered glyph row. This adds no fonts, raises concrete cases to 6,685, keeps implicit cases at zero, and refreshed condition coverage is 15,781 / 17,759 lines, 22,665 / 25,450 regions, and 3,739 / 4,524 branches with 6,681 / 6,681 runtime rows and four explicit pending rows |
+| 2026-07-12 | Delegate pre-rendered bitmap slots through core render | `FT_Render_Glyph` in the C ABI wrapper no longer returns before core when the slot is already bitmap-formatted. This removes duplicate wrapper behavior, keeps the ABI layer thin, preserves the original bitmap no-op load flags from pinned `FT_Render_Glyph_Internal`, and lets existing pre-rendered public render rows exercise the core `GlyphSlot::render` bitmap no-op path through Rust FFI, C ABI, and WASM ABI. No fonts or cases were added; refreshed condition coverage is 15,781 / 17,758 lines, 22,667 / 25,451 regions, and 3,740 / 4,524 branches with 6,681 / 6,681 runtime rows and four explicit pending rows |
 
 ## Immediate Next Actions
 
