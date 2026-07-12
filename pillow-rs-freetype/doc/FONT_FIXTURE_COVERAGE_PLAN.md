@@ -786,27 +786,29 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,274 | Use these rows for structural coverage evidence. |
-| Real null-validation route | 4 | `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null rows execute pinned C oracle status checks and the Rust FFI wrapper validation path; size lifecycle success remains separate. |
+| Real C/Rust/C-ABI/WASM parity route | 3,320 | Use these rows for structural coverage evidence. |
+| Real null-validation route | 8 | `FT_New_Size`, `FT_Done_Size`, `FT_Activate_Size`, `FT_OpenType_Validate`, and `FT_OpenType_Free` null rows execute pinned C oracle status checks and the Rust FFI wrapper validation path; size lifecycle success remains separate. |
 | Compile/header/scalar contract | 2,229 | Valid for ABI/header contracts, not runtime core coverage. |
-| Shape-incomplete fallback | 6 | Convert to complete explicit variants or mark invalid/pending. |
-| Generic modeled fallback | 958 | Classify operation-by-operation as real parity, unsupported, or pending. |
-| Generic modeled error fallback | 142 | Replace implemented surfaces with real error-path execution. |
+| Shape-incomplete fallback | 0 | Closed by classifying all formerly incomplete rows as explicit pending work. |
+| Generic modeled fallback | 942 | Classify operation-by-operation as real parity, unsupported, or pending. |
+| Generic modeled error fallback | 141 | Replace implemented surfaces with real error-path execution. |
 | Null-error fallback | 21 | Keep only exact null-handle probes; route implemented null cases directly. |
 | Void fallback | 2 | Replace with real null/noop wrapper rows or classify as void API contract. |
 | Explicit unsupported | 12 | Keep only where the public surface is intentionally unsupported. |
-| Pending core | 4 | Convert to runnable parity when the named dependencies exist. |
+| Pending core | 10 | Convert to runnable parity when the named dependencies or compact fixtures exist. |
 | Explicit unsupported stubs | 12 | Implement or keep visibly unsupported; do not count as coverage. |
-| Pending core implementation | 4 | Named-instance Adobe MM, `FT_MM_Var`, `gvar`/HVAR, and live non-SFNT face support rows remain pending. |
+| Pending core implementation | 10 | Named-instance Adobe MM, `FT_MM_Var`, `gvar`/HVAR, live non-SFNT face support, synthetic unloaded/unsupported slot states, compact overlap rendering, compact sbit missing-bitmap fixtures, and MVAR table variation rows remain pending. |
 
-The first R0 closure bucket is the 6 shape-incomplete rows because these are
-usually JSON/input fixes rather than new core features:
+The first R0 closure bucket was the 6 shape-incomplete rows because these are
+usually JSON/input fixes rather than new core features. As of the 2026-07-12
+route audit, this bucket is closed: none of the rows are still silent
+shape-incomplete fallbacks.
 
 | Operation | Rows | First action |
 |---|---:|---|
-| `load_glyph` | 2 | Non-null invalid-index, reserved-flag, and null-face probes are now executable; bitmap-missing rows still need explicit oracle/fixture support. |
-| `render_glyph` | 3 | Composite no-recurse cannot-render probing is now executable; unloaded/synthetic slot states and future overlap-font cases still need explicit route or unsupported classification. |
-| `sfnt.get_sfnt_table.record` | 1 | Replace the inert variation sequence with a real table-read route once MVAR variation behavior exists. |
+| `load_glyph` | 2 | Now pending core/fixture: compact sbit missing-bitmap and missing-composite fixtures plus loader behavior. |
+| `render_glyph` | 3 | Now pending core/fixture: unloaded/synthetic slot-state runner support and compact overlap-heavy render fixture. |
+| `sfnt.get_sfnt_table.record` | 1 | Now pending core: MVAR variation behavior before the SFNT table row can run. |
 
 | Route | Current behavior | Coverage risk | Required disposition |
 |---|---|---|---|
@@ -818,7 +820,7 @@ usually JSON/input fixes rather than new core features:
 | C ABI / WASM explicit Rust delegation | Constants, layout probes, compile probes, several SFNT table routes, transforms, reference-face, unsupported stubs, size helpers, and `freetype.new_face` are routed to Rust | Acceptable for compile-time/header probes; unsafe for runtime public functions that should exercise ABI pointer handling | Split into compile-contract probes versus runtime ABI obligations; runtime functions need direct thin-wrapper rows |
 | `ftsizes` null-validation rows | `FT_New_Size` null face/output and `FT_Done_Size`/`FT_Activate_Size` null size now execute pinned C oracle commands and Rust FFI wrapper validation; C/WASM fixture legs delegate because no exported ABI size lifecycle symbols exist yet | Proves null validation only, not secondary-size allocation, activation, destruction, or direct C/WASM export handling | Keep as resolved null-validation evidence; implement real multi-size lifecycle before moving `*_sequence` rows out of generic fallback |
 | Explicit Rust unsupported stubs | `freetype.face_properties` and `freetype.select_size` return `Unimplemented_Feature` directly | These are public FreeType surfaces; final 100% correctness cannot treat them as covered behavior | Implement exact public behavior or keep manifest rows visibly pending/failing until implementation exists |
-| Shape-incomplete fallback guards | `set_char_size` variants, `ftsnames.get_sfnt_name` without indexes, SFNT variation table requests, `sfnt.load_sfnt_table` missing read selectors, and incomplete load/render glyph rows intentionally fall back | These usually indicate declarative input that the runner does not execute | Convert valid rows into explicit grouped variants; remove or mark invalid row shapes rather than keeping inert declarations |
+| Shape-incomplete fallback guards | Current route audit reports zero rows | These previously indicated declarative input that the runner did not execute | Keep this category at zero; future incomplete declarations must become executable variants or explicit pending rows in the same change |
 | Closed named-instance row | `freetype.FT_Get_Postscript_Name.variation_instance_name_behavior` now executes real `FT_Set_Named_Instance` before `FT_Get_Postscript_Name` | This removed the last pending row, but also introduced honest `fvar` and named-instance parsing coverage obligations | Continue metadata coverage through explicit named-instance, name table, and malformed-`fvar` rows rather than hiding the new denominator |
 | Direct `ftmm.set_named_instance` rows | Selection, clear, and invalid-index compact variable cases now execute pinned C oracle, Rust FFI, C ABI, and WASM ABI paths | The remaining Adobe MM, `FT_MM_Var`, and glyph-output rows are real implementation gaps, not runner coverage | Keep those rows explicit pending until Adobe MM design coordinates, namedstyle coordinates, and `gvar`/HVAR deltas are implemented in core |
 
