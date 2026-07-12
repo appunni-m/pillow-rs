@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 141 | 98 | 43 | 109 | 773 KiB |
+| Active fixtures | 142 | 99 | 43 | 110 | 777 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 7 | 7 | 0 | 7 | 193 KiB |
 
@@ -121,6 +121,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `5df1e876cc25` | 1.9 | 1 | `fonts/metadata/head-short-eof.ttf` | 53-byte required head table at physical EOF; owns the short-header face-open error |
 | `4e4f32fced92` | 1.6 | 1 | `fonts/names/name-record-matrix.ttf` | nine-record name table covering Windows decode failures, Mac Roman and arbitrary-Windows fallbacks, invalid ranges, zero lengths, and every preference predicate outcome |
 | `936734c2d182` | 1.5 | 1 | `fonts/names/name-empty.ttf` | valid zero-record name table; owns the `Unknown` family and `Regular` subfamily defaults |
+| `c2023eedc045` | 3.7 | 1 | `fonts/names/name-missing.ttf` | compact generated TrueType face with the optional `name` table removed; owns face construction fallback when the table is absent |
 | `298447f992df` | 1.5 | 1 | `fonts/names/name-short.ttf` | five-byte name table; owns the short-header face-open error |
 | `fad5b6b1057c` | 1.5 | 1 | `fonts/names/name-record-overflow.ttf` | six-byte name header declaring one absent record; owns the record-array overflow error |
 | `ed624513a6fd` | 3.6 | 1 | `fonts/names/name-selection-fallbacks.ttf` | compact generated name-table control with unsupported platform, invalid Apple offset, Unicode family fallback, Apple-Roman subfamily, and Windows PostScript name |
@@ -209,6 +210,7 @@ listed because they enter different hinting and scaling conditions.
 | `post-format-20-custom-truncated.ttf` | gid 1 | name lookup only | format 2.0 custom name index without string bytes returns `.notdef` like the C oracle |
 | `post-format-25-short.ttf`, `post-format-25-zero.ttf`, `post-format-25-too-many.ttf` | gid 1 | name lookup only | malformed format 2.5 headers and above-limit counts default to `.notdef` with exact public status and buffer parity |
 | `name-selection-fallbacks.ttf` | face open and name lookup only | name table only | unsupported and malformed family-name candidates fall through to Unicode/Mac Roman fallbacks while `FT_Get_Postscript_Name` still returns exact Windows bytes |
+| `name-missing.ttf` | face open only | name table absent | public `FT_New_Memory_Face` opens a valid SFNT without an optional `name` table, driving the constructor fallback separate from the zero-record `name-empty.ttf` control |
 | `name-apple-postscript.ttf` | face open and name lookup only | name table only | Apple Roman nameID 6 is selected by `FT_Get_Postscript_Name` when no Windows PostScript name exists |
 | `name-win-postscript-odd-apple.ttf` | face open and name lookup only | name table only | odd-length Windows nameID 6 is rejected and exact C/Rust/C ABI/WASM parity falls back to Apple Roman |
 | `variable-name-apple-prefix.ttf` | encoded named instance 1 | name lookup only | Apple-only variation prefix/subfamily records build the encoded named-instance PostScript name through public `FT_Get_Postscript_Name` |
