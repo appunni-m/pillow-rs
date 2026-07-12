@@ -11075,6 +11075,20 @@ fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result
     let Some(render_mode) = render_mode_to_core(render_mode_param(&case.inputs.params)?) else {
         return Ok(());
     };
+    if let Some(expected) = case
+        .inputs
+        .params
+        .get("assert_render_mode_fixture_name")
+        .and_then(Value::as_str)
+    {
+        let actual = render_mode.fixture_name();
+        if actual != expected {
+            return Err(format!(
+                "{} RenderMode::fixture_name disagrees: mode={actual} expected={expected}",
+                case.case_id
+            ));
+        }
+    }
     let text = case
         .inputs
         .params
@@ -11159,6 +11173,20 @@ fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result
     })?;
     let char_json = rendered_bitmap_json(&char_bitmap);
     let text_json = rendered_bitmap_json(&text_bitmap);
+    if let Some(expected) = case
+        .inputs
+        .params
+        .get("assert_pixel_mode_fixture_name")
+        .and_then(Value::as_str)
+    {
+        let actual = char_bitmap.pixel_mode.fixture_name();
+        if actual != expected {
+            return Err(format!(
+                "{} PixelMode::fixture_name disagrees: pixel={actual} expected={expected}",
+                case.case_id
+            ));
+        }
+    }
     assert_font_convenience_helpers_agree(case, &font, text, render_mode, &char_bitmap, slot_json)?;
     let Some(slot_bitmap) = slot_json.get("bitmap") else {
         return Err(format!(

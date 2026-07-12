@@ -72,10 +72,14 @@
               "render_mode": "FT_RENDER_MODE_LCD",
               "representative_load_target": "FT_LOAD_TARGET_LCD",
               "font_render_text": "A",
-              "assert_font_render_mode_agrees": true
+              "assert_font_render_mode_agrees": true,
+              "assert_render_mode_fixture_name": "lcd",
+              "assert_pixel_mode_fixture_name": "lcd"
             },
             "coverage": [
-              "render_glyph:explicit-variant-1"
+              "render_glyph:explicit-variant-1",
+              "render:fixture-name-lcd",
+              "pixel:fixture-name-lcd"
             ]
           },
           {

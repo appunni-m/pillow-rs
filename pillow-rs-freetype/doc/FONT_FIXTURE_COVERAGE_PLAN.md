@@ -345,7 +345,10 @@ combinations through the safe `Face::load_glyph` agreement hook. This keeps the
 safe Rust convenience surface explicit while adding only one concrete input.
 The existing `FT_Get_Charmap_Index.owned_charmap_indexes` row now also asserts
 that safe `Font` charmap accessors and selection helpers agree with the same
-C-oracle-backed charmap metadata rows.
+C-oracle-backed charmap metadata rows. Existing render-mode rows now also
+declare `RenderMode::fixture_name` and `PixelMode::fixture_name` obligations
+for normal, mono, LCD, vertical LCD, and SDF render paths without adding fonts
+or concrete cases.
 
 | Measure | Current |
 |---|---:|
@@ -356,10 +359,10 @@ C-oracle-backed charmap metadata rows.
 | Runnable parity comparisons | 6,677 |
 | Exact parity | 6,677 / 6,677 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,593 / 17,759 (87.80%) |
-| Rust function coverage | 987 / 1,133 (87.11%) |
-| Rust instantiation coverage | 990 / 1,136 (87.15%) |
-| Rust region coverage | 22,488 / 25,450 (88.36%) |
+| Covered Rust lines | 15,608 / 17,759 (87.89%) |
+| Rust function coverage | 989 / 1,133 (87.29%) |
+| Rust instantiation coverage | 992 / 1,136 (87.32%) |
+| Rust region coverage | 22,503 / 25,450 (88.42%) |
 | Rust branch/condition coverage | 3,737 / 4,524 (82.60%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 151 |
@@ -1775,6 +1778,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Cover safe glyph metrics and monochrome render-target declarations | The existing normal render row now also compares `Font::glyph_metrics('A')` with the same C-oracle-backed glyph-slot metrics already produced by `FT_Render_Glyph`. `FT_Load_Glyph.render_and_target_modes` adds the missing normal `FT_LOAD_RENDER` + `FT_LOAD_MONOCHROME` variant and marks all four monochrome target combinations for safe `Face::load_glyph` agreement. This adds one concrete input and no fonts; refreshed condition coverage is 15,578 / 17,759 lines, 22,469 / 25,450 regions, and 3,735 / 4,524 branches with 6,677 / 6,677 runtime rows and four explicit pending rows |
 | 2026-07-12 | Cover safe charmap accessor parity | Existing `FT_Get_Charmap_Index.owned_charmap_indexes` now opts into a safe `Font` charmap assertion. The assertion compares `Font::charmaps`, `charmap`, `charmap_index`, and successful `set_charmap`/`select_charmap` against the same public charmap-index rows already compared across pinned C, Rust FFI, C ABI, and WASM ABI, then checks the safe API's explicit invalid index and missing-pair guards. This adds no fonts and no concrete cases; refreshed condition coverage is 15,587 / 17,759 lines, 22,477 / 25,450 regions, and 3,737 / 4,524 branches with 6,677 / 6,677 runtime rows and four explicit pending rows |
 | 2026-07-12 | Cover safe default font constructor and face count helper | Existing `FT_RENDER_MODE_NORMAL.render_glyph_mode_dispatch` now declares safe `Font::truetype` constructor coverage for the default load-mode row and compares `Font::face_count` with the same face's public `FT_FaceRec.num_faces` view while the row continues to compare rendered glyph output across pinned C, Rust FFI, C ABI, and WASM ABI. This adds no fonts and no concrete cases; refreshed condition coverage is 15,593 / 17,759 lines, 22,488 / 25,450 regions, and 3,737 / 4,524 branches with 6,677 / 6,677 runtime rows and four explicit pending rows |
+| 2026-07-12 | Cover public render and pixel fixture-name helpers | Existing render-mode dispatch rows now declare `assert_render_mode_fixture_name` and `assert_pixel_mode_fixture_name` for normal, mono, LCD, vertical LCD, and SDF outputs. The assertions run only from explicit public input rows that already compare the rendered glyph output across pinned C, Rust FFI, C ABI, and WASM ABI, so this adds no fonts and no concrete cases; refreshed condition coverage is 15,608 / 17,759 lines, 22,503 / 25,450 regions, and 3,737 / 4,524 branches with 6,677 / 6,677 runtime rows and four explicit pending rows |
 
 ## Immediate Next Actions
 

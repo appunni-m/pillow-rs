@@ -99,10 +99,14 @@
               "render_mode": "FT_RENDER_MODE_MONO",
               "representative_load_target": "FT_LOAD_TARGET_MONO",
               "font_render_text": "A",
-              "assert_font_render_mode_agrees": true
+              "assert_font_render_mode_agrees": true,
+              "assert_render_mode_fixture_name": "mono",
+              "assert_pixel_mode_fixture_name": "mono"
             },
             "coverage": [
-              "render_glyph:target-mono-safe-render-agreement"
+              "render_glyph:target-mono-safe-render-agreement",
+              "render:fixture-name-mono",
+              "pixel:fixture-name-mono"
             ]
           },
           {

@@ -79,12 +79,16 @@
               "assert_font_getmetrics_agrees": true,
               "assert_font_getlength_agrees": true,
               "assert_font_glyph_metrics_agrees": true,
-              "assert_font_getmask_agrees": true
+              "assert_font_getmask_agrees": true,
+              "assert_render_mode_fixture_name": "normal",
+              "assert_pixel_mode_fixture_name": "gray"
             },
             "coverage": [
               "render_glyph:explicit-variant-1",
               "font:default-constructor",
-              "font:face-count"
+              "font:face-count",
+              "render:fixture-name-normal",
+              "pixel:fixture-name-gray"
             ]
           },
           {
