@@ -36,7 +36,7 @@ use std::time::{Duration, Instant};
 
 use fontdone::ffi::*;
 use fontdone::{
-    Face as ApiFace, Font, FontError, GlyphSlot as ApiGlyphSlot, LoadMode, RenderMode,
+    CharmapInfo, Face as ApiFace, Font, FontError, GlyphSlot as ApiGlyphSlot, LoadMode, RenderMode,
     RenderedBitmap,
 };
 use fontdone_ffi_c as c_abi;
@@ -12396,7 +12396,9 @@ fn rust_get_charmap_index(case: &InputCase) -> Result<RunOutput, String> {
     let variants = charmap_variants(&case.inputs.params)?;
     if variants.is_empty() {
         let face = rust_new_face_without_size(case)?;
-        return Ok(ok(rust_owned_charmap_indexes_output(&face)?));
+        let output = rust_owned_charmap_indexes_output(&face)?;
+        assert_font_charmap_accessors_agree(case, &output)?;
+        return Ok(ok(output));
     }
     let face = rust_new_face_without_size(case)?;
     let foreign = rust_new_foreign_face_without_size(case)?;
@@ -13202,6 +13204,165 @@ fn rust_owned_charmap_indexes_output(face: &FT_Face) -> Result<Value, String> {
             .filter_map(|row| row.get("return").and_then(Value::as_i64))
             .collect::<Vec<_>>()
     }))
+}
+
+fn assert_font_charmap_accessors_agree(case: &InputCase, output: &Value) -> Result<(), String> {
+    if !bool_param(
+        &case.inputs.params,
+        "assert_font_charmap_accessors_agree",
+        false,
+    )? {
+        return Ok(());
+    }
+
+    let data = font_bytes(case)?;
+    let face_index = usize::try_from(face_index_param(&case.inputs.params)?)
+        .map_err(|err| format!("{} face_index does not fit usize: {err}", case.case_id))?;
+    let mut font = Font::truetype_face(data.as_ref(), face_index, 10.0)
+        .map_err(|err| format!("{} Font::truetype_face returned {err}", case.case_id))?;
+    let rows = output
+        .get("indices")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("{} charmap index output missing indices", case.case_id))?;
+
+    let charmaps = font.charmaps();
+    if charmaps.len() != rows.len() {
+        return Err(format!(
+            "{} Font::charmaps count disagrees with FT_Get_Charmap_Index rows: font={} ffi={}",
+            case.case_id,
+            charmaps.len(),
+            rows.len()
+        ));
+    }
+
+    for (info, row) in charmaps.iter().zip(rows) {
+        assert_font_charmap_info_matches_row(case, "Font::charmaps", info, row)?;
+    }
+
+    let active_index = font
+        .charmap_index()
+        .ok_or_else(|| format!("{} Font::charmap_index returned None", case.case_id))?;
+    let active_row = rows.get(active_index).ok_or_else(|| {
+        format!(
+            "{} Font::charmap_index returned out-of-range index {active_index}",
+            case.case_id
+        )
+    })?;
+    let active = font
+        .charmap()
+        .ok_or_else(|| format!("{} Font::charmap returned None", case.case_id))?;
+    assert_font_charmap_info_matches_row(case, "Font::charmap", &active, active_row)?;
+
+    for row in rows {
+        let index = row
+            .pointer("/charmap_metadata/charmap_index")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| format!("{} charmap row missing index", case.case_id))?;
+        let index = usize::try_from(index)
+            .map_err(|err| format!("{} charmap index does not fit usize: {err}", case.case_id))?;
+        font.set_charmap(index)
+            .map_err(|err| format!("{} Font::set_charmap({index}) returned {err}", case.case_id))?;
+        let selected = font.charmap().ok_or_else(|| {
+            format!(
+                "{} Font::charmap returned None after set_charmap({index})",
+                case.case_id
+            )
+        })?;
+        assert_font_charmap_info_matches_row(case, "Font::set_charmap", &selected, row)?;
+    }
+
+    if !rows.is_empty() {
+        let out_of_range = rows.len();
+        if font.set_charmap(out_of_range).is_ok() {
+            return Err(format!(
+                "{} Font::set_charmap accepted out-of-range index {out_of_range}",
+                case.case_id
+            ));
+        }
+        let (platform_id, encoding_id) = missing_charmap_pair(&charmaps);
+        if font.select_charmap(platform_id, encoding_id).is_ok() {
+            return Err(format!(
+                "{} Font::select_charmap accepted missing pair {platform_id}/{encoding_id}",
+                case.case_id
+            ));
+        }
+        let first = charmaps
+            .first()
+            .ok_or_else(|| format!("{} expected at least one charmap", case.case_id))?;
+        font.select_charmap(first.platform_id, first.encoding_id)
+            .map_err(|err| {
+                format!(
+                    "{} Font::select_charmap({}, {}) returned {err}",
+                    case.case_id, first.platform_id, first.encoding_id
+                )
+            })?;
+        let selected = font.charmap().ok_or_else(|| {
+            format!(
+                "{} Font::charmap returned None after select_charmap",
+                case.case_id
+            )
+        })?;
+        assert_font_charmap_info_matches_row(
+            case,
+            "Font::select_charmap",
+            &selected,
+            rows.first()
+                .ok_or_else(|| format!("{} missing first charmap row", case.case_id))?,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn assert_font_charmap_info_matches_row(
+    case: &InputCase,
+    context: &str,
+    info: &CharmapInfo,
+    row: &Value,
+) -> Result<(), String> {
+    let metadata = row
+        .get("charmap_metadata")
+        .ok_or_else(|| format!("{} {context} row missing charmap_metadata", case.case_id))?;
+    let return_value = row
+        .get("return")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| format!("{} {context} row missing return", case.case_id))?;
+    let expected_index = metadata
+        .get("charmap_index")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| format!("{} {context} metadata missing charmap_index", case.case_id))?;
+    let expected_platform = metadata
+        .get("platform_id")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| format!("{} {context} metadata missing platform_id", case.case_id))?;
+    let expected_encoding = metadata
+        .get("encoding_id")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| format!("{} {context} metadata missing encoding_id", case.case_id))?;
+    let actual_index = i64::try_from(info.index)
+        .map_err(|err| format!("{} {context} index does not fit i64: {err}", case.case_id))?;
+    if return_value != actual_index
+        || expected_index != info.index as u64
+        || expected_platform != u64::from(info.platform_id)
+        || expected_encoding != u64::from(info.encoding_id)
+    {
+        return Err(format!(
+            "{} {context} disagrees with FT_Get_Charmap_Index row: font={info:?} row={row}",
+            case.case_id
+        ));
+    }
+    Ok(())
+}
+
+fn missing_charmap_pair(charmaps: &[CharmapInfo]) -> (u16, u16) {
+    [(u16::MAX, u16::MAX), (u16::MAX, 0), (0, u16::MAX)]
+        .into_iter()
+        .find(|(platform_id, encoding_id)| {
+            !charmaps
+                .iter()
+                .any(|info| info.platform_id == *platform_id && info.encoding_id == *encoding_id)
+        })
+        .unwrap_or((u16::MAX - 1, u16::MAX - 1))
 }
 
 fn c_owned_charmap_indexes_output(face: c_abi::FT_Face) -> Result<Value, String> {

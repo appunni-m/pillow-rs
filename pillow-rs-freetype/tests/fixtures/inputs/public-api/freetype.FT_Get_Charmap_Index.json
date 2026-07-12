@@ -23,13 +23,15 @@
         },
         "params": {
           "face_index": 0,
-          "charmap_handles": "face.charmaps[*]"
+          "charmap_handles": "face.charmaps[*]",
+          "assert_font_charmap_accessors_agree": true
         }
       },
       "classifiers": [
         "kind:function",
         "header:freetype",
-        "area:charmap"
+        "area:charmap",
+        "coverage:font:charmap-accessors"
       ],
       "expectation": {
         "status": "ok",
