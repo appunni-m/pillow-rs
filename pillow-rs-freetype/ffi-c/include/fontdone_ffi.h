@@ -56,6 +56,15 @@ typedef struct FT_BBox_ {
   FT_Pos yMax;
 } FT_BBox;
 
+typedef struct FT_Outline_ {
+  FT_UShort n_contours;
+  FT_UShort n_points;
+  FT_Vector* points;
+  FT_Byte* tags;
+  FT_UShort* contours;
+  FT_Int flags;
+} FT_Outline;
+
 typedef struct FT_Glyph_Metrics_ {
   FT_Pos width;
   FT_Pos height;
@@ -208,6 +217,7 @@ FT_Error FT_New_Memory_Face(FT_Library library, const unsigned char* file_base, 
 FT_Error FT_Done_Face(FT_Face face);
 FT_Bool FT_Face_CheckTrueTypePatents(FT_Face face);
 FT_Bool FT_Face_SetUnpatentedHinting(FT_Face face, FT_Bool value);
+void FT_Outline_Get_CBox(const FT_Outline* outline, FT_BBox* acbox);
 FT_Error FT_Set_Char_Size(FT_Face face, FT_F26Dot6 char_width, FT_F26Dot6 char_height, FT_UInt horz_resolution, FT_UInt vert_resolution);
 FT_Error FT_Set_Pixel_Sizes(FT_Face face, FT_UInt pixel_width, FT_UInt pixel_height);
 FT_Error FT_Request_Size(FT_Face face, FT_Size_Request req);

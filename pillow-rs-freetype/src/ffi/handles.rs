@@ -111,6 +111,33 @@ pub fn FT_Face_SetUnpatentedHinting(_face: Option<&mut FT_Face>, _value: FT_Bool
     0
 }
 
+pub fn FT_Outline_Get_CBox(outline: Option<&FT_OutlineSnapshot>, acbox: Option<&mut FT_BBox>) {
+    let (Some(outline), Some(acbox)) = (outline, acbox) else {
+        return;
+    };
+    if outline.points.is_empty() {
+        *acbox = FT_BBox::default();
+        return;
+    }
+    let first = outline.points[0];
+    let mut x_min = first.x;
+    let mut y_min = first.y;
+    let mut x_max = first.x;
+    let mut y_max = first.y;
+    for point in &outline.points[1..] {
+        x_min = x_min.min(point.x);
+        y_min = y_min.min(point.y);
+        x_max = x_max.max(point.x);
+        y_max = y_max.max(point.y);
+    }
+    *acbox = FT_BBox {
+        xMin: x_min,
+        yMin: y_min,
+        xMax: x_max,
+        yMax: y_max,
+    };
+}
+
 pub fn FT_OpenType_Free(_face: Option<&FT_Face>, _table: FT_Bytes) {}
 
 pub fn FT_OpenType_Validate(

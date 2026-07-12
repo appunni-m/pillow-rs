@@ -54,6 +54,26 @@ pub struct FontdoneWasmMatrix {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmBBox {
+    pub xMin: i64,
+    pub yMin: i64,
+    pub xMax: i64,
+    pub yMax: i64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmOutline {
+    pub n_contours: FT_UShort,
+    pub n_points: FT_UShort,
+    pub points: *mut FontdoneWasmVector,
+    pub tags: *mut FT_Byte,
+    pub contours: *mut FT_UShort,
+    pub flags: FT_Int,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FT_UnitVector {
     pub x: FT_F2Dot14,
     pub y: FT_F2Dot14,
@@ -362,6 +382,30 @@ pub extern "C" fn fontdone_wasm_face_set_unpatented_hinting(
     value: FT_Bool,
 ) -> FT_Bool {
     rust_ffi::FT_Face_SetUnpatentedHinting(face_mut(handle).map(|state| &mut state.face), value)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_get_cbox(
+    outline: *const FontdoneWasmOutline,
+    acbox: *mut FontdoneWasmBBox,
+) {
+    if outline.is_null() || acbox.is_null() {
+        return;
+    }
+    let Some(snapshot) = outline_snapshot_from_wasm(outline) else {
+        return;
+    };
+    let mut bbox = rust_ffi::FT_BBox::default();
+    rust_ffi::FT_Outline_Get_CBox(Some(&snapshot), Some(&mut bbox));
+    // SAFETY: `acbox` is non-null and the caller provides writable `FontdoneWasmBBox` storage.
+    unsafe {
+        *acbox = FontdoneWasmBBox {
+            xMin: bbox.xMin,
+            yMin: bbox.yMin,
+            xMax: bbox.xMax,
+            yMax: bbox.yMax,
+        };
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1493,6 +1537,54 @@ fn slot_to_wasm(slot: &rust_ffi::FT_GlyphSlot) -> FontdoneWasmGlyphSlot {
         bitmap_left: slot.bitmap_left,
         bitmap_top: slot.bitmap_top,
     }
+}
+
+fn outline_snapshot_from_wasm(
+    outline: *const FontdoneWasmOutline,
+) -> Option<rust_ffi::FT_OutlineSnapshot> {
+    if outline.is_null() {
+        return None;
+    }
+    // SAFETY: `outline` is non-null; wasm ABI callers must pass a valid outline record.
+    let outline = unsafe { &*outline };
+    let n_points = usize::from(outline.n_points);
+    let n_contours = usize::from(outline.n_contours);
+    if (n_points > 0 && outline.points.is_null()) || (n_contours > 0 && outline.contours.is_null())
+    {
+        return None;
+    }
+    let points = if n_points == 0 {
+        Vec::new()
+    } else {
+        // SAFETY: `points` is non-null for `n_points > 0`; the caller provides
+        // `n_points` readable vector records for the duration of this call.
+        unsafe { slice::from_raw_parts(outline.points, n_points) }
+            .iter()
+            .map(|point| rust_ffi::FT_Vector {
+                x: point.x,
+                y: point.y,
+            })
+            .collect()
+    };
+    let tags = if n_points == 0 || outline.tags.is_null() {
+        Vec::new()
+    } else {
+        // SAFETY: `tags` is non-null and points to `n_points` readable tag bytes.
+        unsafe { slice::from_raw_parts(outline.tags, n_points) }.to_vec()
+    };
+    let contours = if n_contours == 0 {
+        Vec::new()
+    } else {
+        // SAFETY: `contours` is non-null for `n_contours > 0`; the caller provides
+        // `n_contours` readable contour endpoint values.
+        unsafe { slice::from_raw_parts(outline.contours, n_contours) }.to_vec()
+    };
+    Some(rust_ffi::FT_OutlineSnapshot {
+        points,
+        tags,
+        contours,
+        flags: outline.flags,
+    })
 }
 
 fn face_ref(handle: usize) -> Option<&'static WasmFaceState> {

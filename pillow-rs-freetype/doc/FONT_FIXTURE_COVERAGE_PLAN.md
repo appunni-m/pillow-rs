@@ -305,6 +305,12 @@ out-pointers and table-index selection. Pinned C returns the table count when
 `FT_Err_Table_Missing` for out-of-range table indexes when `tag` is non-null.
 Rust FFI, C ABI, and WASM ABI now route through that same public pointer
 contract instead of using a Rust-only modeled tuple helper.
+`FT_Outline_Get_CBox.null_inputs_noop` now calls pinned C
+`FT_Outline_Get_CBox(NULL, acbox)` and `FT_Outline_Get_CBox(outline, NULL)`,
+and the Rust FFI, C ABI, and WASM ABI legs route the same nullable pointer
+shapes through thin public wrappers. Live glyph CBox rows also execute the safe
+Rust helper and verify it matches the loaded slot cbox, so null/no-op and
+control-point/empty-outline behavior are both real route evidence.
 
 | Measure | Current |
 |---|---:|
@@ -315,11 +321,11 @@ contract instead of using a Rust-only modeled tuple helper.
 | Runnable parity comparisons | 6,644 |
 | Exact parity | 6,644 / 6,644 |
 | Pending cases | 4 |
-| Covered Rust lines | 14,695 / 17,264 (85.12%) |
-| Rust function coverage | 881 / 1,071 (82.26%) |
-| Rust instantiation coverage | 884 / 1,074 (82.31%) |
-| Rust region coverage | 21,419 / 24,829 (86.27%) |
-| Rust branch/condition coverage | 3,591 / 4,406 (81.50%) |
+| Covered Rust lines | 14,720 / 17,289 (85.14%) |
+| Rust function coverage | 882 / 1,072 (82.28%) |
+| Rust instantiation coverage | 885 / 1,075 (82.33%) |
+| Rust region coverage | 21,454 / 24,864 (86.29%) |
+| Rust branch/condition coverage | 3,595 / 4,410 (81.52%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 141 |
 | Stored active font binaries | 98 files, 773 KiB |
@@ -723,10 +729,10 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,246 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,247 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 4 | `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null rows execute pinned C oracle status checks and the Rust FFI wrapper validation path; size lifecycle success remains separate. |
 | Compile/header/scalar contract | 2,248 | Valid for ABI/header contracts, not runtime core coverage. |
-| Shape-incomplete fallback | 7 | Convert to complete explicit variants or mark invalid/pending. |
+| Shape-incomplete fallback | 6 | Convert to complete explicit variants or mark invalid/pending. |
 | Generic modeled fallback | 961 | Classify operation-by-operation as real parity, unsupported, or pending. |
 | Generic modeled error fallback | 142 | Replace implemented surfaces with real error-path execution. |
 | Null-error fallback | 21 | Keep only exact null-handle probes; route implemented null cases directly. |
@@ -736,14 +742,13 @@ Current route-audit totals:
 | Explicit unsupported stubs | 12 | Implement or keep visibly unsupported; do not count as coverage. |
 | Pending core implementation | 4 | Named-instance Adobe MM, `FT_MM_Var`, `gvar`/HVAR, and live non-SFNT face support rows remain pending. |
 
-The first R0 closure bucket is the 7 shape-incomplete rows because these are
+The first R0 closure bucket is the 6 shape-incomplete rows because these are
 usually JSON/input fixes rather than new core features:
 
 | Operation | Rows | First action |
 |---|---:|---|
 | `load_glyph` | 2 | Non-null invalid-index, reserved-flag, and null-face probes are now executable; bitmap-missing rows still need explicit oracle/fixture support. |
 | `render_glyph` | 3 | Composite no-recurse cannot-render probing is now executable; unloaded/synthetic slot states and future overlap-font cases still need explicit route or unsupported classification. |
-| `ftoutln.outline_get_cbox` | 1 | Add explicit null outline/acbox route support; do not replace null-noop behavior with a normal glyph row. |
 | `sfnt.get_sfnt_table.record` | 1 | Replace the inert variation sequence with a real table-read route once MVAR variation behavior exists. |
 
 | Route | Current behavior | Coverage risk | Required disposition |
@@ -756,7 +761,7 @@ usually JSON/input fixes rather than new core features:
 | C ABI / WASM explicit Rust delegation | Constants, layout probes, compile probes, several SFNT table routes, transforms, reference-face, unsupported stubs, size helpers, and `freetype.new_face` are routed to Rust | Acceptable for compile-time/header probes; unsafe for runtime public functions that should exercise ABI pointer handling | Split into compile-contract probes versus runtime ABI obligations; runtime functions need direct thin-wrapper rows |
 | `ftsizes` null-validation rows | `FT_New_Size` null face/output and `FT_Done_Size`/`FT_Activate_Size` null size now execute pinned C oracle commands and Rust FFI wrapper validation; C/WASM fixture legs delegate because no exported ABI size lifecycle symbols exist yet | Proves null validation only, not secondary-size allocation, activation, destruction, or direct C/WASM export handling | Keep as resolved null-validation evidence; implement real multi-size lifecycle before moving `*_sequence` rows out of generic fallback |
 | Explicit Rust unsupported stubs | `freetype.face_properties` and `freetype.select_size` return `Unimplemented_Feature` directly | These are public FreeType surfaces; final 100% correctness cannot treat them as covered behavior | Implement exact public behavior or keep manifest rows visibly pending/failing until implementation exists |
-| Shape-incomplete fallback guards | `set_char_size` variants, `ftsnames.get_sfnt_name` without indexes, SFNT variation table requests, `sfnt.load_sfnt_table` missing read selectors, incomplete load/render glyph rows, and incomplete outline cbox rows intentionally fall back | These usually indicate declarative input that the runner does not execute | Convert valid rows into explicit grouped variants; remove or mark invalid row shapes rather than keeping inert declarations |
+| Shape-incomplete fallback guards | `set_char_size` variants, `ftsnames.get_sfnt_name` without indexes, SFNT variation table requests, `sfnt.load_sfnt_table` missing read selectors, and incomplete load/render glyph rows intentionally fall back | These usually indicate declarative input that the runner does not execute | Convert valid rows into explicit grouped variants; remove or mark invalid row shapes rather than keeping inert declarations |
 | Closed named-instance row | `freetype.FT_Get_Postscript_Name.variation_instance_name_behavior` now executes real `FT_Set_Named_Instance` before `FT_Get_Postscript_Name` | This removed the last pending row, but also introduced honest `fvar` and named-instance parsing coverage obligations | Continue metadata coverage through explicit named-instance, name table, and malformed-`fvar` rows rather than hiding the new denominator |
 | Direct `ftmm.set_named_instance` rows | Selection, clear, and invalid-index compact variable cases now execute pinned C oracle, Rust FFI, C ABI, and WASM ABI paths | The remaining Adobe MM, `FT_MM_Var`, and glyph-output rows are real implementation gaps, not runner coverage | Keep those rows explicit pending until Adobe MM design coordinates, namedstyle coordinates, and `gvar`/HVAR deltas are implemented in core |
 
@@ -1583,6 +1588,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Direct load-char null-face route | 109 unique hashes | 0 | 6,648 | 6,644 / 6,644 | 4 | 14,695 / 17,264 lines; 21,419 / 24,829 regions; 3,591 / 4,406 branches | `FT_Load_Char.error_null_face_or_invalid_flags.null_face` now calls pinned C `FT_Load_Char(NULL, char_code, flags)` instead of the generic error oracle, and the Rust/C ABI/WASM legs route the same explicit null-face shape through their public validation surfaces. The C and WASM wrappers now return FreeType's `Invalid_Face_Handle` for invalid face handles, route-audit real parity rises to 3,244, and shape-incomplete fallback drops to 9 with no new cases or implicit discovery |
 | 2026-07-12 | Direct load-glyph null-face route | 109 unique hashes | 0 | 6,648 | 6,644 / 6,644 | 4 | 14,695 / 17,264 lines; 21,419 / 24,829 regions; 3,591 / 4,406 branches | `FT_Load_Glyph.error_null_face_or_invalid_flags.null_face` now calls pinned C `FT_Load_Glyph(NULL, glyph_index, flags)` instead of the generic null fallback, and Rust/C ABI/WASM legs route the same explicit null-face shape through public validation. The C and WASM wrappers now match FreeType's `Invalid_Face_Handle` for invalid glyph-load handles, route-audit real parity rises to 3,245, and shape-incomplete fallback drops to 8 without case growth |
 | 2026-07-12 | Direct unpatented-hinting post-load route | 109 unique hashes | 0 | 6,648 | 6,644 / 6,644 | 4 | 14,695 / 17,264 lines; 21,419 / 24,829 regions; 3,591 / 4,406 branches | `FT_Face_SetUnpatentedHinting.post_toggle_load_behavior` now calls pinned C `FT_Face_SetUnpatentedHinting` for the explicit toggle sequence and then compares the post-toggle `FT_Load_Glyph` slot through Rust FFI, C ABI, and WASM ABI. Pinned FreeType's deprecated function is a no-op returning false, so the row proves unchanged post-toggle load behavior instead of a generic boolean list. Route-audit real parity rises to 3,246 and shape-incomplete fallback drops to 7 without case or coverage growth |
+| 2026-07-12 | Direct outline cbox nullable pointer route | 109 unique hashes | 0 | 6,648 | 6,644 / 6,644 | 4 | 14,720 / 17,289 lines; 21,454 / 24,864 regions; 3,595 / 4,410 branches | `FT_Outline_Get_CBox.null_inputs_noop` now calls pinned C, Rust FFI, C ABI, and WASM ABI pointer no-op shapes directly. Live `ftoutln.outline_get_cbox` glyph rows also call the safe Rust helper and verify it agrees with the loaded slot cbox for control-point and empty-outline cases. Route-audit real parity rises to 3,247 and shape-incomplete fallback drops to 6 without case growth |
 
 ## Decision Log
 
@@ -1686,6 +1692,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Route `FT_Load_Char` null-face errors through the real call | Pinned `FT_Load_Char` checks `face == NULL` before charmap lookup or glyph loading and returns `FT_Err_Invalid_Face_Handle`. Public null-face rows must call that function directly; generic `--error` or null-source shortcuts are only fallback evidence and should not count as route parity |
 | 2026-07-12 | Route `FT_Load_Glyph` null-face errors through the real call | Pinned `FT_Load_Glyph` checks `!face || !face->size || !face->glyph` before driver dispatch and returns `FT_Err_Invalid_Face_Handle`. Public null-face glyph-load rows must call `FT_Load_Glyph(NULL, ...)` directly; wrapper validation should mirror that error code without adding font logic |
 | 2026-07-12 | Prove unpatented-hinting toggles through post-load behavior | Pinned `FT_Face_SetUnpatentedHinting` in `ftpatent.c` ignores the face and value and always returns false. Toggle-sequence rows should therefore compare the following public glyph load slot, not only the deprecated function's scalar return |
+| 2026-07-12 | Route `FT_Outline_Get_CBox` nullable inputs through the real call | Pinned `ftoutln.c` does nothing when either `outline` or `acbox` is null, and writes a zero box only for a non-null outline with zero points. Public null/no-op rows must call `FT_Outline_Get_CBox` directly; generic void or modeled fallback output cannot prove the pointer contract |
 
 ## Immediate Next Actions
 
@@ -1696,7 +1703,8 @@ Work must resume here unless a newer user request changes priority:
    `FT_Get_CMap_Format`, `FT_Get_CMap_Language_ID`, and
    `FT_Get_SubGlyph_Info`, `FT_Get_Postscript_Name`, `FT_Get_Sfnt_Name`,
    `FT_Load_Char`, `FT_Load_Glyph`, `FT_Face_SetUnpatentedHinting`, and
-   `FT_Set_Named_Instance`-driven named-instance selection are now real parity.
+   `FT_Outline_Get_CBox`, and `FT_Set_Named_Instance`-driven named-instance
+   selection are now real parity.
    `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null-validation rows
    are now exact C-oracle/Rust-FFI routes; continue with generic fallback rows,
    especially the remaining size lifecycle sequences and any other modeled
