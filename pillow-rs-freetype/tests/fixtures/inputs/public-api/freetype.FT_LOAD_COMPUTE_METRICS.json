@@ -95,9 +95,13 @@
               "face_index": 0,
               "pixel_size": 20,
               "load_flags": ["FT_LOAD_TARGET_MONO"],
-              "glyph_index": { "from_char_code": 65 }
+              "glyph_index": { "from_char_code": 65 },
+              "assert_api_load_glyph_agrees": true
             },
-            "coverage": ["tt/hdmx:mono-device-width-lookup"]
+            "coverage": [
+              "tt/hdmx:mono-device-width-lookup",
+              "api/load_glyph:mono-device-width"
+            ]
           },
           {
             "id": "mono-compute-metrics",
@@ -108,9 +112,13 @@
               "face_index": 0,
               "pixel_size": 20,
               "load_flags": ["FT_LOAD_TARGET_MONO", "FT_LOAD_COMPUTE_METRICS"],
-              "glyph_index": { "from_char_code": 65 }
+              "glyph_index": { "from_char_code": 65 },
+              "assert_api_load_glyph_agrees": true
             },
-            "coverage": ["tt/hdmx:mono-compute-metrics-suppression"]
+            "coverage": [
+              "tt/hdmx:mono-compute-metrics-suppression",
+              "api/load_glyph:mono-compute-metrics"
+            ]
           },
           {
             "id": "mono-ppem-outside-hdmx-u8",
@@ -121,9 +129,13 @@
               "face_index": 0,
               "pixel_size": 256,
               "load_flags": ["FT_LOAD_TARGET_MONO"],
-              "glyph_index": { "from_char_code": 65 }
+              "glyph_index": { "from_char_code": 65 },
+              "assert_api_load_glyph_agrees": true
             },
-            "coverage": ["tt/hdmx:ppem-outside-u8-range"]
+            "coverage": [
+              "tt/hdmx:ppem-outside-u8-range",
+              "api/load_glyph:mono-ppem-outside-hdmx-u8"
+            ]
           },
           {
             "id": "mono-ppem-record-miss",
@@ -134,9 +146,13 @@
               "face_index": 0,
               "pixel_size": 19,
               "load_flags": ["FT_LOAD_TARGET_MONO"],
-              "glyph_index": { "from_char_code": 65 }
+              "glyph_index": { "from_char_code": 65 },
+              "assert_api_load_glyph_agrees": true
             },
-            "coverage": ["tt/hdmx:representable-ppem-record-miss"]
+            "coverage": [
+              "tt/hdmx:representable-ppem-record-miss",
+              "api/load_glyph:mono-ppem-record-miss"
+            ]
           }
         ]
       },
