@@ -220,6 +220,26 @@
             ]
           },
           {
+            "id": "latin-ignore-small-unique-blues",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-small-ignore.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 248,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:unique-small-blue-ignore"
+            ]
+          },
+          {
             "id": "latin-adjust-bottom-tilde",
             "assets": {
               "font": {
