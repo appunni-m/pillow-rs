@@ -2074,6 +2074,7 @@ impl BackendComparisonWorker {
                     | "ftsizes.new_size"
                     | "ftsizes.done_size"
                     | "ftsizes.activate_size"
+                    | "load_char"
             ) {
                 let err = classify_null_operation(&case.operation).unwrap();
                 return Ok(error(err));
@@ -2233,7 +2234,8 @@ impl BackendComparisonWorker {
             return match case.operation.as_str() {
                 "set_pixel_sizes" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
                 "set_char_size" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
-                "load_glyph" | "load_char" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
+                "load_glyph" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
+                "load_char" => c_load_char_output(std::ptr::null_mut(), &case.inputs.params),
                 "get_char_index" => Ok(ok(json!({"value": 0}))),
                 "freetype.set_transform" => return run_rust_ffi(case),
                 "ftsizes.new_size" | "ftsizes.done_size" | "ftsizes.activate_size" => {
@@ -2329,15 +2331,8 @@ impl BackendComparisonWorker {
                 Ok(ok(c_next_char_output(face, &case.inputs.params)?))
             }
             "load_char" => {
-                let char_code = u64_param(&case.inputs.params, "char_code")?;
-                let load_flags = load_flags_param(&case.inputs.params)?;
                 let face = self.c_face(case)?;
-                let err = c_abi::FT_Load_Char(face, char_code, load_flags);
-                if err == FT_Err_Ok {
-                    c_slot_json(face).map(ok)
-                } else {
-                    Ok(error(err))
-                }
+                c_load_char_output(face, &case.inputs.params)
             }
             "load_glyph" => {
                 if load_glyph_num_glyphs_invalid_argument_case(case) {
@@ -2393,7 +2388,8 @@ impl BackendComparisonWorker {
             return match case.operation.as_str() {
                 "set_pixel_sizes" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
                 "set_char_size" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
-                "load_glyph" | "load_char" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
+                "load_glyph" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
+                "load_char" => wasm_load_char_output(0, &case.inputs.params),
                 "get_char_index" => Ok(ok(json!({"value": 0}))),
                 "freetype.set_transform" => return run_rust_ffi(case),
                 "ftsizes.new_size" | "ftsizes.done_size" | "ftsizes.activate_size" => {
@@ -2495,11 +2491,8 @@ impl BackendComparisonWorker {
                 Ok(ok(wasm_next_char_output(handle, &case.inputs.params)?))
             }
             "load_char" => {
-                let char_code = u64_param(&case.inputs.params, "char_code")?;
-                let load_flags = load_flags_param(&case.inputs.params)?;
                 let handle = self.wasm_face(case)?;
-                let err = wasm_abi::fontdone_wasm_load_char(handle, char_code, load_flags);
-                wasm_slot_output(handle, err)
+                wasm_load_char_output(handle, &case.inputs.params)
             }
             "load_glyph" => {
                 if load_glyph_num_glyphs_invalid_argument_case(case) {
@@ -7177,6 +7170,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if params.get("char_code").is_none() {
                 return oracle_fallback_args(case);
             }
+            if lifecycle_handle_param(params, "face") == Some("null") {
+                return Ok(vec![
+                    "--load-char-null-face".to_string(),
+                    u64_param(params, "char_code")?.to_string(),
+                    load_flags_param(params)?.to_string(),
+                ]);
+            }
             let mut args = vec!["--load-char".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
@@ -7540,6 +7540,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "ftsizes.new_size"
                 | "ftsizes.done_size"
                 | "ftsizes.activate_size"
+                | "load_char"
         ) {
             let err = classify_null_operation(&case.operation).unwrap();
             return Ok(error(err));
@@ -8153,22 +8154,14 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_filter_weights" => c_set_lcd_filter_weights(case),
         "ftlcdfil.set_lcd_geometry" => c_set_lcd_geometry(case),
         "load_char" => {
-            let (library, face) = c_open_face(case)?;
-            let err = c_abi::FT_Load_Char(
-                face,
-                u64_param(&case.inputs.params, "char_code")?,
-                load_flags_param(&case.inputs.params)?,
-            );
-            if err == FT_Err_Ok {
-                let output = c_slot_json(face).map(ok);
-                c_done_face(face);
-                c_done_library(library);
-                output
-            } else {
-                c_done_face(face);
-                c_done_library(library);
-                Ok(error(err))
+            if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                return c_load_char_output(std::ptr::null_mut(), &case.inputs.params);
             }
+            let (library, face) = c_open_face(case)?;
+            let output = c_load_char_output(face, &case.inputs.params);
+            c_done_face(face);
+            c_done_library(library);
+            output
         }
         "load_glyph" => {
             if load_glyph_num_glyphs_invalid_argument_case(case) {
@@ -8534,13 +8527,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_filter_weights" => wasm_set_lcd_filter_weights(case),
         "ftlcdfil.set_lcd_geometry" => wasm_set_lcd_geometry(case),
         "load_char" => {
+            if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                return wasm_load_char_output(0, &case.inputs.params);
+            }
             let handle = wasm_open_face(case)?;
-            let err = wasm_abi::fontdone_wasm_load_char(
-                handle,
-                u64_param(&case.inputs.params, "char_code")?,
-                load_flags_param(&case.inputs.params)?,
-            );
-            let output = wasm_slot_output(handle, err);
+            let output = wasm_load_char_output(handle, &case.inputs.params);
             wasm_done_face(handle);
             output
         }
@@ -9658,6 +9649,9 @@ fn rust_render_glyph(
 fn rust_load_char_public_api(case: &InputCase) -> Result<RunOutput, String> {
     let raw_load_flags = load_flags_param(&case.inputs.params)?;
     let char_code = u64_param(&case.inputs.params, "char_code")?;
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(error(FT_Err_Invalid_Face_Handle as FT_Error));
+    }
     let Ok(char_code) = u32::try_from(char_code) else {
         let face = open_face(case)?;
         return match FT_Load_Char(&face, char_code.into(), raw_load_flags) {
@@ -10123,6 +10117,19 @@ fn c_slot_json(face: c_abi::FT_Face) -> Result<Value, String> {
     }))
 }
 
+fn c_load_char_output(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let err = c_abi::FT_Load_Char(
+        face,
+        u64_param(params, "char_code")?,
+        load_flags_param(params)?,
+    );
+    if err == FT_Err_Ok {
+        c_slot_json(face).map(ok)
+    } else {
+        Ok(error(err))
+    }
+}
+
 fn c_size_metrics_json(face: c_abi::FT_Face) -> Result<Value, String> {
     let metrics =
         c_abi::abi_size_metrics(face).ok_or_else(|| "missing c size metrics".to_string())?;
@@ -10218,6 +10225,15 @@ fn wasm_slot_output(handle: usize, err: i32) -> Result<RunOutput, String> {
         return Ok(error(err));
     }
     Ok(ok(wasm_slot_json(handle)?))
+}
+
+fn wasm_load_char_output(handle: usize, params: &Value) -> Result<RunOutput, String> {
+    let err = wasm_abi::fontdone_wasm_load_char(
+        handle,
+        u64_param(params, "char_code")?,
+        load_flags_param(params)?,
+    );
+    wasm_slot_output(handle, err)
 }
 
 fn wasm_slot_json(handle: usize) -> Result<Value, String> {
