@@ -11011,30 +11011,41 @@ fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result
     let (_, pixel_height) = pixel_size_param(&case.inputs.params)?;
     let font = Font::truetype(data.as_ref(), pixel_height as f32)
         .map_err(|err| format!("{} Font::truetype returned {err}", case.case_id))?;
-    let bitmap = font
-        .render_char_mode(
-            text.chars()
-                .next()
-                .ok_or_else(|| "font_render_text must not be empty".to_string())?,
-            render_mode,
+    let ch = text
+        .chars()
+        .next()
+        .ok_or_else(|| "font_render_text must not be empty".to_string())?;
+    let char_bitmap = font.render_char_mode(ch, render_mode).map_err(|err| {
+        format!(
+            "{} Font::render_char_mode returned {}",
+            case.case_id,
+            font_error_to_ft(err)
         )
-        .map_err(|err| {
-            format!(
-                "{} Font::render_char_mode returned {}",
-                case.case_id,
-                font_error_to_ft(err)
-            )
-        })?;
-    let font_json = rendered_bitmap_json(&bitmap);
+    })?;
+    let text_bitmap = font.render_mode(text, render_mode).map_err(|err| {
+        format!(
+            "{} Font::render_mode returned {}",
+            case.case_id,
+            font_error_to_ft(err)
+        )
+    })?;
+    let char_json = rendered_bitmap_json(&char_bitmap);
+    let text_json = rendered_bitmap_json(&text_bitmap);
     let Some(slot_bitmap) = slot_json.get("bitmap") else {
         return Err(format!(
-            "{} slot output missing bitmap for Font::render_char_mode comparison",
+            "{} slot output missing bitmap for Font render comparison",
             case.case_id
         ));
     };
-    if &font_json != slot_bitmap {
+    if &char_json != slot_bitmap {
         return Err(format!(
-            "{} Font::render_char_mode disagrees with FT_Render_Glyph: font={font_json} slot={slot_bitmap}",
+            "{} Font::render_char_mode disagrees with FT_Render_Glyph: font={char_json} slot={slot_bitmap}",
+            case.case_id
+        ));
+    }
+    if text_json != char_json {
+        return Err(format!(
+            "{} Font::render_mode disagrees with Font::render_char_mode: text={text_json} char={char_json}",
             case.case_id
         ));
     }
