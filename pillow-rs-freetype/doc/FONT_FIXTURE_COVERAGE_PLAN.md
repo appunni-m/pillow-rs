@@ -413,29 +413,31 @@ invalid-pixel-size branch instead of staying on the probe-only `variants`
 route. `FT_Get_Postscript_Name` now also exercises an fvar instance with an
 explicit `postscriptNameID`, and `variable-name-missing-subfamily.ttf` uses a
 real 0.5 16.16 coordinate for its existing fractional named-instance row.
-These rows keep the corpus explicit, raise the route-audited concrete count to
-6,720, and
+`FT_Size_Metrics` now also selects a 4.1 KiB hhea-zero/no-OS2 metric fixture,
+covering the final face metric fallback where both hhea and OS/2 metrics are
+unavailable. These rows keep the corpus explicit, raise the route-audited
+concrete count to 6,721, and
 preserve exact Rust FFI, C ABI, and WASM ABI parity.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,149 |
-| Concrete explicit cases | 6,720 |
-| Additional grouped variants | 2,571 |
+| Concrete explicit cases | 6,721 |
+| Additional grouped variants | 2,572 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,716 |
-| Exact parity | 6,716 / 6,716 |
+| Runnable parity comparisons | 6,717 |
+| Exact parity | 6,717 / 6,717 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,846 / 17,766 (89.19%) |
+| Covered Rust lines | 15,847 / 17,766 (89.20%) |
 | Rust function coverage | 1,002 / 1,135 (88.28%) |
 | Rust instantiation coverage | 1,005 / 1,138 (88.31%) |
-| Rust region coverage | 22,755 / 25,457 (89.39%) |
-| Rust branch/condition coverage | 3,795 / 4,524 (83.89%) |
+| Rust region coverage | 22,758 / 25,457 (89.40%) |
+| Rust branch/condition coverage | 3,796 / 4,524 (83.91%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
-| Active fixture font paths | 164 |
-| Stored active font binaries | 121 files, 854 KiB |
+| Active fixture font paths | 165 |
+| Stored active font binaries | 122 files, 858 KiB |
 | Active symlink aliases | 43 |
-| Unique active font contents | 120 SHA-256 identities |
+| Unique active font contents | 121 SHA-256 identities |
 | Deprecated brute-force fonts | 101 files, 99 unique contents, 23 MiB |
 
 The current coverage target is not only line coverage. The maintained
@@ -459,7 +461,7 @@ Current largest uncovered buckets:
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
 | `src/render.rs` | 1,696 / 2,272 | 342 / 426 | 120 / 164 | 2,401 / 3,216 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 1,764 / 1,985 | 201 / 252 | 167 / 199 | 2,401 / 2,711 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/font.rs` | 1,765 / 1,985 | 202 / 252 | 167 / 199 | 2,404 / 2,711 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,516 / 2,828 | 985 / 1,282 | 70 / 73 | 3,621 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
 | `src/scaler.rs` | 1,071 / 1,222 | 156 / 188 | 49 / 62 | 1,145 / 1,276 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
@@ -1879,6 +1881,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-13 | No-scale outline render probe | `FT_Render_Glyph.matrix_render` adds one explicit `hinter-control-matrix.ttf` glyph 41 row with `FT_LOAD_NO_SCALE` and normal rendering. This keeps the probe in the existing compact render matrix, adds no font bytes, and covers one additional `grays.rs` scan-conversion line, region, and branch. Concrete cases are 6,718 with zero implicit rows; runtime parity is 6,714 / 6,714 with four explicit pending rows. Refreshed condition coverage is 15,841 / 17,766 lines, 22,748 / 25,457 regions, and 3,792 / 4,524 branches. Route audit reports the new row as real parity, raising real-parity routes to 3,353 |
 | 2026-07-13 | Explicit request-size ppem overflow | `FT_Request_Size` adds one explicit `params.request` row with nominal 65536 px width/height, avoiding the probe-only `params.variants` route and covering `font.rs::ppem_from_scaled_26dot6` invalid-pixel-size branch. Concrete cases are 6,719 with zero implicit rows; runtime parity is 6,715 / 6,715 with four explicit pending rows. Refreshed condition coverage is 15,842 / 17,766 lines, 22,750 / 25,457 regions, and 3,793 / 4,524 branches. Route audit reports the new row as real parity, raising real-parity routes to 3,354 |
 | 2026-07-13 | Explicit fvar PostScript-name branches | `FT_Get_Postscript_Name.variation_instance_name_behavior` adds one explicit encoded named-instance row over `fvar-instance-postscript-name.ttf`, covering the fvar instance `postscriptNameID` fast path. The generated `variable-name-missing-subfamily.ttf` fixture also changes its existing fractional named-instance coordinate from 1.0 to 0.5 so the already declared fractional row reaches the 16.16 decimal early-termination branch. Concrete cases are 6,720 with zero implicit rows; runtime parity is 6,716 / 6,716 with four explicit pending rows. Refreshed condition coverage is 15,846 / 17,766 lines, 22,755 / 25,457 regions, and 3,795 / 4,524 branches. Route audit reports the new row as real parity, raising real-parity routes to 3,355 |
+| 2026-07-13 | Hhea-zero no-OS2 metric fallback | `build_metric_fixtures.py` now emits a compact `fonts/metrics/hhea-zero-no-os2-fallback.ttf` by clearing hhea ascent/descent/lineGap and removing OS/2. One explicit `FT_Size_Metrics.face_scaling_and_fallbacks` variant proves pinned C, Rust FFI, C ABI, and WASM ABI all return the zero face-metric fallback when no OS/2 metrics are available. Concrete cases are 6,721 with zero implicit rows; runtime parity is 6,717 / 6,717 with four explicit pending rows. Refreshed condition coverage is 15,847 / 17,766 lines, 22,758 / 25,457 regions, and 3,796 / 4,524 branches. Route audit reports the new row as real parity, raising real-parity routes to 3,356 |
 
 ## Immediate Next Actions
 
