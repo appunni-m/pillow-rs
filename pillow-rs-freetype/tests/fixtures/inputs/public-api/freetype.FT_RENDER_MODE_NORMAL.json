@@ -73,7 +73,10 @@
               "render_mode": "FT_RENDER_MODE_NORMAL",
               "representative_load_target": "FT_LOAD_TARGET_NORMAL",
               "font_render_text": "A",
-              "assert_font_render_mode_agrees": true
+              "assert_font_render_mode_agrees": true,
+              "assert_font_getmetrics_agrees": true,
+              "assert_font_getlength_agrees": true,
+              "assert_font_getmask_agrees": true
             },
             "coverage": [
               "render_glyph:explicit-variant-1"
@@ -101,7 +104,9 @@
               "representative_load_target": "FT_LOAD_TARGET_NORMAL",
               "font_render_text": " ",
               "assert_font_empty_text_render": true,
-              "assert_font_render_mode_agrees": true
+              "assert_font_render_mode_agrees": true,
+              "assert_font_getmask_agrees": true,
+              "assert_font_empty_text_mask": true
             },
             "coverage": [
               "render_glyph:space-empty-outline-safe-render-agreement"

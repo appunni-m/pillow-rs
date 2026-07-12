@@ -132,7 +132,8 @@
           "kern_modes": [
             "FT_KERNING_UNFITTED",
             "FT_KERNING_UNSCALED"
-          ]
+          ],
+          "assert_font_getkerning_agrees": true
         }
       },
       "classifiers": [

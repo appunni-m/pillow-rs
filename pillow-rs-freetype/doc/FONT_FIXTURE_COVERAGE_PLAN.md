@@ -331,21 +331,30 @@ C/Rust mismatch: pinned C `find_unicode_charmap` returns
 `FT_Err_Invalid_CharMap_Handle` when no charmap is tagged
 `FT_ENCODING_UNICODE`, while Rust previously fell back to charmap index 0 and
 returned success.
+Existing `FT_RENDER_MODE_NORMAL` and `FT_Get_Kerning` public rows now also
+declare safe `Font` helper assertions instead of relying on a separate fixture
+family. The normal render rows compare `Font::getmetrics`, `getlength`,
+`getbbox`, and `getmask` against the same C-oracle-backed size, slot, and
+rendered bitmap surfaces already exercised by the row, including empty-text and
+empty-outline mask behavior. The kerning row compares `Font::getkerning`
+against the `FT_KERNING_UNFITTED` vector from the existing public kerning
+route. This keeps the case count flat while turning the public Rust convenience
+surface into explicit parity evidence.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,148 |
-| Concrete explicit cases | 6,674 |
-| Additional grouped variants | 2,526 |
+| Concrete explicit cases | 6,680 |
+| Additional grouped variants | 2,532 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,670 |
-| Exact parity | 6,670 / 6,670 |
+| Runnable parity comparisons | 6,676 |
+| Exact parity | 6,676 / 6,676 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,291 / 17,759 (86.10%) |
-| Rust function coverage | 957 / 1,133 (84.47%) |
-| Rust instantiation coverage | 960 / 1,136 (84.51%) |
-| Rust region coverage | 22,147 / 25,452 (87.01%) |
-| Rust branch/condition coverage | 3,711 / 4,524 (82.03%) |
+| Covered Rust lines | 15,574 / 17,759 (87.70%) |
+| Rust function coverage | 983 / 1,133 (86.76%) |
+| Rust instantiation coverage | 986 / 1,136 (86.80%) |
+| Rust region coverage | 22,460 / 25,450 (88.25%) |
+| Rust branch/condition coverage | 3,735 / 4,524 (82.56%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 151 |
 | Stored active font binaries | 108 files, 811 KiB |
@@ -373,13 +382,13 @@ Current largest uncovered buckets:
 
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
-| `src/render.rs` | 1,578 / 2,275 | 331 / 428 | 109 / 164 | 2,282 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 1,444 / 1,936 | 175 / 250 | 127 / 186 | 1,967 / 2,635 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/render.rs` | 1,683 / 2,275 | 341 / 428 | 118 / 164 | 2,388 / 3,219 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
+| `src/font.rs` | 1,659 / 1,979 | 192 / 252 | 156 / 198 | 2,245 / 2,709 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,510 / 2,828 | 980 / 1,282 | 70 / 73 | 3,611 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
-| `src/scaler.rs` | 941 / 1,220 | 153 / 188 | 41 / 61 | 1,081 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
+| `src/scaler.rs` | 966 / 1,220 | 153 / 188 | 43 / 61 | 1,093 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
-| `src/ffi/handles.rs` | 1,361 / 1,490 | 246 / 288 | 149 / 162 | 1,906 / 2,040 | Public FFI route audit; wrappers stay thin and must delegate to core |
+| `src/ffi/handles.rs` | 1,554 / 1,599 | 289 / 322 | 163 / 169 | 2,119 / 2,176 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 862 / 941 | 355 / 426 | 18 / 19 | 1,145 / 1,247 | CJK topology rows in the compact multiscript fixture |
 | `src/api.rs` | 474 / 486 | 76 / 84 | 53 / 54 | 642 / 660 | Public API wrapper rows for render cache and glyph-slot surfaces |
@@ -1756,6 +1765,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Add SDF and target-mono safe render agreement | The existing SDF render-mode row now opts into the safe render agreement hook, and `FT_RENDER_MODE_MONO` adds one explicit grouped variant that loads with `FT_LOAD_TARGET_MONO` before rendering so it matches `Font::render_char_mode(Mono)` semantics. The hook now compares both public safe render entry points, `Font::render_char_mode` and non-empty `Font::render_mode`, against the same C-oracle-backed bitmap JSON. Case count is 6,675 concrete rows with zero implicit rows; refreshed condition coverage is 15,408 / 17,759 lines, 22,271 / 25,452 regions, and 3,716 / 4,524 branches with 6,671 / 6,671 runtime rows and four explicit pending rows |
 | 2026-07-12 | Add empty-outline safe render rows | Four explicit render-mode variants reuse DejaVuSans U+0020 to exercise safe `Font` empty-outline rendering for NORMAL, MONO, LCD_V, and SDF. C `FT_Render_Glyph` exposes no bitmap for the zero-sized modes, so the agreement hook now treats C `bitmap == null` as an explicit canonical-empty safe API assertion instead of byte equality; MONO remains strict bitmap equality. The same NORMAL row asserts `Font::render_mode("")` returns the canonical empty bitmap. The attempted LCD empty-outline row is intentionally not added: safe `Font::render_char_mode(' ', Lcd)` currently returns an LCD-shaped zero-row bitmap while C exposes no bitmap, which is a correctness item to evaluate separately. Case count is 6,679 concrete rows with zero implicit rows; refreshed condition coverage is 15,444 / 17,759 lines, 22,288 / 25,452 regions, and 3,722 / 4,524 branches with 6,675 / 6,675 runtime rows and four explicit pending rows |
 | 2026-07-12 | Cover LCD empty-outline safe render parity | One explicit `FT_RENDER_MODE_LCD.render_glyph_mode_dispatch` variant reuses DejaVuSans U+0020 and opts into the safe `Font` render agreement hook. The row exposed the previously tracked divergence where `Font::render_char_mode(' ', Lcd)` returned an LCD-shaped zero-row bitmap while C `FT_Render_Glyph` exposed no bitmap; core now routes empty LCD safe rendering through the same canonical empty-outline result as loaded-outline rendering. Case count is 6,680 concrete rows with zero implicit rows; refreshed condition coverage is 15,445 / 17,759 lines, 22,290 / 25,450 regions, and 3,723 / 4,524 branches with 6,676 / 6,676 runtime rows and four explicit pending rows |
+| 2026-07-12 | Declare safe `Font` convenience parity on existing rows | Existing `FT_RENDER_MODE_NORMAL.render_glyph_mode_dispatch` variants now opt into safe `Font::getmetrics`, `getlength`, `getbbox`, `getmask`, and empty-text mask agreement checks using the same C-oracle-backed size metrics, glyph slot advance, and normal rendered bitmap already produced by the row. Existing `FT_Get_Kerning.legacy_pair_unfitted_and_unscaled_modes` now opts into `Font::getkerning` agreement against the row's `FT_KERNING_UNFITTED` vector. This adds no fonts and no concrete cases; refreshed condition coverage is 15,574 / 17,759 lines, 22,460 / 25,450 regions, and 3,735 / 4,524 branches with 6,676 / 6,676 runtime rows and four explicit pending rows |
 
 ## Immediate Next Actions
 
@@ -1778,9 +1788,9 @@ Work must resume here unless a newer user request changes priority:
    independent proof, or currently unreachable but preserved.
 3. Resume explicit fixture expansion in the active order: public route audit,
    render/raster matrix, autohint script/topology, TrueType interpreter edge
-   programs, then scalar residuals. The safe LCD empty-outline divergence is
-   now fixed and covered by an explicit public render-mode row; do not add
-   another hidden render dimension for it.
+   programs, then scalar residuals. The safe LCD empty-outline divergence and
+   safe `Font` convenience helper routes are now covered by explicit public
+   rows; do not add hidden render or helper dimensions for them.
 4. Keep the current four pending rows explicit and do not count them as
    coverage until the core Adobe MM, `FT_MM_Var`, `gvar`/HVAR, and live
    non-SFNT-face behavior exists. Embedded-strike request handling remains an
