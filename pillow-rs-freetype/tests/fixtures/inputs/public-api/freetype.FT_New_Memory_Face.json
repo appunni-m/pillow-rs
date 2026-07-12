@@ -927,11 +927,15 @@
                 },
                 {
                   "face_index": 9999
+                },
+                {
+                  "face_index": -9223372036854775808
                 }
               ]
             },
             "coverage": [
-              "new-memory-face:bad-size-and-face-index"
+              "new-memory-face:bad-size-and-face-index",
+              "ffi:face-index-long-min-checked-negation"
             ]
           },
           {
