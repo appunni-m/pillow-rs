@@ -988,6 +988,56 @@
             ]
           },
           {
+            "id": "name-langtag-record-array-overflow",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/sfnt/name-format1-langtag-record-overflow.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/sfnt/name-format1-langtag-record-overflow.ttf"
+              }
+            },
+            "params": {
+              "variants": [
+                {
+                  "face_index": 0
+                }
+              ]
+            },
+            "coverage": [
+              "tt/name:langtag-record-array-overflow-error"
+            ]
+          },
+          {
+            "id": "name-langtag-string-out-of-range",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/sfnt/name-format1-langtag-string-oob.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/sfnt/name-format1-langtag-string-oob.ttf"
+              }
+            },
+            "params": {
+              "variants": [
+                {
+                  "face_index": 0
+                }
+              ]
+            },
+            "coverage": [
+              "tt/name:langtag-string-out-of-range-error"
+            ]
+          },
+          {
             "id": "ttc-short-header",
             "assets": {
               "font_bytes": {
