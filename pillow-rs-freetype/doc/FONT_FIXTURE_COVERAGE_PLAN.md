@@ -1151,6 +1151,17 @@ in `ADJUSTMENT_DATABASE`, so no public Unicode input could select it. The
 retained runtime now has one script-selection path through `FaceGlobals`,
 `STYLE_TABLE`, and `globals::detect_script`.
 
+2026-07-13 reachability note: the current condition report still lists several
+metadata parser guards that should not be assigned to new font rows without a
+new public route. `tt/post.rs` format 3.0 and unknown-format fallback arms are
+blocked by the public `FT_FACE_FLAG_GLYPH_NAMES` gate in `FT_Get_Glyph_Name`;
+supported format 2.0/2.5 malformed rows already cover the public `.notdef`
+fallback behavior. `tt/fvar.rs` and `tt/gasp.rs` checked arithmetic overflow
+closures are fed by 16-bit SFNT counts, so those overflow arms cannot overflow
+on the current 64-bit target through a valid or malformed font file. Keep these
+lines classified as preserved defensive guards unless a maintained public API
+call path is added that can exercise them honestly.
+
 1. For every uncovered function, identify its public manifest operation and
    current call path.
 2. Remove duplicate or obsolete internal wrappers and diagnostic coverage
@@ -1847,6 +1858,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | CJK round-round LIGHT threshold and target-light mask | `FT_Render_Glyph.matrix_render` adds one explicit `FT_LOAD_TARGET_LIGHT | FT_LOAD_NO_AUTOHINT` row, proving the `render_font` target-light condition's masked branch without adding a new axis. `build_autohint_script_fixtures.py` now emits `fonts/autohint/cjk-round-stem-light.ttf`, keeping U+7530 as a standard Hani stem and mapping U+51A2 to a quadratic ring selected by one `FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LIGHT` public row. The CJK row covers the no-stem-adjust round-round threshold for both dimensions. Concrete cases rise to 6,697, implicit cases stay zero, runtime parity is 6,693 / 6,693 with four explicit pending rows, and refreshed condition coverage is 15,803 / 17,764 lines, 22,687 / 25,453 regions, and 3,757 / 4,524 branches |
 | 2026-07-12 | CJK duplicate-edge compatibility rejection | `build_autohint_script_fixtures.py` now emits `fonts/autohint/cjk-duplicate-edge.ttf`, where U+519E has two Hani rectangles sharing the same major edge position while their linked opposite edges are far apart. One explicit `FT_LOAD_FORCE_AUTOHINT` row reaches CJK edge grouping's linked-segment compatibility rejection and same-position major-edge insertion, and also exercises later skipped-edge interpolation from that topology. Concrete cases rise to 6,698, implicit cases stay zero, runtime parity is 6,694 / 6,694 with four explicit pending rows, and refreshed condition coverage is 15,812 / 17,764 lines, 22,699 / 25,453 regions, and 3,763 / 4,524 branches |
 | 2026-07-12 | CJK leading skipped-edge interpolation | `cjk-duplicate-edge.ttf` now also maps U+51A4 to a Hani glyph with a short unlinked leading rectangle before a normal linked stem. One explicit `FT_LOAD_FORCE_AUTOHINT` row reaches the skipped-edge interpolation path where no previous done edge exists and a later done edge anchors the skipped edge. No new font file is added; concrete cases rise to 6,699, implicit cases stay zero, runtime parity is 6,695 / 6,695 with four explicit pending rows, and refreshed condition coverage is 15,820 / 17,764 lines, 22,709 / 25,453 regions, and 3,766 / 4,524 branches |
+| 2026-07-13 | Verified render/scaler/autohint/name/CFF coverage checkpoint | Merged and pushed the compact OTTO metadata row, variable-name metadata rows, Latin small-ignore autohint fixture row, mono composite scaler fix and rows, and SDF tiny-segment render fix and row. Concrete cases are 6,715 with zero implicit rows; runtime parity is 6,711 / 6,711 with four explicit pending rows. Refreshed condition coverage is 15,840 / 17,766 lines, 22,745 / 25,457 regions, and 3,790 / 4,524 branches. Route audit reports real-parity 3,350, compile-contract 2,229, generic-fallback 942, generic-error-fallback 141, pending-core 10, explicit-unsupported 12, real-null-validation 8, null-error-fallback 21, and void-fallback 2 |
 
 ## Immediate Next Actions
 
