@@ -10877,7 +10877,7 @@ fn assert_api_load_glyph_agrees(
     case: &InputCase,
     ffi_result: Result<&FT_GlyphSlot, FT_Error>,
 ) -> Result<(), String> {
-    if !checks_api_load_glyph_agreement(case) {
+    if !checks_api_load_glyph_agreement(case)? {
         return Ok(());
     }
     let load_flags = match load_flags_to_core(load_flags_param(&case.inputs.params)?) {
@@ -10932,22 +10932,8 @@ fn assert_api_load_glyph_agrees(
     Ok(())
 }
 
-fn checks_api_load_glyph_agreement(case: &InputCase) -> bool {
-    matches!(
-        case.case_id.as_str(),
-        "freetype.FT_LOAD_COMPUTE_METRICS.compute_metrics_load_behavior@compute-metrics"
-            | "freetype.FT_LOAD_FORCE_AUTOHINT.load_glyph_force_autohint_behavior"
-            | "freetype.FT_LOAD_NO_HINTING.load_glyph_no_hinting_behavior"
-            | "freetype.FT_LOAD_NO_RECURSE.composite_no_recurse_behavior"
-            | "freetype.FT_LOAD_NO_SCALE.unscaled_load_behavior"
-            | "freetype.FT_LOAD_RENDER.render_during_load"
-            | "freetype.FT_LOAD_TARGET_LIGHT.load_target_behavior"
-            | "freetype.FT_Load_Glyph.matrix_load@glyf-malformed-too-short-force-autohint"
-            | "freetype.FT_Load_Glyph.matrix_load@glyf-malformed-too-short-no-autohint"
-            | "freetype.FT_Load_Glyph.matrix_load@glyf-malformed-too-short-no-hinting"
-            | "freetype.FT_Load_Glyph.matrix_load@glyf-malformed-too-short-no-scale"
-            | "freetype.FT_Load_Glyph.matrix_load@hinter-error-divide-by-zero"
-    )
+fn checks_api_load_glyph_agreement(case: &InputCase) -> Result<bool, String> {
+    bool_param(&case.inputs.params, "assert_api_load_glyph_agrees", false)
 }
 
 fn rust_render_glyph_public_api(case: &InputCase) -> Result<RunOutput, String> {
@@ -10983,16 +10969,76 @@ fn rust_render_glyph_public_api(case: &InputCase) -> Result<RunOutput, String> {
         let mut rows = Vec::new();
         for iteration in 0..repeat_count {
             match face.render_loaded_glyph(glyph_index, load_flags, render_mode) {
-                Ok(slot) => rows.push(render_glyph_sequence_row(iteration, api_slot_json(&slot))),
+                Ok(slot) => {
+                    let slot_json = api_slot_json(&slot);
+                    assert_font_render_mode_agrees(case, &slot_json)?;
+                    rows.push(render_glyph_sequence_row(iteration, slot_json));
+                }
                 Err(err) => return Ok(error(font_error_to_ft(err))),
             }
         }
         return Ok(ok(render_glyph_sequence_json(rows)));
     }
     match face.render_loaded_glyph(glyph_index, load_flags, render_mode) {
-        Ok(slot) => Ok(ok(api_slot_json(&slot))),
+        Ok(slot) => {
+            let slot_json = api_slot_json(&slot);
+            assert_font_render_mode_agrees(case, &slot_json)?;
+            Ok(ok(slot_json))
+        }
         Err(err) => Ok(error(font_error_to_ft(err))),
     }
+}
+
+fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result<(), String> {
+    if !bool_param(&case.inputs.params, "assert_font_render_mode_agrees", false)? {
+        return Ok(());
+    }
+    let Some(render_mode) = render_mode_to_core(render_mode_param(&case.inputs.params)?) else {
+        return Ok(());
+    };
+    let text = case
+        .inputs
+        .params
+        .get("font_render_text")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            format!(
+                "{} assert_font_render_mode_agrees requires font_render_text",
+                case.case_id
+            )
+        })?;
+    let data = font_bytes(case)?;
+    let (_, pixel_height) = pixel_size_param(&case.inputs.params)?;
+    let font = Font::truetype(data.as_ref(), pixel_height as f32)
+        .map_err(|err| format!("{} Font::truetype returned {err}", case.case_id))?;
+    let bitmap = font
+        .render_char_mode(
+            text.chars()
+                .next()
+                .ok_or_else(|| "font_render_text must not be empty".to_string())?,
+            render_mode,
+        )
+        .map_err(|err| {
+            format!(
+                "{} Font::render_char_mode returned {}",
+                case.case_id,
+                font_error_to_ft(err)
+            )
+        })?;
+    let font_json = rendered_bitmap_json(&bitmap);
+    let Some(slot_bitmap) = slot_json.get("bitmap") else {
+        return Err(format!(
+            "{} slot output missing bitmap for Font::render_char_mode comparison",
+            case.case_id
+        ));
+    };
+    if &font_json != slot_bitmap {
+        return Err(format!(
+            "{} Font::render_char_mode disagrees with FT_Render_Glyph: font={font_json} slot={slot_bitmap}",
+            case.case_id
+        ));
+    }
+    Ok(())
 }
 
 fn c_render_glyph(
@@ -15361,6 +15407,19 @@ fn api_slot_json(slot: &ApiGlyphSlot) -> Value {
                 "buffer_hex": hex_bytes(&bitmap.buffer)
             })
         })
+    })
+}
+
+fn rendered_bitmap_json(bitmap: &fontdone::RenderedBitmap) -> Value {
+    json!({
+        "width": bitmap.width,
+        "rows": bitmap.rows,
+        "pitch": bitmap.pitch,
+        "pixel_mode": pixel_mode_from_core(bitmap.pixel_mode),
+        "num_grays": bitmap.num_grays,
+        "left": bitmap.left,
+        "top": bitmap.top,
+        "buffer_hex": hex_bytes(&bitmap.buffer)
     })
 }
 
