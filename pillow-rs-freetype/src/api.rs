@@ -320,6 +320,11 @@ impl Face {
             .char_variant_is_default(char_code, variant_selector)
     }
 
+    /// Return Unicode variation selectors found in the face.
+    pub fn get_variant_selectors(&self) -> Option<Vec<u32>> {
+        self.font.variant_selectors()
+    }
+
     /// Select the best Unicode charmap, equivalent to `FT_Select_Charmap`.
     pub fn select_unicode_charmap(&mut self) -> Result<(), FontError> {
         self.font.select_unicode_charmap()?;

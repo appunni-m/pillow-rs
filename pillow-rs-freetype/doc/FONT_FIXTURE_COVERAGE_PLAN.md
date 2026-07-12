@@ -703,7 +703,8 @@ Resolved in the 2026-07-11 cmap batch:
   through the same four surfaces.
 - The compact `fonts/cmap/cmap-format-language-matrix.ttf` fixture is generated
   from the source-backed hinter matrix by `scripts/build_cmap_fixtures.py` and
-  rebuilt with `make font-fixture-cmap`.
+  rebuilt with `make font-fixture-cmap`. Its format-14 subtable now carries
+  `FE0F` and `E0101` selector records with default and non-default UVS data.
 
 | Public operation | Current runner behavior | Why it is unsafe | Required path |
 |---|---|---|---|
@@ -1598,6 +1599,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Direct SFNT lang-tag route | 110 unique hashes | 0 | 6,650 | 6,646 / 6,646 | 4 | 14,864 / 17,361 lines; 21,638 / 24,966 regions; 3,616 / 4,422 branches | `FT_Get_Sfnt_LangTag` now uses a compact generated name-format-1 font with two language-tag records so explicit `0x8001` reaches FreeType's `langID - 0x8000` index rule and explicit `0x8002` proves the upper-bound invalid row. Existing public inputs now compare native C oracle, Rust core, C ABI fallback-to-core, and WASM fallback-to-core output with zero implicit cases; the previous build-dependent `FT_SfntLangTag` record row is now executable |
 | 2026-07-12 | Direct cmap format-14 variant-index route | 110 unique hashes | 0 | 6,652 | 6,648 / 6,648 | 4 | 15,039 / 17,586 lines; 21,866 / 25,230 regions; 3,640 / 4,462 branches | `FT_Face_GetCharVariantIndex` now routes five explicit rows through pinned C FreeType, Rust FFI, C ABI, and WASM ABI using the compact `cmap-format-language-matrix.ttf` format-14 subtable. The rows cover non-default UVS, default UVS, missing char/selector, no-format14 control, and null-face zero behavior without adding fonts or implicit discovery. Core now parses format-14 selector records and default/non-default UVS tables; ABI wrappers stay thin and delegate to the shared Rust FFI. Route-audit real parity rises to 3,274, generic fallback drops to 958, void fallback drops to 2, and implicit cases remain zero |
 | 2026-07-12 | Direct cmap format-14 default-query route | 110 unique hashes | 0 | 6,654 | 6,650 / 6,650 | 4 | 15,086 / 17,635 lines; 21,918 / 25,284 regions; 3,655 / 4,482 branches | `FT_Face_GetCharVariantIsDefault` now routes five explicit rows through pinned C FreeType, Rust FFI, C ABI, and WASM ABI using the same compact `cmap-format-language-matrix.ttf` format-14 subtable. The rows cover default UVS returning 1, non-default UVS returning 0, missing UVS, no-format14 control, and null-face `-1` behavior without adding fonts or implicit discovery. Core exposes the format-14 selector default query separately from glyph-index lookup because pinned FreeType does not require the active charmap to be Unicode for this API. Route-audit real parity rises to 3,279, generic fallback drops to 955, and implicit cases remain zero |
+| 2026-07-12 | Direct cmap format-14 selector-list route | 110 unique hashes | 0 | 6,655 | 6,651 / 6,651 | 4 | 15,105 / 17,655 lines; 21,946 / 25,313 regions; 3,657 / 4,486 branches | `FT_Face_GetVariantSelectors` now routes four explicit rows through pinned C FreeType, Rust FFI, C ABI, and WASM ABI using the compact `cmap-format-language-matrix.ttf` format-14 subtable. The rows cover non-null selector lists, no-format14 `NULL`, null-face `NULL`, and copied face-owned result lifetime before invalidation. ABI wrappers keep only owned zero-terminated scratch storage and delegate selector discovery to Rust FFI. Route-audit real parity rises to 3,283, generic fallback drops to 952, and implicit cases remain zero |
 
 ## Decision Log
 
@@ -1606,6 +1608,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-10 | Use explicit grouped input variants only | Allows deliberate multi-input cases without hidden Cartesian growth |
 | 2026-07-10 | Do not parameterize glyph-index discovery | Glyph selection must be explicit and tied to topology or behavior |
 | 2026-07-10 | Measure Rust coverage only | Rust core owns behavior; C ABI and WASM ABI are thin wrappers exercised by the same parity cases |
+| 2026-07-12 | Route cmap format-14 selector lists through the real call | Pinned C `FT_Face_GetVariantSelectors` finds the platform 0 encoding 5 format-14 charmap, returns a face-owned zero-terminated `FT_UInt32` selector list in subtable order, returns `NULL` for null face or no format-14 charmap, and allows the scratch result to be overwritten by the next FreeType call; fixtures must copy values immediately |
 | 2026-07-10 | Move old fonts before deleting them | Keeps active and legacy corpora distinct and allows safe obligation-by-obligation replacement |
 | 2026-07-10 | Optimize fonts before broad input expansion | Font-level feature density removes more redundant cases than harness micro-optimization |
 | 2026-07-10 | Mirror maxp's unbounded stream frame explicitly | Pinned FreeType reads maxp extras beyond the declared table length and ignores maxp load errors while constructing a zero-glyph face |

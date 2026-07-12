@@ -3694,6 +3694,38 @@ static void print_char_variant_default_output(FT_Int value) {
     printf("{\"result\":%d,\"value\":%d}", value, value);
 }
 
+static void print_uint32_list_output(FT_UInt32* values) {
+    FT_UInt32* cursor = values;
+    int emitted = 0;
+
+    if (!values) {
+        printf("{\"result\":{\"is_null\":true,\"nullness\":\"null\",\"values\":[],\"terminator\":null},\"copied_values_before_invalidation\":[],\"pointer_identity_class\":\"null\"}");
+        return;
+    }
+
+    printf("{\"result\":{\"is_null\":false,\"nullness\":\"non_null\",\"values\":[");
+    while (*cursor) {
+        if (emitted) {
+            printf(",");
+        }
+        printf("%lu", (unsigned long)*cursor);
+        emitted = 1;
+        cursor++;
+    }
+    printf("],\"terminator\":%lu},\"copied_values_before_invalidation\":[", (unsigned long)*cursor);
+    cursor = values;
+    emitted = 0;
+    while (*cursor) {
+        if (emitted) {
+            printf(",");
+        }
+        printf("%lu", (unsigned long)*cursor);
+        emitted = 1;
+        cursor++;
+    }
+    printf("],\"pointer_identity_class\":\"face_owned_scratch\"}");
+}
+
 static int emit_face_get_char_variant_index_null(int argc, char** argv) {
     FT_ULong charcode = strtoul(argv[2], NULL, 10);
     FT_ULong variant_selector = strtoul(argv[3], NULL, 10);
@@ -3718,6 +3750,17 @@ static int emit_face_get_char_variant_is_default_null(int argc, char** argv) {
     print_char_variant_default_output(
         FT_Face_GetCharVariantIsDefault(NULL, charcode, variant_selector)
     );
+    printf("}\n");
+    return 0;
+}
+
+static int emit_face_get_variant_selectors_null(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    printf("{");
+    print_status(0);
+    printf(",\"output\":");
+    print_uint32_list_output(FT_Face_GetVariantSelectors(NULL));
     printf("}\n");
     return 0;
 }
@@ -5258,6 +5301,17 @@ static int emit_face_or_slot(int argc, char** argv) {
         print_char_variant_default_output(
             FT_Face_GetCharVariantIsDefault(face, charcode, variant_selector)
         );
+        printf("}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--face-get-variant-selectors")) {
+        print_status(0);
+        printf(",\"output\":");
+        print_uint32_list_output(FT_Face_GetVariantSelectors(face));
         printf("}\n");
         FT_Done_Face(face);
         FT_Done_FreeType(library);
@@ -7220,6 +7274,12 @@ static int dispatch(int argc, char** argv) {
         return emit_face_get_char_variant_is_default_null(argc, argv);
     }
     if (argc == 9 && streq(argv[1], "--face-get-char-variant-is-default")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--face-get-variant-selectors-null")) {
+        return emit_face_get_variant_selectors_null(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--face-get-variant-selectors")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-kerning")) {

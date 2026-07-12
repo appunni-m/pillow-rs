@@ -44,6 +44,10 @@ def variation_selector_subtable():
             (0x0041, None),
             (0x0042, "base"),
         ],
+        0xE0101: [
+            (0x0041, None),
+            (0x0043, "mark"),
+        ],
     }
     return table
 

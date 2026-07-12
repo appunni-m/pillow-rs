@@ -16,6 +16,7 @@ pub type FT_Bool = c_uchar;
 pub type FT_Int = c_int;
 pub type FT_UInt = c_uint;
 pub type FT_Int32 = i32;
+pub type FT_UInt32 = u32;
 pub type FT_Byte = c_uchar;
 pub type FT_Long = c_long;
 pub type FT_ULong = c_ulong;
@@ -233,6 +234,7 @@ struct FaceState {
     charmaps: Box<[FT_CharMapRec]>,
     charmap_ptrs: Box<[FT_CharMap]>,
     postscript_name: Option<CString>,
+    variant_list: Vec<FT_UInt32>,
 }
 
 impl FaceState {
@@ -243,6 +245,7 @@ impl FaceState {
             charmaps: Box::new([]),
             charmap_ptrs: Box::new([]),
             postscript_name,
+            variant_list: Vec::new(),
         }
     }
 
@@ -288,6 +291,16 @@ impl FaceState {
     fn charmap_by_index(&self, index: FT_UInt) -> Option<FT_CharMap> {
         let index = usize::try_from(index).ok()?;
         self.charmap_ptrs.get(index).copied()
+    }
+
+    fn variant_list_ptr(&mut self, values: Option<Vec<FT_UInt32>>) -> *mut FT_UInt32 {
+        let Some(values) = values else {
+            self.variant_list.clear();
+            return ptr::null_mut();
+        };
+        self.variant_list = values;
+        self.variant_list.push(0);
+        self.variant_list.as_mut_ptr()
     }
 }
 
@@ -343,6 +356,23 @@ pub fn abi_c_string_bytes(ptr: *const c_char) -> Vec<u8> {
     }
     // SAFETY: test callers pass live FreeType-shaped NUL-terminated strings.
     unsafe { CStr::from_ptr(ptr).to_bytes().to_vec() }
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_uint32_list(ptr: *const FT_UInt32) -> Option<Vec<FT_UInt32>> {
+    if ptr.is_null() {
+        return None;
+    }
+    let mut values = Vec::new();
+    for index in 0..4096 {
+        // SAFETY: test callers pass live FreeType-shaped zero-terminated lists.
+        let value = unsafe { *ptr.add(index) };
+        if value == 0 {
+            return Some(values);
+        }
+        values.push(value);
+    }
+    Some(values)
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -1064,6 +1094,15 @@ pub extern "C" fn FT_Face_GetCharVariantIsDefault(
         return -1;
     };
     rust_ffi::FT_Face_GetCharVariantIsDefault(Some(&state.inner), charcode, variant_selector)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Face_GetVariantSelectors(face: FT_Face) -> *mut FT_UInt32 {
+    let Some(state) = face_state_mut(face) else {
+        return ptr::null_mut();
+    };
+    let values = rust_ffi::FT_Face_GetVariantSelectors(Some(&state.inner));
+    state.variant_list_ptr(values)
 }
 
 #[unsafe(no_mangle)]

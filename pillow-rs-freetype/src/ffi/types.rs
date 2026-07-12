@@ -7,6 +7,7 @@ pub type FT_Error = c_int;
 pub type FT_Int = c_int;
 pub type FT_UInt = c_uint;
 pub type FT_Int32 = i32;
+pub type FT_UInt32 = u32;
 pub type FT_Byte = c_uchar;
 pub type FT_Bool = c_uchar;
 pub type FT_Char = c_schar;

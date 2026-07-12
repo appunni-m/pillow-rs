@@ -943,6 +943,11 @@ impl Font {
             .char_variant_is_default(codepoint, variant_selector)
     }
 
+    /// Equivalent to `FT_Face_GetVariantSelectors`.
+    pub fn variant_selectors(&self) -> Option<Vec<u32>> {
+        self.data.cmap.variant_selectors()
+    }
+
     /// Equivalent to `FT_Get_First_Char`.
     pub fn first_char(&self) -> Option<(u32, u16)> {
         self.data.cmap.first_char(self.selected_charmap)

@@ -18,8 +18,8 @@ use super::types::{
     FT_Glyph_Format, FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_Long, FT_Matrix,
     FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag,
     FT_SfntName, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec,
-    FT_TrueTypeEngineType, FT_UInt, FT_ULong, FT_UShort, FT_Vector, TT_Header, TT_HoriHeader,
-    TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
+    FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector, TT_Header,
+    TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -1216,6 +1216,11 @@ pub fn FT_Face_GetCharVariantIsDefault(
     // (`src/base/ftobjs.c`, `src/sfnt/ttcmap.c`).
     face.inner
         .get_char_variant_is_default(charcode as u32, variant_selector as u32)
+}
+
+pub fn FT_Face_GetVariantSelectors(face: Option<&FT_Face>) -> Option<Vec<FT_UInt32>> {
+    let face = face?;
+    face.inner.get_variant_selectors()
 }
 
 pub fn FT_Get_Kerning(

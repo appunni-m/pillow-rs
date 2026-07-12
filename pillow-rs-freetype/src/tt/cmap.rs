@@ -180,6 +180,16 @@ impl CmapTable {
         -1
     }
 
+    /// Equivalent to `FT_Face_GetVariantSelectors`.
+    pub fn variant_selectors(&self) -> Option<Vec<u32>> {
+        for subtable in &self.format14 {
+            if subtable.platform_id == 0 && subtable.encoding_id == 5 {
+                return Some(subtable.variant_selectors());
+            }
+        }
+        None
+    }
+
     /// Return the first mapped codepoint and glyph index for a charmap.
     pub fn first_char(&self, charmap_index: usize) -> Option<(u32, u16)> {
         self.next_char(charmap_index, 0)
@@ -365,6 +375,10 @@ impl Format14Subtable {
             return 0;
         }
         -1
+    }
+
+    fn variant_selectors(&self) -> Vec<u32> {
+        self.records.iter().map(|record| record.selector).collect()
     }
 }
 
