@@ -11230,6 +11230,43 @@ fn assert_font_convenience_helpers_agree(
         }
     }
 
+    if bool_param(
+        &case.inputs.params,
+        "assert_font_glyph_metrics_agrees",
+        false,
+    )? {
+        let ch = text
+            .chars()
+            .next()
+            .ok_or_else(|| "font_render_text must not be empty".to_string())?;
+        let metrics = font.glyph_metrics(ch as u32).map_err(|err| {
+            format!(
+                "{} Font::glyph_metrics returned {}",
+                case.case_id,
+                font_error_to_ft(err)
+            )
+        })?;
+        let actual = json!({
+            "width": metrics.width,
+            "height": metrics.height,
+            "horiBearingX": metrics.hori_bearing_x,
+            "horiBearingY": metrics.hori_bearing_y,
+            "horiAdvance": metrics.hori_advance,
+            "vertBearingX": metrics.vert_bearing_x,
+            "vertBearingY": metrics.vert_bearing_y,
+            "vertAdvance": metrics.vert_advance
+        });
+        let expected = slot_json
+            .get("metrics")
+            .ok_or_else(|| format!("{} slot output missing metrics", case.case_id))?;
+        if &actual != expected {
+            return Err(format!(
+                "{} Font::glyph_metrics disagrees with glyph-slot metrics: font={actual} slot={expected}",
+                case.case_id
+            ));
+        }
+    }
+
     if bool_param(&case.inputs.params, "assert_font_getmask_agrees", false)? {
         if render_mode != RenderMode::Normal {
             return Err(format!(
