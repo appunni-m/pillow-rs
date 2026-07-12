@@ -15287,22 +15287,35 @@ fn rust_layout(record: &str) -> Result<Value, String> {
                 (delta, FT_Vector),
             ]
         ),
-        "FT_StreamRec" => layout_json!(
-            "FT_StreamRec",
-            FT_StreamRec,
-            [
-                (base, *mut FT_Byte),
-                (size, FT_ULong),
-                (pos, FT_ULong),
-                (descriptor, FT_StreamDesc),
-                (pathname, FT_StreamDesc),
-                (read, FT_Pointer),
-                (close, FT_Pointer),
-                (memory, FT_Memory),
-                (cursor, *mut FT_Byte),
-                (limit, *mut FT_Byte),
-            ]
-        ),
+        "FT_StreamRec" => {
+            let default_descriptor = FT_StreamDesc::default();
+            let default_stream = FT_StreamRec::default();
+            Ok(json!({
+                "record": "FT_StreamRec",
+                "size": size_of::<FT_StreamRec>(),
+                "align": align_of::<FT_StreamRec>(),
+                "fields": [
+                    {"name": "base", "offset": offset_of!(FT_StreamRec, base), "size": size_of::<*mut FT_Byte>()},
+                    {"name": "size", "offset": offset_of!(FT_StreamRec, size), "size": size_of::<FT_ULong>()},
+                    {"name": "pos", "offset": offset_of!(FT_StreamRec, pos), "size": size_of::<FT_ULong>()},
+                    {"name": "descriptor", "offset": offset_of!(FT_StreamRec, descriptor), "size": size_of::<FT_StreamDesc>()},
+                    {"name": "pathname", "offset": offset_of!(FT_StreamRec, pathname), "size": size_of::<FT_StreamDesc>()},
+                    {"name": "read", "offset": offset_of!(FT_StreamRec, read), "size": size_of::<FT_Pointer>()},
+                    {"name": "close", "offset": offset_of!(FT_StreamRec, close), "size": size_of::<FT_Pointer>()},
+                    {"name": "memory", "offset": offset_of!(FT_StreamRec, memory), "size": size_of::<FT_Memory>()},
+                    {"name": "cursor", "offset": offset_of!(FT_StreamRec, cursor), "size": size_of::<*mut FT_Byte>()},
+                    {"name": "limit", "offset": offset_of!(FT_StreamRec, limit), "size": size_of::<*mut FT_Byte>()}
+                ],
+                "default_state": {
+                    "stream_descriptor_size": std::mem::size_of_val(&default_descriptor),
+                    "base_is_null": default_stream.base.is_null(),
+                    "size_is_zero": default_stream.size == 0,
+                    "pos_is_zero": default_stream.pos == 0,
+                    "cursor_is_null": default_stream.cursor.is_null(),
+                    "limit_is_null": default_stream.limit.is_null()
+                }
+            }))
+        }
         "FT_Bitmap_Size" => layout_json!(
             "FT_Bitmap_Size",
             FT_Bitmap_Size,
