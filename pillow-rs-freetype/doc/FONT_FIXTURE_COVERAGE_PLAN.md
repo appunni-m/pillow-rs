@@ -402,9 +402,10 @@ Immediate fixed-math residuals: public `FT_MulDiv`, `FT_MulFix`,
 through core long-width helpers and pass exact Rust FFI, C ABI, and WASM ABI
 fixture parity. The FFI wrapper no longer owns a separate arithmetic
 implementation. This is semantic centralization to enforce thin wrappers, not
-coverage-only deletion. Remaining `fixed.rs` lines are private 32-bit wrapper
-helpers plus vector-length and vector-normalization branches that need either
-existing public route inputs or a separate reachability classification.
+coverage-only deletion. `FT_RoundFix`, `FT_CeilFix`, and `FT_FloorFix` now keep
+FreeType's native signed-long `FT_Fixed` domain instead of truncating through
+the internal 32-bit helper shape; `fixed.rs` is line/function complete, with
+only branch residuals left for vector-length and vector-normalization paths.
 
 Immediate transform-render residuals: the compact
 `FT_Set_Transform.load_ignore_transform_behavior@rendered-transformed-load`
@@ -1223,13 +1224,15 @@ named-instance PostScript-name parity.
 
 #### R8: Scalar, Cast, And Final Error Boundaries
 
-Primary modules: `fixed.rs`, `casts.rs`, plus residual small branches.
+Primary modules: `casts.rs`, `fixed.rs` branch residuals, plus residual small
+branches.
 
 Expected additions: no fonts; 15-30 explicit variants.
 
 Use existing fixed-math public API inputs for signed extremes, zero divisors,
-rounding boundaries, normalization axes, and conversion limits. Remove private
-conversion helpers with no production caller.
+rounding boundaries, normalization axes, and conversion limits. `fixed.rs` is
+line-complete; remaining work there is branch outcome evidence or semantic
+reachability classification, not missing wrapper-line coverage.
 
 Exit gate: every remaining small module reaches complete structural coverage.
 
@@ -1589,6 +1592,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Direct load-glyph null-face route | 109 unique hashes | 0 | 6,648 | 6,644 / 6,644 | 4 | 14,695 / 17,264 lines; 21,419 / 24,829 regions; 3,591 / 4,406 branches | `FT_Load_Glyph.error_null_face_or_invalid_flags.null_face` now calls pinned C `FT_Load_Glyph(NULL, glyph_index, flags)` instead of the generic null fallback, and Rust/C ABI/WASM legs route the same explicit null-face shape through public validation. The C and WASM wrappers now match FreeType's `Invalid_Face_Handle` for invalid glyph-load handles, route-audit real parity rises to 3,245, and shape-incomplete fallback drops to 8 without case growth |
 | 2026-07-12 | Direct unpatented-hinting post-load route | 109 unique hashes | 0 | 6,648 | 6,644 / 6,644 | 4 | 14,695 / 17,264 lines; 21,419 / 24,829 regions; 3,591 / 4,406 branches | `FT_Face_SetUnpatentedHinting.post_toggle_load_behavior` now calls pinned C `FT_Face_SetUnpatentedHinting` for the explicit toggle sequence and then compares the post-toggle `FT_Load_Glyph` slot through Rust FFI, C ABI, and WASM ABI. Pinned FreeType's deprecated function is a no-op returning false, so the row proves unchanged post-toggle load behavior instead of a generic boolean list. Route-audit real parity rises to 3,246 and shape-incomplete fallback drops to 7 without case or coverage growth |
 | 2026-07-12 | Direct outline cbox nullable pointer route | 109 unique hashes | 0 | 6,648 | 6,644 / 6,644 | 4 | 14,720 / 17,289 lines; 21,454 / 24,864 regions; 3,595 / 4,410 branches | `FT_Outline_Get_CBox.null_inputs_noop` now calls pinned C, Rust FFI, C ABI, and WASM ABI pointer no-op shapes directly. Live `ftoutln.outline_get_cbox` glyph rows also call the safe Rust helper and verify it agrees with the loaded slot cbox for control-point and empty-outline cases. Route-audit real parity rises to 3,247 and shape-incomplete fallback drops to 6 without case growth |
+| 2026-07-12 | Native-long fixed-math route parity | 109 unique hashes | 0 | 6,649 | 6,645 / 6,645 | 4 | 14,736 / 17,290 lines; 21,474 / 24,856 regions; 3,600 / 4,406 branches | Existing `FT_RoundFix`, `FT_CeilFix`, `FT_FloorFix`, `FT_MulDiv`, `FT_MulFix`, and `FT_DivFix` rows now classify as real runtime parity instead of compile contracts. The focused `FT_RoundFix.wraparound_matches_c` row exposed that C `FT_Fixed` is a native signed long and returns `2147483648` for the `2147483647` round boundary on this host, while the old core wrapper truncated to `-2147483648`. Rust FFI now delegates unary fixed functions to core native-long wrappers, `fixed.rs` reaches 215 / 215 lines, and route-audit real parity rises to 3,268 without new fonts, cases, or implicit discovery |
 
 ## Decision Log
 

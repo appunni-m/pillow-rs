@@ -1543,15 +1543,15 @@ pub fn FT_DivFix(a: FT_Long, b: FT_Long) -> FT_Long {
 }
 
 pub fn FT_RoundFix(a: FT_Fixed) -> FT_Fixed {
-    crate::fixed::ft_round_fix_long(ft_long_to_i64(a)) as FT_Fixed
+    crate::fixed::ft_round_fix(ft_long_to_i64(a)) as FT_Fixed
 }
 
 pub fn FT_CeilFix(a: FT_Fixed) -> FT_Fixed {
-    crate::fixed::ft_ceil_fix_long(ft_long_to_i64(a)) as FT_Fixed
+    crate::fixed::ft_ceil_fix(ft_long_to_i64(a)) as FT_Fixed
 }
 
 pub fn FT_FloorFix(a: FT_Fixed) -> FT_Fixed {
-    crate::fixed::ft_floor_fix_long(ft_long_to_i64(a)) as FT_Fixed
+    crate::fixed::ft_floor_fix(ft_long_to_i64(a)) as FT_Fixed
 }
 
 pub fn FT_Vector_Transform(vector: Option<&mut FT_Vector>, matrix: Option<&FT_Matrix>) {
