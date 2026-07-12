@@ -7697,11 +7697,17 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             }
         }
         "set_pixel_sizes" => {
-            let (library, face) = c_open_face(case)?;
-            let output = c_size_metrics_json(face);
+            let (library, face) = c_new_face_without_size(case)?;
+            let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+            let err = c_abi::FT_Set_Pixel_Sizes(face, pixel_width, pixel_height);
+            let output = if err == FT_Err_Ok {
+                c_size_metrics_json(face).map(ok)
+            } else {
+                Ok(error(err))
+            };
             c_done_face(face);
             c_done_library(library);
-            output.map(ok)
+            output
         }
         "set_char_size" => {
             let (library, face) = c_new_face_without_size(case)?;
@@ -8060,15 +8066,22 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "new_memory_face" => wasm_new_memory_face(case),
         "set_pixel_sizes" => {
-            let handle = wasm_open_face(case)?;
-            let mut metrics = wasm_abi::FontdoneWasmSizeMetrics::default();
-            let err = wasm_abi::fontdone_wasm_size_metrics(handle, &mut metrics);
-            wasm_done_face(handle);
-            if err == FT_Err_Ok {
-                Ok(ok(wasm_size_metrics_json(&metrics)))
+            let handle = wasm_new_face_without_size(case)?;
+            let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+            let err = wasm_abi::fontdone_wasm_set_pixel_sizes(handle, pixel_width, pixel_height);
+            let output = if err == FT_Err_Ok {
+                let mut metrics = wasm_abi::FontdoneWasmSizeMetrics::default();
+                let metrics_err = wasm_abi::fontdone_wasm_size_metrics(handle, &mut metrics);
+                if metrics_err == FT_Err_Ok {
+                    Ok(ok(wasm_size_metrics_json(&metrics)))
+                } else {
+                    Ok(error(metrics_err))
+                }
             } else {
                 Ok(error(err))
-            }
+            };
+            wasm_done_face(handle);
+            output
         }
         "set_char_size" => {
             let handle = wasm_new_face_without_size(case)?;

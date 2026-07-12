@@ -316,6 +316,47 @@
       }
     },
     {
+      "case_id": "freetype.FT_Set_Pixel_Sizes.error_probe_face_invalid_size_handle",
+      "subject": "freetype.FT_Set_Pixel_Sizes",
+      "case": "error_invalid_or_unscalable_face",
+      "operation": "set_pixel_sizes",
+      "schema": "size_metrics",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": -1,
+          "pixel_width": 12,
+          "pixel_height": 12
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "probe_face": "negative face index opened for face-count probing"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error"
+          ]
+        },
+        "error": "FT_Err_Invalid_Size_Handle"
+      }
+    },
+    {
       "case_id": "freetype.FT_Set_Pixel_Sizes.error_invalid_or_unscalable_face",
       "subject": "freetype.FT_Set_Pixel_Sizes",
       "case": "error_invalid_or_unscalable_face",
