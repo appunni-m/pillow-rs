@@ -15,17 +15,42 @@
       "schema": "api_array",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "path": "fonts/cmap/cmap-format-language-matrix.ttf"
+        "variants": [
+          {
+            "id": "default_uvs_char",
+            "coverage": [
+              "face_get_variants_of_char:default-uvs-mapping"
+            ],
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/cmap/cmap-format-language-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "charcode": "U+0041"
+            }
+          },
+          {
+            "id": "non_default_uvs_char",
+            "coverage": [
+              "face_get_variants_of_char:non-default-uvs-mapping"
+            ],
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/cmap/cmap-format-language-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "charcode": "U+0042"
+            }
           }
-        },
-        "params": {
-          "face_index": 0,
-          "charcode": "U+0041"
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
