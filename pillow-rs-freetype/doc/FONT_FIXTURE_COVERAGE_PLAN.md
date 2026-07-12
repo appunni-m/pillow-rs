@@ -358,6 +358,11 @@ safe `Font::getkerning` helper is reached by the same C-oracle-backed row.
 codepoint-level safe `Font::glyph_hori_advance_26dot6` assertion on the existing
 DejaVuSans `A` no-hinting row, comparing the 26.6 helper against the same
 C-oracle-backed 16.16 advance rounded to 26.6.
+Existing `FT_Render_Glyph.matrix_render` rows now also declare safe `Font`
+render agreement for no-hinting, force-autohint, target-light, and no-autohint
+normal-render outputs, so the safe load-mode dispatch paths are checked against
+the same rendered glyphs already compared across pinned C, Rust FFI, C ABI, and
+WASM ABI.
 
 | Measure | Current |
 |---|---:|
@@ -368,11 +373,11 @@ C-oracle-backed 16.16 advance rounded to 26.6.
 | Runnable parity comparisons | 6,678 |
 | Exact parity | 6,678 / 6,678 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,636 / 17,759 (88.05%) |
-| Rust function coverage | 994 / 1,133 (87.73%) |
-| Rust instantiation coverage | 997 / 1,136 (87.76%) |
-| Rust region coverage | 22,556 / 25,450 (88.63%) |
-| Rust branch/condition coverage | 3,737 / 4,524 (82.60%) |
+| Covered Rust lines | 15,706 / 17,759 (88.44%) |
+| Rust function coverage | 997 / 1,133 (88.00%) |
+| Rust instantiation coverage | 1,000 / 1,136 (88.03%) |
+| Rust region coverage | 22,620 / 25,450 (88.88%) |
+| Rust branch/condition coverage | 3,739 / 4,524 (82.65%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 152 |
 | Stored active font binaries | 109 files, 815 KiB |
@@ -1791,6 +1796,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Add missing-name-table constructor control | `scripts/build_name_fixtures.py` now generates `fonts/names/name-missing.ttf` by removing the optional `name` table from the compact base TrueType font, and `FT_New_Memory_Face.valid_font_bytes` selects it as one explicit variant. This covers the constructor fallback separate from the existing zero-record `name-empty.ttf` control; concrete cases rise by one to 6,682, and refreshed condition coverage is 15,616 / 17,759 lines, 22,509 / 25,450 regions, and 3,737 / 4,524 branches with 6,678 / 6,678 runtime rows and four explicit pending rows |
 | 2026-07-12 | Route safe kerning assertion through cached-face execution | `FT_Get_Kerning.legacy_pair_unfitted_and_unscaled_modes` already declared `assert_font_getkerning_agrees`, but the cached-face runner path bypassed the assertion helper. The Rust route now honors the existing input declaration and compares `Font::getkerning('A', 'V')` with the same `FT_KERNING_UNFITTED` vector returned by pinned C, C ABI, and WASM ABI. This adds no fonts and no concrete cases; refreshed condition coverage is 15,628 / 17,759 lines, 22,539 / 25,450 regions, and 3,737 / 4,524 branches with 6,678 / 6,678 runtime rows and four explicit pending rows |
 | 2026-07-12 | Cover safe horizontal advance helper from public advance row | Existing `FT_Get_Advance.success_horizontal_scaled_advance` now marks the DejaVuSans `A` no-hinting variant with `assert_font_hori_advance_agrees` and `advance_codepoint: 65`. The Rust runner compares `Font::glyph_hori_advance_26dot6(U+0041)` with the same C-oracle-backed `FT_Get_Advance` 16.16 value rounded to 26.6, while keeping C ABI and WASM ABI wrappers unchanged. This adds no fonts and no concrete cases; refreshed condition coverage is 15,636 / 17,759 lines, 22,556 / 25,450 regions, and 3,737 / 4,524 branches with 6,678 / 6,678 runtime rows and four explicit pending rows |
+| 2026-07-12 | Route safe load-mode rendering through public render matrix | Existing `FT_Render_Glyph.matrix_render` variants for no-hinting, force-autohint, target-light, and no-autohint now declare `assert_font_render_mode_agrees` with matching `font_render_text` values. The assertions compare safe `Font::render_char_mode` and `Font::render_mode` through the same load modes against the already C-oracle-backed rendered glyph rows, adding no fonts and no concrete cases. Refreshed condition coverage is 15,706 / 17,759 lines, 22,620 / 25,450 regions, and 3,739 / 4,524 branches with 6,678 / 6,678 runtime rows and four explicit pending rows |
 
 ## Immediate Next Actions
 

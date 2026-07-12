@@ -500,10 +500,13 @@
               "load_flags": [
                 "FT_LOAD_NO_HINTING"
               ],
-              "render_mode": "FT_RENDER_MODE_NORMAL"
+              "render_mode": "FT_RENDER_MODE_NORMAL",
+              "font_render_text": "a",
+              "assert_font_render_mode_agrees": true
             },
             "coverage": [
-              "render:unhinted"
+              "render:unhinted",
+              "coverage:font:no-hinting-render"
             ]
           },
           {
@@ -525,10 +528,13 @@
               "load_flags": [
                 "FT_LOAD_FORCE_AUTOHINT"
               ],
-              "render_mode": "FT_RENDER_MODE_NORMAL"
+              "render_mode": "FT_RENDER_MODE_NORMAL",
+              "font_render_text": "A",
+              "assert_font_render_mode_agrees": true
             },
             "coverage": [
-              "api/render_font:force-autohint"
+              "api/render_font:force-autohint",
+              "coverage:font:force-autohint-render"
             ]
           },
           {
@@ -550,10 +556,13 @@
               "load_flags": [
                 "FT_LOAD_TARGET_LIGHT"
               ],
-              "render_mode": "FT_RENDER_MODE_NORMAL"
+              "render_mode": "FT_RENDER_MODE_NORMAL",
+              "font_render_text": "A",
+              "assert_font_render_mode_agrees": true
             },
             "coverage": [
-              "api/render_font:target-light"
+              "api/render_font:target-light",
+              "coverage:font:target-light-render"
             ]
           },
           {
@@ -575,10 +584,13 @@
               "load_flags": [
                 "FT_LOAD_NO_AUTOHINT"
               ],
-              "render_mode": "FT_RENDER_MODE_NORMAL"
+              "render_mode": "FT_RENDER_MODE_NORMAL",
+              "font_render_text": "A",
+              "assert_font_render_mode_agrees": true
             },
             "coverage": [
-              "api/render_font:no-autohint"
+              "api/render_font:no-autohint",
+              "coverage:font:no-autohint-render"
             ]
           },
           {
