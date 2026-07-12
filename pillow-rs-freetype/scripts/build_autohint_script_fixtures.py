@@ -421,11 +421,65 @@ def build_cjk_tiny_stem() -> None:
     font.save(OUT_DIR / "cjk-tiny-stem.ttf")
 
 
+def build_cjk_snap_below_standard() -> None:
+    glyph_order = [".notdef", "space", "hani_standard", "hani_snap_below"]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -120, 520, 720),
+        "space": empty_glyph(),
+        "hani_standard": rectangle_glyph(100, 0, 200, 560),
+        "hani_snap_below": rectangle_glyph(100, 0, 190, 560),
+    }
+    metrics = {
+        ".notdef": (600, 80),
+        "space": (300, 0),
+        "hani_standard": (700, 100),
+        "hani_snap_below": (700, 100),
+    }
+    cmap = {
+        0x20: "space",
+        0x4ED6: "hani_snap_below",
+        0x7530: "hani_standard",
+    }
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint CJK Snap Below Standard",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint CJK Snap Below Standard Regular",
+            "fullName": "Autohint CJK Snap Below Standard Regular",
+            "psName": "AutohintCJKSnapBelowStandard-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "cjk-snap-below-standard.ttf")
+
+
 def main() -> None:
     build_script_coverage()
     build_cjk_empty_standard()
     build_cjk_blue_edge_cases()
     build_cjk_tiny_stem()
+    build_cjk_snap_below_standard()
 
 
 if __name__ == "__main__":
