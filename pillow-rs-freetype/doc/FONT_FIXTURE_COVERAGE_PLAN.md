@@ -308,18 +308,18 @@ contract instead of using a Rust-only modeled tuple helper.
 
 | Measure | Current |
 |---|---:|
-| Logical public API cases | 4,145 |
-| Concrete explicit cases | 6,646 |
-| Additional grouped variants | 2,501 |
+| Logical public API cases | 4,146 |
+| Concrete explicit cases | 6,648 |
+| Additional grouped variants | 2,502 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,643 |
-| Exact parity | 6,643 / 6,643 |
-| Pending cases | 3 |
-| Covered Rust lines | 14,693 / 17,264 (85.11%) |
+| Runnable parity comparisons | 6,644 |
+| Exact parity | 6,644 / 6,644 |
+| Pending cases | 4 |
+| Covered Rust lines | 14,695 / 17,264 (85.12%) |
 | Rust function coverage | 881 / 1,071 (82.26%) |
 | Rust instantiation coverage | 884 / 1,074 (82.31%) |
-| Rust region coverage | 21,417 / 24,829 (86.26%) |
-| Rust branch/condition coverage | 3,589 / 4,406 (81.46%) |
+| Rust region coverage | 21,419 / 24,829 (86.27%) |
+| Rust branch/condition coverage | 3,591 / 4,406 (81.50%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 141 |
 | Stored active font binaries | 98 files, 773 KiB |
@@ -723,10 +723,10 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,245 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,246 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 4 | `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null rows execute pinned C oracle status checks and the Rust FFI wrapper validation path; size lifecycle success remains separate. |
 | Compile/header/scalar contract | 2,248 | Valid for ABI/header contracts, not runtime core coverage. |
-| Shape-incomplete fallback | 8 | Convert to complete explicit variants or mark invalid/pending. |
+| Shape-incomplete fallback | 7 | Convert to complete explicit variants or mark invalid/pending. |
 | Generic modeled fallback | 961 | Classify operation-by-operation as real parity, unsupported, or pending. |
 | Generic modeled error fallback | 142 | Replace implemented surfaces with real error-path execution. |
 | Null-error fallback | 21 | Keep only exact null-handle probes; route implemented null cases directly. |
@@ -736,7 +736,7 @@ Current route-audit totals:
 | Explicit unsupported stubs | 12 | Implement or keep visibly unsupported; do not count as coverage. |
 | Pending core implementation | 4 | Named-instance Adobe MM, `FT_MM_Var`, `gvar`/HVAR, and live non-SFNT face support rows remain pending. |
 
-The first R0 closure bucket is the 8 shape-incomplete rows because these are
+The first R0 closure bucket is the 7 shape-incomplete rows because these are
 usually JSON/input fixes rather than new core features:
 
 | Operation | Rows | First action |
@@ -744,7 +744,6 @@ usually JSON/input fixes rather than new core features:
 | `load_glyph` | 2 | Non-null invalid-index, reserved-flag, and null-face probes are now executable; bitmap-missing rows still need explicit oracle/fixture support. |
 | `render_glyph` | 3 | Composite no-recurse cannot-render probing is now executable; unloaded/synthetic slot states and future overlap-font cases still need explicit route or unsupported classification. |
 | `ftoutln.outline_get_cbox` | 1 | Add explicit null outline/acbox route support; do not replace null-noop behavior with a normal glyph row. |
-| `freetype.face_set_unpatented_hinting` | 1 | Add route support for toggle-sequence post-load behavior; simple boolean values would not prove this case. |
 | `sfnt.get_sfnt_table.record` | 1 | Replace the inert variation sequence with a real table-read route once MVAR variation behavior exists. |
 
 | Route | Current behavior | Coverage risk | Required disposition |
@@ -1583,6 +1582,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Direct SFNT-name nullable pointer routes | 109 unique hashes | 0 | 6,648 | 6,644 / 6,644 | 4 | 14,695 / 17,264 lines; 21,419 / 24,829 regions; 3,591 / 4,406 branches | `FT_Get_Sfnt_Name.invalid_argument_errors` now has explicit null-face and null-output variants that call pinned C `FT_Get_Sfnt_Name`, Rust FFI, C ABI, and WASM ABI with the same pointer shapes and compare the returned `Invalid_Argument` sequence. The non-SFNT placeholder remains explicit with indexes but is pending rather than counted as live non-SFNT coverage because the current Type 1 fixture fails at face opening. Route-audit real parity rises to 3,243, pending-core rises to 4, and shape-incomplete fallback drops to 10 without implicit case growth |
 | 2026-07-12 | Direct load-char null-face route | 109 unique hashes | 0 | 6,648 | 6,644 / 6,644 | 4 | 14,695 / 17,264 lines; 21,419 / 24,829 regions; 3,591 / 4,406 branches | `FT_Load_Char.error_null_face_or_invalid_flags.null_face` now calls pinned C `FT_Load_Char(NULL, char_code, flags)` instead of the generic error oracle, and the Rust/C ABI/WASM legs route the same explicit null-face shape through their public validation surfaces. The C and WASM wrappers now return FreeType's `Invalid_Face_Handle` for invalid face handles, route-audit real parity rises to 3,244, and shape-incomplete fallback drops to 9 with no new cases or implicit discovery |
 | 2026-07-12 | Direct load-glyph null-face route | 109 unique hashes | 0 | 6,648 | 6,644 / 6,644 | 4 | 14,695 / 17,264 lines; 21,419 / 24,829 regions; 3,591 / 4,406 branches | `FT_Load_Glyph.error_null_face_or_invalid_flags.null_face` now calls pinned C `FT_Load_Glyph(NULL, glyph_index, flags)` instead of the generic null fallback, and Rust/C ABI/WASM legs route the same explicit null-face shape through public validation. The C and WASM wrappers now match FreeType's `Invalid_Face_Handle` for invalid glyph-load handles, route-audit real parity rises to 3,245, and shape-incomplete fallback drops to 8 without case growth |
+| 2026-07-12 | Direct unpatented-hinting post-load route | 109 unique hashes | 0 | 6,648 | 6,644 / 6,644 | 4 | 14,695 / 17,264 lines; 21,419 / 24,829 regions; 3,591 / 4,406 branches | `FT_Face_SetUnpatentedHinting.post_toggle_load_behavior` now calls pinned C `FT_Face_SetUnpatentedHinting` for the explicit toggle sequence and then compares the post-toggle `FT_Load_Glyph` slot through Rust FFI, C ABI, and WASM ABI. Pinned FreeType's deprecated function is a no-op returning false, so the row proves unchanged post-toggle load behavior instead of a generic boolean list. Route-audit real parity rises to 3,246 and shape-incomplete fallback drops to 7 without case or coverage growth |
 
 ## Decision Log
 
@@ -1685,6 +1685,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Route `FT_Get_Sfnt_Name` pointer errors through the real call | Pinned `FT_Get_Sfnt_Name` returns `Invalid_Argument` in the function output for null face and null `aname`; these rows must not go through the generic null-source handler, which reports a top-level invalid-face status instead. A non-SFNT row only proves the `FT_IS_SFNT` branch after both C FreeType and Rust can open the fixture as a live non-SFNT `FT_Face` |
 | 2026-07-12 | Route `FT_Load_Char` null-face errors through the real call | Pinned `FT_Load_Char` checks `face == NULL` before charmap lookup or glyph loading and returns `FT_Err_Invalid_Face_Handle`. Public null-face rows must call that function directly; generic `--error` or null-source shortcuts are only fallback evidence and should not count as route parity |
 | 2026-07-12 | Route `FT_Load_Glyph` null-face errors through the real call | Pinned `FT_Load_Glyph` checks `!face || !face->size || !face->glyph` before driver dispatch and returns `FT_Err_Invalid_Face_Handle`. Public null-face glyph-load rows must call `FT_Load_Glyph(NULL, ...)` directly; wrapper validation should mirror that error code without adding font logic |
+| 2026-07-12 | Prove unpatented-hinting toggles through post-load behavior | Pinned `FT_Face_SetUnpatentedHinting` in `ftpatent.c` ignores the face and value and always returns false. Toggle-sequence rows should therefore compare the following public glyph load slot, not only the deprecated function's scalar return |
 
 ## Immediate Next Actions
 
@@ -1694,7 +1695,7 @@ Work must resume here unless a newer user request changes priority:
    `FT_Get_Glyph_Name`, `FT_Get_Name_Index`, `FT_Get_Gasp`,
    `FT_Get_CMap_Format`, `FT_Get_CMap_Language_ID`, and
    `FT_Get_SubGlyph_Info`, `FT_Get_Postscript_Name`, `FT_Get_Sfnt_Name`,
-   `FT_Load_Char`, `FT_Load_Glyph`, and
+   `FT_Load_Char`, `FT_Load_Glyph`, `FT_Face_SetUnpatentedHinting`, and
    `FT_Set_Named_Instance`-driven named-instance selection are now real parity.
    `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null-validation rows
    are now exact C-oracle/Rust-FFI routes; continue with generic fallback rows,
@@ -1706,9 +1707,9 @@ Work must resume here unless a newer user request changes priority:
 3. Resume explicit fixture expansion in the active order: public route audit,
    render/raster matrix, autohint script/topology, TrueType interpreter edge
    programs, then scalar residuals.
-4. Keep the current three named-instance pending rows explicit and do not count
-   them as coverage until the core Adobe MM, `FT_MM_Var`, and `gvar`/HVAR
-   behavior exists. Embedded-strike request handling remains an R7 fixture
-   obligation, but it is not currently a pending runtime row.
+4. Keep the current four pending rows explicit and do not count them as
+   coverage until the core Adobe MM, `FT_MM_Var`, `gvar`/HVAR, and live
+   non-SFNT-face behavior exists. Embedded-strike request handling remains an
+   R7 fixture obligation, but it is not currently a pending runtime row.
 5. Keep the deprecated corpus isolated until final cleanup is separately
    reviewed and approved.

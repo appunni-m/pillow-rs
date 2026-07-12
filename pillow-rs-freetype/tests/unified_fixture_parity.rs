@@ -930,9 +930,7 @@ fn face_check_truetype_patents_runtime_supported(case: &InputCase) -> bool {
 }
 
 fn face_set_unpatented_hinting_runtime_supported(case: &InputCase) -> bool {
-    if case.inputs.params.get("toggle_sequence").is_some()
-        || patent_bool_values(&case.inputs.params).is_err()
-    {
+    if patent_bool_values(&case.inputs.params).is_err() {
         return false;
     }
     if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
@@ -5114,6 +5112,10 @@ fn wasm_face_check_truetype_patents(case: &InputCase) -> Result<RunOutput, Strin
 }
 
 fn rust_face_set_unpatented_hinting(case: &InputCase) -> Result<RunOutput, String> {
+    if case.inputs.params.get("toggle_sequence").is_some() {
+        let mut face = open_face(case)?;
+        return rust_face_set_unpatented_hinting_post_load(&mut face, &case.inputs.params);
+    }
     if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
         return patent_bool_output(&case.inputs.params, |value| {
             FT_Face_SetUnpatentedHinting(None, value)
@@ -5126,6 +5128,13 @@ fn rust_face_set_unpatented_hinting(case: &InputCase) -> Result<RunOutput, Strin
 }
 
 fn c_face_set_unpatented_hinting(case: &InputCase) -> Result<RunOutput, String> {
+    if case.inputs.params.get("toggle_sequence").is_some() {
+        let (library, face) = c_open_face(case)?;
+        let output = c_face_set_unpatented_hinting_post_load(face, &case.inputs.params);
+        c_done_face(face);
+        c_done_library(library);
+        return output;
+    }
     if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
         return patent_bool_output(&case.inputs.params, |value| {
             c_abi::FT_Face_SetUnpatentedHinting(std::ptr::null_mut(), value)
@@ -5141,6 +5150,12 @@ fn c_face_set_unpatented_hinting(case: &InputCase) -> Result<RunOutput, String> 
 }
 
 fn wasm_face_set_unpatented_hinting(case: &InputCase) -> Result<RunOutput, String> {
+    if case.inputs.params.get("toggle_sequence").is_some() {
+        let handle = wasm_open_face(case)?;
+        let output = wasm_face_set_unpatented_hinting_post_load(handle, &case.inputs.params);
+        wasm_done_face(handle);
+        return output;
+    }
     if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
         return patent_bool_output(&case.inputs.params, |value| {
             wasm_abi::fontdone_wasm_face_set_unpatented_hinting(0, value)
@@ -5168,6 +5183,64 @@ fn patent_bool_output(
         })
         .collect::<Vec<_>>();
     Ok(ok(json!({ "outputs": outputs })))
+}
+
+fn rust_face_set_unpatented_hinting_post_load(
+    face: &mut FT_Face,
+    params: &Value,
+) -> Result<RunOutput, String> {
+    let mut result = 0;
+    for value in patent_bool_values(params)? {
+        result = FT_Face_SetUnpatentedHinting(Some(&mut *face), value);
+    }
+    let glyph_index = rust_resolved_glyph_index(face, params)?;
+    match FT_Load_Glyph(face, glyph_index, load_flags_param(params)?) {
+        Ok(slot) => Ok(ok(json!({
+            "return": result,
+            "post_toggle_slot": slot_json(&slot)
+        }))),
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn c_face_set_unpatented_hinting_post_load(
+    face: c_abi::FT_Face,
+    params: &Value,
+) -> Result<RunOutput, String> {
+    let mut result = 0;
+    for value in patent_bool_values(params)? {
+        result = c_abi::FT_Face_SetUnpatentedHinting(face, value);
+    }
+    let glyph_index = c_resolved_glyph_index(face, params)?;
+    let err = c_abi::FT_Load_Glyph(face, glyph_index, load_flags_param(params)?);
+    if err == FT_Err_Ok {
+        Ok(ok(json!({
+            "return": result,
+            "post_toggle_slot": c_slot_json(face)?
+        })))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn wasm_face_set_unpatented_hinting_post_load(
+    handle: usize,
+    params: &Value,
+) -> Result<RunOutput, String> {
+    let mut result = 0;
+    for value in patent_bool_values(params)? {
+        result = wasm_abi::fontdone_wasm_face_set_unpatented_hinting(handle, value);
+    }
+    let glyph_index = wasm_resolved_glyph_index(handle, params)?;
+    let err = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags_param(params)?);
+    if err == FT_Err_Ok {
+        Ok(ok(json!({
+            "return": result,
+            "post_toggle_slot": wasm_slot_json(handle)?
+        })))
+    } else {
+        Ok(error(err))
+    }
 }
 
 fn rust_set_lcd_filter(case: &InputCase) -> Result<RunOutput, String> {
@@ -7128,6 +7201,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "freetype.face_set_unpatented_hinting" => {
             if patent_bool_values(params).is_err() {
                 return oracle_fallback_args(case);
+            }
+            if params.get("toggle_sequence").is_some() {
+                let mut args = vec!["--face-set-unpatented-hinting-post-load".to_string()];
+                push_font_source(case, &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(patent_bool_values_arg(params)?);
+                args.push(glyph_index_param(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                return Ok(args);
             }
             let mut args = vec![
                 "--face-set-unpatented-hinting".to_string(),
@@ -14823,7 +14905,13 @@ fn lifecycle_handle_param<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
 }
 
 fn patent_bool_values(params: &Value) -> Result<Vec<FT_Bool>, String> {
-    array_param(params, "values")?
+    let values = params
+        .get("values")
+        .or_else(|| params.get("toggle_sequence"))
+        .ok_or_else(|| "missing array param values".to_string())?;
+    values
+        .as_array()
+        .ok_or_else(|| "values must be array".to_string())?
         .iter()
         .map(|value| {
             let value = u32_value(value, "values[]")?;
