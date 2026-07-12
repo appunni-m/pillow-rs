@@ -251,7 +251,11 @@ an additive `cjkSerifM` glyph mapped at U+519D. One explicit
 `FT_LOAD_FORCE_AUTOHINT` public row selects that glyph to exercise FreeType's
 CJK 12-edge serif-`m` horizontal-axis stabilization path; the glyph top is kept
 below the next pixel boundary so the row isolates the x-edge topology without
-introducing an unrelated vertical metrics mismatch.
+introducing an unrelated vertical metrics mismatch. A separate two-glyph
+`cjk-width-order.ttf` fixture now omits U+7530 so Hani standard-width
+initialization falls through to U+56D7, whose wide-then-narrow stems exercise
+the descending insertion-sort and quantization branches without disturbing the
+productive U+7530 rows.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -259,22 +263,22 @@ coordinate parity.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,137 |
-| Concrete explicit cases | 6,621 |
-| Additional grouped variants | 2,484 |
+| Concrete explicit cases | 6,622 |
+| Additional grouped variants | 2,485 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,618 |
-| Exact parity | 6,618 / 6,618 |
+| Runnable parity comparisons | 6,619 |
+| Exact parity | 6,619 / 6,619 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,641 / 17,230 (84.97%) |
+| Covered Rust lines | 14,650 / 17,230 (85.03%) |
 | Rust function coverage | 878 / 1,066 (82.36%) |
 | Rust instantiation coverage | 881 / 1,069 (82.41%) |
-| Rust region coverage | 21,352 / 24,773 (86.19%) |
-| Rust branch/condition coverage | 3,569 / 4,398 (81.15%) |
+| Rust region coverage | 21,358 / 24,773 (86.21%) |
+| Rust branch/condition coverage | 3,572 / 4,398 (81.22%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
-| Active fixture font paths | 140 |
-| Stored active font binaries | 97 files, 772 KiB |
+| Active fixture font paths | 141 |
+| Stored active font binaries | 98 files, 773 KiB |
 | Active symlink aliases | 43 |
-| Unique active font contents | 108 SHA-256 identities |
+| Unique active font contents | 109 SHA-256 identities |
 | Deprecated brute-force fonts | 101 files, 99 unique contents, 23 MiB |
 
 The current coverage target is not only line coverage. The maintained
@@ -297,16 +301,16 @@ Current largest uncovered buckets:
 
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
-| `src/render.rs` | 1,568 / 2,275 | 325 / 428 | 109 / 164 | 2,264 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 1,417 / 1,908 | 175 / 250 | 127 / 186 | 1,930 / 2,597 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/render.rs` | 1,577 / 2,275 | 330 / 428 | 109 / 164 | 2,281 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
+| `src/font.rs` | 1,444 / 1,936 | 175 / 250 | 127 / 186 | 1,967 / 2,635 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,510 / 2,828 | 980 / 1,282 | 70 / 73 | 3,611 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
-| `src/scaler.rs` | 934 / 1,220 | 150 / 188 | 41 / 61 | 1,067 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
+| `src/scaler.rs` | 941 / 1,220 | 153 / 188 | 41 / 61 | 1,081 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 646 / 810 | 131 / 184 | 30 / 35 | 912 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
 | `src/ffi/handles.rs` | 1,353 / 1,490 | 238 / 288 | 149 / 162 | 1,898 / 2,040 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,296 / 1,340 | 353 / 410 | 37 / 40 | 2,676 / 2,901 | Add one TrueType program role per remaining VM state/opcode family |
-| `src/autohint/cjk.rs` | 853 / 941 | 352 / 426 | 18 / 19 | 1,139 / 1,247 | CJK topology rows in the compact multiscript fixture |
-| `src/api.rs` | 473 / 486 | 74 / 84 | 53 / 54 | 639 / 660 | Public API wrapper rows for render cache and glyph-slot surfaces |
+| `src/autohint/cjk.rs` | 862 / 941 | 355 / 426 | 18 / 19 | 1,145 / 1,247 | CJK topology rows in the compact multiscript fixture |
+| `src/api.rs` | 474 / 486 | 76 / 84 | 53 / 54 | 642 / 660 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short
 physical table data plus truncated range arrays. The only remaining uncovered
@@ -1524,6 +1528,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Composite no-recurse and render topology rows | 108 unique hashes | 0 | 6,619 | 6,616 / 6,616 | 3 | 14,626 / 17,230 lines; 21,333 / 24,773 regions; 3,557 / 4,398 branches | Three explicit `FT_Bitmap.public_fields_match_render_output` variants reuse `multiple-charmaps.ttf` glyphs 483 and 380 for mono/SDF off-curve-start and degenerate-conic render topology, the stale `FT_LOAD_NO_RECURSE` composite row now selects DejaVu `Agrave` instead of missing `Aring`, and two explicit `FT_Load_Glyph.matrix_load` variants reuse `hinter-control-matrix.ttf` glyphs 3 and 8 for native composite point attachment and unrounded offsets. The selector correction exposed and fixed composite no-recurse metrics to use the raw composite `glyf` header bbox, matching pinned C, with exact Rust/C ABI/WASM parity and zero implicit cases |
 | 2026-07-12 | S45ROUND clamp probe in super-round glyph | 108 unique hashes | 0 | 6,619 | 6,616 / 6,616 | 3 | 14,628 / 17,230 lines; 21,335 / 24,773 regions; 3,559 / 4,398 branches | The source-backed `hinter-control-matrix.ttf` `superRoundMatrix` glyph now includes a selector `0x71` S45ROUND no-output probe that rounds `0` and `-1`, forcing FreeType's positive and negative clamp repairs while popping the results. The existing `hinter-super-round-matrix` public row keeps exact Rust/C ABI/WASM parity, case count, and implicit count unchanged |
 | 2026-07-12 | Transform-render empty outline row | 108 unique hashes | 0 | 6,620 | 6,617 / 6,617 | 3 | 14,629 / 17,230 lines; 21,338 / 24,773 regions; 3,561 / 4,398 branches | One explicit `FT_Set_Transform.load_ignore_transform_behavior` variant loads `hinter-control-matrix.ttf` glyph 21 with `FT_LOAD_RENDER` under the existing non-identity matrix. It covers the transformed render-outline empty guard in `api.rs` without a new font, discovery axis, or harness path, and exact Rust/C ABI/WASM parity remains green |
+| 2026-07-12 | Hani fallback standard-width order font | 109 unique hashes | 0 | 6,622 | 6,619 / 6,619 | 3 | 14,650 / 17,230 lines; 21,358 / 24,773 regions; 3,572 / 4,398 branches | One minimal `cjk-width-order.ttf` fixture omits U+7530 and maps U+56D7 to a two-stem glyph whose first stem is wider than the second. The explicit `cjk-width-order-20` force-autohint row covers CJK descending width insertion-sort and quantization branches with exact Rust/C ABI/WASM parity and zero implicit cases |
 
 ## Decision Log
 
@@ -1548,6 +1553,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Compare safe facade errors through selected public rows | Error-side coverage for `Face::load_glyph` must be proven by the same `FT_Load_Glyph` fixture cases and exact C/Rust/C-ABI/WASM parity, not by synthetic helper calls or broad routing |
 | 2026-07-12 | Route size null validation before size lifecycle success | Null pointer validation belongs in the thin FFI wrapper and can be proven through existing `ftsizes` public rows. Non-null `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` success lifecycle rows stay generic/unsupported until real multi-size handle ownership is implemented instead of being modeled as C parity |
 | 2026-07-12 | Add new topology glyphs instead of mutating productive rows | Changing the existing U+7530 field glyph reduced net coverage by losing already-covered CJK paths. Additive CJK topology probes must use separate glyphs and explicit public variants so new behavior can only expand the measured union |
+| 2026-07-12 | Use a separate Hani fallback-standard font for width sorting | CJK standard-width initialization always tries U+7530 before U+56D7. A dedicated two-glyph font without U+7530 exercises the fallback standard character and descending width order without changing productive U+7530 geometry or broadening discovery |
 | 2026-07-11 | Pack no-output TT guard probes into existing branch-edge glyphs | Invalid coordinate reads exercise defensive zone access while preserving the same public `FT_Load_Glyph` output and avoiding extra Cartesian case growth |
 | 2026-07-11 | Prefer no-output VM state probes before new TT rows | Stack-only calls, twilight-zone movement, and no-op prep instructions can cover VM branches through the existing public `FT_Load_Glyph` row when they do not alter glyph output or weaken parity |
 | 2026-07-12 | Treat stale fixture obligations as font bugs | When an explicit row claims a structural branch but coverage shows it does not reach that branch, first correct the compact source font or selected glyph parameters instead of adding redundant cases |

@@ -240,6 +240,8 @@ font-fixture-cjk:
 	@command -v ttx >/dev/null || { echo "fonttools ttx is required" >&2; exit 1; }
 	ttx -q --no-recalc-timestamp -o tests/fixtures/fonts/autohint/cjk-coverage.ttf \
 		tests/fixtures/font-sources/cjk-coverage.ttx
+	ttx -q --no-recalc-timestamp -o tests/fixtures/fonts/autohint/cjk-width-order.ttf \
+		tests/fixtures/font-sources/cjk-width-order.ttx
 
 .PHONY: font-fixture-autohint-scripts
 font-fixture-autohint-scripts:
