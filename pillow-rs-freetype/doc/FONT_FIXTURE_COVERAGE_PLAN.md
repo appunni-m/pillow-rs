@@ -259,10 +259,11 @@ the descending insertion-sort and quantization branches without disturbing the
 productive U+7530 rows.
 The generated `cjk-blue-edge-cases.ttf` fixture keeps that productive glyph
 set separate while mapping Hani blue-string probes to one contourless glyph,
-one top flat-only glyph, and one bottom fill/flat inversion. A single explicit
-`FT_LOAD_FORCE_AUTOHINT` row covers the empty-blue-glyph skip, flat-only blue
-zone, and ref/shoot order-repair paths through pinned C, Rust FFI, C ABI, and
-WASM ABI parity.
+one degenerate one-point-contour glyph, one top flat-only glyph, and one bottom
+fill/flat inversion. A single explicit `FT_LOAD_FORCE_AUTOHINT` row covers the
+empty-blue-glyph skip, degenerate-contour skip, flat-only blue zone, and
+ref/shoot order-repair paths through pinned C, Rust FFI, C ABI, and WASM ABI
+parity.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -1826,6 +1827,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Compact render topology branch probes | `FT_Render_Glyph.matrix_render` adds five explicit variants over the existing source-backed `hinter-control-matrix.ttf` render glyphs: conic-chain normal rendering, mixed-winding normal rendering, bowtie mono rendering, and mono scan-type 4/5 glyphs. Each row uses `FT_LOAD_NO_HINTING` to isolate outline decomposition and rasterization from bytecode. This adds no fonts, raises concrete cases to 6,691, keeps implicit cases at zero, and exact Rust FFI, C ABI, and WASM ABI parity passes with 6,687 / 6,687 runtime rows and four explicit pending rows. Refreshed condition coverage is 15,787 / 17,764 lines, 22,669 / 25,453 regions, and 3,742 / 4,524 branches: no line/region/function delta, one additional branch outcome |
 | 2026-07-12 | CJK empty standard-width fallback | `build_autohint_script_fixtures.py` now emits a 1.0 KiB `fonts/autohint/cjk-empty-standard.ttf` where U+7530 maps to a contourless Hani glyph. One explicit `FT_LOAD_FORCE_AUTOHINT` public variant selects it through `FT_Load_Char`, covering the CJK no-width standard fallback without mutating productive U+7530 geometry in `cjk-coverage.ttf`. Concrete cases rise to 6,692, implicit cases stay zero, and exact Rust FFI, C ABI, and WASM ABI parity passes with 6,688 / 6,688 runtime rows and four explicit pending rows. Refreshed condition coverage is 15,788 / 17,764 lines, 22,670 / 25,453 regions, and 3,743 / 4,524 branches |
 | 2026-07-12 | CJK blue-zone edge fixture | `build_autohint_script_fixtures.py` now emits a 1.2 KiB `fonts/autohint/cjk-blue-edge-cases.ttf` where U+4ED6 is contourless, U+519B is the only usable top flat probe, and U+4E2A/U+4E3B invert bottom fill/flat ordering. One explicit `FT_LOAD_FORCE_AUTOHINT` public variant selects U+7530 from that font, covering the CJK empty-blue-glyph skip, flat-only blue zone, and ref/shoot order repair without mutating productive CJK coverage glyphs. Concrete cases rise to 6,693, implicit cases stay zero, and exact Rust FFI, C ABI, and WASM ABI parity passes with 6,689 / 6,689 runtime rows and four explicit pending rows. Refreshed condition coverage is 15,794 / 17,764 lines, 22,678 / 25,453 regions, and 3,747 / 4,524 branches |
+| 2026-07-12 | CJK degenerate blue contours | The existing `cjk-blue-edge-cases.ttf` generated fixture now also maps U+4EEC to three one-point contours. The same explicit `cjk-blue-edge-cases-20` public row reaches the CJK contour-length guard and no-best-position fallback during blue initialization, adding no concrete cases and preserving exact Rust FFI, C ABI, and WASM ABI parity with 6,689 / 6,689 runtime rows and four explicit pending rows. Refreshed condition coverage is 15,796 / 17,764 lines, 22,680 / 25,453 regions, and 3,749 / 4,524 branches |
 
 ## Immediate Next Actions
 

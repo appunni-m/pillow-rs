@@ -2038,6 +2038,7 @@
             },
             "coverage": [
               "autohint/cjk:blue-empty-glyph-skip",
+              "autohint/cjk:blue-degenerate-contour-skip",
               "autohint/cjk:blue-flat-only-zone",
               "autohint/cjk:blue-ref-shoot-order-repair"
             ]
