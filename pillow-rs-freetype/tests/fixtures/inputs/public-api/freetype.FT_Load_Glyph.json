@@ -1176,6 +1176,75 @@
             ]
           },
           {
+            "id": "glyf-malformed-too-short-default",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "api/load_glyph:error-default"
+            ]
+          },
+          {
+            "id": "glyf-malformed-too-short-target-light",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_TARGET_LIGHT"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "api/load_glyph:error-target-light"
+            ]
+          },
+          {
+            "id": "glyf-malformed-too-short-compute-metrics",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/glyf-malformed-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_COMPUTE_METRICS"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "api/load_glyph:error-compute-metrics"
+            ]
+          },
+          {
             "id": "glyf-malformed-end-points-overflow",
             "assets": {
               "font": {
