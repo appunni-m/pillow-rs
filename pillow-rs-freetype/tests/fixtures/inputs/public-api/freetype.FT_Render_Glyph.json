@@ -538,6 +538,93 @@
             ]
           },
           {
+            "id": "dejavu-a-force-autohint-mono",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_MONO"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO",
+              "font_render_text": "A",
+              "assert_font_render_mode_agrees": true
+            },
+            "coverage": [
+              "api/render_font:force-autohint-mono",
+              "coverage:font:force-autohint-native-mono"
+            ]
+          },
+          {
+            "id": "dejavu-a-force-autohint-lcd",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_LCD"
+              ],
+              "render_mode": "FT_RENDER_MODE_LCD",
+              "font_render_text": "A",
+              "assert_font_render_mode_agrees": true
+            },
+            "coverage": [
+              "api/render_font:force-autohint-lcd",
+              "coverage:font:force-autohint-native-lcd"
+            ]
+          },
+          {
+            "id": "dejavu-a-force-autohint-lcd-v",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_LCD_V"
+              ],
+              "render_mode": "FT_RENDER_MODE_LCD_V",
+              "font_render_text": "A",
+              "assert_font_render_mode_agrees": true
+            },
+            "coverage": [
+              "api/render_font:force-autohint-lcd-v",
+              "coverage:font:force-autohint-native-lcd-v"
+            ]
+          },
+          {
             "id": "dejavu-a-target-light",
             "assets": {
               "font": {
