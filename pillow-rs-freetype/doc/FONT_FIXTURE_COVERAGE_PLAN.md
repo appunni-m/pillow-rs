@@ -133,9 +133,10 @@ Initial uncovered branch/condition outcomes are concentrated in:
 | `src/ffi/handles.rs` | 47 | 189 |
 | `src/scaler.rs` | 38 | 246 |
 
-The 3 pending cases are existing unsupported or unresolved named-instance
-inputs. They must remain visible and be converted to runnable explicit cases
-during the coverage phases where their owning operations are addressed.
+The 4 pending cases are existing unsupported or unresolved named-instance and
+non-SFNT face inputs. They must remain visible and be converted to runnable
+explicit cases during the coverage phases where their owning operations are
+addressed.
 
 ## Current Verified Coverage State
 
@@ -311,26 +312,32 @@ and the Rust FFI, C ABI, and WASM ABI legs route the same nullable pointer
 shapes through thin public wrappers. Live glyph CBox rows also execute the safe
 Rust helper and verify it matches the loaded slot cbox, so null/no-op and
 control-point/empty-outline behavior are both real route evidence.
+Two compact generated format-1 `name` table controls now exercise malformed
+language-tag record-array and string-range guards through
+`FT_New_Memory_Face`. Pinned C FreeType and Rust both reject the faces during
+open, and the public rows carry route-visible `font` aliases beside their
+memory-byte sources so route audit counts them as real parity instead of
+fallback evidence.
 
 | Measure | Current |
 |---|---:|
-| Logical public API cases | 4,146 |
-| Concrete explicit cases | 6,648 |
-| Additional grouped variants | 2,502 |
+| Logical public API cases | 4,147 |
+| Concrete explicit cases | 6,662 |
+| Additional grouped variants | 2,515 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,644 |
-| Exact parity | 6,644 / 6,644 |
+| Runnable parity comparisons | 6,658 |
+| Exact parity | 6,658 / 6,658 |
 | Pending cases | 4 |
-| Covered Rust lines | 14,720 / 17,289 (85.14%) |
-| Rust function coverage | 882 / 1,072 (82.28%) |
-| Rust instantiation coverage | 885 / 1,075 (82.33%) |
-| Rust region coverage | 21,454 / 24,864 (86.29%) |
-| Rust branch/condition coverage | 3,595 / 4,410 (81.52%) |
+| Covered Rust lines | 15,223 / 17,756 (85.73%) |
+| Rust function coverage | 948 / 1,133 (83.67%) |
+| Rust instantiation coverage | 951 / 1,136 (83.71%) |
+| Rust region coverage | 22,085 / 25,444 (86.80%) |
+| Rust branch/condition coverage | 3,685 / 4,522 (81.49%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
-| Active fixture font paths | 141 |
-| Stored active font binaries | 98 files, 773 KiB |
+| Active fixture font paths | 147 |
+| Stored active font binaries | 104 files, 795 KiB |
 | Active symlink aliases | 43 |
-| Unique active font contents | 109 SHA-256 identities |
+| Unique active font contents | 113 SHA-256 identities |
 | Deprecated brute-force fonts | 101 files, 99 unique contents, 23 MiB |
 
 The current coverage target is not only line coverage. The maintained
@@ -1602,6 +1609,8 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Direct cmap format-14 default-query route | 110 unique hashes | 0 | 6,654 | 6,650 / 6,650 | 4 | 15,086 / 17,635 lines; 21,918 / 25,284 regions; 3,655 / 4,482 branches | `FT_Face_GetCharVariantIsDefault` now routes five explicit rows through pinned C FreeType, Rust FFI, C ABI, and WASM ABI using the same compact `cmap-format-language-matrix.ttf` format-14 subtable. The rows cover default UVS returning 1, non-default UVS returning 0, missing UVS, no-format14 control, and null-face `-1` behavior without adding fonts or implicit discovery. Core exposes the format-14 selector default query separately from glyph-index lookup because pinned FreeType does not require the active charmap to be Unicode for this API. Route-audit real parity rises to 3,279, generic fallback drops to 955, and implicit cases remain zero |
 | 2026-07-12 | Direct cmap format-14 selector-list route | 110 unique hashes | 0 | 6,655 | 6,651 / 6,651 | 4 | 15,105 / 17,655 lines; 21,946 / 25,313 regions; 3,657 / 4,486 branches | `FT_Face_GetVariantSelectors` now routes four explicit rows through pinned C FreeType, Rust FFI, C ABI, and WASM ABI using the compact `cmap-format-language-matrix.ttf` format-14 subtable. The rows cover non-null selector lists, no-format14 `NULL`, null-face `NULL`, and copied face-owned result lifetime before invalidation. ABI wrappers keep only owned zero-terminated scratch storage and delegate selector discovery to Rust FFI. Route-audit real parity rises to 3,283, generic fallback drops to 952, and implicit cases remain zero |
 | 2026-07-12 | Direct cmap format-14 char and selector UVS list routes | 110 unique hashes | 0 | 6,660 | 6,656 / 6,656 | 4 | 15,196 / 17,746 lines; 22,060 / 25,428 regions; 3,673 / 4,510 branches | `FT_Face_GetVariantsOfChar` and `FT_Face_GetCharsOfVariant` now route eleven explicit rows through pinned C FreeType, Rust FFI, C ABI, and WASM ABI using the compact format-14 cmap fixture. The rows cover a character with two selectors, C's non-null empty selector list for a format-14 character with no UVS entries, no-format14 `NULL`, null-face `NULL`, present selector char lists, absent selector `NULL`, empty selector `NULL`, and copied face-owned list lifetime. Route-audit real parity rises to 3,294, generic fallback drops to 946, and implicit cases remain zero |
+| 2026-07-12 | Route OpenType validation null contracts | 110 unique hashes | 0 | 6,660 | 6,656 / 6,656 | 4 | 15,216 / 17,756 lines; 22,079 / 25,444 regions; 3,684 / 4,522 branches | `FT_OpenType_Validate` and `FT_OpenType_Free` null-face/null-output rows now call pinned C, Rust FFI, C ABI, and WASM ABI instead of modeled fallbacks. Route audit moves real-null-validation to 8, generic fallback to 942, and generic-error fallback to 141 with zero implicit cases |
+| 2026-07-12 | Malformed name language-tag parser controls | 113 unique hashes | 0 | 6,662 | 6,658 / 6,658 | 4 | 15,223 / 17,756 lines; 22,085 / 25,444 regions; 3,685 / 4,522 branches | Two compact format-1 `name` table controls cover language-tag record-array overflow and language-tag string out-of-range guards through public `FT_New_Memory_Face`. Pinned C and Rust both reject the faces at open, route audit counts both rows as real parity, and `tt/name.rs` moves to 331 / 333 lines with exact Rust/C ABI/WASM parity |
 
 ## Decision Log
 
@@ -1715,6 +1724,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Route `FT_Get_Sfnt_LangTag` through real format-1 name data | Pinned `ftsnames.c` requires `langID > 0x8000` but indexes `langTags[langID - 0x8000]`, making language-tag record zero unreachable through the public API. The compact fixture therefore carries two records and selects `0x8001`; null output, format-0, `0x8000`, and upper-bound rows must call the real public function instead of generic fallback |
 | 2026-07-12 | Retire stale public operation names only when an equivalent maintained route exists | The `FT_Load_Sfnt_Table` table-missing row now uses `sfnt.load_sfnt_table` with the existing compact SFNT input, moving one row from generic fallback to real parity without runtime-code changes or weakened comparison shape. Pathname-driven rows such as missing-resource and zero-byte `FT_New_Face`, plus missing-post `FT_Get_Glyph_Name`, stay generic until their exact C source path has a compact fixture and route-equivalent output shape |
 | 2026-07-12 | Route OpenType validation null contracts through real parity | `FT_OpenType_Validate` now matches pinned `ftotval.c` early exits for null face and null output pointers, with exact error-output comparison enabled on those public rows. `FT_OpenType_Free` null-face and null-table rows now call pinned C and the Rust FFI wrapper instead of falling through generic modeled errors. Route audit moves real-null-validation to 8, generic fallback to 942, and generic-error fallback to 141; refreshed condition coverage is 15,216 / 17,756 lines, 22,079 / 25,444 regions, and 3,684 / 4,522 branches with 6,656 / 6,656 runtime rows passing and four explicit pending rows |
+| 2026-07-12 | Treat malformed format-1 language-tag controls as memory-face parser parity | Two generated format-1 `name` table controls now drive language-tag record-array overflow and string-range guards through `FT_New_Memory_Face`. Pinned C FreeType and Rust both reject the face during open; refreshed condition coverage is 15,223 / 17,756 lines, 22,085 / 25,444 regions, and 3,685 / 4,522 branches with 6,658 / 6,658 runtime rows passing and four explicit pending rows |
 
 ## Immediate Next Actions
 

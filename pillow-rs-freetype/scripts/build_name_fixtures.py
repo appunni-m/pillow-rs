@@ -123,6 +123,38 @@ def write_format1_langtag() -> None:
     )
 
 
+def write_format1_langtag_malformed_controls() -> None:
+    # Format-1 name table with a language-tag count but a truncated language-tag
+    # record array. This reaches the parser's explicit record-overflow guard.
+    record_overflow = (
+        (1).to_bytes(2, "big")
+        + (0).to_bytes(2, "big")
+        + (8).to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+    )
+    write_name_payload(
+        BASE_STATIC,
+        ROOT / "tests" / "fixtures" / "fonts" / "sfnt" / "name-format1-langtag-record-overflow.ttf",
+        record_overflow,
+    )
+
+    # Format-1 name table whose language-tag record is present but points past
+    # the string storage area. This reaches the parser's string-range guard.
+    string_oob = (
+        (1).to_bytes(2, "big")
+        + (0).to_bytes(2, "big")
+        + (12).to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+        + (2).to_bytes(2, "big")
+        + (100).to_bytes(2, "big")
+    )
+    write_name_payload(
+        BASE_STATIC,
+        ROOT / "tests" / "fixtures" / "fonts" / "sfnt" / "name-format1-langtag-string-oob.ttf",
+        string_oob,
+    )
+
+
 def variable_base_records() -> list[NameRecordSpec]:
     return [
         NameRecordSpec(3, 1, 0x0409, 1, utf16be("Ubuntu")),
@@ -406,6 +438,7 @@ def main() -> None:
     write_odd_windows_postscript_with_apple_fallback()
     write_postscript_branch_matrix()
     write_format1_langtag()
+    write_format1_langtag_malformed_controls()
     write_variable_apple_prefix()
     write_variable_unicode_prefix()
     write_variable_odd_windows_prefix()
