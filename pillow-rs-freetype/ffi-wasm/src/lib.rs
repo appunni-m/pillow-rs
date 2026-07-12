@@ -1148,20 +1148,32 @@ pub extern "C" fn fontdone_wasm_sfnt_table_info(
     let Some(face) = face_ref(handle) else {
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
-    match rust_ffi::FT_Sfnt_Table_Info(&face.face, table_index) {
-        Ok((tbl_tag, tbl_len)) => {
-            if !out_tag.is_null() {
-                // SAFETY: writable FT_ULong out-param.
-                unsafe { *out_tag = tbl_tag };
-            }
-            if !out_length.is_null() {
-                // SAFETY: writable FT_ULong out-param.
-                unsafe { *out_length = tbl_len };
-            }
-            rust_ffi::FT_Err_Ok as FT_Error
+    let mut tag_out: rust_ffi::FT_ULong = 0;
+    let mut length_out: rust_ffi::FT_ULong = 0;
+    let tag_ref = if out_tag.is_null() {
+        None
+    } else {
+        Some(&mut tag_out)
+    };
+    let length_ref = if out_length.is_null() {
+        None
+    } else {
+        Some(&mut length_out)
+    };
+    let err = rust_ffi::FT_Sfnt_Table_Info(&face.face, table_index, tag_ref, length_ref);
+    if err == rust_ffi::FT_Err_Ok {
+        if !out_tag.is_null() {
+            // SAFETY: writable FT_ULong out-param. Copying after the core call
+            // avoids creating aliased `&mut` references for caller pointers.
+            unsafe { *out_tag = tag_out as FT_ULong };
         }
-        Err(err) => err as FT_Error,
+        if !out_length.is_null() {
+            // SAFETY: writable FT_ULong out-param. C writes tag before length,
+            // so an aliased caller pointer ends with the length value.
+            unsafe { *out_length = length_out as FT_ULong };
+        }
     }
+    err as FT_Error
 }
 
 #[unsafe(no_mangle)]

@@ -1720,14 +1720,31 @@ pub fn FT_Load_Sfnt_Table(
 pub fn FT_Sfnt_Table_Info(
     face: &FT_Face,
     table_index: FT_UInt,
-) -> Result<(FT_ULong, FT_ULong), FT_Error> {
+    tag: Option<&mut FT_ULong>,
+    length: Option<&mut FT_ULong>,
+) -> FT_Error {
+    let Some(length) = length else {
+        return FT_Err_Invalid_Argument;
+    };
+    if tag.is_none() {
+        // C `sfnt_table_info` returns the table count when `tag == NULL`,
+        // ignoring `table_index` (sfnt/sfdriver.c:156-158).
+        *length = FT_Sfnt_Table_Count(face) as FT_ULong;
+        return FT_Err_Ok;
+    }
     let font = face.inner.font();
     let index = match usize::try_from(table_index) {
         Ok(i) => i,
-        Err(_) => return Err(FT_Err_Invalid_Argument),
+        Err(_) => return FT_Err_Table_Missing as FT_Error,
     };
-    let info = font.sfnt_table_info(index).ok_or(FT_Err_Invalid_Argument)?;
-    Ok((info.tag as FT_ULong, info.length as FT_ULong))
+    let Some(info) = font.sfnt_table_info(index) else {
+        return FT_Err_Table_Missing as FT_Error;
+    };
+    if let Some(tag) = tag {
+        *tag = info.tag as FT_ULong;
+    }
+    *length = info.length as FT_ULong;
+    FT_Err_Ok
 }
 
 /// Returns the total number of SFNT tables in the font.

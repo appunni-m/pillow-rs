@@ -1305,20 +1305,32 @@ pub extern "C" fn FT_Sfnt_Table_Info(
     let Some(state) = face_state(face) else {
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
-    match rust_ffi::FT_Sfnt_Table_Info(&state.inner, table_index) {
-        Ok((tbl_tag, tbl_len)) => {
-            if let Some(tag_ptr) = non_null_mut(tag) {
-                // SAFETY: writable FT_ULong out-param.
-                unsafe { *tag_ptr.as_ptr() = tbl_tag };
-            }
-            if let Some(len_ptr) = non_null_mut(length) {
-                // SAFETY: writable FT_ULong out-param.
-                unsafe { *len_ptr.as_ptr() = tbl_len };
-            }
-            rust_ffi::FT_Err_Ok as FT_Error
+    let mut tag_out: rust_ffi::FT_ULong = 0;
+    let mut length_out: rust_ffi::FT_ULong = 0;
+    let tag_ref = if tag.is_null() {
+        None
+    } else {
+        Some(&mut tag_out)
+    };
+    let length_ref = if length.is_null() {
+        None
+    } else {
+        Some(&mut length_out)
+    };
+    let err = rust_ffi::FT_Sfnt_Table_Info(&state.inner, table_index, tag_ref, length_ref);
+    if err == rust_ffi::FT_Err_Ok {
+        if let Some(tag_ptr) = non_null_mut(tag) {
+            // SAFETY: writable FT_ULong out-param. Copying after the core call
+            // avoids creating aliased `&mut` references for caller pointers.
+            unsafe { *tag_ptr.as_ptr() = tag_out as FT_ULong };
         }
-        Err(err) => err as FT_Error,
+        if let Some(len_ptr) = non_null_mut(length) {
+            // SAFETY: writable FT_ULong out-param. C writes tag before length,
+            // so an aliased caller pointer ends with the length value.
+            unsafe { *len_ptr.as_ptr() = length_out as FT_ULong };
+        }
     }
+    err as FT_Error
 }
 
 #[unsafe(no_mangle)]
