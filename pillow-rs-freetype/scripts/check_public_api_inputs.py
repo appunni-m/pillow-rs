@@ -631,6 +631,10 @@ def lifecycle_handle(row: ConcreteInput, name: str) -> str | None:
     return None
 
 
+def param_is_null(row: ConcreteInput, name: str) -> bool:
+    return name in row.params and row.params[name] is None or lifecycle_handle(row, name) == "null"
+
+
 def has_null_lifecycle_handle(row: ConcreteInput) -> bool:
     return any(
         lifecycle_handle(row, name) == "null"
@@ -669,6 +673,20 @@ def size_null_validation_reason(row: ConcreteInput) -> str | None:
         return "FT_Done_Size null size validates through pinned C oracle and Rust FFI wrapper"
     if row.operation == "ftsizes.activate_size" and lifecycle_handle(row, "size") == "null":
         return "FT_Activate_Size null size validates through pinned C oracle and Rust FFI wrapper"
+    return None
+
+
+def otvalid_null_validation_reason(row: ConcreteInput) -> str | None:
+    if row.operation == "ftotval.open_type_validate":
+        if param_is_null(row, "face"):
+            return "FT_OpenType_Validate null face validates through pinned C oracle and Rust FFI wrapper"
+        if "null_output_indices" in row.params:
+            return "FT_OpenType_Validate null output pointers validate through pinned C oracle and Rust FFI wrapper"
+    if row.operation == "ftotval.open_type_free":
+        if param_is_null(row, "face"):
+            return "FT_OpenType_Free null face validates through pinned C oracle and Rust FFI wrapper"
+        if param_is_null(row, "table") and has_runtime_asset(row):
+            return "FT_OpenType_Free null table validates through pinned C oracle and Rust FFI wrapper"
     return None
 
 
@@ -753,6 +771,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     size_null_reason = size_null_validation_reason(row)
     if size_null_reason:
         return ("real-null-validation", size_null_reason)
+    otvalid_null_reason = otvalid_null_validation_reason(row)
+    if otvalid_null_reason:
+        return ("real-null-validation", otvalid_null_reason)
     if operation_is_real_parity(row.operation):
         return ("real-parity", "explicit C oracle, Rust FFI, C ABI, and WASM route")
     if row.expect_error and not has_runtime_asset(row):

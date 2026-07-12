@@ -141,14 +141,25 @@ pub fn FT_Outline_Get_CBox(outline: Option<&FT_OutlineSnapshot>, acbox: Option<&
 pub fn FT_OpenType_Free(_face: Option<&FT_Face>, _table: FT_Bytes) {}
 
 pub fn FT_OpenType_Validate(
-    _face: Option<&FT_Face>,
+    face: Option<&FT_Face>,
     _validation_flags: FT_UInt,
-    _base_table: Option<&mut FT_Bytes>,
-    _gdef_table: Option<&mut FT_Bytes>,
-    _gpos_table: Option<&mut FT_Bytes>,
-    _gsub_table: Option<&mut FT_Bytes>,
-    _jstf_table: Option<&mut FT_Bytes>,
+    base_table: Option<&mut FT_Bytes>,
+    gdef_table: Option<&mut FT_Bytes>,
+    gpos_table: Option<&mut FT_Bytes>,
+    gsub_table: Option<&mut FT_Bytes>,
+    jstf_table: Option<&mut FT_Bytes>,
 ) -> FT_Error {
+    if face.is_none() {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    }
+    if base_table.is_none()
+        || gdef_table.is_none()
+        || gpos_table.is_none()
+        || gsub_table.is_none()
+        || jstf_table.is_none()
+    {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
     FT_Err_Unimplemented_Feature as FT_Error
 }
 
