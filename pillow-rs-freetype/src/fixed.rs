@@ -152,26 +152,29 @@ pub fn ft_div_fix(a: i32, b: i32) -> i32 {
 
 /// FreeType `FT_RoundFix`: round a 16.16 value to an integral 16.16 value.
 ///
-/// `ADD_LONG(a, 0x8000L - (a < 0)) & ~0xFFFFL`.
+/// `FT_Fixed` is a native signed long in FreeType, so this keeps the same
+/// native-long domain as `ftcalc.c:76-78`.
 #[inline]
-pub fn ft_round_fix(a: i32) -> i32 {
-    i32_wrap_from_i64(ft_round_fix_long(i64::from(a)))
+pub fn ft_round_fix(a: i64) -> i64 {
+    ft_round_fix_long(a)
 }
 
 /// FreeType `FT_CeilFix`: ceiling a 16.16 value to an integral 16.16 value.
 ///
-/// Reference: `ftcalc.c:84`. `ADD_LONG(a, 0xFFFFL) & ~0xFFFFL`.
+/// `FT_Fixed` is a native signed long in FreeType, so this keeps the same
+/// native-long domain as `ftcalc.c:85-87`.
 #[inline]
-pub fn ft_ceil_fix(a: i32) -> i32 {
-    i32_wrap_from_i64(ft_ceil_fix_long(i64::from(a)))
+pub fn ft_ceil_fix(a: i64) -> i64 {
+    ft_ceil_fix_long(a)
 }
 
 /// FreeType `FT_FloorFix`: floor a 16.16 value to an integral 16.16 value.
 ///
-/// Reference: `ftcalc.c:93`. `a & ~0xFFFFL`.
+/// `FT_Fixed` is a native signed long in FreeType, so this keeps the same
+/// native-long domain as `ftcalc.c:94-96`.
 #[inline]
-pub fn ft_floor_fix(a: i32) -> i32 {
-    i32_wrap_from_i64(ft_floor_fix_long(i64::from(a)))
+pub fn ft_floor_fix(a: i64) -> i64 {
+    ft_floor_fix_long(a)
 }
 
 #[inline]
