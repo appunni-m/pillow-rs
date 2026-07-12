@@ -1263,7 +1263,7 @@ pub extern "C" fn fontdone_wasm_load_glyph(
     load_flags: FT_Int32,
 ) -> FT_Error {
     let Some(face) = face_mut(handle) else {
-        return rust_ffi::FT_Err_Invalid_Argument;
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
     match rust_ffi::FT_Load_Glyph(&face.face, glyph_index, load_flags) {
         Ok(slot) => {

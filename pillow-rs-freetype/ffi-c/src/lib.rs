@@ -1416,7 +1416,7 @@ pub extern "C" fn FT_Load_Glyph(
     load_flags: FT_Int32,
 ) -> FT_Error {
     let Some(state) = face_state(face) else {
-        return rust_ffi::FT_Err_Invalid_Argument;
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
     match rust_ffi::FT_Load_Glyph(&state.inner, glyph_index, load_flags) {
         Ok(slot) => store_slot(face, slot, load_flags),

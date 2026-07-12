@@ -2624,29 +2624,18 @@
       }
     },
     {
-      "case_id": "freetype.FT_Load_Glyph.error_null_face_or_invalid_flags.null_face_unrouted",
+      "case_id": "freetype.FT_Load_Glyph.error_null_face_or_invalid_flags.null_face",
       "subject": "freetype.FT_Load_Glyph",
       "case": "error_out_of_range_null_face_or_invalid_flags",
       "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
         "params": {
-          "variants": [
-            {
-              "face": "null",
-              "glyph_index": 36,
-              "load_flags": [
-                "FT_LOAD_DEFAULT"
-              ]
-            }
+          "face": "null",
+          "glyph_index": 36,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
           ],
           "size": 20
         }
@@ -2670,10 +2659,7 @@
             "slot_snapshot"
           ]
         },
-        "error": "c_oracle",
-        "fixture_requirements": [
-          "Explicit FT_Load_Glyph null-face oracle and wrapper route support; non-null invalid index and reserved-flag probes are executable variants above."
-        ]
+        "error": "c_oracle"
       }
     }
   ]

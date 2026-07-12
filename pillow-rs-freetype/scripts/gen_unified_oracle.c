@@ -6416,6 +6416,20 @@ static int emit_load_char_null_face(int argc, char** argv) {
     return 0;
 }
 
+static int emit_load_glyph_null_face(int argc, char** argv) {
+    if (argc != 4) {
+        fprintf(stderr, "--load-glyph-null-face requires GID FLAGS\n");
+        return 2;
+    }
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[2], NULL, 10);
+    FT_Int32 load_flags = (FT_Int32)strtol(argv[3], NULL, 10);
+    FT_Error err = FT_Load_Glyph(NULL, glyph_index, load_flags);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":null}\n");
+    return 0;
+}
+
 static int handle_void(void) {
     printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"void\":true}}\n");
     return 0;
@@ -6586,6 +6600,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 4 && streq(argv[1], "--load-char-null-face")) {
         return emit_load_char_null_face(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--load-glyph-null-face")) {
+        return emit_load_glyph_null_face(argc, argv);
     }
     if ((argc == 5 || argc == 10) && streq(argv[1], "--get-sfnt-name-variant")) {
         return emit_get_sfnt_name_variant(argc, argv);
