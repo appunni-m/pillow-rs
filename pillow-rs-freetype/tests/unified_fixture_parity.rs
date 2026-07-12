@@ -2075,6 +2075,7 @@ impl BackendComparisonWorker {
                     | "ftsizes.done_size"
                     | "ftsizes.activate_size"
                     | "load_char"
+                    | "load_glyph"
             ) {
                 let err = classify_null_operation(&case.operation).unwrap();
                 return Ok(error(err));
@@ -2190,6 +2191,9 @@ impl BackendComparisonWorker {
                 if load_glyph_num_glyphs_invalid_argument_case(case) {
                     return Ok(error(FT_Err_Invalid_Argument));
                 }
+                if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                    return Ok(error(FT_Err_Invalid_Face_Handle as FT_Error));
+                }
                 let load_flags = load_flags_param(&case.inputs.params)?;
                 let face = self.rust_face(case)?;
                 let glyph_index = rust_resolved_glyph_index(face, &case.inputs.params)?;
@@ -2234,7 +2238,7 @@ impl BackendComparisonWorker {
             return match case.operation.as_str() {
                 "set_pixel_sizes" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
                 "set_char_size" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
-                "load_glyph" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
+                "load_glyph" => c_load_glyph_output(std::ptr::null_mut(), &case.inputs.params),
                 "load_char" => c_load_char_output(std::ptr::null_mut(), &case.inputs.params),
                 "get_char_index" => Ok(ok(json!({"value": 0}))),
                 "freetype.set_transform" => return run_rust_ffi(case),
@@ -2338,15 +2342,8 @@ impl BackendComparisonWorker {
                 if load_glyph_num_glyphs_invalid_argument_case(case) {
                     return Ok(error(FT_Err_Invalid_Argument));
                 }
-                let load_flags = load_flags_param(&case.inputs.params)?;
                 let face = self.c_face(case)?;
-                let glyph_index = c_resolved_glyph_index(face, &case.inputs.params)?;
-                let err = c_abi::FT_Load_Glyph(face, glyph_index, load_flags);
-                if err == FT_Err_Ok {
-                    c_slot_json(face).map(ok)
-                } else {
-                    Ok(error(err))
-                }
+                c_load_glyph_output(face, &case.inputs.params)
             }
             "freetype.inspect_glyph_metrics" => {
                 let face = self.c_face(case)?;
@@ -2388,7 +2385,7 @@ impl BackendComparisonWorker {
             return match case.operation.as_str() {
                 "set_pixel_sizes" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
                 "set_char_size" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
-                "load_glyph" => Ok(error(FT_Err_Invalid_Face_Handle as FT_Error)),
+                "load_glyph" => wasm_load_glyph_output(0, &case.inputs.params),
                 "load_char" => wasm_load_char_output(0, &case.inputs.params),
                 "get_char_index" => Ok(ok(json!({"value": 0}))),
                 "freetype.set_transform" => return run_rust_ffi(case),
@@ -2498,11 +2495,8 @@ impl BackendComparisonWorker {
                 if load_glyph_num_glyphs_invalid_argument_case(case) {
                     return Ok(error(FT_Err_Invalid_Argument));
                 }
-                let load_flags = load_flags_param(&case.inputs.params)?;
                 let handle = self.wasm_face(case)?;
-                let glyph_index = wasm_resolved_glyph_index(handle, &case.inputs.params)?;
-                let err = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags);
-                wasm_slot_output(handle, err)
+                wasm_load_glyph_output(handle, &case.inputs.params)
             }
             "freetype.inspect_glyph_metrics" => {
                 let handle = self.wasm_face(case)?;
@@ -7189,6 +7183,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 return oracle_fallback_args(case);
             }
             let selector = glyph_index_selector_param(params)?;
+            if lifecycle_handle_param(params, "face") == Some("null") {
+                let glyph_index = match selector {
+                    GlyphIndexSelector::Index(glyph_index) => glyph_index,
+                    GlyphIndexSelector::FromCharCode(_) | GlyphIndexSelector::NumGlyphs => 0,
+                };
+                return Ok(vec![
+                    "--load-glyph-null-face".to_string(),
+                    glyph_index.to_string(),
+                    load_flags_param(params)?.to_string(),
+                ]);
+            }
             let mut args = vec![
                 match selector {
                     GlyphIndexSelector::Index(_) => "--load-glyph",
@@ -7541,6 +7546,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "ftsizes.done_size"
                 | "ftsizes.activate_size"
                 | "load_char"
+                | "load_glyph"
         ) {
             let err = classify_null_operation(&case.operation).unwrap();
             return Ok(error(err));
@@ -7711,6 +7717,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "load_glyph" => {
             if load_glyph_num_glyphs_invalid_argument_case(case) {
                 return Ok(error(FT_Err_Invalid_Argument));
+            }
+            if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                return Ok(error(FT_Err_Invalid_Face_Handle as FT_Error));
             }
             let face = open_face(case)?;
             let glyph_index = rust_resolved_glyph_index(&face, &case.inputs.params)?;
@@ -8167,20 +8176,14 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             if load_glyph_num_glyphs_invalid_argument_case(case) {
                 return Ok(error(FT_Err_Invalid_Argument));
             }
-            let (library, face) = c_open_face(case)?;
-            let glyph_index = c_resolved_glyph_index(face, &case.inputs.params)?;
-            let err =
-                c_abi::FT_Load_Glyph(face, glyph_index, load_flags_param(&case.inputs.params)?);
-            if err == FT_Err_Ok {
-                let output = c_slot_json(face).map(ok);
-                c_done_face(face);
-                c_done_library(library);
-                output
-            } else {
-                c_done_face(face);
-                c_done_library(library);
-                Ok(error(err))
+            if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                return c_load_glyph_output(std::ptr::null_mut(), &case.inputs.params);
             }
+            let (library, face) = c_open_face(case)?;
+            let output = c_load_glyph_output(face, &case.inputs.params);
+            c_done_face(face);
+            c_done_library(library);
+            output
         }
         "freetype.inspect_glyph_metrics" => {
             let (library, face) = c_open_face(case)?;
@@ -8539,14 +8542,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             if load_glyph_num_glyphs_invalid_argument_case(case) {
                 return Ok(error(FT_Err_Invalid_Argument));
             }
+            if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                return wasm_load_glyph_output(0, &case.inputs.params);
+            }
             let handle = wasm_open_face(case)?;
-            let glyph_index = wasm_resolved_glyph_index(handle, &case.inputs.params)?;
-            let err = wasm_abi::fontdone_wasm_load_glyph(
-                handle,
-                glyph_index,
-                load_flags_param(&case.inputs.params)?,
-            );
-            let output = wasm_slot_output(handle, err);
+            let output = wasm_load_glyph_output(handle, &case.inputs.params);
             wasm_done_face(handle);
             output
         }
@@ -10130,6 +10130,20 @@ fn c_load_char_output(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput,
     }
 }
 
+fn c_load_glyph_output(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let glyph_index = if face.is_null() {
+        glyph_index_param(params)?
+    } else {
+        c_resolved_glyph_index(face, params)?
+    };
+    let err = c_abi::FT_Load_Glyph(face, glyph_index, load_flags_param(params)?);
+    if err == FT_Err_Ok {
+        c_slot_json(face).map(ok)
+    } else {
+        Ok(error(err))
+    }
+}
+
 fn c_size_metrics_json(face: c_abi::FT_Face) -> Result<Value, String> {
     let metrics =
         c_abi::abi_size_metrics(face).ok_or_else(|| "missing c size metrics".to_string())?;
@@ -10233,6 +10247,16 @@ fn wasm_load_char_output(handle: usize, params: &Value) -> Result<RunOutput, Str
         u64_param(params, "char_code")?,
         load_flags_param(params)?,
     );
+    wasm_slot_output(handle, err)
+}
+
+fn wasm_load_glyph_output(handle: usize, params: &Value) -> Result<RunOutput, String> {
+    let glyph_index = if handle == 0 {
+        glyph_index_param(params)?
+    } else {
+        wasm_resolved_glyph_index(handle, params)?
+    };
+    let err = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags_param(params)?);
     wasm_slot_output(handle, err)
 }
 
