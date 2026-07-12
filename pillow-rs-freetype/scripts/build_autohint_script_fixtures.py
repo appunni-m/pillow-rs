@@ -147,6 +147,80 @@ STANDARD_CHARS: dict[str, int] = {
     "vaii": 0xA613,
 }
 
+# Keep a few real blue-string characters mapped to each compact probe glyph.
+# The aliases make metrics initialization walk script-specific blue strings
+# without adding one glyph per Unicode character.
+SCRIPT_BLUE_ALIASES: dict[str, tuple[int, ...]] = {
+    "cyrl": (
+        0x0411,
+        0x0412,
+        0x0415,
+        0x041E,
+        0x0421,
+        0x042D,
+        0x0435,
+        0x0437,
+        0x043E,
+        0x0441,
+        0x0443,
+        0x0444,
+        0x0445,
+        0x0448,
+    ),
+    "grek": (
+        0x0393,
+        0x0398,
+        0x03A9,
+        0x03B1,
+        0x03B2,
+        0x03B3,
+        0x03B4,
+        0x03B5,
+        0x03B8,
+        0x03BF,
+        0x03C1,
+        0x03C3,
+        0x03C4,
+        0x03C6,
+        0x03C7,
+        0x03C8,
+        0x03C9,
+    ),
+    "latn": (
+        0x0043,
+        0x0045,
+        0x0048,
+        0x004C,
+        0x004F,
+        0x0051,
+        0x0053,
+        0x0054,
+        0x0055,
+        0x005A,
+        0x0062,
+        0x0063,
+        0x0064,
+        0x0065,
+        0x0066,
+        0x0067,
+        0x0068,
+        0x0069,
+        0x006A,
+        0x006B,
+        0x006E,
+        0x006F,
+        0x0070,
+        0x0071,
+        0x0072,
+        0x0073,
+        0x0075,
+        0x0076,
+        0x0078,
+        0x0079,
+        0x007A,
+    ),
+}
+
 
 def empty_glyph():
     return TTGlyphPen(None).glyph()
@@ -171,6 +245,17 @@ def rectangles_glyph(rects: list[tuple[int, int, int, int]]):
         pen.lineTo((right, bottom))
         pen.closePath()
     return pen.glyph()
+
+
+def stacked_contour_glyph():
+    """Three vertically separated contours for the double-top adjustment path."""
+    return rectangles_glyph(
+        [
+            (100, 0, 500, 500),
+            (180, 540, 420, 600),
+            (210, 660, 390, 700),
+        ]
+    )
 
 
 def nonreciprocal_chain_glyph():
@@ -242,6 +327,7 @@ def build_script_coverage() -> None:
     glyph_order = [".notdef", "space"]
     glyph_order.extend(glyph_name(tag) for tag, _ in SCRIPT_PROBES)
     glyph_order.extend(name for name, _, _ in DIGIT_WIDTH_PROBES)
+    glyph_order.append("latin_double_top")
 
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
@@ -264,11 +350,17 @@ def build_script_coverage() -> None:
         standard = STANDARD_CHARS.get(tag)
         if standard is not None:
             cmap.setdefault(standard, name)
+        for alias in SCRIPT_BLUE_ALIASES.get(tag, ()):
+            cmap.setdefault(alias, name)
 
     for name, codepoint, advance in DIGIT_WIDTH_PROBES:
         glyphs[name] = rectangle_glyph(100, 0, 440, 560)
         metrics[name] = (advance, 100)
         cmap[codepoint] = name
+
+    glyphs["latin_double_top"] = stacked_contour_glyph()
+    metrics["latin_double_top"] = (700, 100)
+    cmap[0x01D5] = "latin_double_top"
 
     font = FontBuilder(UNITS_PER_EM, isTTF=True)
     font.setupGlyphOrder(glyph_order)
