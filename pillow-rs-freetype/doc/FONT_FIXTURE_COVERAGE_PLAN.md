@@ -410,24 +410,27 @@ load rows, adds one explicit SDF conic-chain render row, and adds one compact
 no-scale normal render row over `hinter-control-matrix.ttf`. `FT_Request_Size`
 now also has one explicit ppem-overflow request row that reaches the core
 invalid-pixel-size branch instead of staying on the probe-only `variants`
-route. These rows keep the corpus explicit, raise the route-audited concrete
-count to 6,719, and
+route. `FT_Get_Postscript_Name` now also exercises an fvar instance with an
+explicit `postscriptNameID`, and `variable-name-missing-subfamily.ttf` uses a
+real 0.5 16.16 coordinate for its existing fractional named-instance row.
+These rows keep the corpus explicit, raise the route-audited concrete count to
+6,720, and
 preserve exact Rust FFI, C ABI, and WASM ABI parity.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,149 |
-| Concrete explicit cases | 6,719 |
-| Additional grouped variants | 2,570 |
+| Concrete explicit cases | 6,720 |
+| Additional grouped variants | 2,571 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,715 |
-| Exact parity | 6,715 / 6,715 |
+| Runnable parity comparisons | 6,716 |
+| Exact parity | 6,716 / 6,716 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,842 / 17,766 (89.17%) |
+| Covered Rust lines | 15,846 / 17,766 (89.19%) |
 | Rust function coverage | 1,002 / 1,135 (88.28%) |
 | Rust instantiation coverage | 1,005 / 1,138 (88.31%) |
-| Rust region coverage | 22,750 / 25,457 (89.37%) |
-| Rust branch/condition coverage | 3,793 / 4,524 (83.84%) |
+| Rust region coverage | 22,755 / 25,457 (89.39%) |
+| Rust branch/condition coverage | 3,795 / 4,524 (83.89%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 164 |
 | Stored active font binaries | 121 files, 854 KiB |
@@ -456,7 +459,7 @@ Current largest uncovered buckets:
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
 | `src/render.rs` | 1,696 / 2,272 | 342 / 426 | 120 / 164 | 2,401 / 3,216 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 1,760 / 1,985 | 199 / 252 | 167 / 199 | 2,396 / 2,711 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/font.rs` | 1,764 / 1,985 | 201 / 252 | 167 / 199 | 2,401 / 2,711 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,516 / 2,828 | 985 / 1,282 | 70 / 73 | 3,621 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
 | `src/scaler.rs` | 1,071 / 1,222 | 156 / 188 | 49 / 62 | 1,145 / 1,276 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
@@ -1875,6 +1878,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-13 | Verified render/scaler/autohint/name/CFF coverage checkpoint | Merged and pushed the compact OTTO metadata row, variable-name metadata rows, Latin small-ignore autohint fixture row, mono composite scaler fix and rows, SDF tiny-segment render fix and row, FT_Long::MIN face-index row, autohint script blue-string aliases and double-top probe, explicit safe `Face::load_glyph` route declarations, and SDF conic-chain render row. Concrete cases are 6,717 with zero implicit rows; runtime parity is 6,713 / 6,713 with four explicit pending rows. Refreshed condition coverage is 15,840 / 17,766 lines, 22,747 / 25,457 regions, and 3,791 / 4,524 branches. Route audit reports real-parity 3,352, compile-contract 2,229, generic-fallback 942, generic-error-fallback 141, pending-core 10, explicit-unsupported 12, real-null-validation 8, null-error-fallback 21, and void-fallback 2 |
 | 2026-07-13 | No-scale outline render probe | `FT_Render_Glyph.matrix_render` adds one explicit `hinter-control-matrix.ttf` glyph 41 row with `FT_LOAD_NO_SCALE` and normal rendering. This keeps the probe in the existing compact render matrix, adds no font bytes, and covers one additional `grays.rs` scan-conversion line, region, and branch. Concrete cases are 6,718 with zero implicit rows; runtime parity is 6,714 / 6,714 with four explicit pending rows. Refreshed condition coverage is 15,841 / 17,766 lines, 22,748 / 25,457 regions, and 3,792 / 4,524 branches. Route audit reports the new row as real parity, raising real-parity routes to 3,353 |
 | 2026-07-13 | Explicit request-size ppem overflow | `FT_Request_Size` adds one explicit `params.request` row with nominal 65536 px width/height, avoiding the probe-only `params.variants` route and covering `font.rs::ppem_from_scaled_26dot6` invalid-pixel-size branch. Concrete cases are 6,719 with zero implicit rows; runtime parity is 6,715 / 6,715 with four explicit pending rows. Refreshed condition coverage is 15,842 / 17,766 lines, 22,750 / 25,457 regions, and 3,793 / 4,524 branches. Route audit reports the new row as real parity, raising real-parity routes to 3,354 |
+| 2026-07-13 | Explicit fvar PostScript-name branches | `FT_Get_Postscript_Name.variation_instance_name_behavior` adds one explicit encoded named-instance row over `fvar-instance-postscript-name.ttf`, covering the fvar instance `postscriptNameID` fast path. The generated `variable-name-missing-subfamily.ttf` fixture also changes its existing fractional named-instance coordinate from 1.0 to 0.5 so the already declared fractional row reaches the 16.16 decimal early-termination branch. Concrete cases are 6,720 with zero implicit rows; runtime parity is 6,716 / 6,716 with four explicit pending rows. Refreshed condition coverage is 15,846 / 17,766 lines, 22,755 / 25,457 regions, and 3,795 / 4,524 branches. Route audit reports the new row as real parity, raising real-parity routes to 3,355 |
 
 ## Immediate Next Actions
 
