@@ -146,6 +146,7 @@ REAL_PARITY_OPERATIONS = {
     "freetype.inspect_charmaps",
     "freetype.charmap_ownership",
     "freetype.get_charmap_index",
+    "freetype.face_flags",
     "freetype.get_fstype_flags",
     "freetype.get_kerning",
     "freetype.get_postscript_name",

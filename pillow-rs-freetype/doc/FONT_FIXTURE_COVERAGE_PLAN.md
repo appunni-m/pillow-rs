@@ -267,6 +267,10 @@ behavior now compares exact C oracle, Rust FFI, C ABI, and WASM ABI output.
 Null-handle, null-output, non-SFNT, and bitmap-missing residuals stay visible
 as shape-incomplete or pending route work instead of being replaced by normal
 loaded-face rows.
+The route audit also now recognizes `freetype.face_flags` as an existing real
+parity route: the public runner already compares pinned C `--face-flags`,
+Rust FFI, C ABI, and WASM ABI output for those rows, so keeping them in generic
+fallback understated the trusted route count.
 
 | Measure | Current |
 |---|---:|
@@ -685,11 +689,11 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,200 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,224 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 4 | `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null rows execute pinned C oracle status checks and the Rust FFI wrapper validation path; size lifecycle success remains separate. |
 | Compile/header/scalar contract | 2,248 | Valid for ABI/header contracts, not runtime core coverage. |
 | Shape-incomplete fallback | 11 | Convert to complete explicit variants or mark invalid/pending. |
-| Generic modeled fallback | 985 | Classify operation-by-operation as real parity, unsupported, or pending. |
+| Generic modeled fallback | 961 | Classify operation-by-operation as real parity, unsupported, or pending. |
 | Generic modeled error fallback | 142 | Replace implemented surfaces with real error-path execution. |
 | Null-error fallback | 21 | Keep only exact null-handle probes; route implemented null cases directly. |
 | Void fallback | 3 | Replace with real null/noop wrapper rows or classify as void API contract. |
@@ -1538,6 +1542,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Explicit format-14 `FT_Set_Charmap` rejection | 109 unique hashes | 0 | 6,623 | 6,620 / 6,620 | 3 | 14,652 / 17,230 lines; 21,360 / 24,773 regions; 3,574 / 4,398 branches | The stale future-asset `FT_Set_Charmap.error_format14_charmap` row now reuses active `cmap-format14-only.ttf` with explicit `all_charmaps` selection. It moves one row from shape-incomplete fallback to real Rust/C ABI/WASM parity, keeps case count flat, and covers the thin FFI format-14 rejection branch |
 | 2026-07-12 | CBox and memory-face route cleanup | 109 unique hashes | 0 | 6,625 | 6,622 / 6,622 | 3 | 14,652 / 17,230 lines; 21,360 / 24,773 regions; 3,574 / 4,398 branches | `FT_Outline_Get_CBox` now uses source-backed `hinter-control-matrix.ttf` glyphs 41 and 21 for conic control-point and empty-outline cboxes, `FT_BBox.negative_and_empty_bounds` uses three explicit glyph variants for negative, empty, and zero-width boxes, and the compact `FT_New_Memory_Face.valid_font_bytes` variants expose matching `font` aliases for their memory sources. Structural coverage is unchanged because these parser/cbox paths were already hit, but route audit moves real parity to 3,196 rows and shape-incomplete fallback down to 11 without implicit discovery |
 | 2026-07-12 | Executable invalid-error route split | 109 unique hashes | 0 | 6,629 | 6,626 / 6,626 | 3 | 14,654 / 17,230 lines; 21,362 / 24,773 regions; 3,576 / 4,398 branches | `FT_Get_Sfnt_Name.invalid_argument_errors` now executes an explicit invalid name index while preserving null-output and non-SFNT residuals as incomplete route work; `FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags` now executes out-of-range glyph and reserved-load-flag variants while preserving null-face as unrouted; `FT_Load_Char.error_null_face_or_invalid_flags` now executes the reserved-load-flag row while preserving null-face as unrouted. Exact Rust/C ABI/WASM parity remains green, route audit real parity moves to 3,200 rows, and implicit cases remain zero |
+| 2026-07-12 | Face-flag route-audit classification | 109 unique hashes | 0 | 6,629 | 6,626 / 6,626 | 3 | unchanged | The 24 `freetype.face_flags` concrete rows already execute pinned C `--face-flags`, Rust FFI, C ABI, and WASM ABI routes; `check_public_api_inputs.py` now classifies that operation as real parity instead of generic fallback. Focused face-flag parity passes 45 / 45, route audit real parity rises to 3,224, and generic fallback drops to 961 without changing fixture outputs or coverage denominator |
 
 ## Decision Log
 
