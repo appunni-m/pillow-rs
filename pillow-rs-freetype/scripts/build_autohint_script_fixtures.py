@@ -173,6 +173,20 @@ def rectangles_glyph(rects: list[tuple[int, int, int, int]]):
     return pen.glyph()
 
 
+def nonreciprocal_chain_glyph():
+    # U+51A1: two major-direction segments share one opposite segment so CJK
+    # link cleanup sees a non-reciprocal chain and assigns a serif fallback.
+    pen = TTGlyphPen(None)
+    pen.moveTo((20, 20))
+    pen.lineTo((20, 220))
+    pen.lineTo((60, 220))
+    pen.lineTo((60, 460))
+    pen.lineTo((80, 460))
+    pen.lineTo((80, 20))
+    pen.closePath()
+    return pen.glyph()
+
+
 def ring_glyph(
     left: int,
     bottom: int,
@@ -575,6 +589,7 @@ def build_cjk_duplicate_edge() -> None:
         "space",
         "hani_standard",
         "hani_duplicate_edge",
+        "hani_nonreciprocal_chain",
         "hani_leading_skip",
         "hani_serif_conflict",
     ]
@@ -588,6 +603,7 @@ def build_cjk_duplicate_edge() -> None:
                 (40, 260, 320, 460),
             ]
         ),
+        "hani_nonreciprocal_chain": nonreciprocal_chain_glyph(),
         "hani_leading_skip": rectangles_glyph(
             [
                 (20, 20, 30, 22),
@@ -607,6 +623,7 @@ def build_cjk_duplicate_edge() -> None:
         "space": (300, 0),
         "hani_standard": (700, 100),
         "hani_duplicate_edge": (700, 40),
+        "hani_nonreciprocal_chain": (700, 20),
         "hani_leading_skip": (700, 20),
         "hani_serif_conflict": (700, 60),
     }
@@ -614,6 +631,7 @@ def build_cjk_duplicate_edge() -> None:
         0x20: "space",
         0x519E: "hani_duplicate_edge",
         0x51A0: "hani_serif_conflict",
+        0x51A1: "hani_nonreciprocal_chain",
         0x51A4: "hani_leading_skip",
         0x7530: "hani_standard",
     }
