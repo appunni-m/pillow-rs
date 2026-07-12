@@ -31,6 +31,7 @@ help:
 	@printf "  make font-fixture-metrics Rebuild compact face metric fallback fixtures\n"
 	@printf "  make font-fixture-name Rebuild compact name table fixtures\n"
 	@printf "  make font-fixture-post Rebuild compact post table fixtures\n"
+	@printf "  make font-fixture-sfnt Rebuild compact SFNT table fixtures\n"
 	@printf "\nBuild:\n"
 	@printf "  make build            Build the crate\n"
 	@printf "  make doc              Build crate documentation\n"
@@ -270,6 +271,10 @@ font-fixture-fvar:
 .PHONY: font-fixture-name
 font-fixture-name:
 	$(PYTHON) scripts/build_name_fixtures.py
+
+.PHONY: font-fixture-sfnt
+font-fixture-sfnt: font-fixture-hinter
+	$(PYTHON) scripts/build_sfnt_fixtures.py
 
 .PHONY: fmt
 fmt:

@@ -1692,6 +1692,8 @@ pub fn FT_Get_Sfnt_Table(face: &FT_Face, tag: FT_Sfnt_Tag) -> FT_Pointer {
         return face
             .sfnt_pclt
             .as_deref()
+            // FreeType sfnt/sfdriver.c returns PCLT only when Version is nonzero.
+            .filter(|p| p.Version != 0)
             .map_or(ptr::null_mut(), |p| p as *const TT_PCLT as FT_Pointer);
     }
     // FT_SFNT_MAX or any unrecognised tag returns null.

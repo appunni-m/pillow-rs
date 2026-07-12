@@ -501,6 +501,14 @@ and selected-glyph obligations still come from explicit inputs.
     variants and cover the remaining face-metric fallback order without adding
     glyph rows or multiplying unrelated size/flag combinations.
 
+32. Eight compact SFNT table fixtures are generated from the source-backed
+    hinter matrix by `scripts/build_sfnt_fixtures.py` and rebuilt with
+    `make font-fixture-sfnt`. The set covers standard HEAD/MAXP/HHEA/POST
+    table access, raw table loading and directory-info probes, PCLT present
+    and zero-version nullness, short optional PCLT parsing, VHEA/VMTX vertical
+    table presence, and no-PCLT/no-VHEA/no-OS/2 optional-table controls without
+    introducing a broad font dependency.
+
 ## Replacement Queue
 
 | Order | Deprecated dependency | Minimal replacement property |
