@@ -2094,21 +2094,29 @@ impl BackendComparisonWorker {
                 case.operation.as_str(),
                 "freetype.face_get_char_variant_index"
                     | "freetype.face_get_char_variant_is_default"
+                    | "freetype.face_get_variant_selectors"
             ) {
-                return if case.operation == "freetype.face_get_char_variant_index" {
-                    let value = FT_Face_GetCharVariantIndex(
-                        None,
-                        u64_param(&case.inputs.params, "charcode")?,
-                        u64_param(&case.inputs.params, "variant_selector")?,
-                    );
-                    Ok(ok(char_variant_index_json(value)))
-                } else {
-                    let value = FT_Face_GetCharVariantIsDefault(
-                        None,
-                        u64_param(&case.inputs.params, "charcode")?,
-                        u64_param(&case.inputs.params, "variant_selector")?,
-                    );
-                    Ok(ok(char_variant_default_json(value)))
+                return match case.operation.as_str() {
+                    "freetype.face_get_char_variant_index" => {
+                        let value = FT_Face_GetCharVariantIndex(
+                            None,
+                            u64_param(&case.inputs.params, "charcode")?,
+                            u64_param(&case.inputs.params, "variant_selector")?,
+                        );
+                        Ok(ok(char_variant_index_json(value)))
+                    }
+                    "freetype.face_get_char_variant_is_default" => {
+                        let value = FT_Face_GetCharVariantIsDefault(
+                            None,
+                            u64_param(&case.inputs.params, "charcode")?,
+                            u64_param(&case.inputs.params, "variant_selector")?,
+                        );
+                        Ok(ok(char_variant_default_json(value)))
+                    }
+                    "freetype.face_get_variant_selectors" => {
+                        Ok(ok(uint32_list_json(FT_Face_GetVariantSelectors(None))))
+                    }
+                    _ => unreachable!(),
                 };
             }
             if matches!(case.operation.as_str(), "get_char_index") {
@@ -2143,6 +2151,12 @@ impl BackendComparisonWorker {
                     u64_param(&case.inputs.params, "variant_selector")?,
                 );
                 Ok(ok(char_variant_default_json(value)))
+            }
+            "freetype.face_get_variant_selectors" => {
+                let face = self.rust_face(case)?;
+                Ok(ok(uint32_list_json(FT_Face_GetVariantSelectors(Some(
+                    face,
+                )))))
             }
             "freetype.get_fstype_flags" => {
                 let face = self.rust_face(case)?;
@@ -2298,6 +2312,10 @@ impl BackendComparisonWorker {
                     );
                     Ok(ok(char_variant_default_json(value)))
                 }
+                "freetype.face_get_variant_selectors" => {
+                    let ptr = c_abi::FT_Face_GetVariantSelectors(std::ptr::null_mut());
+                    Ok(ok(uint32_list_json(c_abi::abi_uint32_list(ptr))))
+                }
                 "freetype.set_transform" => return run_rust_ffi(case),
                 "ftsizes.new_size" | "ftsizes.done_size" | "ftsizes.activate_size" => {
                     return run_rust_ffi(case);
@@ -2333,6 +2351,11 @@ impl BackendComparisonWorker {
                     u64_param(&case.inputs.params, "variant_selector")?,
                 );
                 Ok(ok(char_variant_default_json(value)))
+            }
+            "freetype.face_get_variant_selectors" => {
+                let face = self.c_face(case)?;
+                let ptr = c_abi::FT_Face_GetVariantSelectors(face);
+                Ok(ok(uint32_list_json(c_abi::abi_uint32_list(ptr))))
             }
             "freetype.get_fstype_flags" => {
                 let face = self.c_face(case)?;
@@ -2479,6 +2502,10 @@ impl BackendComparisonWorker {
                     );
                     Ok(ok(char_variant_default_json(value)))
                 }
+                "freetype.face_get_variant_selectors" => {
+                    let ptr = wasm_abi::fontdone_wasm_get_variant_selectors(0);
+                    Ok(ok(uint32_list_json(wasm_abi::abi_uint32_list(ptr))))
+                }
                 "freetype.set_transform" => return run_rust_ffi(case),
                 "ftsizes.new_size" | "ftsizes.done_size" | "ftsizes.activate_size" => {
                     return run_rust_ffi(case);
@@ -2520,6 +2547,11 @@ impl BackendComparisonWorker {
                     u64_param(&case.inputs.params, "variant_selector")?,
                 );
                 Ok(ok(char_variant_default_json(value)))
+            }
+            "freetype.face_get_variant_selectors" => {
+                let handle = self.wasm_face(case)?;
+                let ptr = wasm_abi::fontdone_wasm_get_variant_selectors(handle);
+                Ok(ok(uint32_list_json(wasm_abi::abi_uint32_list(ptr))))
             }
             "freetype.get_fstype_flags" => {
                 let handle = self.wasm_face(case)?;
@@ -7170,6 +7202,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(variant_selector.to_string());
             Ok(args)
         }
+        "freetype.face_get_variant_selectors" => {
+            if lifecycle_handle_param(params, "face") == Some("null") {
+                return Ok(vec!["--face-get-variant-selectors-null".to_string()]);
+            }
+            let mut args = vec!["--face-get-variant-selectors".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            Ok(args)
+        }
         "charmap.get_char_index" => {
             let fields = required_charmap_fields(params, "charmap.get_char_index")?;
             let mut args = vec!["--charmap-get-char-index".to_string()];
@@ -8089,6 +8130,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "freetype.face_set_unpatented_hinting"
                 | "freetype.face_get_char_variant_index"
                 | "freetype.face_get_char_variant_is_default"
+                | "freetype.face_get_variant_selectors"
                 | "freetype.library_version"
         ) {
             if lifecycle_handle_param(&case.inputs.params, "face") == Some("null")
@@ -8186,6 +8228,15 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 )
             };
             Ok(ok(char_variant_default_json(value)))
+        }
+        "freetype.face_get_variant_selectors" => {
+            let value = if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                FT_Face_GetVariantSelectors(None)
+            } else {
+                let face = open_face(case)?;
+                FT_Face_GetVariantSelectors(Some(&face))
+            };
+            Ok(ok(uint32_list_json(value)))
         }
         "charmap.get_char_index" => rust_charmap_get_char_index(case),
         "freetype.select_charmap" => rust_select_charmap(case),
@@ -8643,6 +8694,20 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             };
             Ok(ok(char_variant_default_json(value)))
         }
+        "freetype.face_get_variant_selectors" => {
+            let output = if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                let ptr = c_abi::FT_Face_GetVariantSelectors(std::ptr::null_mut());
+                uint32_list_json(c_abi::abi_uint32_list(ptr))
+            } else {
+                let (library, face) = c_open_face(case)?;
+                let ptr = c_abi::FT_Face_GetVariantSelectors(face);
+                let output = uint32_list_json(c_abi::abi_uint32_list(ptr));
+                c_done_face(face);
+                c_done_library(library);
+                output
+            };
+            Ok(ok(output))
+        }
         "charmap.get_char_index" => {
             let (library, face) = c_new_face_without_size(case)?;
             let output = c_charmap_get_char_index(face, case);
@@ -9066,6 +9131,19 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
                 value
             };
             Ok(ok(char_variant_default_json(value)))
+        }
+        "freetype.face_get_variant_selectors" => {
+            let output = if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                let ptr = wasm_abi::fontdone_wasm_get_variant_selectors(0);
+                uint32_list_json(wasm_abi::abi_uint32_list(ptr))
+            } else {
+                let handle = wasm_open_face(case)?;
+                let ptr = wasm_abi::fontdone_wasm_get_variant_selectors(handle);
+                let output = uint32_list_json(wasm_abi::abi_uint32_list(ptr));
+                wasm_done_face(handle);
+                output
+            };
+            Ok(ok(output))
         }
         "charmap.get_char_index" => {
             let handle = wasm_new_face_without_size(case)?;
@@ -15070,6 +15148,31 @@ fn char_variant_default_json(value: FT_Int) -> Value {
     })
 }
 
+fn uint32_list_json(values: Option<Vec<u32>>) -> Value {
+    match values {
+        Some(values) => json!({
+            "result": {
+                "is_null": false,
+                "nullness": "non_null",
+                "values": values,
+                "terminator": 0
+            },
+            "copied_values_before_invalidation": values,
+            "pointer_identity_class": "face_owned_scratch"
+        }),
+        _ => json!({
+            "result": {
+                "is_null": true,
+                "nullness": "null",
+                "values": [],
+                "terminator": null
+            },
+            "copied_values_before_invalidation": [],
+            "pointer_identity_class": "null"
+        }),
+    }
+}
+
 fn advances_json(advances: &[i64]) -> Value {
     json!({
         "advances": advances
@@ -15389,6 +15492,7 @@ fn comparison_schema(case: &InputCase) -> &str {
         "freetype.get_kerning" => return "api_object",
         "freetype.face_get_char_variant_index" => return "api_object",
         "freetype.face_get_char_variant_is_default" => return "api_object",
+        "freetype.face_get_variant_selectors" => return "api_object",
         "freetype.set_transform" => {
             if set_transform_has_post_load(&case.inputs.params) {
                 return "glyph_slot";

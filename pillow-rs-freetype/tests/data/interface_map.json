@@ -238,8 +238,8 @@
           "status": "implemented"
         },
         "FT_Face_GetVariantSelectors": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Face::get_variant_selectors / Font::variant_selectors",
+          "status": "implemented"
         },
         "FT_Face_GetVariantsOfChar": {
           "rust": null,

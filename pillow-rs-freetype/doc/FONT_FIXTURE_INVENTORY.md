@@ -132,9 +132,10 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `1cca599d017f` | 0.02 | 1 | `fonts/control/ttc-face-offset-out-of-range.ttc` | complete one-face TTC header whose selected face offset is outside the stream |
 | `debb925b92a2` | 0.01 | 1 | `fonts/control/otto-empty.otf` | 12-byte zero-table OTTO header; owns the OpenType sfVersion predicate outcome before required-table rejection |
 | `bf004c57a16e` | 1.7 | 1 | `fonts/charmap/format6-range.ttf` | format-6-only trimmed range with mapped and zero glyph entries; owns direct lookup, gap, exhaustion, and wrapping iteration |
-| `e15a8b59055e` | 3.9 | 1 | `fonts/cmap/cmap-format-language-matrix.ttf` | source-backed compact cmap matrix with format 4 language `0x0409`, format 6 language 17, format 12 language `0x12345678`, and format 14 variation-selector metadata |
+| `0be84d75c406` | 4.2 | 1 | `fonts/cmap/cmap-format-language-matrix.ttf` | source-backed compact cmap matrix with format 4 language `0x0409`, format 6 language 17, format 12 language `0x12345678`, and format 14 `FE0F`/`E0101` default plus non-default variation-selector metadata |
 | `251fcf468057` | 2.1 | 1 | `fonts/charmap/cmap-parser-matrix.ttf` | one valid format 6 plus unsupported, out-of-range, and independently malformed format 4/6/12 records |
-| `908f900b2d52` | 3.8 | 1 | `fonts/charmap/cmap-format14-malformed-matrix.ttf` | raw cmap control with one valid format 6 plus malformed format 14 short, length-short, and record-array-overflow subtables |
+| `f33ad4df5ee` | 4.1 | 1 | `fonts/charmap/cmap-format14-malformed-matrix.ttf` | raw cmap control with one valid format 6 plus malformed format 14 short, length-short, and record-array-overflow subtables |
+| `cb1e3fdb23f` | 4.1 | 1 | `fonts/charmap/cmap-format14-only.ttf` | compact format-14-only control with `FE0F` and `E0101` selector records and no direct Unicode lookup charmap |
 | `217751378cbc` | 1.7 | 1 | `fonts/charmap/cmap-record-overflow.ttf` | cmap header declaring one absent encoding record |
 | `93678acbb630` | 1.7 | 1 | `fonts/charmap/cmap-short.ttf` | three-byte cmap short-header control |
 | `b085a0e2a109` | 1.7 | 1 | `fonts/charmap/format6-terminal.ttf` | format 6 range at U+FFFF with a zero glyph; owns terminal iteration |

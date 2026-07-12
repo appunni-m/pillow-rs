@@ -19,9 +19,7 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/variation-selectors/cmap-format14.otf",
-            "status": "required_future_asset",
-            "requires": "OpenType/CFF or TrueType font with Unicode charmap plus cmap format 14 default and non-default UVS records"
+            "path": "fonts/cmap/cmap-format-language-matrix.ttf"
           }
         },
         "params": {
@@ -48,7 +46,7 @@
           ]
         },
         "fixture_requirements": [
-          "Format-14 fixture with at least two selectors"
+          "Format-14 fixture with multiple selectors"
         ]
       }
     },
@@ -60,19 +58,34 @@
       "schema": "api_array",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "no_format14",
+            "coverage": [
+              "face_get_variant_selectors:no-format14-control"
+            ],
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0
+            }
+          },
+          {
+            "id": "null_face",
+            "coverage": [
+              "face_get_variant_selectors:null-face"
+            ],
+            "assets": {},
+            "params": {
+              "face": "null"
+            }
           }
-        },
-        "params": {
-          "face_index": 0,
-          "extra_probes": [
-            "null_face"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -85,11 +98,15 @@
           "return": "FT_UInt32*"
         },
         "compare": {
-          "mode": "nullness",
+          "mode": "exact",
           "paths": [
-            "outputs[*].result"
+            "result.nullness",
+            "result.values"
           ]
-        }
+        },
+        "fixture_requirements": [
+          "Plain font without format 14 plus null-face validation"
+        ]
       }
     },
     {
@@ -104,9 +121,7 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/variation-selectors/cmap-format14.otf",
-            "status": "required_future_asset",
-            "requires": "OpenType/CFF or TrueType font with Unicode charmap plus cmap format 14 default and non-default UVS records"
+            "path": "fonts/cmap/cmap-format-language-matrix.ttf"
           }
         },
         "params": {
@@ -131,14 +146,14 @@
           "lifetime": "face-owned until next FreeType call"
         },
         "compare": {
-          "mode": "unsupported_until_runner_added",
+          "mode": "exact",
           "paths": [
             "copied_values_before_invalidation",
             "pointer_identity_class"
           ]
         },
         "fixture_requirements": [
-          "Runner support for lifetime-safe pointer copy before invalidating call"
+          "Copy zero-terminated face-owned selector buffer before invalidating calls"
         ]
       }
     }

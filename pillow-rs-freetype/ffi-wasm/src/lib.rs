@@ -20,6 +20,7 @@ pub type FT_Int32 = i32;
 pub type FT_Long = i64;
 pub type FT_ULong = u64;
 pub type FT_UInt = u32;
+pub type FT_UInt32 = u32;
 pub type FT_Sfnt_Tag = u32;
 pub type FT_Short = i16;
 pub type FT_UShort = u16;
@@ -214,6 +215,7 @@ pub struct FontdoneWasmSizeRequest {
 struct WasmFaceState {
     face: rust_ffi::FT_Face,
     slot: Option<rust_ffi::FT_GlyphSlot>,
+    variant_list: Vec<FT_UInt32>,
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -304,6 +306,23 @@ fn wasm_bbox_snapshot(bbox: rust_ffi::FT_BBox) -> AbiBBoxSnapshot {
     }
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_uint32_list(ptr: *const FT_UInt32) -> Option<Vec<FT_UInt32>> {
+    if ptr.is_null() {
+        return None;
+    }
+    let mut values = Vec::new();
+    for index in 0..4096 {
+        // SAFETY: test callers pass live FreeType-shaped zero-terminated lists.
+        let value = unsafe { *ptr.add(index) };
+        if value == 0 {
+            return Some(values);
+        }
+        values.push(value);
+    }
+    Some(values)
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_malloc(size: usize) -> *mut c_void {
     let Ok(layout) = Layout::from_size_align(size.max(1), 8) else {
@@ -344,7 +363,12 @@ pub extern "C" fn fontdone_wasm_open_face(
     match rust_ffi::FT_New_Memory_Face(&library, data, face_index, size_pt) {
         Ok(face) => FontdoneWasmStatus {
             error: rust_ffi::FT_Err_Ok,
-            handle: Box::into_raw(Box::new(WasmFaceState { face, slot: None })).addr(),
+            handle: Box::into_raw(Box::new(WasmFaceState {
+                face,
+                slot: None,
+                variant_list: Vec::new(),
+            }))
+            .addr(),
         },
         Err(error) => FontdoneWasmStatus { error, handle: 0 },
     }
@@ -837,6 +861,20 @@ pub extern "C" fn fontdone_wasm_get_char_variant_is_default(
         return -1;
     };
     rust_ffi::FT_Face_GetCharVariantIsDefault(Some(&face.face), charcode, variant_selector)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_variant_selectors(handle: usize) -> *mut FT_UInt32 {
+    let Some(face) = face_mut(handle) else {
+        return ptr::null_mut();
+    };
+    let Some(values) = rust_ffi::FT_Face_GetVariantSelectors(Some(&face.face)) else {
+        face.variant_list.clear();
+        return ptr::null_mut();
+    };
+    face.variant_list = values;
+    face.variant_list.push(0);
+    face.variant_list.as_mut_ptr()
 }
 
 #[unsafe(no_mangle)]
