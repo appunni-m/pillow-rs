@@ -264,6 +264,9 @@ fill/flat inversion. A single explicit `FT_LOAD_FORCE_AUTOHINT` row covers the
 empty-blue-glyph skip, degenerate-contour skip, flat-only blue zone, and
 ref/shoot order-repair paths through pinned C, Rust FFI, C ABI, and WASM ABI
 parity.
+The generated `cjk-tiny-stem.ttf` fixture isolates a U+7530 Hani standard glyph
+with a subpixel-width vertical stem, proving the CJK minimum snapped standard
+width clamp through the same `FT_LOAD_FORCE_AUTOHINT` public route.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -1828,6 +1831,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | CJK empty standard-width fallback | `build_autohint_script_fixtures.py` now emits a 1.0 KiB `fonts/autohint/cjk-empty-standard.ttf` where U+7530 maps to a contourless Hani glyph. One explicit `FT_LOAD_FORCE_AUTOHINT` public variant selects it through `FT_Load_Char`, covering the CJK no-width standard fallback without mutating productive U+7530 geometry in `cjk-coverage.ttf`. Concrete cases rise to 6,692, implicit cases stay zero, and exact Rust FFI, C ABI, and WASM ABI parity passes with 6,688 / 6,688 runtime rows and four explicit pending rows. Refreshed condition coverage is 15,788 / 17,764 lines, 22,670 / 25,453 regions, and 3,743 / 4,524 branches |
 | 2026-07-12 | CJK blue-zone edge fixture | `build_autohint_script_fixtures.py` now emits a 1.2 KiB `fonts/autohint/cjk-blue-edge-cases.ttf` where U+4ED6 is contourless, U+519B is the only usable top flat probe, and U+4E2A/U+4E3B invert bottom fill/flat ordering. One explicit `FT_LOAD_FORCE_AUTOHINT` public variant selects U+7530 from that font, covering the CJK empty-blue-glyph skip, flat-only blue zone, and ref/shoot order repair without mutating productive CJK coverage glyphs. Concrete cases rise to 6,693, implicit cases stay zero, and exact Rust FFI, C ABI, and WASM ABI parity passes with 6,689 / 6,689 runtime rows and four explicit pending rows. Refreshed condition coverage is 15,794 / 17,764 lines, 22,678 / 25,453 regions, and 3,747 / 4,524 branches |
 | 2026-07-12 | CJK degenerate blue contours | The existing `cjk-blue-edge-cases.ttf` generated fixture now also maps U+4EEC to three one-point contours. The same explicit `cjk-blue-edge-cases-20` public row reaches the CJK contour-length guard and no-best-position fallback during blue initialization, adding no concrete cases and preserving exact Rust FFI, C ABI, and WASM ABI parity with 6,689 / 6,689 runtime rows and four explicit pending rows. Refreshed condition coverage is 15,796 / 17,764 lines, 22,680 / 25,453 regions, and 3,749 / 4,524 branches |
+| 2026-07-12 | CJK tiny standard stem clamp | `build_autohint_script_fixtures.py` now emits a 1.0 KiB `fonts/autohint/cjk-tiny-stem.ttf` where U+7530 has a 20-unit vertical stem. One explicit `FT_LOAD_FORCE_AUTOHINT` public variant selects it at 20 ppem, proving CJK's minimum snapped standard-width clamp with exact Rust FFI, C ABI, and WASM ABI parity. Concrete cases rise to 6,694, implicit cases stay zero, runtime parity is 6,690 / 6,690 with four explicit pending rows, and refreshed condition coverage is 15,797 / 17,764 lines, 22,681 / 25,453 regions, and 3,750 / 4,524 branches |
 
 ## Immediate Next Actions
 
