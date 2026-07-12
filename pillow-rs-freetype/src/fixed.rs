@@ -6,6 +6,8 @@
 //! zero. They avoid floating point so the scaler, auto-hinter, and TrueType VM
 //! share one deterministic arithmetic model.
 
+use crate::casts::u32_from_i64;
+
 /// Wrapping native-long addition used by FreeType's `ADD_LONG` macro.
 #[inline]
 pub(crate) fn ft_add_long(a: i64, b: i64) -> i64 {
@@ -202,7 +204,7 @@ fn ft_trig_downscale_long(value: i64) -> i64 {
 fn ft_trig_prenorm_long(x: &mut i64, y: &mut i64) -> i32 {
     let old_x = *x;
     let old_y = *y;
-    let mut shift = ft_msb((ft_abs_long(old_x) as u32) | (ft_abs_long(old_y) as u32));
+    let mut shift = ft_msb(u32_from_i64(ft_abs_long(old_x)) | u32_from_i64(ft_abs_long(old_y)));
     if shift <= FT_TRIG_SAFE_MSB {
         shift = FT_TRIG_SAFE_MSB - shift;
         *x = (old_x as u64).wrapping_shl(shift as u32) as i64;
