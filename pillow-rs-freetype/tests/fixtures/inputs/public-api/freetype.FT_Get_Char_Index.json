@@ -747,7 +747,17 @@
             "coverage": [
               "tt/cmap:format14-too-short",
               "tt/cmap:format14-length-too-short",
-              "tt/cmap:format14-records-exceed-length"
+              "tt/cmap:format14-records-exceed-length",
+              "tt/cmap:format14-offset-out-of-range",
+              "tt/cmap:format14-selectors-out-of-order",
+              "tt/cmap:format14-default-count-missing",
+              "tt/cmap:format14-default-records-exceed-length",
+              "tt/cmap:format14-default-range-exceeds-unicode",
+              "tt/cmap:format14-default-ranges-out-of-order",
+              "tt/cmap:format14-non-default-count-missing",
+              "tt/cmap:format14-non-default-records-exceed-length",
+              "tt/cmap:format14-non-default-codepoint-exceeds-unicode",
+              "tt/cmap:format14-non-default-mappings-out-of-order"
             ]
           },
           {

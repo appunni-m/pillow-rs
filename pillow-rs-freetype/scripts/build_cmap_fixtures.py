@@ -139,6 +139,90 @@ def format14_physically_short_subtable() -> bytes:
     return struct.pack(">H", 14)
 
 
+def pack_u24(value: int) -> bytes:
+    return bytes([(value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF])
+
+
+def raw_format14_subtable(
+    records: list[tuple[int, int, int]],
+    payload: bytes = b"",
+    *,
+    length: int | None = None,
+) -> bytes:
+    if length is None:
+        length = 10 + len(records) * 11 + len(payload)
+    record_bytes = b"".join(
+        pack_u24(selector) + struct.pack(">II", default_offset, non_default_offset)
+        for selector, default_offset, non_default_offset in records
+    )
+    return (
+        struct.pack(">HI", 14, length)
+        + struct.pack(">I", len(records))
+        + record_bytes
+        + payload
+    )
+
+
+def format14_offset_out_of_range_subtable() -> bytes:
+    return raw_format14_subtable([(0xFE00, 21, 0)])
+
+
+def format14_selectors_out_of_order_subtable() -> bytes:
+    return raw_format14_subtable([(0xFE0F, 0, 0), (0xFE00, 0, 0)])
+
+
+def format14_default_count_missing_subtable() -> bytes:
+    return raw_format14_subtable([(0xFE00, 21, 0)], b"\0")
+
+
+def format14_default_records_exceed_length_subtable() -> bytes:
+    return raw_format14_subtable([(0xFE00, 21, 0)], struct.pack(">I", 1))
+
+
+def format14_default_range_exceeds_unicode_subtable() -> bytes:
+    return raw_format14_subtable(
+        [(0xFE00, 21, 0)],
+        struct.pack(">I", 1) + pack_u24(0x10FFFF) + b"\x01",
+    )
+
+
+def format14_default_ranges_out_of_order_subtable() -> bytes:
+    return raw_format14_subtable(
+        [(0xFE00, 21, 0)],
+        struct.pack(">I", 2)
+        + pack_u24(0x0041)
+        + b"\x02"
+        + pack_u24(0x0042)
+        + b"\x00",
+    )
+
+
+def format14_non_default_count_missing_subtable() -> bytes:
+    return raw_format14_subtable([(0xFE00, 0, 21)], b"\0")
+
+
+def format14_non_default_records_exceed_length_subtable() -> bytes:
+    return raw_format14_subtable([(0xFE00, 0, 21)], struct.pack(">I", 1))
+
+
+def format14_non_default_codepoint_exceeds_unicode_subtable() -> bytes:
+    return raw_format14_subtable(
+        [(0xFE00, 0, 21)],
+        struct.pack(">I", 1) + pack_u24(0x110000) + struct.pack(">H", 1),
+    )
+
+
+def format14_non_default_mappings_out_of_order_subtable() -> bytes:
+    return raw_format14_subtable(
+        [(0xFE00, 0, 21)],
+        struct.pack(">I", 2)
+        + pack_u24(0x0043)
+        + struct.pack(">H", 1)
+        + pack_u24(0x0042)
+        + struct.pack(">H", 2),
+    )
+
+
 def build_malformed_format14_font() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     font["cmap"] = raw_cmap_table(
@@ -148,6 +232,16 @@ def build_malformed_format14_font() -> None:
                 (0, 5, format14_length_too_short_subtable()),
                 (0, 6, format14_records_exceed_length_subtable()),
                 (0, 7, format14_physically_short_subtable()),
+                (1, 8, format14_offset_out_of_range_subtable()),
+                (1, 9, format14_selectors_out_of_order_subtable()),
+                (1, 10, format14_default_count_missing_subtable()),
+                (1, 11, format14_default_records_exceed_length_subtable()),
+                (1, 12, format14_default_range_exceeds_unicode_subtable()),
+                (1, 13, format14_default_ranges_out_of_order_subtable()),
+                (1, 14, format14_non_default_count_missing_subtable()),
+                (1, 15, format14_non_default_records_exceed_length_subtable()),
+                (1, 16, format14_non_default_codepoint_exceeds_unicode_subtable()),
+                (1, 17, format14_non_default_mappings_out_of_order_subtable()),
             ]
         )
     )
