@@ -527,7 +527,7 @@ impl Font {
         );
         sync_active_size_metrics(&font_data, size_metrics);
 
-        let selected_charmap = default_unicode_charmap_index(&font_data.cmap);
+        let selected_charmap = default_unicode_charmap_index(&font_data.cmap).unwrap_or(0);
 
         Ok(Font {
             data: font_data,
@@ -901,12 +901,13 @@ impl Font {
 
     /// Equivalent to `FT_Select_Charmap(FT_ENCODING_UNICODE)`.
     pub fn select_unicode_charmap(&mut self) -> Result<(), FontError> {
-        let index = default_unicode_charmap_index(&self.data.cmap);
-        if index >= self.data.cmap.charmaps.len() {
+        // C `find_unicode_charmap` (src/base/ftobjs.c:1372-1453) does not
+        // fall back to the first charmap when no FT_ENCODING_UNICODE map exists.
+        let Some(index) = default_unicode_charmap_index(&self.data.cmap) else {
             return Err(FontError::InvalidFont(
                 "unicode charmap not found".to_string(),
             ));
-        }
+        };
         self.selected_charmap = index;
         Ok(())
     }
@@ -2187,7 +2188,7 @@ fn is_pathological_metrics_advance(scaled: &scaler::ScaledGlyph) -> bool {
             > 16_384
 }
 
-fn default_unicode_charmap_index(cmap: &tt::cmap::CmapTable) -> usize {
+fn default_unicode_charmap_index(cmap: &tt::cmap::CmapTable) -> Option<usize> {
     cmap.charmaps
         .iter()
         .position(|record| {
@@ -2208,7 +2209,6 @@ fn default_unicode_charmap_index(cmap: &tt::cmap::CmapTable) -> usize {
                 .iter()
                 .position(|record| record.format == 4 && record.platform_id == 0)
         })
-        .unwrap_or(0)
 }
 
 fn grid_fit_horizontal_metrics(metrics: &mut GlyphSlotMetrics) {

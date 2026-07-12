@@ -185,6 +185,49 @@
         },
         "error": "Invalid_Argument"
       }
+    },
+    {
+      "case_id": "freetype.FT_Select_Charmap.error_missing_unicode_charmap",
+      "subject": "freetype.FT_Select_Charmap",
+      "case": "error_missing_encoding",
+      "operation": "freetype.select_charmap",
+      "schema": "charmap",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "path": "fonts/charmap/cmap-nonunicode-format6.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "encoding": "FT_ENCODING_UNICODE",
+          "snapshot_before": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "coverage:ffi/handles:FT_Select_Charmap-unicode-selection-miss"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "selected_charmap": "unchanged"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error",
+            "charmap_before_after"
+          ]
+        },
+        "error": "Invalid_CharMap_Handle"
+      }
     }
   ]
 }
