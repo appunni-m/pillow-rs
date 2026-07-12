@@ -161,11 +161,33 @@ pub fn FT_GlyphSlot_Oblique(_slot: FT_GlyphSlot) {}
 pub fn FT_GlyphSlot_Slant(_slot: FT_GlyphSlot) {}
 
 pub fn FT_Get_Sfnt_LangTag(
-    _face: Option<&FT_Face>,
-    _lang_id: FT_UInt,
-    _lang_tag: Option<&mut FT_SfntLangTag>,
+    face: Option<&FT_Face>,
+    lang_id: FT_UInt,
+    lang_tag: Option<&mut FT_SfntLangTag>,
 ) -> FT_Error {
-    FT_Err_Unimplemented_Feature as FT_Error
+    let Some(lang_tag) = lang_tag else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(face) = face else {
+        return FT_Err_Invalid_Argument;
+    };
+    if face.inner.sfnt_name_format() != 1 {
+        return FT_Err_Invalid_Table;
+    }
+    // FreeType `FT_Get_Sfnt_LangTag` in `src/base/ftsnames.c` requires
+    // `langID > 0x8000`, then indexes `langTags[langID - 0x8000]`.
+    if lang_id <= 0x8000 {
+        return FT_Err_Invalid_Argument;
+    }
+    let Ok(index) = usize::try_from(lang_id - 0x8000) else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(record) = face.inner.sfnt_lang_tag(index) else {
+        return FT_Err_Invalid_Argument;
+    };
+    lang_tag.string = record.string.as_ptr().cast_mut().cast::<FT_Byte>();
+    lang_tag.string_len = FT_UInt::try_from(record.string.len()).unwrap_or(FT_UInt::MAX);
+    FT_Err_Ok
 }
 
 pub fn FT_New_Size(face: Option<&FT_Face>, size: Option<&mut FT_Size>) -> FT_Error {
