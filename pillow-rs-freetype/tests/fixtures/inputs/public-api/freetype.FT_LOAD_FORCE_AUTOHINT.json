@@ -2044,6 +2044,26 @@
             ]
           },
           {
+            "id": "cjk-tiny-stem-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-tiny-stem.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 30000,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:minimum-standard-width-clamp"
+            ]
+          },
+          {
             "id": "cjk-shared-latin",
             "assets": {
               "font": {
