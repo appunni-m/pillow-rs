@@ -233,7 +233,7 @@ impl Font {
         let scaled = self.scale_glyph_for_load_mode_with_native_mode(glyph, native_hint_mode)?;
 
         if scaled.outline.n_contours == 0 && mode == RenderMode::Lcd {
-            return render_lcd(scaled.outline, scaled.bbox_x_min, scaled.bbox_y_max);
+            return render_empty_loaded_outline(mode);
         }
 
         if scaled.outline.n_contours == 0 {
