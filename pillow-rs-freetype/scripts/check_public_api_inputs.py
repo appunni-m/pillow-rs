@@ -644,6 +644,23 @@ def has_null_lifecycle_handle(row: ConcreteInput) -> bool:
 
 def pending_core_reason(row: ConcreteInput) -> str | None:
     if (
+        row.case_id
+        == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"
+    ):
+        return "unloaded and unsupported synthetic glyph-slot states need explicit public runner support"
+    if row.case_id in {
+        "fterrdef.FT_Err_Missing_Bitmap.sbit_glyph_without_image",
+        "fterrdef.FT_Err_Missing_Bitmap.composite_sbit_missing_subglyph",
+    }:
+        return "embedded bitmap missing-image errors require compact sbit fixtures and loader support"
+    if row.case_id == "ftimage.FT_OUTLINE_OVERLAP.smooth_overlap_behavior":
+        return "smooth overlap rendering requires a compact overlap-heavy outline/font fixture"
+    if (
+        row.case_id == "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation"
+        and row.operation == "sfnt.get_sfnt_table.record"
+    ):
+        return "MVAR variation table behavior must be implemented before this SFNT table row can run"
+    if (
         row.operation == "ftsnames.get_sfnt_name"
         and row.expectation_status == "build_dependent"
         and lifecycle_handle(row, "face") == "non_sfnt"
