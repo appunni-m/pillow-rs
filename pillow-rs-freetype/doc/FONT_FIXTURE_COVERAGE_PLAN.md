@@ -271,15 +271,20 @@ The route audit also now recognizes `freetype.face_flags` as an existing real
 parity route: the public runner already compares pinned C `--face-flags`,
 Rust FFI, C ABI, and WASM ABI output for those rows, so keeping them in generic
 fallback understated the trusted route count.
+`FT_Render_Glyph.error_unloaded_or_unsupported_slot_format` now also contains
+one executable public error row: rendering DejaVu `Agrave` after
+`FT_LOAD_NO_RECURSE` leaves a composite slot, and pinned C returns
+`FT_Err_Cannot_Render_Glyph`. The genuinely synthetic unloaded/unsupported
+slot states remain separate route work.
 
 | Measure | Current |
 |---|---:|
-| Logical public API cases | 4,140 |
-| Concrete explicit cases | 6,629 |
+| Logical public API cases | 4,141 |
+| Concrete explicit cases | 6,630 |
 | Additional grouped variants | 2,489 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,626 |
-| Exact parity | 6,626 / 6,626 |
+| Runnable parity comparisons | 6,627 |
+| Exact parity | 6,627 / 6,627 |
 | Pending cases | 3 |
 | Covered Rust lines | 14,654 / 17,230 (85.05%) |
 | Rust function coverage | 878 / 1,066 (82.36%) |
@@ -689,7 +694,7 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,224 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,225 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 4 | `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null rows execute pinned C oracle status checks and the Rust FFI wrapper validation path; size lifecycle success remains separate. |
 | Compile/header/scalar contract | 2,248 | Valid for ABI/header contracts, not runtime core coverage. |
 | Shape-incomplete fallback | 11 | Convert to complete explicit variants or mark invalid/pending. |
@@ -708,7 +713,7 @@ usually JSON/input fixes rather than new core features:
 | Operation | Rows | First action |
 |---|---:|---|
 | `load_glyph` | 3 | Non-null invalid-index and reserved-flag probes are now executable; null-face and bitmap-missing rows still need explicit oracle/fixture support. |
-| `render_glyph` | 3 | Add slot/glyph selectors or classify unsupported unloaded-slot and future overlap-font cases. |
+| `render_glyph` | 3 | Composite no-recurse cannot-render probing is now executable; unloaded/synthetic slot states and future overlap-font cases still need explicit route or unsupported classification. |
 | `ftoutln.outline_get_cbox` | 1 | Add explicit null outline/acbox route support; do not replace null-noop behavior with a normal glyph row. |
 | `ftsnames.get_sfnt_name` | 1 | Invalid-index probing is now executable through explicit indexes; null-output and non-SFNT error probes still need explicit route support. |
 | `freetype.face_set_unpatented_hinting` | 1 | Add route support for toggle-sequence post-load behavior; simple boolean values would not prove this case. |
@@ -1543,6 +1548,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | CBox and memory-face route cleanup | 109 unique hashes | 0 | 6,625 | 6,622 / 6,622 | 3 | 14,652 / 17,230 lines; 21,360 / 24,773 regions; 3,574 / 4,398 branches | `FT_Outline_Get_CBox` now uses source-backed `hinter-control-matrix.ttf` glyphs 41 and 21 for conic control-point and empty-outline cboxes, `FT_BBox.negative_and_empty_bounds` uses three explicit glyph variants for negative, empty, and zero-width boxes, and the compact `FT_New_Memory_Face.valid_font_bytes` variants expose matching `font` aliases for their memory sources. Structural coverage is unchanged because these parser/cbox paths were already hit, but route audit moves real parity to 3,196 rows and shape-incomplete fallback down to 11 without implicit discovery |
 | 2026-07-12 | Executable invalid-error route split | 109 unique hashes | 0 | 6,629 | 6,626 / 6,626 | 3 | 14,654 / 17,230 lines; 21,362 / 24,773 regions; 3,576 / 4,398 branches | `FT_Get_Sfnt_Name.invalid_argument_errors` now executes an explicit invalid name index while preserving null-output and non-SFNT residuals as incomplete route work; `FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags` now executes out-of-range glyph and reserved-load-flag variants while preserving null-face as unrouted; `FT_Load_Char.error_null_face_or_invalid_flags` now executes the reserved-load-flag row while preserving null-face as unrouted. Exact Rust/C ABI/WASM parity remains green, route audit real parity moves to 3,200 rows, and implicit cases remain zero |
 | 2026-07-12 | Face-flag route-audit classification | 109 unique hashes | 0 | 6,629 | 6,626 / 6,626 | 3 | unchanged | The 24 `freetype.face_flags` concrete rows already execute pinned C `--face-flags`, Rust FFI, C ABI, and WASM ABI routes; `check_public_api_inputs.py` now classifies that operation as real parity instead of generic fallback. Focused face-flag parity passes 45 / 45, route audit real parity rises to 3,224, and generic fallback drops to 961 without changing fixture outputs or coverage denominator |
+| 2026-07-12 | Render composite-slot error split | 109 unique hashes | 0 | 6,630 | 6,627 / 6,627 | 3 | unchanged | `FT_Render_Glyph.error_unloaded_or_unsupported_slot_format` now has an executable `FT_LOAD_NO_RECURSE` DejaVu `Agrave` variant that compares pinned C's `FT_Err_Cannot_Render_Glyph` against Rust FFI, C ABI, and WASM ABI. The synthetic unloaded and unsupported-slot probes remain visibly unrouted. This moves route-audit real parity to 3,225 with no structural coverage delta, proving the old aggregate contained one real public error path and residual synthetic route work |
 
 ## Decision Log
 
