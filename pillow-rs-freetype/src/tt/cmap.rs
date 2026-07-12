@@ -82,6 +82,26 @@ pub struct Format12Subtable {
 pub struct Format14Subtable {
     pub platform_id: u16,
     pub encoding_id: u16,
+    records: Vec<VariationSelectorRecord>,
+}
+
+#[derive(Debug, Clone)]
+struct VariationSelectorRecord {
+    selector: u32,
+    default_ranges: Vec<VariationDefaultRange>,
+    non_default_mappings: Vec<VariationMapping>,
+}
+
+#[derive(Debug, Clone)]
+struct VariationDefaultRange {
+    start: u32,
+    end: u32,
+}
+
+#[derive(Debug, Clone)]
+struct VariationMapping {
+    codepoint: u32,
+    glyph_id: u16,
 }
 
 impl CmapTable {
@@ -127,6 +147,29 @@ impl CmapTable {
         }
     }
 
+    /// Equivalent to `FT_Face_GetCharVariantIndex` for the active Unicode charmap.
+    pub fn char_variant_index(
+        &self,
+        charmap_index: usize,
+        codepoint: u32,
+        variant_selector: u32,
+    ) -> u16 {
+        let Some(record) = self.charmaps.get(charmap_index) else {
+            return 0;
+        };
+        if !record.is_unicode() {
+            return 0;
+        }
+        for subtable in &self.format14 {
+            if let Some(glyph) = subtable.char_variant_index(codepoint, variant_selector, |cp| {
+                self.char_index_in_charmap(charmap_index, cp).unwrap_or(0)
+            }) {
+                return glyph;
+            }
+        }
+        0
+    }
+
     /// Return the first mapped codepoint and glyph index for a charmap.
     pub fn first_char(&self, charmap_index: usize) -> Option<(u32, u16)> {
         self.next_char(charmap_index, 0)
@@ -141,6 +184,12 @@ impl CmapTable {
             CharmapKind::Format12(index) => self.format12[index].next_char(after),
             CharmapKind::Format14 => None,
         }
+    }
+}
+
+impl CharmapRecord {
+    fn is_unicode(&self) -> bool {
+        self.platform_id == 0 || (self.platform_id == 3 && matches!(self.encoding_id, 1 | 10))
     }
 }
 
@@ -255,6 +304,32 @@ impl Format4Subtable {
             }
             cp = cp.wrapping_add(1);
         }
+    }
+}
+
+impl Format14Subtable {
+    fn char_variant_index(
+        &self,
+        codepoint: u32,
+        variant_selector: u32,
+        mut unicode_index: impl FnMut(u32) -> u16,
+    ) -> Option<u16> {
+        let record = self
+            .records
+            .iter()
+            .find(|record| record.selector == variant_selector)?;
+        if record
+            .default_ranges
+            .iter()
+            .any(|range| codepoint >= range.start && codepoint <= range.end)
+        {
+            return Some(unicode_index(codepoint));
+        }
+        record
+            .non_default_mappings
+            .iter()
+            .find(|mapping| mapping.codepoint == codepoint)
+            .map(|mapping| mapping.glyph_id)
     }
 }
 
@@ -576,13 +651,168 @@ fn parse_format14(
         .get(offset..offset + length)
         .ok_or_else(|| FontError::InvalidFont("cmap format 14: length exceeds data".into()))?;
     let num_records = u32::from_be_bytes([body[6], body[7], body[8], body[9]]) as usize;
-    if 10 + num_records * 11 > body.len() {
+    let selector_records_len = num_records
+        .checked_mul(11)
+        .and_then(|len| 10usize.checked_add(len))
+        .ok_or_else(|| {
+            FontError::InvalidFont(
+                "cmap format 14: variation selector records overflow length".into(),
+            )
+        })?;
+    if selector_records_len > body.len() {
         return Err(FontError::InvalidFont(
             "cmap format 14: variation selector records exceed length".into(),
         ));
     }
+    let mut records = Vec::with_capacity(num_records);
+    let mut last_selector = 1u32;
+    for i in 0..num_records {
+        let record_offset = 10 + i * 11;
+        let selector = read_u24(&body[record_offset..record_offset + 3]);
+        let default_offset = u32::from_be_bytes([
+            body[record_offset + 3],
+            body[record_offset + 4],
+            body[record_offset + 5],
+            body[record_offset + 6],
+        ]) as usize;
+        let non_default_offset = u32::from_be_bytes([
+            body[record_offset + 7],
+            body[record_offset + 8],
+            body[record_offset + 9],
+            body[record_offset + 10],
+        ]) as usize;
+        if default_offset >= length || non_default_offset >= length {
+            return Err(FontError::InvalidFont(
+                "cmap format 14: UVS table offset out of range".into(),
+            ));
+        }
+        if selector < last_selector {
+            return Err(FontError::InvalidFont(
+                "cmap format 14: variation selectors out of order".into(),
+            ));
+        }
+        last_selector = selector.saturating_add(1);
+        let default_ranges = if default_offset == 0 {
+            Vec::new()
+        } else {
+            parse_format14_default_ranges(body, default_offset)?
+        };
+        let non_default_mappings = if non_default_offset == 0 {
+            Vec::new()
+        } else {
+            parse_format14_non_default_mappings(body, non_default_offset)?
+        };
+        records.push(VariationSelectorRecord {
+            selector,
+            default_ranges,
+            non_default_mappings,
+        });
+    }
     Ok(Format14Subtable {
         platform_id,
         encoding_id,
+        records,
     })
+}
+
+fn parse_format14_default_ranges(
+    body: &[u8],
+    offset: usize,
+) -> Result<Vec<VariationDefaultRange>, FontError> {
+    let count_bytes = body.get(offset..offset + 4).ok_or_else(|| {
+        FontError::InvalidFont("cmap format 14: default UVS count missing".into())
+    })?;
+    let count = u32::from_be_bytes([
+        count_bytes[0],
+        count_bytes[1],
+        count_bytes[2],
+        count_bytes[3],
+    ]) as usize;
+    let records_offset = offset + 4;
+    let records_len = count
+        .checked_mul(4)
+        .and_then(|len| records_offset.checked_add(len))
+        .ok_or_else(|| {
+            FontError::InvalidFont("cmap format 14: default UVS records overflow length".into())
+        })?;
+    if records_len > body.len() {
+        return Err(FontError::InvalidFont(
+            "cmap format 14: default UVS records exceed length".into(),
+        ));
+    }
+    let mut ranges = Vec::with_capacity(count);
+    let mut last_base = 0;
+    for i in 0..count {
+        let record_offset = records_offset + i * 4;
+        let start = read_u24(&body[record_offset..record_offset + 3]);
+        let additional = u32::from(body[record_offset + 3]);
+        let end = start + additional;
+        if end >= 0x11_0000 {
+            return Err(FontError::InvalidFont(
+                "cmap format 14: default UVS range exceeds Unicode".into(),
+            ));
+        }
+        if start < last_base {
+            return Err(FontError::InvalidFont(
+                "cmap format 14: default UVS ranges out of order".into(),
+            ));
+        }
+        last_base = end + 1;
+        ranges.push(VariationDefaultRange { start, end });
+    }
+    Ok(ranges)
+}
+
+fn parse_format14_non_default_mappings(
+    body: &[u8],
+    offset: usize,
+) -> Result<Vec<VariationMapping>, FontError> {
+    let count_bytes = body.get(offset..offset + 4).ok_or_else(|| {
+        FontError::InvalidFont("cmap format 14: non-default UVS count missing".into())
+    })?;
+    let count = u32::from_be_bytes([
+        count_bytes[0],
+        count_bytes[1],
+        count_bytes[2],
+        count_bytes[3],
+    ]) as usize;
+    let records_offset = offset + 4;
+    let records_len = count
+        .checked_mul(5)
+        .and_then(|len| records_offset.checked_add(len))
+        .ok_or_else(|| {
+            FontError::InvalidFont("cmap format 14: non-default UVS records overflow length".into())
+        })?;
+    if records_len > body.len() {
+        return Err(FontError::InvalidFont(
+            "cmap format 14: non-default UVS records exceed length".into(),
+        ));
+    }
+    let mut mappings = Vec::with_capacity(count);
+    let mut last_codepoint = 0;
+    for i in 0..count {
+        let record_offset = records_offset + i * 5;
+        let codepoint = read_u24(&body[record_offset..record_offset + 3]);
+        let glyph_id = u16::from_be_bytes([body[record_offset + 3], body[record_offset + 4]]);
+        if codepoint >= 0x11_0000 {
+            return Err(FontError::InvalidFont(
+                "cmap format 14: non-default UVS codepoint exceeds Unicode".into(),
+            ));
+        }
+        if codepoint < last_codepoint {
+            return Err(FontError::InvalidFont(
+                "cmap format 14: non-default UVS mappings out of order".into(),
+            ));
+        }
+        last_codepoint = codepoint + 1;
+        mappings.push(VariationMapping {
+            codepoint,
+            glyph_id,
+        });
+    }
+    Ok(mappings)
+}
+
+fn read_u24(bytes: &[u8]) -> u32 {
+    (u32::from(bytes[0]) << 16) | (u32::from(bytes[1]) << 8) | u32::from(bytes[2])
 }

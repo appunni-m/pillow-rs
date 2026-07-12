@@ -309,6 +309,11 @@ impl Face {
         self.font.char_index(char_code)
     }
 
+    /// Return the glyph index for a Unicode variation-selector pair.
+    pub fn get_char_variant_index(&self, char_code: u32, variant_selector: u32) -> u16 {
+        self.font.char_variant_index(char_code, variant_selector)
+    }
+
     /// Select the best Unicode charmap, equivalent to `FT_Select_Charmap`.
     pub fn select_unicode_charmap(&mut self) -> Result<(), FontError> {
         self.font.select_unicode_charmap()?;
