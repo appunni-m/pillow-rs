@@ -190,6 +190,22 @@
             ]
           },
           {
+            "id": "encoded-explicit-postscript-name-id",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/fvar-instance-postscript-name.ttf"
+              }
+            },
+            "params": {
+              "face_index": 65536
+            },
+            "coverage": [
+              "tt/fvar:instance-explicit-postscript-name-id"
+            ]
+          },
+          {
             "id": "encoded-apple-prefix-instance",
             "assets": {
               "font": {
