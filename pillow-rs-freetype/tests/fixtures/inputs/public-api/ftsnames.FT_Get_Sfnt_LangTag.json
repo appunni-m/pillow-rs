@@ -77,7 +77,7 @@
         "params": {
           "open": "FT_New_Memory_Face",
           "face_index": 0,
-          "langID": "first_name_language_id_greater_than_0x8000"
+          "langID": 32769
         }
       },
       "classifiers": [
@@ -86,7 +86,7 @@
         "area:sfnt_name"
       ],
       "expectation": {
-        "status": "build_dependent",
+        "status": "ok",
         "output_shape": {
           "return": "FT_Error",
           "string": "borrowed_bytes_not_null_terminated",
@@ -156,7 +156,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "input/fonts/LiberationSerif-Regular.ttf"
+            "id": "fonts/sfnt/name-format1-langtag.ttf"
           }
         },
         "params": {
@@ -178,7 +178,7 @@
             },
             {
               "face": "valid_format1",
-              "langID": "0x8000 + numLangTagRecords",
+              "langID": 32770,
               "output": "valid_pointer"
             }
           ]

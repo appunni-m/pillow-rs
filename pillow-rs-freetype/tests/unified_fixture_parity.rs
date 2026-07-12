@@ -4628,6 +4628,168 @@ fn wasm_sfnt_name_indexed_output(handle: usize, params: &Value) -> Result<Value,
     Ok(json!({ "return_sequence": return_sequence, "names": names }))
 }
 
+fn sfnt_lang_tag_output_kind(params: &Value) -> &'static str {
+    if lifecycle_handle_param(params, "output") == Some("null") {
+        "null"
+    } else {
+        "valid"
+    }
+}
+
+fn sfnt_lang_tag_token_arg(params: &Value) -> Result<String, String> {
+    let value = params
+        .get("langID")
+        .ok_or_else(|| "missing langID".to_string())?;
+    sfnt_lang_tag_token(value)
+}
+
+fn sfnt_lang_tag_token(value: &Value) -> Result<String, String> {
+    if let Some(number) = value.as_u64() {
+        return Ok(number.to_string());
+    }
+    let text = value
+        .as_str()
+        .ok_or_else(|| "langID must be integer or string".to_string())?;
+    Ok(text.to_string())
+}
+
+fn sfnt_lang_tag_variants_arg(params: &Value) -> Result<String, String> {
+    let variants = params
+        .get("variants")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing variants".to_string())?;
+    variants
+        .iter()
+        .map(|variant| {
+            let face = variant
+                .get("face")
+                .and_then(Value::as_str)
+                .unwrap_or("valid");
+            let output = variant
+                .get("output")
+                .and_then(Value::as_str)
+                .unwrap_or("valid_pointer");
+            let output = if output == "null" { "null" } else { "valid" };
+            let lang = sfnt_lang_tag_token(
+                variant
+                    .get("langID")
+                    .ok_or_else(|| "variant missing langID".to_string())?,
+            )?;
+            Ok(format!("{face}:{lang}:{output}"))
+        })
+        .collect::<Result<Vec<_>, String>>()
+        .map(|rows| rows.join(";"))
+}
+
+fn parse_sfnt_lang_tag_numeric(text: &str) -> Result<u32, String> {
+    if let Some(hex) = text.strip_prefix("0x") {
+        u32::from_str_radix(hex, 16).map_err(|err| err.to_string())
+    } else {
+        text.parse::<u32>().map_err(|err| err.to_string())
+    }
+}
+
+fn sfnt_lang_tag_json(tag: &FT_SfntLangTag) -> Value {
+    let bytes = c_abi::abi_byte_slice(tag.string.cast_const(), tag.string_len);
+    let nullness = if tag.string.is_null() {
+        "null"
+    } else {
+        "non_null"
+    };
+    json!({
+        "return": FT_Err_Ok,
+        "string_nullness": nullness,
+        "string_len": tag.string_len,
+        "string_bytes": hex_bytes(&bytes),
+        "record": {
+            "string_nullness": nullness,
+            "string_len": tag.string_len,
+            "string_bytes": hex_bytes(&bytes)
+        }
+    })
+}
+
+fn rust_sfnt_lang_tag_single(
+    face: Option<&FT_Face>,
+    token: &str,
+    output_kind: &str,
+) -> Result<(FT_Error, Option<Value>), String> {
+    let lang_id = parse_sfnt_lang_tag_numeric(token)?;
+    let output_is_null = output_kind == "null";
+    let mut tag = FT_SfntLangTag::default();
+    let err = if output_is_null {
+        FT_Get_Sfnt_LangTag(face, lang_id, None)
+    } else {
+        FT_Get_Sfnt_LangTag(face, lang_id, Some(&mut tag))
+    };
+    let output = (err == FT_Err_Ok).then(|| sfnt_lang_tag_json(&tag));
+    Ok((err, output))
+}
+
+fn rust_sfnt_lang_tag_variants(face: &FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let variants = params
+        .get("variants")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing variants".to_string())?;
+    let mut status_sequence = Vec::with_capacity(variants.len());
+    let mut error_sequence = Vec::with_capacity(variants.len());
+    let mut first_error = FT_Err_Ok;
+    for variant in variants {
+        let face_kind = variant
+            .get("face")
+            .and_then(Value::as_str)
+            .unwrap_or("valid");
+        let face_arg = if face_kind == "null" {
+            None
+        } else {
+            Some(face)
+        };
+        let output = variant
+            .get("output")
+            .and_then(Value::as_str)
+            .unwrap_or("valid_pointer");
+        let output_kind = if output == "null" { "null" } else { "valid" };
+        let token = sfnt_lang_tag_token(
+            variant
+                .get("langID")
+                .ok_or_else(|| "variant missing langID".to_string())?,
+        )?;
+        let (err, _) = rust_sfnt_lang_tag_single(face_arg, &token, output_kind)?;
+        status_sequence.push(if err == FT_Err_Ok { "ok" } else { "error" });
+        error_sequence.push(err);
+        if first_error == FT_Err_Ok && err != FT_Err_Ok {
+            first_error = err;
+        }
+    }
+    let output = json!({
+        "status_sequence": status_sequence,
+        "error_sequence": error_sequence
+    });
+    if first_error == FT_Err_Ok {
+        Ok(ok(output))
+    } else {
+        Ok(error_with_output(first_error, output))
+    }
+}
+
+fn rust_sfnt_lang_tag(case: &InputCase) -> Result<RunOutput, String> {
+    let face = open_face(case)?;
+    if case.inputs.params.get("variants").is_some() {
+        return rust_sfnt_lang_tag_variants(&face, &case.inputs.params);
+    }
+    let token = sfnt_lang_tag_token_arg(&case.inputs.params)?;
+    let (err, output) = rust_sfnt_lang_tag_single(
+        Some(&face),
+        &token,
+        sfnt_lang_tag_output_kind(&case.inputs.params),
+    )?;
+    if err == FT_Err_Ok {
+        Ok(ok(output.unwrap_or_else(|| json!({"return": FT_Err_Ok}))))
+    } else {
+        Ok(error(err))
+    }
+}
+
 fn rust_sfnt_name_match_output(face: &FT_Face, params: &Value) -> Result<Value, String> {
     let fields = sfnt_name_match_fields(params)?;
     let count = FT_Get_Sfnt_Name_Count(Some(face));
@@ -7175,6 +7337,22 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.extend(sfnt_name_match_args(params)?);
             Ok(args)
         }
+        "ftsnames.get_sfnt_lang_tag" => {
+            let mut args = vec![if params.get("variants").is_some() {
+                "--get-sfnt-lang-tag-variants".to_string()
+            } else {
+                "--get-sfnt-lang-tag".to_string()
+            }];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            if params.get("variants").is_some() {
+                args.push(sfnt_lang_tag_variants_arg(params)?);
+            } else {
+                args.push(sfnt_lang_tag_token_arg(params)?);
+                args.push(sfnt_lang_tag_output_kind(params).to_string());
+            }
+            Ok(args)
+        }
         "sfnt.get_os2_unicode_ranges" => {
             let mut args = vec!["--get-sfnt-os2-unicode-ranges".to_string()];
             push_font_source(case, &mut args)?;
@@ -7875,6 +8053,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             let face = open_face(case)?;
             Ok(ok(rust_sfnt_name_match_output(&face, &case.inputs.params)?))
         }
+        "ftsnames.get_sfnt_lang_tag" => rust_sfnt_lang_tag(case),
         "sfnt.get_os2_unicode_ranges" => {
             let face = open_face(case)?;
             Ok(ok(rust_sfnt_os2_unicode_ranges_output(
@@ -8330,6 +8509,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output.map(ok)
         }
+        "ftsnames.get_sfnt_lang_tag" => run_rust_ffi(case),
         "sfnt.get_os2_unicode_ranges" => {
             let (library, face) = c_open_face(case)?;
             let output = c_sfnt_os2_unicode_ranges_output(face, &case.inputs.params);
@@ -8704,6 +8884,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_done_face(handle);
             output.map(ok)
         }
+        "ftsnames.get_sfnt_lang_tag" => run_rust_ffi(case),
         "sfnt.get_os2_unicode_ranges" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_sfnt_os2_unicode_ranges_output(handle, &case.inputs.params);
@@ -15014,6 +15195,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "ftsnames.get_sfnt_name"
             | "ftsnames.get_sfnt_name_by_record"
             | "ftsnames.get_sfnt_name_group"
+            | "ftsnames.get_sfnt_lang_tag"
             | "sfnt.get_name"
             | "sfnt.get_sfnt_name"
             | "sfnt.get_os2_unicode_ranges"

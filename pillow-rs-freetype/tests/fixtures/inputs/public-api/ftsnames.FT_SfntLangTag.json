@@ -85,7 +85,7 @@
         "params": {
           "open": "FT_New_Memory_Face",
           "face_index": 0,
-          "langID": "first_name_language_id_greater_than_0x8000",
+          "langID": 32769,
           "preserve_raw_bytes": true
         }
       },
@@ -95,7 +95,7 @@
         "area:runtime_record"
       ],
       "expectation": {
-        "status": "build_dependent",
+        "status": "ok",
         "output_shape": {
           "record": {
             "string": "borrowed_byte_pointer",

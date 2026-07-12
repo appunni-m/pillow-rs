@@ -24,6 +24,12 @@ class NameRecordSpec:
     offset_override: int | None = None
 
 
+@dataclass(frozen=True)
+class LangTagSpec:
+    data: bytes
+    offset_override: int | None = None
+
+
 def utf16be(text: str) -> bytes:
     return text.encode("utf-16-be")
 
@@ -94,6 +100,26 @@ def write_postscript_branch_matrix() -> None:
         BASE_STATIC,
         NAME_OUT_DIR / "name-postscript-branch-matrix.ttf",
         build_name_table(records),
+    )
+
+
+def write_format1_langtag() -> None:
+    records = [
+        NameRecordSpec(3, 1, 0x0409, 1, utf16be("LangTag")),
+        NameRecordSpec(3, 1, 0x0409, 2, utf16be("Regular")),
+        NameRecordSpec(3, 1, 0x0409, 6, utf16be("LangTag-Regular")),
+        NameRecordSpec(3, 1, 0x8001, 1, utf16be("LangTag Localized")),
+    ]
+    lang_tags = [
+        # FreeType requires langID > 0x8000, then indexes langTags[langID - 0x8000],
+        # so index 0 is intentionally unreachable and 0x8001 selects this record.
+        LangTagSpec(utf16be("unused")),
+        LangTagSpec(utf16be("en-Latn-US")),
+    ]
+    write_name_payload(
+        BASE_STATIC,
+        ROOT / "tests" / "fixtures" / "fonts" / "sfnt" / "name-format1-langtag.ttf",
+        build_name_table(records, lang_tags),
     )
 
 
@@ -236,8 +262,14 @@ def build_missing_subfamily_fvar() -> bytes:
     return bytes(payload)
 
 
-def build_name_table(records: list[NameRecordSpec]) -> bytes:
-    string_offset = 6 + len(records) * 12
+def build_name_table(
+    records: list[NameRecordSpec],
+    lang_tags: list[LangTagSpec] | None = None,
+) -> bytes:
+    lang_tags = lang_tags or []
+    format_type = 1 if lang_tags else 0
+    lang_tag_record_size = 2 + len(lang_tags) * 4 if lang_tags else 0
+    string_offset = 6 + len(records) * 12 + lang_tag_record_size
     storage = bytearray()
     rows = bytearray()
     for record in records:
@@ -252,11 +284,23 @@ def build_name_table(records: list[NameRecordSpec]) -> bytes:
         rows.extend(record.name_id.to_bytes(2, "big"))
         rows.extend(len(record.data).to_bytes(2, "big"))
         rows.extend(offset.to_bytes(2, "big"))
+    lang_rows = bytearray()
+    if lang_tags:
+        lang_rows.extend(len(lang_tags).to_bytes(2, "big"))
+        for tag in lang_tags:
+            if tag.offset_override is None:
+                offset = len(storage)
+                storage.extend(tag.data)
+            else:
+                offset = tag.offset_override
+            lang_rows.extend(len(tag.data).to_bytes(2, "big"))
+            lang_rows.extend(offset.to_bytes(2, "big"))
     return (
-        (0).to_bytes(2, "big")
+        format_type.to_bytes(2, "big")
         + len(records).to_bytes(2, "big")
         + string_offset.to_bytes(2, "big")
         + bytes(rows)
+        + bytes(lang_rows)
         + bytes(storage)
     )
 
@@ -361,6 +405,7 @@ def main() -> None:
     write_apple_postscript()
     write_odd_windows_postscript_with_apple_fallback()
     write_postscript_branch_matrix()
+    write_format1_langtag()
     write_variable_apple_prefix()
     write_variable_unicode_prefix()
     write_variable_odd_windows_prefix()

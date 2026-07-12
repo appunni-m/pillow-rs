@@ -404,10 +404,12 @@ impl Font {
         let mut name = match dir.find(data, tag(b"name")) {
             Some(d) => tt::name::parse_name(d)?,
             None => crate::tt::name::NameTable {
+                format: 0,
                 family: "Unknown".into(),
                 subfamily: "Regular".into(),
                 postscript_name: None,
                 records: Vec::new(),
+                lang_tags: Vec::new(),
             },
         };
         if named_instance != 0 {
@@ -710,6 +712,16 @@ impl Font {
     /// Return one raw SFNT name record by index.
     pub fn sfnt_name(&self, index: usize) -> Option<&tt::name::SfntNameRecord> {
         self.data.name.records.get(index)
+    }
+
+    /// Raw SFNT name table format field.
+    pub fn sfnt_name_format(&self) -> u16 {
+        self.data.name.format
+    }
+
+    /// Return one raw SFNT language-tag record by index.
+    pub fn sfnt_lang_tag(&self, index: usize) -> Option<&tt::name::SfntLangTagRecord> {
+        self.data.name.lang_tags.get(index)
     }
 
     /// Approximate `FT_FaceRec::face_flags` for supported SFNT outline faces.

@@ -349,6 +349,16 @@ impl Face {
         self.font.sfnt_name(index)
     }
 
+    /// Return the raw SFNT name table format field.
+    pub fn sfnt_name_format(&self) -> u16 {
+        self.font.sfnt_name_format()
+    }
+
+    /// Return one raw SFNT language-tag record by index.
+    pub fn sfnt_lang_tag(&self, index: usize) -> Option<&crate::tt::name::SfntLangTagRecord> {
+        self.font.sfnt_lang_tag(index)
+    }
+
     /// Return the face PostScript name, equivalent to `FT_Get_Postscript_Name`.
     pub fn postscript_name(&self) -> Option<&str> {
         self.font.postscript_name()

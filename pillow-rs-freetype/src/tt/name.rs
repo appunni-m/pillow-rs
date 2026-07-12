@@ -7,6 +7,8 @@ use crate::error::FontError;
 /// Font identification strings.
 #[derive(Debug, Clone)]
 pub struct NameTable {
+    /// Raw name table format field.
+    pub format: u16,
     /// Font family name (nameID 1).
     pub family: String,
     /// Font subfamily / style name (nameID 2).
@@ -15,6 +17,8 @@ pub struct NameTable {
     pub postscript_name: Option<String>,
     /// Raw SFNT name records exposed by `FT_Get_Sfnt_Name`.
     pub records: Vec<SfntNameRecord>,
+    /// Raw language-tag records exposed by `FT_Get_Sfnt_LangTag`.
+    pub lang_tags: Vec<SfntLangTagRecord>,
 }
 
 /// Raw SFNT name record with string bytes copied from the name table.
@@ -24,6 +28,12 @@ pub struct SfntNameRecord {
     pub encoding_id: u16,
     pub language_id: u16,
     pub name_id: u16,
+    pub string: Vec<u8>,
+}
+
+/// Raw SFNT language-tag record with string bytes copied from the name table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SfntLangTagRecord {
     pub string: Vec<u8>,
 }
 
@@ -52,6 +62,7 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
             "name table too short (need 6 bytes)".into(),
         ));
     }
+    let format = u16::from_be_bytes([data[0], data[1]]);
     let count = u16::from_be_bytes([data[2], data[3]]) as usize;
     let string_offset = u16::from_be_bytes([data[4], data[5]]) as usize;
 
@@ -77,6 +88,11 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
         .iter()
         .filter_map(|record| raw_record(data, string_offset, record))
         .collect();
+    let lang_tags = if format == 1 {
+        parse_lang_tags(data, string_offset, 6 + count * 12)?
+    } else {
+        Vec::new()
+    };
 
     // Prefer typographic family/subfamily (nameID 16/17) over legacy (1/2).
     // FreeType 2.14.3 uses typographic names when available via face->family_name
@@ -90,10 +106,12 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
     let postscript_name = find_postscript_name(data, string_offset, &records);
 
     Ok(NameTable {
+        format,
         family,
         subfamily,
         postscript_name,
         records: raw_records,
+        lang_tags,
     })
 }
 
@@ -113,6 +131,39 @@ fn raw_record(data: &[u8], string_base: usize, record: &NameRecord) -> Option<Sf
         name_id: record.name_id,
         string: bytes.to_vec(),
     })
+}
+
+fn parse_lang_tags(
+    data: &[u8],
+    string_base: usize,
+    lang_tag_count_offset: usize,
+) -> Result<Vec<SfntLangTagRecord>, FontError> {
+    let count_bytes = data
+        .get(lang_tag_count_offset..lang_tag_count_offset + 2)
+        .ok_or_else(|| FontError::InvalidFont("name table: language-tag count missing".into()))?;
+    let count = u16::from_be_bytes([count_bytes[0], count_bytes[1]]) as usize;
+    let records_offset = lang_tag_count_offset + 2;
+    if data.len() < records_offset + count * 4 {
+        return Err(FontError::InvalidFont(
+            "name table: language-tag records overflow data".into(),
+        ));
+    }
+
+    let mut lang_tags = Vec::with_capacity(count);
+    for i in 0..count {
+        let off = records_offset + i * 4;
+        let length = u16::from_be_bytes([data[off], data[off + 1]]) as usize;
+        let offset = u16::from_be_bytes([data[off + 2], data[off + 3]]) as usize;
+        let start = string_base + offset;
+        let end = start + length;
+        let bytes = data.get(start..end).ok_or_else(|| {
+            FontError::InvalidFont("name table: language-tag string out of range".into())
+        })?;
+        lang_tags.push(SfntLangTagRecord {
+            string: bytes.to_vec(),
+        });
+    }
+    Ok(lang_tags)
 }
 
 /// Search for a name string by name_id, preferring platform 3/encoding 1.
