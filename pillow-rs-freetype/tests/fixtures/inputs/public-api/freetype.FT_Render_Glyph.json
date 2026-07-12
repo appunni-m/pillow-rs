@@ -935,6 +935,31 @@
             ]
           },
           {
+            "id": "charmap-first-offcurve-last-on-normal",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/charmap/multiple-charmaps.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 483,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "render/grays:first-offcurve-last-on-normal"
+            ]
+          },
+          {
             "id": "hinter-render-bowtie-thin-mono",
             "assets": {
               "font": {
