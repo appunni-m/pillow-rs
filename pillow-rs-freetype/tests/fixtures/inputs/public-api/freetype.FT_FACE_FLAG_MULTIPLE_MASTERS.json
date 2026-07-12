@@ -169,6 +169,23 @@
             "coverage": [
               "tt/fvar:instance-postscript-name-id"
             ]
+          },
+          {
+            "id": "zero-axis-fvar-control",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/fvar-zero-axis.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS"
+            },
+            "coverage": [
+              "tt/fvar:zero-axis-valid-header"
+            ]
           }
         ]
       },
