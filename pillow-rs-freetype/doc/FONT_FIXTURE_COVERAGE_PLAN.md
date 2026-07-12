@@ -267,6 +267,11 @@ parity.
 The generated `cjk-tiny-stem.ttf` fixture isolates a U+7530 Hani standard glyph
 with a subpixel-width vertical stem, proving the CJK minimum snapped standard
 width clamp through the same `FT_LOAD_FORCE_AUTOHINT` public route.
+The generated `cjk-snap-below-standard.ttf` fixture keeps U+7530 as a
+100-unit standard Hani stem and maps U+4ED6 to a 90-unit Hani stem. One
+explicit `FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_MONO` public row selects the
+narrower glyph at 20 ppem, proving CJK's lower-side snap-to-reference branch
+without adding a size or glyph Cartesian product.
 Three named-instance obligations remain explicit pending rows: Adobe MM reset
 behavior, `gvar`/HVAR glyph-output deltas, and `FT_MM_Var` namedstyle
 coordinate parity.
@@ -392,22 +397,22 @@ any parsed `fvar` table.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,148 |
-| Concrete explicit cases | 6,686 |
-| Additional grouped variants | 2,538 |
+| Concrete explicit cases | 6,695 |
+| Additional grouped variants | 2,547 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,682 |
-| Exact parity | 6,682 / 6,682 |
+| Runnable parity comparisons | 6,691 |
+| Exact parity | 6,691 / 6,691 |
 | Pending cases | 4 |
-| Covered Rust lines | 15,787 / 17,764 (88.87%) |
+| Covered Rust lines | 15,800 / 17,764 (88.94%) |
 | Rust function coverage | 1,001 / 1,134 (88.27%) |
 | Rust instantiation coverage | 1,004 / 1,137 (88.30%) |
-| Rust region coverage | 22,669 / 25,453 (89.06%) |
-| Rust branch/condition coverage | 3,741 / 4,524 (82.69%) |
+| Rust region coverage | 22,683 / 25,453 (89.12%) |
+| Rust branch/condition coverage | 3,752 / 4,524 (82.94%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
-| Active fixture font paths | 153 |
-| Stored active font binaries | 110 files, 824 KiB |
+| Active fixture font paths | 154 |
+| Stored active font binaries | 110 files, 831 KiB |
 | Active symlink aliases | 43 |
-| Unique active font contents | 119 SHA-256 identities |
+| Unique active font contents | 120 SHA-256 identities |
 | Deprecated brute-force fonts | 101 files, 99 unique contents, 23 MiB |
 
 The current coverage target is not only line coverage. The maintained
@@ -1832,6 +1837,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | CJK blue-zone edge fixture | `build_autohint_script_fixtures.py` now emits a 1.2 KiB `fonts/autohint/cjk-blue-edge-cases.ttf` where U+4ED6 is contourless, U+519B is the only usable top flat probe, and U+4E2A/U+4E3B invert bottom fill/flat ordering. One explicit `FT_LOAD_FORCE_AUTOHINT` public variant selects U+7530 from that font, covering the CJK empty-blue-glyph skip, flat-only blue zone, and ref/shoot order repair without mutating productive CJK coverage glyphs. Concrete cases rise to 6,693, implicit cases stay zero, and exact Rust FFI, C ABI, and WASM ABI parity passes with 6,689 / 6,689 runtime rows and four explicit pending rows. Refreshed condition coverage is 15,794 / 17,764 lines, 22,678 / 25,453 regions, and 3,747 / 4,524 branches |
 | 2026-07-12 | CJK degenerate blue contours | The existing `cjk-blue-edge-cases.ttf` generated fixture now also maps U+4EEC to three one-point contours. The same explicit `cjk-blue-edge-cases-20` public row reaches the CJK contour-length guard and no-best-position fallback during blue initialization, adding no concrete cases and preserving exact Rust FFI, C ABI, and WASM ABI parity with 6,689 / 6,689 runtime rows and four explicit pending rows. Refreshed condition coverage is 15,796 / 17,764 lines, 22,680 / 25,453 regions, and 3,749 / 4,524 branches |
 | 2026-07-12 | CJK tiny standard stem clamp | `build_autohint_script_fixtures.py` now emits a 1.0 KiB `fonts/autohint/cjk-tiny-stem.ttf` where U+7530 has a 20-unit vertical stem. One explicit `FT_LOAD_FORCE_AUTOHINT` public variant selects it at 20 ppem, proving CJK's minimum snapped standard-width clamp with exact Rust FFI, C ABI, and WASM ABI parity. Concrete cases rise to 6,694, implicit cases stay zero, runtime parity is 6,690 / 6,690 with four explicit pending rows, and refreshed condition coverage is 15,797 / 17,764 lines, 22,681 / 25,453 regions, and 3,750 / 4,524 branches |
+| 2026-07-12 | CJK snap-below standard width | `build_autohint_script_fixtures.py` now emits `fonts/autohint/cjk-snap-below-standard.ttf`, keeping U+7530 as a 100-unit Hani standard stem and mapping U+4ED6 to a 90-unit Hani stem. One explicit `FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_MONO` public variant selects U+4ED6 at 20 ppem, proving the lower-side `cjk_snap_width` reference branch through exact Rust FFI, C ABI, and WASM ABI parity. Concrete cases rise to 6,695, implicit cases stay zero, runtime parity is 6,691 / 6,691 with four explicit pending rows, and refreshed condition coverage is 15,800 / 17,764 lines, 22,683 / 25,453 regions, and 3,752 / 4,524 branches |
 
 ## Immediate Next Actions
 
