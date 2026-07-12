@@ -263,17 +263,17 @@ coordinate parity.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,137 |
-| Concrete explicit cases | 6,622 |
-| Additional grouped variants | 2,485 |
+| Concrete explicit cases | 6,623 |
+| Additional grouped variants | 2,486 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,619 |
-| Exact parity | 6,619 / 6,619 |
+| Runnable parity comparisons | 6,620 |
+| Exact parity | 6,620 / 6,620 |
 | Pending cases | 3 |
-| Covered Rust lines | 14,650 / 17,230 (85.03%) |
+| Covered Rust lines | 14,651 / 17,230 (85.03%) |
 | Rust function coverage | 878 / 1,066 (82.36%) |
 | Rust instantiation coverage | 881 / 1,069 (82.41%) |
-| Rust region coverage | 21,358 / 24,773 (86.21%) |
-| Rust branch/condition coverage | 3,572 / 4,398 (81.22%) |
+| Rust region coverage | 21,359 / 24,773 (86.22%) |
+| Rust branch/condition coverage | 3,573 / 4,398 (81.24%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 141 |
 | Stored active font binaries | 98 files, 773 KiB |
@@ -301,7 +301,7 @@ Current largest uncovered buckets:
 
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
-| `src/render.rs` | 1,577 / 2,275 | 330 / 428 | 109 / 164 | 2,281 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
+| `src/render.rs` | 1,578 / 2,275 | 331 / 428 | 109 / 164 | 2,282 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
 | `src/font.rs` | 1,444 / 1,936 | 175 / 250 | 127 / 186 | 1,967 / 2,635 | Public route audit, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,510 / 2,828 | 980 / 1,282 | 70 / 73 | 3,611 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
 | `src/scaler.rs` | 941 / 1,220 | 153 / 188 | 41 / 61 | 1,081 / 1,274 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
@@ -1529,6 +1529,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | S45ROUND clamp probe in super-round glyph | 108 unique hashes | 0 | 6,619 | 6,616 / 6,616 | 3 | 14,628 / 17,230 lines; 21,335 / 24,773 regions; 3,559 / 4,398 branches | The source-backed `hinter-control-matrix.ttf` `superRoundMatrix` glyph now includes a selector `0x71` S45ROUND no-output probe that rounds `0` and `-1`, forcing FreeType's positive and negative clamp repairs while popping the results. The existing `hinter-super-round-matrix` public row keeps exact Rust/C ABI/WASM parity, case count, and implicit count unchanged |
 | 2026-07-12 | Transform-render empty outline row | 108 unique hashes | 0 | 6,620 | 6,617 / 6,617 | 3 | 14,629 / 17,230 lines; 21,338 / 24,773 regions; 3,561 / 4,398 branches | One explicit `FT_Set_Transform.load_ignore_transform_behavior` variant loads `hinter-control-matrix.ttf` glyph 21 with `FT_LOAD_RENDER` under the existing non-identity matrix. It covers the transformed render-outline empty guard in `api.rs` without a new font, discovery axis, or harness path, and exact Rust/C ABI/WASM parity remains green |
 | 2026-07-12 | Hani fallback standard-width order font | 109 unique hashes | 0 | 6,622 | 6,619 / 6,619 | 3 | 14,650 / 17,230 lines; 21,358 / 24,773 regions; 3,572 / 4,398 branches | One minimal `cjk-width-order.ttf` fixture omits U+7530 and maps U+56D7 to a two-stem glyph whose first stem is wider than the second. The explicit `cjk-width-order-20` force-autohint row covers CJK descending width insertion-sort and quantization branches with exact Rust/C ABI/WASM parity and zero implicit cases |
+| 2026-07-12 | SDF self-intersection render topology row | 109 unique hashes | 0 | 6,623 | 6,620 / 6,620 | 3 | 14,651 / 17,230 lines; 21,359 / 24,773 regions; 3,573 / 4,398 branches | One explicit `FT_Bitmap.public_fields_match_render_output` variant reuses `hinter-control-matrix.ttf` glyph 42 in SDF mode. It pairs the existing mono/normal bowtie rows with an SDF self-intersection-thin public comparison, moving `render.rs` by one line, one region, and one branch while preserving exact Rust/C ABI/WASM parity and zero implicit cases |
 
 ## Decision Log
 

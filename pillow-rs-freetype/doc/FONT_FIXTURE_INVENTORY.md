@@ -222,7 +222,7 @@ listed because they enter different hinting and scaling conditions.
 | `hinter-control-matrix.ttf` | U+E032 gid 51 | 20 | branch-edge VM control covering zero-length line and stack vectors, invalid stack-index fallback, taken JROF, no-round dispatch, invalid contour shift, invalid coordinate reads, empty twilight-zone SHZ, and positive/negative single-width MDRP cut-in |
 | `hinter-control-matrix.ttf` | gid 21 | 20 | empty outline selected across normal, mono, LCD, LCD_V, and SDF render modes |
 | `hinter-control-matrix.ttf` | U+E028 gid 41 | 20 | off-curve start and consecutive conic controls across normal, mono, LCD, LCD_V, and SDF modes; owns FreeType-compatible SDF conic subdivision |
-| `hinter-control-matrix.ttf` | U+E029 gid 42 | 20 | self-intersecting bowtie plus a thin rectangle in mono and normal modes |
+| `hinter-control-matrix.ttf` | U+E029 gid 42 | 20 | self-intersecting bowtie plus a thin rectangle in mono, normal, and SDF modes |
 | `hinter-control-matrix.ttf` | U+E02A gid 43 | 20 | outer and opposite-winding inner contours plus a coincident-point degenerate contour in normal and SDF modes |
 | `hinter-control-matrix.ttf` | U+E02B gid 44 | 20 | zero-width vertical contour selected across normal, mono, and SDF modes |
 | `hinter-control-matrix.ttf` | U+E02C gid 45 | 20 | zero-height horizontal contour selected across normal, mono, and SDF modes |
