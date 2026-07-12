@@ -360,6 +360,26 @@
             ]
           },
           {
+            "id": "latin-fixed-width-advance-preserve",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/metrics/fixed-width.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 65,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:fixed-width-advance-preserve"
+            ]
+          },
+          {
             "id": "latin-shared-greek",
             "assets": {
               "font": {
