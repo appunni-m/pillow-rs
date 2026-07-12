@@ -68,6 +68,17 @@ pub struct FT_BBox {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FT_Outline {
+    pub n_contours: FT_UShort,
+    pub n_points: FT_UShort,
+    pub points: *mut FT_Vector,
+    pub tags: *mut FT_Byte,
+    pub contours: *mut FT_UShort,
+    pub flags: FT_Int,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FT_UnitVector {
     pub x: FT_F2Dot14,
     pub y: FT_F2Dot14,
@@ -938,6 +949,27 @@ pub extern "C" fn FT_Face_SetUnpatentedHinting(face: FT_Face, value: FT_Bool) ->
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_Get_CBox(outline: *const FT_Outline, acbox: *mut FT_BBox) {
+    if outline.is_null() || acbox.is_null() {
+        return;
+    }
+    let Some(snapshot) = outline_snapshot_from_c(outline) else {
+        return;
+    };
+    let mut bbox = rust_ffi::FT_BBox::default();
+    rust_ffi::FT_Outline_Get_CBox(Some(&snapshot), Some(&mut bbox));
+    // SAFETY: `acbox` is non-null and the caller provides writable `FT_BBox` storage.
+    unsafe {
+        *acbox = FT_BBox {
+            xMin: bbox.xMin,
+            yMin: bbox.yMin,
+            xMax: bbox.xMax,
+            yMax: bbox.yMax,
+        };
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Set_Char_Size(
     face: FT_Face,
     char_width: FT_F26Dot6,
@@ -1658,6 +1690,50 @@ fn rust_size_metrics_to_abi(metrics: rust_ffi::FT_Size_Metrics) -> FT_Size_Metri
         height: metrics.height,
         max_advance: metrics.max_advance,
     }
+}
+
+fn outline_snapshot_from_c(outline: *const FT_Outline) -> Option<rust_ffi::FT_OutlineSnapshot> {
+    let outline = non_null(outline)?;
+    // SAFETY: `outline` is non-null; callers of the C ABI must pass a valid `FT_Outline`.
+    let outline = unsafe { outline.as_ref() };
+    let n_points = usize::from(outline.n_points);
+    let n_contours = usize::from(outline.n_contours);
+    if (n_points > 0 && outline.points.is_null()) || (n_contours > 0 && outline.contours.is_null())
+    {
+        return None;
+    }
+    let points = if n_points == 0 {
+        Vec::new()
+    } else {
+        // SAFETY: `points` is non-null for `n_points > 0`; the C ABI caller owns a readable
+        // array of `n_points` `FT_Vector` records for the duration of this call.
+        unsafe { slice::from_raw_parts(outline.points, n_points) }
+            .iter()
+            .map(|point| rust_ffi::FT_Vector {
+                x: point.x,
+                y: point.y,
+            })
+            .collect()
+    };
+    let tags = if n_points == 0 || outline.tags.is_null() {
+        Vec::new()
+    } else {
+        // SAFETY: `tags` is non-null and points to `n_points` readable tag bytes.
+        unsafe { slice::from_raw_parts(outline.tags, n_points) }.to_vec()
+    };
+    let contours = if n_contours == 0 {
+        Vec::new()
+    } else {
+        // SAFETY: `contours` is non-null for `n_contours > 0`; the caller provides
+        // `n_contours` readable contour endpoint values.
+        unsafe { slice::from_raw_parts(outline.contours, n_contours) }.to_vec()
+    };
+    Some(rust_ffi::FT_OutlineSnapshot {
+        points,
+        tags,
+        contours,
+        flags: outline.flags,
+    })
 }
 
 fn face_state(face: FT_Face) -> Option<&'static FaceState> {

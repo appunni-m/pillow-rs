@@ -36,6 +36,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_done_freetype",
     "fontdone_wasm_face_check_truetype_patents",
     "fontdone_wasm_face_set_unpatented_hinting",
+    "fontdone_wasm_outline_get_cbox",
     "fontdone_wasm_get_truetype_engine_type",
     "fontdone_wasm_library_set_lcd_filter",
     "fontdone_wasm_library_set_lcd_filter_weights",
@@ -690,7 +691,7 @@ def shape_fallback_reason(row: ConcreteInput) -> str | None:
     ):
         return "set_charmap lacks charmap selector rows"
     if operation == "ftoutln.outline_get_cbox" and not any(
-        key in params for key in ("glyph_index", "glyph_indices")
+        key in params for key in ("glyph_index", "glyph_indices", "scenarios")
     ):
         return "outline_get_cbox lacks glyph selector"
     if operation == "ftsnames.get_sfnt_name" and "indexes" not in params:

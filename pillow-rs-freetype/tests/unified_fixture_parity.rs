@@ -7350,6 +7350,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "ftoutln.outline_get_cbox" => {
+            if params.get("scenarios").is_some() {
+                return Ok(vec![
+                    "--outline-get-cbox-null-inputs".to_string(),
+                    outline_get_cbox_sentinel_arg(params)?,
+                ]);
+            }
             if params.get("glyph_index").is_none() && params.get("glyph_indices").is_none() {
                 return oracle_fallback_args(case);
             }
@@ -7829,6 +7835,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_outline_operation(&face, case)
         }
         "ftoutln.outline_get_cbox" => {
+            if case.inputs.params.get("scenarios").is_some() {
+                return rust_outline_get_cbox_null_inputs(&case.inputs.params);
+            }
             if case.inputs.params.get("glyph_index").is_none()
                 && case.inputs.params.get("glyph_indices").is_none()
             {
@@ -8289,6 +8298,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "ftoutln.outline_get_cbox" => {
+            if case.inputs.params.get("scenarios").is_some() {
+                return c_outline_get_cbox_null_inputs(&case.inputs.params);
+            }
             if case.inputs.params.get("glyph_index").is_none()
                 && case.inputs.params.get("glyph_indices").is_none()
             {
@@ -8651,6 +8663,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "ftoutln.outline_get_cbox" => {
+            if case.inputs.params.get("scenarios").is_some() {
+                return wasm_outline_get_cbox_null_inputs(&case.inputs.params);
+            }
             if case.inputs.params.get("glyph_index").is_none()
                 && case.inputs.params.get("glyph_indices").is_none()
             {
@@ -9133,15 +9148,36 @@ fn rust_outline_operation(face: &FT_Face, case: &InputCase) -> Result<RunOutput,
         glyph_index_param(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     ) {
-        Ok(slot) => Ok(ok(outline_operation_output(
-            case,
-            slot.format,
-            slot.outline.as_ref().map(outline_snapshot_json),
-            bbox_from_rust_bbox(slot.outline_bbox),
-            bbox_from_rust_bbox(slot.outline_cbox),
-        )?)),
+        Ok(slot) => {
+            let outline_cbox = rust_outline_operation_cbox(&slot, case)?;
+            Ok(ok(outline_operation_output(
+                case,
+                slot.format,
+                slot.outline.as_ref().map(outline_snapshot_json),
+                bbox_from_rust_bbox(slot.outline_bbox),
+                bbox_from_rust_bbox(outline_cbox),
+            )?))
+        }
         Err(err) => Ok(error(err)),
     }
+}
+
+fn rust_outline_operation_cbox(slot: &FT_GlyphSlot, case: &InputCase) -> Result<FT_BBox, String> {
+    if case.operation != "ftoutln.outline_get_cbox" {
+        return Ok(slot.outline_cbox);
+    }
+    let Some(outline) = slot.outline.as_ref() else {
+        return Err("outline_get_cbox missing outline snapshot".to_string());
+    };
+    let mut cbox = FT_BBox::default();
+    FT_Outline_Get_CBox(Some(outline), Some(&mut cbox));
+    if cbox != slot.outline_cbox {
+        return Err(format!(
+            "outline_get_cbox helper mismatch: helper={cbox:?} slot={:?}",
+            slot.outline_cbox
+        ));
+    }
+    Ok(cbox)
 }
 
 fn c_outline_operation(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
@@ -9592,6 +9628,127 @@ fn bbox_from_wasm_bbox(bbox: wasm_abi::AbiBBoxSnapshot) -> JsonBBox {
         x_max: bbox.xMax,
         y_max: bbox.yMax,
     }
+}
+
+fn bbox_from_wasm_public_bbox(bbox: wasm_abi::FontdoneWasmBBox) -> JsonBBox {
+    JsonBBox {
+        x_min: bbox.xMin,
+        y_min: bbox.yMin,
+        x_max: bbox.xMax,
+        y_max: bbox.yMax,
+    }
+}
+
+fn outline_get_cbox_null_inputs_output(cbox_after: JsonBBox, null_acbox_write: bool) -> RunOutput {
+    ok(json!({
+        "cbox_after": bbox_json(cbox_after),
+        "null_acbox_write": null_acbox_write
+    }))
+}
+
+fn outline_get_cbox_sentinel(params: &Value) -> Result<JsonBBox, String> {
+    let scenario = array_param(params, "scenarios")?
+        .iter()
+        .find(|scenario| scenario.get("outline_pointer").is_some_and(Value::is_null))
+        .ok_or_else(|| "outline_get_cbox missing null outline scenario".to_string())?;
+    let values = array_param(scenario, "sentinel_cbox_before")?;
+    if values.len() != 4 {
+        return Err("sentinel_cbox_before must have four values".to_string());
+    }
+    Ok(JsonBBox {
+        x_min: i64_value(&values[0], "sentinel_cbox_before[0]")?,
+        y_min: i64_value(&values[1], "sentinel_cbox_before[1]")?,
+        x_max: i64_value(&values[2], "sentinel_cbox_before[2]")?,
+        y_max: i64_value(&values[3], "sentinel_cbox_before[3]")?,
+    })
+}
+
+fn outline_get_cbox_sentinel_arg(params: &Value) -> Result<String, String> {
+    let sentinel = outline_get_cbox_sentinel(params)?;
+    Ok(format!(
+        "{},{},{},{}",
+        sentinel.x_min, sentinel.y_min, sentinel.x_max, sentinel.y_max
+    ))
+}
+
+fn dummy_rust_outline_snapshot() -> FT_OutlineSnapshot {
+    FT_OutlineSnapshot {
+        points: vec![FT_Vector { x: 17, y: -23 }],
+        tags: vec![1],
+        contours: vec![0],
+        flags: 0,
+    }
+}
+
+fn rust_outline_get_cbox_null_inputs(params: &Value) -> Result<RunOutput, String> {
+    let sentinel = outline_get_cbox_sentinel(params)?;
+    let mut cbox = FT_BBox {
+        xMin: sentinel.x_min,
+        yMin: sentinel.y_min,
+        xMax: sentinel.x_max,
+        yMax: sentinel.y_max,
+    };
+    FT_Outline_Get_CBox(None, Some(&mut cbox));
+    let outline = dummy_rust_outline_snapshot();
+    FT_Outline_Get_CBox(Some(&outline), None);
+    Ok(outline_get_cbox_null_inputs_output(
+        bbox_from_rust_bbox(cbox),
+        false,
+    ))
+}
+
+fn c_outline_get_cbox_null_inputs(params: &Value) -> Result<RunOutput, String> {
+    let sentinel = outline_get_cbox_sentinel(params)?;
+    let mut cbox = c_abi::FT_BBox {
+        xMin: sentinel.x_min,
+        yMin: sentinel.y_min,
+        xMax: sentinel.x_max,
+        yMax: sentinel.y_max,
+    };
+    c_abi::FT_Outline_Get_CBox(ptr::null(), &mut cbox);
+    let mut points = [c_abi::FT_Vector { x: 17, y: -23 }];
+    let mut tags = [1u8];
+    let mut contours = [0u16];
+    let outline = c_abi::FT_Outline {
+        n_contours: 1,
+        n_points: 1,
+        points: points.as_mut_ptr(),
+        tags: tags.as_mut_ptr(),
+        contours: contours.as_mut_ptr(),
+        flags: 0,
+    };
+    c_abi::FT_Outline_Get_CBox(&outline, ptr::null_mut());
+    Ok(outline_get_cbox_null_inputs_output(
+        bbox_from_c_bbox(cbox),
+        false,
+    ))
+}
+
+fn wasm_outline_get_cbox_null_inputs(params: &Value) -> Result<RunOutput, String> {
+    let sentinel = outline_get_cbox_sentinel(params)?;
+    let mut cbox = wasm_abi::FontdoneWasmBBox {
+        xMin: sentinel.x_min,
+        yMin: sentinel.y_min,
+        xMax: sentinel.x_max,
+        yMax: sentinel.y_max,
+    };
+    wasm_abi::fontdone_wasm_outline_get_cbox(ptr::null(), &mut cbox);
+    let mut points = [wasm_abi::FontdoneWasmVector { x: 17, y: -23 }];
+    let mut tags = [1u8];
+    let mut contours = [0u16];
+    let outline = wasm_abi::FontdoneWasmOutline {
+        n_contours: 1,
+        n_points: 1,
+        points: points.as_mut_ptr(),
+        tags: tags.as_mut_ptr(),
+        contours: contours.as_mut_ptr(),
+        flags: 0,
+    };
+    wasm_abi::fontdone_wasm_outline_get_cbox(&outline, ptr::null_mut());
+    Ok(outline_get_cbox_null_inputs_output(
+        bbox_from_wasm_public_bbox(cbox),
+        false,
+    ))
 }
 
 fn outline_operation_output(
@@ -14563,7 +14720,14 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
             require_path(output, "/bbox", label, case)?;
             require_path(output, "/cbox", label, case)
         }
-        "outline_cbox" => require_path(output, "/cbox", label, case),
+        "outline_cbox" => {
+            if output.get("cbox_after").is_some() {
+                require_path(output, "/cbox_after", label, case)?;
+                require_path(output, "/null_acbox_write", label, case)
+            } else {
+                require_path(output, "/cbox", label, case)
+            }
+        }
         "glyph_cbox" => require_path(output, "/boxes", label, case),
         "glyph_to_bitmap" => {
             require_path(output, "/format", label, case)?;
