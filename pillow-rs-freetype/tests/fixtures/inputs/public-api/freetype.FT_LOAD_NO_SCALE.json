@@ -73,7 +73,8 @@
           "load_flags": [
             "FT_LOAD_NO_SCALE",
             "FT_LOAD_RENDER"
-          ]
+          ],
+          "assert_api_load_glyph_agrees": true
         }
       },
       "classifiers": [

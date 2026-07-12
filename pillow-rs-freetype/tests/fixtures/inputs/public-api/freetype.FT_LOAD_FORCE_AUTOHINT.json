@@ -3410,7 +3410,8 @@
           "glyph_index": {
             "from_char_code": 2325
           },
-          "glyph_name": "Devanagari ka"
+          "glyph_name": "Devanagari ka",
+          "assert_api_load_glyph_agrees": true
         }
       },
       "classifiers": [

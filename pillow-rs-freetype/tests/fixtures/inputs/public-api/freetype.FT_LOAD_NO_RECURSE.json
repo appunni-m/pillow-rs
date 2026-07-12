@@ -78,7 +78,8 @@
           "glyph_index": {
             "from_char_code": 192
           },
-          "glyph_name": "Agrave"
+          "glyph_name": "Agrave",
+          "assert_api_load_glyph_agrees": true
         }
       },
       "classifiers": [

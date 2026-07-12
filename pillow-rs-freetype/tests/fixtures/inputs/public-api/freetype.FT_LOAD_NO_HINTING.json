@@ -149,7 +149,8 @@
           "glyph_index": {
             "from_char_code": 65
           },
-          "glyph_name": "A"
+          "glyph_name": "A",
+          "assert_api_load_glyph_agrees": true
         }
       },
       "classifiers": [

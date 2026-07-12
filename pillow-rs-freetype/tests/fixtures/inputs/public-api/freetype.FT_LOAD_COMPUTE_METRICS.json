@@ -67,7 +67,8 @@
               "face_index": 0,
               "pixel_size": 20,
               "load_flags": ["FT_LOAD_DEFAULT"],
-              "glyph_index": { "from_char_code": 65 }
+              "glyph_index": { "from_char_code": 65 },
+              "assert_api_load_glyph_agrees": true
             },
             "coverage": ["tt/hdmx:backward-compatibility-suppresses-device-width"]
           },
@@ -80,7 +81,8 @@
               "face_index": 0,
               "pixel_size": 20,
               "load_flags": ["FT_LOAD_COMPUTE_METRICS"],
-              "glyph_index": { "from_char_code": 65 }
+              "glyph_index": { "from_char_code": 65 },
+              "assert_api_load_glyph_agrees": true
             },
             "coverage": ["tt/hdmx:compute-metrics-suppresses-device-width"]
           },

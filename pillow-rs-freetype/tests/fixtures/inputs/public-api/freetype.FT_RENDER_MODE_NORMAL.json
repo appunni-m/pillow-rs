@@ -71,7 +71,9 @@
               "char_code": 65,
               "load_flags": 0,
               "render_mode": "FT_RENDER_MODE_NORMAL",
-              "representative_load_target": "FT_LOAD_TARGET_NORMAL"
+              "representative_load_target": "FT_LOAD_TARGET_NORMAL",
+              "font_render_text": "A",
+              "assert_font_render_mode_agrees": true
             },
             "coverage": [
               "render_glyph:explicit-variant-1"
