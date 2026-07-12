@@ -540,6 +540,26 @@
             ]
           },
           {
+            "id": "script-latin-double-top",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 469,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:double-top-multi-contour"
+            ]
+          },
+          {
             "id": "script-adlam",
             "assets": {
               "font": {
