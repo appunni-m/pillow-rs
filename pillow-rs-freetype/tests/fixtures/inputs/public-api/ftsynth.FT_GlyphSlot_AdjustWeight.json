@@ -4,6 +4,7 @@
   "manifest_cases": [
     "signature_and_void_contract",
     "outline_weight_adjusts_points_metrics_and_advances",
+    "degenerate_outline_weight_keeps_points_and_updates_metrics",
     "bitmap_weight_owns_emboldens_and_updates_top",
     "null_or_unsupported_format_noop"
   ],
@@ -160,6 +161,88 @@
         },
         "fixture_requirements": [
           "Use an outline glyph whose post-load slot has an outline format and active size metrics so xdelta and ydelta map to non-zero C strengths."
+        ]
+      }
+    },
+    {
+      "case_id": "ftsynth.FT_GlyphSlot_AdjustWeight.degenerate_outline_weight_keeps_points_and_updates_metrics",
+      "subject": "ftsynth.FT_GlyphSlot_AdjustWeight",
+      "case": "degenerate_outline_weight_keeps_points_and_updates_metrics",
+      "operation": "ftsynth.glyphslot_adjust_weight_after_load",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "ref",
+            "id": "fonts/glyf/hinter-control-matrix.ttf",
+            "role": "font",
+            "requires": "gid 44 is a non-empty zero-width outline whose FT_Outline_Get_Orientation result is FT_ORIENTATION_NONE"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "size_ppem": 20,
+          "load": {
+            "operation": "FT_Load_Glyph",
+            "glyph_index": 44,
+            "load_flags": [
+              "FT_LOAD_NO_HINTING",
+              "FT_LOAD_NO_BITMAP"
+            ]
+          },
+          "adjustments": [
+            {
+              "xdelta_16_16": 3277,
+              "ydelta_16_16": 3277
+            }
+          ],
+          "capture_before_after": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsynth",
+        "format:outline",
+        "operation:glyph-slot-mutation",
+        "coverage:orientation-none"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "slot_format": "FT_GLYPH_FORMAT_OUTLINE",
+          "outline_points_before": [
+            "FT_Vector"
+          ],
+          "outline_points_after": [
+            "FT_Vector"
+          ],
+          "outline_cbox_after": "FT_BBox",
+          "metrics_after": "FT_Glyph_Metrics",
+          "advance_after": "FT_Vector"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "slot_format",
+            "outline_points_before",
+            "outline_points_after",
+            "outline_cbox_after",
+            "metrics_after.width",
+            "metrics_after.height",
+            "metrics_after.horiAdvance",
+            "metrics_after.vertAdvance",
+            "metrics_after.horiBearingY",
+            "advance_after"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftoutln.c:911-1047",
+          "freetype/src/base/ftsynth.c:FT_GlyphSlot_AdjustWeight"
+        ],
+        "fixture_requirements": [
+          "Use a non-empty zero-width outline slot so FT_Outline_EmboldenXY returns for FT_ORIENTATION_NONE while FT_GlyphSlot_AdjustWeight still applies slot metric side effects."
         ]
       }
     },
