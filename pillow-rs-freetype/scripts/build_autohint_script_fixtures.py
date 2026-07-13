@@ -744,21 +744,30 @@ def build_cjk_tiny_stem() -> None:
 
 
 def build_cjk_snap_below_standard() -> None:
-    glyph_order = [".notdef", "space", "hani_standard", "hani_snap_below"]
+    glyph_order = [
+        ".notdef",
+        "space",
+        "hani_standard",
+        "hani_snap_below",
+        "hani_snap_far_below",
+    ]
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
         "space": empty_glyph(),
         "hani_standard": rectangle_glyph(100, 0, 200, 560),
         "hani_snap_below": rectangle_glyph(100, 0, 190, 560),
+        "hani_snap_far_below": rectangle_glyph(100, 0, 140, 560),
     }
     metrics = {
         ".notdef": (600, 80),
         "space": (300, 0),
         "hani_standard": (700, 100),
         "hani_snap_below": (700, 100),
+        "hani_snap_far_below": (700, 100),
     }
     cmap = {
         0x20: "space",
+        0x4E1E: "hani_snap_far_below",
         0x4ED6: "hani_snap_below",
         0x7530: "hani_standard",
     }
