@@ -94,6 +94,7 @@
           "load": {
             "operation": "FT_Load_Glyph",
             "glyph_indices": [
+              3,
               36,
               57
             ],
@@ -103,6 +104,10 @@
             ]
           },
           "adjustments": [
+            {
+              "xdelta_16_16": 0,
+              "ydelta_16_16": 0
+            },
             {
               "xdelta_16_16": 3277,
               "ydelta_16_16": 0
