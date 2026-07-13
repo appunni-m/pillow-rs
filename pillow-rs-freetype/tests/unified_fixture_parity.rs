@@ -8689,6 +8689,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(manager_reset_glyph_index_param(params)?.to_string());
             Ok(args)
         }
+        "ftoutln.get_orientation" => Ok(vec![
+            "--outline-get-orientation".to_string(),
+            case.case_id.clone(),
+        ]),
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => Ok(vec![
             "--outline-render".to_string(),
             if case.expect_error { "error" } else { "bitmap" }.to_string(),
@@ -9211,6 +9215,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_sbit_cache_lookup(&face, case)
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
+        "ftoutln.get_orientation" => rust_outline_orientation_runtime_output(case),
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => {
             outline_render_runtime_output(case)
         }
@@ -9811,6 +9816,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
+        "ftoutln.get_orientation" => c_outline_orientation_runtime_output(case),
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => {
             outline_render_runtime_output(case)
         }
@@ -10291,6 +10297,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
+        "ftoutln.get_orientation" => wasm_outline_orientation_runtime_output(case),
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => {
             outline_render_runtime_output(case)
         }
@@ -15647,6 +15654,175 @@ fn load_glyph_num_glyphs_invalid_argument_case(case: &InputCase) -> bool {
     case.case_id == "fterrdef.FT_Err_Invalid_Glyph_Index.load_glyph_rejects_out_of_range_index"
 }
 
+#[derive(Clone, Copy)]
+enum OrientationOutlineKind {
+    Null,
+    Empty,
+    Positive,
+    Negative,
+    Collapsed,
+    Oversized,
+    ZeroArea,
+}
+
+struct OrientationOutlineModel {
+    points: Vec<(i64, i64)>,
+    tags: Vec<u8>,
+    contours: Vec<u16>,
+}
+
+fn outline_orientation_cases(
+    case_id: &str,
+) -> Result<Vec<(&'static str, OrientationOutlineKind)>, String> {
+    if case_id.contains("FT_Outline_Get_Orientation.null_empty_and_area_sign") {
+        return Ok(vec![
+            ("null", OrientationOutlineKind::Null),
+            ("empty", OrientationOutlineKind::Empty),
+            ("positive", OrientationOutlineKind::Positive),
+            ("negative", OrientationOutlineKind::Negative),
+        ]);
+    }
+    if case_id.contains("FT_Outline_Get_Orientation.collapsed_and_oversized_return_none") {
+        return Ok(vec![
+            ("collapsed", OrientationOutlineKind::Collapsed),
+            ("oversized", OrientationOutlineKind::Oversized),
+        ]);
+    }
+    if case_id.contains("FT_ORIENTATION_TRUETYPE.null_and_empty_return_truetype") {
+        return Ok(vec![
+            ("null", OrientationOutlineKind::Null),
+            ("empty", OrientationOutlineKind::Empty),
+        ]);
+    }
+    if case_id.contains("FT_ORIENTATION_TRUETYPE.negative_area_returns_truetype")
+        || case_id.contains("FT_ORIENTATION_FILL_RIGHT.alias_matches_truetype_orientation")
+    {
+        return Ok(vec![("negative", OrientationOutlineKind::Negative)]);
+    }
+    if case_id.contains("FT_ORIENTATION_POSTSCRIPT.positive_area_returns_postscript") {
+        return Ok(vec![("positive", OrientationOutlineKind::Positive)]);
+    }
+    if case_id.contains("FT_ORIENTATION_NONE.returned_for_collapsed_or_zero_area") {
+        return Ok(vec![
+            ("collapsed", OrientationOutlineKind::Collapsed),
+            ("zero_area", OrientationOutlineKind::ZeroArea),
+        ]);
+    }
+    if case_id.contains("FT_ORIENTATION_NONE.returned_for_oversized_outline") {
+        return Ok(vec![("oversized", OrientationOutlineKind::Oversized)]);
+    }
+    Err(format!("unsupported outline orientation case {case_id}"))
+}
+
+fn orientation_outline_model(kind: OrientationOutlineKind) -> Option<OrientationOutlineModel> {
+    let points = match kind {
+        OrientationOutlineKind::Null => return None,
+        OrientationOutlineKind::Empty => Vec::new(),
+        OrientationOutlineKind::Positive => vec![(0, 0), (0, 64), (64, 64), (64, 0)],
+        OrientationOutlineKind::Negative => vec![(0, 0), (64, 0), (64, 64), (0, 64)],
+        OrientationOutlineKind::Collapsed => vec![(0, 0), (64, 0)],
+        OrientationOutlineKind::Oversized => {
+            let max = 0x1000000i64 + 64;
+            vec![(0, 0), (0, 64), (max, 64), (max, 0)]
+        }
+        OrientationOutlineKind::ZeroArea => vec![(0, 0), (64, 64), (0, 64), (64, 0)],
+    };
+    let contours = if points.is_empty() {
+        Vec::new()
+    } else {
+        vec![u16::try_from(points.len() - 1).unwrap_or(u16::MAX)]
+    };
+    let tags = vec![1; points.len()];
+    Some(OrientationOutlineModel {
+        points,
+        tags,
+        contours,
+    })
+}
+
+fn outline_orientation_output<F>(case: &InputCase, mut orientation: F) -> Result<RunOutput, String>
+where
+    F: FnMut(OrientationOutlineKind) -> i64,
+{
+    let rows = outline_orientation_cases(&case.case_id)?
+        .into_iter()
+        .map(|(label, kind)| {
+            json!({
+                "label": label,
+                "orientation": orientation(kind)
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(ok(json!({ "orientations": rows })))
+}
+
+fn rust_outline_orientation_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_orientation_output(case, |kind| {
+        let Some(model) = orientation_outline_model(kind) else {
+            return i64::from(FT_Outline_Get_Orientation(None));
+        };
+        let snapshot = FT_OutlineSnapshot {
+            points: model
+                .points
+                .into_iter()
+                .map(|(x, y)| FT_Vector { x, y })
+                .collect(),
+            tags: model.tags,
+            contours: model.contours,
+            flags: 0,
+        };
+        i64::from(FT_Outline_Get_Orientation(Some(&snapshot)))
+    })
+}
+
+fn c_outline_orientation_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_orientation_output(case, |kind| {
+        let Some(model) = orientation_outline_model(kind) else {
+            return i64::from(c_abi::FT_Outline_Get_Orientation(ptr::null()));
+        };
+        let mut points = model
+            .points
+            .into_iter()
+            .map(|(x, y)| c_abi::FT_Vector { x, y })
+            .collect::<Vec<_>>();
+        let mut tags = model.tags;
+        let mut contours = model.contours;
+        let outline = c_abi::FT_Outline {
+            n_contours: u16::try_from(contours.len()).unwrap_or(u16::MAX),
+            n_points: u16::try_from(points.len()).unwrap_or(u16::MAX),
+            points: points.as_mut_ptr(),
+            tags: tags.as_mut_ptr(),
+            contours: contours.as_mut_ptr(),
+            flags: 0,
+        };
+        i64::from(c_abi::FT_Outline_Get_Orientation(&outline))
+    })
+}
+
+fn wasm_outline_orientation_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_orientation_output(case, |kind| {
+        let Some(model) = orientation_outline_model(kind) else {
+            return i64::from(wasm_abi::fontdone_wasm_outline_get_orientation(ptr::null()));
+        };
+        let mut points = model
+            .points
+            .into_iter()
+            .map(|(x, y)| wasm_abi::FontdoneWasmVector { x, y })
+            .collect::<Vec<_>>();
+        let mut tags = model.tags;
+        let mut contours = model.contours;
+        let outline = wasm_abi::FontdoneWasmOutline {
+            n_contours: u16::try_from(contours.len()).unwrap_or(u16::MAX),
+            n_points: u16::try_from(points.len()).unwrap_or(u16::MAX),
+            points: points.as_mut_ptr(),
+            tags: tags.as_mut_ptr(),
+            contours: contours.as_mut_ptr(),
+            flags: 0,
+        };
+        i64::from(wasm_abi::fontdone_wasm_outline_get_orientation(&outline))
+    })
+}
+
 fn outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
     if case.expect_error {
         return Ok(error(FT_Err_Invalid_Argument));
@@ -18200,6 +18376,7 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
         "bool_result" => require_path(output, "/result", label, case),
         "advance_result" => require_path(output, "/advance", label, case),
         "advance_range" => require_path(output, "/advances", label, case),
+        "outline_orientation" => require_path(output, "/orientations", label, case),
         "error" => {
             if output.is_null() {
                 Ok(())
@@ -18351,6 +18528,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             "freetype.load_glyph_outline" => "outline_result",
             "ftbbox.outline_get_bbox" => "outline_bbox",
             "ftoutln.outline_get_cbox" => "outline_cbox",
+            "ftoutln.get_orientation" => "outline_orientation",
             "ftglyph.glyph_get_cbox" => "glyph_cbox",
             "ftcache.sbit_cache_lookup" => "cache_sbit_result",
             operation if operation.starts_with("freetype.face_macro") => "face_macro",

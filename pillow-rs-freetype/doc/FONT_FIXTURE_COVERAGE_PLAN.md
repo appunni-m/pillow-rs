@@ -2240,6 +2240,45 @@ The ftsynth row itself contributes one additional concrete public case plus +1
 covered line, +1 covered region, and +1 covered branch.
 `src/api.rs:1059` no longer appears in the full missing-line report.
 
+### Public Outline Orientation Route - 2026-07-13
+
+`FT_Outline_Get_Orientation` is now a maintained public parity route for the
+existing `ftoutln.get_orientation` manifest rows.  The route uses the pinned C
+oracle's `FT_Outline_Get_Orientation` over a compact deterministic outline
+model set, then compares the same null, empty, positive-area, negative-area,
+collapsed, oversized, and zero-area shapes through Rust FFI, C ABI, and WASM
+ABI.  The C and WASM wrappers stay thin: they only copy the raw outline record
+into the existing `FT_OutlineSnapshot` boundary and delegate to the core
+orientation helper.
+
+Focused verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftoutln.get_orientation
+```
+
+Result: `9 / 9` focused comparisons passed.  The route audit moved the eight
+`ftoutln.get_orientation` rows from `generic-fallback` to `real-parity`
+(`real-parity 3,442 -> 3,450`, `generic-fallback 924 -> 916`).
+
+Integrated counts after
+`make -C pillow-rs-freetype test-unified-condition-coverage`:
+
+| Measure | Count |
+|---|---:|
+| Logical public API cases | 4,165 |
+| Concrete explicit cases | 6,794 |
+| Runnable parity comparisons | 6,791 / 6,791 |
+| Pending cases | 3 |
+| Covered Rust lines | 17,008 / 18,897 (90.0037%) |
+| Rust region coverage | 24,444 / 27,182 (89.9272%) |
+| Rust branch/condition coverage | 4,035 / 4,736 (85.1985%) |
+| Rust function coverage | 1,104 / 1,258 (87.7583%) |
+
+Compared with the previous checkpoint this added +44 covered lines, +62
+covered regions, +4 covered branches, and +8 covered functions while adding
+one new missed defensive conversion line in `ffi/handles.rs`.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:

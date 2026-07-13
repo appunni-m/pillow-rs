@@ -33,6 +33,7 @@ pub type FT_Generic_Finalizer = FT_Pointer;
 pub type FT_Render_Mode = c_int;
 pub type FT_Pixel_Mode = c_int;
 pub type FT_Glyph_Format = c_int;
+pub type FT_Orientation = c_int;
 pub type FT_Sfnt_Tag = c_uint;
 pub type FT_Encoding = c_int;
 pub type FT_Size_Request_Type = c_int;

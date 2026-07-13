@@ -30,6 +30,7 @@ pub type FT_UShort = c_ushort;
 pub type FT_Render_Mode = c_int;
 pub type FT_Pixel_Mode = c_int;
 pub type FT_Glyph_Format = c_int;
+pub type FT_Orientation = c_int;
 pub type FT_Size_Request_Type = c_int;
 pub type FT_Encoding = c_int;
 pub type FT_Sfnt_Tag = c_uint;
@@ -1082,6 +1083,14 @@ pub extern "C" fn FT_Outline_Get_CBox(outline: *const FT_Outline, acbox: *mut FT
             yMax: bbox.yMax,
         };
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_Get_Orientation(outline: *const FT_Outline) -> FT_Orientation {
+    let Some(snapshot) = outline_snapshot_from_c(outline) else {
+        return rust_ffi::FT_ORIENTATION_TRUETYPE as FT_Orientation;
+    };
+    rust_ffi::FT_Outline_Get_Orientation(Some(&snapshot)) as FT_Orientation
 }
 
 #[unsafe(no_mangle)]
