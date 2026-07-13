@@ -148,23 +148,24 @@
       "expect_error": false,
       "inputs": {
         "assets": {
-          "bitmap_strike_font": {
+          "font": {
             "kind": "ref",
-            "id": "input/fonts/bitmap/embedded-strike.ttf",
+            "id": "fixtures/assets/fonts/sbit_gray_format1.ttf",
             "role": "font",
-            "status": "required_future_asset",
-            "requires": "face with embedded bitmap strike"
+            "requirements": "Compact scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray bitmap for glyph 1."
           }
         },
         "params": {
           "open": "FT_New_Memory_Face",
           "face_index": 0,
-          "select_size_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
           "load": {
             "operation": "FT_Load_Glyph",
             "glyph_indices": [
-              1,
-              2
+              1
             ],
             "load_flags": [
               "FT_LOAD_DEFAULT",
@@ -200,7 +201,7 @@
           ]
         },
         "fixture_requirements": [
-          "Add an embedded-bitmap strike fixture that loads bitmap slots without outline fallback."
+          "Uses the compact 20 ppem SBIT gray format-1 strike that loads bitmap slots without outline fallback."
         ]
       }
     },

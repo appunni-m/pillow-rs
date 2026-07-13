@@ -2524,12 +2524,12 @@ static int emit_macro_eval(const char* case_id) {
     return 2;
 }
 
-static void print_bitmap(FT_GlyphSlot slot) {
+static void print_bitmap_named(const char* name, FT_GlyphSlot slot) {
     long len = 0;
     if (slot->bitmap.buffer && slot->bitmap.rows > 0) {
         len = labs(slot->bitmap.pitch) * slot->bitmap.rows;
     }
-    printf("\"bitmap\":");
+    printf("\"%s\":", name);
     if (!slot->bitmap.buffer || len == 0) {
         printf("null");
         return;
@@ -2544,6 +2544,22 @@ static void print_bitmap(FT_GlyphSlot slot) {
            slot->bitmap_top);
     print_hex_bytes(slot->bitmap.buffer, len);
     printf("\"}");
+}
+
+static void print_bitmap(FT_GlyphSlot slot) {
+    print_bitmap_named("bitmap", slot);
+}
+
+static void print_bitmap_top_named(const char* name, FT_GlyphSlot slot) {
+    long len = 0;
+    if (slot->bitmap.buffer && slot->bitmap.rows > 0) {
+        len = labs(slot->bitmap.pitch) * slot->bitmap.rows;
+    }
+    if (!slot->bitmap.buffer || len == 0) {
+        printf("\"%s\":null", name);
+        return;
+    }
+    printf("\"%s\":%d", name, slot->bitmap_top);
 }
 
 static void print_slot_body(FT_GlyphSlot slot, FT_UInt glyph_index) {
@@ -2709,6 +2725,10 @@ static int print_glyphslot_weight_rows(FT_Face face, const char* rows_arg, int e
                ydelta);
         print_outline_points_named("outline_points_before", &face->glyph->outline);
         printf(",");
+        print_bitmap_named("bitmap_before", face->glyph);
+        printf(",");
+        print_bitmap_top_named("bitmap_top_before", face->glyph);
+        printf(",");
         print_metrics_named("metrics_before", face->glyph->metrics);
         printf(",");
         print_vector_named("advance_before", face->glyph->advance);
@@ -2726,6 +2746,10 @@ static int print_glyphslot_weight_rows(FT_Face face, const char* rows_arg, int e
         print_outline_points_named("outline_points_after", &face->glyph->outline);
         printf(",");
         print_bbox_named("outline_cbox_after", cbox);
+        printf(",");
+        print_bitmap_named("bitmap_after", face->glyph);
+        printf(",");
+        print_bitmap_top_named("bitmap_top_after", face->glyph);
         printf(",");
         print_metrics_named("metrics_after", face->glyph->metrics);
         printf(",");

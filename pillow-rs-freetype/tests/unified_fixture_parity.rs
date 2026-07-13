@@ -11912,6 +11912,10 @@ fn ftsynth_weight_row_json(row: FtsynthWeightRow, before: Value, after: Value) -
         "outline_points_before": before["outline_points"].clone(),
         "outline_points_after": after["outline_points"].clone(),
         "outline_cbox_after": after["outline_cbox"].clone(),
+        "bitmap_before": before["bitmap"].clone(),
+        "bitmap_after": after["bitmap"].clone(),
+        "bitmap_top_before": before["bitmap_top"].clone(),
+        "bitmap_top_after": after["bitmap_top"].clone(),
         "metrics_before": before["metrics"].clone(),
         "metrics_after": after["metrics"].clone(),
         "advance_before": before["advance"].clone(),
@@ -11929,11 +11933,28 @@ fn ftsynth_rust_slot_state(slot: &FT_GlyphSlot) -> Value {
             "xMax": slot.outline_cbox.xMax,
             "yMax": slot.outline_cbox.yMax
         }),
+        "bitmap": ftsynth_rust_bitmap_json(slot),
+        "bitmap_top": slot.bitmap.as_ref().map_or(Value::Null, |_| json!(slot.bitmap_top)),
         "metrics": glyph_metrics_fields_json(rust_metrics_fields(&slot.metrics)),
         "advance": {
             "x": slot.advance.x,
             "y": slot.advance.y
         }
+    })
+}
+
+fn ftsynth_rust_bitmap_json(slot: &FT_GlyphSlot) -> Value {
+    slot.bitmap.as_ref().map_or(Value::Null, |bitmap| {
+        json!({
+            "width": bitmap.width,
+            "rows": bitmap.rows,
+            "pitch": bitmap.pitch,
+            "pixel_mode": bitmap.pixel_mode,
+            "num_grays": bitmap.num_grays,
+            "left": slot.bitmap_left,
+            "top": slot.bitmap_top,
+            "buffer_hex": hex_bytes(&bitmap.buffer)
+        })
     })
 }
 
@@ -12940,11 +12961,28 @@ fn ftsynth_c_slot_state(slot: &c_abi::AbiSlotSnapshot) -> Value {
             "xMax": slot.outline_cbox.xMax,
             "yMax": slot.outline_cbox.yMax
         }),
+        "bitmap": ftsynth_c_bitmap_json(slot),
+        "bitmap_top": slot.bitmap.as_ref().map_or(Value::Null, |bitmap| json!(bitmap.top)),
         "metrics": glyph_metrics_fields_json(c_metrics_fields(&slot.metrics)),
         "advance": {
             "x": slot.advance.x,
             "y": slot.advance.y
         }
+    })
+}
+
+fn ftsynth_c_bitmap_json(slot: &c_abi::AbiSlotSnapshot) -> Value {
+    slot.bitmap.as_ref().map_or(Value::Null, |bitmap| {
+        json!({
+            "width": bitmap.width,
+            "rows": bitmap.rows,
+            "pitch": bitmap.pitch,
+            "pixel_mode": bitmap.pixel_mode,
+            "num_grays": bitmap.num_grays,
+            "left": bitmap.left,
+            "top": bitmap.top,
+            "buffer_hex": hex_bytes(&bitmap.buffer)
+        })
     })
 }
 
@@ -13654,11 +13692,28 @@ fn ftsynth_wasm_slot_state(slot: &wasm_abi::AbiSlotSnapshot) -> Value {
             "xMax": slot.outline_cbox.xMax,
             "yMax": slot.outline_cbox.yMax
         }),
+        "bitmap": ftsynth_wasm_bitmap_json(slot),
+        "bitmap_top": slot.bitmap.as_ref().map_or(Value::Null, |bitmap| json!(bitmap.top)),
         "metrics": glyph_metrics_fields_json(wasm_metrics_fields(&slot.metrics)),
         "advance": {
             "x": slot.advance.x,
             "y": slot.advance.y
         }
+    })
+}
+
+fn ftsynth_wasm_bitmap_json(slot: &wasm_abi::AbiSlotSnapshot) -> Value {
+    slot.bitmap.as_ref().map_or(Value::Null, |bitmap| {
+        json!({
+            "width": bitmap.width,
+            "rows": bitmap.rows,
+            "pitch": bitmap.pitch,
+            "pixel_mode": bitmap.pixel_mode,
+            "num_grays": bitmap.num_grays,
+            "left": bitmap.left,
+            "top": bitmap.top,
+            "buffer_hex": hex_bytes(&bitmap.buffer)
+        })
     })
 }
 

@@ -832,23 +832,24 @@
       "expect_error": false,
       "inputs": {
         "assets": {
-          "bitmap_strike_font": {
+          "font": {
             "kind": "ref",
-            "id": "input/fonts/bitmap/embedded-strike.ttf",
+            "id": "fixtures/assets/fonts/sbit_gray_format1.ttf",
             "role": "font",
-            "status": "required_future_asset",
-            "requires": "face with an embedded bitmap strike that loads FT_GLYPH_FORMAT_BITMAP glyph slots"
+            "requirements": "Compact scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray bitmap for glyph 1."
           }
         },
         "params": {
           "open": "FT_New_Memory_Face",
           "face_index": 0,
-          "select_size_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
           "load": {
             "operation": "FT_Load_Glyph",
             "glyph_indices": [
-              1,
-              2
+              1
             ],
             "load_flags": [
               "FT_LOAD_DEFAULT",
@@ -892,14 +893,14 @@
             "bitmap_after.width",
             "bitmap_after.pitch",
             "bitmap_after.pixel_mode",
-            "bitmap_after.buffer",
+            "bitmap_after.buffer_hex",
             "bitmap_top_after",
             "metrics_after",
             "advance_after"
           ]
         },
         "fixture_requirements": [
-          "Add an embedded-bitmap strike fixture where FT_Load_Glyph produces an owned or ownable bitmap slot."
+          "Uses the compact 20 ppem SBIT gray format-1 strike where FT_Load_Glyph produces an ownable bitmap slot."
         ]
       }
     },
