@@ -279,30 +279,48 @@
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts/sfnt/basic-ttf.ttf",
-            "role": "font",
-            "requirements": "Valid SFNT font without the requested fake table."
+        "variants": [
+          {
+            "id": "sfnt-missing-table",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/sfnt/basic-ttf.ttf",
+                "role": "font",
+                "requirements": "Valid SFNT font without the requested fake table."
+              }
+            },
+            "params": {
+              "missing_tag_hex": "0x5A5A5A5A",
+              "offset": 0,
+              "buffer_kind": "null",
+              "length_state": "zero"
+            },
+            "coverage": [
+              "sfnt-load-table:missing-table"
+            ]
           },
-          "non_sfnt_face": {
-            "kind": "ref",
-            "id": "input/fonts/non-sfnt/type1-basic.pfb",
-            "role": "font",
-            "requirements": "Non-SFNT face for invalid face handle path."
+          {
+            "id": "type1-non-sfnt-invalid-face",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/type1/attach-afm-base.pfb",
+                "role": "font",
+                "requirements": "Non-SFNT Type 1 face for invalid face handle path."
+              }
+            },
+            "params": {
+              "missing_tag_hex": "0x68656164",
+              "offset": 0,
+              "buffer_kind": "null",
+              "length_state": "zero"
+            },
+            "coverage": [
+              "sfnt-load-table:non-sfnt-invalid-face"
+            ]
           }
-        },
-        "params": {
-          "missing_tag_hex": "0x5A5A5A5A",
-          "face_kinds": [
-            "null",
-            "non_sfnt"
-          ],
-          "offset": 0,
-          "buffer_kind": "null",
-          "length_state": "zero"
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -317,8 +335,8 @@
       "expectation": {
         "status": "build_dependent",
         "fixture_requirements": [
-          "Missing asset: input/fonts/sfnt/basic-ttf.ttf for missing-table probe.",
-          "Missing asset: input/fonts/non-sfnt/type1-basic.pfb for non-SFNT face probe."
+          "input/fonts/sfnt/basic-ttf.ttf for missing-table probe.",
+          "input/fonts/type1/attach-afm-base.pfb for non-SFNT face probe."
         ],
         "output_shape": {
           "error": "FT_Error",
