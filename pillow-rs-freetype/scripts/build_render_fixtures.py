@@ -18,6 +18,7 @@ GLYPH_ORDER = [
     "horizontal_dropout_guard",
     "vertical_dropout_guard",
     "conic_bbox_extrema",
+    "subpixel_short_box",
 ]
 
 
@@ -73,18 +74,34 @@ def conic_bbox_extrema_glyph():
     return pen.glyph()
 
 
+def subpixel_short_box_glyph():
+    pen = TTGlyphPen(None)
+
+    # At 16 ppem this is one 26.6 unit tall: enough to create mono profile
+    # state, but below the first drawable scan center in the normal sweep.
+    pen.moveTo((0, 0))
+    pen.lineTo((128, 0))
+    pen.lineTo((128, 1))
+    pen.lineTo((0, 1))
+    pen.closePath()
+
+    return pen.glyph()
+
+
 def build_render_coverage() -> None:
     glyphs = {
         ".notdef": empty_glyph(),
         "horizontal_dropout_guard": horizontal_dropout_guard_glyph(),
         "vertical_dropout_guard": vertical_dropout_guard_glyph(),
         "conic_bbox_extrema": conic_bbox_extrema_glyph(),
+        "subpixel_short_box": subpixel_short_box_glyph(),
     }
     metrics = {
         ".notdef": (256, 0),
         "horizontal_dropout_guard": (256, 0),
         "vertical_dropout_guard": (256, 0),
         "conic_bbox_extrema": (640, 0),
+        "subpixel_short_box": (256, 0),
     }
 
     builder = FontBuilder(UNITS_PER_EM, isTTF=True)
@@ -94,6 +111,7 @@ def build_render_coverage() -> None:
             0xE100: "horizontal_dropout_guard",
             0xE101: "vertical_dropout_guard",
             0xE102: "conic_bbox_extrema",
+            0xE103: "subpixel_short_box",
         }
     )
     builder.setupGlyf(glyphs)
