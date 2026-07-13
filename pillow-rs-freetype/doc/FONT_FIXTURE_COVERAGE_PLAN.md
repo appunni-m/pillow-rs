@@ -839,11 +839,12 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,320 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,389 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 8 | `FT_New_Size`, `FT_Done_Size`, `FT_Activate_Size`, `FT_OpenType_Validate`, and `FT_OpenType_Free` null rows execute pinned C oracle status checks and the Rust FFI wrapper validation path; size lifecycle success remains separate. |
+| Wrapper null-validation route | 1 | `FT_Get_SubGlyph_Info` null-output rows intentionally validate the thin Rust/C/WASM wrapper guard after a native-C proof row establishes the composite slot state. |
 | Compile/header/scalar contract | 2,229 | Valid for ABI/header contracts, not runtime core coverage. |
-| Shape-incomplete fallback | 0 | Closed by classifying all formerly incomplete rows as explicit pending work. |
-| Generic modeled fallback | 942 | Classify operation-by-operation as real parity, unsupported, or pending. |
+| Shape-incomplete fallback | 6 | Convert these residual declarations to executable variants or explicit pending rows. |
+| Generic modeled fallback | 930 | Classify operation-by-operation as real parity, unsupported, or pending. |
 | Generic modeled error fallback | 141 | Replace implemented surfaces with real error-path execution. |
 | Null-error fallback | 21 | Keep only exact null-handle probes; route implemented null cases directly. |
 | Void fallback | 2 | Replace with real null/noop wrapper rows or classify as void API contract. |
@@ -852,10 +853,10 @@ Current route-audit totals:
 | Explicit unsupported stubs | 12 | Implement or keep visibly unsupported; do not count as coverage. |
 | Pending core implementation | 10 | Named-instance Adobe MM, `FT_MM_Var`, `gvar`/HVAR, live non-SFNT face support, synthetic unloaded/unsupported slot states, compact overlap rendering, compact sbit missing-bitmap fixtures, and MVAR table variation rows remain pending. |
 
-The first R0 closure bucket was the 6 shape-incomplete rows because these are
-usually JSON/input fixes rather than new core features. As of the 2026-07-12
-route audit, this bucket is closed: none of the rows are still silent
-shape-incomplete fallbacks.
+The remaining R0 closure bucket is the 6 shape-incomplete rows because these are
+usually JSON/input fixes rather than new core features. Keep them visible until
+each row is converted to an executable public variant or an explicit pending
+case with a named blocker.
 
 | Operation | Rows | First action |
 |---|---:|---|
@@ -1903,10 +1904,12 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-13 | Ftsynth zero-strength outline row | Existing `FT_GlyphSlot_AdjustWeight.outline_weight_adjusts_points_metrics_and_advances` now includes DejaVuSans glyph 3 and a zero 16.16 adjustment in the explicit row set. The zero row proves FreeType's no-strength outline embolden return through the existing C-oracle-backed Rust FFI, C ABI, and WASM ABI route, while glyph 3 keeps empty-outline metric side effects visible in the same public case. This adds no font bytes and no concrete cases; runtime comparison remains 6,741 / 6,741 with four explicit pending rows. Refreshed condition coverage is 16,192 / 18,080 lines, 23,243 / 25,910 regions, 3,896 / 4,638 branches, and 1,021 / 1,147 functions; missed source lines drop by one from the previous checkpoint |
 | 2026-07-13 | Ftsynth orientation-none outline row | `FT_GlyphSlot_AdjustWeight` adds one manifest-backed explicit case over existing `fonts/glyf/hinter-control-matrix.ttf` gid 44, a non-empty zero-width outline. Pinned C, Rust FFI, C ABI, and WASM ABI all keep outline points unchanged after `FT_Outline_EmboldenXY` reaches `FT_ORIENTATION_NONE`, while the public glyph-slot helper still applies metric and advance side effects. This adds no font bytes and one real-parity concrete case; runtime comparison is 6,742 / 6,742 with four explicit pending rows. Refreshed condition coverage is 16,194 / 18,080 lines, 23,245 / 25,910 regions, 3,898 / 4,638 branches, and 1,021 / 1,147 functions; route audit reports 6,746 concrete cases, 3,386 real-parity routes, and zero implicit rows |
 | 2026-07-13 | Ftsynth vertical-advance outline row | `FT_GlyphSlot_AdjustWeight` adds one manifest-backed explicit case over existing `input/fonts/DejaVuSans.ttf` gid 36 with `FT_LOAD_VERTICAL_LAYOUT`. Pinned C, Rust FFI, C ABI, and WASM ABI agree that the loaded public advance vector is vertical before ydelta is applied, covering the public slot `advance.y` mutation without a glyph loop or new font bytes. Runtime comparison is 6,743 / 6,743 with four explicit pending rows. Refreshed condition coverage is 16,195 / 18,080 lines, 23,247 / 25,910 regions, 3,899 / 4,638 branches, and 1,021 / 1,147 functions; route audit reports 6,747 concrete cases, 3,387 real-parity routes, and zero implicit rows |
+| 2026-07-13 | Ftsynth PostScript-orientation outline row | `FT_GlyphSlot_AdjustWeight` adds one manifest-backed explicit case over existing `fonts/glyf/hinter-control-matrix.ttf` gid 1, whose positive area selects FreeType's PostScript-orientation embolden branch in `FT_Outline_EmboldenXY`. Pinned C, Rust FFI, C ABI, and WASM ABI agree on mutated outline points, cbox, metrics, and advances. This adds no font bytes and one real-parity concrete case; runtime comparison is 6,744 / 6,744 with four explicit pending rows. Refreshed condition coverage is 16,198 / 18,080 lines, 23,250 / 25,910 regions, 3,902 / 4,638 branches, and 1,021 / 1,147 functions |
+| 2026-07-13 | Ftsynth mixed-winding degenerate segment row | `FT_GlyphSlot_AdjustWeight` adds one manifest-backed explicit case over existing `fonts/glyf/hinter-control-matrix.ttf` gid 43, whose mixed-winding outline includes a repeated-point degenerate contour. Pinned C, Rust FFI, C ABI, and WASM ABI agree while the embolden walker skips zero-length segment vectors through the public glyph-slot mutation route. This adds no font bytes and one real-parity concrete case; runtime comparison is 6,745 / 6,745 with four explicit pending rows. Refreshed condition coverage is 16,200 / 18,080 lines, 23,255 / 25,910 regions, 3,905 / 4,638 branches, and 1,021 / 1,147 functions; route audit reports 6,749 concrete cases, 3,389 real-parity routes, and zero implicit rows |
 
 ## Residual Coverage Classification - 2026-07-13
 
-Fresh `test-unified-condition-coverage` still reports 1,885 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,880 uncovered core
 source lines. The current split is:
 
 | Bucket | Evidence | Action |
