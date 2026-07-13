@@ -943,12 +943,21 @@ fn embolden_rendered_bitmap(bitmap: &mut RenderedBitmap, x_pixels: i32, y_pixels
     }
     match bitmap.pixel_mode {
         PixelMode::Gray => embolden_8bit_positive_pitch_bitmap(bitmap, x_pixels, y_pixels),
-        PixelMode::Mono
-        | PixelMode::Gray2
-        | PixelMode::Gray4
-        | PixelMode::Lcd
-        | PixelMode::LcdV
-        | PixelMode::Bgra => false,
+        PixelMode::Mono => embolden_mono_positive_pitch_bitmap(bitmap, x_pixels.min(8), y_pixels),
+        // FreeType `src/base/ftbitmap.c:313-333` converts packed 2/4-bit
+        // bitmaps to 8-bit gray before applying the same embolden loop.
+        PixelMode::Gray2 => {
+            convert_packed_gray_bitmap(bitmap, 2, 4)
+                && embolden_8bit_positive_pitch_bitmap(bitmap, x_pixels, y_pixels)
+        }
+        PixelMode::Gray4 => {
+            convert_packed_gray_bitmap(bitmap, 4, 16)
+                && embolden_8bit_positive_pitch_bitmap(bitmap, x_pixels, y_pixels)
+        }
+        // FreeType returns success for color glyphs without mutating bitmap
+        // bytes, then ftsynth still applies slot metric/top side effects.
+        PixelMode::Bgra => true,
+        PixelMode::Lcd | PixelMode::LcdV => false,
     }
 }
 
@@ -1034,6 +1043,159 @@ fn embolden_8bit_positive_pitch_bitmap(
     bitmap.width = width;
     bitmap.rows = rows;
     true
+}
+
+fn convert_packed_gray_bitmap(
+    bitmap: &mut RenderedBitmap,
+    bits_per_pixel: usize,
+    num_grays: u16,
+) -> bool {
+    let (Ok(width), Ok(rows), Ok(pitch)) = (
+        usize::try_from(bitmap.width),
+        usize::try_from(bitmap.rows),
+        usize::try_from(bitmap.pitch),
+    ) else {
+        return false;
+    };
+    let Ok(width_i32) = i32::try_from(width) else {
+        return false;
+    };
+    let Some(bits_per_row) = width.checked_mul(bits_per_pixel) else {
+        return false;
+    };
+    let Some(row_bytes) = bits_per_row.checked_add(7).map(|bits| bits >> 3) else {
+        return false;
+    };
+    let Some(source_len) = pitch.checked_mul(rows) else {
+        return false;
+    };
+    let Some(new_len) = width.checked_mul(rows) else {
+        return false;
+    };
+    if pitch < row_bytes || bitmap.buffer.len() < source_len {
+        return false;
+    }
+
+    let mut new_buffer = vec![0; new_len];
+    let mask = ((1u16 << bits_per_pixel) - 1) as u8;
+    for row in 0..rows {
+        let src_row = row * pitch;
+        let dst_row = row * width;
+        for x in 0..width {
+            let bit_offset = x * bits_per_pixel;
+            let byte = bitmap.buffer[src_row + bit_offset / 8];
+            let shift = 8 - bits_per_pixel - bit_offset % 8;
+            new_buffer[dst_row + x] = (byte >> shift) & mask;
+        }
+    }
+
+    bitmap.buffer = new_buffer;
+    bitmap.pitch = width_i32;
+    bitmap.pixel_mode = PixelMode::Gray;
+    bitmap.num_grays = num_grays;
+    true
+}
+
+fn embolden_mono_positive_pitch_bitmap(
+    bitmap: &mut RenderedBitmap,
+    x_pixels: usize,
+    y_pixels: usize,
+) -> bool {
+    let (Ok(width), Ok(rows), Ok(pitch)) = (
+        usize::try_from(bitmap.width),
+        usize::try_from(bitmap.rows),
+        usize::try_from(bitmap.pitch),
+    ) else {
+        return false;
+    };
+    let Some(row_bytes) = width.checked_add(7).map(|value| value >> 3) else {
+        return false;
+    };
+    let Some(source_len) = pitch.checked_mul(rows) else {
+        return false;
+    };
+    if pitch < row_bytes || bitmap.buffer.len() < source_len {
+        return false;
+    }
+    let Some(new_width) = width.checked_add(x_pixels) else {
+        return false;
+    };
+    let Some(new_pitch) = new_width.checked_add(7).map(|value| value >> 3) else {
+        return false;
+    };
+
+    if y_pixels == 0 && new_pitch <= pitch {
+        let bit_last = new_width;
+        for row in 0..rows {
+            zero_mono_padding(&mut bitmap.buffer, row * pitch, pitch, bit_last);
+        }
+    } else {
+        let Some(new_rows) = rows.checked_add(y_pixels) else {
+            return false;
+        };
+        let Some(new_len) = new_rows.checked_mul(new_pitch) else {
+            return false;
+        };
+        let Ok(new_pitch_i32) = i32::try_from(new_pitch) else {
+            return false;
+        };
+        let mut new_buffer = vec![0; new_len];
+        for row in 0..rows {
+            let src = row * pitch;
+            let dst = (row + y_pixels) * new_pitch;
+            new_buffer[dst..dst + row_bytes].copy_from_slice(&bitmap.buffer[src..src + row_bytes]);
+        }
+        bitmap.buffer = new_buffer;
+        bitmap.pitch = new_pitch_i32;
+    }
+
+    let pitch = usize::try_from(bitmap.pitch).unwrap_or(new_pitch);
+    for row in 0..rows {
+        let row_start = (row + y_pixels) * pitch;
+        for x in (0..pitch).rev() {
+            let source = bitmap.buffer[row_start + x];
+            for i in 1..=x_pixels {
+                bitmap.buffer[row_start + x] |= source >> i;
+                if x > 0 {
+                    bitmap.buffer[row_start + x] |= bitmap.buffer[row_start + x - 1] << (8 - i);
+                }
+            }
+        }
+        for y in 1..=y_pixels {
+            let dst = row_start - pitch * y;
+            for i in 0..pitch {
+                bitmap.buffer[dst + i] |= bitmap.buffer[row_start + i];
+            }
+        }
+    }
+
+    let (Ok(x_pixels), Ok(y_pixels)) = (u32::try_from(x_pixels), u32::try_from(y_pixels)) else {
+        return false;
+    };
+    let (Some(width), Some(rows)) = (
+        bitmap.width.checked_add(x_pixels),
+        bitmap.rows.checked_add(y_pixels),
+    ) else {
+        return false;
+    };
+    bitmap.width = width;
+    bitmap.rows = rows;
+    true
+}
+
+fn zero_mono_padding(buffer: &mut [u8], row_start: usize, pitch: usize, bit_last: usize) {
+    let bit_width = pitch * 8;
+    if bit_last >= bit_width {
+        return;
+    }
+
+    let mut byte_index = bit_last >> 3;
+    let shift = bit_last & 7;
+    if shift > 0 {
+        buffer[row_start + byte_index] &= (0xFF00u16 >> shift) as u8;
+        byte_index += 1;
+    }
+    buffer[row_start + byte_index..row_start + pitch].fill(0);
 }
 
 fn transform_outline_points(
