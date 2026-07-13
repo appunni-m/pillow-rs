@@ -1007,6 +1007,84 @@ def build_digit_notdef_cmap() -> None:
     font.save(OUT_DIR / "digit-notdef-cmap.ttf")
 
 
+def build_latin_standard_fallbacks() -> None:
+    fallback_cases = [
+        (
+            "latin-missing-standard.ttf",
+            "Autohint Latin Missing Standard",
+            {
+                ".notdef": rectangle_glyph(80, -120, 520, 720),
+                "space": empty_glyph(),
+                "latin_A": rectangle_glyph(100, 0, 540, 680),
+            },
+            {
+                ".notdef": (600, 80),
+                "space": (300, 0),
+                "latin_A": (700, 100),
+            },
+            {
+                0x20: "space",
+                0x41: "latin_A",
+            },
+            [".notdef", "space", "latin_A"],
+        ),
+        (
+            "latin-empty-standard.ttf",
+            "Autohint Latin Empty Standard",
+            {
+                ".notdef": rectangle_glyph(80, -120, 520, 720),
+                "space": empty_glyph(),
+                "latin_o_empty": empty_glyph(),
+                "latin_A": rectangle_glyph(100, 0, 540, 680),
+            },
+            {
+                ".notdef": (600, 80),
+                "space": (300, 0),
+                "latin_o_empty": (620, 0),
+                "latin_A": (700, 100),
+            },
+            {
+                0x20: "space",
+                0x41: "latin_A",
+                0x6F: "latin_o_empty",
+            },
+            [".notdef", "space", "latin_o_empty", "latin_A"],
+        ),
+    ]
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    for filename, family, glyphs, metrics, cmap, glyph_order in fallback_cases:
+        font = FontBuilder(UNITS_PER_EM, isTTF=True)
+        font.setupGlyphOrder(glyph_order)
+        font.setupCharacterMap(cmap)
+        font.setupGlyf(glyphs)
+        font.setupHorizontalMetrics(metrics)
+        font.setupHorizontalHeader(ascent=820, descent=-220)
+        font.setupNameTable(
+            {
+                "familyName": family,
+                "styleName": "Regular",
+                "uniqueFontIdentifier": f"{family} Regular",
+                "fullName": f"{family} Regular",
+                "psName": family.replace(" ", "") + "-Regular",
+                "version": "Version 1.0",
+            }
+        )
+        font.setupOS2(
+            sTypoAscender=820,
+            sTypoDescender=-220,
+            usWinAscent=820,
+            usWinDescent=220,
+        )
+        font.setupPost()
+
+        head = font.font["head"]
+        head.created = 0
+        head.modified = 0
+        font.font.recalcTimestamp = False
+        font.save(OUT_DIR / filename)
+
+
 def main() -> None:
     build_script_coverage()
     build_cjk_empty_standard()
@@ -1019,6 +1097,7 @@ def main() -> None:
     build_cjk_round_stem_light()
     build_cjk_duplicate_edge()
     build_digit_notdef_cmap()
+    build_latin_standard_fallbacks()
 
 
 if __name__ == "__main__":
