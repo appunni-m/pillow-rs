@@ -1210,6 +1210,31 @@
             ]
           },
           {
+            "id": "render-coverage-vertical-dropout-guard-mono",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "glyph_index": 2,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "render/mono:vertical-dropout-alternate-set"
+            ]
+          },
+          {
             "id": "mono-geometry-gid-0",
             "assets": {
               "font": {
