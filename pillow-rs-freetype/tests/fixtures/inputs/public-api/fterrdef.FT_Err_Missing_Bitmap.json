@@ -92,6 +92,62 @@
             ]
           },
           {
+            "id": "sbits-only-no-bitmap",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_missing_bitmap.ttf",
+                "requirements": "Synthetic scalable SFNT bitmap strike used to prove FT_LOAD_SBITS_ONLY rejects incompatible no-bitmap flags before SBIT lookup."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/base/ftobjs.c:943-1177",
+              "internal_sbit_source": "freetype/src/truetype/ttgload.c:2401-2469",
+              "face_index": 0,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY",
+                "FT_LOAD_NO_BITMAP"
+              ],
+              "glyph_record": "FT_LOAD_SBITS_ONLY combined with FT_LOAD_NO_BITMAP"
+            },
+            "coverage": [
+              "sbit:sbits-only-no-bitmap-public-invalid-argument"
+            ]
+          },
+          {
+            "id": "sbits-only-no-scale",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_missing_bitmap.ttf",
+                "requirements": "Synthetic scalable SFNT bitmap strike used to prove FT_LOAD_SBITS_ONLY rejects incompatible no-scale flags before SBIT lookup."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/base/ftobjs.c:943-1177",
+              "internal_sbit_source": "freetype/src/truetype/ttgload.c:2401-2469",
+              "face_index": 0,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY",
+                "FT_LOAD_NO_SCALE"
+              ],
+              "glyph_record": "FT_LOAD_SBITS_ONLY combined with FT_LOAD_NO_SCALE"
+            },
+            "coverage": [
+              "sbit:sbits-only-no-scale-public-invalid-argument"
+            ]
+          },
+          {
             "id": "no-matching-strike",
             "assets": {
               "fixture": {

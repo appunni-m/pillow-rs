@@ -424,21 +424,28 @@ self-intersecting zero-area outline, selecting both through
 and zero-area orientation-none area-accumulator branch without implicit
 expansion. These rows keep the corpus explicit and preserve exact Rust FFI, C
 ABI, and WASM ABI parity.
+The latest SBIT public-error rows add two explicit
+`FT_LOAD_SBITS_ONLY` incompatible-flag variants over the existing compact
+`sbit_missing_bitmap.ttf` fixture: `FT_LOAD_SBITS_ONLY | FT_LOAD_NO_BITMAP` and
+`FT_LOAD_SBITS_ONLY | FT_LOAD_NO_SCALE`. Pinned C returns
+`FT_Err_Invalid_Argument` for both rows before SBIT lookup, and Rust FFI, C ABI,
+and WASM ABI prove the same public guard without adding bitmap decoding, font
+bytes, or implicit expansion.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,797 |
-| Additional grouped variants | 2,632 |
+| Concrete explicit cases | 6,799 |
+| Additional grouped variants | 2,634 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,794 |
-| Exact parity | 6,794 / 6,794 |
+| Runnable parity comparisons | 6,796 |
+| Exact parity | 6,796 / 6,796 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,016 / 18,901 (90.0270%) |
+| Covered Rust lines | 17,019 / 18,901 (90.0429%) |
 | Rust function coverage | 1,105 / 1,259 (87.7681%) |
 | Rust instantiation coverage | 1,108 / 1,262 (87.7971%) |
-| Rust region coverage | 24,447 / 27,180 (89.9448%) |
-| Rust branch/condition coverage | 4,036 / 4,730 (85.3277%) |
+| Rust region coverage | 24,448 / 27,180 (89.9485%) |
+| Rust branch/condition coverage | 4,038 / 4,730 (85.3700%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 155 |
 | Stored active font binaries | 112 files, 832 KiB |
@@ -475,7 +482,7 @@ Current largest uncovered buckets:
 | `src/ffi/handles.rs` | 1,839 / 1,872 | 333 / 368 | 203 / 204 | 2,492 / 2,540 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,352 / 1,379 | 374 / 416 | 40 / 43 | 2,740 / 2,945 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 893 / 941 | 381 / 426 | 18 / 19 | 1,187 / 1,247 | CJK topology rows in the compact multiscript fixture |
-| `src/api.rs` | 751 / 780 | 159 / 188 | 77 / 78 | 1,081 / 1,112 | Public API wrapper rows for render cache and glyph-slot surfaces |
+| `src/api.rs` | 754 / 780 | 161 / 188 | 77 / 78 | 1,082 / 1,112 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short
 physical table data plus truncated range arrays. The only remaining uncovered
@@ -1957,23 +1964,24 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-13 | Missing post-table public route correction | `build_post_fixtures.py` now emits `fonts/metadata/post-missing.ttf`, a compact generated SFNT with the optional `post` table removed. The `FT_Err_Post_Table_Missing` public input no longer uses stale generic-fallback assets; it calls the real `freetype.get_glyph_name` route for both absent-post and present-post controls. Pinned C returns top-level success with glyph-name status `FT_Err_Invalid_Argument` and clears only byte zero for the absent optional `post` service, so this row proves the error code 0x94 is not surfaced by `FT_Get_Glyph_Name`. Concrete cases stay at 6,794, coverage counts are unchanged, route-audit generic fallback drops from 926 to 924, and real-parity routes rise from 3,440 to 3,442 |
 | 2026-07-13 | Size lifecycle explicit variants and probe-face correction | `FT_Done_Size.remove_secondary_size_success` now has active-secondary and inactive-secondary variants, covering non-active size removal without a new manifest case. `FT_New_Size.create_secondary_size_success` now has normal-face and negative-face-index-probe variants. Pinned C proves negative `FT_New_Memory_Face` probes start with `face->size == NULL` but can later allocate and activate a size through `FT_New_Size`; Rust now models probe faces with an empty size list and gates size-setting on active-size presence rather than the probe flag. Focused `ftsizes.new_size_sequence` and `ftsizes.done_size_sequence` each pass `2 / 2`. Full condition coverage passes with 6,796 concrete cases, 6,793 / 6,793 runtime rows, three FTMM pending rows, 17,015 / 18,901 lines, 24,446 / 27,180 regions, 4,035 / 4,730 branches, 1,105 / 1,259 functions, and 1,108 / 1,262 instantiations. Route audit reports 3,452 real-parity rows and zero implicit cases |
 | 2026-07-13 | Explicit non-SFNT SFNT-load error row | `FT_Load_Sfnt_Table.missing_table_or_invalid_face_error` now has two explicit variants instead of one mixed declaration: an SFNT missing-table row and a Type 1 `input/fonts/type1/attach-afm-base.pfb` non-SFNT row. The new non-SFNT row calls pinned C, Rust FFI, C ABI, and WASM ABI through `sfnt.load_sfnt_table` and covers the Rust wrapper's `!font.is_sfnt()` `FT_Err_Invalid_Face_Handle` branch without changing code or comparison shape. Focused `sfnt.load_sfnt_table` parity passes 16 / 16. Full condition coverage passes with 6,797 concrete cases, 6,794 / 6,794 runtime rows, three FTMM pending rows, 17,016 / 18,901 lines, 24,447 / 27,180 regions, 4,036 / 4,730 branches, 1,105 / 1,259 functions, and 1,108 / 1,262 instantiations. Route audit reports 3,453 real-parity rows and zero implicit cases |
+| 2026-07-13 | SBIT incompatible flag public errors | `FT_Err_Missing_Bitmap.sbit_glyph_without_image` now includes two explicit variants for `FT_LOAD_SBITS_ONLY | FT_LOAD_NO_BITMAP` and `FT_LOAD_SBITS_ONLY | FT_LOAD_NO_SCALE` over the existing compact `sbit_missing_bitmap.ttf` fixture. Pinned C returns `FT_Err_Invalid_Argument` for both incompatible load-flag combinations before selecting an embedded bitmap strike; Rust FFI, C ABI, and WASM ABI prove the same public result without adding bitmap-success decoding. Focused `load_glyph` parity passes with 6,799 checked concrete cases and 348 load-glyph runtime rows. Full condition coverage passes with 6,799 concrete cases, 6,796 / 6,796 runtime rows, three FTMM pending rows, 17,019 / 18,901 lines, 24,448 / 27,180 regions, 4,038 / 4,730 branches, 1,105 / 1,259 functions, and 1,108 / 1,262 instantiations. Route audit reports 3,455 real-parity rows and zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-13
 
-Fresh `test-unified-condition-coverage` still reports 1,885 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,882 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,797 |
-| Runnable parity comparisons | 6,794 / 6,794 |
+| Concrete explicit cases | 6,799 |
+| Runnable parity comparisons | 6,796 / 6,796 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,016 / 18,901 (90.0270%) |
-| Rust region coverage | 24,447 / 27,180 (89.9448%) |
-| Rust branch/condition coverage | 4,036 / 4,730 (85.3277%) |
+| Covered Rust lines | 17,019 / 18,901 (90.0429%) |
+| Rust region coverage | 24,448 / 27,180 (89.9485%) |
+| Rust branch/condition coverage | 4,038 / 4,730 (85.3700%) |
 | Rust function coverage | 1,105 / 1,259 (87.7681%) |
-| Route audit split | real-parity 3,453; generic-fallback 916; raw-slot-null-validation 4; pending-core 10; shape-incomplete-fallback 0 |
+| Route audit split | real-parity 3,455; generic-fallback 916; raw-slot-null-validation 4; pending-core 10; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
