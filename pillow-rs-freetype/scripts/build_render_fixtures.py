@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "tests" / "fixtures" / "fonts" / "glyf"
 
 UNITS_PER_EM = 1024
-GLYPH_ORDER = [".notdef", "horizontal_dropout_guard"]
+GLYPH_ORDER = [".notdef", "horizontal_dropout_guard", "vertical_dropout_guard"]
 
 
 def empty_glyph():
@@ -39,19 +39,45 @@ def horizontal_dropout_guard_glyph():
     return pen.glyph()
 
 
+def vertical_dropout_guard_glyph():
+    pen = TTGlyphPen(None)
+
+    # Mirror the horizontal guard so the normal mono profile sweep sees the
+    # thin vertical dropout after already-set pixels in the same scan row.
+    for y in (48, 112):
+        pen.moveTo((0, y))
+        pen.lineTo((192, y))
+        pen.closePath()
+
+    pen.moveTo((64, 0))
+    pen.lineTo((80, 0))
+    pen.lineTo((80, 192))
+    pen.lineTo((64, 192))
+    pen.closePath()
+
+    return pen.glyph()
+
+
 def build_render_coverage() -> None:
     glyphs = {
         ".notdef": empty_glyph(),
         "horizontal_dropout_guard": horizontal_dropout_guard_glyph(),
+        "vertical_dropout_guard": vertical_dropout_guard_glyph(),
     }
     metrics = {
         ".notdef": (256, 0),
         "horizontal_dropout_guard": (256, 0),
+        "vertical_dropout_guard": (256, 0),
     }
 
     builder = FontBuilder(UNITS_PER_EM, isTTF=True)
     builder.setupGlyphOrder(GLYPH_ORDER)
-    builder.setupCharacterMap({0xE100: "horizontal_dropout_guard"})
+    builder.setupCharacterMap(
+        {
+            0xE100: "horizontal_dropout_guard",
+            0xE101: "vertical_dropout_guard",
+        }
+    )
     builder.setupGlyf(glyphs)
     builder.setupHorizontalMetrics(metrics)
     builder.setupHorizontalHeader(ascent=256, descent=0)
