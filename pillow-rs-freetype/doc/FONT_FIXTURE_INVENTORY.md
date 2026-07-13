@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 155 | 112 | 43 | 123 | 832 KiB |
+| Active fixtures | 156 | 113 | 43 | 124 | 834 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 7 | 7 | 0 | 7 | 193 KiB |
 
@@ -68,6 +68,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `233f86bc5e71` | 4.1 | 1 | `fonts/metrics/hhea-zero-win-fallback.ttf` | compact glyf with zero hhea and zero OS/2 typo metrics plus nonzero OS/2 Windows metrics; owns FreeType's final Windows metric fallback |
 | `6f630b9ef12c` | 17.3 | 1 | `fonts/metadata/style-bold-italic.ttf` | compact glyf, head macStyle bold+italic, OS/2 weight 700, post italic angle |
 | `767c9aeb5455` | 1.7 | 2 | `fonts/type1/simple-type1.pfb` | source-backed compact Type 1 fixture for live non-SFNT face routes |
+| `70bf9c7e3c78` | 1.7 | 1 | `fonts/type1/metadata-bold-invalid-bool.pfb` | source-backed compact Type 1 metadata probe with `Weight (Bold)` and an unrecognized `isFixedPitch` token; owns public constructor coverage for bold macStyle and boolean fallback parsing |
 | `81b1cc1baa0b` | 1.7 | 2 | `input/fonts/type1/attach-afm-base.pfb` | source-backed compact Type 1 fixture for live attach and non-TrueType patent control routes |
 | `5a2f6febcb80` | 754.2 | 3 | `input/fonts/generated/vertical/cjk-vertical-metrics.ttf` | broad glyf font with vhea/vmtx |
 | `f1ad285ec056` | 0.6 | 1 | `generated/sfnt/zero-units-per-em-autohint.ttf` | intentionally invalid units-per-em edge fixture |
