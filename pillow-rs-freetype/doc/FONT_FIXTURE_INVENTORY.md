@@ -67,7 +67,8 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `17f780c4bcbe` | 4.1 | 1 | `fonts/metrics/hhea-zero-typo-fallback.ttf` | compact glyf with zero hhea ascent/descent/lineGap and nonzero OS/2 typo metrics; owns FreeType's hhea-zero typo fallback for face and size metrics |
 | `233f86bc5e71` | 4.1 | 1 | `fonts/metrics/hhea-zero-win-fallback.ttf` | compact glyf with zero hhea and zero OS/2 typo metrics plus nonzero OS/2 Windows metrics; owns FreeType's final Windows metric fallback |
 | `6f630b9ef12c` | 17.3 | 1 | `fonts/metadata/style-bold-italic.ttf` | compact glyf, head macStyle bold+italic, OS/2 weight 700, post italic angle |
-| `b77a0b580098` | 0.6 | 2 | `fonts/type1/simple-type1.pfb` | focused binary Type 1 fixture |
+| `767c9aeb5455` | 1.7 | 2 | `fonts/type1/simple-type1.pfb` | source-backed compact Type 1 fixture for live non-SFNT face routes |
+| `81b1cc1baa0b` | 1.7 | 2 | `input/fonts/type1/attach-afm-base.pfb` | source-backed compact Type 1 fixture for live attach and non-TrueType patent control routes |
 | `5a2f6febcb80` | 754.2 | 3 | `input/fonts/generated/vertical/cjk-vertical-metrics.ttf` | broad glyf font with vhea/vmtx |
 | `f1ad285ec056` | 0.6 | 1 | `generated/sfnt/zero-units-per-em-autohint.ttf` | intentionally invalid units-per-em edge fixture |
 | `2cf2f480ecb6` | 12.3 | 1 | `input/fonts/LiberationSerif-Regular.ttf` | compact glyf, 131 glyphs, 17 Latin mappings |

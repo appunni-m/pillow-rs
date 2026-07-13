@@ -50,6 +50,7 @@ pub struct Font {
     pub data: Arc<FontData>,
     pub size_pt: f32,
     pub load_mode: LoadMode,
+    face_kind: FaceKind,
     /// Face-level global hinting data: per-glyph script assignment,
     /// lazy-computed per-style metrics (Latin, Greek, etc.).
     /// Matches FreeType's AF_FaceGlobals.
@@ -62,6 +63,197 @@ pub struct Font {
     /// Reusable raster scratch space for gray rasterizer passes.
     /// Avoids allocating scanline cell vectors on every glyph render.
     pub(crate) raster_scratch: std::cell::RefCell<crate::grays::RasterScratch>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FaceKind {
+    Sfnt,
+    Type1 { is_fixed_pitch: bool },
+}
+
+struct Type1Metadata {
+    font_name: String,
+    family_name: String,
+    style_name: String,
+    italic_angle: i16,
+    is_fixed_pitch: bool,
+    underline_position: i16,
+    underline_thickness: i16,
+    bbox: BBox,
+}
+
+fn type1_cleartext(data: &[u8]) -> Option<&[u8]> {
+    if data.len() >= 6 && data[0] == 0x80 && data[1] == 0x01 {
+        let len = u32::from_le_bytes([data[2], data[3], data[4], data[5]]) as usize;
+        let clear = data.get(6..6 + len)?;
+        return clear.starts_with(b"%!").then_some(clear);
+    }
+    data.starts_with(b"%!").then_some(data)
+}
+
+fn parse_type1_metadata(cleartext: &[u8]) -> Result<Type1Metadata, FontError> {
+    let text = std::str::from_utf8(cleartext)
+        .map_err(|_| FontError::InvalidFont("Type 1 clear-text dictionary is not UTF-8".into()))?;
+    let font_name = type1_name_token(text, "FontName")
+        .ok_or_else(|| FontError::InvalidFont("Type 1 missing FontName".into()))?;
+    let family_name = type1_string_value(text, "FamilyName").unwrap_or_else(|| font_name.clone());
+    let style_name = type1_string_value(text, "Weight").unwrap_or_else(|| "Regular".into());
+    let bbox =
+        type1_bbox(text).ok_or_else(|| FontError::InvalidFont("Type 1 missing FontBBox".into()))?;
+    Ok(Type1Metadata {
+        font_name,
+        family_name,
+        style_name,
+        italic_angle: type1_i16_value(text, "ItalicAngle").unwrap_or(0),
+        is_fixed_pitch: type1_bool_value(text, "isFixedPitch").unwrap_or(false),
+        underline_position: type1_i16_value(text, "UnderlinePosition").unwrap_or(0),
+        underline_thickness: type1_i16_value(text, "UnderlineThickness").unwrap_or(0),
+        bbox,
+    })
+}
+
+fn type1_font_data(data: &[u8], size_pt: f32, metadata: &Type1Metadata) -> Arc<FontData> {
+    let mac_style = u16::from(metadata.italic_angle != 0) << 1
+        | if matches!(metadata.style_name.as_str(), "Bold" | "Black") {
+            1u16
+        } else {
+            0u16
+        };
+    #[allow(clippy::arc_with_non_send_sync)]
+    let font_data = Arc::new(FontData {
+        raw_data: data.to_vec(),
+        face_offset: 0,
+        face_index: 0,
+        num_faces: 1,
+        table_directory: tt::TableDirectory {
+            records: Vec::new(),
+        },
+        cmap: tt::cmap::CmapTable::default(),
+        fvar: None,
+        gasp: None,
+        head: tt::head::HeadTable {
+            units_per_em: 1000,
+            x_min: i16_from_i32(metadata.bbox.x_min),
+            y_min: i16_from_i32(metadata.bbox.y_min),
+            x_max: i16_from_i32(metadata.bbox.x_max),
+            y_max: i16_from_i32(metadata.bbox.y_max),
+            index_to_loc_format: 0,
+            flags: 0,
+            mac_style,
+            lowest_rec_ppem: 0,
+        },
+        hhea: tt::hhea::HheaTable {
+            ascent: i16_from_i32(metadata.bbox.y_max),
+            descent: i16_from_i32(metadata.bbox.y_min),
+            line_gap: i16_from_i32(
+                1200i32.saturating_sub(metadata.bbox.y_max - metadata.bbox.y_min),
+            ),
+            advance_width_max: u16::try_from(metadata.bbox.x_max.max(0)).unwrap_or(u16::MAX),
+            num_hmetrics: 1,
+        },
+        hmtx: tt::hmtx::HmtxTable {
+            h_metrics: vec![tt::hmtx::LongHorMetric {
+                advance_width: u16::try_from(metadata.bbox.x_max.max(0)).unwrap_or(u16::MAX),
+                lsb: 0,
+            }],
+            left_side_bearings: Vec::new(),
+        },
+        maxp: tt::maxp::MaxpTable {
+            num_glyphs: 2,
+            ..tt::maxp::MaxpTable::default()
+        },
+        name: tt::name::NameTable {
+            format: 0,
+            family: metadata.family_name.clone(),
+            subfamily: metadata.style_name.clone(),
+            postscript_name: Some(metadata.font_name.clone()),
+            records: Vec::new(),
+            lang_tags: Vec::new(),
+        },
+        os2: None,
+        post: None,
+        vhea: None,
+        vmtx: None,
+        hdmx: None,
+        kern: None,
+        sbit: None,
+        loca_data: Vec::new(),
+        glyf_data: Vec::new(),
+        size_pt: std::cell::Cell::new(size_pt),
+        size_x_scale: std::cell::Cell::new(0),
+        size_y_scale: std::cell::Cell::new(0),
+        size_tt_scale: std::cell::Cell::new(0),
+        size_tt_ppem: std::cell::Cell::new(0),
+        size_tt_point_size: std::cell::Cell::new(0),
+        transform_xx: std::cell::Cell::new(0x1_0000),
+        transform_xy: std::cell::Cell::new(0),
+        transform_yx: std::cell::Cell::new(0),
+        transform_yy: std::cell::Cell::new(0x1_0000),
+        transform_dx: std::cell::Cell::new(0),
+        transform_dy: std::cell::Cell::new(0),
+        fpgm: None,
+        prep: None,
+        cvt: None,
+        glyph_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
+        self_arc: std::sync::OnceLock::new(),
+    });
+    let _ = font_data.self_arc.set(font_data.clone());
+    font_data
+}
+
+fn type1_value_tail<'a>(text: &'a str, key: &str) -> Option<&'a str> {
+    let marker = format!("/{key}");
+    let start = text.find(&marker)? + marker.len();
+    Some(text[start..].trim_start())
+}
+
+fn type1_name_token(text: &str, key: &str) -> Option<String> {
+    let tail = type1_value_tail(text, key)?;
+    let tail = tail.strip_prefix('/')?;
+    let end = tail.find(char::is_whitespace).unwrap_or(tail.len());
+    Some(tail[..end].to_string())
+}
+
+fn type1_string_value(text: &str, key: &str) -> Option<String> {
+    let tail = type1_value_tail(text, key)?;
+    let tail = tail.strip_prefix('(')?;
+    let end = tail.find(')')?;
+    Some(tail[..end].to_string())
+}
+
+fn type1_i16_value(text: &str, key: &str) -> Option<i16> {
+    type1_number_token(text, key)?.parse().ok()
+}
+
+fn type1_bool_value(text: &str, key: &str) -> Option<bool> {
+    let token = type1_number_token(text, key)?;
+    match token {
+        "true" => Some(true),
+        "false" => Some(false),
+        _ => None,
+    }
+}
+
+fn type1_number_token<'a>(text: &'a str, key: &str) -> Option<&'a str> {
+    let tail = type1_value_tail(text, key)?;
+    let end = tail.find(char::is_whitespace).unwrap_or(tail.len());
+    Some(&tail[..end])
+}
+
+fn type1_bbox(text: &str) -> Option<BBox> {
+    let tail = type1_value_tail(text, "FontBBox")?;
+    let close = if tail.starts_with('{') { '}' } else { ']' };
+    let tail = tail.strip_prefix('{').or_else(|| tail.strip_prefix('['))?;
+    let end = tail.find(close)?;
+    let mut values = tail[..end]
+        .split_whitespace()
+        .filter_map(|item| item.parse::<i32>().ok());
+    Some(BBox {
+        x_min: values.next()?,
+        y_min: values.next()?,
+        x_max: values.next()?,
+        y_max: values.next()?,
+    })
 }
 
 #[derive(Clone, Default)]
@@ -310,6 +502,21 @@ enum MetricsGridFit {
 }
 
 impl Font {
+    /// Load a FreeType-style memory face from raw bytes.
+    ///
+    /// This accepts the supported SFNT faces plus the compact Type 1
+    /// non-SFNT fixtures needed for public face/name error-path parity.
+    pub(crate) fn memory_face(
+        data: &[u8],
+        face_index: usize,
+        size_pt: f32,
+    ) -> Result<Self, FontError> {
+        if type1_cleartext(data).is_some() {
+            return Self::type1_face(data, face_index, size_pt);
+        }
+        Self::truetype_face(data, face_index, size_pt)
+    }
+
     /// Load a TrueType/OpenType font from raw bytes at a given point size.
     ///
     /// Parses all required tables eagerly. Matches `FT_New_Memory_Face` +
@@ -347,6 +554,43 @@ impl Font {
     /// `face_index` follows FreeType's zero-based face selection semantics.
     pub fn truetype_face(data: &[u8], face_index: usize, size_pt: f32) -> Result<Self, FontError> {
         Self::truetype_face_with_load_mode(data, face_index, size_pt, LoadMode::Default)
+    }
+
+    fn type1_face(data: &[u8], face_index: usize, size_pt: f32) -> Result<Self, FontError> {
+        if face_index != 0 {
+            return Err(FontError::InvalidFont(format!(
+                "face index {face_index} out of range for 1 face(s)"
+            )));
+        }
+        let cleartext = type1_cleartext(data)
+            .ok_or_else(|| FontError::InvalidFont("missing Type 1 clear-text dictionary".into()))?;
+        let metadata = parse_type1_metadata(cleartext)?;
+        let font_data = type1_font_data(data, size_pt, &metadata);
+        let is_italic = metadata.italic_angle != 0;
+        let face_globals = crate::autohint::globals::FaceGlobals::new(font_data.clone(), is_italic);
+        let size_metrics = SizeMetrics::from_char_size(
+            i32_from_f32((size_pt * 64.0).round()),
+            i32_from_f32((size_pt * 64.0).round()),
+            72,
+            72,
+            font_data.as_ref(),
+        );
+        sync_active_size_metrics(&font_data, size_metrics);
+
+        Ok(Font {
+            data: font_data,
+            size_pt,
+            load_mode: LoadMode::Default,
+            face_kind: FaceKind::Type1 {
+                is_fixed_pitch: metadata.is_fixed_pitch,
+            },
+            face_globals,
+            is_italic,
+            size_metrics,
+            selected_charmap: 0,
+            bytecode_context: BytecodeContextCache::default(),
+            raster_scratch: std::cell::RefCell::new(crate::grays::RasterScratch::new()),
+        })
     }
 
     /// Load a specific face from raw SFNT/TTC bytes with an explicit load mode.
@@ -543,6 +787,7 @@ impl Font {
             data: font_data,
             size_pt,
             load_mode,
+            face_kind: FaceKind::Sfnt,
             face_globals,
             is_italic,
             size_metrics,
@@ -586,6 +831,11 @@ impl Font {
     /// Return the number of faces in the original font resource.
     pub fn num_faces(&self) -> usize {
         self.data.num_faces
+    }
+
+    /// Return whether this face uses the SFNT storage scheme.
+    pub(crate) fn is_sfnt(&self) -> bool {
+        self.face_kind == FaceKind::Sfnt
     }
 
     /// Return scalar face metadata.
@@ -634,6 +884,9 @@ impl Font {
 
     /// Equivalent to `FT_Get_Font_Format` for the supported SFNT wrappers.
     pub fn font_format(&self) -> &'static str {
+        if matches!(self.face_kind, FaceKind::Type1 { .. }) {
+            return "Type 1";
+        }
         let tag = u32::from_be_bytes([
             self.data.raw_data[self.data.face_offset],
             self.data.raw_data[self.data.face_offset + 1],
@@ -746,6 +999,19 @@ impl Font {
         const FT_FACE_FLAG_MULTIPLE_MASTERS: u32 = 1 << 8;
         const FT_FACE_FLAG_GLYPH_NAMES: u32 = 1 << 9;
         const FT_FACE_FLAG_HINTER: u32 = 1 << 11;
+
+        if let FaceKind::Type1 { is_fixed_pitch } = self.face_kind {
+            // FreeType `src/type1/t1objs.c:383-389` sets these flags for a
+            // loaded Type 1 face, adding FIXED_WIDTH only for `isFixedPitch`.
+            let mut flags = FT_FACE_FLAG_SCALABLE
+                | FT_FACE_FLAG_HORIZONTAL
+                | FT_FACE_FLAG_GLYPH_NAMES
+                | FT_FACE_FLAG_HINTER;
+            if is_fixed_pitch {
+                flags |= FT_FACE_FLAG_FIXED_WIDTH;
+            }
+            return flags;
+        }
 
         let mut flags = FT_FACE_FLAG_SCALABLE | FT_FACE_FLAG_SFNT | FT_FACE_FLAG_HORIZONTAL;
         if self
@@ -1066,6 +1332,9 @@ impl Font {
     }
 
     fn sfnt_table_read_base_and_len(&self, tag: u32) -> Result<(i64, usize), FontError> {
+        if !self.is_sfnt() {
+            return Err(FontError::InvalidFont("face is not SFNT".into()));
+        }
         if tag == 0 {
             return Ok((0, self.data.raw_data.len()));
         }
