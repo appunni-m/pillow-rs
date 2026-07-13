@@ -5369,10 +5369,10 @@ subjects:
       - id: value_matches_header
         description: Numeric value is exactly 157, matching FT_ERRORDEF_(Missing_Bitmap, 0x9D) in the pinned header.
       - id: sbit_glyph_without_image
-        description: Loading an embedded bitmap strike glyph with an empty EBDT/sbix image range returns FT_Err_Missing_Bitmap from ttsbit.c.
+        description: Loading a scalable SFNT embedded bitmap strike glyph with a failed internal SBIT lookup returns FT_Err_Invalid_Argument from TT_Load_Glyph while exercising the ttsbit.c Missing_Bitmap branch.
       - id: composite_sbit_missing_subglyph
-        description: A recursive embedded bitmap composite with a missing subglyph reports Invalid_Composite instead of Missing_Bitmap, preserving the C branch split.
-    # needs-input: operation=load_glyph or FT_Load_Char with FT_LOAD_COLOR/FT_LOAD_SBITS_ONLY against a synthetic SFNT bitmap strike; fixture_asset=fixtures/assets/fonts/sbit_missing_bitmap.ttf plus optional composite variant; params glyph with glyph_start==glyph_end, valid strike size selected by FT_Select_Size, and recursive composite missing subglyph; output shape=FT_Error, slot format/bitmap fields when any, and face/slot preservation; comparison=exact C oracle error 0x9D for direct missing image and exact non-0x9D branch for recursive composite.
+        description: A recursive scalable SFNT embedded bitmap composite with a missing or malformed component exercises the ttsbit.c composite split, then public TT_Load_Glyph reports FT_Err_Invalid_Argument for FT_LOAD_SBITS_ONLY.
+    # needs-input: operation=load_glyph or FT_Load_Char with FT_LOAD_COLOR/FT_LOAD_SBITS_ONLY against synthetic scalable SFNT bitmap strikes; fixture_asset=fixtures/assets/fonts/sbit_missing_bitmap.ttf plus compact branch variants; params glyph with equal image offsets, range misses, missing subtable data, unsupported index format, and recursive composite malformed/missing subglyphs; output shape=FT_Error and face/slot preservation; comparison=exact C oracle public FT_Err_Invalid_Argument while preserving internal SBIT branch coverage notes.
 
   - id: fterrdef.FT_Err_Missing_Chars_Field
     kind: error

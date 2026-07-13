@@ -63,27 +63,169 @@
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "fixture": {
-            "kind": "ref",
-            "role": "font_or_public_input",
-            "id": "fixtures/assets/fonts/sbit_missing_bitmap.ttf",
-            "requirements": "Synthetic SFNT bitmap strike whose EBDT/sbix glyph_start equals glyph_end for a selected strike glyph."
+        "variants": [
+          {
+            "id": "equal-offset",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_missing_bitmap.ttf",
+                "requirements": "Synthetic scalable SFNT bitmap strike whose EBLC index-format-1 glyph offsets are equal for glyph 1."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+              "internal_sbit_source": "freetype/src/sfnt/ttsbit.c:1298-1302",
+              "face_index": 0,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
+              ],
+              "glyph_record": "glyph_start == glyph_end"
+            },
+            "coverage": [
+              "sbit:index1-equal-offset-public-invalid-argument"
+            ]
+          },
+          {
+            "id": "no-matching-strike",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_no_matching_strike.ttf",
+                "requirements": "Synthetic scalable SFNT with a 19 ppem EBLC strike while the public load path requests 20 ppem."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+              "face_index": 0,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
+              ],
+              "glyph_record": "no EBLC strike matches the active size"
+            },
+            "coverage": [
+              "sbit:no-matching-strike-public-invalid-argument"
+            ]
+          },
+          {
+            "id": "range-miss",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_range_miss.ttf",
+                "requirements": "Synthetic scalable SFNT whose selected EBLC strike range covers glyph 2 while the public load path requests glyph 1."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+              "internal_sbit_source": "freetype/src/sfnt/ttsbit.c:1259-1267",
+              "face_index": 0,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
+              ],
+              "glyph_record": "selected strike has no range for glyph 1"
+            },
+            "coverage": [
+              "sbit:range-miss-public-invalid-argument"
+            ]
+          },
+          {
+            "id": "missing-range-array",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_missing_range_array.ttf",
+                "requirements": "Synthetic scalable SFNT whose EBLC bitmapSizeTable points the indexSubTableArray beyond the EBLC table."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+              "internal_sbit_source": "freetype/src/sfnt/ttsbit.c:523-529",
+              "face_index": 0,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
+              ],
+              "glyph_record": "indexSubTableArray cannot be read"
+            },
+            "coverage": [
+              "sbit:missing-range-array-public-invalid-argument"
+            ]
+          },
+          {
+            "id": "missing-subtable-header",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_missing_subtable_header.ttf",
+                "requirements": "Synthetic scalable SFNT whose EBLC range record points to an absent index subtable header."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+              "internal_sbit_source": "freetype/src/sfnt/ttsbit.c:1279-1282",
+              "face_index": 0,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
+              ],
+              "glyph_record": "range record points beyond available subtable header bytes"
+            },
+            "coverage": [
+              "sbit:missing-subtable-header-public-invalid-argument"
+            ]
+          },
+          {
+            "id": "unsupported-index-format",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_unsupported_index_format.ttf",
+                "requirements": "Synthetic scalable SFNT whose selected EBLC range uses an unsupported index format."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+              "internal_sbit_source": "freetype/src/sfnt/ttsbit.c:1406-1408",
+              "face_index": 0,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
+              ],
+              "glyph_record": "selected range uses EBLC index format 6"
+            },
+            "coverage": [
+              "sbit:unsupported-index-format-public-invalid-argument"
+            ]
           }
-        },
-        "params": {
-          "expected_error_symbol": "FT_Err_Missing_Bitmap",
-          "expected_error_value_source": "pinned fterrdef.h",
-          "pinned_source": "freetype/src/sfnt/ttsbit.c:1496-1497",
-          "face_index": 0,
-          "select_size_index": 0,
-          "glyph_index": 1,
-          "load_flags": [
-            "FT_LOAD_COLOR",
-            "FT_LOAD_SBITS_ONLY"
-          ],
-          "glyph_record": "glyph_start == glyph_end"
-        }
+        ]
       },
       "classifiers": [
         "kind:error",
@@ -103,6 +245,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "error",
             "error_symbol",
@@ -111,8 +254,8 @@
             "slot_state.mutation_class"
           ]
         },
-        "error": "FT_Err_Missing_Bitmap",
-        "fixture_requirements": "Synthetic SFNT bitmap strike whose EBDT/sbix glyph_start equals glyph_end for a selected strike glyph."
+        "error": "FT_Err_Invalid_Argument",
+        "fixture_requirements": "Synthetic scalable SFNT bitmap strike controls whose internal SBIT lookup fails; public TT_Load_Glyph with FT_LOAD_SBITS_ONLY converts the failed sbit load to FT_Err_Invalid_Argument."
       }
     },
     {
@@ -135,9 +278,10 @@
               }
             },
             "params": {
-              "expected_error_symbol": "FT_Err_Invalid_Composite",
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
               "expected_error_value_source": "pinned fterrdef.h",
-              "pinned_source": "freetype/src/sfnt/ttsbit.c:1436-1441",
+              "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+              "internal_sbit_source": "freetype/src/sfnt/ttsbit.c:1433-1441",
               "face_index": 0,
               "select_size_index": 0,
               "glyph_index": 2,
@@ -161,9 +305,10 @@
               }
             },
             "params": {
-              "expected_error_symbol": "FT_Err_Invalid_Composite",
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
               "expected_error_value_source": "pinned fterrdef.h",
-              "pinned_source": "freetype/src/sfnt/ttsbit.c:1436-1441",
+              "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+              "internal_sbit_source": "freetype/src/sfnt/ttsbit.c:1433-1441",
               "face_index": 0,
               "select_size_index": 0,
               "glyph_index": 2,
@@ -174,6 +319,60 @@
             },
             "coverage": [
               "sbit:compound-index3-format9-missing-subglyph"
+            ]
+          },
+          {
+            "id": "compound-missing-count",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_composite_missing_count.ttf",
+                "requirements": "Recursive embedded bitmap composite using EBLC index format 1 and EBDT image format 8 whose EBDT image ends before the component count."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+              "internal_sbit_source": "freetype/src/sfnt/ttsbit.c:961-985",
+              "face_index": 0,
+              "select_size_index": 0,
+              "glyph_index": 2,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
+              ]
+            },
+            "coverage": [
+              "sbit:compound-format8-missing-count-public-invalid-argument"
+            ]
+          },
+          {
+            "id": "compound-truncated-records",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_composite_truncated_records.ttf",
+                "requirements": "Recursive embedded bitmap composite using EBLC index format 3 and EBDT image format 9 whose component count exceeds the available component records."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+              "internal_sbit_source": "freetype/src/sfnt/ttsbit.c:961-985",
+              "face_index": 0,
+              "select_size_index": 0,
+              "glyph_index": 2,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
+              ]
+            },
+            "coverage": [
+              "sbit:compound-format9-truncated-records-public-invalid-argument"
             ]
           }
         ]
@@ -196,6 +395,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "error",
             "error_symbol",
@@ -204,8 +404,8 @@
             "slot_state.mutation_class"
           ]
         },
-        "error": "FT_Err_Invalid_Composite",
-        "fixture_requirements": "Recursive embedded bitmap composite whose missing component follows the ttsbit.c composite branch and reports Invalid_Composite rather than Missing_Bitmap."
+        "error": "FT_Err_Invalid_Argument",
+        "fixture_requirements": "Recursive embedded bitmap composite controls whose internal SBIT lookup fails; public scalable TT_Load_Glyph with FT_LOAD_SBITS_ONLY converts the failed sbit load to FT_Err_Invalid_Argument."
       }
     }
   ]
