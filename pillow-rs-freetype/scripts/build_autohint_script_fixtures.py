@@ -896,6 +896,59 @@ def build_cjk_duplicate_edge() -> None:
     font.save(OUT_DIR / "cjk-duplicate-edge.ttf")
 
 
+def build_digit_notdef_cmap() -> None:
+    glyph_order = [".notdef", "space", "latin_o"]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -120, 520, 720),
+        "space": empty_glyph(),
+        "latin_o": ring_glyph(90, 0, 510, 520, 190, 120, 410, 400),
+    }
+    metrics = {
+        ".notdef": (600, 80),
+        "space": (300, 0),
+        "latin_o": (620, 90),
+    }
+    cmap = {
+        0x20: "space",
+        # Exercise FreeType's digit-width scan case where a cmap-covered digit
+        # still resolves to glyph 0.
+        0x30: ".notdef",
+        0x6F: "latin_o",
+    }
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint Digit Notdef Cmap",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint Digit Notdef Cmap Regular",
+            "fullName": "Autohint Digit Notdef Cmap Regular",
+            "psName": "AutohintDigitNotdefCmap-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "digit-notdef-cmap.ttf")
+
+
 def main() -> None:
     build_script_coverage()
     build_cjk_empty_standard()
@@ -906,6 +959,7 @@ def main() -> None:
     build_cjk_snap_below_standard()
     build_cjk_round_stem_light()
     build_cjk_duplicate_edge()
+    build_digit_notdef_cmap()
 
 
 if __name__ == "__main__":

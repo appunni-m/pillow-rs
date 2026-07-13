@@ -404,6 +404,26 @@
             ]
           },
           {
+            "id": "latin-digit-notdef-cmap",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/digit-notdef-cmap.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 111,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:digit-cmap-glyph-zero"
+            ]
+          },
+          {
             "id": "latin-shared-greek",
             "assets": {
               "font": {
