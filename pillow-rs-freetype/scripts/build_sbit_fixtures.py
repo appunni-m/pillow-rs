@@ -54,6 +54,7 @@ def bitmap_size_table(
     end_glyph: int,
     x_ppem: int = 20,
     y_ppem: int = 20,
+    bit_depth: int = 1,
 ) -> bytes:
     horizontal = eblc_line_metrics()
     vertical = bytes(12)
@@ -61,7 +62,15 @@ def bitmap_size_table(
         struct.pack(">IIII", index_array_offset, index_tables_size, 1, 0)
         + horizontal
         + vertical
-        + struct.pack(">HHBBBB", start_glyph, end_glyph, x_ppem, y_ppem, 1, 1)
+        + struct.pack(
+            ">HHBBBB",
+            start_glyph,
+            end_glyph,
+            x_ppem,
+            y_ppem,
+            bit_depth,
+            1,
+        )
     )
     assert len(strike) == 48
     return strike
@@ -99,6 +108,29 @@ def empty_image_eblc() -> bytes:
         + struct.pack(">II", 0, 0)
     )
     return eblc_with_index_tables(index_array, index_subtable)
+
+
+def gray_format1_tables() -> tuple[bytes, bytes]:
+    # EBDT image format 1 stores small metrics followed by byte-aligned bitmap
+    # bytes. With an 8-bit strike, FreeType exposes FT_PIXEL_MODE_GRAY and a
+    # pitch equal to the bitmap width.
+    image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x80, 0xC0, 0xFF])
+    index_array = struct.pack(">HHI", 1, 1, 8)
+    index_subtable = (
+        struct.pack(">HHI", 1, 1, 4)
+        + struct.pack(">II", 0, len(image))
+    )
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        1,
+        bit_depth=8,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000) + image
+    return eblc, ebdt
 
 
 def no_matching_strike_eblc() -> bytes:
@@ -227,6 +259,11 @@ def build_missing_bitmap() -> None:
     )
 
 
+def build_gray_format1_bitmap() -> None:
+    eblc, ebdt = gray_format1_tables()
+    save_sbit_font("sbit_gray_format1.ttf", eblc, ebdt)
+
+
 def build_sbit_error_branch_fixtures() -> None:
     ebdt = struct.pack(">I", 0x00020000)
     save_sbit_font("sbit_empty_ebdt.ttf", valid_empty_eblc(), b"")
@@ -268,6 +305,7 @@ def build_composite_missing_subglyphs() -> None:
 
 def main() -> None:
     build_missing_bitmap()
+    build_gray_format1_bitmap()
     build_sbit_error_branch_fixtures()
     build_composite_missing_subglyphs()
 

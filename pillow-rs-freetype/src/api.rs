@@ -481,12 +481,10 @@ impl Face {
             // scalable TrueType faces with `FT_LOAD_SBITS_ONLY` any failed
             // sbit load is then replaced with `Invalid_Argument`
             // (`truetype/ttgload.c:2401-2469`).
-            font.load_sbit_only_glyph(glyph_index).map_err(|_| {
+            let sbit = font.load_sbit_only_glyph(glyph_index).map_err(|_| {
                 FontError::InvalidArgument("embedded bitmap image not available".into())
             })?;
-            return Err(FontError::UnsupportedLoadFlags(
-                "embedded bitmap image decoding".into(),
-            ));
+            return Ok(sbit_glyph_slot(glyph_index, sbit, vertical_layout));
         }
         let mut loaded = if flags.contains(LoadFlags::NO_RECURSE) {
             font.glyph_slot_load_no_recurse(glyph_index)?
@@ -604,6 +602,54 @@ impl Face {
             .render_fonts
             .get_or_insert_with(key, || self.font.clone_with_load_mode(load_mode)))
     }
+}
+
+fn sbit_glyph_slot(
+    glyph_index: u16,
+    sbit: crate::tt::sbit::SbitGlyph,
+    vertical_layout: bool,
+) -> GlyphSlot {
+    let metrics = sbit.metrics;
+    let (bitmap_left, bitmap_top) = if vertical_layout {
+        (metrics.vert_bearing_x / 64, metrics.vert_bearing_y / 64)
+    } else {
+        (metrics.hori_bearing_x / 64, metrics.hori_bearing_y / 64)
+    };
+    let bitmap = RenderedBitmap {
+        width: sbit.bitmap.width,
+        rows: sbit.bitmap.rows,
+        pitch: sbit.bitmap.pitch,
+        pixel_mode: PixelMode::Gray,
+        num_grays: sbit.bitmap.num_grays,
+        left: bitmap_left,
+        top: bitmap_top,
+        buffer: sbit.bitmap.buffer,
+    };
+    let zero_bbox = BBox {
+        x_min: 0,
+        y_min: 0,
+        x_max: 0,
+        y_max: 0,
+    };
+    let loaded = GlyphSlotLoad {
+        metrics: GlyphSlotMetrics {
+            width: metrics.width,
+            height: metrics.height,
+            hori_bearing_x: metrics.hori_bearing_x,
+            hori_bearing_y: metrics.hori_bearing_y,
+            hori_advance: metrics.hori_advance,
+            vert_bearing_x: metrics.vert_bearing_x,
+            vert_bearing_y: metrics.vert_bearing_y,
+            vert_advance: metrics.vert_advance,
+        },
+        format: GlyphSlotLoadFormat::Outline,
+        outline_cbox: zero_bbox,
+        outline_bbox: zero_bbox,
+        subglyphs: Vec::new(),
+        slot_outline: None,
+        render_outline: None,
+    };
+    GlyphSlot::new(glyph_index, loaded, Some(bitmap), vertical_layout, true)
 }
 
 /// Snapshot of the loaded glyph-slot fields callers normally read from

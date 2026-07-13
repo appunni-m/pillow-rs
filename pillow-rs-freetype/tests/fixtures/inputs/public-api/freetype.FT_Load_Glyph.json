@@ -214,6 +214,31 @@
             ]
           },
           {
+            "id": "sbit-gray-format1-sbits-only",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fixtures/assets/fonts/sbit_gray_format1.ttf",
+                "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray embedded bitmap for glyph 1."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_SBITS_ONLY"
+              ]
+            },
+            "coverage": [
+              "sbit:gray-format1-bitmap-success"
+            ]
+          },
+          {
             "id": "dejavu-b-light",
             "assets": {
               "font": {

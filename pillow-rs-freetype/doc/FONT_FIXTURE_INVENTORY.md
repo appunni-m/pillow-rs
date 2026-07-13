@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 156 | 113 | 43 | 124 | 834 KiB |
+| Active fixtures | 157 | 114 | 43 | 125 | 839 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 7 | 7 | 0 | 7 | 193 KiB |
 
@@ -158,6 +158,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `f8e4a4dc0dd7` | 1.0 | 1 | `fonts/glyf/render-coverage.ttf` | compact generated glyf fixture covering mono dropout guards, a subpixel zero-height mono profile sweep, and a quadratic scaler bbox-extrema branch probe |
 | `80bdde1bb256` | 4.5 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed VM, render-topology, and ftsynth matrix covering state, geometry, control flow, DELTA, invalid coordinate reads, indexed-stack and scan-control fallbacks, twilight zone-pointer MD/MDRP/SHC branch probes, DELTAP Y-touched compatibility, repeated post-IUP compatibility return, prep-range empty-zone SHZ and IUP, six exact bytecode error classes, conic chains, intersections, thin outlines, mixed winding, degenerate contours, empty outlines, collapsed spans, mono low-precision raster selection, scan-type dropout modes, PostScript-orientation embolden, zero-length embolden segment skipping, nearly-opposite embolden vector zero-shift, and zero-area orientation-none embolden |
 | `270d82716a52` | 4.6 | 1 | `fixtures/assets/fonts/sbit_missing_bitmap.ttf` | source-backed TrueType control with one EBLC/EBDT strike at 20 ppem and a glyph-1 index-format-1 record whose equal image offsets exercise the internal SBIT missing-image branch; public scalable `FT_LOAD_SBITS_ONLY` reports `FT_Err_Invalid_Argument` |
+| `18159d790c14` | 4.6 | 1 | `fixtures/assets/fonts/sbit_gray_format1.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT strike; glyph 1 uses index format 1 and image format 1 with 8-bit gray small metrics plus bitmap bytes, owning the scalable `FT_LOAD_SBITS_ONLY` bitmap-success path and FreeType's fallback from missing SBIT vertical advance to the glyph linear vertical advance |
 | `6e02745a630e` | 4.6 | 1 | `fixtures/assets/fonts/sbit_no_matching_strike.ttf` | source-backed TrueType control with only a 19 ppem EBLC/EBDT strike; loading at 20 ppem owns the no-selected-SBIT-strike branch and exact public `FT_Err_Invalid_Argument` |
 | `9dd3c473b4a1` | 4.6 | 1 | `fixtures/assets/fonts/sbit_range_miss.ttf` | source-backed TrueType control with a selected 20 ppem strike whose range covers glyph 2 only; loading glyph 1 owns the SBIT range-miss branch and exact public `FT_Err_Invalid_Argument` |
 | `02fba33ce7ba` | 4.6 | 1 | `fixtures/assets/fonts/sbit_missing_range_array.ttf` | source-backed TrueType control whose bitmapSizeTable points the EBLC indexSubTableArray beyond the table; owns Rust range-array absence coverage and exact public `FT_Err_Invalid_Argument` |
