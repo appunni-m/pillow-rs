@@ -354,6 +354,7 @@
     <bytecode>
       b1 01 00 8e
       b0 01 16 b0 00 36
+      30 31
     </bytecode>
   </prep>
 
