@@ -492,6 +492,7 @@ def build_latin_small_ignore() -> None:
         "latin_x",
         "latin_c",
         "latin_oslash",
+        "latin_g_cedilla",
     ]
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
@@ -513,6 +514,12 @@ def build_latin_small_ignore() -> None:
         # Keep U+00F8 on a unique glyph index so the adjustment database lookup
         # reaches AF_IGNORE_SMALL_TOP | AF_IGNORE_SMALL_BOTTOM for this row.
         "latin_oslash": ring_glyph(90, -40, 510, 560, 190, 100, 410, 420),
+        "latin_g_cedilla": rectangles_glyph(
+            [
+                (90, 0, 520, 560),
+                (220, -70, 360, -20),
+            ]
+        ),
     }
     metrics = {
         ".notdef": (600, 80),
@@ -521,6 +528,7 @@ def build_latin_small_ignore() -> None:
         "latin_x": (620, 120),
         "latin_c": (620, 90),
         "latin_oslash": (620, 90),
+        "latin_g_cedilla": (620, 90),
     }
     cmap = {
         0x20: "space",
@@ -528,6 +536,7 @@ def build_latin_small_ignore() -> None:
         0x006F: "latin_o",
         0x0078: "latin_x",
         0x00F8: "latin_oslash",
+        0x0122: "latin_g_cedilla",
     }
 
     font = FontBuilder(UNITS_PER_EM, isTTF=True)
