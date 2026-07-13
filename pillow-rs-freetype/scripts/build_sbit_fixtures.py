@@ -182,6 +182,31 @@ def bgra_format1_tables() -> tuple[bytes, bytes]:
     return packed_format1_tables(32, image)
 
 
+def unsupported_bit_depth_format1_tables() -> tuple[bytes, bytes]:
+    image = bytes([1, 1, 1, 1, 1]) + bytes([0x80])
+    return packed_format1_tables(7, image)
+
+
+def unsupported_image_format_tables() -> tuple[bytes, bytes]:
+    image = bytes([1, 1, 1, 1, 1]) + bytes([0x80])
+    index_array = struct.pack(">HHI", 1, 1, 8)
+    index_subtable = (
+        struct.pack(">HHI", 1, 10, 4)
+        + struct.pack(">II", 0, len(image))
+    )
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        1,
+        bit_depth=8,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000) + image
+    return eblc, ebdt
+
+
 def gray_format3_tables() -> tuple[bytes, bytes]:
     image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x80, 0xC0, 0xFF])
     index_array = struct.pack(">HHI", 1, 1, 8)
@@ -353,6 +378,16 @@ def build_bgra_format1_bitmap() -> None:
     save_sbit_font("sbit_bgra_format1.ttf", eblc, ebdt)
 
 
+def build_unsupported_bit_depth_bitmap() -> None:
+    eblc, ebdt = unsupported_bit_depth_format1_tables()
+    save_sbit_font("sbit_unsupported_bit_depth_format1.ttf", eblc, ebdt)
+
+
+def build_unsupported_image_format_bitmap() -> None:
+    eblc, ebdt = unsupported_image_format_tables()
+    save_sbit_font("sbit_unsupported_image_format.ttf", eblc, ebdt)
+
+
 def build_gray_format3_bitmap() -> None:
     eblc, ebdt = gray_format3_tables()
     save_sbit_font("sbit_gray_format3.ttf", eblc, ebdt)
@@ -404,6 +439,8 @@ def main() -> None:
     build_gray2_format1_bitmap()
     build_gray4_format1_bitmap()
     build_bgra_format1_bitmap()
+    build_unsupported_bit_depth_bitmap()
+    build_unsupported_image_format_bitmap()
     build_gray_format3_bitmap()
     build_sbit_error_branch_fixtures()
     build_composite_missing_subglyphs()

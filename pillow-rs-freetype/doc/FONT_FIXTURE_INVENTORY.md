@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 162 | 119 | 43 | 130 | 862 KiB |
+| Active fixtures | 164 | 121 | 43 | 132 | 871 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 7 | 7 | 0 | 7 | 193 KiB |
 
@@ -164,6 +164,8 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `c30ebb38710e` | 4.6 | 1 | `fixtures/assets/fonts/sbit_gray2_format1.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT strike; glyph 1 uses index format 1 and image format 1 with 2-bit packed grayscale small metrics plus bitmap bytes, owning exact `FT_PIXEL_MODE_GRAY2`, pitch, `num_grays`, buffer parity through `FT_Load_Glyph`, and packed-to-gray ftsynth bitmap-slot emboldening |
 | `f6c196691dde` | 4.6 | 1 | `fixtures/assets/fonts/sbit_gray4_format1.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT strike; glyph 1 uses index format 1 and image format 1 with 4-bit packed grayscale small metrics plus bitmap bytes, owning exact `FT_PIXEL_MODE_GRAY4`, pitch, `num_grays`, buffer parity through `FT_Load_Glyph`, and packed-to-gray ftsynth bitmap-slot emboldening |
 | `08f208b72acc` | 4.6 | 1 | `fixtures/assets/fonts/sbit_bgra_format1.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT strike; glyph 1 uses index format 1 and image format 1 with 32-bit packed BGRA bitmap bytes, owning exact `FT_PIXEL_MODE_BGRA`, pitch, `num_grays`, buffer parity through `FT_LOAD_COLOR | FT_LOAD_SBITS_ONLY`, and ftsynth BGRA success-without-byte-mutation metric side effects |
+| `ae1b80693d24` | 4.6 | 1 | `fixtures/assets/fonts/sbit_unsupported_bit_depth_format1.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT image-format-1 strike using unsupported bit depth 7; owns exact public `FT_LOAD_SBITS_ONLY` error parity for unsupported bit depths |
+| `6507261ab172` | 4.6 | 1 | `fixtures/assets/fonts/sbit_unsupported_image_format.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT index-format-1 strike whose selected image record uses unsupported image format 10; owns exact public `FT_LOAD_SBITS_ONLY` error parity for unsupported image formats |
 | `06991368d003` | 4.6 | 1 | `fixtures/assets/fonts/sbit_gray_format3.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT strike; glyph 1 uses index format 3 and image format 1 with 8-bit gray small metrics, owning the successful two-byte offset-array SBIT lookup path |
 | `6e02745a630e` | 4.6 | 1 | `fixtures/assets/fonts/sbit_no_matching_strike.ttf` | source-backed TrueType control with only a 19 ppem EBLC/EBDT strike; loading at 20 ppem owns the no-selected-SBIT-strike branch and exact public `FT_Err_Invalid_Argument` |
 | `9dd3c473b4a1` | 4.6 | 1 | `fixtures/assets/fonts/sbit_range_miss.ttf` | source-backed TrueType control with a selected 20 ppem strike whose range covers glyph 2 only; loading glyph 1 owns the SBIT range-miss branch and exact public `FT_Err_Invalid_Argument` |
@@ -244,6 +246,8 @@ listed because they enter different hinting and scaling conditions.
 | `hdmx_observable.ttf` | U+0041 gid 36 (`A`) | 20 | default, compute-metrics, mono hdmx, and mono suppression conditions |
 | `hhea-zero-typo-fallback.ttf` | face open and active size metrics only | 20 | hhea ascent/descent/lineGap are zero and OS/2 `USE_TYPO_METRICS` is clear, so public `FT_Size_Metrics` selects the OS/2 typo fallback branch |
 | `hhea-zero-win-fallback.ttf` | face open and active size metrics only | 20 | hhea and OS/2 typo metrics are zero, so public `FT_Size_Metrics` selects the OS/2 Windows ascent/descent fallback branch |
+| `sbit_unsupported_bit_depth_format1.ttf` | gid 1 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` to prove unsupported bit depth 7 public error parity |
+| `sbit_unsupported_image_format.ttf` | gid 1 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` to prove unsupported image format 10 public error parity |
 | `post-format-1.ttf` | gid 1 | name lookup only | `post` format 1.0 with non-258 glyph count returns FreeType's default `.notdef` instead of Mac standard names |
 | `post-format-1-standard-count.ttf` | gid 36 (`A`) | name lookup only | `post` format 1.0 with exactly 258 glyph slots returns FreeType's Mac standard name and reverse name index for gid 36 |
 | `post-missing.ttf` | gid 1 | name lookup only | absent optional `post` table proves public `FT_Get_Glyph_Name` returns `FT_Err_Invalid_Argument`, not `FT_Err_Post_Table_Missing`, and preserves the filled buffer after clearing byte zero |
