@@ -2128,6 +2128,26 @@
             ]
           },
           {
+            "id": "cjk-blue-degenerate-glyph-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-blue-edge-cases.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 20204,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:degenerate-one-point-glyph"
+            ]
+          },
+          {
             "id": "cjk-tiny-stem-20",
             "assets": {
               "font": {
