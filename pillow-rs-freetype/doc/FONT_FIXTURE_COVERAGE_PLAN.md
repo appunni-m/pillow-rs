@@ -458,26 +458,33 @@ C ABI, and WASM ABI rows prove the null-face, no-fixed-size,
 negative-index, out-of-range, and success paths against pinned C, and the
 `ftsizes.activate_select_size_sequence` row proves strike selection mutates the
 currently active size rather than a hidden singleton.
+The latest SBIT bitmap-success row adds `sbit_mono_format1.ttf`, a compact
+source-backed 1-bit EBLC/EBDT format-1 fixture.  One explicit
+`FT_Load_Glyph.matrix_load@sbit-mono-format1-sbits-only` variant selects glyph
+1 with `FT_LOAD_SBITS_ONLY`, and pinned C, Rust FFI, C ABI, and WASM ABI agree
+on `FT_PIXEL_MODE_MONO`, pitch 2, `num_grays == 2`, and bitmap bytes
+`a5805a00`.  Core SBIT decoding now maps FreeType's bit-depth 1 allocation path
+to MONO while preserving the existing bit-depth 8 GRAY fixture behavior.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,806 |
-| Additional grouped variants | 2,641 |
+| Concrete explicit cases | 6,807 |
+| Additional grouped variants | 2,642 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,803 |
-| Exact parity | 6,803 / 6,803 |
+| Runnable parity comparisons | 6,804 |
+| Exact parity | 6,804 / 6,804 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,307 / 19,232 (89.9906%) |
+| Covered Rust lines | 17,309 / 19,234 (89.9917%) |
 | Rust function coverage | 1,120 / 1,285 (87.1595%) |
 | Rust instantiation coverage | 1,123 / 1,288 (87.1894%) |
-| Rust region coverage | 24,862 / 27,656 (89.8973%) |
-| Rust branch/condition coverage | 4,107 / 4,802 (85.5269%) |
+| Rust region coverage | 24,868 / 27,663 (89.8963%) |
+| Rust branch/condition coverage | 4,108 / 4,802 (85.5477%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
-| Active fixture font paths | 156 |
-| Stored active font binaries | 113 files, 834 KiB |
+| Active fixture font paths | 157 |
+| Stored active font binaries | 114 files, 839 KiB |
 | Active symlink aliases | 43 |
-| Unique active font contents | 124 SHA-256 identities |
+| Unique active font contents | 125 SHA-256 identities |
 | Deprecated brute-force fonts | 101 files, 99 unique contents, 23 MiB |
 
 The current coverage target is not only line coverage. The maintained
@@ -2000,6 +2007,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | Default SBIT load-before-outline order | One explicit `FT_Load_Glyph.matrix_load@sbit-gray-format1-default-render` row reuses `sbit_gray_format1.ttf` and loads glyph 1 with `FT_LOAD_RENDER` rather than `FT_LOAD_SBITS_ONLY`. Pinned FreeType first tries embedded bitmaps before outline loading when bitmap loading is allowed (`base/ftobjs.c:1028-1050`) and the TrueType driver repeats the SBIT attempt before falling through to outlines (`truetype/ttgload.c:2401-2474`). Rust now mirrors that order: successful SBIT loads return bitmap slots for normal load/render calls, while failed `FT_LOAD_SBITS_ONLY` attempts still map to public `FT_Err_Invalid_Argument`. Focused `FT_Load_Glyph.matrix_load` parity passes 119 / 119. Full condition coverage passes with 6,808 concrete cases, 6,805 / 6,805 runtime rows, three FTMM pending rows, 17,165 / 19,071 lines, 24,614 / 27,383 regions, 4,072 / 4,750 branches, 1,109 / 1,274 functions, and 1,112 / 1,277 instantiations. Route audit reports 3,478 real-parity rows and zero implicit cases |
 | 2026-07-14 | Ftsynth bitmap-slot embolden parity | The existing `ftsynth.FT_GlyphSlot_AdjustWeight.bitmap_weight_owns_emboldens_and_updates_top` and `ftsynth.FT_GlyphSlot_Embolden.bitmap_embolden_mutates_bitmap_and_metrics` public rows now reuse `sbit_gray_format1.ttf` instead of the deprecated embedded-strike placeholder. The native oracle and unified Rust/C/WASM outputs now include bitmap descriptors, bitmap bytes, and bitmap-top values for ftsynth weight rows, proving the mutation rather than only slot metrics. Core `FT_GlyphSlot_AdjustWeight` now follows FreeType `base/ftsynth.c`: bitmap slots round synthetic strengths to full pixels, force a one-pixel horizontal embolden when the rounded x strength is zero, call the bitmap embolden path before metric side effects, and skip metric mutation when bitmap emboldening rejects negative pixel strength. Focused parity passes for both ftsynth bitmap rows. Full condition coverage passes with 6,808 concrete cases, 6,805 / 6,805 runtime rows, three FTMM pending rows, 17,253 / 19,176 lines, 24,783 / 27,574 regions, 4,102 / 4,796 branches, 1,113 / 1,278 functions, and 1,116 / 1,281 instantiations. Route audit reports 3,480 real-parity rows, 8 pending-core rows, and zero implicit cases |
 | 2026-07-14 | Real `FT_Select_Size` route and active-size sequence | `FT_Select_Size` now uses the compact `sbit_gray_format1.ttf` strike instead of the deprecated embedded-strike placeholder. Rust core exposes fixed-size face flags from parsed SBIT strikes, selects strike ppem into the active size object, resets scaler/autohint/bytecode state, and maps pinned FreeType's null-face, no-fixed-size, negative-index, out-of-range, and success errors through Rust FFI, C ABI, and WASM ABI. The `ftsizes.activate_select_size_sequence` row now runs real pinned C/Rust/C-ABI/WASM-ABI parity and proves selection mutates the currently active secondary size before reactivating the initial size. Focused `FT_Select_Size` parity passes 4 / 4 and the ftsizes select sequence passes 1 / 1. Full condition coverage passes with 6,806 concrete cases, 6,803 / 6,803 runtime rows, three FTMM pending rows, 17,307 / 19,232 lines, 24,862 / 27,656 regions, 4,107 / 4,802 branches, 1,120 / 1,285 functions, and 1,123 / 1,288 instantiations. Route audit reports 3,485 real-parity rows, 7 pending-core rows, 6 explicit-unsupported rows, and zero implicit cases |
+| 2026-07-14 | SBIT mono format-1 bitmap-success path | `font-fixture-sbit` now emits `sbit_mono_format1.ttf`, a compact source-backed TrueType face with one 20 ppem EBLC/EBDT strike. One explicit `FT_Load_Glyph.matrix_load@sbit-mono-format1-sbits-only` row selects glyph 1 with `FT_LOAD_SBITS_ONLY`, exercising index format 1, image format 1, bit-depth 1 MONO bitmap allocation, a two-byte pitch for a 9-pixel-wide image, and final-byte masking through exact pinned C, Rust FFI, C ABI, and WASM ABI parity. The first implementation check showed the public oracle expects `FT_PIXEL_MODE_MONO`, `num_grays == 2`, pitch 2, and bytes `a5805a00`; core SBIT decoding now maps bit-depth 1 to MONO while preserving the existing bit-depth 8 GRAY path. Focused mono-SBIT parity passes 1 / 1 and full `load_glyph` operation parity passes 355 / 355. Full condition coverage passes with 6,807 concrete cases, 6,804 / 6,804 runtime rows, three FTMM pending rows, 17,309 / 19,234 lines, 24,868 / 27,663 regions, 4,108 / 4,802 branches, 1,120 / 1,285 functions, and 1,123 / 1,288 instantiations. Route audit reports 3,486 real-parity rows and zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-14
 

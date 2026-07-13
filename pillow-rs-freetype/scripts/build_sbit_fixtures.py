@@ -133,6 +133,29 @@ def gray_format1_tables() -> tuple[bytes, bytes]:
     return eblc, ebdt
 
 
+def mono_format1_tables() -> tuple[bytes, bytes]:
+    # The same image format with a 1-bit strike exposes FT_PIXEL_MODE_MONO and
+    # a byte pitch of ceil(width / 8).  A 9-pixel width keeps the final-byte mask
+    # observable without needing another glyph.
+    image = bytes([2, 9, 1, 2, 10]) + bytes([0xA5, 0x80, 0x5A, 0x00])
+    index_array = struct.pack(">HHI", 1, 1, 8)
+    index_subtable = (
+        struct.pack(">HHI", 1, 1, 4)
+        + struct.pack(">II", 0, len(image))
+    )
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        1,
+        bit_depth=1,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000) + image
+    return eblc, ebdt
+
+
 def no_matching_strike_eblc() -> bytes:
     index_array = struct.pack(">HHI", 1, 1, 8)
     index_subtable = struct.pack(">HHI", 1, 1, 0) + struct.pack(">II", 0, 0)
@@ -264,6 +287,11 @@ def build_gray_format1_bitmap() -> None:
     save_sbit_font("sbit_gray_format1.ttf", eblc, ebdt)
 
 
+def build_mono_format1_bitmap() -> None:
+    eblc, ebdt = mono_format1_tables()
+    save_sbit_font("sbit_mono_format1.ttf", eblc, ebdt)
+
+
 def build_sbit_error_branch_fixtures() -> None:
     ebdt = struct.pack(">I", 0x00020000)
     save_sbit_font("sbit_empty_ebdt.ttf", valid_empty_eblc(), b"")
@@ -306,6 +334,7 @@ def build_composite_missing_subglyphs() -> None:
 def main() -> None:
     build_missing_bitmap()
     build_gray_format1_bitmap()
+    build_mono_format1_bitmap()
     build_sbit_error_branch_fixtures()
     build_composite_missing_subglyphs()
 
