@@ -1,7 +1,7 @@
 # Font Fixture Inventory
 
 Status: active inventory
-Recorded: 2026-07-13
+Recorded: 2026-07-14
 Coverage plan: `doc/FONT_FIXTURE_COVERAGE_PLAN.md`
 
 This inventory separates file paths, stored binaries, unique contents, cmap
@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 161 | 118 | 43 | 129 | 857 KiB |
+| Active fixtures | 162 | 119 | 43 | 130 | 862 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 7 | 7 | 0 | 7 | 193 KiB |
 
@@ -112,16 +112,17 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `f5a7badf5399` | 1.9 | 1 | `fonts/metrics/hhea-short-eof.ttf` | 35-byte hhea at physical EOF; required-header stream error control |
 | `1eee7f2e8396` | 1.9 | 1 | `fonts/metrics/vhea-short-eof.ttf` | 35-byte vhea at physical EOF; present malformed vertical-header error control |
 | `acb83f0642a9` | 16.9 | 1 | `fonts/metadata/short-os2-post.ttf` | compact glyf with a 77-byte OS/2 table and 15-byte post table; owns both optional short-table fallbacks |
-| `bdead31913b1` | 3.5 | 1 | `fonts/metadata/post-format-1.ttf` | compact glyf with `post` format 1.0 and non-258 glyph count; owns FreeType's default `.notdef` glyph-name behavior |
-| `c353a6673ba4` | 3.6 | 1 | `fonts/metadata/post-format-25.ttf` | compact glyf with FreeType's historical `post` format 2.5 tag `0x00025000`; owns valid signed-delta names and out-of-range deltas mapping to Mac glyph 0 |
-| `294a4e61d972` | 3.5 | 1 | `fonts/metadata/post-format-unsupported.ttf` | compact glyf with unsupported `post` format 4.0; owns C's cleared-buffer `Invalid_Argument` public glyph-name behavior |
-| `d748e79c861a` | 3.5 | 1 | `fonts/metadata/post-format-20-short.ttf` | compact glyf with format 2.0 table shorter than the glyph-name count field; owns default-name fallback after ignored load failure |
-| `e219ae6aa11b` | 3.5 | 1 | `fonts/metadata/post-format-20-zero.ttf` | compact glyf with format 2.0 declaring zero glyph names; owns the zero-count default-name path |
-| `34f13fe4339d` | 3.5 | 1 | `fonts/metadata/post-format-20-custom-truncated.ttf` | compact glyf with a format 2.0 custom-name index and no Pascal string bytes; owns the missing-custom-name `.notdef` fallback |
-| `67495e426ca2` | 3.5 | 1 | `fonts/metadata/post-format-25-short.ttf` | compact glyf with format 2.5 table shorter than the glyph-name count field; owns default-name fallback after ignored load failure |
-| `e5eb22517140` | 3.5 | 1 | `fonts/metadata/post-format-25-zero.ttf` | compact glyf with format 2.5 declaring zero glyph names; owns the zero-count default-name path |
-| `224ebed17a6a` | 3.5 | 1 | `fonts/metadata/post-format-25-too-many.ttf` | compact glyf with format 2.5 declaring 387 glyph deltas; owns FreeType's above-theoretical-limit rejection |
-| `33a97c809d7a` | 3.5 | 1 | `fonts/metadata/post-missing.ttf` | compact glyf with no `post` table; owns the public `FT_Get_Glyph_Name` absent-optional-post behavior where C returns `FT_Err_Invalid_Argument` and clears the first output byte |
+| `f4e4f0a1fcbe` | 3.6 | 1 | `fonts/metadata/post-format-1.ttf` | compact glyf with `post` format 1.0 and non-258 glyph count; owns FreeType's default `.notdef` glyph-name behavior |
+| `a57bc1e4cbac` | 4.4 | 1 | `fonts/metadata/post-format-1-standard-count.ttf` | compact glyf with `post` format 1.0 and exactly 258 glyph slots; owns FreeType's Mac standard-name path for format 1.0 |
+| `411e1536e24e` | 3.7 | 1 | `fonts/metadata/post-format-25.ttf` | compact glyf with FreeType's historical `post` format 2.5 tag `0x00025000`; owns valid signed-delta names and out-of-range deltas mapping to Mac glyph 0 |
+| `52e2429258c4` | 3.6 | 1 | `fonts/metadata/post-format-unsupported.ttf` | compact glyf with unsupported `post` format 4.0; owns C's cleared-buffer `Invalid_Argument` public glyph-name behavior |
+| `3061b69b9e3e` | 3.6 | 1 | `fonts/metadata/post-format-20-short.ttf` | compact glyf with format 2.0 table shorter than the glyph-name count field; owns default-name fallback after ignored load failure |
+| `0117b5a8272f` | 3.6 | 1 | `fonts/metadata/post-format-20-zero.ttf` | compact glyf with format 2.0 declaring zero glyph names; owns the zero-count default-name path |
+| `6822428548e8` | 3.6 | 1 | `fonts/metadata/post-format-20-custom-truncated.ttf` | compact glyf with a format 2.0 custom-name index and no Pascal string bytes; owns the missing-custom-name `.notdef` fallback |
+| `f5a6de05ec3b` | 3.6 | 1 | `fonts/metadata/post-format-25-short.ttf` | compact glyf with format 2.5 table shorter than the glyph-name count field; owns default-name fallback after ignored load failure |
+| `76b0617f384f` | 3.6 | 1 | `fonts/metadata/post-format-25-zero.ttf` | compact glyf with format 2.5 declaring zero glyph names; owns the zero-count default-name path |
+| `816c3ba67da4` | 3.6 | 1 | `fonts/metadata/post-format-25-too-many.ttf` | compact glyf with format 2.5 declaring 387 glyph deltas; owns FreeType's above-theoretical-limit rejection |
+| `5b03f3479e60` | 3.5 | 1 | `fonts/metadata/post-missing.ttf` | compact glyf with no `post` table; owns the public `FT_Get_Glyph_Name` absent-optional-post behavior where C returns `FT_Err_Invalid_Argument` and clears the first output byte |
 | `9e63ed2c07b6` | 17.2 | 1 | `fonts/metadata/os2-use-typo-metrics.ttf` | compact glyf with `USE_TYPO_METRICS`; owns OS/2 typographic face and size metric selection |
 | `5df1e876cc25` | 1.9 | 1 | `fonts/metadata/head-short-eof.ttf` | 53-byte required head table at physical EOF; owns the short-header face-open error |
 | `4e4f32fced92` | 1.6 | 1 | `fonts/names/name-record-matrix.ttf` | nine-record name table covering Windows decode failures, Mac Roman and arbitrary-Windows fallbacks, invalid ranges, zero lengths, and every preference predicate outcome |
@@ -244,6 +245,7 @@ listed because they enter different hinting and scaling conditions.
 | `hhea-zero-typo-fallback.ttf` | face open and active size metrics only | 20 | hhea ascent/descent/lineGap are zero and OS/2 `USE_TYPO_METRICS` is clear, so public `FT_Size_Metrics` selects the OS/2 typo fallback branch |
 | `hhea-zero-win-fallback.ttf` | face open and active size metrics only | 20 | hhea and OS/2 typo metrics are zero, so public `FT_Size_Metrics` selects the OS/2 Windows ascent/descent fallback branch |
 | `post-format-1.ttf` | gid 1 | name lookup only | `post` format 1.0 with non-258 glyph count returns FreeType's default `.notdef` instead of Mac standard names |
+| `post-format-1-standard-count.ttf` | gid 36 (`A`) | name lookup only | `post` format 1.0 with exactly 258 glyph slots returns FreeType's Mac standard name and reverse name index for gid 36 |
 | `post-missing.ttf` | gid 1 | name lookup only | absent optional `post` table proves public `FT_Get_Glyph_Name` returns `FT_Err_Invalid_Argument`, not `FT_Err_Post_Table_Missing`, and preserves the filled buffer after clearing byte zero |
 | `post-format-25.ttf` | gid 36 (`A`), gid 1 | name lookup only | format 2.5 signed-delta rows cover valid Mac-name lookup and invalid negative deltas mapping to `.notdef` / glyph index 0 |
 | `post-format-unsupported.ttf` | gid 1 | name lookup only | unsupported non-3.0 format proves the public `FT_HAS_GLYPH_NAMES` / cleared-buffer `Invalid_Argument` path |
@@ -462,9 +464,10 @@ and selected-glyph obligations still come from explicit inputs.
     Rust now propagates a present malformed vhea like FreeType while retaining
     an empty vmtx for a present but unreadable metrics table; `tt/hhea.rs` and
     `tt/vhea.rs` have 100% structural coverage.
-20. Twelve metadata controls cover a physically short required head, optional
+20. Thirteen metadata controls cover a physically short required head, optional
     short OS/2 and post tables, OS/2 `USE_TYPO_METRICS`, valid `post` format
-    1.0/2.5 glyph-name behavior, and malformed format 2.0/2.5 public fallback
+    1.0/2.5 glyph-name behavior including exact 258-glyph Mac standard-name
+    lookup, and malformed format 2.0/2.5 public fallback
     behavior. Two additional 4.1 KiB metric controls generated by
     `make font-fixture-metrics` prove the hhea-zero OS/2 typo and OS/2 Windows
     fallback branches through public `FT_Size_Metrics`. FreeType selects
