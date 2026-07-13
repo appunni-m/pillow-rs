@@ -2085,6 +2085,35 @@ instantiations, with no concrete case-count increase. `autohint/coverage.rs`
 no longer appears in the missing-line report and is now covered at 28 / 28
 lines, 35 / 35 regions, 7 / 7 functions, and 4 / 4 branches.
 
+### Autohint Digit Cmap Glyph-Zero Checkpoint - 2026-07-13
+
+`build_autohint_script_fixtures.py` now emits
+`fonts/autohint/digit-notdef-cmap.ttf`, a 1.1 KiB source-backed glyf fixture
+whose cmap explicitly maps U+0030 to `.notdef`/glyph 0 while U+006F selects a
+normal Latin ring. One public `FT_LOAD_FORCE_AUTOHINT` row selects U+006F, so
+the face-global metrics setup scans a cmap-covered digit that FreeType reports
+as glyph index 0 without rendering the `.notdef` glyph itself. This covers the
+Rust branch in `digits_have_same_width` that previously remained missed because
+existing compact fonts either omitted digits or mapped them to nonzero glyphs.
+
+Verified counts after `make -C pillow-rs-freetype test-unified-condition-coverage`:
+
+| Measure | Count |
+|---|---:|
+| Logical public API cases | 4,163 |
+| Concrete explicit cases | 6,765 |
+| Runnable parity comparisons | 6,761 / 6,761 |
+| Pending cases | 4 |
+| Covered Rust lines | 16,261 / 18,095 (89.8646%) |
+| Rust region coverage | 23,335 / 25,934 (89.9784%) |
+| Rust branch/condition coverage | 3,925 / 4,634 (84.7000%) |
+| Rust function coverage | 1,030 / 1,150 (89.5652%) |
+| Route audit split | real-parity 3,405; raw-slot-null-validation 4; shape-incomplete-fallback 2 |
+
+The delta from the autohint coverage-bit checkpoint is +1 covered line, +2
+covered regions, and +3 covered branches, with one additional concrete public
+case. `autohint/globals.rs:317` no longer appears in the missing-line report.
+
 ### Size Null-Validation Coverage Attribution - 2026-07-13
 
 The `ftsizes.FT_New_Size.null_output_pointer_error` row was rechecked with:

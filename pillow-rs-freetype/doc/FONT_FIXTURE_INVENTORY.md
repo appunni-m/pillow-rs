@@ -46,6 +46,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `e6bc1ae1a7f7` | 11.5 | 1 | `fonts/autohint/basic-latin.ttf` | glyf, 42 glyphs, 45 Unicode mappings, native hinting, GPOS |
 | `f6fa317b2fbb` | 2.4 | 1 | `fonts/autohint/cjk-coverage.ttf` | source-backed glyf, 22 glyphs, 37 Unicode mappings, vertical metrics, CJK geometry plus Latin adjustment, blue-zone, stem-sort, and serif topologies |
 | `b17d2e85af72` | 0.7 | 1 | `fonts/autohint/cjk-width-order.ttf` | source-backed glyf, 2 glyphs, one U+56D7 mapping, no U+7530; owns Hani fallback-standard width ordering with descending stems |
+| `99ab69fa2b56` | 1.1 | 1 | `fonts/autohint/digit-notdef-cmap.ttf` | source-backed glyf, 3 glyphs, U+0030 explicitly maps to glyph 0 while U+006F selects a Latin ring; owns the face-global digit-width scan glyph-zero branch |
 | `38431987e24e` | 11.7 | 1 | `fonts/autohint/indic-coverage.ttf` | glyf, 37 glyphs, 29 mappings, native hinting, Devanagari geometry |
 | `b4ff2e5f559c` | 10.7 | 1 | `fonts/autohint/latin-greek-cyrillic.ttf` | glyf, 39 glyphs, distinct Latin/Greek/Cyrillic geometry |
 | `1ff7a44a2e54` | 5.5 | 1 | `fonts/autohint/script-coverage.ttf` | source-backed glyf, 61 glyphs, 109 Unicode mappings, one compact glyph per autohint script tag plus standard-character aliases |
@@ -213,6 +214,7 @@ listed because they enter different hinting and scaling conditions.
 | `cjk-coverage.ttf` | U+004F gid 17, U+006F gid 18 | 20 | distinct capital/lowercase round extrema paired with flat H/n calibration geometry |
 | `cjk-coverage.ttf` | U+0049 gid 19 | 20 | compact four-edge micro-serif with close cross-links and intermediate-edge overlap rejection |
 | `cjk-width-order.ttf` | U+56D7 gid 1 | 20 | Hani fallback standard character without U+7530; wide-then-narrow stems exercise CJK standard-width insertion sort and quantization |
+| `digit-notdef-cmap.ttf` | U+006F gid 2, with U+0030 cmap-covered as gid 0 | 20 | public force-autohint metrics setup scans an explicitly covered digit that resolves to glyph 0, exercising the face-global digit-width skip branch without selecting `.notdef` as the rendered glyph |
 | `script-coverage.ttf` | all generated `SCRIPT_PROBES` codepoints from `scripts/build_autohint_script_fixtures.py` | 20 | explicit `FT_LOAD_FORCE_AUTOHINT` script-selection rows for all 59 compact script glyphs; this proves each selected script tag through real Rust/C ABI/WASM parity without an implicit script matrix |
 | `hdmx_observable.ttf` | U+0041 gid 36 (`A`) | 20 | default, compute-metrics, mono hdmx, and mono suppression conditions |
 | `hhea-zero-typo-fallback.ttf` | face open and active size metrics only | 20 | hhea ascent/descent/lineGap are zero and OS/2 `USE_TYPO_METRICS` is clear, so public `FT_Size_Metrics` selects the OS/2 typo fallback branch |
