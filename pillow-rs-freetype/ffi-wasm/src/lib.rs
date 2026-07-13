@@ -29,6 +29,7 @@ pub type FT_Size_Request_Type = i32;
 pub type FT_Encoding = i32;
 pub type FT_LcdFilter = i32;
 pub type FT_TrueTypeEngineType = i32;
+pub type FT_Orientation = i32;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -486,6 +487,16 @@ pub extern "C" fn fontdone_wasm_outline_get_cbox(
             yMax: bbox.yMax,
         };
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_get_orientation(
+    outline: *const FontdoneWasmOutline,
+) -> FT_Orientation {
+    let Some(snapshot) = outline_snapshot_from_wasm(outline) else {
+        return rust_ffi::FT_ORIENTATION_TRUETYPE as FT_Orientation;
+    };
+    rust_ffi::FT_Outline_Get_Orientation(Some(&snapshot)) as FT_Orientation
 }
 
 #[unsafe(no_mangle)]

@@ -930,6 +930,23 @@ enum OutlineOrientation {
     None,
 }
 
+impl OutlineOrientation {
+    fn to_ft_orientation(self) -> i32 {
+        match self {
+            Self::TrueType => 0,
+            Self::PostScript => 1,
+            Self::None => 2,
+        }
+    }
+}
+
+/// Return the FreeType `FT_Orientation` value for an outline.
+pub fn outline_get_orientation(outline: Option<&crate::outline::Outline>) -> i32 {
+    outline.map_or(0, |outline| {
+        outline_orientation(outline).to_ft_orientation()
+    })
+}
+
 fn embolden_outline(outline: &mut crate::outline::Outline, mut xstrength: i32, mut ystrength: i32) {
     // C reference: `FT_Outline_EmboldenXY` in `src/base/ftoutln.c:911-1047`.
     xstrength /= 2;

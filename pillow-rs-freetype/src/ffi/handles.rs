@@ -18,10 +18,10 @@ use super::types::{
     FT_Angle, FT_BBox, FT_Bitmap, FT_Bool, FT_Byte, FT_Bytes, FT_Char, FT_CharMap,
     FT_CharMapRecPublic, FT_Encoding, FT_Error, FT_F26Dot6, FT_FaceRecPublic, FT_Fixed,
     FT_Glyph_Format, FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_Long, FT_Matrix,
-    FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag,
-    FT_SfntName, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec,
-    FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector, TT_Header,
-    TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
+    FT_Orientation, FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag,
+    FT_SfntLangTag, FT_SfntName, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
+    FT_Size_RequestRec, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector,
+    TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -305,6 +305,16 @@ pub fn FT_Outline_Get_CBox(outline: Option<&FT_OutlineSnapshot>, acbox: Option<&
         xMax: x_max,
         yMax: y_max,
     };
+}
+
+pub fn FT_Outline_Get_Orientation(outline: Option<&FT_OutlineSnapshot>) -> FT_Orientation {
+    let Some(outline) = outline else {
+        return FT_ORIENTATION_TRUETYPE as FT_Orientation;
+    };
+    let Some(outline) = outline_snapshot_to_core(outline) else {
+        return FT_ORIENTATION_NONE as FT_Orientation;
+    };
+    api::outline_get_orientation(Some(&outline)) as FT_Orientation
 }
 
 pub fn FT_OpenType_Free(_face: Option<&FT_Face>, _table: FT_Bytes) {}
@@ -2247,6 +2257,38 @@ fn outline_to_ffi_snapshot(outline: &crate::outline::Outline) -> FT_OutlineSnaps
             .collect(),
         flags: outline.flags as FT_Int,
     }
+}
+
+fn outline_snapshot_to_core(outline: &FT_OutlineSnapshot) -> Option<crate::outline::Outline> {
+    let points = outline
+        .points
+        .iter()
+        .enumerate()
+        .map(|(index, point)| {
+            Some(crate::outline::OutlinePoint {
+                x: i32::try_from(point.x).ok()?,
+                y: i32::try_from(point.y).ok()?,
+                on_curve: outline.tags.get(index).is_none_or(|tag| tag & 1 != 0),
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let contours = outline
+        .contours
+        .iter()
+        .map(|&contour| i16::try_from(contour).ok())
+        .collect::<Option<Vec<_>>>()?;
+    Some(crate::outline::Outline {
+        n_contours: i32::try_from(contours.len()).ok()?,
+        contours,
+        points,
+        tags: outline.tags.clone(),
+        contour_dropouts: Vec::new(),
+        flags: u32::try_from(outline.flags).unwrap_or(0),
+        cbox_x_min: 0,
+        cbox_y_min: 0,
+        cbox_x_max: 0,
+        cbox_y_max: 0,
+    })
 }
 
 fn bbox_to_ffi(bbox: crate::font::BBox) -> FT_BBox {

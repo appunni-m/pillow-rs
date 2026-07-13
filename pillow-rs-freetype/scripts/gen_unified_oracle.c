@@ -3533,6 +3533,152 @@ static int emit_outline_render(int argc, char** argv) {
     return 0;
 }
 
+typedef enum OrientationOutlineKind_ {
+    ORIENTATION_OUTLINE_NULL,
+    ORIENTATION_OUTLINE_EMPTY,
+    ORIENTATION_OUTLINE_POSITIVE,
+    ORIENTATION_OUTLINE_NEGATIVE,
+    ORIENTATION_OUTLINE_COLLAPSED,
+    ORIENTATION_OUTLINE_OVERSIZED,
+    ORIENTATION_OUTLINE_ZERO_AREA,
+} OrientationOutlineKind;
+
+static void build_orientation_outline(
+    OrientationOutlineKind kind,
+    FT_Outline* outline,
+    FT_Vector* points,
+    char* tags,
+    short* contours
+) {
+    for (int index = 0; index < 4; index++) {
+        tags[index] = FT_CURVE_TAG_ON;
+    }
+    contours[0] = 3;
+    outline->n_contours = 1;
+    outline->n_points = 4;
+    outline->points = points;
+    outline->tags = tags;
+    outline->contours = contours;
+    outline->flags = 0;
+
+    if (kind == ORIENTATION_OUTLINE_EMPTY) {
+        outline->n_contours = 0;
+        outline->n_points = 0;
+        return;
+    }
+    if (kind == ORIENTATION_OUTLINE_COLLAPSED) {
+        outline->n_points = 2;
+        contours[0] = 1;
+        points[0].x = 0;
+        points[0].y = 0;
+        points[1].x = 64;
+        points[1].y = 0;
+        return;
+    }
+    if (kind == ORIENTATION_OUTLINE_OVERSIZED) {
+        points[0].x = 0;
+        points[0].y = 0;
+        points[1].x = 0;
+        points[1].y = 64;
+        points[2].x = 0x1000000L + 64;
+        points[2].y = 64;
+        points[3].x = 0x1000000L + 64;
+        points[3].y = 0;
+        return;
+    }
+    if (kind == ORIENTATION_OUTLINE_ZERO_AREA) {
+        points[0].x = 0;
+        points[0].y = 0;
+        points[1].x = 64;
+        points[1].y = 64;
+        points[2].x = 0;
+        points[2].y = 64;
+        points[3].x = 64;
+        points[3].y = 0;
+        return;
+    }
+    if (kind == ORIENTATION_OUTLINE_NEGATIVE) {
+        points[0].x = 0;
+        points[0].y = 0;
+        points[1].x = 64;
+        points[1].y = 0;
+        points[2].x = 64;
+        points[2].y = 64;
+        points[3].x = 0;
+        points[3].y = 64;
+        return;
+    }
+
+    points[0].x = 0;
+    points[0].y = 0;
+    points[1].x = 0;
+    points[1].y = 64;
+    points[2].x = 64;
+    points[2].y = 64;
+    points[3].x = 64;
+    points[3].y = 0;
+}
+
+static void print_orientation_observation(
+    const char* label,
+    OrientationOutlineKind kind,
+    int* emitted
+) {
+    if (*emitted) {
+        printf(",");
+    }
+    *emitted = 1;
+    FT_Orientation orientation;
+    if (kind == ORIENTATION_OUTLINE_NULL) {
+        orientation = FT_Outline_Get_Orientation(NULL);
+    } else {
+        FT_Outline outline;
+        FT_Vector points[4];
+        char tags[4];
+        short contours[1];
+        build_orientation_outline(kind, &outline, points, tags, contours);
+        orientation = FT_Outline_Get_Orientation(&outline);
+    }
+    printf("{\"label\":\"%s\",\"orientation\":%d}", label, orientation);
+}
+
+static int emit_outline_get_orientation(int argc, char** argv) {
+    if (argc != 3) {
+        return 1;
+    }
+    const char* case_id = argv[2];
+    print_ok_output_prefix();
+    printf("{\"orientations\":[");
+    int emitted = 0;
+    if (strstr(case_id, "FT_Outline_Get_Orientation.null_empty_and_area_sign")) {
+        print_orientation_observation("null", ORIENTATION_OUTLINE_NULL, &emitted);
+        print_orientation_observation("empty", ORIENTATION_OUTLINE_EMPTY, &emitted);
+        print_orientation_observation("positive", ORIENTATION_OUTLINE_POSITIVE, &emitted);
+        print_orientation_observation("negative", ORIENTATION_OUTLINE_NEGATIVE, &emitted);
+    } else if (strstr(case_id, "FT_Outline_Get_Orientation.collapsed_and_oversized_return_none")) {
+        print_orientation_observation("collapsed", ORIENTATION_OUTLINE_COLLAPSED, &emitted);
+        print_orientation_observation("oversized", ORIENTATION_OUTLINE_OVERSIZED, &emitted);
+    } else if (strstr(case_id, "FT_ORIENTATION_TRUETYPE.null_and_empty_return_truetype")) {
+        print_orientation_observation("null", ORIENTATION_OUTLINE_NULL, &emitted);
+        print_orientation_observation("empty", ORIENTATION_OUTLINE_EMPTY, &emitted);
+    } else if (strstr(case_id, "FT_ORIENTATION_TRUETYPE.negative_area_returns_truetype") ||
+               strstr(case_id, "FT_ORIENTATION_FILL_RIGHT.alias_matches_truetype_orientation")) {
+        print_orientation_observation("negative", ORIENTATION_OUTLINE_NEGATIVE, &emitted);
+    } else if (strstr(case_id, "FT_ORIENTATION_POSTSCRIPT.positive_area_returns_postscript")) {
+        print_orientation_observation("positive", ORIENTATION_OUTLINE_POSITIVE, &emitted);
+    } else if (strstr(case_id, "FT_ORIENTATION_NONE.returned_for_collapsed_or_zero_area")) {
+        print_orientation_observation("collapsed", ORIENTATION_OUTLINE_COLLAPSED, &emitted);
+        print_orientation_observation("zero_area", ORIENTATION_OUTLINE_ZERO_AREA, &emitted);
+    } else if (strstr(case_id, "FT_ORIENTATION_NONE.returned_for_oversized_outline")) {
+        print_orientation_observation("oversized", ORIENTATION_OUTLINE_OVERSIZED, &emitted);
+    } else {
+        fprintf(stderr, "unsupported outline orientation case: %s\n", case_id);
+        return 2;
+    }
+    printf("]}}\n");
+    return 0;
+}
+
 static int face_macro_value(FT_Face face, const char* macro_name, int* out) {
     if (streq(macro_name, "FT_HAS_COLOR")) {
         *out = FT_HAS_COLOR(face);
@@ -7984,6 +8130,9 @@ static int dispatch(int argc, char** argv) {
     if (argc == 4 && streq(argv[1], "--outline-render")) {
         return emit_outline_render(argc, argv);
     }
+    if (argc == 3 && streq(argv[1], "--outline-get-orientation")) {
+        return emit_outline_get_orientation(argc, argv);
+    }
     if (argc == 7 && (streq(argv[1], "--new-memory-face") || streq(argv[1], "--set-pixel-sizes") || streq(argv[1], "--size-metrics"))) {
         return emit_face_or_slot(argc, argv);
     }
@@ -8248,7 +8397,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 9 && streq(argv[1], "--sbit-cache-lookup")) {
         return emit_face_or_slot(argc, argv);
     }
-    fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | --constant-map SYMBOLS_CSV | --fixed-math OP ROWS | --trigon OP ROWS | --trigon-aggregate OP ROWS | --vector-transform ROWS | --matrix-multiply ROWS | --matrix-invert ROWS | --layout RECORD | --type-probe SYMBOL | --function-probe SYMBOL | --abi-value-echo TYPE ROWS | --compile-alias-probe MACRO TYPEDEF SIGNATURE | --macro-eval CASE_ID | --face-macro SRC_KIND SRC FACE_INDEX MACRO | --face-macro-flags MACRO FACE_INDEX FLAGS_CSV | --library-version PRESENT ROW_MASKS SENTINELS | --face-flags SRC_KIND SRC FACE_INDEX FLAG | --manager-reset-null | --manager-reset SRC_KIND SRC FACE_INDEX PX PY GID | --outline-render MODE CASE_ID | --new-memory-face SRC_KIND SRC FACE_INDEX PX PY | --new-memory-face-variants SRC_KIND SRC ROWS | --set-pixel-sizes SRC_KIND SRC FACE_INDEX PX PY | --set-char-size SRC_KIND SRC FACE_INDEX WIDTH HEIGHT HR VR | --set-char-sizes SRC_KIND SRC FACE_INDEX ROWS | --request-size SRC_KIND SRC FACE_INDEX ROWS | --new-size-null-face | --new-size-null-output SRC_KIND SRC FACE_INDEX | --done-size-null | --activate-size-null | --size-metrics SRC_KIND SRC FACE_INDEX PX PY | --get-char-index SRC_KIND SRC FACE_INDEX PX PY CHAR | --face-get-char-variant-index SRC_KIND SRC FACE_INDEX PX PY CHAR SELECTOR | --face-get-char-variant-index-null CHAR SELECTOR | --get-kerning SRC_KIND SRC FACE_INDEX PX PY ROWS | --charmap-get-char-index SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING CHAR | --inspect-charmaps SRC_KIND SRC FACE_INDEX PX PY ENCODINGS CHARS | --set-charmap SRC_KIND SRC FACE_INDEX PX PY INDICES CHARS | --set-charmap-null-face | --set-charmap-variants SRC_KIND SRC FACE_INDEX FOREIGN_KIND FOREIGN_SRC FOREIGN_FACE_INDEX VARIANTS | --get-charmap-index SRC_KIND SRC FACE_INDEX PX PY | --get-charmap-index-variants SRC_KIND SRC FACE_INDEX VARIANTS | --get-cmap-format SRC_KIND SRC FACE_INDEX PX PY VARIANTS | --get-cmap-language-id SRC_KIND SRC FACE_INDEX PX PY VARIANTS | --select-charmap SRC_KIND SRC FACE_INDEX ENCODING CHARS | --set-lcd-filter LIBRARY_PRESENT FILTERS | --set-lcd-filter-weights LIBRARY_PRESENT WEIGHTS | --set-lcd-geometry LIBRARY_PRESENT GEOMETRY | --get-truetype-engine-type LIBRARY_PRESENT | --done-freetype MODE [SRC_KIND SRC FACE_INDEX] | --done-face MODE [SRC_KIND SRC FACE_INDEX] | --face-check-tt-patents MODE [SRC_KIND SRC FACE_INDEX] | --face-set-unpatented-hinting MODE VALUES [SRC_KIND SRC FACE_INDEX] | --outline-get-cbox-null-inputs SENTINEL | --get-fstype-flags SRC_KIND SRC FACE_INDEX PX PY [SYMBOL] | --get-postscript-name SRC_KIND SRC FACE_INDEX PX PY | --get-postscript-name-variants SRC_KIND SRC FACE_INDEX VARIANTS | --set-named-instance-null-face INSTANCE | --set-named-instance SRC_KIND SRC FACE_INDEX PRIOR_INSTANCE INSTANCE | --get-sfnt-name-count SRC_KIND SRC FACE_INDEX PX PY | --get-sfnt-name SRC_KIND SRC FACE_INDEX PX PY INDEXES | --get-sfnt-lang-tag SRC_KIND SRC FACE_INDEX PX PY LANG OUTPUT | --get-sfnt-lang-tag-variants SRC_KIND SRC FACE_INDEX PX PY ROWS | --get-sfnt-name-match SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID | --sfnt-mac-encoding-record SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID CODEPOINTS | --get-sfnt-os2-unicode-ranges SRC_KIND SRC FACE_INDEX PX PY CODEPOINTS | --get-first-char-null-face | --get-next-char-null-face STARTS_CSV | --get-first-char SRC_KIND SRC FACE_INDEX PX PY | --get-next-char-sequence SRC_KIND SRC FACE_INDEX PX PY MAX_STEPS | --get-next-char-starts SRC_KIND SRC FACE_INDEX PX PY STARTS_CSV | --load-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --load-glyph-from-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph-num-glyphs SRC_KIND SRC FACE_INDEX PX PY FLAGS | --load-glyph-outline SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-bbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --glyph-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODES | --glyph-to-bitmap SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE DESTROY | --glyphslot-slant SRC_KIND SRC FACE_INDEX PX PY ROWS | --glyphslot-oblique SRC_KIND SRC FACE_INDEX PX PY ROWS | --glyphslot-null-noop FUNCTION FIRST SECOND | --glyph-record SRC_KIND SRC FACE_INDEX PX PY GID FLAGS ACTION | --sbit-cache-lookup SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-metrics SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-slot SRC_KIND SRC FACE_INDEX PX PY GID FLAGS [MODE] | --get-advance SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --get-advances SRC_KIND SRC FACE_INDEX PX PY START COUNT FLAGS | --get-subglyph-info-null-slot SUB_INDEX | --get-subglyph-info-null-outputs SRC_KIND SRC FACE_INDEX PX PY GID FLAGS SUB_INDEX NULL_OUTPUTS | --get-subglyph-info SRC_KIND SRC FACE_INDEX PX PY GID FLAGS SUB_INDICES INVALID_SUB_INDICES | --render-glyph SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS MODE [REPEAT] | --render-glyph-index SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE [REPEAT]\n");
+    fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | --constant-map SYMBOLS_CSV | --fixed-math OP ROWS | --trigon OP ROWS | --trigon-aggregate OP ROWS | --vector-transform ROWS | --matrix-multiply ROWS | --matrix-invert ROWS | --layout RECORD | --type-probe SYMBOL | --function-probe SYMBOL | --abi-value-echo TYPE ROWS | --compile-alias-probe MACRO TYPEDEF SIGNATURE | --macro-eval CASE_ID | --face-macro SRC_KIND SRC FACE_INDEX MACRO | --face-macro-flags MACRO FACE_INDEX FLAGS_CSV | --library-version PRESENT ROW_MASKS SENTINELS | --face-flags SRC_KIND SRC FACE_INDEX FLAG | --manager-reset-null | --manager-reset SRC_KIND SRC FACE_INDEX PX PY GID | --outline-render MODE CASE_ID | --outline-get-orientation CASE_ID | --new-memory-face SRC_KIND SRC FACE_INDEX PX PY | --new-memory-face-variants SRC_KIND SRC ROWS | --set-pixel-sizes SRC_KIND SRC FACE_INDEX PX PY | --set-char-size SRC_KIND SRC FACE_INDEX WIDTH HEIGHT HR VR | --set-char-sizes SRC_KIND SRC FACE_INDEX ROWS | --request-size SRC_KIND SRC FACE_INDEX ROWS | --new-size-null-face | --new-size-null-output SRC_KIND SRC FACE_INDEX | --done-size-null | --activate-size-null | --size-metrics SRC_KIND SRC FACE_INDEX PX PY | --get-char-index SRC_KIND SRC FACE_INDEX PX PY CHAR | --face-get-char-variant-index SRC_KIND SRC FACE_INDEX PX PY CHAR SELECTOR | --face-get-char-variant-index-null CHAR SELECTOR | --get-kerning SRC_KIND SRC FACE_INDEX PX PY ROWS | --charmap-get-char-index SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING CHAR | --inspect-charmaps SRC_KIND SRC FACE_INDEX PX PY ENCODINGS CHARS | --set-charmap SRC_KIND SRC FACE_INDEX PX PY INDICES CHARS | --set-charmap-null-face | --set-charmap-variants SRC_KIND SRC FACE_INDEX FOREIGN_KIND FOREIGN_SRC FOREIGN_FACE_INDEX VARIANTS | --get-charmap-index SRC_KIND SRC FACE_INDEX PX PY | --get-charmap-index-variants SRC_KIND SRC FACE_INDEX VARIANTS | --get-cmap-format SRC_KIND SRC FACE_INDEX PX PY VARIANTS | --get-cmap-language-id SRC_KIND SRC FACE_INDEX PX PY VARIANTS | --select-charmap SRC_KIND SRC FACE_INDEX ENCODING CHARS | --set-lcd-filter LIBRARY_PRESENT FILTERS | --set-lcd-filter-weights LIBRARY_PRESENT WEIGHTS | --set-lcd-geometry LIBRARY_PRESENT GEOMETRY | --get-truetype-engine-type LIBRARY_PRESENT | --done-freetype MODE [SRC_KIND SRC FACE_INDEX] | --done-face MODE [SRC_KIND SRC FACE_INDEX] | --face-check-tt-patents MODE [SRC_KIND SRC FACE_INDEX] | --face-set-unpatented-hinting MODE VALUES [SRC_KIND SRC FACE_INDEX] | --outline-get-cbox-null-inputs SENTINEL | --get-fstype-flags SRC_KIND SRC FACE_INDEX PX PY [SYMBOL] | --get-postscript-name SRC_KIND SRC FACE_INDEX PX PY | --get-postscript-name-variants SRC_KIND SRC FACE_INDEX VARIANTS | --set-named-instance-null-face INSTANCE | --set-named-instance SRC_KIND SRC FACE_INDEX PRIOR_INSTANCE INSTANCE | --get-sfnt-name-count SRC_KIND SRC FACE_INDEX PX PY | --get-sfnt-name SRC_KIND SRC FACE_INDEX PX PY INDEXES | --get-sfnt-lang-tag SRC_KIND SRC FACE_INDEX PX PY LANG OUTPUT | --get-sfnt-lang-tag-variants SRC_KIND SRC FACE_INDEX PX PY ROWS | --get-sfnt-name-match SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID | --sfnt-mac-encoding-record SRC_KIND SRC FACE_INDEX PX PY PLATFORM ENCODING LANGUAGE NAME_ID CODEPOINTS | --get-sfnt-os2-unicode-ranges SRC_KIND SRC FACE_INDEX PX PY CODEPOINTS | --get-first-char-null-face | --get-next-char-null-face STARTS_CSV | --get-first-char SRC_KIND SRC FACE_INDEX PX PY | --get-next-char-sequence SRC_KIND SRC FACE_INDEX PX PY MAX_STEPS | --get-next-char-starts SRC_KIND SRC FACE_INDEX PX PY STARTS_CSV | --load-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --load-glyph-from-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph-num-glyphs SRC_KIND SRC FACE_INDEX PX PY FLAGS | --load-glyph-outline SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-bbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --outline-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --glyph-get-cbox SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODES | --glyph-to-bitmap SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE DESTROY | --glyphslot-slant SRC_KIND SRC FACE_INDEX PX PY ROWS | --glyphslot-oblique SRC_KIND SRC FACE_INDEX PX PY ROWS | --glyphslot-null-noop FUNCTION FIRST SECOND | --glyph-record SRC_KIND SRC FACE_INDEX PX PY GID FLAGS ACTION | --sbit-cache-lookup SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-metrics SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --inspect-glyph-slot SRC_KIND SRC FACE_INDEX PX PY GID FLAGS [MODE] | --get-advance SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --get-advances SRC_KIND SRC FACE_INDEX PX PY START COUNT FLAGS | --get-subglyph-info-null-slot SUB_INDEX | --get-subglyph-info-null-outputs SRC_KIND SRC FACE_INDEX PX PY GID FLAGS SUB_INDEX NULL_OUTPUTS | --get-subglyph-info SRC_KIND SRC FACE_INDEX PX PY GID FLAGS SUB_INDICES INVALID_SUB_INDICES | --render-glyph SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS MODE [REPEAT] | --render-glyph-index SRC_KIND SRC FACE_INDEX PX PY GID FLAGS MODE [REPEAT]\n");
     fprintf(stderr, "       --get-sfnt-name-variant FACE_KIND OUTPUT_KIND INDEXES [SRC_KIND SRC FACE_INDEX PX PY]\n");
     return 2;
 }
