@@ -1967,6 +1967,28 @@
             ]
           },
           {
+            "id": "hinter-fpgm-fdef-index-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-fpgm-fdef-index-overflow.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_NO_AUTOHINT"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/hinter:fpgm-fdef-index-overflow"
+            ]
+          },
+          {
             "id": "hinter-fpgm-nested-fdef",
             "assets": {
               "font": {

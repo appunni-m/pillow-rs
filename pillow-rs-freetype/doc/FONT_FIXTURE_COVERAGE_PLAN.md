@@ -839,7 +839,7 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,389 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,390 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 8 | `FT_New_Size`, `FT_Done_Size`, `FT_Activate_Size`, `FT_OpenType_Validate`, and `FT_OpenType_Free` null rows execute pinned C oracle status checks and the Rust FFI wrapper validation path; size lifecycle success remains separate. |
 | Wrapper null-validation route | 1 | `FT_Get_SubGlyph_Info` null-output rows intentionally validate the thin Rust/C/WASM wrapper guard after a native-C proof row establishes the composite slot state. |
 | Compile/header/scalar contract | 2,229 | Valid for ABI/header contracts, not runtime core coverage. |
@@ -1906,10 +1906,11 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-13 | Ftsynth vertical-advance outline row | `FT_GlyphSlot_AdjustWeight` adds one manifest-backed explicit case over existing `input/fonts/DejaVuSans.ttf` gid 36 with `FT_LOAD_VERTICAL_LAYOUT`. Pinned C, Rust FFI, C ABI, and WASM ABI agree that the loaded public advance vector is vertical before ydelta is applied, covering the public slot `advance.y` mutation without a glyph loop or new font bytes. Runtime comparison is 6,743 / 6,743 with four explicit pending rows. Refreshed condition coverage is 16,195 / 18,080 lines, 23,247 / 25,910 regions, 3,899 / 4,638 branches, and 1,021 / 1,147 functions; route audit reports 6,747 concrete cases, 3,387 real-parity routes, and zero implicit rows |
 | 2026-07-13 | Ftsynth PostScript-orientation outline row | `FT_GlyphSlot_AdjustWeight` adds one manifest-backed explicit case over existing `fonts/glyf/hinter-control-matrix.ttf` gid 1, whose positive area selects FreeType's PostScript-orientation embolden branch in `FT_Outline_EmboldenXY`. Pinned C, Rust FFI, C ABI, and WASM ABI agree on mutated outline points, cbox, metrics, and advances. This adds no font bytes and one real-parity concrete case; runtime comparison is 6,744 / 6,744 with four explicit pending rows. Refreshed condition coverage is 16,198 / 18,080 lines, 23,250 / 25,910 regions, 3,902 / 4,638 branches, and 1,021 / 1,147 functions |
 | 2026-07-13 | Ftsynth mixed-winding degenerate segment row | `FT_GlyphSlot_AdjustWeight` adds one manifest-backed explicit case over existing `fonts/glyf/hinter-control-matrix.ttf` gid 43, whose mixed-winding outline includes a repeated-point degenerate contour. Pinned C, Rust FFI, C ABI, and WASM ABI agree while the embolden walker skips zero-length segment vectors through the public glyph-slot mutation route. This adds no font bytes and one real-parity concrete case; runtime comparison is 6,745 / 6,745 with four explicit pending rows. Refreshed condition coverage is 16,200 / 18,080 lines, 23,255 / 25,910 regions, 3,905 / 4,638 branches, and 1,021 / 1,147 functions; route audit reports 6,749 concrete cases, 3,389 real-parity routes, and zero implicit rows |
+| 2026-07-13 | TrueType fpgm FDEF index overflow fixture | `font-fixture-hinter` now emits `fonts/glyf/hinter-fpgm-fdef-index-overflow.ttf`, a compact derived TrueType control whose font program attempts `FDEF 256` before scanning any function body. One explicit `FT_Load_Glyph.matrix_load` row proves pinned C, Rust FFI, C ABI, and WASM ABI all reject the out-of-range function definition through the public load route. Concrete cases are 6,750 with zero implicit rows; runtime comparison is 6,746 / 6,746 with four explicit pending rows. Refreshed condition coverage is 16,203 / 18,080 lines, 23,256 / 25,910 regions, 3,906 / 4,638 branches, and 1,021 / 1,147 functions; route audit reports 6,750 concrete cases, 3,390 real-parity routes, and zero implicit rows |
 
 ## Residual Coverage Classification - 2026-07-13
 
-Fresh `test-unified-condition-coverage` still reports 1,880 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,877 uncovered core
 source lines. The current split is:
 
 | Bucket | Evidence | Action |
