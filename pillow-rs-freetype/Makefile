@@ -32,6 +32,7 @@ help:
 	@printf "  make font-fixture-metrics Rebuild compact face metric fallback fixtures\n"
 	@printf "  make font-fixture-name Rebuild compact name table fixtures\n"
 	@printf "  make font-fixture-post Rebuild compact post table fixtures\n"
+	@printf "  make font-fixture-render Rebuild compact render path fixtures\n"
 	@printf "  make font-fixture-sfnt Rebuild compact SFNT table fixtures\n"
 	@printf "\nBuild:\n"
 	@printf "  make build            Build the crate\n"
@@ -237,6 +238,10 @@ font-fixture-hinter:
 	ttx -q --no-recalc-timestamp -o tests/fixtures/fonts/glyf/hinter-control-matrix.ttf \
 		tests/fixtures/font-sources/hinter-control-matrix.ttx
 	$(PYTHON) scripts/build_hinter_edge_fixtures.py
+
+.PHONY: font-fixture-render
+font-fixture-render:
+	$(PYTHON) scripts/build_render_fixtures.py
 
 .PHONY: font-fixture-cjk
 font-fixture-cjk:
