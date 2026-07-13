@@ -121,6 +121,42 @@
             }
           },
           {
+            "id": "below_default_range",
+            "coverage": [
+              "face_get_char_variant_is_default:format14-below-default-range"
+            ],
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/cmap/cmap-format-language-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "charcode": "U+0040",
+              "variant_selector": "U+FE0F"
+            }
+          },
+          {
+            "id": "zero_glyph_non_default",
+            "coverage": [
+              "face_get_char_variant_is_default:format14-zero-glyph-non-default"
+            ],
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/cmap/cmap-format-language-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "charcode": "U+0045",
+              "variant_selector": "U+FE0E"
+            }
+          },
+          {
             "id": "missing_selector",
             "coverage": [
               "face_get_char_variant_is_default:format14-missing-selector"

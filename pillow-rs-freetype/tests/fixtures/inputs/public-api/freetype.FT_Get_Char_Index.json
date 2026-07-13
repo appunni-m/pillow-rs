@@ -750,6 +750,7 @@
               "tt/cmap:format14-records-exceed-length",
               "tt/cmap:format14-physical-too-short",
               "tt/cmap:format14-offset-out-of-range",
+              "tt/cmap:format14-non-default-offset-out-of-range",
               "tt/cmap:format14-selectors-out-of-order",
               "tt/cmap:format14-default-count-missing",
               "tt/cmap:format14-default-records-exceed-length",

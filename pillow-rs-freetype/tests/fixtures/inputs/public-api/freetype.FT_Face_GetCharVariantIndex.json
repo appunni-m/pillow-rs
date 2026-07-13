@@ -78,6 +78,25 @@
             }
           },
           {
+            "id": "platform0_below_default_range",
+            "coverage": [
+              "face_get_char_variant_index:platform0-active-unicode-charmap",
+              "face_get_char_variant_index:format14-below-default-range"
+            ],
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/charmap/cmap-platform0-variation.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "charcode": "U+0040",
+              "variant_selector": "U+FE0F"
+            }
+          },
+          {
             "id": "missing_char_or_selector",
             "coverage": [
               "face_get_char_variant_index:format14-missing-char"
