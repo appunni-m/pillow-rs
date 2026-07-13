@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 142 | 99 | 43 | 110 | 777 KiB |
+| Active fixtures | 148 | 105 | 43 | 116 | 802 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 7 | 7 | 0 | 7 | 193 KiB |
 
@@ -150,10 +150,16 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `2868a722bff5` | 1.6 | 1 | `fonts/glyf/loca-long-truncated.ttf` | long-loca control with only seven bytes, one byte below a complete glyph-0 offset pair |
 | `697619c0847e` | 1.6 | 1 | `fonts/glyf/cvt-empty.ttf` | valid TrueType control with a present zero-length cvt table |
 | `6175105e1748` | 1.6 | 1 | `fonts/glyf/cvt-odd-length.ttf` | valid TrueType control with a one-byte cvt table rejected by Rust parsing and ignored by face construction |
-| `bc5dd5f0757d` | 3.8 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed VM and render-topology matrix covering state, geometry, control flow, DELTA, invalid coordinate reads, repeated post-IUP compatibility return, six exact bytecode error classes, conic chains, intersections, thin outlines, mixed winding, degenerate contours, empty outlines, collapsed spans, mono low-precision raster selection, and scan-type dropout modes |
+| `6a0cb31f530d` | 4.2 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed VM and render-topology matrix covering state, geometry, control flow, DELTA, invalid coordinate reads, repeated post-IUP compatibility return, six exact bytecode error classes, conic chains, intersections, thin outlines, mixed winding, degenerate contours, empty outlines, collapsed spans, mono low-precision raster selection, and scan-type dropout modes |
 | `237f640b006f` | 4.2 | 1 | `fonts/glyf/hinter-empty-fpgm.ttf` | derived source-backed TrueType control with empty `fpgm`, non-empty `prep`, present `cvt`, and the same glyph programs as `hinter-control-matrix.ttf`; owns native prepare-context empty-font-program coverage |
-| `4404c836404e` | 4.2 | 1 | `fonts/glyf/hinter-prep-definitions.ttf` | derived source-backed TrueType control whose prep program attempts FDEF then IDEF definitions; owns C-compatible invalid prep definition error parity |
-| `fc972ab14dba` | 4.2 | 1 | `fonts/glyf/hinter-prep-idef.ttf` | derived source-backed TrueType control whose prep program attempts only IDEF; owns the paired invalid prep IDEF error route |
+| `4404c836404e` | 4.2 | 1 | `fonts/glyf/hinter-prep-definitions.ttf` | derived source-backed TrueType control whose prep program attempts additional FDEF then IDEF definitions beyond the font's maxp definition budgets; owns C-compatible too-many-definition error parity |
+| `fc972ab14dba` | 4.2 | 1 | `fonts/glyf/hinter-prep-idef.ttf` | derived source-backed TrueType control whose prep program attempts only a new IDEF beyond the font's maxp instruction-definition budget; owns the paired too-many-IDEF error route |
+| `7c8156a2d450` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-loopcall.ttf` | derived source-backed TrueType control whose base glyph calls the existing no-op FDEF twice with LOOPCALL; owns repeated call-frame return coverage |
+| `0d2856cd2a4b` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-nested-fdef.ttf` | derived source-backed TrueType control whose font program contains nested FDEF; owns FreeType `Nested_DEFS` error parity |
+| `fab1a7a87ba8` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-idef-opcode-overflow.ttf` | derived source-backed TrueType control whose font program attempts IDEF opcode 0x100; owns out-of-range instruction-definition error parity |
+| `d699aaefd480` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-nested-idef.ttf` | derived source-backed TrueType control whose font program contains nested IDEF; owns FreeType `Nested_DEFS` error parity for instruction definitions |
+| `97bb46e830c3` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-unterminated-fdef.ttf` | derived source-backed TrueType control whose font program starts FDEF without ENDF; owns unterminated-FDEF scanner error parity |
+| `0c5f7ffdca48` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-unterminated-idef.ttf` | derived source-backed TrueType control whose font program starts IDEF without ENDF; owns unterminated-IDEF scanner error parity |
 
 ### Legacy Alias Concentration
 
@@ -227,7 +233,9 @@ listed because they enter different hinting and scaling conditions.
 | `cvt-empty.ttf`, `cvt-odd-length.ttf` | gid 1 | 20 | present-empty and odd-length CVT parser outcomes isolated with no-scale loading |
 | `hinter-control-matrix.ttf` | gid 1, gids 24-40 | 20 | valid VM family matrices plus empty-stack ROLL no-op, repeated post-IUP compatibility return, divide-zero, truncated pushes, glyph IDEF, unterminated FDEF, undefined-opcode errors, and mono scan-type 0/2 dropout controls |
 | `hinter-empty-fpgm.ttf` | gid 1 | 20 | native TrueType prepare path with empty font program, non-empty prep program, and present CVT |
-| `hinter-prep-definitions.ttf`, `hinter-prep-idef.ttf` | gid 1 | 20 | invalid prep-range FDEF/IDEF definitions matched to pinned C error behavior |
+| `hinter-prep-definitions.ttf`, `hinter-prep-idef.ttf` | gid 1 | 20 | prep-range FDEF/IDEF definitions allowed by FreeType syntax but rejected by this font's maxp definition budgets, matching pinned C error behavior |
+| `hinter-fpgm-loopcall.ttf` | gid 1 | 20 | no-output repeated LOOPCALL of the existing function definition, covering call-frame repeat and ENDF return without changing points |
+| `hinter-fpgm-nested-fdef.ttf`, `hinter-fpgm-nested-idef.ttf`, `hinter-fpgm-idef-opcode-overflow.ttf`, `hinter-fpgm-unterminated-fdef.ttf`, `hinter-fpgm-unterminated-idef.ttf` | gid 1 | 20 | invalid fpgm scanner controls for nested definitions, out-of-range IDEF opcode, and unterminated FDEF/IDEF, each exposed as an explicit public load error |
 | `hinter-control-matrix.ttf` | U+E032 gid 51 | 20 | branch-edge VM control covering zero-length line and stack vectors, invalid stack-index fallback, taken JROF, no-round dispatch, invalid contour shift, invalid coordinate reads, empty twilight-zone SHZ, and positive/negative single-width MDRP cut-in |
 | `hinter-control-matrix.ttf` | gid 21 | 20 | empty outline selected across normal, mono, LCD, LCD_V, and SDF render modes |
 | `hinter-control-matrix.ttf` | U+E028 gid 41 | 20 | off-curve start and consecutive conic controls across normal, mono, LCD, LCD_V, and SDF modes; owns FreeType-compatible SDF conic subdivision |

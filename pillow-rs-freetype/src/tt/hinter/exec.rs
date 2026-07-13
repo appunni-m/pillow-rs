@@ -132,10 +132,14 @@ pub struct ExecContext {
     // ── Function definitions ──────────────────────────────────────────
     /// Function definitions (FDEF/ENDF).
     pub functions: Vec<Option<DefRecord>>,
+    max_function_defs: usize,
+    num_function_defs: usize,
 
     /// Instruction definitions (IDEF/ENDF).
     #[allow(dead_code)]
     pub instruction_defs: Vec<Option<DefRecord>>,
+    max_instruction_defs: usize,
+    num_instruction_defs: usize,
 
     // ── Call stack ────────────────────────────────────────────────────
     /// Call stack (max 10 levels deep).
@@ -198,7 +202,11 @@ impl ExecContext {
             storage: vec![0; scale.storage_size.max(1)],
             cvt: cvt.to_vec(),
             functions: vec![None; MAX_FUNCTIONS],
+            max_function_defs: scale.max_function_defs,
+            num_function_defs: 0,
             instruction_defs: vec![None; MAX_INSTRUCTION_DEFS],
+            max_instruction_defs: scale.max_instruction_defs,
+            num_instruction_defs: 0,
             call_stack: Vec::with_capacity(MAX_CALL_DEPTH),
             ip: 0,
             cur_range: 0,
@@ -549,65 +557,34 @@ impl ExecContext {
     fn define_function(&mut self) -> Result<(), FontError> {
         let func_num = self.pop()? as u16;
         let range = self.cur_range;
-        // FreeType `ttinterp.c` treats definition opcodes as font-program
-        // constructs; prep/glyph-range definitions fail as invalid bytecode.
-        if range != 1 {
+        // FreeType `ttinterp.c:3274-3335` allows FDEF in `fpgm` and `prep`,
+        // but rejects glyph-program definitions and nested FDEF/IDEF opcodes.
+        if range == 2 {
             return Err(FontError::InvalidOutline(
-                "bytecode: FDEF outside font program".into(),
+                "bytecode: FDEF in glyph program".into(),
             ));
         }
-        let program = &self.font_program;
-        let start = self.ip;
-        let mut scan_ip = self.ip;
-        let mut depth = 1u32;
-
-        while scan_ip < program.len() {
-            let op_ip = scan_ip;
-            let op = program[scan_ip];
-            scan_ip += 1;
-            match op {
-                0x2C => depth += 1,
-                0x2D => {
-                    depth -= 1;
-                    if depth == 0 {
-                        if (func_num as usize) < self.functions.len() {
-                            self.functions[func_num as usize] = Some(DefRecord {
-                                range,
-                                start,
-                                end: op_ip,
-                                opc: func_num,
-                                active: true,
-                            });
-                        }
-                        self.ip = scan_ip;
-                        return Ok(());
-                    }
-                }
-                _ => Self::skip_instruction_operands(program, &mut scan_ip, op),
+        let func_index = func_num as usize;
+        if func_index >= self.functions.len() {
+            return Err(FontError::InvalidOutline(
+                "bytecode: too many function definitions".into(),
+            ));
+        }
+        let redefining = self.functions[func_index].is_some();
+        if !redefining {
+            if self.num_function_defs >= self.max_function_defs {
+                return Err(FontError::InvalidOutline(
+                    "bytecode: too many function definitions".into(),
+                ));
             }
+            self.num_function_defs += 1;
         }
 
-        Err(FontError::InvalidOutline(
-            "bytecode: unterminated FDEF".into(),
-        ))
-    }
-
-    fn define_instruction(&mut self) -> Result<(), FontError> {
-        let opcode = self.pop()?;
-        if !(0..=0xFF).contains(&opcode) {
-            return Err(FontError::InvalidOutline(
-                "bytecode: IDEF opcode out of range".into(),
-            ));
-        }
-
-        let range = self.cur_range;
-        if range != 1 {
-            return Err(FontError::InvalidOutline(
-                "bytecode: IDEF outside font program".into(),
-            ));
-        }
-
-        let program = &self.font_program;
+        let program = if range == 0 {
+            &self.cvt_program
+        } else {
+            &self.font_program
+        };
         let start = self.ip;
         let mut scan_ip = self.ip;
 
@@ -622,11 +599,76 @@ impl ExecContext {
                     ));
                 }
                 0x2D => {
-                    self.instruction_defs[opcode as usize] = Some(DefRecord {
+                    self.functions[func_index] = Some(DefRecord {
                         range,
                         start,
                         end: op_ip,
-                        opc: opcode as u16,
+                        opc: func_num,
+                        active: true,
+                    });
+                    self.ip = scan_ip;
+                    return Ok(());
+                }
+                _ => Self::skip_instruction_operands(program, &mut scan_ip, op),
+            }
+        }
+
+        Err(FontError::InvalidOutline(
+            "bytecode: unterminated FDEF".into(),
+        ))
+    }
+
+    fn define_instruction(&mut self) -> Result<(), FontError> {
+        let opcode = self.pop()?;
+        let range = self.cur_range;
+        // FreeType `ttinterp.c:3563-3619` has the same definition-range and
+        // nested-definition rules for IDEF as for FDEF.
+        if range == 2 {
+            return Err(FontError::InvalidOutline(
+                "bytecode: IDEF in glyph program".into(),
+            ));
+        }
+
+        if !(0..=0xFF).contains(&opcode) {
+            return Err(FontError::InvalidOutline(
+                "bytecode: IDEF opcode out of range".into(),
+            ));
+        }
+        let opcode_index = opcode as usize;
+        let redefining = self.instruction_defs[opcode_index].is_some();
+        if !redefining {
+            if self.num_instruction_defs >= self.max_instruction_defs {
+                return Err(FontError::InvalidOutline(
+                    "bytecode: too many instruction definitions".into(),
+                ));
+            }
+            self.num_instruction_defs += 1;
+        }
+
+        let program = if range == 0 {
+            &self.cvt_program
+        } else {
+            &self.font_program
+        };
+        let start = self.ip;
+        let mut scan_ip = self.ip;
+
+        while scan_ip < program.len() {
+            let op_ip = scan_ip;
+            let op = program[scan_ip];
+            scan_ip += 1;
+            match op {
+                0x2C | 0x89 => {
+                    return Err(FontError::InvalidOutline(
+                        "bytecode: nested FDEF/IDEF".into(),
+                    ));
+                }
+                0x2D => {
+                    self.instruction_defs[opcode_index] = Some(DefRecord {
+                        range,
+                        start,
+                        end: op_ip,
+                        opc: opcode_index as u16,
                         active: true,
                     });
                     self.ip = scan_ip;

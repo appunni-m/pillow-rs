@@ -61,6 +61,8 @@ pub struct HintScale {
     pub ppem: i32,
     pub point_size: i32,
     pub storage_size: usize,
+    pub max_function_defs: usize,
+    pub max_instruction_defs: usize,
     pub twilight_points: usize,
     pub is_composite: bool,
     pub reset_vectors_at_glyph_entry: bool,
