@@ -465,6 +465,32 @@
             ]
           },
           {
+            "id": "sbit-composite-success-format9-vertical-layout",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fixtures/assets/fonts/sbit_composite_success_format9.ttf",
+                "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT compound image-format-9 glyph 2 using big vertical metrics for the public vertical-layout bitmap slot path."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 2,
+              "load_flags": [
+                "FT_LOAD_VERTICAL_LAYOUT",
+                "FT_LOAD_SBITS_ONLY"
+              ]
+            },
+            "coverage": [
+              "sbit:compound-format9-vertical-layout-slot"
+            ]
+          },
+          {
             "id": "sbit-composite-mono-success-format8",
             "assets": {
               "font": {

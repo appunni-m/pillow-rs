@@ -489,21 +489,26 @@ root canvas, and preserve root metrics for the returned slot.  This adds real
 implementation code, so the coverage percentage shifts with a larger source
 denominator even though absolute covered lines and SBIT behavior both move
 forward.
+The latest SBIT vertical-layout row reuses the compact format-9 compound strike
+and adds `FT_LOAD_VERTICAL_LAYOUT | FT_LOAD_SBITS_ONLY` for glyph 2.  Pinned C
+returns a vertical bitmap slot with zero bitmap-left/top from the big metrics;
+Rust FFI, C ABI, and WASM ABI now prove the same public path without adding
+font bytes.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,829 |
-| Additional grouped variants | 2,664 |
+| Concrete explicit cases | 6,830 |
+| Additional grouped variants | 2,665 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,826 |
-| Exact parity | 6,826 / 6,826 |
+| Runnable parity comparisons | 6,827 |
+| Exact parity | 6,827 / 6,827 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,544 / 19,534 (89.8126%) |
+| Covered Rust lines | 17,543 / 19,535 (89.8029%) |
 | Rust function coverage | 1,133 / 1,310 (86.4885%) |
 | Rust instantiation coverage | 1,136 / 1,313 (86.5194%) |
-| Rust region coverage | 25,277 / 28,141 (89.8227%) |
-| Rust branch/condition coverage | 4,154 / 4,880 (85.1230%) |
+| Rust region coverage | 25,278 / 28,142 (89.8230%) |
+| Rust branch/condition coverage | 4,155 / 4,880 (85.1434%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 170 |
 | Stored active font binaries | 127 files, 899 KiB |
@@ -531,16 +536,16 @@ Current largest uncovered buckets:
 
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
-| `src/render.rs` | 1,721 / 2,272 | 351 / 426 | 121 / 164 | 2,426 / 3,216 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 2,015 / 2,242 | 226 / 270 | 185 / 224 | 2,788 / 3,126 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/render.rs` | 1,721 / 2,277 | 351 / 426 | 121 / 164 | 2,426 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
+| `src/font.rs` | 2,067 / 2,291 | 233 / 278 | 189 / 228 | 2,854 / 3,195 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,538 / 2,828 | 1,006 / 1,282 | 70 / 73 | 3,648 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
 | `src/scaler.rs` | 1,073 / 1,226 | 158 / 188 | 49 / 62 | 1,147 / 1,280 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 650 / 810 | 134 / 184 | 30 / 35 | 918 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
-| `src/ffi/handles.rs` | 1,839 / 1,872 | 333 / 368 | 203 / 204 | 2,492 / 2,540 | Public FFI route audit; wrappers stay thin and must delegate to core |
+| `src/ffi/handles.rs` | 1,850 / 1,885 | 340 / 376 | 203 / 204 | 2,508 / 2,558 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,352 / 1,379 | 382 / 416 | 40 / 43 | 2,741 / 2,945 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 893 / 941 | 381 / 426 | 18 / 19 | 1,187 / 1,247 | CJK topology rows in the compact multiscript fixture |
-| `src/api.rs` | 754 / 780 | 161 / 188 | 77 / 78 | 1,082 / 1,112 | Public API wrapper rows for render cache and glyph-slot surfaces |
+| `src/api.rs` | 1,012 / 1,069 | 228 / 298 | 90 / 90 | 1,527 / 1,595 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short
 physical table data plus truncated range arrays. The only remaining uncovered
@@ -916,7 +921,7 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,511 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,512 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 8 | `FT_New_Size`, `FT_Done_Size`, `FT_Activate_Size`, `FT_OpenType_Validate`, and `FT_OpenType_Free` null rows execute pinned C oracle status checks and wrapper validation; size lifecycle null rows now use direct C/WASM lifecycle exports, and success rows live in real parity. |
 | Wrapper null-validation route | 1 | `FT_Get_SubGlyph_Info` null-output rows intentionally validate the thin Rust/C/WASM wrapper guard after a native-C proof row establishes the composite slot state. |
 | Raw-slot null-validation route | 4 | Runtime rows intentionally validate raw glyph-slot pointer handling after a concrete slot state is established. |
@@ -2037,23 +2042,24 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | Post format-1 standard Mac-name control | `font-fixture-post` now emits `post-format-1-standard-count.ttf`, a compact format-1.0 `post` control with exactly 258 glyph slots. `FT_Get_Glyph_Name.post_format_1_default_names` keeps the non-258 fallback row and adds an exact-258 gid 36 row that returns Mac standard name `A`; `FT_Get_Name_Index.post_format_1_default_name_index` adds the reverse `A -> 36` lookup. Focused glyph-name and name-index parity each pass 2 / 2 through Rust FFI, C ABI, and WASM ABI. Full condition coverage passes with 6,821 concrete cases, 6,818 / 6,818 runtime rows, three FTMM pending rows, 17,431 / 19,380 lines, 25,106 / 27,921 regions, 4,138 / 4,858 branches, 1,127 / 1,292 functions, and 1,130 / 1,295 instantiations. `tt/post.rs` moves to 184 / 192 regions and 21 / 22 branches; the remaining missed lines are helper paths blocked by public glyph-name validation or face-flag gates. Route audit reports 3,503 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 | 2026-07-14 | SBIT unsupported bit-depth and image-format controls | `font-fixture-sbit` now emits `sbit_unsupported_bit_depth_format1.ttf` and `sbit_unsupported_image_format.ttf`, two compact EBLC/EBDT controls. Explicit `FT_Load_Glyph.matrix_load` variants prove pinned C, Rust FFI, C ABI, and WASM ABI parity for unsupported bit depth 7 in image format 1 and unsupported image format 10 through the public `FT_LOAD_SBITS_ONLY` path. Focused `matrix_load` parity passes 1,702 / 1,702. Full condition coverage passes with 6,823 concrete cases, 6,820 / 6,820 runtime rows, three FTMM pending rows, 17,439 / 19,380 lines, 25,109 / 27,921 regions, 4,139 / 4,858 branches, 1,127 / 1,292 functions, and 1,130 / 1,295 instantiations. `tt/sbit.rs` moves to 319 / 398 lines and 29 / 34 branches; remaining misses are private status helpers, checked overflow guards, 64-bit conversion guards, the unreachable compound-format arm, and the compound-image success tail that still needs real compound SBIT success decoding. Route audit reports 3,505 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 | 2026-07-14 | SBIT compound bitmap assembly | `font-fixture-sbit` now emits six compact compound controls: format-8 gray success, format-9 big-metrics success, MONO success, BGRA success, negative component offset, and component out-of-bounds. Core mirrors FreeType `sfnt/ttsbit.c:961-1012` by allocating the root bitmap from compound metrics, recursively loading components, ORing component bytes into the root canvas, and preserving root metrics. Focused `FT_Load_Glyph.matrix_load` parity passes 1,708 / 1,708. Full condition coverage passes with 6,829 concrete cases, 6,826 / 6,826 runtime rows, three FTMM pending rows, 17,544 / 19,534 lines, 25,277 / 28,141 regions, 4,154 / 4,880 branches, 1,133 / 1,310 functions, and 1,136 / 1,313 instantiations. `tt/sbit.rs` moves to 424 / 552 lines and 43 / 56 branches; absolute covered lines increased by 105 while the percentage shifted because real compound implementation code increased the denominator. Route audit reports 3,511 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
+| 2026-07-14 | SBIT vertical-layout bitmap slot | One explicit `FT_Load_Glyph.matrix_load@sbit-composite-success-format9-vertical-layout` row reuses `sbit_composite_success_format9.ttf` with `FT_LOAD_VERTICAL_LAYOUT | FT_LOAD_SBITS_ONLY`. Pinned C returns the compound SBIT bitmap using vertical big metrics, and Rust FFI, C ABI, and WASM ABI agree exactly. This adds no font bytes and closes the public `sbit_glyph_slot` vertical-layout branch in `api.rs`. Focused `matrix_load` parity passes 1,709 / 1,709. Full condition coverage passes with 6,830 concrete cases, 6,827 / 6,827 runtime rows, three FTMM pending rows, 17,543 / 19,535 lines, 25,278 / 28,142 regions, 4,155 / 4,880 branches, 1,133 / 1,310 functions, and 1,136 / 1,313 instantiations. Route audit reports 3,512 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-14
 
-Fresh `test-unified-condition-coverage` still reports 1,990 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,992 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,829 |
-| Runnable parity comparisons | 6,826 / 6,826 |
+| Concrete explicit cases | 6,830 |
+| Runnable parity comparisons | 6,827 / 6,827 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,544 / 19,534 (89.8126%) |
-| Rust region coverage | 25,277 / 28,141 (89.8227%) |
-| Rust branch/condition coverage | 4,154 / 4,880 (85.1230%) |
+| Covered Rust lines | 17,543 / 19,535 (89.8029%) |
+| Rust region coverage | 25,278 / 28,142 (89.8230%) |
+| Rust branch/condition coverage | 4,155 / 4,880 (85.1434%) |
 | Rust function coverage | 1,133 / 1,310 (86.4885%) |
-| Route audit split | real-parity 3,511; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
+| Route audit split | real-parity 3,512; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
