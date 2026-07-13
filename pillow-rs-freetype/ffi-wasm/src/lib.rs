@@ -436,9 +436,9 @@ pub extern "C" fn fontdone_wasm_done_size(size_handle: usize) -> FT_Error {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_active_size(handle: usize) -> usize {
-    face_ref(handle)
-        .map(|face| rust_ffi::FT_Face_Info(&face.face).size as usize)
-        .unwrap_or(0)
+    face_ref(handle).map_or(0, |face| {
+        rust_ffi::FT_Face_Info(&face.face).size as usize
+    })
 }
 
 #[unsafe(no_mangle)]
