@@ -1185,6 +1185,31 @@
             ]
           },
           {
+            "id": "render-coverage-subpixel-short-box-mono",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "glyph_index": 4,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "render/mono:zero-height-profile-sweep"
+            ]
+          },
+          {
             "id": "render-coverage-horizontal-dropout-guard-mono",
             "assets": {
               "font": {
