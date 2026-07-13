@@ -670,7 +670,6 @@ def pending_core_reason(row: ConcreteInput) -> str | None:
     ):
         return "unloaded and unsupported synthetic glyph-slot states need explicit public runner support"
     if row.case_id in {
-        "fterrdef.FT_Err_Missing_Bitmap.sbit_glyph_without_image",
         "fterrdef.FT_Err_Missing_Bitmap.composite_sbit_missing_subglyph",
     }:
         return "embedded bitmap missing-image errors require compact sbit fixtures and loader support"

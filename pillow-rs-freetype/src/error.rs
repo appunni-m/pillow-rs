@@ -31,6 +31,18 @@ pub enum FontError {
     /// The requested FreeType-style load flag combination is not implemented.
     #[error("Unsupported load flags: {0}")]
     UnsupportedLoadFlags(String),
+
+    /// The requested FreeType-style argument combination is invalid.
+    #[error("Invalid argument: {0}")]
+    InvalidArgument(String),
+
+    /// The selected embedded bitmap strike has no image for the glyph.
+    #[error("Missing embedded bitmap")]
+    MissingBitmap,
+
+    /// A composite embedded bitmap could not load one of its components.
+    #[error("Invalid embedded bitmap composite")]
+    InvalidComposite,
 }
 
 #[cfg(test)]
@@ -74,5 +86,23 @@ mod tests {
             err.to_string(),
             "Unsupported load flags: NO_HINTING | RENDER"
         );
+    }
+
+    #[test]
+    fn invalid_argument_displays_message() {
+        let err = FontError::InvalidArgument("missing strike".into());
+        assert_eq!(err.to_string(), "Invalid argument: missing strike");
+    }
+
+    #[test]
+    fn missing_bitmap_has_static_message() {
+        let err = FontError::MissingBitmap;
+        assert_eq!(err.to_string(), "Missing embedded bitmap");
+    }
+
+    #[test]
+    fn invalid_composite_has_static_message() {
+        let err = FontError::InvalidComposite;
+        assert_eq!(err.to_string(), "Invalid embedded bitmap composite");
     }
 }

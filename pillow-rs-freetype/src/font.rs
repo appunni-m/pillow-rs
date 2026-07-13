@@ -452,6 +452,7 @@ impl Font {
         let kern = dir
             .find(data, tag(b"kern"))
             .and_then(|d| tt::kern::parse_kern(d).ok());
+        let sbit = tt::sbit::parse_sbit(&dir, data);
 
         let loca_data = dir
             .find(data, tag(b"loca"))
@@ -500,6 +501,7 @@ impl Font {
             vmtx,
             hdmx,
             kern,
+            sbit,
             loca_data,
             glyf_data,
             size_pt: std::cell::Cell::new(size_pt),
@@ -1214,6 +1216,14 @@ impl Font {
             use_hdmx,
         )?;
         Ok(self.slot_load_from_scaled(glyph, scaled, grid_fit_for_layout(vertical_layout)))
+    }
+
+    pub(crate) fn load_sbit_only_glyph(&self, glyph: u16) -> Result<(), FontError> {
+        let sbit = self.data.sbit.as_ref().ok_or_else(|| {
+            FontError::InvalidArgument("embedded bitmap strike not selected".into())
+        })?;
+        let metrics = self.size_metrics();
+        sbit.load_glyph_status(glyph, metrics.x_ppem, metrics.y_ppem, 0)
     }
 
     pub(crate) fn glyph_metrics_for_index_force_autohint(

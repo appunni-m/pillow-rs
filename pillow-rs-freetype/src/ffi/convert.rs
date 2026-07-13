@@ -117,6 +117,12 @@ pub fn load_flags_to_core(flags: FT_Int32) -> Result<api::LoadFlags, FT_Error> {
     if flags & FT_LOAD_MONOCHROME != 0 {
         core |= api::LoadFlags::MONOCHROME_RENDER;
     }
+    if flags & FT_LOAD_SBITS_ONLY != 0 {
+        core |= api::LoadFlags::SBITS_ONLY;
+    }
+    if flags & FT_LOAD_NO_BITMAP != 0 {
+        core |= api::LoadFlags::NO_BITMAP;
+    }
     if flags & FT_LOAD_COMPUTE_METRICS != 0 {
         core |= api::LoadFlags::COMPUTE_METRICS;
     }
@@ -196,5 +202,8 @@ pub(super) fn error_to_ft(error: FontError) -> FT_Error {
         FontError::InvalidOutline(_) => FT_Err_Invalid_Outline,
         FontError::CannotRenderGlyph(_) => FT_Err_Cannot_Render_Glyph,
         FontError::UnsupportedLoadFlags(_) => FT_Err_Unimplemented_Feature,
+        FontError::InvalidArgument(_) => FT_Err_Invalid_Argument,
+        FontError::MissingBitmap => FT_Err_Missing_Bitmap as FT_Error,
+        FontError::InvalidComposite => FT_Err_Invalid_Composite as FT_Error,
     }
 }
