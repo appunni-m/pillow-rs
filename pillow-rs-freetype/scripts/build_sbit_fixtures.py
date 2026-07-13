@@ -129,6 +129,18 @@ def unsupported_index_format_eblc() -> bytes:
     return eblc_with_index_tables(index_array, index_subtable)
 
 
+def invalid_version_eblc() -> bytes:
+    return struct.pack(">II", 0x00030000, 0)
+
+
+def strike_count_overflow_eblc() -> bytes:
+    return struct.pack(">II", 0x00020000, 0x00010000)
+
+
+def valid_empty_eblc() -> bytes:
+    return struct.pack(">II", 0x00020000, 0)
+
+
 def compound_missing_subglyph_tables(index_format: int, image_format: int) -> tuple[bytes, bytes]:
     index_array_offset = 8 + 48
     index_subtable_offset = 8
@@ -217,6 +229,9 @@ def build_missing_bitmap() -> None:
 
 def build_sbit_error_branch_fixtures() -> None:
     ebdt = struct.pack(">I", 0x00020000)
+    save_sbit_font("sbit_empty_ebdt.ttf", valid_empty_eblc(), b"")
+    save_sbit_font("sbit_invalid_eblc_version.ttf", invalid_version_eblc(), ebdt)
+    save_sbit_font("sbit_strike_count_overflow.ttf", strike_count_overflow_eblc(), ebdt)
     save_sbit_font("sbit_no_matching_strike.ttf", no_matching_strike_eblc(), ebdt)
     save_sbit_font("sbit_range_miss.ttf", range_miss_eblc(), ebdt)
     save_sbit_font("sbit_missing_range_array.ttf", missing_range_array_eblc(), ebdt)

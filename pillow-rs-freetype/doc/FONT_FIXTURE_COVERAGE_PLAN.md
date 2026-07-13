@@ -1990,23 +1990,24 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | TrueType DELTAP Y-touched compatibility probe | The source-backed `hinter-control-matrix.ttf` `deltaControlMatrix` glyph now adds a no-output Y-axis probe that touches point 1 with `MDAP[0]`, applies one matching `DELTAP1`, and restores the coordinate with `SCFS`. This covers FreeType's v40 compatibility branch where DELTAP movement is allowed for a Y-touched point, while the same existing `FT_Load_Glyph.matrix_load@hinter-delta-control-matrix` row keeps exact pinned C, Rust FFI, C ABI, and WASM ABI parity. Full condition coverage remains at 6,800 concrete cases, 6,797 / 6,797 runtime rows, three FTMM pending rows, 17,021 / 18,901 lines, 24,454 / 27,180 regions, 1,105 / 1,259 functions, and 1,108 / 1,262 instantiations; branch coverage moves to 4,052 / 4,730 and `tt/hinter/exec.rs` moves to 382 / 416 branch outcomes. Route audit remains 3,456 real-parity rows and zero implicit cases |
 | 2026-07-14 | Constructor error asset aliases | Existing `FT_New_Memory_Face` constructor error rows already executed exact Rust FFI / C ABI / WASM ABI parity, but several used only `font_bytes` or `blob` asset keys and were classified as null fallbacks by route audit. The public input JSON now adds canonical `font` aliases beside those same byte assets for malformed SFNT/TTC/OTTO/cmap/name/header cases plus the unknown-format blob. Focused constructor and unknown-format parity stays green, concrete cases remain 6,802 with zero implicit rows, and route audit moves from 3,458 real-parity / 21 null-error-fallback rows to 3,472 real-parity / 7 null-error-fallback rows without changing line coverage |
 | 2026-07-14 | Worker coverage rows integrated | Merged verified worker rows for `FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags@sbits-only-no-bitmap-conflict` and `FT_LOAD_FORCE_AUTOHINT@script-latin-serif-m-symmetry-12-edge`. The load-glyph row proves pinned C and Rust return `FT_Err_Invalid_Argument` for `FT_LOAD_SBITS_ONLY | FT_LOAD_NO_BITMAP` over DejaVuSans; the autohint row reuses the source-backed `script-coverage.ttf` serifed three-stem Latin `m`. The older CINDEX worker branch is recorded as merged but resolved to this branch's existing superset `hinter-control-matrix.ttf`, which already includes the CINDEX probe plus newer no-output indexed-stack probes. Focused parity passes for both public rows. Full condition coverage passes with 6,803 concrete cases, 6,800 / 6,800 runtime rows, three FTMM pending rows, 17,026 / 18,901 lines, 24,458 / 27,180 regions, 4,053 / 4,730 branches, 1,105 / 1,259 functions, and 1,108 / 1,262 instantiations. Route audit reports 3,473 real-parity rows and zero implicit cases |
+| 2026-07-14 | Malformed SBIT table header controls | `font-fixture-sbit` now emits `sbit_invalid_eblc_version.ttf`, `sbit_empty_ebdt.ttf`, and `sbit_strike_count_overflow.ttf`, three compact malformed embedded-bitmap controls. The existing `FT_Err_Missing_Bitmap.sbit_glyph_without_image` public row selects each with `FT_LOAD_COLOR | FT_LOAD_SBITS_ONLY`; pinned C, Rust FFI, C ABI, and WASM ABI all return exact public `FT_Err_Invalid_Argument`. These rows cover `tt/sbit.rs` early-return paths for invalid EBLC version/empty EBDT and impossible declared strike count while keeping bitmap-success decoding pending. Full condition coverage passes with 6,806 concrete cases, 6,803 / 6,803 runtime rows, three FTMM pending rows, 17,028 / 18,901 lines, 24,461 / 27,180 regions, 4,057 / 4,730 branches, 1,105 / 1,259 functions, and 1,108 / 1,262 instantiations. Route audit reports 3,476 real-parity rows and zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-14
 
-Fresh `test-unified-condition-coverage` still reports 1,875 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,873 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,803 |
-| Runnable parity comparisons | 6,800 / 6,800 |
+| Concrete explicit cases | 6,806 |
+| Runnable parity comparisons | 6,803 / 6,803 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,026 / 18,901 (90.0799%) |
-| Rust region coverage | 24,458 / 27,180 (89.9853%) |
-| Rust branch/condition coverage | 4,053 / 4,730 (85.6871%) |
+| Covered Rust lines | 17,028 / 18,901 (90.0905%) |
+| Rust region coverage | 24,461 / 27,180 (89.9963%) |
+| Rust branch/condition coverage | 4,057 / 4,730 (85.7717%) |
 | Rust function coverage | 1,105 / 1,259 (87.7681%) |
-| Route audit split | real-parity 3,473; generic-fallback 916; null-error-fallback 7; raw-slot-null-validation 4; pending-core 10; shape-incomplete-fallback 0 |
+| Route audit split | real-parity 3,476; generic-fallback 916; null-error-fallback 7; raw-slot-null-validation 4; pending-core 10; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
