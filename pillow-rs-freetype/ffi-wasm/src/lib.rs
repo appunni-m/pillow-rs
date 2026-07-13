@@ -1557,6 +1557,27 @@ pub extern "C" fn fontdone_wasm_glyphslot_oblique(handle: usize) -> FT_Error {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_glyphslot_embolden(handle: usize) -> FT_Error {
+    fontdone_wasm_glyphslot_adjust_weight(handle, 0x0AAA, 0x0AAA)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_glyphslot_adjust_weight(
+    handle: usize,
+    xdelta: FT_Fixed,
+    ydelta: FT_Fixed,
+) -> FT_Error {
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(slot) = face.slot.as_mut() else {
+        return rust_ffi::FT_Err_Invalid_Glyph_Index;
+    };
+    rust_ffi::FT_GlyphSlot_AdjustWeight(Some(slot), xdelta, ydelta);
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_glyphslot_slant(
     handle: usize,
     xslant: FT_Fixed,

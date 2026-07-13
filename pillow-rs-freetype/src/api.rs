@@ -734,7 +734,36 @@ impl GlyphSlot {
         if let Some(ref mut lo) = self.loaded_outline {
             transform_loaded_outline_for_render(lo, xx, xy, yx, yy, dx, dy);
         }
-        // Recompute bbox and cbox from transformed outline.
+        self.recompute_outline_boxes();
+    }
+
+    /// Apply FreeType's synthetic outline emboldening and slot metric side effects.
+    pub(crate) fn adjust_outline_weight(&mut self, xstrength: i32, ystrength: i32) {
+        if let Some(ref mut outline) = self.slot_outline {
+            embolden_outline(outline, xstrength, ystrength);
+        }
+        if let Some(ref mut loaded) = self.loaded_outline {
+            embolden_loaded_outline_for_render(loaded, xstrength, ystrength);
+        }
+
+        if self.advance.x != 0 {
+            self.advance.x = self.advance.x.wrapping_add(xstrength);
+        }
+        if self.advance.y != 0 {
+            self.advance.y = self.advance.y.wrapping_add(ystrength);
+        }
+
+        // FreeType ftsynth.c updates these slot metrics even though
+        // FT_Outline_EmboldenXY reports errors only to its ignored return value.
+        self.metrics.width = self.metrics.width.wrapping_add(xstrength);
+        self.metrics.height = self.metrics.height.wrapping_add(ystrength);
+        self.metrics.hori_advance = self.metrics.hori_advance.wrapping_add(xstrength);
+        self.metrics.vert_advance = self.metrics.vert_advance.wrapping_add(ystrength);
+        self.metrics.hori_bearing_y = self.metrics.hori_bearing_y.wrapping_add(ystrength);
+        self.recompute_outline_boxes();
+    }
+
+    fn recompute_outline_boxes(&mut self) {
         let mut new_cbox = crate::font::BBox {
             x_min: 0,
             y_min: 0,
@@ -819,7 +848,25 @@ fn transform_loaded_outline_for_render(
         point.y += base_y;
     }
     transform_outline_points(&mut loaded.outline.points, xx, xy, yx, yy, dx, dy);
+    reposition_loaded_outline_for_render(loaded);
+}
 
+fn embolden_loaded_outline_for_render(loaded: &mut LoadedOutline, xstrength: i32, ystrength: i32) {
+    if loaded.outline.is_empty() {
+        return;
+    }
+
+    let base_x = loaded.left * 64;
+    let base_y = loaded.bottom * 64;
+    for point in &mut loaded.outline.points {
+        point.x += base_x;
+        point.y += base_y;
+    }
+    embolden_outline(&mut loaded.outline, xstrength, ystrength);
+    reposition_loaded_outline_for_render(loaded);
+}
+
+fn reposition_loaded_outline_for_render(loaded: &mut LoadedOutline) {
     let Some(cbox) = outline_point_cbox(&loaded.outline.points) else {
         return;
     };
@@ -844,4 +891,236 @@ fn transform_loaded_outline_for_render(
     loaded.left = px_x_min;
     loaded.bottom = px_y_min;
     loaded.top = px_y_max;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OutlineOrientation {
+    TrueType,
+    PostScript,
+    None,
+}
+
+fn embolden_outline(outline: &mut crate::outline::Outline, mut xstrength: i32, mut ystrength: i32) {
+    // C reference: `FT_Outline_EmboldenXY` in `src/base/ftoutln.c:911-1047`.
+    xstrength /= 2;
+    ystrength /= 2;
+    if xstrength == 0 && ystrength == 0 {
+        return;
+    }
+
+    let orientation = outline_orientation(outline);
+    if orientation == OutlineOrientation::None {
+        return;
+    }
+
+    let Ok(contour_count) = usize::try_from(outline.n_contours) else {
+        return;
+    };
+    if contour_count > outline.contours.len() {
+        return;
+    }
+
+    let mut previous_last = -1i32;
+    for contour_index in 0..contour_count {
+        let first_i32 = previous_last + 1;
+        let last_i32 = i32::from(outline.contours[contour_index]);
+        if first_i32 < 0 || last_i32 < first_i32 {
+            return;
+        }
+        let Ok(first) = usize::try_from(first_i32) else {
+            return;
+        };
+        let Ok(last) = usize::try_from(last_i32) else {
+            return;
+        };
+        if last >= outline.points.len() {
+            return;
+        }
+        embolden_contour_points(
+            &mut outline.points,
+            first,
+            last,
+            orientation,
+            xstrength,
+            ystrength,
+        );
+        previous_last = last_i32;
+    }
+}
+
+fn embolden_contour_points(
+    points: &mut [crate::outline::OutlinePoint],
+    first: usize,
+    last: usize,
+    orientation: OutlineOrientation,
+    xstrength: i32,
+    ystrength: i32,
+) {
+    let mut in_vec = (0, 0);
+    let mut anchor = (0, 0);
+    let mut l_in = 0;
+    let mut l_anchor = 0;
+    let mut i = last;
+    let mut j = first;
+    let mut k = None;
+
+    while j != i && Some(i) != k {
+        let (out, l_out) = if Some(j) != k {
+            let out_x = points[j].x.wrapping_sub(points[i].x);
+            let out_y = points[j].y.wrapping_sub(points[i].y);
+            let (normalized, length) = crate::fixed::ft_vector_norm_len(out_x, out_y);
+            if length == 0 {
+                j = next_contour_index(j, first, last);
+                continue;
+            }
+            (normalized, i32::try_from(length).unwrap_or(i32::MAX))
+        } else {
+            (anchor, l_anchor)
+        };
+
+        if l_in != 0 {
+            if k.is_none() {
+                k = Some(i);
+                anchor = in_vec;
+                l_anchor = l_in;
+            }
+
+            let mut d = crate::fixed::ft_mul_fix(in_vec.0, out.0)
+                .wrapping_add(crate::fixed::ft_mul_fix(in_vec.1, out.1));
+            let (shift_x, shift_y) = if d > -0xF000 {
+                d = d.wrapping_add(0x10000);
+                let mut shift_x = in_vec.1.wrapping_add(out.1);
+                let mut shift_y = in_vec.0.wrapping_add(out.0);
+                if orientation == OutlineOrientation::TrueType {
+                    shift_x = shift_x.wrapping_neg();
+                } else {
+                    shift_y = shift_y.wrapping_neg();
+                }
+
+                let mut q = crate::fixed::ft_mul_fix(out.0, in_vec.1)
+                    .wrapping_sub(crate::fixed::ft_mul_fix(out.1, in_vec.0));
+                if orientation == OutlineOrientation::TrueType {
+                    q = q.wrapping_neg();
+                }
+                let l = l_in.min(l_out);
+
+                if crate::fixed::ft_mul_fix(xstrength, q) <= crate::fixed::ft_mul_fix(l, d) {
+                    shift_x = crate::fixed::ft_mul_div(shift_x, xstrength, d);
+                } else {
+                    shift_x = crate::fixed::ft_mul_div(shift_x, l, q);
+                }
+
+                if crate::fixed::ft_mul_fix(ystrength, q) <= crate::fixed::ft_mul_fix(l, d) {
+                    shift_y = crate::fixed::ft_mul_div(shift_y, ystrength, d);
+                } else {
+                    shift_y = crate::fixed::ft_mul_div(shift_y, l, q);
+                }
+                (shift_x, shift_y)
+            } else {
+                (0, 0)
+            };
+
+            while i != j {
+                points[i].x = points[i].x.wrapping_add(xstrength).wrapping_add(shift_x);
+                points[i].y = points[i].y.wrapping_add(ystrength).wrapping_add(shift_y);
+                i = next_contour_index(i, first, last);
+            }
+        } else {
+            i = j;
+        }
+
+        in_vec = out;
+        l_in = l_out;
+        j = next_contour_index(j, first, last);
+    }
+}
+
+fn next_contour_index(index: usize, first: usize, last: usize) -> usize {
+    if index < last { index + 1 } else { first }
+}
+
+fn outline_orientation(outline: &crate::outline::Outline) -> OutlineOrientation {
+    // C reference: `FT_Outline_Get_Orientation` in `src/base/ftoutln.c:1055-1117`.
+    if outline.points.is_empty() || outline.n_contours <= 0 {
+        return OutlineOrientation::TrueType;
+    }
+
+    let Some(cbox) = outline_point_cbox(&outline.points) else {
+        return OutlineOrientation::TrueType;
+    };
+    if cbox.x_min == cbox.x_max || cbox.y_min == cbox.y_max {
+        return OutlineOrientation::None;
+    }
+    if cbox.x_min < -0x1000000
+        || cbox.y_min < -0x1000000
+        || cbox.x_max > 0x1000000
+        || cbox.y_max > 0x1000000
+    {
+        return OutlineOrientation::None;
+    }
+
+    let x_abs = ft_abs_i32_as_u32(cbox.x_max) | ft_abs_i32_as_u32(cbox.x_min);
+    let xshift = (ft_msb_nonzero(x_abs) - 14).max(0);
+    let yspan = cbox.y_max.wrapping_sub(cbox.y_min) as u32;
+    let yshift = (ft_msb_nonzero(yspan) - 14).max(0);
+
+    let Ok(contour_count) = usize::try_from(outline.n_contours) else {
+        return OutlineOrientation::None;
+    };
+    if contour_count > outline.contours.len() {
+        return OutlineOrientation::None;
+    }
+
+    let mut area = 0i64;
+    let mut previous_last = -1i32;
+    for contour_index in 0..contour_count {
+        let first_i32 = previous_last + 1;
+        let last_i32 = i32::from(outline.contours[contour_index]);
+        if first_i32 < 0 || last_i32 < first_i32 {
+            return OutlineOrientation::None;
+        }
+        let Ok(first) = usize::try_from(first_i32) else {
+            return OutlineOrientation::None;
+        };
+        let Ok(last) = usize::try_from(last_i32) else {
+            return OutlineOrientation::None;
+        };
+        if last >= outline.points.len() {
+            return OutlineOrientation::None;
+        }
+
+        let mut prev_x = outline.points[last].x >> xshift;
+        let mut prev_y = outline.points[last].y >> yshift;
+        for point in &outline.points[first..=last] {
+            let cur_x = point.x >> xshift;
+            let cur_y = point.y >> yshift;
+            let product = (i64::from(cur_y.wrapping_sub(prev_y)) as u64)
+                .wrapping_mul(i64::from(cur_x.wrapping_add(prev_x)) as u64)
+                as i64;
+            area = crate::fixed::ft_add_long(area, product);
+            prev_x = cur_x;
+            prev_y = cur_y;
+        }
+        previous_last = last_i32;
+    }
+
+    if area > 0 {
+        OutlineOrientation::PostScript
+    } else if area < 0 {
+        OutlineOrientation::TrueType
+    } else {
+        OutlineOrientation::None
+    }
+}
+
+fn ft_abs_i32_as_u32(value: i32) -> u32 {
+    if value < 0 {
+        0u32.wrapping_sub(value as u32)
+    } else {
+        value as u32
+    }
+}
+
+fn ft_msb_nonzero(value: u32) -> i32 {
+    31 - value.leading_zeros() as i32
 }

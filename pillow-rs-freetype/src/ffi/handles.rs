@@ -163,9 +163,28 @@ pub fn FT_OpenType_Validate(
     FT_Err_Unimplemented_Feature as FT_Error
 }
 
-pub fn FT_GlyphSlot_AdjustWeight(_slot: FT_GlyphSlot, _x_delta: FT_Fixed, _y_delta: FT_Fixed) {}
+pub fn FT_GlyphSlot_AdjustWeight(
+    slot: Option<&mut FT_GlyphSlot>,
+    x_delta: FT_Fixed,
+    y_delta: FT_Fixed,
+) {
+    let Some(slot) = slot else {
+        return;
+    };
+    if slot.format != FT_GLYPH_FORMAT_OUTLINE {
+        return;
+    }
 
-pub fn FT_GlyphSlot_Embolden(_slot: FT_GlyphSlot) {}
+    let size = slot.source_face.size_metrics();
+    let xstrength = ((FT_Long::from(size.x_ppem) * x_delta) / 1024) as i32;
+    let ystrength = ((FT_Long::from(size.y_ppem) * y_delta) / 1024) as i32;
+    slot.core_slot.adjust_outline_weight(xstrength, ystrength);
+    refresh_slot_public_fields(slot);
+}
+
+pub fn FT_GlyphSlot_Embolden(slot: Option<&mut FT_GlyphSlot>) {
+    FT_GlyphSlot_AdjustWeight(slot, 0x0AAA, 0x0AAA);
+}
 
 pub fn FT_GlyphSlot_Oblique(slot: Option<&mut FT_GlyphSlot>) {
     // FreeType `src/base/ftsynth.c` uses a fixed 12-degree shear and keeps
@@ -186,9 +205,7 @@ pub fn FT_GlyphSlot_Slant(slot: Option<&mut FT_GlyphSlot>, xslant: FT_Fixed, ysl
     // width, and it leaves metrics unchanged.
     slot.core_slot
         .apply_outline_transform(0x10000, xslant as i32, -(yslant as i32), 0x10000, 0, 0);
-    slot.outline_cbox = bbox_to_ffi(slot.core_slot.outline_cbox);
-    slot.outline_bbox = bbox_to_ffi(slot.core_slot.outline_bbox);
-    slot.outline = slot.core_slot.slot_outline().map(outline_to_ffi_snapshot);
+    refresh_slot_public_fields(slot);
 }
 
 pub fn FT_Get_Sfnt_LangTag(
@@ -1922,6 +1939,19 @@ fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags)
         source_face,
         load_flags,
     }
+}
+
+fn refresh_slot_public_fields(slot: &mut FT_GlyphSlot) {
+    slot.metrics = slot.core_slot.metrics.into();
+    slot.advance = slot.core_slot.advance.into();
+    slot.format = glyph_format_from_core(slot.core_slot.format);
+    slot.num_subglyphs = FT_UInt::try_from(slot.core_slot.subglyphs.len()).unwrap_or(FT_UInt::MAX);
+    slot.bitmap = slot.core_slot.bitmap.clone().map(Into::into);
+    slot.bitmap_left = slot.core_slot.bitmap_left;
+    slot.bitmap_top = slot.core_slot.bitmap_top;
+    slot.outline_cbox = bbox_to_ffi(slot.core_slot.outline_cbox);
+    slot.outline_bbox = bbox_to_ffi(slot.core_slot.outline_bbox);
+    slot.outline = slot.core_slot.slot_outline().map(outline_to_ffi_snapshot);
 }
 
 fn outline_to_ffi_snapshot(outline: &crate::outline::Outline) -> FT_OutlineSnapshot {

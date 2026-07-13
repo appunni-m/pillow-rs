@@ -478,6 +478,28 @@ pub fn abi_glyphslot_slant_from_face(
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_glyphslot_adjust_weight_from_face(
+    face: FT_Face,
+    xdelta: FT_Fixed,
+    ydelta: FT_Fixed,
+) -> FT_Error {
+    let Some(slot) = abi_glyph_slot(face) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    FT_GlyphSlot_AdjustWeight(slot.as_ptr(), xdelta, ydelta);
+    rust_ffi::FT_Err_Ok
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_glyphslot_embolden_from_face(face: FT_Face) -> FT_Error {
+    let Some(slot) = abi_glyph_slot(face) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    FT_GlyphSlot_Embolden(slot.as_ptr());
+    rust_ffi::FT_Err_Ok
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_glyphslot_oblique_from_face(face: FT_Face) -> FT_Error {
     let Some(slot) = abi_glyph_slot(face) else {
         return rust_ffi::FT_Err_Invalid_Argument;
@@ -1703,6 +1725,31 @@ pub extern "C" fn FT_Render_Glyph(slot: FT_GlyphSlot, render_mode: FT_Render_Mod
     match rust_ffi::FT_Render_Glyph(rust_slot, render_mode) {
         Ok(rendered) => store_slot(source_face, rendered, load_flags | rust_ffi::FT_LOAD_RENDER),
         Err(error) => error,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_GlyphSlot_Embolden(slot: FT_GlyphSlot) {
+    FT_GlyphSlot_AdjustWeight(slot, 0x0AAA, 0x0AAA);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_GlyphSlot_AdjustWeight(
+    slot: FT_GlyphSlot,
+    xdelta: FT_Fixed,
+    ydelta: FT_Fixed,
+) {
+    let Some(slot_ptr) = non_null_mut(slot) else {
+        return;
+    };
+    // SAFETY: `slot_ptr` is checked non-null and points to a live slot allocated by this crate.
+    unsafe {
+        let slot_ref = &mut *slot_ptr.as_ptr();
+        rust_ffi::FT_GlyphSlot_AdjustWeight(Some(&mut slot_ref.rust_slot), xdelta, ydelta);
+        let source_face = slot_ref.source_face;
+        let load_flags = slot_ref.load_flags;
+        let rust_slot = slot_ref.rust_slot.clone();
+        *slot_ref = rust_slot_to_abi(rust_slot, source_face, load_flags);
     }
 }
 

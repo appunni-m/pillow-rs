@@ -98,6 +98,8 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_advances",
     "fontdone_wasm_get_subglyph_info",
     "fontdone_wasm_render_glyph",
+    "fontdone_wasm_glyphslot_adjust_weight",
+    "fontdone_wasm_glyphslot_embolden",
     "fontdone_wasm_glyphslot_oblique",
     "fontdone_wasm_glyphslot_slant",
     "fontdone_wasm_get_slot",
@@ -217,6 +219,10 @@ REAL_PARITY_OPERATIONS = {
     "ftadvanc.get_advance",
     "ftadvanc.get_advances",
     "render_glyph",
+    "ftsynth.glyphslot_slant_after_load",
+    "ftsynth.glyphslot_oblique_after_load",
+    "ftsynth.glyphslot_adjust_weight_after_load",
+    "ftsynth.glyphslot_embolden_after_load",
     "ftgasp.get_gasp",
     "tttables.get_cmap_format",
     "tttables.get_cmap_language_id",
@@ -781,6 +787,22 @@ def shape_fallback_reason(row: ConcreteInput) -> str | None:
         key in params for key in ("bool_values", "values", "value", "toggle_sequence")
     ):
         return "face_set_unpatented_hinting lacks bool values"
+    if operation in {
+        "ftsynth.glyphslot_slant_noop",
+        "ftsynth.glyphslot_oblique_noop",
+        "ftsynth.glyphslot_adjust_weight_noop",
+        "ftsynth.glyphslot_embolden_noop",
+    }:
+        return "synthetic unsupported glyph-slot fixture is required_future_asset"
+    if (
+        operation
+        in {
+            "ftsynth.glyphslot_adjust_weight_after_load",
+            "ftsynth.glyphslot_embolden_after_load",
+        }
+        and "bitmap_strike_font" in row.assets
+    ):
+        return "embedded bitmap strike fixture is required_future_asset"
     return None
 
 
