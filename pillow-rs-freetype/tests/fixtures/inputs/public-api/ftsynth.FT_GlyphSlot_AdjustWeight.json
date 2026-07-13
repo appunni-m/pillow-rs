@@ -4,6 +4,7 @@
   "manifest_cases": [
     "signature_and_void_contract",
     "outline_weight_adjusts_points_metrics_and_advances",
+    "vertical_outline_weight_updates_vertical_advance",
     "degenerate_outline_weight_keeps_points_and_updates_metrics",
     "bitmap_weight_owns_emboldens_and_updates_top",
     "null_or_unsupported_format_noop"
@@ -161,6 +162,90 @@
         },
         "fixture_requirements": [
           "Use an outline glyph whose post-load slot has an outline format and active size metrics so xdelta and ydelta map to non-zero C strengths."
+        ]
+      }
+    },
+    {
+      "case_id": "ftsynth.FT_GlyphSlot_AdjustWeight.vertical_outline_weight_updates_vertical_advance",
+      "subject": "ftsynth.FT_GlyphSlot_AdjustWeight",
+      "case": "vertical_outline_weight_updates_vertical_advance",
+      "operation": "ftsynth.glyphslot_adjust_weight_after_load",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf",
+            "role": "font",
+            "requires": "scalable outline glyph with non-zero vertical layout advance"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "size_ppem": 28,
+          "load": {
+            "operation": "FT_Load_Glyph",
+            "glyph_index": 36,
+            "load_flags": [
+              "FT_LOAD_DEFAULT",
+              "FT_LOAD_NO_BITMAP",
+              "FT_LOAD_VERTICAL_LAYOUT"
+            ]
+          },
+          "adjustments": [
+            {
+              "xdelta_16_16": 0,
+              "ydelta_16_16": 3277
+            }
+          ],
+          "capture_before_after": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsynth",
+        "format:outline",
+        "operation:glyph-slot-mutation",
+        "coverage:vertical-advance"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "slot_format": "FT_GLYPH_FORMAT_OUTLINE",
+          "outline_points_before": [
+            "FT_Vector"
+          ],
+          "outline_points_after": [
+            "FT_Vector"
+          ],
+          "outline_cbox_after": "FT_BBox",
+          "metrics_after": "FT_Glyph_Metrics",
+          "advance_before": "FT_Vector",
+          "advance_after": "FT_Vector"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "slot_format",
+            "outline_points_after",
+            "outline_cbox_after",
+            "metrics_after.width",
+            "metrics_after.height",
+            "metrics_after.horiAdvance",
+            "metrics_after.vertAdvance",
+            "metrics_after.horiBearingY",
+            "advance_before",
+            "advance_after"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftsynth.c:FT_GlyphSlot_AdjustWeight",
+          "freetype/src/base/ftobjs.c:FT_Load_Glyph"
+        ],
+        "fixture_requirements": [
+          "Use FT_LOAD_VERTICAL_LAYOUT so the slot public advance vector is vertical before the ydelta side effect is applied."
         ]
       }
     },

@@ -10527,6 +10527,8 @@ subjects:
         description: Public declaration is void FT_GlyphSlot_AdjustWeight(FT_GlyphSlot, FT_Fixed, FT_Fixed), so comparison is based on mutated slot output rather than status.
       - id: outline_weight_adjusts_points_metrics_and_advances
         description: For outline glyphs, C converts xdelta and ydelta through size ppem into 26.6 strengths, calls FT_Outline_EmboldenXY, and updates advance, width, height, horiAdvance, vertAdvance, and horiBearingY exactly.
+      - id: vertical_outline_weight_updates_vertical_advance
+        description: With FT_LOAD_VERTICAL_LAYOUT, the public slot advance uses the vertical vector and FT_GlyphSlot_AdjustWeight applies the y-strength side effect to advance.y.
       - id: degenerate_outline_weight_keeps_points_and_updates_metrics
         description: A non-empty outline whose orientation is NONE returns from FT_Outline_EmboldenXY without point movement, while the public glyph-slot helper still applies its documented metric and advance side effects.
       - id: bitmap_weight_owns_emboldens_and_updates_top
