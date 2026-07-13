@@ -831,43 +831,223 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "fixtures/assets/fonts/sbit_gray_format1.ttf",
-            "role": "font",
-            "requirements": "Compact scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray bitmap for glyph 1."
-          }
-        },
-        "params": {
-          "open": "FT_New_Memory_Face",
-          "face_index": 0,
-          "pixel_size": {
-            "x": 0,
-            "y": 20
-          },
-          "load": {
-            "operation": "FT_Load_Glyph",
-            "glyph_indices": [
-              1
-            ],
-            "load_flags": [
-              "FT_LOAD_DEFAULT",
-              "FT_LOAD_COLOR"
+        "variants": [
+          {
+            "id": "sbit-gray8-format1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fixtures/assets/fonts/sbit_gray_format1.ttf",
+                "role": "font",
+                "requirements": "Compact scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray bitmap for glyph 1."
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "load": {
+                "operation": "FT_Load_Glyph",
+                "glyph_indices": [
+                  1
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_COLOR"
+                ]
+              },
+              "adjustments": [
+                {
+                  "xdelta_16_16": 4096,
+                  "ydelta_16_16": 4096
+                },
+                {
+                  "xdelta_16_16": -2048,
+                  "ydelta_16_16": 2048
+                }
+              ],
+              "capture_before_after": true
+            },
+            "coverage": [
+              "ftsynth:bitmap-adjust-weight-gray8-format1"
             ]
           },
-          "adjustments": [
-            {
-              "xdelta_16_16": 4096,
-              "ydelta_16_16": 4096
+          {
+            "id": "sbit-mono-format1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fixtures/assets/fonts/sbit_mono_format1.ttf",
+                "role": "font",
+                "requirements": "Compact scalable SFNT with one 20 ppem EBLC/EBDT format-1 mono bitmap for glyph 1."
+              }
             },
-            {
-              "xdelta_16_16": -2048,
-              "ydelta_16_16": 2048
-            }
-          ],
-          "capture_before_after": true
-        }
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "load": {
+                "operation": "FT_Load_Glyph",
+                "glyph_indices": [
+                  1
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_COLOR"
+                ]
+              },
+              "adjustments": [
+                {
+                  "xdelta_16_16": 4096,
+                  "ydelta_16_16": 4096
+                },
+                {
+                  "xdelta_16_16": -2048,
+                  "ydelta_16_16": 2048
+                }
+              ],
+              "capture_before_after": true
+            },
+            "coverage": [
+              "ftsynth:bitmap-adjust-weight-mono-format1"
+            ]
+          },
+          {
+            "id": "sbit-gray2-format1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fixtures/assets/fonts/sbit_gray2_format1.ttf",
+                "role": "font",
+                "requirements": "Compact scalable SFNT with one 20 ppem EBLC/EBDT format-1 2-bit gray bitmap for glyph 1."
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "load": {
+                "operation": "FT_Load_Glyph",
+                "glyph_indices": [
+                  1
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_COLOR"
+                ]
+              },
+              "adjustments": [
+                {
+                  "xdelta_16_16": 4096,
+                  "ydelta_16_16": 4096
+                },
+                {
+                  "xdelta_16_16": -2048,
+                  "ydelta_16_16": 2048
+                }
+              ],
+              "capture_before_after": true
+            },
+            "coverage": [
+              "ftsynth:bitmap-adjust-weight-gray2-format1"
+            ]
+          },
+          {
+            "id": "sbit-gray4-format1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fixtures/assets/fonts/sbit_gray4_format1.ttf",
+                "role": "font",
+                "requirements": "Compact scalable SFNT with one 20 ppem EBLC/EBDT format-1 4-bit gray bitmap for glyph 1."
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "load": {
+                "operation": "FT_Load_Glyph",
+                "glyph_indices": [
+                  1
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_COLOR"
+                ]
+              },
+              "adjustments": [
+                {
+                  "xdelta_16_16": 4096,
+                  "ydelta_16_16": 4096
+                },
+                {
+                  "xdelta_16_16": -2048,
+                  "ydelta_16_16": 2048
+                }
+              ],
+              "capture_before_after": true
+            },
+            "coverage": [
+              "ftsynth:bitmap-adjust-weight-gray4-format1"
+            ]
+          },
+          {
+            "id": "sbit-bgra-format1",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fixtures/assets/fonts/sbit_bgra_format1.ttf",
+                "role": "font",
+                "requirements": "Compact scalable SFNT with one 20 ppem EBLC/EBDT format-1 32-bit BGRA bitmap for glyph 1."
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "load": {
+                "operation": "FT_Load_Glyph",
+                "glyph_indices": [
+                  1
+                ],
+                "load_flags": [
+                  "FT_LOAD_DEFAULT",
+                  "FT_LOAD_COLOR"
+                ]
+              },
+              "adjustments": [
+                {
+                  "xdelta_16_16": 4096,
+                  "ydelta_16_16": 4096
+                },
+                {
+                  "xdelta_16_16": -2048,
+                  "ydelta_16_16": 2048
+                }
+              ],
+              "capture_before_after": true
+            },
+            "coverage": [
+              "ftsynth:bitmap-adjust-weight-bgra-format1"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",
