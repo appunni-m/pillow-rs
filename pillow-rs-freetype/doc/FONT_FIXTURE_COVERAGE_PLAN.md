@@ -1962,6 +1962,23 @@ public surface:
 | Render SDF/cubic | A possible CFF/CFF2 `FT_Render_Glyph` SDF row | Current Rust face loading still relies on glyf/loca fallback for the compact CFF fixture, so C would render cubic charstrings while Rust would not preserve a cubic public glyph outline through this path | Implement a real public cubic-outline loader route before adding SDF cubic render fixture rows |
 | Render mono/profile | Remaining `render.rs` mono/profile helpers such as the old intersection rasterizer and low-level line/bezier helper families | No current `FT_Render_Glyph` row reaches these as public code; the profile-based horizontal and vertical dropout guards are already covered | Keep visible as private/no-route until a real public operation requires them or they are independently proven duplicate/obsolete |
 | Size lifecycle | Rust FFI-only implementation sketch for `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` success sequences | Focused Rust FFI parity can pass, but the route is insufficient if C ABI and WASM comparisons are mapped back through Rust FFI while public ABI exports remain unimplemented | A mergeable implementation must keep wrappers thin but real: expose and route actual C ABI/WASM size lifecycle calls, or document the public ABI blocker instead of committing a Rust-only proof |
+| Safe render no-value rows | Adding `assert_font_render_mode_agrees` to the existing Noto `FORCE_AUTOHINT | NO_AUTOHINT` render row passed focused `render_glyph` parity and full runtime parity, but total condition coverage stayed fixed at 16,227 / 18,091 lines, 23,297 / 25,933 regions, 3,909 / 4,632 branches, and 1,025 / 1,150 functions | Do not add more safe render agreement flags to rows that already exercise the same load-mode branch |
+| Zero-width normal render row | A candidate `FT_RENDER_MODE_NORMAL` row over `fonts/glyf/hinter-control-matrix.ttf` U+E02B (`renderZeroWidth`) with safe render and getmask assertions passed exact parity, raising concrete rows locally to 6,758, but condition coverage and missing lines were unchanged | Do not keep this row. The current public load/render path does not reach a new zero-extent `Font::getmask_single_glyph` or render guard from that glyph |
+
+### Table And FFI No-Route Addendum - 2026-07-13
+
+These misses were audited after the 6,757-case checkpoint. They are not
+fixture-row candidates unless a new public route appears:
+
+| Source lines | Classification | Reason |
+|---|---|---|
+| `autohint/coverage.rs:110-135` | Diagnostic-only helper surface | The public autohint route calls only `coverage::record` from `latin.rs`. `current_mask`, `reset`, and `collect_hit_bits` have no manifest-backed public output, and adding a hidden diagnostic call would not prove Rust/C parity |
+| `tt/post.rs:47,66,70` | Public-gate unreachable | `FT_Get_Glyph_Name` validates `glyph_index < num_glyphs` before `PostTable::glyph_name`; `FT_Get_Name_Index` scans only valid glyph indexes; both wrappers suppress format 3.0 and unsupported `post` formats with `FT_FACE_FLAG_GLYPH_NAMES` before direct name lookup |
+| `tt/fvar.rs:58-59` | Host-width unreachable defensive overflow | `instance_count` and `instance_size` are 16-bit SFNT fields, so their product cannot overflow `usize` on the supported 64-bit coverage target. Keep the guard for portability; do not manufacture a parser row |
+| `tt/cmap.rs:786-789,866-867,914-915` | Host-width unreachable defensive overflow | Format-14 selector/default/non-default counts are `u32`. On the supported 64-bit target their record-byte products cannot overflow `usize`; malformed fonts instead reach the normal exceeds-length guards already covered by compact cmap rows |
+| `ffi/convert.rs:166,194-195,198` | No public conversion source | No current public runner produces `GlyphFormat::None`, `UnsupportedCmapFormat`, `RasterOverflow`, or `UnsupportedLoadFlags` through the thin FFI converter. Keep these mappings for boundary completeness, but do not add private synthetic conversion tests |
+| `tt/hinter/exec.rs:265-283` | Private/no-route fetch helpers | The active interpreter loop uses `fetch_byte_glyph`; the older public `ExecContext::fetch_byte`/`fetch_word` helpers are not selected by public glyph-load execution |
+| `tt/hinter/exec.rs:293` | Private call-site preempted by prepare path | The compact `hinter-empty-fpgm.ttf` row already proves empty font-program handling through public `FT_Load_Glyph`, but the prepare path skips `run_fpgm` entirely when `fpgm` is empty, so the internal `run_fpgm` empty-return line has no public fixture route |
 
 ### Render/Raster Residual Audit - 2026-07-13
 
