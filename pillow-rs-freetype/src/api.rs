@@ -477,7 +477,13 @@ impl Face {
                     "embedded bitmap strike not selected".into(),
                 ));
             }
-            font.load_sbit_only_glyph(glyph_index)?;
+            // C `TT_Load_Glyph` first tries `load_sbit_image`, but for
+            // scalable TrueType faces with `FT_LOAD_SBITS_ONLY` any failed
+            // sbit load is then replaced with `Invalid_Argument`
+            // (`truetype/ttgload.c:2401-2469`).
+            font.load_sbit_only_glyph(glyph_index).map_err(|_| {
+                FontError::InvalidArgument("embedded bitmap image not available".into())
+            })?;
             return Err(FontError::UnsupportedLoadFlags(
                 "embedded bitmap image decoding".into(),
             ));
