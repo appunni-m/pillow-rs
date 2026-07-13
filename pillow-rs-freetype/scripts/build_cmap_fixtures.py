@@ -41,6 +41,9 @@ def variation_selector_subtable():
     table.cmap = {}
     table.uvsDict = {
         0xFE00: [],
+        0xFE0E: [
+            (0x0045, ".notdef"),
+        ],
         0xFE0F: [
             (0x0041, None),
             (0x0042, "base"),
@@ -48,6 +51,9 @@ def variation_selector_subtable():
         0xE0101: [
             (0x0041, None),
             (0x0043, "mark"),
+        ],
+        0xE0102: [
+            (0x0044, "mark"),
         ],
     }
     return table
@@ -167,6 +173,10 @@ def format14_offset_out_of_range_subtable() -> bytes:
     return raw_format14_subtable([(0xFE00, 21, 0)])
 
 
+def format14_non_default_offset_out_of_range_subtable() -> bytes:
+    return raw_format14_subtable([(0xFE00, 0, 21)])
+
+
 def format14_empty_selector_subtable(selector: int) -> bytes:
     return raw_format14_subtable([(selector, 0, 0)])
 
@@ -237,6 +247,7 @@ def build_malformed_format14_font() -> None:
                 (0, 6, format14_records_exceed_length_subtable()),
                 (0, 7, format14_physically_short_subtable()),
                 (1, 8, format14_offset_out_of_range_subtable()),
+                (1, 19, format14_non_default_offset_out_of_range_subtable()),
                 (1, 9, format14_selectors_out_of_order_subtable()),
                 (1, 10, format14_default_count_missing_subtable()),
                 (1, 11, format14_default_records_exceed_length_subtable()),
@@ -289,6 +300,32 @@ def build_format14_only_font() -> None:
     font.save(out, reorderTables=True)
 
 
+def build_platform0_variation_font() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    cmap = newTable("cmap")
+    cmap.tableVersion = 0
+    cmap.tables = [
+        cmap_subtable(
+            4,
+            0,
+            3,
+            0,
+            {
+                0x0041: "base",
+                0x0042: "mark",
+            },
+        ),
+        variation_selector_subtable(),
+    ]
+    font["cmap"] = cmap
+
+    CHARMAP_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = CHARMAP_OUT_DIR / "cmap-platform0-variation.ttf"
+    if out.exists() or out.is_symlink():
+        out.unlink()
+    font.save(out, reorderTables=True)
+
+
 def build_non_uvs_format14_platforms_font() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     font["cmap"] = raw_cmap_table(
@@ -313,6 +350,7 @@ def main() -> None:
     build_malformed_format14_font()
     build_non_unicode_format6_font()
     build_format14_only_font()
+    build_platform0_variation_font()
     build_non_uvs_format14_platforms_font()
 
 
