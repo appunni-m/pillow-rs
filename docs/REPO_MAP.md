@@ -347,7 +347,9 @@ generated reports, build outputs, and package installs.
 |   |   |-- build_name_fixtures.py
 |   |   |-- build_post_fixtures.py
 |   |   |-- build_render_fixtures.py
+|   |   |-- build_sbit_fixtures.py
 |   |   |-- build_sfnt_fixtures.py
+|   |   |-- build_type1_fixtures.py
 |   |   |-- build_unified_oracle.py
 |   |   |-- check_public_api_inputs.py
 |   |   |-- extract_blues.py
@@ -408,6 +410,7 @@ generated reports, build outputs, and package installs.
 |   |       |-- name.rs
 |   |       |-- os2.rs
 |   |       |-- post.rs
+|   |       |-- sbit.rs
 |   |       |-- vhea.rs
 |   |       `-- vmtx.rs
 |   `-- tests/
