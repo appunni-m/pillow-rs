@@ -2189,6 +2189,27 @@
             ]
           },
           {
+            "id": "cjk-snap-far-below-standard-target-mono-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-snap-below-standard.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 19998,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_MONO"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:snap-width-far-below-reference"
+            ]
+          },
+          {
             "id": "cjk-multi-width-snap-target-mono-20",
             "assets": {
               "font": {
