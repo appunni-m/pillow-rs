@@ -17,6 +17,10 @@ pub struct MaxpTable {
     pub max_twilight_points: u16,
     /// Number of storage area locations available to TrueType bytecode.
     pub max_storage: u16,
+    /// Maximum number of function definitions (`FDEF`) the bytecode may define.
+    pub max_function_defs: u16,
+    /// Maximum number of instruction definitions (`IDEF`) the bytecode may define.
+    pub max_instruction_defs: u16,
     /// Maximum component depth for composite glyphs.
     pub max_component_depth: u16,
 }
@@ -33,29 +37,40 @@ pub fn parse_maxp(data: &[u8]) -> Result<MaxpTable, FontError> {
 
     // FreeType's tt_face_load_maxp reads only the six-byte header below
     // version 1.0 and a complete 26-byte extra frame otherwise.
-    let (max_points, max_contours, max_twilight_points, max_storage, max_component_depth) =
-        if version >= 0x0001_0000 {
-            if data.len() < 32 {
-                return Err(FontError::InvalidFont(
-                    "maxp version 1 table too short (need 32 bytes)".into(),
-                ));
-            }
-            (
-                u16::from_be_bytes([data[6], data[7]]),
-                u16::from_be_bytes([data[8], data[9]]),
-                u16::from_be_bytes([data[16], data[17]]),
-                u16::from_be_bytes([data[18], data[19]]),
-                u16::from_be_bytes([data[30], data[31]]),
-            )
-        } else {
-            (0, 0, 0, 0, 0)
-        };
+    let (
+        max_points,
+        max_contours,
+        max_twilight_points,
+        max_storage,
+        max_function_defs,
+        max_instruction_defs,
+        max_component_depth,
+    ) = if version >= 0x0001_0000 {
+        if data.len() < 32 {
+            return Err(FontError::InvalidFont(
+                "maxp version 1 table too short (need 32 bytes)".into(),
+            ));
+        }
+        (
+            u16::from_be_bytes([data[6], data[7]]),
+            u16::from_be_bytes([data[8], data[9]]),
+            u16::from_be_bytes([data[16], data[17]]),
+            u16::from_be_bytes([data[18], data[19]]),
+            u16::from_be_bytes([data[20], data[21]]),
+            u16::from_be_bytes([data[22], data[23]]),
+            u16::from_be_bytes([data[30], data[31]]),
+        )
+    } else {
+        (0, 0, 0, 0, 0, 0, 0)
+    };
     Ok(MaxpTable {
         num_glyphs,
         max_points,
         max_contours,
         max_twilight_points,
         max_storage,
+        max_function_defs,
+        max_instruction_defs,
         max_component_depth,
     })
 }

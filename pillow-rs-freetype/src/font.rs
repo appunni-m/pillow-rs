@@ -1800,6 +1800,8 @@ impl Font {
                 ppem: self.size_metrics.tt_ppem(),
                 point_size: self.size_metrics.tt_point_size(),
                 storage_size: self.data.maxp.max_storage as usize,
+                max_function_defs: self.data.maxp.max_function_defs as usize,
+                max_instruction_defs: self.data.maxp.max_instruction_defs as usize,
                 twilight_points: self.data.maxp.max_twilight_points as usize,
                 is_composite: false,
                 reset_vectors_at_glyph_entry: false,
