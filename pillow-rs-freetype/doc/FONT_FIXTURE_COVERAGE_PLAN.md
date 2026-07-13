@@ -1914,6 +1914,19 @@ source lines. The current split is:
 | Private/no-route helpers | `Font::layout_glyphs`, `Font::layout_bounds`, `layout_bounds_from_glyphs`, `grays::rasterize`, `grays::rasterize_shifted_in_box`, `grays::render_scanline`, and `render::render_loaded_char_mode_for_index` are not selected by the current public FreeType fixtures | Do not call these through synthetic tests; either expose a real public operation with C parity or prove and remove independently of coverage |
 | Coverage instrumentation artifacts | `Font::load_sfnt_table` and several wrapper functions show zero-count closure symbols even while the public body is heavily executed; many missed `api.rs` and `font.rs` lines are trailing call arguments in covered functions | Use function bodies, contiguous blocks, and branch counters to choose cases; do not grow JSON for tail-line artifacts alone |
 
+### Rejected Candidate Audit - 2026-07-13
+
+These candidates were exact-parity probes but deliberately not kept because
+they did not improve measured condition coverage or did not prove the intended
+public surface:
+
+| Bucket | Candidate | Result | Decision |
+|---|---|---|---|
+| Autohint topology | `latin-double-top-glyph-force-autohint`, `cjk-snap-below-standard-normal-force-autohint`, and `cjk-snap-below-standard-lcd-force-autohint` over existing compact autohint fonts | Each focused row passed exact parity, but full condition coverage stayed flat at 15,947 / 17,810 lines, 22,852 / 25,492 regions, 3,832 / 4,536 branches, and 1,005 / 1,135 functions | Do not re-add these rows. The next autohint improvement needs genuinely new glyph topology, not another explicit row over the current compact fonts |
+| Render SDF/cubic | A possible CFF/CFF2 `FT_Render_Glyph` SDF row | Current Rust face loading still relies on glyf/loca fallback for the compact CFF fixture, so C would render cubic charstrings while Rust would not preserve a cubic public glyph outline through this path | Implement a real public cubic-outline loader route before adding SDF cubic render fixture rows |
+| Render mono/profile | Remaining `render.rs` mono/profile helpers such as the old intersection rasterizer and low-level line/bezier helper families | No current `FT_Render_Glyph` row reaches these as public code; the profile-based horizontal and vertical dropout guards are already covered | Keep visible as private/no-route until a real public operation requires them or they are independently proven duplicate/obsolete |
+| Size lifecycle | Rust FFI-only implementation sketch for `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` success sequences | Focused Rust FFI parity can pass, but the route is insufficient if C ABI and WASM comparisons are mapped back through Rust FFI while public ABI exports remain unimplemented | A mergeable implementation must keep wrappers thin but real: expose and route actual C ABI/WASM size lifecycle calls, or document the public ABI blocker instead of committing a Rust-only proof |
+
 Readable zero-count functions from `llvm-cxxfilt` fall into this first
 ledger. Treat this as the next owner list, not as deletion evidence:
 
