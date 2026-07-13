@@ -2075,6 +2075,7 @@ impl BackendComparisonWorker {
                     | "freetype.get_kerning"
                     | "freetype.get_subglyph_info"
                     | "ftotval.open_type_validate"
+                    | "ftmm.set_named_instance"
                     | "ftsizes.new_size"
                     | "ftsizes.done_size"
                     | "ftsizes.activate_size"
@@ -4493,6 +4494,19 @@ fn named_instance_observation_json(
     })
 }
 
+fn named_instance_null_face_output(status: FT_Error) -> RunOutput {
+    error_with_output(
+        status,
+        json!({
+            "return": status,
+            "face_index": Value::Null,
+            "face_flags": Value::Null,
+            "variation_bit_set": Value::Null,
+            "postscript_name": postscript_name_json(None)
+        }),
+    )
+}
+
 fn named_instance_run_output(
     status: FT_Error,
     info: &FT_FaceRecPublic,
@@ -4579,6 +4593,10 @@ where
 }
 
 fn rust_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        let err = FT_Set_Named_Instance(None, set_named_instance_index_param(&case.inputs.params)?);
+        return Ok(named_instance_null_face_output(err));
+    }
     let mut face = rust_new_face_without_size(case)?;
     if let Some(prior_instance) = prior_named_instance_index_param(&case.inputs.params)? {
         let err = FT_Set_Named_Instance(Some(&mut face), prior_instance);
@@ -4609,6 +4627,13 @@ fn rust_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn c_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        let err = c_abi::FT_Set_Named_Instance(
+            std::ptr::null_mut(),
+            set_named_instance_index_param(&case.inputs.params)?,
+        );
+        return Ok(named_instance_null_face_output(err));
+    }
     let (library, face) = c_new_face_without_size(case)?;
     let output = c_set_named_instance_on_face(face, &case.inputs.params);
     c_done_face(face);
@@ -4639,6 +4664,13 @@ fn c_set_named_instance_on_face(face: c_abi::FT_Face, params: &Value) -> Result<
 }
 
 fn wasm_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        let err = wasm_abi::fontdone_wasm_set_named_instance(
+            0,
+            set_named_instance_index_param(&case.inputs.params)?,
+        );
+        return Ok(named_instance_null_face_output(err));
+    }
     let handle = wasm_new_face_without_size(case)?;
     let output = wasm_set_named_instance_on_face(handle, &case.inputs.params);
     wasm_done_face(handle);
@@ -7729,6 +7761,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "ftmm.set_named_instance" => {
+            if lifecycle_handle_param(params, "face") == Some("null") {
+                return Ok(vec![
+                    "--set-named-instance-null-face".to_string(),
+                    set_named_instance_index_param(params)?.to_string(),
+                ]);
+            }
             if has_adobe_mm_prior_call(params) {
                 return Err(
                     "Adobe MM named-instance reset requires real Adobe MM support".to_string(),
@@ -8534,6 +8572,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "freetype.get_kerning"
                 | "freetype.get_subglyph_info"
                 | "ftotval.open_type_validate"
+                | "ftmm.set_named_instance"
                 | "ftsizes.new_size"
                 | "ftsizes.done_size"
                 | "ftsizes.activate_size"
