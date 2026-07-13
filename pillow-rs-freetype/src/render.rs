@@ -146,14 +146,19 @@ impl RenderMode {
 pub enum PixelMode {
     Gray,
     Mono,
+    Gray2,
+    Gray4,
     Lcd,
     LcdV,
+    Bgra,
 }
 
 impl PixelMode {
     pub fn num_grays(self) -> u16 {
         match self {
-            PixelMode::Gray | PixelMode::Lcd | PixelMode::LcdV => 256,
+            PixelMode::Gray | PixelMode::Lcd | PixelMode::LcdV | PixelMode::Bgra => 256,
+            PixelMode::Gray2 => 4,
+            PixelMode::Gray4 => 16,
             // FreeType leaves `FT_Bitmap::num_grays` at 256 for rendered
             // monochrome slots even though the buffer is 1-bit packed.
             PixelMode::Mono => 256,
@@ -164,8 +169,11 @@ impl PixelMode {
         match self {
             PixelMode::Gray => "gray",
             PixelMode::Mono => "mono",
+            PixelMode::Gray2 => "gray2",
+            PixelMode::Gray4 => "gray4",
             PixelMode::Lcd => "lcd",
             PixelMode::LcdV => "lcd_v",
+            PixelMode::Bgra => "bgra",
         }
     }
 }

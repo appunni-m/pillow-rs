@@ -48,9 +48,18 @@ pub struct SbitBitmap {
     pub width: u32,
     pub rows: u32,
     pub pitch: i32,
-    pub is_mono: bool,
+    pub pixel_mode: SbitPixelMode,
     pub num_grays: u16,
     pub buffer: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SbitPixelMode {
+    Mono,
+    Gray2,
+    Gray4,
+    Gray,
+    Bgra,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -292,9 +301,9 @@ fn load_simple_image(
     ebdt: &[u8],
     image_record: SbitImageRecord,
 ) -> Result<SbitGlyph, FontError> {
-    // FreeType `sfnt/ttsbit.c:1083-1130` routes image format 1 through the
-    // byte-aligned decoder.  `tt_sbit_decoder_alloc_bitmap` maps bit depth 1
-    // to MONO and bit depth 8 to GRAY before copying row-aligned image bytes.
+    // FreeType `sfnt/ttsbit.c:544-589,700-743` routes image format 1 through
+    // the byte-aligned decoder after mapping bit depths 1/2/4/8/32 to
+    // MONO/GRAY2/GRAY4/GRAY/BGRA and copying row-aligned image bytes.
     if image_record.format != 1 {
         return Err(FontError::InvalidFont(format!(
             "unsupported embedded bitmap image format {}",
@@ -324,9 +333,13 @@ fn load_simple_image(
     let raw_width = *image
         .get(1)
         .ok_or_else(|| FontError::InvalidFont("embedded bitmap small metrics missing".into()))?;
-    let (is_mono, row_bytes, num_grays) = match strike.bit_depth {
-        1 => (true, usize::from(raw_width).div_ceil(8), 2),
-        8 => (false, usize::from(raw_width), 256),
+    let width = usize::from(raw_width);
+    let (pixel_mode, row_bytes, num_grays) = match strike.bit_depth {
+        1 => (SbitPixelMode::Mono, width.div_ceil(8), 2),
+        2 => (SbitPixelMode::Gray2, width.div_ceil(4), 4),
+        4 => (SbitPixelMode::Gray4, width.div_ceil(2), 16),
+        8 => (SbitPixelMode::Gray, width, 256),
+        32 => (SbitPixelMode::Bgra, width * 4, 256),
         depth => {
             return Err(FontError::InvalidFont(format!(
                 "unsupported embedded bitmap bit depth {depth}"
@@ -352,7 +365,7 @@ fn load_simple_image(
             width: u32::from(raw_width),
             rows: u32::from(raw_height),
             pitch: row_bytes as i32,
-            is_mono,
+            pixel_mode,
             num_grays,
             buffer,
         },

@@ -162,8 +162,11 @@ pub fn pixel_mode_from_core(mode: PixelMode) -> FT_Pixel_Mode {
     match mode {
         PixelMode::Gray => FT_PIXEL_MODE_GRAY,
         PixelMode::Mono => FT_PIXEL_MODE_MONO,
+        PixelMode::Gray2 => FT_PIXEL_MODE_GRAY2,
+        PixelMode::Gray4 => FT_PIXEL_MODE_GRAY4,
         PixelMode::Lcd => FT_PIXEL_MODE_LCD,
         PixelMode::LcdV => FT_PIXEL_MODE_LCD_V,
+        PixelMode::Bgra => FT_PIXEL_MODE_BGRA,
     }
 }
 
