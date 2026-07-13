@@ -944,7 +944,8 @@
              dispatch, invalid contour shift, invalid coordinate reads, empty
              twilight-zone SHZ, non-output stack calls, clamped delta counts,
              twilight-zone moves, interpolation, positive/negative
-             single-width MDRP cut-in, and unknown-opcode IDEF dispatch. -->
+             single-width MDRP cut-in, unknown-opcode IDEF dispatch, and
+             ENDF with an empty call stack. -->
         <bytecode>
           01
           b1 00 00 08
@@ -987,6 +988,7 @@
           b0 00 15 b1 02 40 48 b0 00 16 b0 00 11 b0 00 12 b0 02 39 b0 01 16
           b4 00 00 00 09 00 0f
           93
+          2d
         </bytecode>
       </instructions>
     </TTGlyph>
