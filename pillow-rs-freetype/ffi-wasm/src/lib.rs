@@ -386,6 +386,62 @@ pub extern "C" fn fontdone_wasm_done_face(handle: usize) -> FT_Error {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_new_size(handle: usize) -> FontdoneWasmStatus {
+    let Some(face) = face_ref(handle) else {
+        return FontdoneWasmStatus {
+            error: rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error,
+            handle: 0,
+        };
+    };
+    let mut size: rust_ffi::FT_Size = ptr::null_mut();
+    let error = rust_ffi::FT_New_Size(Some(&face.face), Some(&mut size));
+    FontdoneWasmStatus {
+        error,
+        handle: if error == rust_ffi::FT_Err_Ok {
+            size as usize
+        } else {
+            0
+        },
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_new_size_out(handle: usize, out: *mut usize) -> FT_Error {
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(out) = ptr::NonNull::new(out) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let mut size: rust_ffi::FT_Size = ptr::null_mut();
+    let error = rust_ffi::FT_New_Size(Some(&face.face), Some(&mut size));
+    if error == rust_ffi::FT_Err_Ok {
+        // SAFETY: `out` was checked for null and is only written with an opaque handle value.
+        unsafe { *out.as_ptr() = size as usize };
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_activate_size(size_handle: usize) -> FT_Error {
+    let size = ptr::with_exposed_provenance_mut::<rust_ffi::FT_SizeRec>(size_handle);
+    rust_ffi::FT_Activate_Size(size)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_done_size(size_handle: usize) -> FT_Error {
+    let size = ptr::with_exposed_provenance_mut::<rust_ffi::FT_SizeRec>(size_handle);
+    rust_ffi::FT_Done_Size(size)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_active_size(handle: usize) -> usize {
+    face_ref(handle)
+        .map(|face| rust_ffi::FT_Face_Info(&face.face).size as usize)
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_done_freetype(library_present: i32) -> FT_Error {
     let library = if library_present != 0 {
         Some(rust_ffi::FT_Init_FreeType())

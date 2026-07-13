@@ -8,8 +8,8 @@
 
 use crate::error::FontError;
 use crate::font::{
-    BBox, FaceInfo, Font, GlyphSlotLoad, GlyphSlotLoadFormat, GlyphSlotMetrics, KerningMode,
-    LoadMode, LoadedOutline, SizeMetrics, SizeRequest, SizeRequestError, SubGlyphInfo,
+    ActiveSizeState, BBox, FaceInfo, Font, GlyphSlotLoad, GlyphSlotLoadFormat, GlyphSlotMetrics,
+    KerningMode, LoadMode, LoadedOutline, SizeMetrics, SizeRequest, SizeRequestError, SubGlyphInfo,
 };
 use crate::render::{PixelMode, RenderMode, RenderedBitmap, render_loaded_outline};
 use crate::tt::hinter::NativeHintMode;
@@ -269,6 +269,15 @@ impl Face {
     /// Return active size metrics.
     pub fn size_metrics(&self) -> SizeMetrics {
         self.font.size_metrics()
+    }
+
+    pub(crate) fn active_size_state(&self) -> ActiveSizeState {
+        self.font.active_size_state()
+    }
+
+    pub(crate) fn activate_size_state(&mut self, state: &ActiveSizeState) {
+        self.font.activate_size_state(state);
+        self.render_fonts.clear();
     }
 
     /// Set the active character size, equivalent to `FT_Set_Char_Size`.
