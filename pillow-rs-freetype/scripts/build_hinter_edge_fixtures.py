@@ -74,6 +74,14 @@ def write_fpgm_loopcall() -> None:
     save_font("hinter-fpgm-loopcall.ttf", font)
 
 
+def write_fpgm_fdef_index_overflow() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    # FDEF 256 is beyond the fixed TT_DefRecord array range.  FreeType rejects
+    # it before scanning a function body, so no glyph points are needed.
+    font["fpgm"].program = program_from_bytes(bytes.fromhex("b8 01 00 2c"))
+    save_font("hinter-fpgm-fdef-index-overflow.ttf", font)
+
+
 def write_fpgm_nested_fdef() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     fpgm = font["fpgm"].program.getBytecode()
@@ -114,6 +122,7 @@ def main() -> None:
     write_prep_idef()
     write_prep_redefine_defs()
     write_fpgm_loopcall()
+    write_fpgm_fdef_index_overflow()
     write_fpgm_nested_fdef()
     write_fpgm_idef_opcode_overflow()
     write_fpgm_nested_idef()
