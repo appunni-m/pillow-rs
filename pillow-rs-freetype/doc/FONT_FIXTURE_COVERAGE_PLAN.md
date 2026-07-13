@@ -2013,11 +2013,43 @@ ledger. Treat this as the next owner list, not as deletion evidence:
 
 | Disposition | Zero-count functions or families | Route decision |
 |---|---|---|
-| Implement before fixture parity | `ffi::handles::FT_New_Face`, `FT_GlyphSlot_AdjustWeight`, `FT_GlyphSlot_Embolden`, `FT_GlyphSlot_Oblique`, `FT_GlyphSlot_Slant` | These are public surfaces or public stubs; fixtures must not fake success until core behavior exists and C/WASM ABI wrappers remain thin |
+| Implement before fixture parity | `ffi::handles::FT_New_Face` | This is a public stub; fixtures must not fake success until core behavior exists and C/WASM ABI wrappers remain thin |
 | Public helper not owned by current FreeType manifest route | `autohint::globals::detect_script`, `globals_data::blue_chars_for_script`, `latin::metrics_init_blues`, `latin::metrics_init_blues_greek`, `Direction::{as_i8,is_horizontal,is_vertical}`, `GlyphHints::num_contours`, `ExecContext::{fetch_byte,fetch_word}` | Keep visible; either route through an existing public manifest subject with real C parity or decide separately whether these helpers belong in public Rust surface |
 | Private/no-route implementation helpers | `Font::{layout_glyphs,layout_bounds,slot_metrics_from_scaled,native_bytecode_context}`, `layout_bounds_from_glyphs`, `grays::{rasterize,rasterize_shifted_in_box,ft_div_mod,Worker::render_scanline}`, `render::MonoProfileBuilder::*`, `render::rasterize_mono_intersections`, `render::{line_up,line_down,bezier_up_2,bezier_down_2,unpack_mono_row,apply_horizontal_center_edges}` | Do not add synthetic tests. A real public operation must need them, or they need independent semantic cleanup after proving they are duplicate/obsolete |
 | Covered body with closure artifact | `Font::load_sfnt_table` closures, `Font::truetype_face_with_load_mode` closures, `SizeMetrics::from_char_size` closure, `tt::{cmap,fvar,gasp}` checked-overflow closures, `api::GlyphSlot::new` closure | Do not add fixture rows for closure symbols alone. Add rows only if a public error branch or output difference is missing |
 | Fixture/font reachable candidates | `cjk::cjk_mark_round_segments`, parts of `SdfFlattener`, `MonoOutlineProfileBuilder`, `scaler` metric/composite helpers, and `tt::hinter::exec::run_program` closure | Add compact glyph/topology/program rows only after identifying the exact branch and proving the row moves coverage with exact parity. `latin::find_second_lowest_contour` remains preserved code, but pinned FreeType 2.14.3 defines `AF_ADJUST_DOWN2` / `AF_ADJUST_TILDE_BOTTOM2` without any adjustment-database entries, so it is not currently reachable through a real public `char_code` fixture row |
+
+### FTSynth Null-Slot Checkpoint - 2026-07-13
+
+This batch made the remaining public ftsynth null-slot no-op obligation
+explicit without adding a synthetic slot model or a public WASM-only escape
+hatch.  `ftsynth.glyphslot_null_noop` calls the pinned C oracle, Rust FFI, and
+C ABI raw `FT_GlyphSlot` surface for `FT_GlyphSlot_AdjustWeight`,
+`FT_GlyphSlot_Embolden`, `FT_GlyphSlot_Oblique`, and `FT_GlyphSlot_Slant`.
+The WASM ABI is explicitly non-applicable for these rows because its public
+surface exposes face handles, not raw glyph-slot pointers.  The existing
+`FT_GlyphSlot_Embolden.null_or_unsupported_format_noop` row now uses the real
+`glyf-component-matrix.ttf` composite slot loaded with `FT_LOAD_NO_RECURSE`
+instead of a future synthetic slot asset.
+
+Verified counts after `make -C pillow-rs-freetype test-unified-condition-coverage`:
+
+| Measure | Count |
+|---|---:|
+| Logical public API cases | 4,163 |
+| Concrete explicit cases | 6,764 |
+| Runnable parity comparisons | 6,760 / 6,760 |
+| Pending cases | 4 |
+| Covered Rust lines | 16,238 / 18,095 (89.7375%) |
+| Rust region coverage | 23,305 / 25,934 (89.8627%) |
+| Rust branch/condition coverage | 3,918 / 4,634 (84.5490%) |
+| Rust function coverage | 1,025 / 1,150 (89.1304%) |
+| Route audit split | real-parity 3,404; raw-slot-null-validation 4; shape-incomplete-fallback 2 |
+
+The previously missed `ffi/handles.rs` null-return lines for
+`FT_GlyphSlot_AdjustWeight` and `FT_GlyphSlot_Slant` are now covered.  The two
+remaining ftsynth shape-incomplete rows are the embedded-bitmap strike cases
+for `FT_GlyphSlot_AdjustWeight` and `FT_GlyphSlot_Embolden`.
 
 ## Immediate Next Actions
 

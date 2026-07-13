@@ -2028,16 +2028,27 @@ impl BackendComparisonWorker {
         let c_duration = start.elapsed();
         self.profile.c_abi = self.profile.c_abi.saturating_add(c_duration);
 
-        let start = Instant::now();
-        let wasm_actual =
-            backend_or_error("wasm abi", case.case_id.as_str(), self.run_wasm_abi(case))?;
-        let wasm_duration = start.elapsed();
-        self.profile.wasm_abi = self.profile.wasm_abi.saturating_add(wasm_duration);
+        let (wasm_actual, wasm_duration) = if wasm_backend_applies(case) {
+            let start = Instant::now();
+            let actual =
+                backend_or_error("wasm abi", case.case_id.as_str(), self.run_wasm_abi(case))?;
+            let duration = start.elapsed();
+            self.profile.wasm_abi = self.profile.wasm_abi.saturating_add(duration);
+            (Some(actual), duration)
+        } else {
+            (None, Duration::ZERO)
+        };
 
         let start = Instant::now();
         let result = compare_named_output(case, "rust ffi", oracle, &rust_actual)
             .and_then(|()| compare_named_output(case, "c abi", oracle, &c_actual))
-            .and_then(|()| compare_named_output(case, "wasm abi", oracle, &wasm_actual));
+            .and_then(|()| {
+                if let Some(wasm_actual) = wasm_actual.as_ref() {
+                    compare_named_output(case, "wasm abi", oracle, wasm_actual)
+                } else {
+                    Ok(())
+                }
+            });
         let compare_duration = start.elapsed();
         self.profile.compare = self.profile.compare.saturating_add(compare_duration);
         if profile_enabled() {
@@ -6303,6 +6314,13 @@ fn case_uses_cached_face(case: &InputCase) -> bool {
     )
 }
 
+fn wasm_backend_applies(case: &InputCase) -> bool {
+    // The WASM ABI exposes glyph-slot synthesis through face handles, not raw
+    // `FT_GlyphSlot` pointers. Null raw-slot no-op parity is therefore covered
+    // by pinned C, Rust FFI, and the C ABI only.
+    case.operation != "ftsynth.glyphslot_null_noop"
+}
+
 fn case_requires_asset_validation(_case: &InputCase) -> bool {
     // All cases are accepted via generic fallback — no asset validation needed.
     false
@@ -8392,6 +8410,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(ftsynth_weight_rows_arg(params, true)?);
             Ok(args)
         }
+        "ftsynth.glyphslot_null_noop" => ftsynth_null_noop_oracle_args(params),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
             let mut args = vec!["--glyph-record".to_string()];
             push_font_source(case, &mut args)?;
@@ -8928,6 +8947,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftsynth.glyphslot_oblique_after_load" => rust_ftsynth_slant(case, true),
         "ftsynth.glyphslot_adjust_weight_after_load" => rust_ftsynth_weight(case, false),
         "ftsynth.glyphslot_embolden_after_load" => rust_ftsynth_weight(case, true),
+        "ftsynth.glyphslot_null_noop" => rust_ftsynth_null_noop(case),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
             let face = open_face(case)?;
             rust_glyph_record(&face, case)
@@ -9517,6 +9537,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output
         }
+        "ftsynth.glyphslot_null_noop" => c_ftsynth_null_noop(case),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
             let (library, face) = c_open_face(case)?;
             let output = c_glyph_record(face, case);
@@ -11494,6 +11515,100 @@ fn ftsynth_weight_value(value: &Value, label: &str) -> Result<(i64, i64), String
         .transpose()?
         .unwrap_or(0);
     Ok((xdelta, ydelta))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FtsynthNullNoopFunction {
+    AdjustWeight,
+    Embolden,
+    Oblique,
+    Slant,
+}
+
+impl FtsynthNullNoopFunction {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::AdjustWeight => "FT_GlyphSlot_AdjustWeight",
+            Self::Embolden => "FT_GlyphSlot_Embolden",
+            Self::Oblique => "FT_GlyphSlot_Oblique",
+            Self::Slant => "FT_GlyphSlot_Slant",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FtsynthNullNoop {
+    function: FtsynthNullNoopFunction,
+    first: i64,
+    second: i64,
+}
+
+fn ftsynth_null_noop_param(params: &Value) -> Result<FtsynthNullNoop, String> {
+    let function = match string_param(params, "function")? {
+        "FT_GlyphSlot_AdjustWeight" => FtsynthNullNoopFunction::AdjustWeight,
+        "FT_GlyphSlot_Embolden" => FtsynthNullNoopFunction::Embolden,
+        "FT_GlyphSlot_Oblique" => FtsynthNullNoopFunction::Oblique,
+        "FT_GlyphSlot_Slant" => FtsynthNullNoopFunction::Slant,
+        other => return Err(format!("unsupported ftsynth null no-op function {other}")),
+    };
+    let (first, second) = match function {
+        FtsynthNullNoopFunction::AdjustWeight => ftsynth_weight_value(params, "adjustment")?,
+        FtsynthNullNoopFunction::Slant => ftsynth_slant_value(params, "slant")?,
+        FtsynthNullNoopFunction::Embolden | FtsynthNullNoopFunction::Oblique => (0, 0),
+    };
+    Ok(FtsynthNullNoop {
+        function,
+        first,
+        second,
+    })
+}
+
+fn ftsynth_null_noop_oracle_args(params: &Value) -> Result<Vec<String>, String> {
+    let row = ftsynth_null_noop_param(params)?;
+    Ok(vec![
+        "--glyphslot-null-noop".to_string(),
+        row.function.as_str().to_string(),
+        row.first.to_string(),
+        row.second.to_string(),
+    ])
+}
+
+fn ftsynth_null_noop_output(row: FtsynthNullNoop) -> RunOutput {
+    ok(json!({
+        "function": row.function.as_str(),
+        "slot": "null",
+        "first": row.first,
+        "second": row.second,
+        "completed": true
+    }))
+}
+
+fn rust_ftsynth_null_noop(case: &InputCase) -> Result<RunOutput, String> {
+    let row = ftsynth_null_noop_param(&case.inputs.params)?;
+    match row.function {
+        FtsynthNullNoopFunction::AdjustWeight => {
+            FT_GlyphSlot_AdjustWeight(None, row.first, row.second);
+        }
+        FtsynthNullNoopFunction::Embolden => FT_GlyphSlot_Embolden(None),
+        FtsynthNullNoopFunction::Oblique => FT_GlyphSlot_Oblique(None),
+        FtsynthNullNoopFunction::Slant => FT_GlyphSlot_Slant(None, row.first, row.second),
+    }
+    Ok(ftsynth_null_noop_output(row))
+}
+
+fn c_ftsynth_null_noop(case: &InputCase) -> Result<RunOutput, String> {
+    let row = ftsynth_null_noop_param(&case.inputs.params)?;
+    match row.function {
+        FtsynthNullNoopFunction::AdjustWeight => {
+            c_abi::FT_GlyphSlot_AdjustWeight(ptr::null_mut(), row.first, row.second);
+        }
+        FtsynthNullNoopFunction::Embolden => c_abi::FT_GlyphSlot_Embolden(ptr::null_mut()),
+        FtsynthNullNoopFunction::Oblique => c_abi::FT_GlyphSlot_Oblique(ptr::null_mut()),
+        FtsynthNullNoopFunction::Slant => {
+            c_abi::FT_GlyphSlot_Slant(ptr::null_mut(), row.first, row.second);
+        }
+    }
+    Ok(ftsynth_null_noop_output(row))
 }
 
 fn ftsynth_output(rows: Vec<Value>) -> RunOutput {
