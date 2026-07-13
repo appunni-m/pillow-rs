@@ -1993,10 +1993,11 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | Malformed SBIT table header controls | `font-fixture-sbit` now emits `sbit_invalid_eblc_version.ttf`, `sbit_empty_ebdt.ttf`, and `sbit_strike_count_overflow.ttf`, three compact malformed embedded-bitmap controls. The existing `FT_Err_Missing_Bitmap.sbit_glyph_without_image` public row selects each with `FT_LOAD_COLOR | FT_LOAD_SBITS_ONLY`; pinned C, Rust FFI, C ABI, and WASM ABI all return exact public `FT_Err_Invalid_Argument`. These rows cover `tt/sbit.rs` early-return paths for invalid EBLC version/empty EBDT and impossible declared strike count while keeping bitmap-success decoding pending. Full condition coverage passes with 6,806 concrete cases, 6,803 / 6,803 runtime rows, three FTMM pending rows, 17,028 / 18,901 lines, 24,461 / 27,180 regions, 4,057 / 4,730 branches, 1,105 / 1,259 functions, and 1,108 / 1,262 instantiations. Route audit reports 3,476 real-parity rows and zero implicit cases |
 | 2026-07-14 | SBIT gray format-1 bitmap-success path | `font-fixture-sbit` now emits `sbit_gray_format1.ttf`, a compact source-backed TrueType face with one 20 ppem EBLC/EBDT strike. One explicit `FT_Load_Glyph.matrix_load@sbit-gray-format1-sbits-only` row selects glyph 1 with `FT_LOAD_SBITS_ONLY`, exercising index format 1, image format 1, 8-bit gray bitmap allocation/bytes, and FreeType's scalable-SBIT fallback from missing small-metrics `vertAdvance` to the glyph linear vertical advance (`truetype/ttgload.c:2401-2469`). The first focused run exposed Rust's zero `vertAdvance`; core now carries SBIT slot metrics in 26.6 units and fills missing scalable SBIT advances from `hmtx`/`vmtx` or synthesized vertical font metrics. Focused `FT_Load_Glyph.matrix_load` parity passes 118 / 118. Full condition coverage passes with 6,807 concrete cases, 6,804 / 6,804 runtime rows, three FTMM pending rows, 17,160 / 19,066 lines, 24,612 / 27,381 regions, 4,065 / 4,742 branches, 1,110 / 1,275 functions, and 1,113 / 1,278 instantiations. Route audit reports 3,477 real-parity rows and zero implicit cases |
 | 2026-07-14 | Default SBIT load-before-outline order | One explicit `FT_Load_Glyph.matrix_load@sbit-gray-format1-default-render` row reuses `sbit_gray_format1.ttf` and loads glyph 1 with `FT_LOAD_RENDER` rather than `FT_LOAD_SBITS_ONLY`. Pinned FreeType first tries embedded bitmaps before outline loading when bitmap loading is allowed (`base/ftobjs.c:1028-1050`) and the TrueType driver repeats the SBIT attempt before falling through to outlines (`truetype/ttgload.c:2401-2474`). Rust now mirrors that order: successful SBIT loads return bitmap slots for normal load/render calls, while failed `FT_LOAD_SBITS_ONLY` attempts still map to public `FT_Err_Invalid_Argument`. Focused `FT_Load_Glyph.matrix_load` parity passes 119 / 119. Full condition coverage passes with 6,808 concrete cases, 6,805 / 6,805 runtime rows, three FTMM pending rows, 17,165 / 19,071 lines, 24,614 / 27,383 regions, 4,072 / 4,750 branches, 1,109 / 1,274 functions, and 1,112 / 1,277 instantiations. Route audit reports 3,478 real-parity rows and zero implicit cases |
+| 2026-07-14 | Ftsynth bitmap-slot embolden parity | The existing `ftsynth.FT_GlyphSlot_AdjustWeight.bitmap_weight_owns_emboldens_and_updates_top` and `ftsynth.FT_GlyphSlot_Embolden.bitmap_embolden_mutates_bitmap_and_metrics` public rows now reuse `sbit_gray_format1.ttf` instead of the deprecated embedded-strike placeholder. The native oracle and unified Rust/C/WASM outputs now include bitmap descriptors, bitmap bytes, and bitmap-top values for ftsynth weight rows, proving the mutation rather than only slot metrics. Core `FT_GlyphSlot_AdjustWeight` now follows FreeType `base/ftsynth.c`: bitmap slots round synthetic strengths to full pixels, force a one-pixel horizontal embolden when the rounded x strength is zero, call the bitmap embolden path before metric side effects, and skip metric mutation when bitmap emboldening rejects negative pixel strength. Focused parity passes for both ftsynth bitmap rows. Full condition coverage passes with 6,808 concrete cases, 6,805 / 6,805 runtime rows, three FTMM pending rows, 17,253 / 19,176 lines, 24,783 / 27,574 regions, 4,102 / 4,796 branches, 1,113 / 1,278 functions, and 1,116 / 1,281 instantiations. Route audit reports 3,480 real-parity rows, 8 pending-core rows, and zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-14
 
-Fresh `test-unified-condition-coverage` still reports 1,906 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,923 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
@@ -2005,16 +2006,16 @@ source lines. The current split is:
 | Concrete explicit cases | 6,808 |
 | Runnable parity comparisons | 6,805 / 6,805 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,165 / 19,071 (90.0058%) |
-| Rust region coverage | 24,614 / 27,383 (89.8879%) |
-| Rust branch/condition coverage | 4,072 / 4,750 (85.7263%) |
-| Rust function coverage | 1,109 / 1,274 (87.0487%) |
-| Route audit split | real-parity 3,478; generic-fallback 916; null-error-fallback 7; raw-slot-null-validation 4; pending-core 10; shape-incomplete-fallback 0 |
+| Covered Rust lines | 17,253 / 19,176 (89.9718%) |
+| Rust region coverage | 24,783 / 27,574 (89.8781%) |
+| Rust branch/condition coverage | 4,102 / 4,796 (85.5296%) |
+| Rust function coverage | 1,113 / 1,278 (87.0892%) |
+| Route audit split | real-parity 3,480; generic-fallback 916; null-error-fallback 7; raw-slot-null-validation 4; pending-core 8; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
 | Fixture/font reachable | `autohint/latin.rs`, `autohint/cjk.rs`, `scaler.rs`, `tt/hinter/exec.rs`, and parts of `render.rs` still have real branch gaps tied to glyph topology, script selection, bytecode state, or render geometry | Add or extend compact source-backed fonts and explicit public rows only when the selected glyph moves the measured branch or line |
-| Public unsupported implementation paths | `FT_OpenType_Validate` non-null behavior and the ftsynth bitmap-slot paths for `FT_GlyphSlot_AdjustWeight` / `FT_GlyphSlot_Embolden` have non-null or mutation paths that return preserved stubs today | Implement the real public behavior first, then add parity rows; do not add fake success fixtures |
+| Public unsupported implementation paths | `FT_OpenType_Validate` non-null behavior still returns preserved stubs today | Implement the real public behavior first, then add parity rows; do not add fake success fixtures |
 | Public-construction unreachable guards | Short required `head`/`hhea` tables fail face construction before `face_to_ffi`; short optional `vhea` currently fails in `Font::truetype`; `tt/cmap.rs` format-14 branch outcomes are now closed, leaving only checked-multiply overflow closures at lines 786-789, 866-867, and 914-915 that cannot overflow on 64-bit from u32 counts; `tt/fvar.rs` checked-multiply overflow closures likewise cannot overflow from u16 counts | Leave visible and documented unless parser semantics change or a true public route appears |
 | Defensive invalid helper guards | `RoundMode::from_u8`'s invalid-value fallback remains missed after all valid FreeType `TT_Round_*` constants are routed through public `FT_Load_Glyph` rows | Leave visible; do not add a synthetic invalid round-state path unless a real public opcode or ABI surface can supply one |
 | Private/no-route helpers | `Font::layout_glyphs`, `Font::layout_bounds`, `layout_bounds_from_glyphs`, `grays::rasterize`, `grays::rasterize_shifted_in_box`, `grays::render_scanline`, and `render::render_loaded_char_mode_for_index` are not selected by the current public FreeType fixtures | Do not call these through synthetic tests; either expose a real public operation with C parity or prove and remove independently of coverage |
@@ -2393,8 +2394,8 @@ Work must resume here unless a newer user request changes priority:
 4. Keep the current three runtime pending rows explicit and do not count them
    as coverage until the core Adobe MM, `FT_MM_Var`, and `gvar`/HVAR behavior
    exists. The live non-SFNT face path is now covered by the compact Type 1
-   fixture. The ftsynth embedded-strike bitmap rows are route-audit
-   pending-core rows, not runtime pending rows, until core bitmap-slot
-   synthesis and a real bitmap-strike load route exist.
+   fixture. The ftsynth bitmap-slot rows now run as real parity through the
+   compact SBIT format-1 strike; remaining pending-core rows should be selected
+   from the refreshed route audit, not from older embedded-strike placeholders.
 5. Keep the deprecated corpus isolated until final cleanup is separately
    reviewed and approved.

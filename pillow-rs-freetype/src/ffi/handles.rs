@@ -357,14 +357,18 @@ pub fn FT_GlyphSlot_AdjustWeight(
     let Some(slot) = slot else {
         return;
     };
-    if slot.format != FT_GLYPH_FORMAT_OUTLINE {
+    if slot.format != FT_GLYPH_FORMAT_OUTLINE && slot.format != FT_GLYPH_FORMAT_BITMAP {
         return;
     }
 
     let size = slot.source_face.size_metrics();
     let xstrength = ((FT_Long::from(size.x_ppem) * x_delta) / 1024) as i32;
     let ystrength = ((FT_Long::from(size.y_ppem) * y_delta) / 1024) as i32;
-    slot.core_slot.adjust_outline_weight(xstrength, ystrength);
+    if slot.format == FT_GLYPH_FORMAT_OUTLINE {
+        slot.core_slot.adjust_outline_weight(xstrength, ystrength);
+    } else {
+        slot.core_slot.adjust_bitmap_weight(xstrength, ystrength);
+    }
     refresh_slot_public_fields(slot);
 }
 

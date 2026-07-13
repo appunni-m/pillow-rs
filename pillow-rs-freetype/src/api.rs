@@ -833,6 +833,40 @@ impl GlyphSlot {
             embolden_loaded_outline_for_render(loaded, xstrength, ystrength);
         }
 
+        self.apply_synthetic_weight_metrics(xstrength, ystrength);
+        self.recompute_outline_boxes();
+    }
+
+    /// Apply FreeType's synthetic bitmap-slot emboldening and slot metric side effects.
+    pub(crate) fn adjust_bitmap_weight(&mut self, mut xstrength: i32, mut ystrength: i32) {
+        let Some(ref mut bitmap) = self.bitmap else {
+            return;
+        };
+
+        // FreeType `src/base/ftsynth.c` rounds bitmap slot strengths down to
+        // full pixels before calling FT_Bitmap_Embolden, and forces a minimum
+        // one-pixel horizontal embolden for zero or subpixel x strength.
+        xstrength &= !63;
+        if xstrength == 0 {
+            xstrength = 1 << 6;
+        }
+        ystrength &= !63;
+
+        let x_pixels = xstrength >> 6;
+        let y_pixels = ystrength >> 6;
+        if !embolden_rendered_bitmap(bitmap, x_pixels, y_pixels) {
+            return;
+        }
+
+        self.apply_synthetic_weight_metrics(xstrength, ystrength);
+        self.bitmap_top = self.bitmap_top.wrapping_add(y_pixels);
+        if let Some(ref mut bitmap) = self.bitmap {
+            bitmap.left = self.bitmap_left;
+            bitmap.top = self.bitmap_top;
+        }
+    }
+
+    fn apply_synthetic_weight_metrics(&mut self, xstrength: i32, ystrength: i32) {
         if self.advance.x != 0 {
             self.advance.x = self.advance.x.wrapping_add(xstrength);
         }
@@ -847,7 +881,6 @@ impl GlyphSlot {
         self.metrics.hori_advance = self.metrics.hori_advance.wrapping_add(xstrength);
         self.metrics.vert_advance = self.metrics.vert_advance.wrapping_add(ystrength);
         self.metrics.hori_bearing_y = self.metrics.hori_bearing_y.wrapping_add(ystrength);
-        self.recompute_outline_boxes();
     }
 
     fn recompute_outline_boxes(&mut self) {
@@ -876,6 +909,107 @@ impl GlyphSlot {
     pub(crate) fn slot_outline(&self) -> Option<&crate::outline::Outline> {
         self.slot_outline.as_ref()
     }
+}
+
+fn embolden_rendered_bitmap(bitmap: &mut RenderedBitmap, x_pixels: i32, y_pixels: i32) -> bool {
+    if x_pixels < 0 || y_pixels < 0 {
+        return false;
+    }
+    let (Ok(x_pixels), Ok(y_pixels)) = (usize::try_from(x_pixels), usize::try_from(y_pixels))
+    else {
+        return false;
+    };
+    if x_pixels == 0 && y_pixels == 0 {
+        return true;
+    }
+    match bitmap.pixel_mode {
+        PixelMode::Gray => embolden_8bit_positive_pitch_bitmap(bitmap, x_pixels, y_pixels),
+        PixelMode::Mono | PixelMode::Lcd | PixelMode::LcdV => false,
+    }
+}
+
+fn embolden_8bit_positive_pitch_bitmap(
+    bitmap: &mut RenderedBitmap,
+    x_pixels: usize,
+    y_pixels: usize,
+) -> bool {
+    let (Ok(width), Ok(rows), Ok(pitch)) = (
+        usize::try_from(bitmap.width),
+        usize::try_from(bitmap.rows),
+        usize::try_from(bitmap.pitch),
+    ) else {
+        return false;
+    };
+    if pitch < width || bitmap.buffer.len() < pitch.saturating_mul(rows) {
+        return false;
+    }
+    let Some(new_pitch) = width.checked_add(x_pixels) else {
+        return false;
+    };
+
+    if y_pixels == 0 && new_pitch <= pitch {
+        for row in 0..rows {
+            let start = row * pitch + new_pitch;
+            let end = (row + 1) * pitch;
+            bitmap.buffer[start..end].fill(0);
+        }
+    } else {
+        let Some(new_rows) = rows.checked_add(y_pixels) else {
+            return false;
+        };
+        let Some(new_len) = new_rows.checked_mul(new_pitch) else {
+            return false;
+        };
+        let mut new_buffer = vec![0; new_len];
+        for row in 0..rows {
+            let src = row * pitch;
+            let dst = (row + y_pixels) * new_pitch;
+            new_buffer[dst..dst + width].copy_from_slice(&bitmap.buffer[src..src + width]);
+        }
+        bitmap.buffer = new_buffer;
+        bitmap.pitch = match i32::try_from(new_pitch) {
+            Ok(value) => value,
+            Err(_) => return false,
+        };
+    }
+
+    let pitch = usize::try_from(bitmap.pitch).unwrap_or(new_pitch);
+    let max_gray = u8::try_from(bitmap.num_grays.saturating_sub(1).min(255)).unwrap_or(255);
+    for row in 0..rows {
+        let row_start = (row + y_pixels) * pitch;
+        for x in (0..pitch).rev() {
+            for i in 1..=x_pixels {
+                if x < i {
+                    break;
+                }
+                let src = bitmap.buffer[row_start + x - i];
+                let dst = &mut bitmap.buffer[row_start + x];
+                *dst = dst.saturating_add(src).min(max_gray);
+                if *dst == max_gray {
+                    break;
+                }
+            }
+        }
+        for y in 1..=y_pixels {
+            let dst = row_start - pitch * y;
+            for i in 0..pitch {
+                bitmap.buffer[dst + i] |= bitmap.buffer[row_start + i];
+            }
+        }
+    }
+
+    let (Ok(x_pixels), Ok(y_pixels)) = (u32::try_from(x_pixels), u32::try_from(y_pixels)) else {
+        return false;
+    };
+    let (Some(width), Some(rows)) = (
+        bitmap.width.checked_add(x_pixels),
+        bitmap.rows.checked_add(y_pixels),
+    ) else {
+        return false;
+    };
+    bitmap.width = width;
+    bitmap.rows = rows;
+    true
 }
 
 fn transform_outline_points(
