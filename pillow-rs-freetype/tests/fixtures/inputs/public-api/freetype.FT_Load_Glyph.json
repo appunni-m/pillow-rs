@@ -3271,6 +3271,28 @@
             "coverage": [
               "load_glyph:error-reserved-load-flag"
             ]
+          },
+          {
+            "id": "sbits-only-no-bitmap-conflict",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_SBITS_ONLY",
+                "FT_LOAD_NO_BITMAP"
+              ],
+              "size": 20
+            },
+            "coverage": [
+              "load_glyph:error-sbits-only-no-bitmap-conflict"
+            ]
           }
         ]
       },
