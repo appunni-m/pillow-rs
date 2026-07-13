@@ -133,10 +133,14 @@
               "char_code": 65,
               "load_flags": [
                 "FT_LOAD_FORCE_AUTOHINT"
+              ],
+              "assert_autohint_coverage_bits_include": [
+                32
               ]
             },
             "coverage": [
-              "autohint/latin:italic-no-horizontal"
+              "autohint/latin:italic-no-horizontal",
+              "autohint/coverage:COV_ITALIC_NO_HORZ"
             ]
           },
           {

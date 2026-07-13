@@ -34,6 +34,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use fontdone::autohint::coverage as autohint_coverage;
 use fontdone::ffi::*;
 use fontdone::{
     CharmapInfo, Face as ApiFace, Font, FontError, GlyphSlot as ApiGlyphSlot, LoadMode, RenderMode,
@@ -11783,10 +11784,13 @@ fn rust_load_char_public_api(case: &InputCase) -> Result<RunOutput, String> {
         Err(err) => return Ok(error(err)),
     };
     let face = open_api_face(case)?;
-    match face.load_char(char_code, load_flags) {
-        Ok(slot) => Ok(ok(api_slot_json(&slot))),
-        Err(err) => Ok(error(font_error_to_ft(err))),
-    }
+    let expected_autohint_bits = reset_autohint_coverage_if_requested(case)?;
+    let output = match face.load_char(char_code, load_flags) {
+        Ok(slot) => ok(api_slot_json(&slot)),
+        Err(err) => error(font_error_to_ft(err)),
+    };
+    assert_autohint_coverage_bits(case, expected_autohint_bits.as_deref())?;
+    Ok(output)
 }
 
 fn assert_api_load_glyph_agrees(
@@ -11809,9 +11813,11 @@ fn assert_api_load_glyph_agrees(
     let glyph_index = u16::try_from(rust_resolved_glyph_index(&ffi_face, &case.inputs.params)?)
         .map_err(|err| format!("{} glyph_index does not fit u16: {err}", case.case_id))?;
     let face = open_api_face(case)?;
+    let expected_autohint_bits = reset_autohint_coverage_if_requested(case)?;
     let api_result = face
         .load_glyph(glyph_index, load_flags)
         .map_err(font_error_to_ft);
+    assert_autohint_coverage_bits(case, expected_autohint_bits.as_deref())?;
     match (api_result, ffi_result) {
         (Ok(api_slot), Ok(ffi_slot)) => {
             let ffi_json = slot_json(ffi_slot);
@@ -11850,6 +11856,80 @@ fn assert_api_load_glyph_agrees(
 
 fn checks_api_load_glyph_agreement(case: &InputCase) -> Result<bool, String> {
     bool_param(&case.inputs.params, "assert_api_load_glyph_agrees", false)
+}
+
+fn reset_autohint_coverage_if_requested(case: &InputCase) -> Result<Option<Vec<u32>>, String> {
+    let expected = autohint_coverage_bits_param(case)?;
+    if expected.is_some() {
+        autohint_coverage::reset();
+        let mask = autohint_coverage::current_mask();
+        if mask != 0 {
+            return Err(format!(
+                "{} autohint coverage reset left mask=0x{mask:x}",
+                case.case_id
+            ));
+        }
+    }
+    Ok(expected)
+}
+
+fn assert_autohint_coverage_bits(case: &InputCase, expected: Option<&[u32]>) -> Result<(), String> {
+    let Some(expected) = expected else {
+        return Ok(());
+    };
+    let mask = autohint_coverage::current_mask();
+    let actual = autohint_coverage::collect_hit_bits(mask);
+    let missing = expected
+        .iter()
+        .copied()
+        .filter(|bit| !actual.contains(bit))
+        .collect::<Vec<_>>();
+    autohint_coverage::reset();
+    if !missing.is_empty() {
+        return Err(format!(
+            "{} autohint coverage bits missing: expected_include={expected:?} actual={actual:?} missing={missing:?}",
+            case.case_id
+        ));
+    }
+    Ok(())
+}
+
+fn autohint_coverage_bits_param(case: &InputCase) -> Result<Option<Vec<u32>>, String> {
+    let Some(raw) = case
+        .inputs
+        .params
+        .get("assert_autohint_coverage_bits_include")
+    else {
+        return Ok(None);
+    };
+    let values = raw.as_array().ok_or_else(|| {
+        format!(
+            "{} assert_autohint_coverage_bits_include must be an array",
+            case.case_id
+        )
+    })?;
+    let mut bits = Vec::with_capacity(values.len());
+    for value in values {
+        let bit = value.as_u64().ok_or_else(|| {
+            format!(
+                "{} assert_autohint_coverage_bits_include entries must be integers",
+                case.case_id
+            )
+        })?;
+        if bit >= u64::BITS.into() {
+            return Err(format!(
+                "{} autohint coverage bit {bit} is outside the u64 mask",
+                case.case_id
+            ));
+        }
+        bits.push(u32::try_from(bit).map_err(|err| {
+            format!(
+                "{} autohint coverage bit {bit} does not fit u32: {err}",
+                case.case_id
+            )
+        })?);
+    }
+    Ok(Some(bits))
 }
 
 fn rust_render_glyph_public_api(case: &InputCase) -> Result<RunOutput, String> {
