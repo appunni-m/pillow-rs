@@ -2084,12 +2084,15 @@ pub fn FT_Load_Sfnt_Table(
     offset: FT_Long,
     length: Option<&mut FT_ULong>,
 ) -> Result<Option<Vec<u8>>, FT_Error> {
+    let inner = face.inner.borrow();
+    let font = inner.font();
+    if !font.is_sfnt() {
+        return Err(FT_Err_Invalid_Face_Handle as FT_Error);
+    }
     let tag_u32 = match u32::try_from(tag) {
         Ok(t) => t,
         Err(_) => return Err(FT_Err_Table_Missing as FT_Error),
     };
-    let inner = face.inner.borrow();
-    let font = inner.font();
     let table_len = match font.sfnt_table_len(tag_u32) {
         Ok(len) => len,
         Err(_) => return Err(FT_Err_Table_Missing as FT_Error),
@@ -2130,6 +2133,11 @@ pub fn FT_Sfnt_Table_Info(
     tag: Option<&mut FT_ULong>,
     length: Option<&mut FT_ULong>,
 ) -> FT_Error {
+    let inner = face.inner.borrow();
+    let font = inner.font();
+    if !font.is_sfnt() {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    }
     let Some(length) = length else {
         return FT_Err_Invalid_Argument;
     };
@@ -2139,8 +2147,6 @@ pub fn FT_Sfnt_Table_Info(
         *length = FT_Sfnt_Table_Count(face) as FT_ULong;
         return FT_Err_Ok;
     }
-    let inner = face.inner.borrow();
-    let font = inner.font();
     let index = match usize::try_from(table_index) {
         Ok(i) => i,
         Err(_) => return FT_Err_Table_Missing as FT_Error,

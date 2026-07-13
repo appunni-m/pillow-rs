@@ -150,7 +150,7 @@ impl Library {
         face_index: usize,
         size_pt: f32,
     ) -> Result<Face, FontError> {
-        let font = Font::truetype_face(data, face_index, size_pt)?;
+        let font = Font::memory_face(data, face_index, size_pt)?;
         Ok(Face {
             font,
             render_fonts: RenderFontCache::default(),

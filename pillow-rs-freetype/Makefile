@@ -35,6 +35,7 @@ help:
 	@printf "  make font-fixture-render Rebuild compact render path fixtures\n"
 	@printf "  make font-fixture-sbit Rebuild compact embedded bitmap/SBIT fixtures\n"
 	@printf "  make font-fixture-sfnt Rebuild compact SFNT table fixtures\n"
+	@printf "  make font-fixture-type1 Rebuild compact Type 1 fixtures\n"
 	@printf "\nBuild:\n"
 	@printf "  make build            Build the crate\n"
 	@printf "  make doc              Build crate documentation\n"
@@ -259,6 +260,10 @@ font-fixture-autohint-scripts:
 .PHONY: font-fixture-cff
 font-fixture-cff:
 	$(PYTHON) scripts/build_cff_fixtures.py
+
+.PHONY: font-fixture-type1
+font-fixture-type1:
+	$(PYTHON) scripts/build_type1_fixtures.py
 
 .PHONY: font-fixture-gasp
 font-fixture-gasp: font-fixture-hinter

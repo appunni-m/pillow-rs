@@ -244,7 +244,7 @@
       "case": "invalid_argument_errors",
       "operation": "ftsnames.get_sfnt_name",
       "schema": "api_result",
-      "expect_error": true,
+      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -267,10 +267,13 @@
         "kind:function",
         "header:ftsnames",
         "area:error_path",
-        "requires:non_sfnt_runtime_face"
+        "runtime:non_sfnt_face"
       ],
+      "metadata": {
+        "source_behavior": "Pinned ftsnames.c keeps Invalid_Argument for a live non-SFNT face because FT_IS_SFNT(face) is false, so no FT_SfntName fields are copied."
+      },
       "expectation": {
-        "status": "build_dependent",
+        "status": "ok",
         "output_shape": {
           "return_sequence": "array<FT_Error>",
           "names": "array<FT_SfntName_with_string_bytes>"
@@ -287,10 +290,7 @@
             "names[].string_bytes"
           ]
         },
-        "error": "Invalid_Argument",
-        "fixture_requirements": [
-          "Requires a non-SFNT face fixture that both C FreeType and the Rust implementation can open as a live FT_Face; the current Type 1 placeholder reaches FT_New_Memory_Face error before FT_Get_Sfnt_Name."
-        ]
+        "error": "Invalid_Argument"
       }
     }
   ]
