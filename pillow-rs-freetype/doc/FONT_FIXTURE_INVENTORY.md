@@ -243,7 +243,7 @@ listed because they enter different hinting and scaling conditions.
 | `hinter-control-matrix.ttf` | U+E028 gid 41 | 20 | off-curve start and consecutive conic controls across normal, mono, LCD, LCD_V, and SDF modes; owns FreeType-compatible SDF conic subdivision |
 | `hinter-control-matrix.ttf` | U+E029 gid 42 | 20 | self-intersecting bowtie plus a thin rectangle in mono, normal, and SDF modes |
 | `hinter-control-matrix.ttf` | U+E02A gid 43 | 20 | outer and opposite-winding inner contours plus a coincident-point degenerate contour in normal and SDF modes |
-| `hinter-control-matrix.ttf` | U+E02B gid 44 | 20 | zero-width vertical contour selected across normal, mono, and SDF modes |
+| `hinter-control-matrix.ttf` | U+E02B gid 44 | 20 | zero-width vertical contour selected across normal, mono, SDF, and ftsynth weight-adjustment modes; owns the public glyph-slot orientation-none embolden return with metric side effects |
 | `hinter-control-matrix.ttf` | U+E02C gid 45 | 20 | zero-height horizontal contour selected across normal, mono, and SDF modes |
 | `hinter-control-matrix.ttf` | U+E02D gid 46, U+E02E gid 47 | 20 | scan types 4 and 5 on narrow vertical rectangles; owns smart dropout selection with and without stub inclusion |
 | `hinter-control-matrix.ttf` | U+E02F gid 48, U+E030 gid 49, U+E031 gid 50 | 20 | collapsed x/y mono contours at negative-bias fractional positions plus a 130 px mono box that selects the low-precision raster path |
