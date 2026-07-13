@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 153 | 110 | 43 | 121 | 823 KiB |
+| Active fixtures | 155 | 112 | 43 | 123 | 832 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 7 | 7 | 0 | 7 | 193 KiB |
 
@@ -155,7 +155,9 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `6175105e1748` | 1.6 | 1 | `fonts/glyf/cvt-odd-length.ttf` | valid TrueType control with a one-byte cvt table rejected by Rust parsing and ignored by face construction |
 | `f8e4a4dc0dd7` | 1.0 | 1 | `fonts/glyf/render-coverage.ttf` | compact generated glyf fixture covering mono dropout guards, a subpixel zero-height mono profile sweep, and a quadratic scaler bbox-extrema branch probe |
 | `885bc8840936` | 4.3 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed VM, render-topology, and ftsynth matrix covering state, geometry, control flow, DELTA, invalid coordinate reads, repeated post-IUP compatibility return, prep-range empty-zone SHZ and IUP, six exact bytecode error classes, conic chains, intersections, thin outlines, mixed winding, degenerate contours, empty outlines, collapsed spans, mono low-precision raster selection, scan-type dropout modes, PostScript-orientation embolden, zero-length embolden segment skipping, nearly-opposite embolden vector zero-shift, and zero-area orientation-none embolden |
-| `58191c7b740f` | 4.5 | 1 | `fixtures/assets/fonts/sbit_missing_bitmap.ttf` | source-backed TrueType control with one EBLC/EBDT strike at 20 ppem and a glyph-1 index-format-1 record whose equal image offsets own the `FT_LOAD_SBITS_ONLY` Missing_Bitmap public error route |
+| `dec8992f7f06` | 4.5 | 1 | `fixtures/assets/fonts/sbit_missing_bitmap.ttf` | source-backed TrueType control with one EBLC/EBDT strike at 20 ppem and a glyph-1 index-format-1 record whose equal image offsets own the `FT_LOAD_SBITS_ONLY` Missing_Bitmap public error route |
+| `1367a1e9fc40` | 4.5 | 1 | `fixtures/assets/fonts/sbit_composite_missing_subglyph.ttf` | source-backed TrueType control with one EBLC/EBDT strike at 20 ppem; glyph 2 is an image-format-8 compound bitmap using index-format-1 offsets and references glyph 1 whose image offsets are empty, owning recursive SBIT `Invalid_Composite` parity |
+| `7ba4fc3eeb7b` | 4.5 | 1 | `fixtures/assets/fonts/sbit_composite_missing_subglyph_format3.ttf` | source-backed TrueType control with one EBLC/EBDT strike at 20 ppem; glyph 2 is an image-format-9 compound bitmap using index-format-3 offsets and references glyph 1 whose image offsets are empty, covering the big-metrics recursive SBIT branch |
 | `1000cfa4a810` | 4.3 | 1 | `fonts/glyf/hinter-empty-fpgm.ttf` | derived source-backed TrueType control with empty `fpgm`, non-empty `prep`, present `cvt`, and the same glyph programs as `hinter-control-matrix.ttf`; owns native prepare-context empty-font-program coverage |
 | `cf0d8d5c3519` | 4.4 | 1 | `fonts/glyf/hinter-prep-definitions.ttf` | derived source-backed TrueType control whose prep program attempts additional FDEF then IDEF definitions beyond the font's maxp definition budgets; owns C-compatible too-many-definition error parity |
 | `4ce5f65e9105` | 4.3 | 1 | `fonts/glyf/hinter-prep-idef.ttf` | derived source-backed TrueType control whose prep program attempts only a new IDEF beyond the font's maxp instruction-definition budget; owns the paired too-many-IDEF error route |

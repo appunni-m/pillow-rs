@@ -123,25 +123,60 @@
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "fixture": {
-            "kind": "ref",
-            "role": "font_or_public_input",
-            "id": "fixtures/assets/fonts/sbit_composite_missing_subglyph.ttf",
-            "requirements": "Recursive embedded bitmap composite whose missing component follows the ttsbit.c composite branch and reports Invalid_Composite rather than Missing_Bitmap."
+        "variants": [
+          {
+            "id": "index1-format8",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_composite_missing_subglyph.ttf",
+                "requirements": "Recursive embedded bitmap composite using EBLC index format 1 and EBDT image format 8 whose missing component follows the ttsbit.c composite branch."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Composite",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/sfnt/ttsbit.c:1436-1441",
+              "face_index": 0,
+              "select_size_index": 0,
+              "glyph_index": 2,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
+              ]
+            },
+            "coverage": [
+              "sbit:compound-index1-format8-missing-subglyph"
+            ]
+          },
+          {
+            "id": "index3-format9",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_composite_missing_subglyph_format3.ttf",
+                "requirements": "Recursive embedded bitmap composite using EBLC index format 3 and EBDT image format 9 whose missing component follows the ttsbit.c composite branch."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Composite",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/sfnt/ttsbit.c:1436-1441",
+              "face_index": 0,
+              "select_size_index": 0,
+              "glyph_index": 2,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
+              ]
+            },
+            "coverage": [
+              "sbit:compound-index3-format9-missing-subglyph"
+            ]
           }
-        },
-        "params": {
-          "expected_error_symbol": "FT_Err_Invalid_Composite",
-          "expected_error_value_source": "pinned fterrdef.h",
-          "pinned_source": "freetype/src/sfnt/ttsbit.c:1436-1441",
-          "face_index": 0,
-          "select_size_index": 0,
-          "load_flags": [
-            "FT_LOAD_COLOR",
-            "FT_LOAD_SBITS_ONLY"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:error",

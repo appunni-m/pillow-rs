@@ -75,7 +75,7 @@ struct SizeOwner {
 type SizeHandleRegistry = BTreeMap<usize, SizeOwner>;
 
 thread_local! {
-    static SIZE_HANDLE_REGISTRY: RefCell<SizeHandleRegistry> = RefCell::new(BTreeMap::new());
+    static SIZE_HANDLE_REGISTRY: RefCell<SizeHandleRegistry> = const { RefCell::new(BTreeMap::new()) };
 }
 
 impl FaceSizeState {
