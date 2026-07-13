@@ -334,18 +334,7 @@ fn load_simple_image(
         .get(1)
         .ok_or_else(|| FontError::InvalidFont("embedded bitmap small metrics missing".into()))?;
     let width = usize::from(raw_width);
-    let (pixel_mode, row_bytes, num_grays) = match strike.bit_depth {
-        1 => (SbitPixelMode::Mono, width.div_ceil(8), 2),
-        2 => (SbitPixelMode::Gray2, width.div_ceil(4), 4),
-        4 => (SbitPixelMode::Gray4, width.div_ceil(2), 16),
-        8 => (SbitPixelMode::Gray, width, 256),
-        32 => (SbitPixelMode::Bgra, width * 4, 256),
-        depth => {
-            return Err(FontError::InvalidFont(format!(
-                "unsupported embedded bitmap bit depth {depth}"
-            )));
-        }
-    };
+    let (pixel_mode, row_bytes, num_grays) = bitmap_layout_for_bit_depth(strike.bit_depth, width)?;
     let metrics = read_small_metrics(image)?;
     let bitmap_start = 5usize;
     let rows = usize::from(raw_height);
@@ -396,11 +385,12 @@ fn load_compound_image(
     let image = ebdt
         .get(start..end)
         .ok_or_else(|| FontError::InvalidFont("embedded bitmap image exceeds data".into()))?;
-    let component_start = match image_record.format {
-        8 => 6,
-        9 => 8,
+    let (metrics, component_start) = match image_record.format {
+        8 => (read_small_metrics(image)?, 6usize),
+        9 => (read_big_metrics(image)?, 8usize),
         _ => unreachable!("compound image loader only accepts image formats 8 and 9"),
     };
+    let mut glyph = blank_compound_glyph(strike, metrics)?;
     let num_components = read_u16(image, component_start)
         .ok_or_else(|| FontError::InvalidFont("embedded bitmap compound count missing".into()))?;
     let records_start = component_start
@@ -415,15 +405,19 @@ fn load_compound_image(
     let records = image.get(records_start..records_end).ok_or_else(|| {
         FontError::InvalidFont("embedded bitmap compound record truncated".into())
     })?;
+    // FreeType `sfnt/ttsbit.c:961-1012` allocates the root bitmap from the
+    // compound metrics, ORs each recursively loaded component into that
+    // canvas, then restores the root metrics.
     for component in records.chunks_exact(4) {
         let gindex = read_u16(component, 0).ok_or_else(|| {
             FontError::InvalidFont("embedded bitmap component glyph missing".into())
         })?;
-        strike.find_image(eblc, ebdt, gindex, recurse_count + 1)?;
+        let dx = i32::from(component[2] as i8);
+        let dy = i32::from(component[3] as i8);
+        let component = strike.find_image(eblc, ebdt, gindex, recurse_count + 1)?;
+        blit_component_bitmap(&mut glyph.bitmap, &component.bitmap, dx, dy)?;
     }
-    Err(FontError::UnsupportedLoadFlags(
-        "embedded bitmap compound image decoding".into(),
-    ))
+    Ok(glyph)
 }
 
 fn read_small_metrics(data: &[u8]) -> Result<SbitMetrics, FontError> {
@@ -440,6 +434,160 @@ fn read_small_metrics(data: &[u8]) -> Result<SbitMetrics, FontError> {
         vert_bearing_y: 0,
         vert_advance: 0,
     })
+}
+
+fn read_big_metrics(data: &[u8]) -> Result<SbitMetrics, FontError> {
+    let bytes = data
+        .get(0..8)
+        .ok_or_else(|| FontError::InvalidFont("embedded bitmap big metrics missing".into()))?;
+    Ok(SbitMetrics {
+        height: i32::from(bytes[0]) * 64,
+        width: i32::from(bytes[1]) * 64,
+        hori_bearing_x: i32::from(bytes[2] as i8) * 64,
+        hori_bearing_y: i32::from(bytes[3] as i8) * 64,
+        hori_advance: i32::from(bytes[4]) * 64,
+        vert_bearing_x: i32::from(bytes[5] as i8) * 64,
+        vert_bearing_y: i32::from(bytes[6] as i8) * 64,
+        vert_advance: i32::from(bytes[7]) * 64,
+    })
+}
+
+fn blank_compound_glyph(strike: SbitStrike, metrics: SbitMetrics) -> Result<SbitGlyph, FontError> {
+    let width = bitmap_dimension_from_metric(metrics.width, "width")?;
+    let rows = bitmap_dimension_from_metric(metrics.height, "height")?;
+    let (pixel_mode, row_bytes, num_grays) = bitmap_layout_for_bit_depth(strike.bit_depth, width)?;
+    let len = row_bytes.checked_mul(rows).ok_or_else(|| {
+        FontError::InvalidFont("embedded bitmap compound buffer length overflow".into())
+    })?;
+    Ok(SbitGlyph {
+        metrics,
+        bitmap: SbitBitmap {
+            width: width as u32,
+            rows: rows as u32,
+            pitch: row_bytes as i32,
+            pixel_mode,
+            num_grays,
+            buffer: vec![0; len],
+        },
+    })
+}
+
+fn bitmap_dimension_from_metric(value: i32, name: &str) -> Result<usize, FontError> {
+    if value < 0 || value % 64 != 0 {
+        return Err(FontError::InvalidFont(format!(
+            "embedded bitmap compound {name} metric is invalid"
+        )));
+    }
+    usize::try_from(value / 64).map_err(|_| {
+        FontError::InvalidFont(format!(
+            "embedded bitmap compound {name} metric does not fit usize"
+        ))
+    })
+}
+
+fn bitmap_layout_for_bit_depth(
+    bit_depth: u8,
+    width: usize,
+) -> Result<(SbitPixelMode, usize, u16), FontError> {
+    match bit_depth {
+        1 => Ok((SbitPixelMode::Mono, width.div_ceil(8), 2)),
+        2 => Ok((SbitPixelMode::Gray2, width.div_ceil(4), 4)),
+        4 => Ok((SbitPixelMode::Gray4, width.div_ceil(2), 16)),
+        8 => Ok((SbitPixelMode::Gray, width, 256)),
+        32 => Ok((SbitPixelMode::Bgra, width * 4, 256)),
+        depth => Err(FontError::InvalidFont(format!(
+            "unsupported embedded bitmap bit depth {depth}"
+        ))),
+    }
+}
+
+fn blit_component_bitmap(
+    target: &mut SbitBitmap,
+    component: &SbitBitmap,
+    dx: i32,
+    dy: i32,
+) -> Result<(), FontError> {
+    if target.pixel_mode != component.pixel_mode || target.num_grays != component.num_grays {
+        return Err(FontError::InvalidFont(
+            "embedded bitmap compound pixel mode mismatch".into(),
+        ));
+    }
+    if dx < 0 || dy < 0 {
+        return Err(FontError::InvalidFont(
+            "embedded bitmap compound component outside target".into(),
+        ));
+    }
+    let dx = dx as u32;
+    let dy = dy as u32;
+    let Some(right) = dx.checked_add(component.width) else {
+        return Err(FontError::InvalidFont(
+            "embedded bitmap compound component outside target".into(),
+        ));
+    };
+    let Some(bottom) = dy.checked_add(component.rows) else {
+        return Err(FontError::InvalidFont(
+            "embedded bitmap compound component outside target".into(),
+        ));
+    };
+    if right > target.width || bottom > target.rows {
+        return Err(FontError::InvalidFont(
+            "embedded bitmap compound component outside target".into(),
+        ));
+    }
+
+    let target_pitch = usize::try_from(target.pitch)
+        .map_err(|_| FontError::InvalidFont("embedded bitmap target pitch invalid".into()))?;
+    let component_pitch = usize::try_from(component.pitch)
+        .map_err(|_| FontError::InvalidFont("embedded bitmap component pitch invalid".into()))?;
+    let bytes_per_pixel = match target.pixel_mode {
+        SbitPixelMode::Bgra => 4,
+        SbitPixelMode::Gray => 1,
+        SbitPixelMode::Mono | SbitPixelMode::Gray2 | SbitPixelMode::Gray4 => {
+            if dx != 0 {
+                return Err(FontError::InvalidFont(
+                    "embedded bitmap packed compound x offset unsupported".into(),
+                ));
+            }
+            0
+        }
+    };
+    let target_x = (dx as usize).checked_mul(bytes_per_pixel).ok_or_else(|| {
+        FontError::InvalidFont("embedded bitmap compound x offset overflow".into())
+    })?;
+    let row_bytes = component_pitch;
+    for row in 0..component.rows as usize {
+        let target_start = (dy as usize + row)
+            .checked_mul(target_pitch)
+            .and_then(|start| start.checked_add(target_x))
+            .ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap compound target offset overflow".into())
+            })?;
+        let component_start = row.checked_mul(component_pitch).ok_or_else(|| {
+            FontError::InvalidFont("embedded bitmap compound component offset overflow".into())
+        })?;
+        let target_end = target_start.checked_add(row_bytes).ok_or_else(|| {
+            FontError::InvalidFont("embedded bitmap compound target row overflow".into())
+        })?;
+        let component_end = component_start.checked_add(row_bytes).ok_or_else(|| {
+            FontError::InvalidFont("embedded bitmap compound component row overflow".into())
+        })?;
+        let target_row = target
+            .buffer
+            .get_mut(target_start..target_end)
+            .ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap compound target row truncated".into())
+            })?;
+        let component_row = component
+            .buffer
+            .get(component_start..component_end)
+            .ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap compound component row truncated".into())
+            })?;
+        for (target_byte, component_byte) in target_row.iter_mut().zip(component_row) {
+            *target_byte |= component_byte;
+        }
+    }
+    Ok(())
 }
 
 fn no_bitmap_error(recurse_count: u32) -> FontError {
