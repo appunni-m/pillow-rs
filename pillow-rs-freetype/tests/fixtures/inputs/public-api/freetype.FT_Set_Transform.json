@@ -174,6 +174,54 @@
       }
     },
     {
+      "case_id": "freetype.FT_Set_Transform.success_null_face_noop.asset_backed",
+      "subject": "freetype.FT_Set_Transform",
+      "case": "success_null_face_noop",
+      "operation": "freetype.set_transform",
+      "schema": "api_void",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face": "null",
+          "matrix": {
+            "xx": 65536,
+            "xy": 0,
+            "yx": 0,
+            "yy": 65536
+          },
+          "delta": [
+            1,
+            2
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "coverage:ffi/handles:FT_Set_Transform-null-face"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "side_effects": "none"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "no_crash"
+          ]
+        }
+      }
+    },
+    {
       "case_id": "freetype.FT_Set_Transform.load_ignore_transform_behavior",
       "subject": "freetype.FT_Set_Transform",
       "case": "load_ignore_transform_behavior",
