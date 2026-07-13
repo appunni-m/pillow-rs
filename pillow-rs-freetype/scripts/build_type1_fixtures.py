@@ -27,7 +27,15 @@ def stable_generator_header(data: bytes) -> bytes:
     )
 
 
-def build_simple_type1(path: Path, font_name: str, family_name: str, notice: str) -> None:
+def build_simple_type1(
+    path: Path,
+    font_name: str,
+    family_name: str,
+    notice: str,
+    *,
+    weight: str = "Regular",
+    cleartext_replacements: list[tuple[bytes, bytes]] | None = None,
+) -> None:
     font = T1Font.__new__(T1Font)
     font.encoding = "ascii"
     font.font = {
@@ -37,7 +45,7 @@ def build_simple_type1(path: Path, font_name: str, family_name: str, notice: str
             "Notice": notice,
             "FullName": family_name,
             "FamilyName": family_name,
-            "Weight": "Regular",
+            "Weight": weight,
             "ItalicAngle": 0,
             "isFixedPitch": False,
             "UnderlinePosition": -100,
@@ -93,6 +101,10 @@ def build_simple_type1(path: Path, font_name: str, family_name: str, notice: str
         },
     }
     data = stable_generator_header(font.getData())
+    for before, after in cleartext_replacements or []:
+        if before not in data:
+            raise ValueError(f"missing Type 1 fixture token: {before!r}")
+        data = data.replace(before, after, 1)
     path.parent.mkdir(parents=True, exist_ok=True)
     write(str(path), data, kind="PFB")
 
@@ -103,6 +115,14 @@ def main() -> None:
         "MinimalNonSfnt",
         "Minimal NonSFNT",
         "Generated for fontdone non-SFNT coverage",
+    )
+    build_simple_type1(
+        OUT_DIR / "metadata-bold-invalid-bool.pfb",
+        "MetadataProbe",
+        "Metadata Probe",
+        "Generated for fontdone Type 1 metadata coverage",
+        weight="Bold",
+        cleartext_replacements=[(b"/isFixedPitch false def", b"/isFixedPitch maybe def")],
     )
     build_simple_type1(
         INPUT_OUT_DIR / "attach-afm-base.pfb",

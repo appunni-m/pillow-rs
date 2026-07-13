@@ -659,6 +659,29 @@
             ]
           },
           {
+            "id": "type1-metadata-bold-invalid-bool",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/type1/metadata-bold-invalid-bool.pfb"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/type1/metadata-bold-invalid-bool.pfb"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "type1:metadata-bold-mac-style",
+              "type1:metadata-invalid-bool-fallback"
+            ]
+          },
+          {
             "id": "multiface-cjk-indic-collection",
             "assets": {
               "font_bytes": {
@@ -936,6 +959,31 @@
             "coverage": [
               "new-memory-face:bad-size-and-face-index",
               "ffi:face-index-long-min-checked-negation"
+            ]
+          },
+          {
+            "id": "type1-positive-face-index-out-of-range",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/type1/simple-type1.pfb"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/type1/simple-type1.pfb"
+              }
+            },
+            "params": {
+              "variants": [
+                {
+                  "face_index": 1
+                }
+              ]
+            },
+            "coverage": [
+              "type1:new-memory-face-positive-face-index-out-of-range"
             ]
           },
           {
