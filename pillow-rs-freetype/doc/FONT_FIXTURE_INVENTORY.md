@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 151 | 108 | 43 | 119 | 814 KiB |
+| Active fixtures | 152 | 109 | 43 | 120 | 818 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 7 | 7 | 0 | 7 | 193 KiB |
 
@@ -156,6 +156,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `fc972ab14dba` | 4.2 | 1 | `fonts/glyf/hinter-prep-idef.ttf` | derived source-backed TrueType control whose prep program attempts only a new IDEF beyond the font's maxp instruction-definition budget; owns the paired too-many-IDEF error route |
 | `dd78e2f3a494` | 4.2 | 1 | `fonts/glyf/hinter-prep-redefine-defs.ttf` | derived source-backed TrueType control whose prep program redefines existing FDEF 1 and IDEF 0x8F within the font's maxp budgets; owns the successful prep-definition path |
 | `7c8156a2d450` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-loopcall.ttf` | derived source-backed TrueType control whose base glyph calls the existing no-op FDEF twice with LOOPCALL; owns repeated call-frame return coverage |
+| `74cf9cfd95c7` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-call-errors.ttf` | derived source-backed TrueType control with one self-recursive FDEF and four glyph programs for negative CALL, undefined CALL, undefined LOOPCALL, and recursive CALL stack overflow error parity |
 | `84ef501944aa` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-fdef-index-overflow.ttf` | derived source-backed TrueType control whose font program attempts FDEF 256, beyond FreeType's fixed TT_DefRecord function array; owns the fpgm function-index overflow error route |
 | `4a02cf4d665b` | 4.2 | 1 | `fonts/glyf/hinter-idef-recursive-depth.ttf` | derived source-backed TrueType control whose ADJUST IDEF recursively calls itself; owns the public IDEF call-depth guard error route |
 | `0b8ee6c55162` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-nested-fdef.ttf` | derived source-backed TrueType control whose font program redefines existing FDEF 1 with a nested FDEF body; owns FreeType `Nested_DEFS` error parity |
@@ -240,6 +241,7 @@ listed because they enter different hinting and scaling conditions.
 | `hinter-prep-definitions.ttf`, `hinter-prep-idef.ttf` | gid 1 | 20 | prep-range FDEF/IDEF definitions allowed by FreeType syntax but rejected by this font's maxp definition budgets, matching pinned C error behavior |
 | `hinter-prep-redefine-defs.ttf` | gid 1 | 20 | prep-range redefinition of existing FDEF 1 and IDEF 0x8F within maxp budgets, proving FreeType-compatible successful prep definitions |
 | `hinter-fpgm-loopcall.ttf` | gid 1 | 20 | no-output repeated LOOPCALL of the existing function definition, covering call-frame repeat and ENDF return without changing points |
+| `hinter-fpgm-call-errors.ttf` | gids 0, 1, 2, 24 | 20 | compact CALL/LOOPCALL public error matrix: negative function reference, undefined CALL, undefined LOOPCALL, and recursive CALL stack overflow |
 | `hinter-fpgm-fdef-index-overflow.ttf` | gid 1 | 20 | invalid fpgm FDEF 256 probes FreeType's function-definition index overflow before body scanning, exposed as an explicit public load error |
 | `hinter-idef-recursive-depth.ttf` | gid 1 | 20 | recursive ADJUST IDEF calls itself until the interpreter call-depth guard rejects the glyph load, exposed as an explicit public load error |
 | `hinter-fpgm-nested-fdef.ttf`, `hinter-fpgm-nested-idef.ttf`, `hinter-fpgm-idef-opcode-overflow.ttf`, `hinter-fpgm-unterminated-fdef.ttf`, `hinter-fpgm-unterminated-idef.ttf` | gid 1 | 20 | invalid fpgm scanner controls for nested definitions, out-of-range IDEF opcode, and unterminated FDEF/IDEF, each exposed as an explicit public load error |
