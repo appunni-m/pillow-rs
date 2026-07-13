@@ -5,6 +5,7 @@
     "iterates_mapped_chars_in_c_order",
     "strict_after_and_gap_behavior",
     "exhausted_or_no_active_charmap",
+    "null_face_returns_zero",
     "format14_only_charmap_returns_zero"
   ],
   "cases": [
@@ -206,6 +207,65 @@
         "source_refs": [
           "freetype/src/base/ftobjs.c:4615-4640",
           "freetype/src/sfnt/ttcmap.c:3081-3191"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Next_Char.null_face_returns_zero",
+      "subject": "freetype.FT_Get_Next_Char",
+      "case": "null_face_returns_zero",
+      "operation": "freetype.get_next_char",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "face": "null",
+          "start_charcodes": [
+            0,
+            65,
+            4294967295
+          ],
+          "agindex_pointer": "non_null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:charmap-iteration",
+        "behavior:null-face"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/freetype.h",
+          "symbol": "FT_Get_Next_Char",
+          "kind": "function"
+        },
+        "source_behavior": "FT_Get_Next_Char checks face before charmap access; NULL face returns charcode 0 and writes glyph index 0 for every start code."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "rows": [
+            {
+              "start": "FT_ULong",
+              "result": {
+                "return": "FT_ULong zero sentinel",
+                "writes": {
+                  "agindex": "FT_UInt zero sentinel"
+                }
+              }
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:3977-4003"
         ]
       }
     },

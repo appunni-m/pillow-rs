@@ -1081,6 +1081,9 @@ fn has_probe_params(case: &InputCase) -> bool {
 }
 
 fn char_iteration_runtime_supported(case: &InputCase) -> bool {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return !case.expect_error && !has_probe_params(case);
+    }
     !case.expect_error
         && has_runtime_font_source(case)
         && assets_are_runtime_resolved(case)
@@ -2142,6 +2145,15 @@ impl BackendComparisonWorker {
             if matches!(case.operation.as_str(), "get_char_index") {
                 return Ok(ok(json!({"void": true})));
             }
+            if matches!(case.operation.as_str(), "freetype.get_first_char") {
+                return Ok(ok(rust_first_char_optional_output(None)));
+            }
+            if matches!(case.operation.as_str(), "freetype.get_next_char") {
+                return Ok(ok(rust_next_char_optional_output(
+                    None,
+                    &case.inputs.params,
+                )?));
+            }
             return run_rust_ffi(case);
         }
         match case.operation.as_str() {
@@ -2268,10 +2280,19 @@ impl BackendComparisonWorker {
                 )?))
             }
             "freetype.get_first_char" => {
+                if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                    return Ok(ok(rust_first_char_optional_output(None)));
+                }
                 let face = self.rust_face(case)?;
                 Ok(ok(rust_first_char_output(face)))
             }
             "freetype.get_next_char" => {
+                if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                    return Ok(ok(rust_next_char_optional_output(
+                        None,
+                        &case.inputs.params,
+                    )?));
+                }
                 let face = self.rust_face(case)?;
                 Ok(ok(rust_next_char_output(face, &case.inputs.params)?))
             }
@@ -2367,6 +2388,11 @@ impl BackendComparisonWorker {
                     Ok(ok(uint32_list_json(c_abi::abi_uint32_list(ptr))))
                 }
                 "freetype.set_transform" => return run_rust_ffi(case),
+                "freetype.get_first_char" => Ok(ok(c_first_char_output(std::ptr::null_mut()))),
+                "freetype.get_next_char" => Ok(ok(c_next_char_output(
+                    std::ptr::null_mut(),
+                    &case.inputs.params,
+                )?)),
                 "ftsizes.new_size" | "ftsizes.done_size" | "ftsizes.activate_size" => {
                     return run_rust_ffi(case);
                 }
@@ -2491,10 +2517,19 @@ impl BackendComparisonWorker {
                 )?))
             }
             "freetype.get_first_char" => {
+                if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                    return Ok(ok(c_first_char_output(std::ptr::null_mut())));
+                }
                 let face = self.c_face(case)?;
                 Ok(ok(c_first_char_output(face)))
             }
             "freetype.get_next_char" => {
+                if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                    return Ok(ok(c_next_char_output(
+                        std::ptr::null_mut(),
+                        &case.inputs.params,
+                    )?));
+                }
                 let face = self.c_face(case)?;
                 Ok(ok(c_next_char_output(face, &case.inputs.params)?))
             }
@@ -2587,6 +2622,8 @@ impl BackendComparisonWorker {
                     Ok(ok(uint32_list_json(wasm_abi::abi_uint32_list(ptr))))
                 }
                 "freetype.set_transform" => return run_rust_ffi(case),
+                "freetype.get_first_char" => Ok(ok(wasm_first_char_output(0))),
+                "freetype.get_next_char" => Ok(ok(wasm_next_char_output(0, &case.inputs.params)?)),
                 "ftsizes.new_size" | "ftsizes.done_size" | "ftsizes.activate_size" => {
                     return run_rust_ffi(case);
                 }
@@ -2717,10 +2754,16 @@ impl BackendComparisonWorker {
                 )?))
             }
             "freetype.get_first_char" => {
+                if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                    return Ok(ok(wasm_first_char_output(0)));
+                }
                 let handle = self.wasm_face(case)?;
                 Ok(ok(wasm_first_char_output(handle)))
             }
             "freetype.get_next_char" => {
+                if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                    return Ok(ok(wasm_next_char_output(0, &case.inputs.params)?));
+                }
                 let handle = self.wasm_face(case)?;
                 Ok(ok(wasm_next_char_output(handle, &case.inputs.params)?))
             }
@@ -5528,10 +5571,14 @@ fn wasm_charmap_json(info: &wasm_abi::FontdoneWasmCharmap) -> Value {
     })
 }
 
-fn rust_first_char_output(face: &FT_Face) -> Value {
+fn rust_first_char_optional_output(face: Option<&FT_Face>) -> Value {
     let mut glyph_index = 0;
-    let char_code = FT_Get_First_Char(Some(face), Some(&mut glyph_index));
+    let char_code = FT_Get_First_Char(face, Some(&mut glyph_index));
     char_iteration_json(char_code, glyph_index)
+}
+
+fn rust_first_char_output(face: &FT_Face) -> Value {
+    rust_first_char_optional_output(Some(face))
 }
 
 fn c_first_char_output(face: c_abi::FT_Face) -> Value {
@@ -5546,13 +5593,13 @@ fn wasm_first_char_output(handle: usize) -> Value {
     char_iteration_json(char_code, glyph_index)
 }
 
-fn rust_next_char_output(face: &FT_Face, params: &Value) -> Result<Value, String> {
+fn rust_next_char_optional_output(face: Option<&FT_Face>, params: &Value) -> Result<Value, String> {
     if params.get("start_charcodes").is_some() {
         let rows = next_char_start_values(params)?
             .into_iter()
             .map(|start| {
                 let mut glyph_index = 0;
-                let char_code = FT_Get_Next_Char(Some(face), start, Some(&mut glyph_index));
+                let char_code = FT_Get_Next_Char(face, start, Some(&mut glyph_index));
                 json!({
                     "start": start,
                     "result": char_iteration_json(char_code, glyph_index)
@@ -5563,15 +5610,19 @@ fn rust_next_char_output(face: &FT_Face, params: &Value) -> Result<Value, String
     }
     let mut sequence = Vec::new();
     let mut glyph_index = 0;
-    let mut char_code = FT_Get_First_Char(Some(face), Some(&mut glyph_index));
+    let mut char_code = FT_Get_First_Char(face, Some(&mut glyph_index));
     for _ in 0..u32_param(params, "max_steps")? {
         if glyph_index == 0 {
             break;
         }
         sequence.push(char_iteration_json(char_code, glyph_index));
-        char_code = FT_Get_Next_Char(Some(face), char_code, Some(&mut glyph_index));
+        char_code = FT_Get_Next_Char(face, char_code, Some(&mut glyph_index));
     }
     Ok(json!({ "sequence": sequence }))
+}
+
+fn rust_next_char_output(face: &FT_Face, params: &Value) -> Result<Value, String> {
+    rust_next_char_optional_output(Some(face), params)
 }
 
 fn c_next_char_output(face: c_abi::FT_Face, params: &Value) -> Result<Value, String> {
@@ -8019,12 +8070,21 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "freetype.get_first_char" => {
+            if lifecycle_handle_param(params, "face") == Some("null") {
+                return Ok(vec!["--get-first-char-null-face".to_string()]);
+            }
             let mut args = vec!["--get-first-char".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
             Ok(args)
         }
         "freetype.get_next_char" => {
+            if lifecycle_handle_param(params, "face") == Some("null") {
+                return Ok(vec![
+                    "--get-next-char-null-face".to_string(),
+                    next_char_starts_arg(params)?,
+                ]);
+            }
             let mut args = vec![
                 if params.get("start_charcodes").is_some() {
                     "--get-next-char-starts"

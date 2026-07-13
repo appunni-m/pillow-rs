@@ -1524,6 +1524,8 @@ subjects:
         description: A populated active charmap returns the first mapped character code and writes its glyph index.
       - id: empty_or_no_active_charmap
         description: Empty charmaps, no active charmap, and null face cases return and write the same sentinel values as C.
+      - id: null_face_returns_zero
+        description: A null face returns charcode zero and writes glyph index zero without requiring a font.
       - id: format14_only_charmap_returns_zero
         description: A face whose only cmap is format 14 returns the same zero sentinel as C for first-character iteration.
       - id: charcode_zero_disambiguated_by_glyph_index
@@ -1602,6 +1604,8 @@ subjects:
         description: Starting from a mapped code or a gap returns the next strictly greater mapped code exactly like C.
       - id: exhausted_or_no_active_charmap
         description: Exhausted charmaps, null faces, and no active charmap cases return and write the same zero sentinels as C.
+      - id: null_face_returns_zero
+        description: A null face returns charcode zero and writes glyph index zero for every queried start code.
       - id: format14_only_charmap_returns_zero
         description: A face whose only cmap is format 14 returns the same zero sentinel as C for next-character iteration.
 

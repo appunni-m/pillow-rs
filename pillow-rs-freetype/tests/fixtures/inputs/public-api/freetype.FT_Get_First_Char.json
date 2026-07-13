@@ -4,6 +4,7 @@
   "manifest_cases": [
     "first_mapped_char_and_glyph",
     "empty_or_no_active_charmap",
+    "null_face_returns_zero",
     "format14_only_charmap_returns_zero",
     "charcode_zero_disambiguated_by_glyph_index"
   ],
@@ -120,6 +121,54 @@
             "writes.agindex"
           ]
         }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_First_Char.null_face_returns_zero",
+      "subject": "freetype.FT_Get_First_Char",
+      "case": "null_face_returns_zero",
+      "operation": "freetype.get_first_char",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "face": "null",
+          "agindex_pointer": "non_null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:charmap-iteration",
+        "behavior:null-face"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/freetype.h",
+          "symbol": "FT_Get_First_Char",
+          "kind": "function"
+        },
+        "source_behavior": "FT_Get_First_Char checks face before charmap access; NULL face returns charcode 0 and writes glyph index 0."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_ULong zero sentinel",
+          "writes": {
+            "agindex": "FT_UInt zero sentinel"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return",
+            "writes.agindex"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:3952-3972"
+        ]
       }
     },
     {
