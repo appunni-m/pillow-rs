@@ -375,6 +375,10 @@ def build_missing_subfamily_fvar() -> bytes:
         (0, 0),
         (0, -1 << 16),
         (1 << 15, 400 << 16),
+        (7, 400 << 16),
+        (10, 400 << 16),
+        (1024, 400 << 16),
+        (-1 << 15, 400 << 16),
     ]
     for index, (wdth, wght) in enumerate(coordinate_rows):
         off = instances_offset + index * instance_size
