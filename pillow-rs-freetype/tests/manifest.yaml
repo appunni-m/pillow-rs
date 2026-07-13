@@ -10529,6 +10529,10 @@ subjects:
         description: For outline glyphs, C converts xdelta and ydelta through size ppem into 26.6 strengths, calls FT_Outline_EmboldenXY, and updates advance, width, height, horiAdvance, vertAdvance, and horiBearingY exactly.
       - id: vertical_outline_weight_updates_vertical_advance
         description: With FT_LOAD_VERTICAL_LAYOUT, the public slot advance uses the vertical vector and FT_GlyphSlot_AdjustWeight applies the y-strength side effect to advance.y.
+      - id: postscript_orientation_outline_weight_mutates_points
+        description: A positive-area outline drives FreeType's PostScript orientation branch in FT_Outline_EmboldenXY while preserving the same public metric and advance side effects.
+      - id: mixed_winding_outline_weight_skips_degenerate_segments
+        description: A valid outline with a zero-length degenerate contour keeps FreeType's embolden segment walker on the public success path while skipping zero-length vectors.
       - id: degenerate_outline_weight_keeps_points_and_updates_metrics
         description: A non-empty outline whose orientation is NONE returns from FT_Outline_EmboldenXY without point movement, while the public glyph-slot helper still applies its documented metric and advance side effects.
       - id: bitmap_weight_owns_emboldens_and_updates_top
