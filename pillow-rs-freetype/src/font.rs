@@ -351,6 +351,12 @@ pub enum SizeRequestError {
     InvalidPixelSize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectSizeError {
+    NoFixedSizes,
+    InvalidArgument,
+}
+
 /// Public face metadata matching the scalar fields exposed by `FT_Face`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FaceInfo {
@@ -991,6 +997,7 @@ impl Font {
     /// Approximate `FT_FaceRec::face_flags` for supported SFNT outline faces.
     pub fn face_flags(&self) -> u32 {
         const FT_FACE_FLAG_SCALABLE: u32 = 1 << 0;
+        const FT_FACE_FLAG_FIXED_SIZES: u32 = 1 << 1;
         const FT_FACE_FLAG_FIXED_WIDTH: u32 = 1 << 2;
         const FT_FACE_FLAG_SFNT: u32 = 1 << 3;
         const FT_FACE_FLAG_HORIZONTAL: u32 = 1 << 4;
@@ -1014,6 +1021,14 @@ impl Font {
         }
 
         let mut flags = FT_FACE_FLAG_SCALABLE | FT_FACE_FLAG_SFNT | FT_FACE_FLAG_HORIZONTAL;
+        if self
+            .data
+            .sbit
+            .as_ref()
+            .is_some_and(|sbit| sbit.strike_count() != 0)
+        {
+            flags |= FT_FACE_FLAG_FIXED_SIZES;
+        }
         if self
             .data
             .post
@@ -1152,6 +1167,35 @@ impl Font {
             crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
         // `FT_Request_Size` invalidates the active size's prepared bytecode
         // state just like `FT_Set_Char_Size` and `FT_Set_Pixel_Sizes`.
+        self.bytecode_context = BytecodeContextCache::default();
+        Ok(())
+    }
+
+    pub fn select_size(&mut self, strike_index: usize) -> Result<(), SelectSizeError> {
+        let sbit = self
+            .data
+            .sbit
+            .as_ref()
+            .filter(|sbit| sbit.strike_count() != 0)
+            .ok_or(SelectSizeError::NoFixedSizes)?;
+        let metrics = sbit
+            .strike_metrics(strike_index)
+            .ok_or(SelectSizeError::InvalidArgument)?;
+        // FreeType `FT_Select_Size` dispatches TrueType scalable bitmap faces
+        // through `tt_size_select` (`src/truetype/ttdriver.c:312-331`), which
+        // stores the strike index then calls `FT_Select_Metrics`
+        // (`src/base/ftobjs.c:3210-3236`) to rebuild scalable size metrics
+        // from the strike ppem values.
+        self.size_metrics = SizeMetrics::from_pixel_size(
+            u32::from(metrics.x_ppem),
+            u32::from(metrics.y_ppem),
+            &self.data,
+        );
+        self.size_pt = f32::from(self.size_metrics.y_ppem);
+        self.data.size_pt.set(self.size_pt);
+        sync_active_size_metrics(&self.data, self.size_metrics);
+        self.face_globals =
+            crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
         self.bytecode_context = BytecodeContextCache::default();
         Ok(())
     }

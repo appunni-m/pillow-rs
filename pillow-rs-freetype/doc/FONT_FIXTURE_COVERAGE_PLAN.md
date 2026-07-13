@@ -449,21 +449,30 @@ positive face-index error probe over the existing compact Type 1 face. Both rows
 run through public `FT_New_Memory_Face` and exact Rust FFI, C ABI, and WASM ABI
 parity; together they remove the Type 1 metadata and one-face index guards from
 the `font.rs` missing-line report without changing implementation code.
+The latest size-selection batch turns `FT_Select_Size` into a real public
+parity route.  The compact `sbit_gray_format1.ttf` fixture supplies the fixed
+20 ppem EBLC/EBDT strike; Rust core now reads the strike ppem, updates the
+active face size metrics through the same size object used by later loads, and
+resets the scaler, autohint globals, and bytecode context.  Direct Rust FFI,
+C ABI, and WASM ABI rows prove the null-face, no-fixed-size,
+negative-index, out-of-range, and success paths against pinned C, and the
+`ftsizes.activate_select_size_sequence` row proves strike selection mutates the
+currently active size rather than a hidden singleton.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,802 |
-| Additional grouped variants | 2,637 |
+| Concrete explicit cases | 6,806 |
+| Additional grouped variants | 2,641 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,799 |
-| Exact parity | 6,799 / 6,799 |
+| Runnable parity comparisons | 6,803 |
+| Exact parity | 6,803 / 6,803 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,026 / 18,901 (90.0799%) |
-| Rust function coverage | 1,105 / 1,259 (87.7681%) |
-| Rust instantiation coverage | 1,108 / 1,262 (87.7971%) |
-| Rust region coverage | 24,458 / 27,180 (89.9853%) |
-| Rust branch/condition coverage | 4,053 / 4,730 (85.6871%) |
+| Covered Rust lines | 17,307 / 19,232 (89.9906%) |
+| Rust function coverage | 1,120 / 1,285 (87.1595%) |
+| Rust instantiation coverage | 1,123 / 1,288 (87.1894%) |
+| Rust region coverage | 24,862 / 27,656 (89.8973%) |
+| Rust branch/condition coverage | 4,107 / 4,802 (85.5269%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 156 |
 | Stored active font binaries | 113 files, 834 KiB |
@@ -857,7 +866,7 @@ Resolved in the 2026-07-11 cmap batch:
 
 ### R0 False-Green Route Audit Snapshot
 
-Recorded from the active public input JSON on 2026-07-13. This is the current
+Recorded from the active public input JSON on 2026-07-14. This is the current
 source-level route audit from `tests/unified_fixture_parity.rs`; it identifies
 the remaining categories that can still produce a green result without proving
 the intended public behavior.
@@ -876,29 +885,25 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,442 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,485 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 8 | `FT_New_Size`, `FT_Done_Size`, `FT_Activate_Size`, `FT_OpenType_Validate`, and `FT_OpenType_Free` null rows execute pinned C oracle status checks and wrapper validation; size lifecycle null rows now use direct C/WASM lifecycle exports, and success rows live in real parity. |
 | Wrapper null-validation route | 1 | `FT_Get_SubGlyph_Info` null-output rows intentionally validate the thin Rust/C/WASM wrapper guard after a native-C proof row establishes the composite slot state. |
 | Raw-slot null-validation route | 4 | Runtime rows intentionally validate raw glyph-slot pointer handling after a concrete slot state is established. |
 | Compile/header/scalar contract | 2,229 | Valid for ABI/header contracts, not runtime core coverage. |
 | Shape-incomplete fallback | 0 | Keep this at zero; future incomplete declarations must become executable variants or explicit pending rows in the same change. |
-| Generic modeled fallback | 924 | Classify operation-by-operation as real parity, unsupported, or pending. |
+| Generic modeled fallback | 916 | Classify operation-by-operation as real parity, unsupported, or pending. |
 | Generic modeled error fallback | 141 | Replace implemented surfaces with real error-path execution. |
-| Null-error fallback | 21 | Keep only exact null-handle probes; route implemented null cases directly. |
+| Null-error fallback | 7 | Keep only exact null-handle probes; route implemented null cases directly. |
 | Void fallback | 2 | Replace with real null/noop wrapper rows or classify as void API contract. |
-| Explicit unsupported | 12 | Keep only where the public surface is intentionally unsupported. |
-| Pending core | 10 | Convert to runnable parity when the named dependencies or compact fixtures exist. |
-| Explicit unsupported stubs | 12 | Implement or keep visibly unsupported; do not count as coverage. |
-| Pending core implementation | 10 | Named-instance Adobe MM, `FT_MM_Var`, `gvar`/HVAR, synthetic unloaded/unsupported slot states, compact overlap rendering, MVAR table variation rows, `FT_Select_Size` active-size mutation, and ftsynth bitmap-slot synthesis rows remain pending. |
+| Explicit unsupported | 6 | Keep only where the public surface is intentionally unsupported. |
+| Pending core | 7 | Convert to runnable parity when the named dependencies or compact fixtures exist. |
+| Explicit unsupported stubs | 6 | Implement or keep visibly unsupported; do not count as coverage. |
+| Pending core implementation | 7 | Adobe MM named-instance reset, `FT_MM_Var` namedstyle coordinates, `gvar`/HVAR glyph-output deltas, synthetic unloaded/unsupported render-slot states, and MVAR table variation rows remain pending. |
 
-The former two shape-incomplete ftsynth bitmap declarations are now explicit
-pending-core rows. FreeType `src/base/ftsynth.c:106-180` accepts
-`FT_GLYPH_FORMAT_BITMAP`, rounds the requested x/y strengths to pixels, calls
-`FT_GlyphSlot_Own_Bitmap` and `FT_Bitmap_Embolden`, then updates slot advance,
-metrics, and `bitmap_top`.  Rust currently handles only outline slots in
-`src/ffi/handles.rs`, so these rows require core bitmap-slot behavior plus an
-embedded-bitmap strike that loads a real bitmap slot before they can become
-real parity.
+The former shape-incomplete ftsynth bitmap declarations are now exact real
+parity rows through the compact format-1 SBIT strike.  They should remain in
+the active fixture set because they prove bitmap mutation and metrics side
+effects rather than only slot-metric placeholders.
 
 | Route | Current behavior | Coverage risk | Required disposition |
 |---|---|---|---|
@@ -908,8 +913,8 @@ real parity.
 | Global Rust `_` fallback | Returns `FT_Err_Unimplemented_Feature` for unmatched operations | Rust core coverage cannot improve through this path and parity is only error agreement | Convert implemented operations to explicit Rust FFI handlers; leave unsupported optional modules visibly unsupported |
 | C ABI / WASM `_other` fallback | Falls through to the Rust FFI runner for unsupported binding operations | Thin-wrapper coverage is not proven when the C/WASM leg never calls its public export | For every retained public C/WASM symbol, add direct wrapper execution or mark the symbol as intentionally Rust-only/test-only |
 | C ABI / WASM explicit Rust delegation | Constants, layout probes, compile probes, several SFNT table routes, transforms, reference-face, unsupported stubs, size helpers, and `freetype.new_face` are routed to Rust | Acceptable for compile-time/header probes; unsafe for runtime public functions that should exercise ABI pointer handling | Split into compile-contract probes versus runtime ABI obligations; runtime functions need direct thin-wrapper rows |
-| `ftsizes` lifecycle rows | Null validation rows still prove handle-error behavior. The three non-null sequence rows now execute pinned C oracle commands, Rust FFI, direct C ABI exports, and direct WASM ABI exports for secondary-size allocation, activation, destruction, and active-size fallback | The remaining size lifecycle gap is `ftsizes.activate_select_size_sequence`, which depends on real `FT_Select_Size` strike selection and active-size mutation | Keep the implemented rows in real parity; leave the select-size sequence explicit pending until core strike selection matches FreeType |
-| Explicit Rust unsupported stubs | `freetype.face_properties` and `freetype.select_size` return `Unimplemented_Feature` directly | These are public FreeType surfaces; final 100% correctness cannot treat them as covered behavior | Implement exact public behavior or keep manifest rows visibly pending/failing until implementation exists |
+| `ftsizes` lifecycle rows | Null validation and non-null sequence rows now execute pinned C oracle commands, Rust FFI, direct C ABI exports, and direct WASM ABI exports for secondary-size allocation, activation, destruction, active-size fallback, and `FT_Select_Size` active-size mutation | Future size regressions could hide in generic model rows if new lifecycle cases are not routed directly | Keep all implemented size rows in real parity; any new lifecycle case must call the public Rust/C/WASM wrappers directly |
+| Explicit Rust unsupported stubs | `freetype.face_properties` returns `Unimplemented_Feature` directly | This is a public FreeType surface; final 100% correctness cannot treat it as covered behavior | Implement exact public behavior or keep manifest rows visibly pending/failing until implementation exists |
 | Shape-incomplete fallback guards | Current route audit reports zero rows | These previously indicated declarative input that the runner did not execute | Keep this category at zero; future incomplete declarations must become executable variants or explicit pending rows in the same change |
 | Closed named-instance row | `freetype.FT_Get_Postscript_Name.variation_instance_name_behavior` now executes real `FT_Set_Named_Instance` before `FT_Get_Postscript_Name` | This removed the last pending row, but also introduced honest `fvar` and named-instance parsing coverage obligations | Continue metadata coverage through explicit named-instance, name table, and malformed-`fvar` rows rather than hiding the new denominator |
 | Direct `ftmm.set_named_instance` rows | Selection, clear, and invalid-index compact variable cases now execute pinned C oracle, Rust FFI, C ABI, and WASM ABI paths | The remaining Adobe MM, `FT_MM_Var`, and glyph-output rows are real implementation gaps, not runner coverage | Keep those rows explicit pending until Adobe MM design coordinates, namedstyle coordinates, and `gvar`/HVAR deltas are implemented in core |
@@ -1048,7 +1053,7 @@ coverage score can be trusted as correctness evidence.
 | Generic oracle fallback | Any unmatched operation can still return a modeled FreeType error | Produce an operation table where every implemented public operation has a real C oracle arm; unsupported operations remain explicit pending/unsupported rows |
 | Rust `_` fallback | Any unmatched Rust route returns `Unimplemented_Feature` | Add direct Rust FFI execution for implemented surfaces; leave unsupported optional modules visibly unsupported |
 | C ABI/WASM runtime delegation | Several runtime operations still fall through to the Rust leg instead of the public C/WASM wrapper | Split compile/header probes from runtime ABI obligations; runtime symbols must call their thin wrapper |
-| `freetype.select_size` | Explicit unsupported stub | Add available-size/strike fixture support or keep rows pending until embedded bitmap strikes are represented |
+| `freetype.select_size` | Closed; real parity over compact SBIT strike | Keep future fixed-strike cases explicit and sequence-based; do not reintroduce embedded-strike placeholders or Rust-only proof paths |
 | `freetype.face_properties` | Explicit unsupported stub | Audit FreeType property tags, implement supported public behavior, and keep unsupported tags exact-error visible |
 | Shape-incomplete JSON rows | Some rows lack selectors such as glyph, offset, size, or index and fall into fallback paths | Convert valid rows into complete explicit variants or mark invalid declarations pending/unsupported |
 | Named-instance PostScript row | Closed; the row is active and exact across Rust, C ABI, and WASM ABI | Keep future variation rows explicit and sequence-based; do not make them implicit axes |
@@ -1994,23 +1999,24 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | SBIT gray format-1 bitmap-success path | `font-fixture-sbit` now emits `sbit_gray_format1.ttf`, a compact source-backed TrueType face with one 20 ppem EBLC/EBDT strike. One explicit `FT_Load_Glyph.matrix_load@sbit-gray-format1-sbits-only` row selects glyph 1 with `FT_LOAD_SBITS_ONLY`, exercising index format 1, image format 1, 8-bit gray bitmap allocation/bytes, and FreeType's scalable-SBIT fallback from missing small-metrics `vertAdvance` to the glyph linear vertical advance (`truetype/ttgload.c:2401-2469`). The first focused run exposed Rust's zero `vertAdvance`; core now carries SBIT slot metrics in 26.6 units and fills missing scalable SBIT advances from `hmtx`/`vmtx` or synthesized vertical font metrics. Focused `FT_Load_Glyph.matrix_load` parity passes 118 / 118. Full condition coverage passes with 6,807 concrete cases, 6,804 / 6,804 runtime rows, three FTMM pending rows, 17,160 / 19,066 lines, 24,612 / 27,381 regions, 4,065 / 4,742 branches, 1,110 / 1,275 functions, and 1,113 / 1,278 instantiations. Route audit reports 3,477 real-parity rows and zero implicit cases |
 | 2026-07-14 | Default SBIT load-before-outline order | One explicit `FT_Load_Glyph.matrix_load@sbit-gray-format1-default-render` row reuses `sbit_gray_format1.ttf` and loads glyph 1 with `FT_LOAD_RENDER` rather than `FT_LOAD_SBITS_ONLY`. Pinned FreeType first tries embedded bitmaps before outline loading when bitmap loading is allowed (`base/ftobjs.c:1028-1050`) and the TrueType driver repeats the SBIT attempt before falling through to outlines (`truetype/ttgload.c:2401-2474`). Rust now mirrors that order: successful SBIT loads return bitmap slots for normal load/render calls, while failed `FT_LOAD_SBITS_ONLY` attempts still map to public `FT_Err_Invalid_Argument`. Focused `FT_Load_Glyph.matrix_load` parity passes 119 / 119. Full condition coverage passes with 6,808 concrete cases, 6,805 / 6,805 runtime rows, three FTMM pending rows, 17,165 / 19,071 lines, 24,614 / 27,383 regions, 4,072 / 4,750 branches, 1,109 / 1,274 functions, and 1,112 / 1,277 instantiations. Route audit reports 3,478 real-parity rows and zero implicit cases |
 | 2026-07-14 | Ftsynth bitmap-slot embolden parity | The existing `ftsynth.FT_GlyphSlot_AdjustWeight.bitmap_weight_owns_emboldens_and_updates_top` and `ftsynth.FT_GlyphSlot_Embolden.bitmap_embolden_mutates_bitmap_and_metrics` public rows now reuse `sbit_gray_format1.ttf` instead of the deprecated embedded-strike placeholder. The native oracle and unified Rust/C/WASM outputs now include bitmap descriptors, bitmap bytes, and bitmap-top values for ftsynth weight rows, proving the mutation rather than only slot metrics. Core `FT_GlyphSlot_AdjustWeight` now follows FreeType `base/ftsynth.c`: bitmap slots round synthetic strengths to full pixels, force a one-pixel horizontal embolden when the rounded x strength is zero, call the bitmap embolden path before metric side effects, and skip metric mutation when bitmap emboldening rejects negative pixel strength. Focused parity passes for both ftsynth bitmap rows. Full condition coverage passes with 6,808 concrete cases, 6,805 / 6,805 runtime rows, three FTMM pending rows, 17,253 / 19,176 lines, 24,783 / 27,574 regions, 4,102 / 4,796 branches, 1,113 / 1,278 functions, and 1,116 / 1,281 instantiations. Route audit reports 3,480 real-parity rows, 8 pending-core rows, and zero implicit cases |
+| 2026-07-14 | Real `FT_Select_Size` route and active-size sequence | `FT_Select_Size` now uses the compact `sbit_gray_format1.ttf` strike instead of the deprecated embedded-strike placeholder. Rust core exposes fixed-size face flags from parsed SBIT strikes, selects strike ppem into the active size object, resets scaler/autohint/bytecode state, and maps pinned FreeType's null-face, no-fixed-size, negative-index, out-of-range, and success errors through Rust FFI, C ABI, and WASM ABI. The `ftsizes.activate_select_size_sequence` row now runs real pinned C/Rust/C-ABI/WASM-ABI parity and proves selection mutates the currently active secondary size before reactivating the initial size. Focused `FT_Select_Size` parity passes 4 / 4 and the ftsizes select sequence passes 1 / 1. Full condition coverage passes with 6,806 concrete cases, 6,803 / 6,803 runtime rows, three FTMM pending rows, 17,307 / 19,232 lines, 24,862 / 27,656 regions, 4,107 / 4,802 branches, 1,120 / 1,285 functions, and 1,123 / 1,288 instantiations. Route audit reports 3,485 real-parity rows, 7 pending-core rows, 6 explicit-unsupported rows, and zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-14
 
-Fresh `test-unified-condition-coverage` still reports 1,923 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,925 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,808 |
-| Runnable parity comparisons | 6,805 / 6,805 |
+| Concrete explicit cases | 6,806 |
+| Runnable parity comparisons | 6,803 / 6,803 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,253 / 19,176 (89.9718%) |
-| Rust region coverage | 24,783 / 27,574 (89.8781%) |
-| Rust branch/condition coverage | 4,102 / 4,796 (85.5296%) |
-| Rust function coverage | 1,113 / 1,278 (87.0892%) |
-| Route audit split | real-parity 3,480; generic-fallback 916; null-error-fallback 7; raw-slot-null-validation 4; pending-core 8; shape-incomplete-fallback 0 |
+| Covered Rust lines | 17,307 / 19,232 (89.9906%) |
+| Rust region coverage | 24,862 / 27,656 (89.8973%) |
+| Rust branch/condition coverage | 4,107 / 4,802 (85.5269%) |
+| Rust function coverage | 1,120 / 1,285 (87.1595%) |
+| Route audit split | real-parity 3,485; generic-fallback 916; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
@@ -2053,7 +2059,7 @@ public surface:
 | TrueType empty-zone SHZ | A derived `hinter-empty-composite-shz.ttf` font whose empty composite glyph carried `PUSHB[0] 0; SHZ[0]`; the retained source-backed prep probe appends `SZPS 1; SHZ[0]` to `hinter-control-matrix.ttf` | The derived glyph row passed exact C/Rust/C-ABI/WASM parity but stayed flat. The retained prep route hits `tt/hinter/exec.rs:1408` because prep executes against an empty glyph zone before glyph loading | Do not add the derived font. Keep the existing base-prep route because it covers the public empty-zone `SHZ` branch with no concrete case growth |
 | Render SDF/cubic | A possible CFF/CFF2 `FT_Render_Glyph` SDF row | Current Rust face loading still relies on glyf/loca fallback for the compact CFF fixture, so C would render cubic charstrings while Rust would not preserve a cubic public glyph outline through this path | Implement a real public cubic-outline loader route before adding SDF cubic render fixture rows |
 | Render mono/profile | Remaining `render.rs` mono/profile helpers such as the old intersection rasterizer and low-level line/bezier helper families | No current `FT_Render_Glyph` row reaches these as public code; the profile-based horizontal and vertical dropout guards are already covered | Keep visible as private/no-route until a real public operation requires them or they are independently proven duplicate/obsolete |
-| Historical size lifecycle sketch | Rust FFI-only implementation sketch for `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` success sequences | Superseded by the verified face-owned size implementation with direct C ABI and WASM ABI lifecycle exports. Focused sequence parity and full condition coverage now pass with the three success rows classified as real parity | Do not reintroduce Rust-only C/WASM delegation for lifecycle rows. Future size work should target the remaining `FT_Select_Size` active-size sequence blocker |
+| Historical size lifecycle sketch | Rust FFI-only implementation sketch for `FT_New_Size`, `FT_Done_Size`, `FT_Activate_Size`, and `FT_Select_Size` success sequences | Superseded by the verified face-owned size implementation with direct C ABI and WASM ABI lifecycle exports. Focused sequence parity and full condition coverage now pass with the size lifecycle and fixed-strike selection rows classified as real parity | Do not reintroduce Rust-only C/WASM delegation for lifecycle rows. Future size work should target new public behavior from the route audit rather than generic modeled rows |
 | Safe render no-value rows | Adding `assert_font_render_mode_agrees` to the existing Noto `FORCE_AUTOHINT | NO_AUTOHINT` render row passed focused `render_glyph` parity and full runtime parity, but total condition coverage stayed fixed at 16,227 / 18,091 lines, 23,297 / 25,933 regions, 3,909 / 4,632 branches, and 1,025 / 1,150 functions | Do not add more safe render agreement flags to rows that already exercise the same load-mode branch |
 | Zero-width normal render row | A candidate `FT_RENDER_MODE_NORMAL` row over `fonts/glyf/hinter-control-matrix.ttf` U+E02B (`renderZeroWidth`) with safe render and getmask assertions passed exact parity, raising concrete rows locally to 6,758, but condition coverage and missing lines were unchanged | Do not keep this row. The current public load/render path does not reach a new zero-extent `Font::getmask_single_glyph` or render guard from that glyph |
 | Render top-boundary gray clip | A candidate `render-coverage.ttf` grid-aligned 3x3 box rendered in normal mode passed focused `render_glyph` parity and raised concrete rows locally to 6,766 | It only increased already-covered `grays.rs` top/right clipping counts and left total, `render.rs`, and `grays.rs` line/region/branch/function coverage unchanged | Do not add top-boundary gray rows unless the focused condition report shows a new uncovered outcome, not just higher execution counts |
@@ -2377,11 +2383,11 @@ Work must resume here unless a newer user request changes priority:
    `FT_Load_Char`, `FT_Load_Glyph`, `FT_Face_SetUnpatentedHinting`, and
    `FT_Outline_Get_CBox`, `FT_Get_Sfnt_LangTag`, and
    `FT_Set_Named_Instance`-driven named-instance selection are now real parity.
-   `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` null-validation and
-   non-null lifecycle rows are now exact C-oracle/Rust-FFI/C-ABI/WASM-ABI
-   routes. Continue with generic fallback rows, especially
-   `FT_Select_Size` active-size mutation, `FT_OpenType_Validate`, and any
-   other modeled public surfaces.
+   `FT_New_Size`, `FT_Done_Size`, `FT_Activate_Size`, and `FT_Select_Size`
+   null-validation and non-null lifecycle rows are now exact
+   C-oracle/Rust-FFI/C-ABI/WASM-ABI routes. Continue with generic fallback
+   rows, especially `FT_OpenType_Validate` and any other modeled public
+   surfaces.
 2. Complete R0 by turning the residual classification above into a per-function
    table: public, font-reachable, missing delegation, blocked by incomplete
    implementation, duplicate with independent proof, private/no-route, or

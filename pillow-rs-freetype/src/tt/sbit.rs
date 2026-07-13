@@ -19,6 +19,12 @@ struct SbitStrike {
     index_array_count: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SbitStrikeMetrics {
+    pub x_ppem: u16,
+    pub y_ppem: u16,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SbitGlyph {
     pub metrics: SbitMetrics,
@@ -93,6 +99,17 @@ pub fn parse_sbit(directory: &TableDirectory, data: &[u8]) -> Option<SbitTable> 
 }
 
 impl SbitTable {
+    pub fn strike_count(&self) -> usize {
+        self.strikes.len()
+    }
+
+    pub fn strike_metrics(&self, index: usize) -> Option<SbitStrikeMetrics> {
+        self.strikes.get(index).map(|strike| SbitStrikeMetrics {
+            x_ppem: u16::from(strike.x_ppem),
+            y_ppem: u16::from(strike.y_ppem),
+        })
+    }
+
     pub fn load_glyph(
         &self,
         glyph_index: u16,

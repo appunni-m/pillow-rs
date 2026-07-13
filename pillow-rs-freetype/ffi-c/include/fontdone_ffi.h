@@ -227,6 +227,7 @@ FT_Orientation FT_Outline_Get_Orientation(const FT_Outline* outline);
 FT_Error FT_Set_Char_Size(FT_Face face, FT_F26Dot6 char_width, FT_F26Dot6 char_height, FT_UInt horz_resolution, FT_UInt vert_resolution);
 FT_Error FT_Set_Pixel_Sizes(FT_Face face, FT_UInt pixel_width, FT_UInt pixel_height);
 FT_Error FT_Request_Size(FT_Face face, FT_Size_Request req);
+FT_Error FT_Select_Size(FT_Face face, FT_Int strike_index);
 FT_UInt FT_Get_Char_Index(FT_Face face, FT_ULong char_code);
 FT_UInt FT_Face_GetCharVariantIndex(FT_Face face, FT_ULong charcode, FT_ULong variant_selector);
 FT_Int FT_Face_GetCharVariantIsDefault(FT_Face face, FT_ULong charcode, FT_ULong variant_selector);

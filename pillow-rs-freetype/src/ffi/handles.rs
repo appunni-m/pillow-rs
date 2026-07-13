@@ -7,7 +7,9 @@ use std::rc::{Rc, Weak};
 use std::sync::{Mutex, OnceLock};
 
 use crate::api;
-use crate::font::{ActiveSizeState, KerningMode, SizeRequest, SizeRequestError, SizeRequestType};
+use crate::font::{
+    ActiveSizeState, KerningMode, SelectSizeError, SizeRequest, SizeRequestError, SizeRequestType,
+};
 
 use super::constants::*;
 use super::convert::{
@@ -831,8 +833,22 @@ pub fn FT_Get_Gasp(face: Option<&FT_Face>, ppem: FT_UInt) -> FT_Int {
     })
 }
 
-pub fn FT_Select_Size(_face: Option<&mut FT_Face>, _strike_index: FT_Int) -> FT_Error {
-    FT_Err_Unimplemented_Feature as FT_Error
+pub fn FT_Select_Size(face: Option<&mut FT_Face>, strike_index: FT_Int) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Ok(strike_index) = usize::try_from(strike_index) else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let result = face.inner.borrow_mut().select_size(strike_index);
+    match result {
+        Ok(()) => {
+            sync_active_size_state(face);
+            FT_Err_Ok
+        }
+        Err(SelectSizeError::NoFixedSizes) => FT_Err_Invalid_Face_Handle as FT_Error,
+        Err(SelectSizeError::InvalidArgument) => FT_Err_Invalid_Argument as FT_Error,
+    }
 }
 
 pub fn FT_Get_SubGlyph_Info(
