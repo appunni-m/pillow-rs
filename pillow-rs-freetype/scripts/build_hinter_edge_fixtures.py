@@ -23,8 +23,12 @@ def save_font(name: str, font: TTFont) -> None:
 
 
 def empty_program() -> Program:
+    return program_from_bytes(b"")
+
+
+def program_from_bytes(bytecode: bytes) -> Program:
     program = Program()
-    program.fromBytecode(b"")
+    program.fromBytecode(bytecode)
     return program
 
 
@@ -34,8 +38,29 @@ def write_empty_fpgm() -> None:
     save_font("hinter-empty-fpgm.ttf", font)
 
 
+def write_prep_definitions() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    prep = font["prep"].program.getBytecode()
+    # Existing prep sets INSTCTRL, then these no-output definitions exercise
+    # range-0 FDEF and IDEF scanning without changing glyph points.
+    prep += bytes.fromhex("b0 02 2c b0 01 21 2d")
+    prep += bytes.fromhex("b0 84 89 b0 01 21 2d")
+    font["prep"].program = program_from_bytes(prep)
+    save_font("hinter-prep-definitions.ttf", font)
+
+
+def write_prep_idef() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    prep = font["prep"].program.getBytecode()
+    prep += bytes.fromhex("b0 84 89 b0 01 21 2d")
+    font["prep"].program = program_from_bytes(prep)
+    save_font("hinter-prep-idef.ttf", font)
+
+
 def main() -> None:
     write_empty_fpgm()
+    write_prep_definitions()
+    write_prep_idef()
 
 
 if __name__ == "__main__":

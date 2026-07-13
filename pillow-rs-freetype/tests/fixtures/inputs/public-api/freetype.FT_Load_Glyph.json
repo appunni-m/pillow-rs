@@ -1857,6 +1857,50 @@
             ]
           },
           {
+            "id": "hinter-prep-definition-scan",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-prep-definitions.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_NO_AUTOHINT"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/hinter:prep-range-fdef-idef-scan"
+            ]
+          },
+          {
+            "id": "hinter-prep-idef-scan",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-prep-idef.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_NO_AUTOHINT"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/hinter:prep-range-idef-scan"
+            ]
+          },
+          {
             "id": "hinter-scan-type-zero",
             "assets": {
               "font": {

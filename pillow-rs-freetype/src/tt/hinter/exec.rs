@@ -549,11 +549,14 @@ impl ExecContext {
     fn define_function(&mut self) -> Result<(), FontError> {
         let func_num = self.pop()? as u16;
         let range = self.cur_range;
-        let program = match range {
-            0 => &self.cvt_program,
-            1 => &self.font_program,
-            _ => &self.glyph_program,
-        };
+        // FreeType `ttinterp.c` treats definition opcodes as font-program
+        // constructs; prep/glyph-range definitions fail as invalid bytecode.
+        if range != 1 {
+            return Err(FontError::InvalidOutline(
+                "bytecode: FDEF outside font program".into(),
+            ));
+        }
+        let program = &self.font_program;
         let start = self.ip;
         let mut scan_ip = self.ip;
         let mut depth = 1u32;
@@ -598,17 +601,13 @@ impl ExecContext {
         }
 
         let range = self.cur_range;
-        if range == 2 {
+        if range != 1 {
             return Err(FontError::InvalidOutline(
-                "bytecode: IDEF in glyph program".into(),
+                "bytecode: IDEF outside font program".into(),
             ));
         }
 
-        let program = match range {
-            0 => &self.cvt_program,
-            1 => &self.font_program,
-            _ => &self.glyph_program,
-        };
+        let program = &self.font_program;
         let start = self.ip;
         let mut scan_ip = self.ip;
 
