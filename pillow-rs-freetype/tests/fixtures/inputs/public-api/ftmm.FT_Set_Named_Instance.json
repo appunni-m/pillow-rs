@@ -1,7 +1,7 @@
 {
   "version": 1,
   "subject": "ftmm.FT_Set_Named_Instance",
-  "manifest_cases": ["success_select_named_instance", "success_clear_named_instance", "success_adobe_mm_resets_default", "error_invalid_instance_index", "output_changes_to_named_instance"],
+  "manifest_cases": ["success_select_named_instance", "success_clear_named_instance", "success_adobe_mm_resets_default", "error_null_face", "error_invalid_instance_index", "output_changes_to_named_instance"],
   "cases": [
     {
       "case_id": "ftmm.FT_Set_Named_Instance.success_select_named_instance",
@@ -38,6 +38,18 @@
       "classifiers": ["kind:function", "header:ftmm", "surface:public-c-api", "operation:adobe-mm"],
       "metadata": {"abi": {"header": "freetype/ftmm.h", "symbol": "FT_Set_Named_Instance", "kind": "function"}, "source_behavior": "For Adobe MM service implementations, named-instance selection is modeled as a reset to default design state rather than a named-style selection."},
       "expectation": {"status": "build_dependent", "output_shape": {"return": "FT_Error", "design_coords": ["FT_Long"], "face_flags": "FT_Long", "face_index": "FT_Long"}, "compare": {"mode": "exact", "paths": ["return", "design_coords", "face_flags.FT_FACE_FLAG_VARIATION", "face_index"]}, "source_refs": ["freetype/src/base/ftmm.c:626-687", "freetype/src/type1/t1load.c"], "fixture_requirements": ["Adobe MM Type 1 font and core Adobe MM design-coordinate support."]}
+    },
+    {
+      "case_id": "ftmm.FT_Set_Named_Instance.error_null_face",
+      "subject": "ftmm.FT_Set_Named_Instance",
+      "case": "error_null_face",
+      "operation": "ftmm.set_named_instance",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {"assets": {}, "params": {"face": "null", "instance_index": 1}},
+      "classifiers": ["kind:function", "header:ftmm", "surface:public-c-api", "error:null-face"],
+      "metadata": {"abi": {"header": "freetype/ftmm.h", "symbol": "FT_Set_Named_Instance", "kind": "function"}, "source_behavior": "The public wrapper rejects a NULL face before dispatching to a variation service."},
+      "expectation": {"status": "error", "output_shape": {"return": "FT_Error", "face_index": "null", "face_flags": "null", "variation_bit_set": "null", "postscript_name": "null_string"}, "compare": {"mode": "exact_error", "compare_error_output": true, "paths": ["return", "face_index", "face_flags", "variation_bit_set", "postscript_name"]}, "error": "FT_Err_Invalid_Face_Handle", "source_refs": ["freetype/src/base/ftmm.c:626-687"]}
     },
     {
       "case_id": "ftmm.FT_Set_Named_Instance.error_invalid_instance_index",

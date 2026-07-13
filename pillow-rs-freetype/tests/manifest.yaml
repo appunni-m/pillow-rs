@@ -8393,6 +8393,8 @@ subjects:
         description: Instance index zero clears the named-instance bits and resets variation state.
       - id: success_adobe_mm_resets_default
         description: On Adobe MM fonts, the function resets the face to its default instance rather than selecting a named style.
+      - id: error_null_face
+        description: Null face handles return Invalid_Face_Handle before variation service dispatch.
       - id: error_invalid_instance_index
         description: Out-of-range named instance indexes return the same C error and leave prior observable state unchanged.
       - id: output_changes_to_named_instance
