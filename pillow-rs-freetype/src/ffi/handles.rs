@@ -88,6 +88,13 @@ impl FaceSizeState {
         }
     }
 
+    fn empty() -> Self {
+        Self {
+            active: None,
+            entries: Vec::new(),
+        }
+    }
+
     fn active_handle(&self) -> FT_Size {
         self.active
             .and_then(|active| self.entries.iter().find(|entry| entry.key() == active))
@@ -425,11 +432,6 @@ pub fn FT_New_Size(face: Option<&FT_Face>, size: Option<&mut FT_Size>) -> FT_Err
     let Some(size) = size else {
         return FT_Err_Invalid_Argument as FT_Error;
     };
-    if face.probe_only {
-        *size = ptr::null_mut();
-        return FT_Err_Invalid_Size_Handle;
-    }
-
     *size = ptr::null_mut();
     let state = face.inner.borrow().active_size_state();
     let handle = face.sizes.borrow_mut().add_size(state);
@@ -1004,7 +1006,13 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         .map(Box::new);
     let charmaps = charmaps_to_ffi(&inner);
     let inner = Rc::new(RefCell::new(inner));
-    let sizes = Rc::new(RefCell::new(FaceSizeState::new(size_state)));
+    // FreeType `FT_Open_Face`/`FT_New_Memory_Face` negative face-index probes
+    // start with `face->size == NULL`; `FT_New_Size` may allocate one later.
+    let sizes = Rc::new(RefCell::new(if probe_only {
+        FaceSizeState::empty()
+    } else {
+        FaceSizeState::new(size_state)
+    }));
     let face = FT_Face {
         inner,
         sizes,
@@ -1393,7 +1401,7 @@ pub fn FT_Set_Char_Size(
     horz_resolution: FT_UInt,
     vert_resolution: FT_UInt,
 ) -> FT_Error {
-    if face.probe_only || !has_active_size(face) {
+    if !has_active_size(face) {
         return FT_Err_Invalid_Size_Handle;
     }
     let Ok(char_width) = i32::try_from(char_width) else {
@@ -1426,7 +1434,7 @@ pub fn FT_Set_Pixel_Sizes(
     pixel_width: FT_UInt,
     pixel_height: FT_UInt,
 ) -> FT_Error {
-    if face.probe_only || !has_active_size(face) {
+    if !has_active_size(face) {
         return FT_Err_Invalid_Size_Handle;
     }
     face.inner
@@ -1440,7 +1448,7 @@ pub fn FT_Request_Size(face: Option<&mut FT_Face>, req: Option<&FT_Size_RequestR
     let Some(face) = face else {
         return FT_Err_Invalid_Face_Handle as FT_Error;
     };
-    if face.probe_only || !has_active_size(face) {
+    if !has_active_size(face) {
         return FT_Err_Invalid_Size_Handle;
     }
     let Some(req) = req else {
