@@ -1930,10 +1930,11 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-13 | Latin standard-character fallback fixtures | `build_autohint_script_fixtures.py` now emits `fonts/autohint/latin-missing-standard.ttf`, whose Latin-covered `A` glyph has no `o/O/0` standard-character fallback in the cmap, and `fonts/autohint/latin-empty-standard.ttf`, whose `o` standard glyph exists but has an empty outline. Two explicit `FT_Load_Glyph.matrix_load` rows select their real Latin glyphs with `FT_LOAD_FORCE_AUTOHINT`, covering the face-global Latin fallback-width path and `metrics_init_widths` empty-standard-glyph fallback without adding a glyph loop or reusing the previously rejected digit `.notdef` probe. Concrete cases are 6,770 with zero implicit rows; runtime comparison is 6,766 / 6,766 with four explicit pending rows. Refreshed condition coverage is 16,273 / 18,090 lines, 23,348 / 25,927 regions, 3,928 / 4,626 branches, and 1,030 / 1,150 functions |
 | 2026-07-13 | Malformed Latin standard-character fixture | `build_autohint_script_fixtures.py` now emits `fonts/autohint/latin-malformed-standard.ttf`, whose selected U+0041/gid 2 glyph is valid while U+006F maps to a final glyph truncated to a two-byte `glyf` record. One explicit `FT_Load_Glyph.matrix_load` variant selects gid 2 with `FT_LOAD_FORCE_AUTOHINT`, so Latin metrics setup tries the malformed `o` standard glyph, ignores the failed load, and falls back exactly like pinned FreeType. Concrete cases are 6,771 with zero implicit rows; runtime comparison is 6,767 / 6,767 with four explicit pending rows. Refreshed condition coverage is 16,275 / 18,090 lines, 23,350 / 25,927 regions, 3,929 / 4,626 branches, and 1,030 / 1,150 functions. Route audit reports 3,411 real-parity rows |
 | 2026-07-13 | TrueType prep empty-zone SHZ probe | The source-backed `hinter-control-matrix.ttf` prep program now appends a no-output `SZPS 1; SHZ[0]` sequence. Prep always runs against an empty glyph zone, so the existing `FT_Load_Glyph.matrix_load@hinter-branch-edge-matrix` row covers the interpreter's zero-contour target-zone `SHZ` branch without adding a concrete case or JSON input. The focused row passed exact Rust FFI, C ABI, and WASM ABI parity and hit `tt/hinter/exec.rs:1408`; the full gate remains at 6,771 concrete cases, zero implicit rows, 6,767 / 6,767 runtime comparisons, and four explicit pending rows. Refreshed condition coverage is 16,276 / 18,090 lines, 23,351 / 25,927 regions, 3,930 / 4,626 branches, and 1,030 / 1,150 functions |
+| 2026-07-13 | TrueType prep empty-zone IUP probe | The source-backed `hinter-control-matrix.ttf` prep program now appends no-output `IUP[y]` and `IUP[x]` opcodes after the empty-zone SHZ probe. Prep executes before any glyph zone points are installed, so the existing `FT_Load_Glyph.matrix_load@hinter-branch-edge-matrix` public row covers FreeType's empty-zone IUP return without adding a concrete case or JSON input. Pinned C treats both IUP directions over an empty zone as no-ops, and Rust FFI, C ABI, and WASM ABI already matched that behavior. The full gate remains at 6,771 concrete cases, zero implicit rows, 6,767 / 6,767 runtime comparisons, and four explicit pending rows. Refreshed condition coverage is 16,277 / 18,090 lines, 23,352 / 25,927 regions, 3,931 / 4,626 branches, and 1,030 / 1,150 functions |
 
 ## Residual Coverage Classification - 2026-07-13
 
-Fresh `test-unified-condition-coverage` still reports 1,814 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,813 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
@@ -1942,9 +1943,9 @@ source lines. The current split is:
 | Concrete explicit cases | 6,771 |
 | Runnable parity comparisons | 6,767 / 6,767 |
 | Pending cases | 4 |
-| Covered Rust lines | 16,276 / 18,090 (89.9724%) |
-| Rust region coverage | 23,351 / 25,927 (90.0644%) |
-| Rust branch/condition coverage | 3,930 / 4,626 (84.9546%) |
+| Covered Rust lines | 16,277 / 18,090 (89.9779%) |
+| Rust region coverage | 23,352 / 25,927 (90.0683%) |
+| Rust branch/condition coverage | 3,931 / 4,626 (84.9762%) |
 | Rust function coverage | 1,030 / 1,150 (89.5652%) |
 | Route audit split | real-parity 3,411; raw-slot-null-validation 4; shape-incomplete-fallback 2 |
 
