@@ -1935,23 +1935,24 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-13 | Ftsynth nearly-opposite vector row | The source-backed `hinter-control-matrix.ttf` now includes U+E035/gid 54, a compact sharp-turn outline whose adjacent normalized vectors are nearly opposite. One explicit `FT_GlyphSlot_AdjustWeight.outline_weight_nearly_opposite_vectors` row selects it with `FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP`, proving pinned C, Rust FFI, C ABI, and WASM ABI all take the zero-shift branch in `FT_Outline_EmboldenXY` (`ftoutln.c:911-1047`) without implicit glyph expansion. Concrete cases are 6,772 with zero implicit rows; runtime comparison is 6,768 / 6,768 with four explicit pending rows. Refreshed condition coverage is 16,278 / 18,090 lines, 23,353 / 25,927 regions, 3,932 / 4,626 branches, and 1,030 / 1,150 functions. Route audit reports 3,412 real-parity rows |
 | 2026-07-13 | Ftsynth zero-area orientation row | The source-backed `hinter-control-matrix.ttf` now includes U+E036/gid 55, a self-intersecting bowtie whose cbox is nondegenerate but whose signed-area accumulator is zero. One explicit `FT_GlyphSlot_AdjustWeight.outline_weight_zero_area_orientation_none` row selects it with `FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP`, proving pinned C, Rust FFI, C ABI, and WASM ABI all reach `FT_Outline_Get_Orientation`'s `FT_ORIENTATION_NONE` area branch (`ftoutln.c:1055-1117`) while `FT_GlyphSlot_AdjustWeight` still applies metric and advance side effects through `ftsynth.c`. Concrete cases are 6,773 with zero implicit rows; runtime comparison is 6,769 / 6,769 with four explicit pending rows. Refreshed condition coverage is 16,279 / 18,090 lines, 23,354 / 25,927 regions, 3,933 / 4,626 branches, and 1,030 / 1,150 functions. Route audit reports 3,413 real-parity rows |
 | 2026-07-13 | CJK wide standard snap fixture | `build_autohint_script_fixtures.py` now emits `fonts/autohint/cjk-wide-stem-snap.ttf`, where U+7530 supplies a 100 FU Hani standard stem and U+4ED6 supplies a 170 FU selected stem. One explicit `FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_MONO` public row keeps the selected stem inside FreeType's `af_cjk_snap_width` reference search window but above `FT_PIX_ROUND(reference) + 48`, proving the upper-side no-snap branch in `afcjk.c:1440-1480` through exact Rust FFI, C ABI, and WASM ABI parity. Concrete cases are 6,774 with zero implicit rows; runtime comparison is 6,770 / 6,770 with four explicit pending rows. Refreshed condition coverage is 16,279 / 18,090 lines, 23,355 / 25,927 regions, 3,934 / 4,626 branches, and 1,030 / 1,150 functions; `src/autohint/cjk.rs` gains one covered region and one covered branch. Route audit reports 3,414 real-parity rows |
+| 2026-07-13 | Render smart-dropout neighbor row | The source-backed `hinter-control-matrix.ttf` now includes U+E037/gid 56, a compact scan-type-4 glyph whose bytecode sets `SCANCTRL 255; SCANTYPE 4`. One explicit `FT_Render_Glyph.matrix_render` row selects it with `FT_LOAD_DEFAULT` and `FT_RENDER_MODE_MONO`, proving pinned C, Rust FFI, C ABI, and WASM ABI agree while the black rasterizer skips a smart-dropout primary because the alternate pixel is already set. This preserves FreeType's scan-mode handoff from `ttgload.c:838-840` and smart-dropout/alternate-pixel behavior from `ftraster.c:2176-2199,2377-2418`. Combined with the CJK probe above, concrete cases are 6,775 with zero implicit rows and runtime comparison is 6,771 / 6,771 with four explicit pending rows. Refreshed condition coverage is 16,280 / 18,090 lines, 23,356 / 25,927 regions, 3,935 / 4,626 branches, and 1,030 / 1,150 functions; `render.rs` reaches 1,721 / 2,272 lines, 2,426 / 3,216 regions, and 350 / 426 branches. Route audit reports 3,415 real-parity rows |
 
 ## Residual Coverage Classification - 2026-07-13
 
-Fresh `test-unified-condition-coverage` still reports 1,811 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,810 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,774 |
-| Runnable parity comparisons | 6,770 / 6,770 |
+| Concrete explicit cases | 6,775 |
+| Runnable parity comparisons | 6,771 / 6,771 |
 | Pending cases | 4 |
-| Covered Rust lines | 16,279 / 18,090 (89.9889%) |
-| Rust region coverage | 23,355 / 25,927 (90.0798%) |
-| Rust branch/condition coverage | 3,934 / 4,626 (85.0411%) |
+| Covered Rust lines | 16,280 / 18,090 (89.9945%) |
+| Rust region coverage | 23,356 / 25,927 (90.0837%) |
+| Rust branch/condition coverage | 3,935 / 4,626 (85.0627%) |
 | Rust function coverage | 1,030 / 1,150 (89.5652%) |
-| Route audit split | real-parity 3,414; raw-slot-null-validation 4; pending-core 16; shape-incomplete-fallback 0 |
+| Route audit split | real-parity 3,415; raw-slot-null-validation 4; pending-core 16; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
@@ -2024,7 +2025,7 @@ fixture-row candidates unless a new public route appears:
 
 ### Render/Raster Residual Audit - 2026-07-13
 
-The current `route-audit` split for `FT_Render_Glyph` is 179 real-parity rows,
+The current `route-audit` split for `FT_Render_Glyph` is 180 real-parity rows,
 one `null-error-fallback` row, and three `pending-core` rows. The non-real
 routes are `freetype.FT_Render_Glyph.error_null_or_unowned_slot`,
 `freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format`, and the
