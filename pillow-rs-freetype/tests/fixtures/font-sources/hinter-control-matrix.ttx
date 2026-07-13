@@ -57,6 +57,7 @@
     <GlyphID id="51" name="branchEdgeMatrix"/>
     <GlyphID id="52" name="renderDegenerateConicEnd"/>
     <GlyphID id="53" name="renderTinySdfSegment"/>
+    <GlyphID id="54" name="emboldenSharpTurn"/>
   </GlyphOrder>
 
   <head>
@@ -103,7 +104,7 @@
   <maxp>
     <!-- Most of this table will be recalculated by the compiler -->
     <tableVersion value="0x10000"/>
-    <numGlyphs value="54"/>
+    <numGlyphs value="55"/>
     <maxPoints value="4"/>
     <maxContours value="1"/>
     <maxCompositePoints value="6"/>
@@ -157,7 +158,7 @@
     <achVendID value="????"/>
     <fsSelection value="00000000 00000000"/>
     <usFirstCharIndex value="57344"/>
-    <usLastCharIndex value="57395"/>
+    <usLastCharIndex value="57397"/>
     <sTypoAscender value="800"/>
     <sTypoDescender value="-200"/>
     <sTypoLineGap value="0"/>
@@ -226,6 +227,7 @@
     <mtx name="branchEdgeMatrix" width="700" lsb="0"/>
     <mtx name="renderDegenerateConicEnd" width="700" lsb="100"/>
     <mtx name="renderTinySdfSegment" width="700" lsb="100"/>
+    <mtx name="emboldenSharpTurn" width="700" lsb="0"/>
     <mtx name="withInstructions" width="700" lsb="0"/>
   </hmtx>
 
@@ -285,6 +287,7 @@
       <map code="0xe032" name="branchEdgeMatrix"/>
       <map code="0xe033" name="renderDegenerateConicEnd"/>
       <map code="0xe034" name="renderTinySdfSegment"/>
+      <map code="0xe035" name="emboldenSharpTurn"/>
     </cmap_format_4>
     <cmap_format_4 platformID="3" platEncID="1" language="0">
       <map code="0xe000" name="base"/><!-- ???? -->
@@ -340,6 +343,7 @@
       <map code="0xe032" name="branchEdgeMatrix"/>
       <map code="0xe033" name="renderDegenerateConicEnd"/>
       <map code="0xe034" name="renderTinySdfSegment"/>
+      <map code="0xe035" name="emboldenSharpTurn"/>
     </cmap_format_4>
   </cmap>
 
@@ -855,6 +859,16 @@
       <instructions/>
     </TTGlyph>
 
+    <TTGlyph name="emboldenSharpTurn" xMin="0" yMin="0" xMax="700" yMax="400">
+      <contour>
+        <pt x="0" y="0" on="1"/>
+        <pt x="700" y="0" on="1"/>
+        <pt x="700" y="400" on="1"/>
+        <pt x="700" y="1" on="1"/>
+      </contour>
+      <instructions/>
+    </TTGlyph>
+
     <TTGlyph name="renderBowtieThin" xMin="50" yMin="0" xMax="640" yMax="600">
       <contour>
         <pt x="50" y="0" on="1"/>
@@ -1085,6 +1099,7 @@
       <psName name="renderZeroHeight"/>
       <psName name="renderDegenerateConicEnd"/>
       <psName name="renderTinySdfSegment"/>
+      <psName name="emboldenSharpTurn"/>
     </extraNames>
   </post>
 
