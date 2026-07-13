@@ -66,6 +66,11 @@
             "role": "font_bytes",
             "id": "generated/fonts/not-a-font.bin",
             "requirements": "Small non-empty byte sequence with no recognized font signature."
+          },
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "generated/fonts/not-a-font.bin"
           }
         },
         "params": {

@@ -886,6 +886,11 @@
             "kind": "file",
             "role": "font",
             "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
           }
         },
         "params": {
@@ -935,6 +940,11 @@
             "id": "bad-size-and-face-index",
             "assets": {
               "font_bytes": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "font": {
                 "kind": "file",
                 "role": "font",
                 "path": "input/fonts/DejaVuSans.ttf"
@@ -993,6 +1003,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/metrics/hhea-short-eof.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hhea-short-eof.ttf"
               }
             },
             "params": {
@@ -1010,6 +1025,11 @@
             "id": "vhea-short-at-physical-eof",
             "assets": {
               "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/vhea-short-eof.ttf"
+              },
+              "font": {
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/metrics/vhea-short-eof.ttf"
@@ -1033,6 +1053,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/metadata/head-short-eof.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metadata/head-short-eof.ttf"
               }
             },
             "params": {
@@ -1053,6 +1078,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/names/name-short.ttf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-short.ttf"
               }
             },
             "params": {
@@ -1070,6 +1100,11 @@
             "id": "name-record-array-overflow",
             "assets": {
               "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-record-overflow.ttf"
+              },
+              "font": {
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/names/name-record-overflow.ttf"
@@ -1168,6 +1203,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/control/ttc-short.ttc"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/ttc-short.ttc"
               }
             },
             "params": {
@@ -1185,6 +1225,11 @@
             "id": "ttc-offset-array-overflow",
             "assets": {
               "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/ttc-offset-overflow.ttc"
+              },
+              "font": {
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/control/ttc-offset-overflow.ttc"
@@ -1208,6 +1253,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/control/ttc-face-offset-out-of-range.ttc"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/ttc-face-offset-out-of-range.ttc"
               }
             },
             "params": {
@@ -1228,6 +1278,11 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fonts/control/otto-empty.otf"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/control/otto-empty.otf"
               }
             },
             "params": {
@@ -1244,7 +1299,8 @@
           {
             "id": "cmap-short-header",
             "assets": {
-              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/charmap/cmap-short.ttf" }
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/charmap/cmap-short.ttf" },
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/cmap-short.ttf" }
             },
             "params": { "variants": [ { "face_index": 0 } ] },
             "coverage": [ "tt/cmap:short-header-error" ]
@@ -1252,7 +1308,8 @@
           {
             "id": "cmap-record-array-overflow",
             "assets": {
-              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/charmap/cmap-record-overflow.ttf" }
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/charmap/cmap-record-overflow.ttf" },
+              "font": { "kind": "ref", "role": "font", "id": "fonts/charmap/cmap-record-overflow.ttf" }
             },
             "params": { "variants": [ { "face_index": 0 } ] },
             "coverage": [ "tt/cmap:encoding-record-array-overflow" ]
