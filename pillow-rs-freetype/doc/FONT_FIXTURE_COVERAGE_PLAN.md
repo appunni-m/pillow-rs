@@ -2085,6 +2085,49 @@ instantiations, with no concrete case-count increase. `autohint/coverage.rs`
 no longer appears in the missing-line report and is now covered at 28 / 28
 lines, 35 / 35 regions, 7 / 7 functions, and 4 / 4 branches.
 
+### Size Null-Validation Coverage Attribution - 2026-07-13
+
+The `ftsizes.FT_New_Size.null_output_pointer_error` row was rechecked with:
+
+```bash
+FONTDONE_UNIFIED_OPERATION_FILTER="ftsizes.new_size" \
+FONTDONE_UNIFIED_CASE_FILTER="null_output_pointer_error" \
+FONTDONE_UNIFIED_ORACLE_REFRESH=1 \
+make -C pillow-rs-freetype test-unified-condition-coverage \
+  CONDITION_COVERAGE_OUTPUT=target/coverage/probes/ftsizes-new-size-null-output-summary.json \
+  CONDITION_COVERAGE_LINES_OUTPUT=target/coverage/probes/ftsizes-new-size-null-output-missing-lines.txt
+```
+
+The row passes one exact Rust FFI / C ABI / WASM ABI parity comparison. The
+LLVM coverage export shows `FT_New_Size` entered three times and the
+`size.is_none()` condition taking the true branch three times. The standalone
+`return FT_Err_Invalid_Argument` source line still reported as missed because
+coverage was attributed to the guard condition line, not to the following
+return-only line. `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` now use
+rustfmt-stable match arms so covered null-validation behavior is represented on
+covered source lines. The non-null `Unimplemented_Feature` arms are
+unchanged and remain pending-core lifecycle work, not coverage-complete
+behavior.
+
+Verified counts after the follow-up
+`make -C pillow-rs-freetype test-unified-condition-coverage` run:
+
+| Measure | Count |
+|---|---:|
+| Logical public API cases | 4,163 |
+| Concrete explicit cases | 6,764 |
+| Runnable parity comparisons | 6,760 / 6,760 |
+| Pending cases | 4 |
+| Covered Rust lines | 16,258 / 18,090 (89.8729%) |
+| Rust region coverage | 23,329 / 25,927 (89.9796%) |
+| Rust branch/condition coverage | 3,917 / 4,626 (84.6736%) |
+| Rust function coverage | 1,030 / 1,150 (89.5652%) |
+
+`ffi/handles.rs` now reports 1,610 / 1,637 covered lines and only the
+non-null size lifecycle arms at lines 245, 252, and 259 remain missed for the
+size APIs. Those three lines are blocked by the real multi-size implementation,
+not by missing null-validation inputs.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
