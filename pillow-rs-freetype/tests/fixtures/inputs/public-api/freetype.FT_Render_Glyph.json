@@ -1260,6 +1260,31 @@
             ]
           },
           {
+            "id": "render-coverage-folded-dropout-mono",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "glyph_index": 5,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "render/mono:folded-profile-nonadjacent"
+            ]
+          },
+          {
             "id": "render-coverage-vertical-dropout-guard-mono",
             "assets": {
               "font": {

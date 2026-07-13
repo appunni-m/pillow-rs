@@ -19,6 +19,7 @@ GLYPH_ORDER = [
     "vertical_dropout_guard",
     "conic_bbox_extrema",
     "subpixel_short_box",
+    "folded_profile_dropout",
 ]
 
 
@@ -88,6 +89,24 @@ def subpixel_short_box_glyph():
     return pen.glyph()
 
 
+def folded_profile_dropout_glyph():
+    pen = TTGlyphPen(None)
+
+    # Four one-row vertical profiles in one folded contour make the mono
+    # dropout pass compare same-contour profiles that are not adjacent in order.
+    pen.moveTo((0, 32))
+    pen.lineTo((0, 48))
+    pen.lineTo((48, 48))
+    pen.lineTo((48, 32))
+    pen.lineTo((32, 32))
+    pen.lineTo((32, 48))
+    pen.lineTo((16, 48))
+    pen.lineTo((16, 32))
+    pen.closePath()
+
+    return pen.glyph()
+
+
 def build_render_coverage() -> None:
     glyphs = {
         ".notdef": empty_glyph(),
@@ -95,6 +114,7 @@ def build_render_coverage() -> None:
         "vertical_dropout_guard": vertical_dropout_guard_glyph(),
         "conic_bbox_extrema": conic_bbox_extrema_glyph(),
         "subpixel_short_box": subpixel_short_box_glyph(),
+        "folded_profile_dropout": folded_profile_dropout_glyph(),
     }
     metrics = {
         ".notdef": (256, 0),
@@ -102,6 +122,7 @@ def build_render_coverage() -> None:
         "vertical_dropout_guard": (256, 0),
         "conic_bbox_extrema": (640, 0),
         "subpixel_short_box": (256, 0),
+        "folded_profile_dropout": (256, 0),
     }
 
     builder = FontBuilder(UNITS_PER_EM, isTTF=True)
@@ -112,6 +133,7 @@ def build_render_coverage() -> None:
             0xE101: "vertical_dropout_guard",
             0xE102: "conic_bbox_extrema",
             0xE103: "subpixel_short_box",
+            0xE104: "folded_profile_dropout",
         }
     )
     builder.setupGlyf(glyphs)
