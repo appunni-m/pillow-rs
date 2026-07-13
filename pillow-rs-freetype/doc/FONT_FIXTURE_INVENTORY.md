@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 150 | 107 | 43 | 118 | 810 KiB |
+| Active fixtures | 151 | 108 | 43 | 119 | 814 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 7 | 7 | 0 | 7 | 193 KiB |
 
@@ -157,6 +157,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `dd78e2f3a494` | 4.2 | 1 | `fonts/glyf/hinter-prep-redefine-defs.ttf` | derived source-backed TrueType control whose prep program redefines existing FDEF 1 and IDEF 0x8F within the font's maxp budgets; owns the successful prep-definition path |
 | `7c8156a2d450` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-loopcall.ttf` | derived source-backed TrueType control whose base glyph calls the existing no-op FDEF twice with LOOPCALL; owns repeated call-frame return coverage |
 | `84ef501944aa` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-fdef-index-overflow.ttf` | derived source-backed TrueType control whose font program attempts FDEF 256, beyond FreeType's fixed TT_DefRecord function array; owns the fpgm function-index overflow error route |
+| `4a02cf4d665b` | 4.2 | 1 | `fonts/glyf/hinter-idef-recursive-depth.ttf` | derived source-backed TrueType control whose ADJUST IDEF recursively calls itself; owns the public IDEF call-depth guard error route |
 | `0b8ee6c55162` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-nested-fdef.ttf` | derived source-backed TrueType control whose font program redefines existing FDEF 1 with a nested FDEF body; owns FreeType `Nested_DEFS` error parity |
 | `fab1a7a87ba8` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-idef-opcode-overflow.ttf` | derived source-backed TrueType control whose font program attempts IDEF opcode 0x100; owns out-of-range instruction-definition error parity |
 | `d699aaefd480` | 4.2 | 1 | `fonts/glyf/hinter-fpgm-nested-idef.ttf` | derived source-backed TrueType control whose font program contains nested IDEF; owns FreeType `Nested_DEFS` error parity for instruction definitions |
@@ -240,6 +241,7 @@ listed because they enter different hinting and scaling conditions.
 | `hinter-prep-redefine-defs.ttf` | gid 1 | 20 | prep-range redefinition of existing FDEF 1 and IDEF 0x8F within maxp budgets, proving FreeType-compatible successful prep definitions |
 | `hinter-fpgm-loopcall.ttf` | gid 1 | 20 | no-output repeated LOOPCALL of the existing function definition, covering call-frame repeat and ENDF return without changing points |
 | `hinter-fpgm-fdef-index-overflow.ttf` | gid 1 | 20 | invalid fpgm FDEF 256 probes FreeType's function-definition index overflow before body scanning, exposed as an explicit public load error |
+| `hinter-idef-recursive-depth.ttf` | gid 1 | 20 | recursive ADJUST IDEF calls itself until the interpreter call-depth guard rejects the glyph load, exposed as an explicit public load error |
 | `hinter-fpgm-nested-fdef.ttf`, `hinter-fpgm-nested-idef.ttf`, `hinter-fpgm-idef-opcode-overflow.ttf`, `hinter-fpgm-unterminated-fdef.ttf`, `hinter-fpgm-unterminated-idef.ttf` | gid 1 | 20 | invalid fpgm scanner controls for nested definitions, out-of-range IDEF opcode, and unterminated FDEF/IDEF, each exposed as an explicit public load error |
 | `hinter-control-matrix.ttf` | U+E032 gid 51 | 20 | branch-edge VM control covering zero-length line and stack vectors, invalid stack-index fallback, taken JROF, no-round dispatch, invalid contour shift, invalid coordinate reads, empty twilight-zone SHZ, and positive/negative single-width MDRP cut-in |
 | `hinter-control-matrix.ttf` | gid 21 | 20 | empty outline selected across normal, mono, LCD, LCD_V, and SDF render modes |

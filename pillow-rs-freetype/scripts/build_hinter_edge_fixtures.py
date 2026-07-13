@@ -82,6 +82,15 @@ def write_fpgm_fdef_index_overflow() -> None:
     save_font("hinter-fpgm-fdef-index-overflow.ttf", font)
 
 
+def write_idef_recursive_depth() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    # Redefine the existing ADJUST IDEF opcode with a body that calls itself.
+    # FreeType bails out through its IDEF call-stack guard instead of looping.
+    font["fpgm"].program = program_from_bytes(bytes.fromhex("b0 8f 89 8f 2d"))
+    font["glyf"]["base"].program = program_from_bytes(bytes.fromhex("8f"))
+    save_font("hinter-idef-recursive-depth.ttf", font)
+
+
 def write_fpgm_nested_fdef() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     fpgm = font["fpgm"].program.getBytecode()
@@ -123,6 +132,7 @@ def main() -> None:
     write_prep_redefine_defs()
     write_fpgm_loopcall()
     write_fpgm_fdef_index_overflow()
+    write_idef_recursive_depth()
     write_fpgm_nested_fdef()
     write_fpgm_idef_opcode_overflow()
     write_fpgm_nested_idef()
