@@ -98,6 +98,8 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_advances",
     "fontdone_wasm_get_subglyph_info",
     "fontdone_wasm_render_glyph",
+    "fontdone_wasm_glyphslot_oblique",
+    "fontdone_wasm_glyphslot_slant",
     "fontdone_wasm_get_slot",
     "fontdone_wasm_size_metrics",
 }
