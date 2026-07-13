@@ -2173,22 +2173,22 @@ public glyph-slot mutation still succeeds and updates the exact slot metrics,
 advance, outline points, and control box through Rust FFI, C ABI, and WASM ABI
 routes.
 
-Verified counts after
+Integrated branch counts after
 `FONTDONE_UNIFIED_ORACLE_REFRESH=1 make -C pillow-rs-freetype test-unified-condition-coverage`:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,163 |
-| Concrete explicit cases | 6,766 |
-| Runnable parity comparisons | 6,762 / 6,762 |
+| Concrete explicit cases | 6,768 |
+| Runnable parity comparisons | 6,764 / 6,764 |
 | Pending cases | 4 |
-| Covered Rust lines | 16,261 / 18,090 (89.8894%) |
-| Rust region coverage | 23,333 / 25,927 (89.9950%) |
-| Rust branch/condition coverage | 3,922 / 4,626 (84.7817%) |
+| Covered Rust lines | 16,262 / 18,090 (89.8950%) |
+| Rust region coverage | 23,335 / 25,927 (90.0027%) |
+| Rust branch/condition coverage | 3,924 / 4,626 (84.8249%) |
 | Rust function coverage | 1,030 / 1,150 (89.5652%) |
 
-The delta from baseline commit `e3f33921` is one additional concrete public
-case plus +1 covered line, +1 covered region, and +1 covered branch.
+The ftsynth row itself contributes one additional concrete public case plus +1
+covered line, +1 covered region, and +1 covered branch.
 `src/api.rs:1059` no longer appears in the full missing-line report.
 
 ## Immediate Next Actions
