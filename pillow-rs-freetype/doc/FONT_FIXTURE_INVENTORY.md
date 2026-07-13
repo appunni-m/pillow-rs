@@ -111,15 +111,16 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `f5a7badf5399` | 1.9 | 1 | `fonts/metrics/hhea-short-eof.ttf` | 35-byte hhea at physical EOF; required-header stream error control |
 | `1eee7f2e8396` | 1.9 | 1 | `fonts/metrics/vhea-short-eof.ttf` | 35-byte vhea at physical EOF; present malformed vertical-header error control |
 | `acb83f0642a9` | 16.9 | 1 | `fonts/metadata/short-os2-post.ttf` | compact glyf with a 77-byte OS/2 table and 15-byte post table; owns both optional short-table fallbacks |
-| `12b8e116037d` | 3.0 | 1 | `fonts/metadata/post-format-1.ttf` | compact glyf with `post` format 1.0 and non-258 glyph count; owns FreeType's default `.notdef` glyph-name behavior |
-| `2571fddb58ac` | 3.1 | 1 | `fonts/metadata/post-format-25.ttf` | compact glyf with FreeType's historical `post` format 2.5 tag `0x00025000`; owns valid signed-delta names and out-of-range deltas mapping to Mac glyph 0 |
-| `dbe5cef750a9` | 3.0 | 1 | `fonts/metadata/post-format-unsupported.ttf` | compact glyf with unsupported `post` format 4.0; owns C's cleared-buffer `Invalid_Argument` public glyph-name behavior |
-| `18fc60864980` | 3.0 | 1 | `fonts/metadata/post-format-20-short.ttf` | compact glyf with format 2.0 table shorter than the glyph-name count field; owns default-name fallback after ignored load failure |
-| `712b4bbd33d0` | 3.0 | 1 | `fonts/metadata/post-format-20-zero.ttf` | compact glyf with format 2.0 declaring zero glyph names; owns the zero-count default-name path |
-| `401588233b68` | 3.0 | 1 | `fonts/metadata/post-format-20-custom-truncated.ttf` | compact glyf with a format 2.0 custom-name index and no Pascal string bytes; owns the missing-custom-name `.notdef` fallback |
-| `2f50d6f217bd` | 3.0 | 1 | `fonts/metadata/post-format-25-short.ttf` | compact glyf with format 2.5 table shorter than the glyph-name count field; owns default-name fallback after ignored load failure |
-| `86500c6b0a3b` | 3.0 | 1 | `fonts/metadata/post-format-25-zero.ttf` | compact glyf with format 2.5 declaring zero glyph names; owns the zero-count default-name path |
-| `149337a4d1da` | 3.0 | 1 | `fonts/metadata/post-format-25-too-many.ttf` | compact glyf with format 2.5 declaring 387 glyph deltas; owns FreeType's above-theoretical-limit rejection |
+| `bdead31913b1` | 3.5 | 1 | `fonts/metadata/post-format-1.ttf` | compact glyf with `post` format 1.0 and non-258 glyph count; owns FreeType's default `.notdef` glyph-name behavior |
+| `c353a6673ba4` | 3.6 | 1 | `fonts/metadata/post-format-25.ttf` | compact glyf with FreeType's historical `post` format 2.5 tag `0x00025000`; owns valid signed-delta names and out-of-range deltas mapping to Mac glyph 0 |
+| `294a4e61d972` | 3.5 | 1 | `fonts/metadata/post-format-unsupported.ttf` | compact glyf with unsupported `post` format 4.0; owns C's cleared-buffer `Invalid_Argument` public glyph-name behavior |
+| `d748e79c861a` | 3.5 | 1 | `fonts/metadata/post-format-20-short.ttf` | compact glyf with format 2.0 table shorter than the glyph-name count field; owns default-name fallback after ignored load failure |
+| `e219ae6aa11b` | 3.5 | 1 | `fonts/metadata/post-format-20-zero.ttf` | compact glyf with format 2.0 declaring zero glyph names; owns the zero-count default-name path |
+| `34f13fe4339d` | 3.5 | 1 | `fonts/metadata/post-format-20-custom-truncated.ttf` | compact glyf with a format 2.0 custom-name index and no Pascal string bytes; owns the missing-custom-name `.notdef` fallback |
+| `67495e426ca2` | 3.5 | 1 | `fonts/metadata/post-format-25-short.ttf` | compact glyf with format 2.5 table shorter than the glyph-name count field; owns default-name fallback after ignored load failure |
+| `e5eb22517140` | 3.5 | 1 | `fonts/metadata/post-format-25-zero.ttf` | compact glyf with format 2.5 declaring zero glyph names; owns the zero-count default-name path |
+| `224ebed17a6a` | 3.5 | 1 | `fonts/metadata/post-format-25-too-many.ttf` | compact glyf with format 2.5 declaring 387 glyph deltas; owns FreeType's above-theoretical-limit rejection |
+| `33a97c809d7a` | 3.5 | 1 | `fonts/metadata/post-missing.ttf` | compact glyf with no `post` table; owns the public `FT_Get_Glyph_Name` absent-optional-post behavior where C returns `FT_Err_Invalid_Argument` and clears the first output byte |
 | `9e63ed2c07b6` | 17.2 | 1 | `fonts/metadata/os2-use-typo-metrics.ttf` | compact glyf with `USE_TYPO_METRICS`; owns OS/2 typographic face and size metric selection |
 | `5df1e876cc25` | 1.9 | 1 | `fonts/metadata/head-short-eof.ttf` | 53-byte required head table at physical EOF; owns the short-header face-open error |
 | `4e4f32fced92` | 1.6 | 1 | `fonts/names/name-record-matrix.ttf` | nine-record name table covering Windows decode failures, Mac Roman and arbitrary-Windows fallbacks, invalid ranges, zero lengths, and every preference predicate outcome |
@@ -233,6 +234,7 @@ listed because they enter different hinting and scaling conditions.
 | `hhea-zero-typo-fallback.ttf` | face open and active size metrics only | 20 | hhea ascent/descent/lineGap are zero and OS/2 `USE_TYPO_METRICS` is clear, so public `FT_Size_Metrics` selects the OS/2 typo fallback branch |
 | `hhea-zero-win-fallback.ttf` | face open and active size metrics only | 20 | hhea and OS/2 typo metrics are zero, so public `FT_Size_Metrics` selects the OS/2 Windows ascent/descent fallback branch |
 | `post-format-1.ttf` | gid 1 | name lookup only | `post` format 1.0 with non-258 glyph count returns FreeType's default `.notdef` instead of Mac standard names |
+| `post-missing.ttf` | gid 1 | name lookup only | absent optional `post` table proves public `FT_Get_Glyph_Name` returns `FT_Err_Invalid_Argument`, not `FT_Err_Post_Table_Missing`, and preserves the filled buffer after clearing byte zero |
 | `post-format-25.ttf` | gid 36 (`A`), gid 1 | name lookup only | format 2.5 signed-delta rows cover valid Mac-name lookup and invalid negative deltas mapping to `.notdef` / glyph index 0 |
 | `post-format-unsupported.ttf` | gid 1 | name lookup only | unsupported non-3.0 format proves the public `FT_HAS_GLYPH_NAMES` / cleared-buffer `Invalid_Argument` path |
 | `post-format-20-short.ttf`, `post-format-20-zero.ttf` | gid 1 | name lookup only | malformed format 2.0 headers default to `.notdef` with exact public status and buffer parity |

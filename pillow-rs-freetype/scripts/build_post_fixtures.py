@@ -48,6 +48,12 @@ def write_format_25() -> None:
     patch_table_bytes(path, b"post", payload)
 
 
+def write_missing_post() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    del font["post"]
+    save_font(OUT_DIR / "post-missing.ttf", font)
+
+
 def write_malformed_controls() -> None:
     write_post_payload("post-format-unsupported.ttf", 0x0004_0000, b"")
     write_post_payload("post-format-20-short.ttf", 0x0002_0000, b"", table_len=32)
@@ -131,6 +137,7 @@ def checksum(table_data: bytes | bytearray) -> int:
 def main() -> None:
     write_format_1()
     write_format_25()
+    write_missing_post()
     write_malformed_controls()
 
 
