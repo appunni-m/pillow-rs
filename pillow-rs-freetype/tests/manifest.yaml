@@ -1543,7 +1543,7 @@ subjects:
       - id: truncates_and_terminates_to_buffer_size
         description: Small buffers receive the same truncated and zero-terminated bytes as the C oracle.
       - id: post_format_1_default_names
-        description: A compact SFNT with post format 1.0 and a non-258 glyph count returns the same default .notdef names as C.
+        description: Compact SFNT post format 1.0 controls cover both C's non-258 default .notdef fallback and exact-258 Mac standard names.
       - id: post_format_25_delta_names
         description: A compact SFNT with post format 2.5 returns Mac names for valid signed deltas and .notdef for out-of-range deltas like C.
       - id: post_malformed_tables_default_names
@@ -1585,7 +1585,7 @@ subjects:
       - id: post_format_25_name_index
         description: Name lookup over post format 2.5 delta names returns the same first matching glyph index as C.
       - id: post_format_1_default_name_index
-        description: Name lookup over a post format 1.0 face with non-258 glyph count returns the same zero sentinel for unavailable standard names as C.
+        description: Name lookup over post format 1.0 covers both C's non-258 zero sentinel and exact-258 Mac standard-name index.
       - id: unknown_or_unavailable_name_returns_zero
         description: Unknown names, faces without glyph-name support, and unavailable name data return 0 like C.
       - id: null_face_or_name_returns_zero

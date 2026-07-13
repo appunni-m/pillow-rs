@@ -202,6 +202,27 @@
             "coverage": [
               "post:format-1-nonstandard-count-default-name"
             ]
+          },
+          {
+            "id": "format1_standard_count_returns_mac_name",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/metadata/post-format-1-standard-count.ttf",
+                "requires": "SFNT post table format 1.0 with exactly 258 glyph slots"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "buffer_initial": "0xAA",
+              "buffer_max": 64,
+              "glyph_index": "gid:36",
+              "expected_name": "A"
+            },
+            "coverage": [
+              "post:format-1-standard-count-mac-name"
+            ]
           }
         ]
       },

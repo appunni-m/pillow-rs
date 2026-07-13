@@ -151,6 +151,25 @@
             "coverage": [
               "post:format-1-nonstandard-count-name-index"
             ]
+          },
+          {
+            "id": "format1_standard_count_A",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "path": "fonts/metadata/post-format-1-standard-count.ttf",
+                "requires": "SFNT post table format 1.0 with exactly 258 glyph slots"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_name": "A",
+              "expected_glyph_index": 36
+            },
+            "coverage": [
+              "post:format-1-standard-count-name-index"
+            ]
           }
         ]
       },
@@ -164,7 +183,7 @@
       "expectation": {
         "status": "ok",
         "output_shape": {
-          "return": "FT_UInt zero sentinel"
+          "return": "FT_UInt glyph index or zero sentinel"
         },
         "compare": {
           "mode": "value",
