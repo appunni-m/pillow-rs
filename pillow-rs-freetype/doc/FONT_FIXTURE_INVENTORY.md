@@ -1,7 +1,7 @@
 # Font Fixture Inventory
 
 Status: active inventory
-Recorded: 2026-07-12
+Recorded: 2026-07-13
 Coverage plan: `doc/FONT_FIXTURE_COVERAGE_PLAN.md`
 
 This inventory separates file paths, stored binaries, unique contents, cmap
@@ -150,6 +150,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `2868a722bff5` | 1.6 | 1 | `fonts/glyf/loca-long-truncated.ttf` | long-loca control with only seven bytes, one byte below a complete glyph-0 offset pair |
 | `697619c0847e` | 1.6 | 1 | `fonts/glyf/cvt-empty.ttf` | valid TrueType control with a present zero-length cvt table |
 | `6175105e1748` | 1.6 | 1 | `fonts/glyf/cvt-odd-length.ttf` | valid TrueType control with a one-byte cvt table rejected by Rust parsing and ignored by face construction |
+| `7b48e63ccda3` | 1.0 | 1 | `fonts/glyf/render-coverage.ttf` | compact generated glyf fixture covering mono dropout guards and a quadratic scaler bbox-extrema branch probe |
 | `6a0cb31f530d` | 4.2 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed VM, render-topology, and ftsynth matrix covering state, geometry, control flow, DELTA, invalid coordinate reads, repeated post-IUP compatibility return, six exact bytecode error classes, conic chains, intersections, thin outlines, mixed winding, degenerate contours, empty outlines, collapsed spans, mono low-precision raster selection, scan-type dropout modes, PostScript-orientation embolden, and zero-length embolden segment skipping |
 | `237f640b006f` | 4.2 | 1 | `fonts/glyf/hinter-empty-fpgm.ttf` | derived source-backed TrueType control with empty `fpgm`, non-empty `prep`, present `cvt`, and the same glyph programs as `hinter-control-matrix.ttf`; owns native prepare-context empty-font-program coverage |
 | `4404c836404e` | 4.2 | 1 | `fonts/glyf/hinter-prep-definitions.ttf` | derived source-backed TrueType control whose prep program attempts additional FDEF then IDEF definitions beyond the font's maxp definition budgets; owns C-compatible too-many-definition error parity |
@@ -254,6 +255,7 @@ listed because they enter different hinting and scaling conditions.
 | `hinter-control-matrix.ttf` | U+E02C gid 45 | 20 | zero-height horizontal contour selected across normal, mono, and SDF modes |
 | `hinter-control-matrix.ttf` | U+E02D gid 46, U+E02E gid 47 | 20 | scan types 4 and 5 on narrow vertical rectangles; owns smart dropout selection with and without stub inclusion |
 | `hinter-control-matrix.ttf` | U+E02F gid 48, U+E030 gid 49, U+E031 gid 50 | 20 | collapsed x/y mono contours at negative-bias fractional positions plus a 130 px mono box that selects the low-precision raster path |
+| `render-coverage.ttf` | gids 1-2, gid 3 | 16, 20 | compact mono horizontal/vertical dropout guards plus a single quadratic contour whose off-curve control covers scaler exact-bbox left/top extrema branches |
 
 The custom fonts contain additional glyphs for future focused obligations:
 Latin digits, round/straight/overshoot forms, combining marks, simple and
