@@ -74,6 +74,19 @@ def write_fpgm_loopcall() -> None:
     save_font("hinter-fpgm-loopcall.ttf", font)
 
 
+def write_fpgm_call_errors() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    # This single font keeps CALL/LOOPCALL error coverage compact.  Its fpgm
+    # defines FDEF 1 as a self-recursive body; function 0 and -1 remain invalid
+    # references while glyph 24 reaches FreeType's call-stack overflow guard.
+    font["fpgm"].program = program_from_bytes(bytes.fromhex("b0 01 2c b0 01 2b 2d"))
+    font["glyf"][".notdef"].program = program_from_bytes(bytes.fromhex("b8 ff ff 2b"))
+    font["glyf"]["base"].program = program_from_bytes(bytes.fromhex("b0 00 2b"))
+    font["glyf"]["mark"].program = program_from_bytes(bytes.fromhex("b1 01 00 2a"))
+    font["glyf"]["scanType0"].program = program_from_bytes(bytes.fromhex("b0 01 2b"))
+    save_font("hinter-fpgm-call-errors.ttf", font)
+
+
 def write_fpgm_fdef_index_overflow() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     # FDEF 256 is beyond the fixed TT_DefRecord array range.  FreeType rejects
@@ -131,6 +144,7 @@ def main() -> None:
     write_prep_idef()
     write_prep_redefine_defs()
     write_fpgm_loopcall()
+    write_fpgm_call_errors()
     write_fpgm_fdef_index_overflow()
     write_idef_recursive_depth()
     write_fpgm_nested_fdef()

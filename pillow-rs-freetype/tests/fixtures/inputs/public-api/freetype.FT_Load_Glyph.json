@@ -1967,6 +1967,94 @@
             ]
           },
           {
+            "id": "hinter-fpgm-call-negative-reference",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-fpgm-call-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 0,
+              "load_flags": [
+                "FT_LOAD_NO_AUTOHINT"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/hinter:fpgm-call-negative-reference"
+            ]
+          },
+          {
+            "id": "hinter-fpgm-call-invalid-reference",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-fpgm-call-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_NO_AUTOHINT"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/hinter:fpgm-call-invalid-reference"
+            ]
+          },
+          {
+            "id": "hinter-fpgm-loopcall-invalid-reference",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-fpgm-call-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 2,
+              "load_flags": [
+                "FT_LOAD_NO_AUTOHINT"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/hinter:fpgm-loopcall-invalid-reference"
+            ]
+          },
+          {
+            "id": "hinter-fpgm-call-stack-overflow",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-fpgm-call-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 24,
+              "load_flags": [
+                "FT_LOAD_NO_AUTOHINT"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/hinter:fpgm-call-stack-overflow"
+            ]
+          },
+          {
             "id": "hinter-fpgm-fdef-index-overflow",
             "assets": {
               "font": {

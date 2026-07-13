@@ -702,6 +702,48 @@ impl ExecContext {
         true
     }
 
+    fn active_function_def(&self, func_num: i32) -> Result<(usize, usize, u8), FontError> {
+        let func_index = usize::try_from(func_num).map_err(|_| {
+            FontError::InvalidOutline("bytecode: invalid function reference".into())
+        })?;
+        let Some(def) = self.functions.get(func_index).and_then(Option::as_ref) else {
+            return Err(FontError::InvalidOutline(
+                "bytecode: invalid function reference".into(),
+            ));
+        };
+        if !def.active {
+            return Err(FontError::InvalidOutline(
+                "bytecode: invalid function reference".into(),
+            ));
+        }
+        Ok((func_index, def.start, def.range))
+    }
+
+    fn enter_function_call(&mut self, func_num: i32, count: i32) -> Result<(), FontError> {
+        // C: ttinterp.c:3395-3549 `Ins_CALL` and `Ins_LOOPCALL` validate the
+        // FDEF reference and call-stack room before deciding whether LOOPCALL's
+        // repeat count is positive.  Invalid/inactive definitions are errors,
+        // not silent no-ops.
+        let (def_index, def_start, def_range) = self.active_function_def(func_num)?;
+        if self.call_stack.len() >= MAX_CALL_DEPTH {
+            return Err(FontError::InvalidOutline(
+                "bytecode: call stack overflow".into(),
+            ));
+        }
+        if count <= 0 {
+            return Ok(());
+        }
+        self.call_stack.push(CallRecord {
+            caller_range: self.cur_range,
+            caller_ip: self.ip,
+            cur_count: count,
+            def_index,
+        });
+        self.ip = def_start;
+        self.cur_range = def_range;
+        Ok(())
+    }
+
     fn point_displacement(&self, opcode: u8, zone: &GlyphZone) -> (i32, i32, u8, usize) {
         let (ref_zone, ref_pt) = if opcode & 1 != 0 {
             (self.gs.zp0, self.gs.rp1 as usize)
@@ -1405,40 +1447,14 @@ impl ExecContext {
                 // C: Ins_LOOPCALL uses args[1] as FDEF id and args[0] as count
                 // after the VM has popped two operands into the argument area.
                 0x2A => {
-                    let func_num = self.pop()? as u16;
+                    let func_num = self.pop()?;
                     let count = self.pop()?;
-                    if count > 0 && (func_num as usize) < self.functions.len() {
-                        if let Some(ref def) = self.functions[func_num as usize] {
-                            if def.active {
-                                self.call_stack.push(CallRecord {
-                                    caller_range: self.cur_range,
-                                    caller_ip: self.ip,
-                                    cur_count: count,
-                                    def_index: func_num as usize,
-                                });
-                                self.ip = def.start;
-                                self.cur_range = def.range;
-                            }
-                        }
-                    }
+                    self.enter_function_call(func_num, count)?;
                 }
                 // CALL (0x2B): pop function number from top of stack
                 0x2B => {
-                    let func_num = self.pop()? as u16;
-                    if (func_num as usize) < self.functions.len() {
-                        if let Some(ref def) = self.functions[func_num as usize] {
-                            if def.active {
-                                self.call_stack.push(CallRecord {
-                                    caller_range: self.cur_range,
-                                    caller_ip: self.ip,
-                                    cur_count: 0,
-                                    def_index: func_num as usize,
-                                });
-                                self.ip = def.start;
-                                self.cur_range = def.range;
-                            }
-                        }
-                    }
+                    let func_num = self.pop()?;
+                    self.enter_function_call(func_num, 1)?;
                 }
                 0x2D => {
                     // ENDF: return from function
