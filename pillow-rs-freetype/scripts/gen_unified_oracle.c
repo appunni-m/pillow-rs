@@ -2675,6 +2675,71 @@ static int print_glyphslot_slant_rows(FT_Face face, const char* rows_arg, int ob
     return 0;
 }
 
+static int print_glyphslot_weight_rows(FT_Face face, const char* rows_arg, int embolden) {
+    char* rows = (char*)malloc(strlen(rows_arg) + 1);
+    if (!rows) {
+        return 2;
+    }
+    memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    char* row = strtok(rows, ",");
+    int row_index = 0;
+    while (row) {
+        long glyph_index = 0;
+        long load_flags = 0;
+        long xdelta = 0;
+        long ydelta = 0;
+        if (sscanf(row, "%ld:%ld:%ld:%ld", &glyph_index, &load_flags, &xdelta, &ydelta) != 4) {
+            free(rows);
+            return 2;
+        }
+
+        FT_Error err = FT_Load_Glyph(face, (FT_UInt)glyph_index, (FT_Int32)load_flags);
+        if (err) {
+            free(rows);
+            return err;
+        }
+        if (row_index) printf(",");
+        printf("{\"glyph_index\":%ld,\"load_flags\":%ld,\"xdelta\":%ld,\"ydelta\":%ld,",
+               glyph_index,
+               load_flags,
+               xdelta,
+               ydelta);
+        print_outline_points_named("outline_points_before", &face->glyph->outline);
+        printf(",");
+        print_metrics_named("metrics_before", face->glyph->metrics);
+        printf(",");
+        print_vector_named("advance_before", face->glyph->advance);
+        printf(",");
+
+        if (embolden) {
+            FT_GlyphSlot_Embolden(face->glyph);
+        } else {
+            FT_GlyphSlot_AdjustWeight(face->glyph, (FT_Fixed)xdelta, (FT_Fixed)ydelta);
+        }
+
+        FT_BBox cbox;
+        FT_Outline_Get_CBox(&face->glyph->outline, &cbox);
+        printf("\"slot_format\":%ld,", (long)face->glyph->format);
+        print_outline_points_named("outline_points_after", &face->glyph->outline);
+        printf(",");
+        print_bbox_named("outline_cbox_after", cbox);
+        printf(",");
+        print_metrics_named("metrics_after", face->glyph->metrics);
+        printf(",");
+        print_vector_named("advance_after", face->glyph->advance);
+        printf("}");
+
+        row_index++;
+        row = strtok(NULL, ",");
+    }
+    printf("]}}\n");
+    free(rows);
+    return 0;
+}
+
 static void print_glyph_metrics(FT_Glyph_Metrics metrics) {
     printf("\"output\":{\"metrics\":{");
     printf("\"width\":%ld,\"height\":%ld,\"horiBearingX\":%ld,\"horiBearingY\":%ld,\"horiAdvance\":%ld,\"vertBearingX\":%ld,\"vertBearingY\":%ld,\"vertAdvance\":%ld",
@@ -6482,6 +6547,13 @@ static int emit_face_or_slot(int argc, char** argv) {
         free(data);
         return result ? 2 : 0;
     }
+    if (streq(command, "--glyphslot-adjust-weight") || streq(command, "--glyphslot-embolden")) {
+        int result = print_glyphslot_weight_rows(face, argv[7], streq(command, "--glyphslot-embolden"));
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return result ? 2 : 0;
+    }
 
     FT_UInt glyph_index = 0;
     FT_Int32 load_flags = 0;
@@ -7788,7 +7860,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 9 && (streq(argv[1], "--load-char") || streq(argv[1], "--load-glyph") || streq(argv[1], "--load-glyph-from-char") || streq(argv[1], "--inspect-glyph-metrics") || streq(argv[1], "--inspect-glyph-slot") || streq(argv[1], "--load-glyph-outline") || streq(argv[1], "--outline-get-bbox") || streq(argv[1], "--outline-get-cbox"))) {
         return emit_face_or_slot(argc, argv);
     }
-    if (argc == 8 && (streq(argv[1], "--glyphslot-slant") || streq(argv[1], "--glyphslot-oblique"))) {
+    if (argc == 8 && (streq(argv[1], "--glyphslot-slant") || streq(argv[1], "--glyphslot-oblique") || streq(argv[1], "--glyphslot-adjust-weight") || streq(argv[1], "--glyphslot-embolden"))) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 10 && streq(argv[1], "--face-set-unpatented-hinting-post-load")) {

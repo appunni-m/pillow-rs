@@ -8274,6 +8274,26 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(ftsynth_slant_rows_arg(params, true)?);
             Ok(args)
         }
+        "ftsynth.glyphslot_adjust_weight_after_load" => {
+            if !has_runtime_font_source(case) {
+                return oracle_fallback_args(case);
+            }
+            let mut args = vec!["--glyphslot-adjust-weight".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(ftsynth_weight_rows_arg(params, false)?);
+            Ok(args)
+        }
+        "ftsynth.glyphslot_embolden_after_load" => {
+            if !has_runtime_font_source(case) {
+                return oracle_fallback_args(case);
+            }
+            let mut args = vec!["--glyphslot-embolden".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(ftsynth_weight_rows_arg(params, true)?);
+            Ok(args)
+        }
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
             let mut args = vec!["--glyph-record".to_string()];
             push_font_source(case, &mut args)?;
@@ -8807,6 +8827,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftsynth.glyphslot_slant_after_load" => rust_ftsynth_slant(case, false),
         "ftsynth.glyphslot_oblique_after_load" => rust_ftsynth_slant(case, true),
+        "ftsynth.glyphslot_adjust_weight_after_load" => rust_ftsynth_weight(case, false),
+        "ftsynth.glyphslot_embolden_after_load" => rust_ftsynth_weight(case, true),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
             let face = open_face(case)?;
             rust_glyph_record(&face, case)
@@ -9382,6 +9404,20 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output
         }
+        "ftsynth.glyphslot_adjust_weight_after_load" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_ftsynth_weight(face, case, false);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
+        "ftsynth.glyphslot_embolden_after_load" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_ftsynth_weight(face, case, true);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
             let (library, face) = c_open_face(case)?;
             let output = c_glyph_record(face, case);
@@ -9846,6 +9882,18 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftsynth.glyphslot_oblique_after_load" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_ftsynth_slant(handle, case, true);
+            wasm_done_face(handle);
+            output
+        }
+        "ftsynth.glyphslot_adjust_weight_after_load" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_ftsynth_weight(handle, case, false);
+            wasm_done_face(handle);
+            output
+        }
+        "ftsynth.glyphslot_embolden_after_load" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_ftsynth_weight(handle, case, true);
             wasm_done_face(handle);
             output
         }
@@ -11262,6 +11310,93 @@ fn ftsynth_slant_value(value: &Value, label: &str) -> Result<(i64, i64), String>
     Ok((xslant, yslant))
 }
 
+#[derive(Debug, Clone, Copy)]
+struct FtsynthWeightRow {
+    glyph_index: u32,
+    load_flags: i32,
+    xdelta: i64,
+    ydelta: i64,
+}
+
+fn ftsynth_weight_rows_arg(params: &Value, embolden: bool) -> Result<String, String> {
+    Ok(ftsynth_weight_rows(params, embolden)?
+        .into_iter()
+        .map(|row| {
+            format!(
+                "{}:{}:{}:{}",
+                row.glyph_index, row.load_flags, row.xdelta, row.ydelta
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn ftsynth_weight_rows(params: &Value, embolden: bool) -> Result<Vec<FtsynthWeightRow>, String> {
+    let load = params.get("load").unwrap_or(params);
+    let load_flags = load_flags_param(load)?;
+    let glyph_indices = if let Some(values) = load.get("glyph_indices").and_then(Value::as_array) {
+        values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| u32_value(value, &format!("glyph_indices[{index}]")))
+            .collect::<Result<Vec<_>, _>>()?
+    } else if let Some(value) = load.get("glyph_index") {
+        vec![u32_value(value, "glyph_index")?]
+    } else {
+        vec![glyph_index_param(load)?]
+    };
+    if glyph_indices.is_empty() {
+        return Err("ftsynth weight rows require at least one glyph index".to_string());
+    }
+
+    let adjustments = if embolden {
+        let strength = params
+            .get("compare_with_adjust_weight_strength")
+            .map(|value| i64_value(value, "compare_with_adjust_weight_strength"))
+            .transpose()?
+            .unwrap_or(0x0AAA);
+        vec![(strength, strength)]
+    } else if let Some(values) = params.get("adjustments").and_then(Value::as_array) {
+        values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| ftsynth_weight_value(value, &format!("adjustments[{index}]")))
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        vec![ftsynth_weight_value(params, "adjustment")?]
+    };
+    if adjustments.is_empty() {
+        return Err("ftsynth weight rows require at least one adjustment".to_string());
+    }
+
+    let mut rows = Vec::new();
+    for glyph_index in glyph_indices {
+        for (xdelta, ydelta) in &adjustments {
+            rows.push(FtsynthWeightRow {
+                glyph_index,
+                load_flags,
+                xdelta: *xdelta,
+                ydelta: *ydelta,
+            });
+        }
+    }
+    Ok(rows)
+}
+
+fn ftsynth_weight_value(value: &Value, label: &str) -> Result<(i64, i64), String> {
+    let xdelta = value
+        .get("xdelta_16_16")
+        .map(|value| i64_value(value, &format!("{label}.xdelta_16_16")))
+        .transpose()?
+        .unwrap_or(0);
+    let ydelta = value
+        .get("ydelta_16_16")
+        .map(|value| i64_value(value, &format!("{label}.ydelta_16_16")))
+        .transpose()?
+        .unwrap_or(0);
+    Ok((xdelta, ydelta))
+}
+
 fn ftsynth_output(rows: Vec<Value>) -> RunOutput {
     ok(json!({ "rows": rows }))
 }
@@ -11272,6 +11407,23 @@ fn ftsynth_row_json(row: FtsynthSlantRow, before: Value, after: Value) -> Value 
         "load_flags": row.load_flags,
         "xslant": row.xslant,
         "yslant": row.yslant,
+        "slot_format": after["slot_format"].clone(),
+        "outline_points_before": before["outline_points"].clone(),
+        "outline_points_after": after["outline_points"].clone(),
+        "outline_cbox_after": after["outline_cbox"].clone(),
+        "metrics_before": before["metrics"].clone(),
+        "metrics_after": after["metrics"].clone(),
+        "advance_before": before["advance"].clone(),
+        "advance_after": after["advance"].clone()
+    })
+}
+
+fn ftsynth_weight_row_json(row: FtsynthWeightRow, before: Value, after: Value) -> Value {
+    json!({
+        "glyph_index": row.glyph_index,
+        "load_flags": row.load_flags,
+        "xdelta": row.xdelta,
+        "ydelta": row.ydelta,
         "slot_format": after["slot_format"].clone(),
         "outline_points_before": before["outline_points"].clone(),
         "outline_points_after": after["outline_points"].clone(),
@@ -11331,6 +11483,32 @@ fn rust_ftsynth_slant(case: &InputCase, oblique: bool) -> Result<RunOutput, Stri
             FT_GlyphSlot_Slant(Some(&mut slot), row.xslant, row.yslant);
         }
         rows.push(ftsynth_row_json(
+            row,
+            before,
+            ftsynth_rust_slot_state(&slot),
+        ));
+    }
+    Ok(ftsynth_output(rows))
+}
+
+fn rust_ftsynth_weight(case: &InputCase, embolden: bool) -> Result<RunOutput, String> {
+    if !has_runtime_font_source(case) {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    }
+    let face = open_face(case)?;
+    let mut rows = Vec::new();
+    for row in ftsynth_weight_rows(&case.inputs.params, embolden)? {
+        let mut slot = match FT_Load_Glyph(&face, row.glyph_index, row.load_flags) {
+            Ok(slot) => slot,
+            Err(err) => return Ok(error(err)),
+        };
+        let before = ftsynth_rust_slot_state(&slot);
+        if embolden {
+            FT_GlyphSlot_Embolden(Some(&mut slot));
+        } else {
+            FT_GlyphSlot_AdjustWeight(Some(&mut slot), row.xdelta, row.ydelta);
+        }
+        rows.push(ftsynth_weight_row_json(
             row,
             before,
             ftsynth_rust_slot_state(&slot),
@@ -12237,6 +12415,39 @@ fn c_ftsynth_slant(
     Ok(ftsynth_output(rows))
 }
 
+fn c_ftsynth_weight(
+    face: c_abi::FT_Face,
+    case: &InputCase,
+    embolden: bool,
+) -> Result<RunOutput, String> {
+    if !has_runtime_font_source(case) {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    }
+    let mut rows = Vec::new();
+    for row in ftsynth_weight_rows(&case.inputs.params, embolden)? {
+        let err = c_abi::FT_Load_Glyph(face, row.glyph_index, row.load_flags);
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+        let before = c_abi::abi_slot_snapshot(face)
+            .ok_or_else(|| "missing c ftsynth weight slot before".to_string())
+            .map(|slot| ftsynth_c_slot_state(&slot))?;
+        let err = if embolden {
+            c_abi::abi_glyphslot_embolden_from_face(face)
+        } else {
+            c_abi::abi_glyphslot_adjust_weight_from_face(face, row.xdelta, row.ydelta)
+        };
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+        let after = c_abi::abi_slot_snapshot(face)
+            .ok_or_else(|| "missing c ftsynth weight slot after".to_string())
+            .map(|slot| ftsynth_c_slot_state(&slot))?;
+        rows.push(ftsynth_weight_row_json(row, before, after));
+    }
+    Ok(ftsynth_output(rows))
+}
+
 fn c_load_char_output(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
     let err = c_abi::FT_Load_Char(
         face,
@@ -12453,6 +12664,39 @@ fn wasm_ftsynth_slant(handle: usize, case: &InputCase, oblique: bool) -> Result<
             .ok_or_else(|| "missing wasm ftsynth slot after".to_string())
             .map(|slot| ftsynth_wasm_slot_state(&slot))?;
         rows.push(ftsynth_row_json(row, before, after));
+    }
+    Ok(ftsynth_output(rows))
+}
+
+fn wasm_ftsynth_weight(
+    handle: usize,
+    case: &InputCase,
+    embolden: bool,
+) -> Result<RunOutput, String> {
+    if !has_runtime_font_source(case) {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    }
+    let mut rows = Vec::new();
+    for row in ftsynth_weight_rows(&case.inputs.params, embolden)? {
+        let err = wasm_abi::fontdone_wasm_load_glyph(handle, row.glyph_index, row.load_flags);
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+        let before = wasm_abi::abi_slot_snapshot(handle)
+            .ok_or_else(|| "missing wasm ftsynth weight slot before".to_string())
+            .map(|slot| ftsynth_wasm_slot_state(&slot))?;
+        let err = if embolden {
+            wasm_abi::fontdone_wasm_glyphslot_embolden(handle)
+        } else {
+            wasm_abi::fontdone_wasm_glyphslot_adjust_weight(handle, row.xdelta, row.ydelta)
+        };
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+        let after = wasm_abi::abi_slot_snapshot(handle)
+            .ok_or_else(|| "missing wasm ftsynth weight slot after".to_string())
+            .map(|slot| ftsynth_wasm_slot_state(&slot))?;
+        rows.push(ftsynth_weight_row_json(row, before, after));
     }
     Ok(ftsynth_output(rows))
 }
@@ -15394,11 +15638,12 @@ fn rust_function_probe(symbol: &str) -> Result<Value, String> {
             Ok(function_probe_json(symbol))
         }
         "FT_GlyphSlot_AdjustWeight" => {
-            let _function: fn(FT_GlyphSlot, FT_Fixed, FT_Fixed) = FT_GlyphSlot_AdjustWeight;
+            let _function: fn(Option<&mut FT_GlyphSlot>, FT_Fixed, FT_Fixed) =
+                FT_GlyphSlot_AdjustWeight;
             Ok(function_probe_json(symbol))
         }
         "FT_GlyphSlot_Embolden" => {
-            let _function: fn(FT_GlyphSlot) = FT_GlyphSlot_Embolden;
+            let _function: fn(Option<&mut FT_GlyphSlot>) = FT_GlyphSlot_Embolden;
             Ok(function_probe_json(symbol))
         }
         "FT_GlyphSlot_Oblique" => {
