@@ -757,11 +757,15 @@ The exact line-range inspection artifact for the latest run is generated at
 intentionally not committed because `target/` is generated output; this table
 is the source-controlled ownership view.
 
+2026-07-13 supersession note: the `autohint/coverage.rs` row in this older
+ledger is now closed by the Autohint Coverage-Bit checkpoint below. The
+accumulator helpers are covered through an explicit assertion on an existing
+public `FT_LOAD_FORCE_AUTOHINT` row, not by a standalone diagnostic test.
+
 This concentration changes the execution strategy. More fonts alone cannot
-close the report. Entire modules such as `autohint/coverage.rs` and
-`ffi/types.rs`, plus many convenience methods in `font.rs`, `api.rs`, and
-`render.rs`, have no covered functions. Each must first be
-classified as one of:
+close the report. Broad convenience/helper areas in `font.rs`, `api.rs`,
+`render.rs`, and the remaining low-coverage autohint metadata modules must
+first be classified as one of:
 
 1. Required behavior already exposed by a manifest public operation.
 2. Required behavior whose existing public operation does not yet delegate to
@@ -1975,7 +1979,7 @@ fixture-row candidates unless a new public route appears:
 
 | Source lines | Classification | Reason |
 |---|---|---|
-| `autohint/coverage.rs:110-135` | Diagnostic-only helper surface | The public autohint route calls only `coverage::record` from `latin.rs`. `current_mask`, `reset`, and `collect_hit_bits` have no manifest-backed public output, and adding a hidden diagnostic call would not prove Rust/C parity |
+| `autohint/coverage.rs:110-135` | Resolved by public-row assertion | The existing `FT_LOAD_FORCE_AUTOHINT.load_char_force_autohint_behavior@latin-italic-no-horizontal` row now declares `assert_autohint_coverage_bits_include: [32]`, proving the safe public load route records `COV_ITALIC_NO_HORZ` without adding a standalone fixture test |
 | `tt/post.rs:47,66,70` | Public-gate unreachable | `FT_Get_Glyph_Name` validates `glyph_index < num_glyphs` before `PostTable::glyph_name`; `FT_Get_Name_Index` scans only valid glyph indexes; both wrappers suppress format 3.0 and unsupported `post` formats with `FT_FACE_FLAG_GLYPH_NAMES` before direct name lookup |
 | `tt/fvar.rs:58-59` | Host-width unreachable defensive overflow | `instance_count` and `instance_size` are 16-bit SFNT fields, so their product cannot overflow `usize` on the supported 64-bit coverage target. Keep the guard for portability; do not manufacture a parser row |
 | `tt/cmap.rs:786-789,866-867,914-915` | Host-width unreachable defensive overflow | Format-14 selector/default/non-default counts are `u32`. On the supported 64-bit target their record-byte products cannot overflow `usize`; malformed fonts instead reach the normal exceeds-length guards already covered by compact cmap rows |
@@ -2050,6 +2054,36 @@ The previously missed `ffi/handles.rs` null-return lines for
 `FT_GlyphSlot_AdjustWeight` and `FT_GlyphSlot_Slant` are now covered.  The two
 remaining ftsynth shape-incomplete rows are the embedded-bitmap strike cases
 for `FT_GlyphSlot_AdjustWeight` and `FT_GlyphSlot_Embolden`.
+
+### Autohint Coverage-Bit Checkpoint - 2026-07-13
+
+The existing
+`FT_LOAD_FORCE_AUTOHINT.load_char_force_autohint_behavior@latin-italic-no-horizontal`
+row now declares `assert_autohint_coverage_bits_include: [32]`, proving the
+safe public load route records `COV_ITALIC_NO_HORZ` from the italic Latin
+autohint branch. The unified harness resets and reads the autohint accumulator
+only when a public input row asks for that assertion; it does not add a
+separate fixture test or hidden case expansion.
+
+Verified counts after `make -C pillow-rs-freetype test-unified-condition-coverage`:
+
+| Measure | Count |
+|---|---:|
+| Logical public API cases | 4,163 |
+| Concrete explicit cases | 6,764 |
+| Runnable parity comparisons | 6,760 / 6,760 |
+| Pending cases | 4 |
+| Covered Rust lines | 16,260 / 18,095 (89.8591%) |
+| Rust region coverage | 23,333 / 25,934 (89.9707%) |
+| Rust branch/condition coverage | 3,922 / 4,634 (84.6353%) |
+| Rust function coverage | 1,030 / 1,150 (89.5652%) |
+| Route audit split | real-parity 3,404; raw-slot-null-validation 4; shape-incomplete-fallback 2 |
+
+The delta from the FTSynth checkpoint is +22 covered lines, +28 covered
+regions, +4 covered branches, +5 covered functions, and +5 covered
+instantiations, with no concrete case-count increase. `autohint/coverage.rs`
+no longer appears in the missing-line report and is now covered at 28 / 28
+lines, 35 / 35 regions, 7 / 7 functions, and 4 / 4 branches.
 
 ## Immediate Next Actions
 
