@@ -854,25 +854,23 @@ Current route-audit totals:
 | Wrapper null-validation route | 1 | `FT_Get_SubGlyph_Info` null-output rows intentionally validate the thin Rust/C/WASM wrapper guard after a native-C proof row establishes the composite slot state. |
 | Raw-slot null-validation route | 4 | Runtime rows intentionally validate raw glyph-slot pointer handling after a concrete slot state is established. |
 | Compile/header/scalar contract | 2,229 | Valid for ABI/header contracts, not runtime core coverage. |
-| Shape-incomplete fallback | 2 | Convert these residual declarations to executable variants or explicit pending rows. |
+| Shape-incomplete fallback | 0 | Keep this at zero; future incomplete declarations must become executable variants or explicit pending rows in the same change. |
 | Generic modeled fallback | 926 | Classify operation-by-operation as real parity, unsupported, or pending. |
 | Generic modeled error fallback | 141 | Replace implemented surfaces with real error-path execution. |
 | Null-error fallback | 21 | Keep only exact null-handle probes; route implemented null cases directly. |
 | Void fallback | 2 | Replace with real null/noop wrapper rows or classify as void API contract. |
 | Explicit unsupported | 12 | Keep only where the public surface is intentionally unsupported. |
-| Pending core | 14 | Convert to runnable parity when the named dependencies or compact fixtures exist. |
+| Pending core | 16 | Convert to runnable parity when the named dependencies or compact fixtures exist. |
 | Explicit unsupported stubs | 12 | Implement or keep visibly unsupported; do not count as coverage. |
-| Pending core implementation | 14 | Named-instance Adobe MM, `FT_MM_Var`, `gvar`/HVAR, live non-SFNT face support, synthetic unloaded/unsupported slot states, compact overlap rendering, compact sbit missing-bitmap fixtures, MVAR table variation rows, and size lifecycle success rows remain pending. |
+| Pending core implementation | 16 | Named-instance Adobe MM, `FT_MM_Var`, `gvar`/HVAR, live non-SFNT face support, synthetic unloaded/unsupported slot states, compact overlap rendering, compact sbit missing-bitmap fixtures, MVAR table variation rows, size lifecycle success rows, and ftsynth bitmap-slot synthesis rows remain pending. |
 
-The remaining R0 closure bucket is the 2 shape-incomplete rows because these
-are usually JSON/input fixes rather than new core features. Keep them visible
-until each row is converted to an executable public variant or an explicit
-pending case with a named blocker.
-
-| Operation | Rows | First action |
-|---|---:|---|
-| `ftsynth.glyphslot_adjust_weight_after_load` | 1 | Replace the bitmap embolden declaration with an executable bitmap slot row or mark the missing bitmap slot mutation as pending core work. |
-| `ftsynth.glyphslot_embolden_after_load` | 1 | Replace the bitmap embolden declaration with an executable bitmap slot row or mark the missing bitmap slot mutation as pending core work. |
+The former two shape-incomplete ftsynth bitmap declarations are now explicit
+pending-core rows. FreeType `src/base/ftsynth.c:106-180` accepts
+`FT_GLYPH_FORMAT_BITMAP`, rounds the requested x/y strengths to pixels, calls
+`FT_GlyphSlot_Own_Bitmap` and `FT_Bitmap_Embolden`, then updates slot advance,
+metrics, and `bitmap_top`.  Rust currently handles only outline slots in
+`src/ffi/handles.rs`, so these rows require core bitmap-slot behavior plus an
+executable embedded-bitmap strike route before they can become real parity.
 
 | Route | Current behavior | Coverage risk | Required disposition |
 |---|---|---|---|
@@ -1952,12 +1950,12 @@ source lines. The current split is:
 | Rust region coverage | 23,354 / 25,927 (90.0760%) |
 | Rust branch/condition coverage | 3,933 / 4,626 (85.0195%) |
 | Rust function coverage | 1,030 / 1,150 (89.5652%) |
-| Route audit split | real-parity 3,413; raw-slot-null-validation 4; shape-incomplete-fallback 2 |
+| Route audit split | real-parity 3,413; raw-slot-null-validation 4; pending-core 16; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
 | Fixture/font reachable | `autohint/latin.rs`, `autohint/cjk.rs`, `scaler.rs`, `tt/hinter/exec.rs`, and parts of `render.rs` still have real branch gaps tied to glyph topology, script selection, bytecode state, or render geometry | Add or extend compact source-backed fonts and explicit public rows only when the selected glyph moves the measured branch or line |
-| Public unsupported implementation paths | `FT_New_Size`, `FT_Done_Size`, `FT_Activate_Size`, `FT_OpenType_Validate`, and `FT_GlyphSlot_*` synth functions have non-null or mutation paths that return preserved stubs today | Implement the real public behavior first, then add parity rows; do not add fake success fixtures |
+| Public unsupported implementation paths | `FT_New_Size`, `FT_Done_Size`, `FT_Activate_Size`, `FT_OpenType_Validate`, and the ftsynth bitmap-slot paths for `FT_GlyphSlot_AdjustWeight` / `FT_GlyphSlot_Embolden` have non-null or mutation paths that return preserved stubs today | Implement the real public behavior first, then add parity rows; do not add fake success fixtures |
 | Public-construction unreachable guards | Short required `head`/`hhea` tables fail face construction before `face_to_ffi`; short optional `vhea` currently fails in `Font::truetype`; `tt/cmap.rs` format-14 and `tt/fvar.rs` checked-multiply overflow closures cannot overflow on 64-bit from their u32/u16 counts | Leave visible and documented unless parser semantics change or a true public route appears |
 | Defensive invalid helper guards | `RoundMode::from_u8`'s invalid-value fallback remains missed after all valid FreeType `TT_Round_*` constants are routed through public `FT_Load_Glyph` rows | Leave visible; do not add a synthetic invalid round-state path unless a real public opcode or ABI surface can supply one |
 | Private/no-route helpers | `Font::layout_glyphs`, `Font::layout_bounds`, `layout_bounds_from_glyphs`, `grays::rasterize`, `grays::rasterize_shifted_in_box`, `grays::render_scanline`, and `render::render_loaded_char_mode_for_index` are not selected by the current public FreeType fixtures | Do not call these through synthetic tests; either expose a real public operation with C parity or prove and remove independently of coverage |
@@ -2247,9 +2245,10 @@ Work must resume here unless a newer user request changes priority:
    programs, then scalar residuals. The safe LCD empty-outline divergence and
    safe `Font` convenience helper routes are now covered by explicit public
    rows; do not add hidden render or helper dimensions for them.
-4. Keep the current four pending rows explicit and do not count them as
+4. Keep the current four runtime pending rows explicit and do not count them as
    coverage until the core Adobe MM, `FT_MM_Var`, `gvar`/HVAR, and live
-   non-SFNT-face behavior exists. Embedded-strike request handling remains an
-   R7 fixture obligation, but it is not currently a pending runtime row.
+   non-SFNT-face behavior exists. The ftsynth embedded-strike bitmap rows are
+   route-audit pending-core rows, not runtime pending rows, until core
+   bitmap-slot synthesis and an executable embedded-bitmap route exist.
 5. Keep the deprecated corpus isolated until final cleanup is separately
    reviewed and approved.

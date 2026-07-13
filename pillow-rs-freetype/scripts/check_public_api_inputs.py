@@ -674,6 +674,18 @@ def pending_core_reason(row: ConcreteInput) -> str | None:
     if row.case_id == "ftimage.FT_OUTLINE_OVERLAP.smooth_overlap_behavior":
         return "smooth overlap rendering requires a compact overlap-heavy outline/font fixture"
     if (
+        row.operation
+        in {
+            "ftsynth.glyphslot_adjust_weight_after_load",
+            "ftsynth.glyphslot_embolden_after_load",
+        }
+        and "bitmap_strike_font" in row.assets
+    ):
+        return (
+            "bitmap glyph-slot synthesis requires FT_GlyphSlot_AdjustWeight "
+            "bitmap-slot behavior plus an executable embedded-bitmap strike route"
+        )
+    if (
         row.case_id == "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation"
         and row.operation == "sfnt.get_sfnt_table.record"
     ):
