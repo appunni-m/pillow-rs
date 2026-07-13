@@ -8260,6 +8260,20 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(i32::from(bool_param(params, "destroy", false)?).to_string());
             Ok(args)
         }
+        "ftsynth.glyphslot_slant_after_load" => {
+            let mut args = vec!["--glyphslot-slant".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(ftsynth_slant_rows_arg(params, false)?);
+            Ok(args)
+        }
+        "ftsynth.glyphslot_oblique_after_load" => {
+            let mut args = vec!["--glyphslot-oblique".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(ftsynth_slant_rows_arg(params, true)?);
+            Ok(args)
+        }
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
             let mut args = vec!["--glyph-record".to_string()];
             push_font_source(case, &mut args)?;
@@ -8791,6 +8805,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             let face = open_face(case)?;
             rust_glyph_to_bitmap(&face, case)
         }
+        "ftsynth.glyphslot_slant_after_load" => rust_ftsynth_slant(case, false),
+        "ftsynth.glyphslot_oblique_after_load" => rust_ftsynth_slant(case, true),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
             let face = open_face(case)?;
             rust_glyph_record(&face, case)
@@ -9352,6 +9368,20 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output
         }
+        "ftsynth.glyphslot_slant_after_load" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_ftsynth_slant(face, case, false);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
+        "ftsynth.glyphslot_oblique_after_load" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_ftsynth_slant(face, case, true);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
             let (library, face) = c_open_face(case)?;
             let output = c_glyph_record(face, case);
@@ -9804,6 +9834,18 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftglyph.glyph_to_bitmap" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_glyph_to_bitmap(handle, case);
+            wasm_done_face(handle);
+            output
+        }
+        "ftsynth.glyphslot_slant_after_load" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_ftsynth_slant(handle, case, false);
+            wasm_done_face(handle);
+            output
+        }
+        "ftsynth.glyphslot_oblique_after_load" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_ftsynth_slant(handle, case, true);
             wasm_done_face(handle);
             output
         }
@@ -11138,6 +11180,165 @@ fn pix_ceil(value: i64) -> i64 {
     (value + 63) & !63
 }
 
+#[derive(Debug, Clone, Copy)]
+struct FtsynthSlantRow {
+    glyph_index: u32,
+    load_flags: i32,
+    xslant: i64,
+    yslant: i64,
+}
+
+fn ftsynth_slant_rows_arg(params: &Value, oblique: bool) -> Result<String, String> {
+    Ok(ftsynth_slant_rows(params, oblique)?
+        .into_iter()
+        .map(|row| {
+            format!(
+                "{}:{}:{}:{}",
+                row.glyph_index, row.load_flags, row.xslant, row.yslant
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn ftsynth_slant_rows(params: &Value, oblique: bool) -> Result<Vec<FtsynthSlantRow>, String> {
+    let load = params.get("load").unwrap_or(params);
+    let load_flags = load_flags_param(load)?;
+    let glyph_indices = if let Some(values) = load.get("glyph_indices").and_then(Value::as_array) {
+        values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| u32_value(value, &format!("glyph_indices[{index}]")))
+            .collect::<Result<Vec<_>, _>>()?
+    } else if let Some(value) = load.get("glyph_index") {
+        vec![u32_value(value, "glyph_index")?]
+    } else {
+        vec![glyph_index_param(load)?]
+    };
+    if glyph_indices.is_empty() {
+        return Err("ftsynth slant rows require at least one glyph index".to_string());
+    }
+
+    let slants = if oblique {
+        vec![(0x0366A, 0)]
+    } else if let Some(values) = params.get("slants").and_then(Value::as_array) {
+        values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| ftsynth_slant_value(value, &format!("slants[{index}]")))
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        vec![ftsynth_slant_value(params, "slant")?]
+    };
+    if slants.is_empty() {
+        return Err("ftsynth slant rows require at least one slant".to_string());
+    }
+
+    let mut rows = Vec::new();
+    for glyph_index in glyph_indices {
+        for (xslant, yslant) in &slants {
+            rows.push(FtsynthSlantRow {
+                glyph_index,
+                load_flags,
+                xslant: *xslant,
+                yslant: *yslant,
+            });
+        }
+    }
+    Ok(rows)
+}
+
+fn ftsynth_slant_value(value: &Value, label: &str) -> Result<(i64, i64), String> {
+    let xslant = value
+        .get("xslant_16_16")
+        .map(|value| i64_value(value, &format!("{label}.xslant_16_16")))
+        .transpose()?
+        .unwrap_or(0);
+    let yslant = value
+        .get("yslant_16_16")
+        .map(|value| i64_value(value, &format!("{label}.yslant_16_16")))
+        .transpose()?
+        .unwrap_or(0);
+    Ok((xslant, yslant))
+}
+
+fn ftsynth_output(rows: Vec<Value>) -> RunOutput {
+    ok(json!({ "rows": rows }))
+}
+
+fn ftsynth_row_json(row: FtsynthSlantRow, before: Value, after: Value) -> Value {
+    json!({
+        "glyph_index": row.glyph_index,
+        "load_flags": row.load_flags,
+        "xslant": row.xslant,
+        "yslant": row.yslant,
+        "slot_format": after["slot_format"].clone(),
+        "outline_points_before": before["outline_points"].clone(),
+        "outline_points_after": after["outline_points"].clone(),
+        "outline_cbox_after": after["outline_cbox"].clone(),
+        "metrics_before": before["metrics"].clone(),
+        "metrics_after": after["metrics"].clone(),
+        "advance_before": before["advance"].clone(),
+        "advance_after": after["advance"].clone()
+    })
+}
+
+fn ftsynth_rust_slot_state(slot: &FT_GlyphSlot) -> Value {
+    json!({
+        "slot_format": slot.format,
+        "outline_points": ftsynth_outline_points_json(slot.outline.as_ref()),
+        "outline_cbox": json!({
+            "xMin": slot.outline_cbox.xMin,
+            "yMin": slot.outline_cbox.yMin,
+            "xMax": slot.outline_cbox.xMax,
+            "yMax": slot.outline_cbox.yMax
+        }),
+        "metrics": glyph_metrics_fields_json(rust_metrics_fields(&slot.metrics)),
+        "advance": {
+            "x": slot.advance.x,
+            "y": slot.advance.y
+        }
+    })
+}
+
+fn ftsynth_outline_points_json(outline: Option<&FT_OutlineSnapshot>) -> Value {
+    outline.map_or_else(
+        || json!([]),
+        |outline| {
+            json!(
+                outline
+                    .points
+                    .iter()
+                    .map(|point| json!({"x": point.x, "y": point.y}))
+                    .collect::<Vec<_>>()
+            )
+        },
+    )
+}
+
+fn rust_ftsynth_slant(case: &InputCase, oblique: bool) -> Result<RunOutput, String> {
+    let face = open_face(case)?;
+    let mut rows = Vec::new();
+    for row in ftsynth_slant_rows(&case.inputs.params, oblique)? {
+        let mut slot = match FT_Load_Glyph(&face, row.glyph_index, row.load_flags) {
+            Ok(slot) => slot,
+            Err(err) => return Ok(error(err)),
+        };
+        let before = ftsynth_rust_slot_state(&slot);
+        if oblique {
+            FT_GlyphSlot_Oblique(Some(&mut slot));
+        } else {
+            FT_GlyphSlot_Slant(Some(&mut slot), row.xslant, row.yslant);
+        }
+        rows.push(ftsynth_row_json(
+            row,
+            before,
+            ftsynth_rust_slot_state(&slot),
+        ));
+    }
+    Ok(ftsynth_output(rows))
+}
+
 fn rust_render_glyph(
     face: &FT_Face,
     glyph_input: GlyphLoadInput,
@@ -11988,6 +12189,54 @@ fn c_slot_json(face: c_abi::FT_Face) -> Result<Value, String> {
     }))
 }
 
+fn ftsynth_c_slot_state(slot: &c_abi::AbiSlotSnapshot) -> Value {
+    json!({
+        "slot_format": slot.format,
+        "outline_points": ftsynth_outline_points_json(slot.outline.as_ref()),
+        "outline_cbox": json!({
+            "xMin": slot.outline_cbox.xMin,
+            "yMin": slot.outline_cbox.yMin,
+            "xMax": slot.outline_cbox.xMax,
+            "yMax": slot.outline_cbox.yMax
+        }),
+        "metrics": glyph_metrics_fields_json(c_metrics_fields(&slot.metrics)),
+        "advance": {
+            "x": slot.advance.x,
+            "y": slot.advance.y
+        }
+    })
+}
+
+fn c_ftsynth_slant(
+    face: c_abi::FT_Face,
+    case: &InputCase,
+    oblique: bool,
+) -> Result<RunOutput, String> {
+    let mut rows = Vec::new();
+    for row in ftsynth_slant_rows(&case.inputs.params, oblique)? {
+        let err = c_abi::FT_Load_Glyph(face, row.glyph_index, row.load_flags);
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+        let before = c_abi::abi_slot_snapshot(face)
+            .ok_or_else(|| "missing c ftsynth slot before".to_string())
+            .map(|slot| ftsynth_c_slot_state(&slot))?;
+        let err = if oblique {
+            c_abi::abi_glyphslot_oblique_from_face(face)
+        } else {
+            c_abi::abi_glyphslot_slant_from_face(face, row.xslant, row.yslant)
+        };
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+        let after = c_abi::abi_slot_snapshot(face)
+            .ok_or_else(|| "missing c ftsynth slot after".to_string())
+            .map(|slot| ftsynth_c_slot_state(&slot))?;
+        rows.push(ftsynth_row_json(row, before, after));
+    }
+    Ok(ftsynth_output(rows))
+}
+
 fn c_load_char_output(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
     let err = c_abi::FT_Load_Char(
         face,
@@ -12162,6 +12411,50 @@ fn wasm_slot_json(handle: usize) -> Result<Value, String> {
         },
         "bitmap": bitmap
     }))
+}
+
+fn ftsynth_wasm_slot_state(slot: &wasm_abi::AbiSlotSnapshot) -> Value {
+    json!({
+        "slot_format": slot.format,
+        "outline_points": ftsynth_outline_points_json(slot.outline.as_ref()),
+        "outline_cbox": json!({
+            "xMin": slot.outline_cbox.xMin,
+            "yMin": slot.outline_cbox.yMin,
+            "xMax": slot.outline_cbox.xMax,
+            "yMax": slot.outline_cbox.yMax
+        }),
+        "metrics": glyph_metrics_fields_json(wasm_metrics_fields(&slot.metrics)),
+        "advance": {
+            "x": slot.advance.x,
+            "y": slot.advance.y
+        }
+    })
+}
+
+fn wasm_ftsynth_slant(handle: usize, case: &InputCase, oblique: bool) -> Result<RunOutput, String> {
+    let mut rows = Vec::new();
+    for row in ftsynth_slant_rows(&case.inputs.params, oblique)? {
+        let err = wasm_abi::fontdone_wasm_load_glyph(handle, row.glyph_index, row.load_flags);
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+        let before = wasm_abi::abi_slot_snapshot(handle)
+            .ok_or_else(|| "missing wasm ftsynth slot before".to_string())
+            .map(|slot| ftsynth_wasm_slot_state(&slot))?;
+        let err = if oblique {
+            wasm_abi::fontdone_wasm_glyphslot_oblique(handle)
+        } else {
+            wasm_abi::fontdone_wasm_glyphslot_slant(handle, row.xslant, row.yslant)
+        };
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+        let after = wasm_abi::abi_slot_snapshot(handle)
+            .ok_or_else(|| "missing wasm ftsynth slot after".to_string())
+            .map(|slot| ftsynth_wasm_slot_state(&slot))?;
+        rows.push(ftsynth_row_json(row, before, after));
+    }
+    Ok(ftsynth_output(rows))
 }
 
 fn wasm_done_face(handle: usize) {
@@ -15109,11 +15402,11 @@ fn rust_function_probe(symbol: &str) -> Result<Value, String> {
             Ok(function_probe_json(symbol))
         }
         "FT_GlyphSlot_Oblique" => {
-            let _function: fn(FT_GlyphSlot) = FT_GlyphSlot_Oblique;
+            let _function: fn(Option<&mut FT_GlyphSlot>) = FT_GlyphSlot_Oblique;
             Ok(function_probe_json(symbol))
         }
         "FT_GlyphSlot_Slant" => {
-            let _function: fn(FT_GlyphSlot) = FT_GlyphSlot_Slant;
+            let _function: fn(Option<&mut FT_GlyphSlot>, FT_Fixed, FT_Fixed) = FT_GlyphSlot_Slant;
             Ok(function_probe_json(symbol))
         }
         "FT_Get_Sfnt_LangTag" => {
@@ -16262,6 +16555,19 @@ fn glyph_metrics_json(metrics: GlyphMetricsFields) -> Value {
             "vertBearingY": metrics.vert_bearing_y,
             "vertAdvance": metrics.vert_advance
         }
+    })
+}
+
+fn glyph_metrics_fields_json(metrics: GlyphMetricsFields) -> Value {
+    json!({
+        "width": metrics.width,
+        "height": metrics.height,
+        "horiBearingX": metrics.hori_bearing_x,
+        "horiBearingY": metrics.hori_bearing_y,
+        "horiAdvance": metrics.hori_advance,
+        "vertBearingX": metrics.vert_bearing_x,
+        "vertBearingY": metrics.vert_bearing_y,
+        "vertAdvance": metrics.vert_advance
     })
 }
 

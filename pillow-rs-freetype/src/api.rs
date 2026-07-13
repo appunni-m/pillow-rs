@@ -715,7 +715,19 @@ impl GlyphSlot {
             a.x = ax;
             a.y = ay;
         }
-        // Transform both slot_outline and loaded_outline points.
+        self.apply_outline_transform(xx, xy, yx, yy, dx, dy);
+    }
+
+    /// Apply a 2x2 transform to outline snapshots without changing metrics or advance.
+    pub(crate) fn apply_outline_transform(
+        &mut self,
+        xx: i32,
+        xy: i32,
+        yx: i32,
+        yy: i32,
+        dx: i32,
+        dy: i32,
+    ) {
         if let Some(ref mut outline) = self.slot_outline {
             transform_outline_points(&mut outline.points, xx, xy, yx, yy, dx, dy);
         }

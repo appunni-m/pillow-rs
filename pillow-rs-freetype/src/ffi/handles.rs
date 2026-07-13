@@ -167,9 +167,29 @@ pub fn FT_GlyphSlot_AdjustWeight(_slot: FT_GlyphSlot, _x_delta: FT_Fixed, _y_del
 
 pub fn FT_GlyphSlot_Embolden(_slot: FT_GlyphSlot) {}
 
-pub fn FT_GlyphSlot_Oblique(_slot: FT_GlyphSlot) {}
+pub fn FT_GlyphSlot_Oblique(slot: Option<&mut FT_GlyphSlot>) {
+    // FreeType `src/base/ftsynth.c` uses a fixed 12-degree shear and keeps
+    // advance/metrics unchanged.
+    FT_GlyphSlot_Slant(slot, 0x0366A, 0);
+}
 
-pub fn FT_GlyphSlot_Slant(_slot: FT_GlyphSlot) {}
+pub fn FT_GlyphSlot_Slant(slot: Option<&mut FT_GlyphSlot>, xslant: FT_Fixed, yslant: FT_Fixed) {
+    let Some(slot) = slot else {
+        return;
+    };
+    if slot.format != FT_GLYPH_FORMAT_OUTLINE {
+        return;
+    }
+
+    // C `FT_GlyphSlot_Slant` (`src/base/ftsynth.c`) calls
+    // `FT_Outline_Transform` only.  It explicitly does not touch advance
+    // width, and it leaves metrics unchanged.
+    slot.core_slot
+        .apply_outline_transform(0x10000, xslant as i32, -(yslant as i32), 0x10000, 0, 0);
+    slot.outline_cbox = bbox_to_ffi(slot.core_slot.outline_cbox);
+    slot.outline_bbox = bbox_to_ffi(slot.core_slot.outline_bbox);
+    slot.outline = slot.core_slot.slot_outline().map(outline_to_ffi_snapshot);
+}
 
 pub fn FT_Get_Sfnt_LangTag(
     face: Option<&FT_Face>,

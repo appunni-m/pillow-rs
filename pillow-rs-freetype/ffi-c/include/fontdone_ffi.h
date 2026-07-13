@@ -254,6 +254,8 @@ FT_Error FT_Get_Advance(FT_Face face, FT_UInt glyph_index, FT_Int32 load_flags, 
 FT_Error FT_Get_Advances(FT_Face face, FT_UInt start, FT_UInt count, FT_Int32 load_flags, FT_Fixed* padvances);
 FT_Error FT_Get_SubGlyph_Info(FT_GlyphSlot glyph, FT_UInt sub_index, FT_Int* p_index, FT_UInt* p_flags, FT_Int* p_arg1, FT_Int* p_arg2, FT_Matrix* p_transform);
 FT_Error FT_Render_Glyph(FT_GlyphSlot slot, FT_Render_Mode render_mode);
+void FT_GlyphSlot_Oblique(FT_GlyphSlot slot);
+void FT_GlyphSlot_Slant(FT_GlyphSlot slot, FT_Fixed xslant, FT_Fixed yslant);
 
 #ifdef __cplusplus
 }
