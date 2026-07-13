@@ -65,25 +65,60 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts/LiberationSerif-Regular.ttf"
+        "variants": [
+          {
+            "id": "active-secondary",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "remove_active": true,
+              "sequence": [
+                "FT_New_Size secondary_size",
+                "FT_Activate_Size secondary_size",
+                "FT_Set_Pixel_Sizes 0 18",
+                "FT_Done_Size secondary_size",
+                "probe face->size",
+                "FT_Set_Pixel_Sizes 0 12",
+                "FT_Load_Glyph glyph_index=36 load_flags=FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "ftsizes.done_size_sequence:active-size-fallback"
+            ]
+          },
+          {
+            "id": "inactive-secondary",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "remove_active": false,
+              "sequence": [
+                "FT_New_Size secondary_size",
+                "FT_Activate_Size initial_size",
+                "FT_Set_Pixel_Sizes 0 18",
+                "FT_Done_Size secondary_size",
+                "probe face->size",
+                "FT_Set_Pixel_Sizes 0 12",
+                "FT_Load_Glyph glyph_index=36 load_flags=FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "ftsizes.done_size_sequence:inactive-size-removal"
+            ]
           }
-        },
-        "params": {
-          "open": "FT_New_Memory_Face",
-          "face_index": 0,
-          "sequence": [
-            "FT_New_Size secondary_size",
-            "FT_Activate_Size secondary_size",
-            "FT_Set_Pixel_Sizes 0 18",
-            "FT_Done_Size secondary_size",
-            "probe face->size",
-            "FT_Set_Pixel_Sizes 0 12",
-            "FT_Load_Glyph glyph_index=36 load_flags=FT_LOAD_DEFAULT"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",

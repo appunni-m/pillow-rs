@@ -3555,8 +3555,10 @@ fn rust_done_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = rust_new_face_without_size(case)?;
     let initial = FT_Face_Info(&face).size;
     let mut secondary = std::ptr::null_mut();
+    let remove_active = bool_param(&case.inputs.params, "remove_active", true)?;
     let new_error = FT_New_Size(Some(&face), Some(&mut secondary));
-    let activate_error = FT_Activate_Size(secondary);
+    let active_before_done = if remove_active { secondary } else { initial };
+    let activate_error = FT_Activate_Size(active_before_done);
     let set18_error = FT_Set_Pixel_Sizes(&mut face, 0, 18);
     let done_error = FT_Done_Size(secondary);
     let active_after_done = FT_Face_Info(&face).size;
@@ -7810,6 +7812,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             let mut args = vec!["--done-size-sequence".to_string()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
+            args.push(i32::from(bool_param(params, "remove_active", true)?).to_string());
             Ok(args)
         }
         "ftsizes.activate_size" => {
@@ -13169,8 +13172,10 @@ fn c_done_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
     let (library, face) = c_new_face_without_size(case)?;
     let initial = c_active_size(face);
     let mut secondary = std::ptr::null_mut();
+    let remove_active = bool_param(&case.inputs.params, "remove_active", true)?;
     let new_error = c_abi::FT_New_Size(face, &mut secondary);
-    let activate_error = c_abi::FT_Activate_Size(secondary);
+    let active_before_done = if remove_active { secondary } else { initial };
+    let activate_error = c_abi::FT_Activate_Size(active_before_done);
     let set18_error = c_abi::FT_Set_Pixel_Sizes(face, 0, 18);
     let done_error = c_abi::FT_Done_Size(secondary);
     let active_after_done = c_active_size(face);
@@ -13469,8 +13474,10 @@ fn wasm_done_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
     let initial = wasm_abi::fontdone_wasm_active_size(handle);
     let status = wasm_abi::fontdone_wasm_new_size(handle);
     let secondary = status.handle;
+    let remove_active = bool_param(&case.inputs.params, "remove_active", true)?;
     let new_error = status.error;
-    let activate_error = wasm_abi::fontdone_wasm_activate_size(secondary);
+    let active_before_done = if remove_active { secondary } else { initial };
+    let activate_error = wasm_abi::fontdone_wasm_activate_size(active_before_done);
     let set18_error = wasm_abi::fontdone_wasm_set_pixel_sizes(handle, 0, 18);
     let done_error = wasm_abi::fontdone_wasm_done_size(secondary);
     let active_after_done = wasm_abi::fontdone_wasm_active_size(handle);

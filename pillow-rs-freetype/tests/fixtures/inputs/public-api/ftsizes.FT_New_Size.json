@@ -67,25 +67,60 @@
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "id": "input/fonts/LiberationSerif-Regular.ttf"
+        "variants": [
+          {
+            "id": "normal-face",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "sequence": [
+                "snapshot initial face->size",
+                "FT_New_Size secondary_size",
+                "snapshot face->size before activation",
+                "FT_Activate_Size secondary_size",
+                "FT_Request_Size nominal height=20 width=0 dpi=72",
+                "FT_Activate_Size initial_size",
+                "FT_Request_Size nominal height=10 width=0 dpi=72"
+              ]
+            },
+            "coverage": [
+              "ftsizes.new_size_sequence:normal-face-secondary-size"
+            ]
+          },
+          {
+            "id": "negative-face-index-probe",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": -1,
+              "sequence": [
+                "open probe face with face_index=-1",
+                "snapshot initial face->size is null",
+                "FT_New_Size secondary_size",
+                "snapshot face->size before activation remains null",
+                "FT_Activate_Size secondary_size",
+                "FT_Request_Size nominal height=20 width=0 dpi=72",
+                "FT_Activate_Size initial_size",
+                "FT_Request_Size nominal height=10 width=0 dpi=72"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "ftsizes.new_size_sequence:negative-face-index-probe-secondary-size"
+            ]
           }
-        },
-        "params": {
-          "open": "FT_New_Memory_Face",
-          "face_index": 0,
-          "sequence": [
-            "snapshot initial face->size",
-            "FT_New_Size secondary_size",
-            "snapshot face->size before activation",
-            "FT_Activate_Size secondary_size",
-            "FT_Request_Size nominal height=20 width=0 dpi=72",
-            "FT_Activate_Size initial_size",
-            "FT_Request_Size nominal height=10 width=0 dpi=72"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
