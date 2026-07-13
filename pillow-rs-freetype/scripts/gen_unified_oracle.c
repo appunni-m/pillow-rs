@@ -2786,6 +2786,18 @@ static void print_metrics_named(const char* name, FT_Glyph_Metrics metrics) {
            metrics.vertAdvance);
 }
 
+static void print_glyph_metrics_object(FT_Glyph_Metrics metrics) {
+    printf("{\"width\":%ld,\"height\":%ld,\"horiBearingX\":%ld,\"horiBearingY\":%ld,\"horiAdvance\":%ld,\"vertBearingX\":%ld,\"vertBearingY\":%ld,\"vertAdvance\":%ld}",
+           metrics.width,
+           metrics.height,
+           metrics.horiBearingX,
+           metrics.horiBearingY,
+           metrics.horiAdvance,
+           metrics.vertBearingX,
+           metrics.vertBearingY,
+           metrics.vertAdvance);
+}
+
 static void print_outline_points_named(const char* name, FT_Outline* outline) {
     printf("\"%s\":[", name);
     for (short i = 0; i < outline->n_points; i++) {
@@ -4101,6 +4113,228 @@ static int open_oracle_face(
         close_oracle_face(out);
         return 1;
     }
+    return 0;
+}
+
+static void print_size_metrics_named_value(const char* name, FT_Size_Metrics* metrics) {
+    printf("\"%s\":", name);
+    if (!metrics) {
+        printf("null");
+        return;
+    }
+    printf("{");
+    print_size_metrics_object(*metrics);
+    printf("}");
+}
+
+static const char* size_identity_label(FT_Size size, FT_Size initial, FT_Size secondary) {
+    if (!size) {
+        return "null";
+    }
+    if (size == initial) {
+        return "initial_size";
+    }
+    if (size == secondary) {
+        return "secondary_size";
+    }
+    return "other";
+}
+
+static FT_Error first_sequence_error(const FT_Error* errors, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        if (errors[i]) {
+            return errors[i];
+        }
+    }
+    return FT_Err_Ok;
+}
+
+static FT_Size_RequestRec nominal_size_request(FT_Long height) {
+    FT_Size_RequestRec request;
+    request.type = FT_SIZE_REQUEST_TYPE_NOMINAL;
+    request.width = 0;
+    request.height = height;
+    request.horiResolution = 72;
+    request.vertResolution = 72;
+    return request;
+}
+
+static int emit_new_size_sequence(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    FT_Size initial = face.face->size;
+    FT_Size secondary = NULL;
+    FT_Error errors[5];
+    errors[0] = FT_New_Size(face.face, &secondary);
+    int active_unchanged_until_activation = face.face->size == initial;
+    const char* parent_face = "none";
+    if (secondary) {
+        parent_face = secondary->face == face.face ? "same_face" : "other";
+    }
+
+    errors[1] = FT_Activate_Size(secondary);
+    FT_Size_RequestRec request20 = nominal_size_request(20 * 64);
+    errors[2] = FT_Request_Size(face.face, &request20);
+    FT_Size_Metrics secondary_metrics;
+    FT_Size_Metrics* secondary_metrics_ptr = NULL;
+    if (!errors[2] && face.face->size) {
+        secondary_metrics = face.face->size->metrics;
+        secondary_metrics_ptr = &secondary_metrics;
+    }
+
+    errors[3] = FT_Activate_Size(initial);
+    FT_Size_RequestRec request10 = nominal_size_request(10 * 64);
+    errors[4] = FT_Request_Size(face.face, &request10);
+    FT_Size_Metrics initial_metrics;
+    FT_Size_Metrics* initial_metrics_ptr = NULL;
+    if (!errors[4] && face.face->size) {
+        initial_metrics = face.face->size->metrics;
+        initial_metrics_ptr = &initial_metrics;
+    }
+
+    printf("{");
+    print_status(first_sequence_error(errors, 5));
+    printf(",\"output\":{\"return_sequence\":[%d,%d,%d,%d,%d],",
+           errors[0], errors[1], errors[2], errors[3], errors[4]);
+    printf("\"new_size_nullness\":\"%s\",", secondary ? "non_null" : "null");
+    printf("\"new_size_parent_face\":\"%s\",", parent_face);
+    printf("\"active_size_unchanged_until_activation\":");
+    print_json_bool(active_unchanged_until_activation);
+    printf(",\"metrics_by_size\":{");
+    print_size_metrics_named_value("initial_size", initial_metrics_ptr);
+    printf(",");
+    print_size_metrics_named_value("secondary_size", secondary_metrics_ptr);
+    printf("}}}\n");
+
+    if (secondary) {
+        FT_Done_Size(secondary);
+    }
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_done_size_sequence(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    FT_Size initial = face.face->size;
+    FT_Size secondary = NULL;
+    FT_Error errors[6];
+    errors[0] = FT_New_Size(face.face, &secondary);
+    errors[1] = FT_Activate_Size(secondary);
+    errors[2] = FT_Set_Pixel_Sizes(face.face, 0, 18);
+    errors[3] = FT_Done_Size(secondary);
+    FT_Size active_after_done = face.face->size;
+    int destroyed_size_removed = active_after_done != secondary;
+    errors[4] = FT_Set_Pixel_Sizes(face.face, 0, 12);
+    errors[5] = FT_Load_Glyph(face.face, 36, FT_LOAD_DEFAULT);
+
+    printf("{");
+    print_status(first_sequence_error(errors, 6));
+    printf(",\"output\":{\"return_sequence\":[%d,%d,%d,%d,%d,%d],",
+           errors[0], errors[1], errors[2], errors[3], errors[4], errors[5]);
+    printf("\"destroyed_size_removed\":");
+    print_json_bool(destroyed_size_removed);
+    printf(",\"active_size_after_done\":\"%s\",",
+           size_identity_label(active_after_done, initial, secondary));
+    printf("\"post_done_face_usable\":");
+    print_json_bool(!errors[4] && !errors[5]);
+    printf(",\"post_done_glyph_metrics\":");
+    if (!errors[5] && face.face->glyph) {
+        print_glyph_metrics_object(face.face->glyph->metrics);
+    } else {
+        printf("null");
+    }
+    printf("}}\n");
+
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_activate_size_sequence(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    FT_Size initial = face.face->size;
+    FT_Size secondary = NULL;
+    FT_Error errors[7];
+    errors[0] = FT_Set_Pixel_Sizes(face.face, 0, 12);
+    FT_Size_Metrics initial_metrics;
+    FT_Size_Metrics* initial_metrics_ptr = NULL;
+    if (!errors[0] && face.face->size) {
+        initial_metrics = face.face->size->metrics;
+        initial_metrics_ptr = &initial_metrics;
+    }
+
+    errors[1] = FT_New_Size(face.face, &secondary);
+    errors[2] = FT_Activate_Size(secondary);
+    const char* after_secondary_activation = size_identity_label(face.face->size, initial, secondary);
+    FT_Size_RequestRec request18 = nominal_size_request(18 * 64);
+    errors[3] = FT_Request_Size(face.face, &request18);
+    FT_Size_Metrics secondary_metrics;
+    FT_Size_Metrics* secondary_metrics_ptr = NULL;
+    if (!errors[3] && face.face->size) {
+        secondary_metrics = face.face->size->metrics;
+        secondary_metrics_ptr = &secondary_metrics;
+    }
+    errors[4] = FT_Load_Glyph(face.face, 36, FT_LOAD_DEFAULT);
+    FT_Glyph_Metrics secondary_glyph_metrics;
+    int has_secondary_glyph_metrics = !errors[4] && face.face->glyph;
+    if (has_secondary_glyph_metrics) {
+        secondary_glyph_metrics = face.face->glyph->metrics;
+    }
+
+    errors[5] = FT_Activate_Size(initial);
+    const char* after_initial_activation = size_identity_label(face.face->size, initial, secondary);
+    errors[6] = FT_Load_Glyph(face.face, 36, FT_LOAD_DEFAULT);
+    FT_Glyph_Metrics initial_glyph_metrics;
+    int has_initial_glyph_metrics = !errors[6] && face.face->glyph;
+    if (has_initial_glyph_metrics) {
+        initial_glyph_metrics = face.face->glyph->metrics;
+    }
+
+    printf("{");
+    print_status(first_sequence_error(errors, 7));
+    printf(",\"output\":{\"return_sequence\":[%d,%d,%d,%d,%d,%d,%d],",
+           errors[0], errors[1], errors[2], errors[3], errors[4], errors[5], errors[6]);
+    printf("\"active_size_identity\":{\"after_secondary_activation\":\"%s\",\"after_initial_activation\":\"%s\"},",
+           after_secondary_activation,
+           after_initial_activation);
+    printf("\"metrics_by_size\":{");
+    print_size_metrics_named_value("initial_size", initial_metrics_ptr);
+    printf(",");
+    print_size_metrics_named_value("secondary_size", secondary_metrics_ptr);
+    printf("},\"glyph_metrics_by_active_size\":[");
+    if (has_secondary_glyph_metrics) {
+        print_glyph_metrics_object(secondary_glyph_metrics);
+    } else {
+        printf("null");
+    }
+    printf(",");
+    if (has_initial_glyph_metrics) {
+        print_glyph_metrics_object(initial_glyph_metrics);
+    } else {
+        printf("null");
+    }
+    printf("]}}\n");
+
+    if (secondary) {
+        FT_Done_Size(secondary);
+    }
+    close_oracle_face(&face);
     return 0;
 }
 
@@ -7771,11 +8005,20 @@ static int dispatch(int argc, char** argv) {
     if (argc == 5 && streq(argv[1], "--new-size-null-output")) {
         return emit_new_size_null_output(argc, argv);
     }
+    if (argc == 5 && streq(argv[1], "--new-size-sequence")) {
+        return emit_new_size_sequence(argc, argv);
+    }
     if (argc == 2 && streq(argv[1], "--done-size-null")) {
         return emit_done_size_null(argc, argv);
     }
+    if (argc == 5 && streq(argv[1], "--done-size-sequence")) {
+        return emit_done_size_sequence(argc, argv);
+    }
     if (argc == 2 && streq(argv[1], "--activate-size-null")) {
         return emit_activate_size_null(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--activate-size-sequence")) {
+        return emit_activate_size_sequence(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--open-type-validate-null-face")) {
         return emit_open_type_validate_null_face(argc, argv);

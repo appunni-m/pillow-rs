@@ -83,6 +83,14 @@ impl BytecodeContextCache {
     }
 }
 
+#[derive(Clone)]
+pub(crate) struct ActiveSizeState {
+    size_pt: f32,
+    size_metrics: SizeMetrics,
+    face_globals: crate::autohint::globals::FaceGlobals,
+    bytecode_context: BytecodeContextCache,
+}
+
 /// FreeType-style bounding box.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BBox {
@@ -796,6 +804,24 @@ impl Font {
     /// Selected size metrics.
     pub fn size_metrics(&self) -> SizeMetrics {
         self.size_metrics
+    }
+
+    pub(crate) fn active_size_state(&self) -> ActiveSizeState {
+        ActiveSizeState {
+            size_pt: self.size_pt,
+            size_metrics: self.size_metrics,
+            face_globals: self.face_globals.clone(),
+            bytecode_context: self.bytecode_context.clone(),
+        }
+    }
+
+    pub(crate) fn activate_size_state(&mut self, state: &ActiveSizeState) {
+        self.size_pt = state.size_pt;
+        self.size_metrics = state.size_metrics;
+        self.face_globals = state.face_globals.clone();
+        self.bytecode_context = state.bytecode_context.clone();
+        self.data.size_pt.set(self.size_pt);
+        sync_active_size_metrics(&self.data, self.size_metrics);
     }
 
     pub(crate) fn clone_with_load_mode(&self, load_mode: LoadMode) -> Self {

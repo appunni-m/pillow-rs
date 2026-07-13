@@ -2405,9 +2405,9 @@ impl BackendComparisonWorker {
                     std::ptr::null_mut(),
                     &case.inputs.params,
                 )?)),
-                "ftsizes.new_size" | "ftsizes.done_size" | "ftsizes.activate_size" => {
-                    return run_rust_ffi(case);
-                }
+                "ftsizes.new_size" => return c_new_size(case),
+                "ftsizes.done_size" => return c_done_size(case),
+                "ftsizes.activate_size" => return c_activate_size(case),
                 _ => run_c_abi(case),
             };
         }
@@ -2636,9 +2636,9 @@ impl BackendComparisonWorker {
                 "freetype.set_transform" => return run_rust_ffi(case),
                 "freetype.get_first_char" => Ok(ok(wasm_first_char_output(0))),
                 "freetype.get_next_char" => Ok(ok(wasm_next_char_output(0, &case.inputs.params)?)),
-                "ftsizes.new_size" | "ftsizes.done_size" | "ftsizes.activate_size" => {
-                    return run_rust_ffi(case);
-                }
+                "ftsizes.new_size" => return wasm_new_size(case),
+                "ftsizes.done_size" => return wasm_done_size(case),
+                "ftsizes.activate_size" => return wasm_activate_size(case),
                 _ => run_wasm_abi(case),
             };
         }
@@ -3426,6 +3426,238 @@ fn rust_activate_size(case: &InputCase) -> Result<RunOutput, String> {
     } else {
         Ok(error(err))
     }
+}
+
+fn size_identity_label<T>(size: *mut T, initial: *mut T, secondary: *mut T) -> &'static str {
+    if size.is_null() {
+        "null"
+    } else if size == initial {
+        "initial_size"
+    } else if size == secondary {
+        "secondary_size"
+    } else {
+        "other"
+    }
+}
+
+fn size_identity_label_usize(size: usize, initial: usize, secondary: usize) -> &'static str {
+    if size == 0 {
+        "null"
+    } else if size == initial {
+        "initial_size"
+    } else if size == secondary {
+        "secondary_size"
+    } else {
+        "other"
+    }
+}
+
+fn lifecycle_sequence_output(first_error: FT_Error, output: Value) -> RunOutput {
+    if first_error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(first_error, output)
+    }
+}
+
+fn first_lifecycle_error(errors: &[FT_Error]) -> FT_Error {
+    errors
+        .iter()
+        .copied()
+        .find(|error| *error != FT_Err_Ok)
+        .unwrap_or(FT_Err_Ok)
+}
+
+fn rust_nominal_size_request(height: FT_Long) -> FT_Size_RequestRec {
+    FT_Size_RequestRec {
+        type_: FT_SIZE_REQUEST_TYPE_NOMINAL as _,
+        width: 0,
+        height,
+        horiResolution: 72,
+        vertResolution: 72,
+    }
+}
+
+fn c_nominal_size_request(height: c_abi::FT_Long) -> c_abi::FT_Size_RequestRec {
+    c_abi::FT_Size_RequestRec {
+        type_: FT_SIZE_REQUEST_TYPE_NOMINAL as _,
+        width: 0,
+        height,
+        horiResolution: 72,
+        vertResolution: 72,
+    }
+}
+
+fn wasm_nominal_size_request(height: wasm_abi::FT_Long) -> wasm_abi::FontdoneWasmSizeRequest {
+    wasm_abi::FontdoneWasmSizeRequest {
+        type_: FT_SIZE_REQUEST_TYPE_NOMINAL as _,
+        width: 0,
+        height,
+        horiResolution: 72,
+        vertResolution: 72,
+    }
+}
+
+fn rust_new_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let initial = FT_Face_Info(&face).size;
+    let mut secondary = std::ptr::null_mut();
+    let new_error = FT_New_Size(Some(&face), Some(&mut secondary));
+    let active_unchanged_until_activation = FT_Face_Info(&face).size == initial;
+    let parent_face = if secondary.is_null() {
+        "none"
+    } else {
+        "same_face"
+    };
+
+    let activate_secondary_error = FT_Activate_Size(secondary);
+    let request20 = rust_nominal_size_request(20 * 64);
+    let request20_error = FT_Request_Size(Some(&mut face), Some(&request20));
+    let secondary_metrics = if request20_error == FT_Err_Ok {
+        size_metrics_json(&FT_Size_Metrics(&face))
+    } else {
+        Value::Null
+    };
+
+    let activate_initial_error = FT_Activate_Size(initial);
+    let request10 = rust_nominal_size_request(10 * 64);
+    let request10_error = FT_Request_Size(Some(&mut face), Some(&request10));
+    let initial_metrics = if request10_error == FT_Err_Ok {
+        size_metrics_json(&FT_Size_Metrics(&face))
+    } else {
+        Value::Null
+    };
+
+    let errors = [
+        new_error,
+        activate_secondary_error,
+        request20_error,
+        activate_initial_error,
+        request10_error,
+    ];
+    let output = json!({
+        "return_sequence": errors,
+        "new_size_nullness": if secondary.is_null() { "null" } else { "non_null" },
+        "new_size_parent_face": parent_face,
+        "active_size_unchanged_until_activation": active_unchanged_until_activation,
+        "metrics_by_size": {
+            "initial_size": initial_metrics,
+            "secondary_size": secondary_metrics
+        }
+    });
+    Ok(lifecycle_sequence_output(
+        first_lifecycle_error(&errors),
+        output,
+    ))
+}
+
+fn rust_done_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let initial = FT_Face_Info(&face).size;
+    let mut secondary = std::ptr::null_mut();
+    let new_error = FT_New_Size(Some(&face), Some(&mut secondary));
+    let activate_error = FT_Activate_Size(secondary);
+    let set18_error = FT_Set_Pixel_Sizes(&mut face, 0, 18);
+    let done_error = FT_Done_Size(secondary);
+    let active_after_done = FT_Face_Info(&face).size;
+    let set12_error = FT_Set_Pixel_Sizes(&mut face, 0, 12);
+    let (load_error, glyph_metrics) = match FT_Load_Glyph(&face, 36, FT_LOAD_DEFAULT) {
+        Ok(slot) => (
+            FT_Err_Ok,
+            glyph_metrics_fields_json(rust_metrics_fields(&slot.metrics)),
+        ),
+        Err(error) => (error, Value::Null),
+    };
+
+    let errors = [
+        new_error,
+        activate_error,
+        set18_error,
+        done_error,
+        set12_error,
+        load_error,
+    ];
+    let output = json!({
+        "return_sequence": errors,
+        "destroyed_size_removed": active_after_done != secondary,
+        "active_size_after_done": size_identity_label(active_after_done, initial, secondary),
+        "post_done_face_usable": set12_error == FT_Err_Ok && load_error == FT_Err_Ok,
+        "post_done_glyph_metrics": glyph_metrics
+    });
+    Ok(lifecycle_sequence_output(
+        first_lifecycle_error(&errors),
+        output,
+    ))
+}
+
+fn rust_activate_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let initial = FT_Face_Info(&face).size;
+    let set12_error = FT_Set_Pixel_Sizes(&mut face, 0, 12);
+    let initial_metrics = if set12_error == FT_Err_Ok {
+        size_metrics_json(&FT_Size_Metrics(&face))
+    } else {
+        Value::Null
+    };
+
+    let mut secondary = std::ptr::null_mut();
+    let new_error = FT_New_Size(Some(&face), Some(&mut secondary));
+    let activate_secondary_error = FT_Activate_Size(secondary);
+    let after_secondary_activation =
+        size_identity_label(FT_Face_Info(&face).size, initial, secondary);
+    let request18 = rust_nominal_size_request(18 * 64);
+    let request18_error = FT_Request_Size(Some(&mut face), Some(&request18));
+    let secondary_metrics = if request18_error == FT_Err_Ok {
+        size_metrics_json(&FT_Size_Metrics(&face))
+    } else {
+        Value::Null
+    };
+    let (load_secondary_error, secondary_glyph_metrics) =
+        match FT_Load_Glyph(&face, 36, FT_LOAD_DEFAULT) {
+            Ok(slot) => (
+                FT_Err_Ok,
+                glyph_metrics_fields_json(rust_metrics_fields(&slot.metrics)),
+            ),
+            Err(error) => (error, Value::Null),
+        };
+
+    let activate_initial_error = FT_Activate_Size(initial);
+    let after_initial_activation =
+        size_identity_label(FT_Face_Info(&face).size, initial, secondary);
+    let (load_initial_error, initial_glyph_metrics) =
+        match FT_Load_Glyph(&face, 36, FT_LOAD_DEFAULT) {
+            Ok(slot) => (
+                FT_Err_Ok,
+                glyph_metrics_fields_json(rust_metrics_fields(&slot.metrics)),
+            ),
+            Err(error) => (error, Value::Null),
+        };
+
+    let errors = [
+        set12_error,
+        new_error,
+        activate_secondary_error,
+        request18_error,
+        load_secondary_error,
+        activate_initial_error,
+        load_initial_error,
+    ];
+    let output = json!({
+        "return_sequence": errors,
+        "active_size_identity": {
+            "after_secondary_activation": after_secondary_activation,
+            "after_initial_activation": after_initial_activation
+        },
+        "metrics_by_size": {
+            "initial_size": initial_metrics,
+            "secondary_size": secondary_metrics
+        },
+        "glyph_metrics_by_active_size": [secondary_glyph_metrics, initial_glyph_metrics]
+    });
+    Ok(lifecycle_sequence_output(
+        first_lifecycle_error(&errors),
+        output,
+    ))
 }
 
 fn otvalid_null_face_output(err: FT_Error) -> RunOutput {
@@ -7562,17 +7794,35 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
             oracle_fallback_args(case)
         }
+        "ftsizes.new_size_sequence" => {
+            let mut args = vec!["--new-size-sequence".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "ftsizes.done_size" => {
             if lifecycle_handle_param(params, "size") == Some("null") {
                 return Ok(vec!["--done-size-null".to_string()]);
             }
             oracle_fallback_args(case)
         }
+        "ftsizes.done_size_sequence" => {
+            let mut args = vec!["--done-size-sequence".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "ftsizes.activate_size" => {
             if lifecycle_handle_param(params, "size") == Some("null") {
                 return Ok(vec!["--activate-size-null".to_string()]);
             }
             oracle_fallback_args(case)
+        }
+        "ftsizes.activate_size_sequence" => {
+            let mut args = vec!["--activate-size-sequence".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
         }
         "ftotval.open_type_validate" => {
             if param_is_null(params, "face") {
@@ -8826,8 +9076,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.get_transform" => rust_get_transform(case),
         "freetype.reference_face" => rust_reference_face(case),
         "ftsizes.new_size" => rust_new_size(case),
+        "ftsizes.new_size_sequence" => rust_new_size_sequence(case),
         "ftsizes.done_size" => rust_done_size(case),
+        "ftsizes.done_size_sequence" => rust_done_size_sequence(case),
         "ftsizes.activate_size" => rust_activate_size(case),
+        "ftsizes.activate_size_sequence" => rust_activate_size_sequence(case),
         "ftsnames.get_sfnt_name_count" => {
             let face = open_face(case)?;
             Ok(ok(rust_sfnt_name_count_output(Some(&face))))
@@ -9087,6 +9340,12 @@ fn catch_font_error(err: String) -> Result<RunOutput, String> {
 
 fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
     match case.operation.as_str() {
+        "ftsizes.new_size" => c_new_size(case),
+        "ftsizes.done_size" => c_done_size(case),
+        "ftsizes.activate_size" => c_activate_size(case),
+        "ftsizes.new_size_sequence" => c_new_size_sequence(case),
+        "ftsizes.done_size_sequence" => c_done_size_sequence(case),
+        "ftsizes.activate_size_sequence" => c_activate_size_sequence(case),
         "constant"
         | "constant_map"
         | "record_layout"
@@ -9110,9 +9369,6 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.select_size"
         | "ftotval.open_type_validate"
         | "ftotval.open_type_free"
-        | "ftsizes.new_size"
-        | "ftsizes.done_size"
-        | "ftsizes.activate_size"
         | "freetype.new_face" => run_rust_ffi(case),
         "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
             &case.inputs.params,
@@ -9628,6 +9884,12 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
 
 fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
     match case.operation.as_str() {
+        "ftsizes.new_size" => wasm_new_size(case),
+        "ftsizes.done_size" => wasm_done_size(case),
+        "ftsizes.activate_size" => wasm_activate_size(case),
+        "ftsizes.new_size_sequence" => wasm_new_size_sequence(case),
+        "ftsizes.done_size_sequence" => wasm_done_size_sequence(case),
+        "ftsizes.activate_size_sequence" => wasm_activate_size_sequence(case),
         "constant"
         | "constant_map"
         | "record_layout"
@@ -9651,9 +9913,6 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.select_size"
         | "ftotval.open_type_validate"
         | "ftotval.open_type_free"
-        | "ftsizes.new_size"
-        | "ftsizes.done_size"
-        | "ftsizes.activate_size"
         | "freetype.new_face" => run_rust_ffi(case),
         "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
             &case.inputs.params,
@@ -12784,6 +13043,227 @@ fn c_size_metrics_json(face: c_abi::FT_Face) -> Result<Value, String> {
     }))
 }
 
+fn c_active_size(face: c_abi::FT_Face) -> c_abi::FT_Size {
+    c_abi::abi_active_size(face).unwrap_or(std::ptr::null_mut())
+}
+
+fn c_glyph_metrics_fields_json(face: c_abi::FT_Face) -> Result<Value, String> {
+    let slot = c_abi::abi_slot_snapshot(face)
+        .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+    Ok(glyph_metrics_fields_json(c_metrics_fields(&slot.metrics)))
+}
+
+fn c_new_size(case: &InputCase) -> Result<RunOutput, String> {
+    let mut size = std::ptr::null_mut();
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        let err = c_abi::FT_New_Size(std::ptr::null_mut(), &mut size);
+        return if err == FT_Err_Ok {
+            Ok(ok(json!({"size_is_null": size.is_null()})))
+        } else {
+            Ok(error(err))
+        };
+    }
+
+    let (library, face) = c_new_face_without_size(case)?;
+    let err = if lifecycle_handle_param(&case.inputs.params, "output") == Some("null") {
+        c_abi::FT_New_Size(face, std::ptr::null_mut())
+    } else {
+        c_abi::FT_New_Size(face, &mut size)
+    };
+    c_done_face(face);
+    c_done_library(library);
+    if err == FT_Err_Ok {
+        Ok(ok(json!({"size_is_null": size.is_null()})))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn c_done_size(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "size") != Some("null") {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    }
+    let err = c_abi::FT_Done_Size(std::ptr::null_mut());
+    if err == FT_Err_Ok {
+        Ok(ok(json!({"done": true})))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn c_activate_size(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "size") != Some("null") {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    }
+    let err = c_abi::FT_Activate_Size(std::ptr::null_mut());
+    if err == FT_Err_Ok {
+        Ok(ok(json!({"activated": true})))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn c_new_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let initial = c_active_size(face);
+    let mut secondary = std::ptr::null_mut();
+    let new_error = c_abi::FT_New_Size(face, &mut secondary);
+    let active_unchanged_until_activation = c_active_size(face) == initial;
+    let parent_face = if secondary.is_null() {
+        "none"
+    } else {
+        "same_face"
+    };
+
+    let activate_secondary_error = c_abi::FT_Activate_Size(secondary);
+    let request20 = c_nominal_size_request(20 * 64);
+    let request20_error = c_abi::FT_Request_Size(face, &request20);
+    let secondary_metrics = if request20_error == FT_Err_Ok {
+        c_size_metrics_json(face)?
+    } else {
+        Value::Null
+    };
+
+    let activate_initial_error = c_abi::FT_Activate_Size(initial);
+    let request10 = c_nominal_size_request(10 * 64);
+    let request10_error = c_abi::FT_Request_Size(face, &request10);
+    let initial_metrics = if request10_error == FT_Err_Ok {
+        c_size_metrics_json(face)?
+    } else {
+        Value::Null
+    };
+
+    let errors = [
+        new_error,
+        activate_secondary_error,
+        request20_error,
+        activate_initial_error,
+        request10_error,
+    ];
+    let output = json!({
+        "return_sequence": errors,
+        "new_size_nullness": if secondary.is_null() { "null" } else { "non_null" },
+        "new_size_parent_face": parent_face,
+        "active_size_unchanged_until_activation": active_unchanged_until_activation,
+        "metrics_by_size": {
+            "initial_size": initial_metrics,
+            "secondary_size": secondary_metrics
+        }
+    });
+    c_done_face(face);
+    c_done_library(library);
+    Ok(lifecycle_sequence_output(
+        first_lifecycle_error(&errors),
+        output,
+    ))
+}
+
+fn c_done_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let initial = c_active_size(face);
+    let mut secondary = std::ptr::null_mut();
+    let new_error = c_abi::FT_New_Size(face, &mut secondary);
+    let activate_error = c_abi::FT_Activate_Size(secondary);
+    let set18_error = c_abi::FT_Set_Pixel_Sizes(face, 0, 18);
+    let done_error = c_abi::FT_Done_Size(secondary);
+    let active_after_done = c_active_size(face);
+    let set12_error = c_abi::FT_Set_Pixel_Sizes(face, 0, 12);
+    let load_error = c_abi::FT_Load_Glyph(face, 36, FT_LOAD_DEFAULT);
+    let glyph_metrics = if load_error == FT_Err_Ok {
+        c_glyph_metrics_fields_json(face)?
+    } else {
+        Value::Null
+    };
+
+    let errors = [
+        new_error,
+        activate_error,
+        set18_error,
+        done_error,
+        set12_error,
+        load_error,
+    ];
+    let output = json!({
+        "return_sequence": errors,
+        "destroyed_size_removed": active_after_done != secondary,
+        "active_size_after_done": size_identity_label(active_after_done, initial, secondary),
+        "post_done_face_usable": set12_error == FT_Err_Ok && load_error == FT_Err_Ok,
+        "post_done_glyph_metrics": glyph_metrics
+    });
+    c_done_face(face);
+    c_done_library(library);
+    Ok(lifecycle_sequence_output(
+        first_lifecycle_error(&errors),
+        output,
+    ))
+}
+
+fn c_activate_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let initial = c_active_size(face);
+    let set12_error = c_abi::FT_Set_Pixel_Sizes(face, 0, 12);
+    let initial_metrics = if set12_error == FT_Err_Ok {
+        c_size_metrics_json(face)?
+    } else {
+        Value::Null
+    };
+
+    let mut secondary = std::ptr::null_mut();
+    let new_error = c_abi::FT_New_Size(face, &mut secondary);
+    let activate_secondary_error = c_abi::FT_Activate_Size(secondary);
+    let after_secondary_activation = size_identity_label(c_active_size(face), initial, secondary);
+    let request18 = c_nominal_size_request(18 * 64);
+    let request18_error = c_abi::FT_Request_Size(face, &request18);
+    let secondary_metrics = if request18_error == FT_Err_Ok {
+        c_size_metrics_json(face)?
+    } else {
+        Value::Null
+    };
+    let load_secondary_error = c_abi::FT_Load_Glyph(face, 36, FT_LOAD_DEFAULT);
+    let secondary_glyph_metrics = if load_secondary_error == FT_Err_Ok {
+        c_glyph_metrics_fields_json(face)?
+    } else {
+        Value::Null
+    };
+
+    let activate_initial_error = c_abi::FT_Activate_Size(initial);
+    let after_initial_activation = size_identity_label(c_active_size(face), initial, secondary);
+    let load_initial_error = c_abi::FT_Load_Glyph(face, 36, FT_LOAD_DEFAULT);
+    let initial_glyph_metrics = if load_initial_error == FT_Err_Ok {
+        c_glyph_metrics_fields_json(face)?
+    } else {
+        Value::Null
+    };
+
+    let errors = [
+        set12_error,
+        new_error,
+        activate_secondary_error,
+        request18_error,
+        load_secondary_error,
+        activate_initial_error,
+        load_initial_error,
+    ];
+    let output = json!({
+        "return_sequence": errors,
+        "active_size_identity": {
+            "after_secondary_activation": after_secondary_activation,
+            "after_initial_activation": after_initial_activation
+        },
+        "metrics_by_size": {
+            "initial_size": initial_metrics,
+            "secondary_size": secondary_metrics
+        },
+        "glyph_metrics_by_active_size": [secondary_glyph_metrics, initial_glyph_metrics]
+    });
+    c_done_face(face);
+    c_done_library(library);
+    Ok(lifecycle_sequence_output(
+        first_lifecycle_error(&errors),
+        output,
+    ))
+}
+
 fn c_done_face(face: c_abi::FT_Face) {
     if !face.is_null() {
         let _ = c_abi::FT_Done_Face(face);
@@ -12857,6 +13337,238 @@ fn wasm_new_memory_face(case: &InputCase) -> Result<RunOutput, String> {
     } else {
         Ok(error(status.error))
     }
+}
+
+fn wasm_size_metrics_value(handle: usize) -> Result<Value, String> {
+    let mut metrics = wasm_abi::FontdoneWasmSizeMetrics::default();
+    let err = wasm_abi::fontdone_wasm_size_metrics(handle, &mut metrics);
+    if err == FT_Err_Ok {
+        Ok(wasm_size_metrics_json(&metrics))
+    } else {
+        Err(format!("fontdone_wasm_size_metrics returned {err}"))
+    }
+}
+
+fn wasm_glyph_metrics_fields_json(handle: usize) -> Result<Value, String> {
+    let slot = wasm_abi::abi_slot_snapshot(handle)
+        .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+    Ok(glyph_metrics_fields_json(wasm_metrics_fields(
+        &slot.metrics,
+    )))
+}
+
+fn wasm_new_size(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        let status = wasm_abi::fontdone_wasm_new_size(0);
+        return if status.error == FT_Err_Ok {
+            Ok(ok(json!({"size_is_null": status.handle == 0})))
+        } else {
+            Ok(error(status.error))
+        };
+    }
+
+    let handle = wasm_new_face_without_size(case)?;
+    let mut size = 0usize;
+    let err = if lifecycle_handle_param(&case.inputs.params, "output") == Some("null") {
+        wasm_abi::fontdone_wasm_new_size_out(handle, std::ptr::null_mut())
+    } else {
+        wasm_abi::fontdone_wasm_new_size_out(handle, &mut size)
+    };
+    wasm_done_face(handle);
+    if err == FT_Err_Ok {
+        Ok(ok(json!({"size_is_null": size == 0})))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn wasm_done_size(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "size") != Some("null") {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    }
+    let err = wasm_abi::fontdone_wasm_done_size(0);
+    if err == FT_Err_Ok {
+        Ok(ok(json!({"done": true})))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn wasm_activate_size(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "size") != Some("null") {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    }
+    let err = wasm_abi::fontdone_wasm_activate_size(0);
+    if err == FT_Err_Ok {
+        Ok(ok(json!({"activated": true})))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn wasm_new_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let initial = wasm_abi::fontdone_wasm_active_size(handle);
+    let status = wasm_abi::fontdone_wasm_new_size(handle);
+    let secondary = status.handle;
+    let new_error = status.error;
+    let active_unchanged_until_activation = wasm_abi::fontdone_wasm_active_size(handle) == initial;
+    let parent_face = if secondary == 0 { "none" } else { "same_face" };
+
+    let activate_secondary_error = wasm_abi::fontdone_wasm_activate_size(secondary);
+    let request20 = wasm_nominal_size_request(20 * 64);
+    let request20_error = wasm_abi::fontdone_wasm_request_size(handle, &request20);
+    let secondary_metrics = if request20_error == FT_Err_Ok {
+        wasm_size_metrics_value(handle)?
+    } else {
+        Value::Null
+    };
+
+    let activate_initial_error = wasm_abi::fontdone_wasm_activate_size(initial);
+    let request10 = wasm_nominal_size_request(10 * 64);
+    let request10_error = wasm_abi::fontdone_wasm_request_size(handle, &request10);
+    let initial_metrics = if request10_error == FT_Err_Ok {
+        wasm_size_metrics_value(handle)?
+    } else {
+        Value::Null
+    };
+
+    let errors = [
+        new_error,
+        activate_secondary_error,
+        request20_error,
+        activate_initial_error,
+        request10_error,
+    ];
+    let output = json!({
+        "return_sequence": errors,
+        "new_size_nullness": if secondary == 0 { "null" } else { "non_null" },
+        "new_size_parent_face": parent_face,
+        "active_size_unchanged_until_activation": active_unchanged_until_activation,
+        "metrics_by_size": {
+            "initial_size": initial_metrics,
+            "secondary_size": secondary_metrics
+        }
+    });
+    wasm_done_face(handle);
+    Ok(lifecycle_sequence_output(
+        first_lifecycle_error(&errors),
+        output,
+    ))
+}
+
+fn wasm_done_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let initial = wasm_abi::fontdone_wasm_active_size(handle);
+    let status = wasm_abi::fontdone_wasm_new_size(handle);
+    let secondary = status.handle;
+    let new_error = status.error;
+    let activate_error = wasm_abi::fontdone_wasm_activate_size(secondary);
+    let set18_error = wasm_abi::fontdone_wasm_set_pixel_sizes(handle, 0, 18);
+    let done_error = wasm_abi::fontdone_wasm_done_size(secondary);
+    let active_after_done = wasm_abi::fontdone_wasm_active_size(handle);
+    let set12_error = wasm_abi::fontdone_wasm_set_pixel_sizes(handle, 0, 12);
+    let load_error = wasm_abi::fontdone_wasm_load_glyph(handle, 36, FT_LOAD_DEFAULT);
+    let glyph_metrics = if load_error == FT_Err_Ok {
+        wasm_glyph_metrics_fields_json(handle)?
+    } else {
+        Value::Null
+    };
+
+    let errors = [
+        new_error,
+        activate_error,
+        set18_error,
+        done_error,
+        set12_error,
+        load_error,
+    ];
+    let output = json!({
+        "return_sequence": errors,
+        "destroyed_size_removed": active_after_done != secondary,
+        "active_size_after_done": size_identity_label_usize(active_after_done, initial, secondary),
+        "post_done_face_usable": set12_error == FT_Err_Ok && load_error == FT_Err_Ok,
+        "post_done_glyph_metrics": glyph_metrics
+    });
+    wasm_done_face(handle);
+    Ok(lifecycle_sequence_output(
+        first_lifecycle_error(&errors),
+        output,
+    ))
+}
+
+fn wasm_activate_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let initial = wasm_abi::fontdone_wasm_active_size(handle);
+    let set12_error = wasm_abi::fontdone_wasm_set_pixel_sizes(handle, 0, 12);
+    let initial_metrics = if set12_error == FT_Err_Ok {
+        wasm_size_metrics_value(handle)?
+    } else {
+        Value::Null
+    };
+
+    let status = wasm_abi::fontdone_wasm_new_size(handle);
+    let secondary = status.handle;
+    let new_error = status.error;
+    let activate_secondary_error = wasm_abi::fontdone_wasm_activate_size(secondary);
+    let after_secondary_activation = size_identity_label_usize(
+        wasm_abi::fontdone_wasm_active_size(handle),
+        initial,
+        secondary,
+    );
+    let request18 = wasm_nominal_size_request(18 * 64);
+    let request18_error = wasm_abi::fontdone_wasm_request_size(handle, &request18);
+    let secondary_metrics = if request18_error == FT_Err_Ok {
+        wasm_size_metrics_value(handle)?
+    } else {
+        Value::Null
+    };
+    let load_secondary_error = wasm_abi::fontdone_wasm_load_glyph(handle, 36, FT_LOAD_DEFAULT);
+    let secondary_glyph_metrics = if load_secondary_error == FT_Err_Ok {
+        wasm_glyph_metrics_fields_json(handle)?
+    } else {
+        Value::Null
+    };
+
+    let activate_initial_error = wasm_abi::fontdone_wasm_activate_size(initial);
+    let after_initial_activation = size_identity_label_usize(
+        wasm_abi::fontdone_wasm_active_size(handle),
+        initial,
+        secondary,
+    );
+    let load_initial_error = wasm_abi::fontdone_wasm_load_glyph(handle, 36, FT_LOAD_DEFAULT);
+    let initial_glyph_metrics = if load_initial_error == FT_Err_Ok {
+        wasm_glyph_metrics_fields_json(handle)?
+    } else {
+        Value::Null
+    };
+
+    let errors = [
+        set12_error,
+        new_error,
+        activate_secondary_error,
+        request18_error,
+        load_secondary_error,
+        activate_initial_error,
+        load_initial_error,
+    ];
+    let output = json!({
+        "return_sequence": errors,
+        "active_size_identity": {
+            "after_secondary_activation": after_secondary_activation,
+            "after_initial_activation": after_initial_activation
+        },
+        "metrics_by_size": {
+            "initial_size": initial_metrics,
+            "secondary_size": secondary_metrics
+        },
+        "glyph_metrics_by_active_size": [secondary_glyph_metrics, initial_glyph_metrics]
+    });
+    wasm_done_face(handle);
+    Ok(lifecycle_sequence_output(
+        first_lifecycle_error(&errors),
+        output,
+    ))
 }
 
 fn wasm_slot_output(handle: usize, err: i32) -> Result<RunOutput, String> {

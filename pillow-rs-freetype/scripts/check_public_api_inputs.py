@@ -33,6 +33,11 @@ WASM_EXPORTS = {
     "fontdone_wasm_free",
     "fontdone_wasm_open_face",
     "fontdone_wasm_done_face",
+    "fontdone_wasm_new_size",
+    "fontdone_wasm_new_size_out",
+    "fontdone_wasm_activate_size",
+    "fontdone_wasm_done_size",
+    "fontdone_wasm_active_size",
     "fontdone_wasm_done_freetype",
     "fontdone_wasm_face_check_truetype_patents",
     "fontdone_wasm_face_set_unpatented_hinting",
@@ -226,6 +231,9 @@ REAL_PARITY_OPERATIONS = {
     "ftgasp.get_gasp",
     "tttables.get_cmap_format",
     "tttables.get_cmap_language_id",
+    "ftsizes.new_size_sequence",
+    "ftsizes.done_size_sequence",
+    "ftsizes.activate_size_sequence",
 }
 
 EXPLICIT_UNSUPPORTED_OPERATIONS = {
@@ -651,15 +659,10 @@ def has_null_lifecycle_handle(row: ConcreteInput) -> bool:
 
 
 def pending_core_reason(row: ConcreteInput) -> str | None:
-    if row.operation in {
-        "ftsizes.new_size_sequence",
-        "ftsizes.done_size_sequence",
-        "ftsizes.activate_size_sequence",
-        "ftsizes.activate_select_size_sequence",
-    }:
+    if row.operation == "ftsizes.activate_select_size_sequence":
         return (
-            "size lifecycle success requires a real face-owned FT_Size handle "
-            "model plus direct C ABI and WASM ABI routes"
+            "FT_Select_Size active-size mutation needs real strike selection "
+            "support before this sequence can run as exact parity"
         )
     if (
         row.case_id
@@ -713,13 +716,13 @@ def pending_core_reason(row: ConcreteInput) -> str | None:
 def size_null_validation_reason(row: ConcreteInput) -> str | None:
     if row.operation == "ftsizes.new_size":
         if lifecycle_handle(row, "face") == "null":
-            return "FT_New_Size null face validates through pinned C oracle and Rust FFI wrapper"
+            return "FT_New_Size null face validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         if lifecycle_handle(row, "output") == "null":
-            return "FT_New_Size null output pointer validates through pinned C oracle and Rust FFI wrapper"
+            return "FT_New_Size null output pointer validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if row.operation == "ftsizes.done_size" and lifecycle_handle(row, "size") == "null":
-        return "FT_Done_Size null size validates through pinned C oracle and Rust FFI wrapper"
+        return "FT_Done_Size null size validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if row.operation == "ftsizes.activate_size" and lifecycle_handle(row, "size") == "null":
-        return "FT_Activate_Size null size validates through pinned C oracle and Rust FFI wrapper"
+        return "FT_Activate_Size null size validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     return None
 
 

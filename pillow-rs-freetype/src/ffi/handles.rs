@@ -1,11 +1,13 @@
 #![allow(non_camel_case_types, non_snake_case)]
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ptr;
+use std::rc::{Rc, Weak};
 use std::sync::{Mutex, OnceLock};
 
 use crate::api;
-use crate::font::{KerningMode, SizeRequest, SizeRequestError, SizeRequestType};
+use crate::font::{ActiveSizeState, KerningMode, SizeRequest, SizeRequestError, SizeRequestType};
 
 use super::constants::*;
 use super::convert::{
@@ -32,8 +34,10 @@ pub struct FT_Library {
 
 #[derive(Clone)]
 pub struct FT_Face {
-    inner: api::Face,
+    inner: Rc<RefCell<api::Face>>,
+    sizes: Rc<RefCell<FaceSizeState>>,
     probe_only: bool,
+    postscript_name: Option<String>,
     sfnt_os2: Option<Box<TT_OS2>>,
     sfnt_head: Option<Box<TT_Header>>,
     sfnt_maxp: Option<Box<TT_MaxProfile>>,
@@ -45,6 +49,171 @@ pub struct FT_Face {
     transform_matrix: FT_Matrix,
     transform_delta: FT_Vector,
     refcount: usize,
+}
+
+struct FaceSizeState {
+    active: Option<usize>,
+    entries: Vec<SizeEntry>,
+}
+
+struct SizeEntry {
+    _token: Box<SizeToken>,
+    handle: FT_Size,
+    state: ActiveSizeState,
+}
+
+struct SizeToken {
+    _identity: usize,
+}
+
+#[derive(Clone)]
+struct SizeOwner {
+    face: Weak<RefCell<api::Face>>,
+    sizes: Weak<RefCell<FaceSizeState>>,
+}
+
+type SizeHandleRegistry = BTreeMap<usize, SizeOwner>;
+
+thread_local! {
+    static SIZE_HANDLE_REGISTRY: RefCell<SizeHandleRegistry> = RefCell::new(BTreeMap::new());
+}
+
+impl FaceSizeState {
+    fn new(initial_state: ActiveSizeState) -> Self {
+        let entry = SizeEntry::new(initial_state);
+        let active = Some(size_handle_key(entry.handle));
+        Self {
+            active,
+            entries: vec![entry],
+        }
+    }
+
+    fn active_handle(&self) -> FT_Size {
+        self.active
+            .and_then(|active| self.entries.iter().find(|entry| entry.key() == active))
+            .map_or(ptr::null_mut(), |entry| entry.handle)
+    }
+
+    fn active_entry_mut(&mut self) -> Option<&mut SizeEntry> {
+        let active = self.active?;
+        self.entries.iter_mut().find(|entry| entry.key() == active)
+    }
+
+    fn add_size(&mut self, state: ActiveSizeState) -> FT_Size {
+        let entry = SizeEntry::new(state);
+        let handle = entry.handle;
+        self.entries.push(entry);
+        handle
+    }
+
+    fn activate(&mut self, handle: FT_Size) -> Option<ActiveSizeState> {
+        let key = size_handle_key(handle);
+        let state = self
+            .entries
+            .iter()
+            .find(|entry| entry.key() == key)
+            .map(|entry| entry.state.clone())?;
+        self.active = Some(key);
+        Some(state)
+    }
+
+    fn remove(&mut self, handle: FT_Size) -> Option<DoneSizeResult> {
+        let key = size_handle_key(handle);
+        let index = self.entries.iter().position(|entry| entry.key() == key)?;
+        let was_active = self.active == Some(key);
+        self.entries.remove(index);
+        let fallback = if was_active {
+            self.active = self.entries.first().map(SizeEntry::key);
+            self.entries.first().map(|entry| entry.state.clone())
+        } else {
+            None
+        };
+        Some(DoneSizeResult {
+            removed_key: key,
+            fallback,
+        })
+    }
+}
+
+impl Drop for FaceSizeState {
+    fn drop(&mut self) {
+        SIZE_HANDLE_REGISTRY.with(|registry| {
+            let mut registry = registry.borrow_mut();
+            for entry in &self.entries {
+                registry.remove(&entry.key());
+            }
+        });
+    }
+}
+
+impl SizeEntry {
+    fn new(state: ActiveSizeState) -> Self {
+        let mut token = Box::new(SizeToken { _identity: 0 });
+        let handle = (&mut *token as *mut SizeToken).cast::<super::types::FT_SizeRec>();
+        Self {
+            _token: token,
+            handle,
+            state,
+        }
+    }
+
+    fn key(&self) -> usize {
+        size_handle_key(self.handle)
+    }
+}
+
+struct DoneSizeResult {
+    removed_key: usize,
+    fallback: Option<ActiveSizeState>,
+}
+
+fn size_handle_key(size: FT_Size) -> usize {
+    size as usize
+}
+
+fn register_size_handle(
+    size: FT_Size,
+    face: &Rc<RefCell<api::Face>>,
+    sizes: &Rc<RefCell<FaceSizeState>>,
+) {
+    let owner = SizeOwner {
+        face: Rc::downgrade(face),
+        sizes: Rc::downgrade(sizes),
+    };
+    SIZE_HANDLE_REGISTRY.with(|registry| {
+        registry.borrow_mut().insert(size_handle_key(size), owner);
+    });
+}
+
+fn register_face_size_handles(face: &FT_Face) {
+    for entry in &face.sizes.borrow().entries {
+        register_size_handle(entry.handle, &face.inner, &face.sizes);
+    }
+}
+
+fn lookup_size_owner(size: FT_Size) -> Option<SizeOwner> {
+    SIZE_HANDLE_REGISTRY.with(|registry| registry.borrow().get(&size_handle_key(size)).cloned())
+}
+
+fn unregister_size_handle_key(key: usize) {
+    SIZE_HANDLE_REGISTRY.with(|registry| {
+        registry.borrow_mut().remove(&key);
+    });
+}
+
+fn active_size_handle(face: &FT_Face) -> FT_Size {
+    face.sizes.borrow().active_handle()
+}
+
+fn has_active_size(face: &FT_Face) -> bool {
+    !active_size_handle(face).is_null()
+}
+
+fn sync_active_size_state(face: &FT_Face) {
+    let state = face.inner.borrow().active_size_state();
+    if let Some(entry) = face.sizes.borrow_mut().active_entry_mut() {
+        entry.state = state;
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -219,7 +388,8 @@ pub fn FT_Get_Sfnt_LangTag(
     let Some(face) = face else {
         return FT_Err_Invalid_Argument;
     };
-    if face.inner.sfnt_name_format() != 1 {
+    let inner = face.inner.borrow();
+    if inner.sfnt_name_format() != 1 {
         return FT_Err_Invalid_Table;
     }
     // FreeType `FT_Get_Sfnt_LangTag` in `src/base/ftsnames.c` requires
@@ -230,7 +400,7 @@ pub fn FT_Get_Sfnt_LangTag(
     let Ok(index) = usize::try_from(lang_id - 0x8000) else {
         return FT_Err_Invalid_Argument;
     };
-    let Some(record) = face.inner.sfnt_lang_tag(index) else {
+    let Some(record) = inner.sfnt_lang_tag(index) else {
         return FT_Err_Invalid_Argument;
     };
     lang_tag.string = record.string.as_ptr().cast_mut().cast::<FT_Byte>();
@@ -239,25 +409,69 @@ pub fn FT_Get_Sfnt_LangTag(
 }
 
 pub fn FT_New_Size(face: Option<&FT_Face>, size: Option<&mut FT_Size>) -> FT_Error {
-    match (face.is_none(), size.is_none()) {
-        (true, _) => FT_Err_Invalid_Face_Handle as FT_Error,
-        (_, true) => FT_Err_Invalid_Argument as FT_Error,
-        _ => FT_Err_Unimplemented_Feature as FT_Error,
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(size) = size else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if face.probe_only {
+        *size = ptr::null_mut();
+        return FT_Err_Invalid_Size_Handle;
     }
+
+    *size = ptr::null_mut();
+    let state = face.inner.borrow().active_size_state();
+    let handle = face.sizes.borrow_mut().add_size(state);
+    register_size_handle(handle, &face.inner, &face.sizes);
+    *size = handle;
+    FT_Err_Ok
 }
 
 pub fn FT_Done_Size(size: FT_Size) -> FT_Error {
-    match size.is_null() {
-        true => FT_Err_Invalid_Size_Handle,
-        false => FT_Err_Unimplemented_Feature as FT_Error,
+    if size.is_null() {
+        return FT_Err_Invalid_Size_Handle;
     }
+    let Some(owner) = lookup_size_owner(size) else {
+        return FT_Err_Invalid_Size_Handle;
+    };
+    let Some(face) = owner.face.upgrade() else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(sizes) = owner.sizes.upgrade() else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+
+    let Some(result) = sizes.borrow_mut().remove(size) else {
+        return FT_Err_Invalid_Size_Handle;
+    };
+    unregister_size_handle_key(result.removed_key);
+    if let Some(fallback) = result.fallback {
+        // FreeType `FT_Done_Size` in `src/base/ftobjs.c` selects
+        // `face->sizes_list.head` when the active size is destroyed.
+        face.borrow_mut().activate_size_state(&fallback);
+    }
+    FT_Err_Ok
 }
 
 pub fn FT_Activate_Size(size: FT_Size) -> FT_Error {
-    match size.is_null() {
-        true => FT_Err_Invalid_Size_Handle,
-        false => FT_Err_Unimplemented_Feature as FT_Error,
+    if size.is_null() {
+        return FT_Err_Invalid_Size_Handle;
     }
+    let Some(owner) = lookup_size_owner(size) else {
+        return FT_Err_Invalid_Size_Handle;
+    };
+    let Some(face) = owner.face.upgrade() else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(sizes) = owner.sizes.upgrade() else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(state) = sizes.borrow_mut().activate(size) else {
+        return FT_Err_Invalid_Size_Handle;
+    };
+    face.borrow_mut().activate_size_state(&state);
+    FT_Err_Ok
 }
 
 const FT_TRIG_SCALE: FT_Fixed = 0xDBD9_5B16;
@@ -596,7 +810,9 @@ pub fn FT_Reference_Face(face: Option<&mut FT_Face>) -> FT_Error {
 // These return Unimplemented_Feature or sentinel values as documented.
 
 pub fn FT_Get_Gasp(face: Option<&FT_Face>, ppem: FT_UInt) -> FT_Int {
-    face.map_or(FT_GASP_NO_TABLE as FT_Int, |face| face.inner.get_gasp(ppem))
+    face.map_or(FT_GASP_NO_TABLE as FT_Int, |face| {
+        face.inner.borrow().get_gasp(ppem)
+    })
 }
 
 pub fn FT_Select_Size(_face: Option<&mut FT_Face>, _strike_index: FT_Int) -> FT_Error {
@@ -652,13 +868,14 @@ pub fn FT_Get_Glyph_Name(
     // FreeType `FT_Get_Glyph_Name` in `src/base/ftobjs.c` clears the first
     // output byte before invalid-glyph and no-glyph-name service failures.
     buffer[0] = 0;
-    if glyph_index >= FT_UInt::from(face.inner.info().num_glyphs) {
+    let inner = face.inner.borrow();
+    if glyph_index >= FT_UInt::from(inner.info().num_glyphs) {
         return Err(FT_Err_Invalid_Glyph_Index);
     }
-    if (face.inner.info().face_flags & (1 << 9)) == 0 {
+    if (inner.info().face_flags & (1 << 9)) == 0 {
         return Err(FT_Err_Invalid_Argument);
     }
-    let Some(name) = face.inner.glyph_name(glyph_index) else {
+    let Some(name) = inner.glyph_name(glyph_index) else {
         return Err(FT_Err_Invalid_Argument);
     };
     let bytes = name.as_bytes();
@@ -672,14 +889,15 @@ pub fn FT_Get_Name_Index(face: Option<&FT_Face>, glyph_name: Option<&str>) -> FT
     let (Some(face), Some(glyph_name)) = (face, glyph_name) else {
         return 0;
     };
-    if (face.inner.info().face_flags & (1 << 9)) == 0 {
+    let inner = face.inner.borrow();
+    if (inner.info().face_flags & (1 << 9)) == 0 {
         return 0;
     }
-    face.inner.name_index(glyph_name)
+    inner.name_index(glyph_name)
 }
 
 pub fn FT_Get_Postscript_Name(face: &FT_Face) -> Option<&str> {
-    face.inner.postscript_name()
+    face.postscript_name.as_deref()
 }
 
 pub fn FT_Set_Named_Instance(face: Option<&mut FT_Face>, instance_index: FT_UInt) -> FT_Error {
@@ -689,12 +907,13 @@ pub fn FT_Set_Named_Instance(face: Option<&mut FT_Face>, instance_index: FT_UInt
     let Ok(instance_index) = usize::try_from(instance_index) else {
         return FT_Err_Invalid_Argument as FT_Error;
     };
-    match face.inner.set_named_instance(instance_index) {
+    let result = face.inner.borrow_mut().set_named_instance(instance_index);
+    match result {
         Ok(()) => {
             let transform_matrix = face.transform_matrix;
             let transform_delta = face.transform_delta;
             let refcount = face.refcount;
-            let mut refreshed = face_to_ffi(face.inner.clone(), face.probe_only);
+            let mut refreshed = face_to_ffi(face.inner.borrow().clone(), face.probe_only);
             refreshed.transform_matrix = transform_matrix;
             refreshed.transform_delta = transform_delta;
             refreshed.refcount = refcount;
@@ -740,6 +959,8 @@ pub fn FT_New_Memory_Face(
 
 fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     let font = inner.font();
+    let postscript_name = inner.postscript_name().map(str::to_owned);
+    let size_state = inner.active_size_state();
     let sfnt_os2 = font.os2_table().map(os2_to_ffi).map(Box::new);
     let sfnt_head = font
         .load_sfnt_table(0x68656164, 0, None)
@@ -772,9 +993,13 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         .and_then(|data| parse_tt_pclt(&data))
         .map(Box::new);
     let charmaps = charmaps_to_ffi(&inner);
-    FT_Face {
+    let inner = Rc::new(RefCell::new(inner));
+    let sizes = Rc::new(RefCell::new(FaceSizeState::new(size_state)));
+    let face = FT_Face {
         inner,
+        sizes,
         probe_only,
+        postscript_name,
         sfnt_os2,
         sfnt_head,
         sfnt_maxp,
@@ -791,7 +1016,9 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         },
         transform_delta: FT_Vector { x: 0, y: 0 },
         refcount: 1,
-    }
+    };
+    register_face_size_handles(&face);
+    face
 }
 
 fn parse_tt_header(data: &[u8]) -> Option<TT_Header> {
@@ -1156,7 +1383,7 @@ pub fn FT_Set_Char_Size(
     horz_resolution: FT_UInt,
     vert_resolution: FT_UInt,
 ) -> FT_Error {
-    if face.probe_only {
+    if face.probe_only || !has_active_size(face) {
         return FT_Err_Invalid_Size_Handle;
     }
     let Ok(char_width) = i32::try_from(char_width) else {
@@ -1168,11 +1395,17 @@ pub fn FT_Set_Char_Size(
     let Ok(char_height) = i32::try_from(char_height) else {
         return FT_Err_Invalid_Pixel_Size;
     };
-    match face
-        .inner
-        .try_set_char_size(char_width, char_height, horz_resolution, vert_resolution)
-    {
-        Ok(()) => FT_Err_Ok,
+    let result = face.inner.borrow_mut().try_set_char_size(
+        char_width,
+        char_height,
+        horz_resolution,
+        vert_resolution,
+    );
+    match result {
+        Ok(()) => {
+            sync_active_size_state(face);
+            FT_Err_Ok
+        }
         Err(SizeRequestError::DivideByZero) => FT_Err_Divide_By_Zero as FT_Error,
         Err(SizeRequestError::InvalidPixelSize) => FT_Err_Invalid_Pixel_Size,
     }
@@ -1183,10 +1416,13 @@ pub fn FT_Set_Pixel_Sizes(
     pixel_width: FT_UInt,
     pixel_height: FT_UInt,
 ) -> FT_Error {
-    if face.probe_only {
+    if face.probe_only || !has_active_size(face) {
         return FT_Err_Invalid_Size_Handle;
     }
-    face.inner.set_pixel_sizes(pixel_width, pixel_height);
+    face.inner
+        .borrow_mut()
+        .set_pixel_sizes(pixel_width, pixel_height);
+    sync_active_size_state(face);
     FT_Err_Ok
 }
 
@@ -1194,7 +1430,7 @@ pub fn FT_Request_Size(face: Option<&mut FT_Face>, req: Option<&FT_Size_RequestR
     let Some(face) = face else {
         return FT_Err_Invalid_Face_Handle as FT_Error;
     };
-    if face.probe_only {
+    if face.probe_only || !has_active_size(face) {
         return FT_Err_Invalid_Size_Handle;
     }
     let Some(req) = req else {
@@ -1218,8 +1454,12 @@ pub fn FT_Request_Size(face: Option<&mut FT_Face>, req: Option<&FT_Size_RequestR
         hori_resolution: req.horiResolution,
         vert_resolution: req.vertResolution,
     };
-    match face.inner.request_size(request) {
-        Ok(()) => FT_Err_Ok,
+    let result = face.inner.borrow_mut().request_size(request);
+    match result {
+        Ok(()) => {
+            sync_active_size_state(face);
+            FT_Err_Ok
+        }
         Err(SizeRequestError::DivideByZero) => FT_Err_Divide_By_Zero as FT_Error,
         Err(SizeRequestError::InvalidPixelSize) => FT_Err_Invalid_Pixel_Size,
     }
@@ -1229,7 +1469,7 @@ pub fn FT_Get_Char_Index(face: &FT_Face, char_code: FT_ULong) -> FT_UInt {
     let Ok(char_code) = u32::try_from(char_code) else {
         return 0;
     };
-    u32::from(face.inner.get_char_index(char_code))
+    u32::from(face.inner.borrow().get_char_index(char_code))
 }
 
 pub fn FT_Face_GetCharVariantIndex(
@@ -1245,6 +1485,7 @@ pub fn FT_Face_GetCharVariantIndex(
     // (`src/base/ftobjs.c`, `src/sfnt/ttcmap.c`).
     u32::from(
         face.inner
+            .borrow()
             .get_char_variant_index(charcode as u32, variant_selector as u32),
     )
 }
@@ -1261,12 +1502,13 @@ pub fn FT_Face_GetCharVariantIsDefault(
     // charmap directly and truncates both public inputs to `FT_UInt32`
     // (`src/base/ftobjs.c`, `src/sfnt/ttcmap.c`).
     face.inner
+        .borrow()
         .get_char_variant_is_default(charcode as u32, variant_selector as u32)
 }
 
 pub fn FT_Face_GetVariantSelectors(face: Option<&FT_Face>) -> Option<Vec<FT_UInt32>> {
     let face = face?;
-    face.inner.get_variant_selectors()
+    face.inner.borrow().get_variant_selectors()
 }
 
 pub fn FT_Face_GetVariantsOfChar(
@@ -1274,7 +1516,7 @@ pub fn FT_Face_GetVariantsOfChar(
     charcode: FT_ULong,
 ) -> Option<Vec<FT_UInt32>> {
     let face = face?;
-    face.inner.get_variants_of_char(charcode as u32)
+    face.inner.borrow().get_variants_of_char(charcode as u32)
 }
 
 pub fn FT_Face_GetCharsOfVariant(
@@ -1282,7 +1524,9 @@ pub fn FT_Face_GetCharsOfVariant(
     variant_selector: FT_ULong,
 ) -> Option<Vec<FT_UInt32>> {
     let face = face?;
-    face.inner.get_chars_of_variant(variant_selector as u32)
+    face.inner
+        .borrow()
+        .get_chars_of_variant(variant_selector as u32)
 }
 
 pub fn FT_Get_Kerning(
@@ -1305,7 +1549,10 @@ pub fn FT_Get_Kerning(
         mode if mode == FT_KERNING_UNSCALED as FT_UInt => KerningMode::Unscaled,
         _ => KerningMode::Default,
     };
-    let vector = face.inner.kerning_by_glyphs(left_glyph, right_glyph, mode);
+    let vector = face
+        .inner
+        .borrow()
+        .kerning_by_glyphs(left_glyph, right_glyph, mode);
     akerning.x = FT_Long::from(vector.x);
     akerning.y = FT_Long::from(vector.y);
     FT_Err_Ok
@@ -1334,6 +1581,7 @@ pub fn FT_Face_Charmap_Info(face: &FT_Face, index: FT_UInt) -> Option<FT_CharMap
 
 pub fn FT_Face_Active_Charmap_Index(face: &FT_Face) -> FT_Int {
     face.inner
+        .borrow()
         .charmap_index()
         .and_then(|index| FT_Int::try_from(index).ok())
         .unwrap_or(-1)
@@ -1377,7 +1625,7 @@ pub fn FT_Set_Charmap(face: Option<&mut FT_Face>, charmap: FT_CharMap) -> FT_Err
     if face.charmaps.get(index).map(|record| record.format) == Some(14) {
         return FT_Err_Invalid_Argument;
     }
-    match face.inner.set_charmap(index) {
+    match face.inner.borrow_mut().set_charmap(index) {
         Ok(()) => FT_Err_Ok,
         Err(_) => FT_Err_Invalid_Argument,
     }
@@ -1398,7 +1646,7 @@ pub fn FT_Select_Charmap(face: Option<&mut FT_Face>, encoding: FT_Encoding) -> F
         return FT_Err_Invalid_Face_Handle as FT_Error;
     };
     match i64::from(encoding) {
-        FT_ENCODING_UNICODE => match face.inner.select_unicode_charmap() {
+        FT_ENCODING_UNICODE => match face.inner.borrow_mut().select_unicode_charmap() {
             Ok(()) => FT_Err_Ok,
             Err(_) => FT_Err_Invalid_CharMap_Handle,
         },
@@ -1410,7 +1658,7 @@ pub fn FT_Select_Charmap(face: Option<&mut FT_Face>, encoding: FT_Encoding) -> F
             else {
                 return FT_Err_Invalid_Argument;
             };
-            match face.inner.set_charmap(index) {
+            match face.inner.borrow_mut().set_charmap(index) {
                 Ok(()) => FT_Err_Ok,
                 Err(_) => FT_Err_Invalid_Argument,
             }
@@ -1419,12 +1667,12 @@ pub fn FT_Select_Charmap(face: Option<&mut FT_Face>, encoding: FT_Encoding) -> F
 }
 
 pub fn FT_Get_FSType_Flags(face: Option<&FT_Face>) -> FT_UShort {
-    face.map_or(0, |face| face.inner.get_fstype_flags())
+    face.map_or(0, |face| face.inner.borrow().get_fstype_flags())
 }
 
 pub fn FT_Get_Sfnt_Name_Count(face: Option<&FT_Face>) -> FT_UInt {
     face.map_or(0, |face| {
-        FT_UInt::try_from(face.inner.sfnt_name_count()).unwrap_or(FT_UInt::MAX)
+        FT_UInt::try_from(face.inner.borrow().sfnt_name_count()).unwrap_or(FT_UInt::MAX)
     })
 }
 
@@ -1439,7 +1687,8 @@ pub fn FT_Get_Sfnt_Name(
     let Some(face) = face else {
         return FT_Err_Invalid_Argument;
     };
-    let Some(record) = face.inner.sfnt_name(idx as usize) else {
+    let inner = face.inner.borrow();
+    let Some(record) = inner.sfnt_name(idx as usize) else {
         return FT_Err_Invalid_Argument;
     };
     aname.platform_id = record.platform_id;
@@ -1455,7 +1704,7 @@ pub fn FT_Get_First_Char(face: Option<&FT_Face>, agindex: Option<&mut FT_UInt>) 
     let mut glyph_index = 0;
     let mut char_code = 0;
     if let Some(face) = face {
-        if let Some((code, glyph)) = face.inner.first_char() {
+        if let Some((code, glyph)) = face.inner.borrow().first_char() {
             char_code = FT_ULong::from(code);
             glyph_index = FT_UInt::from(glyph);
         }
@@ -1474,7 +1723,7 @@ pub fn FT_Get_Next_Char(
     let mut glyph_index = 0;
     let mut next_char = 0;
     if let Some(face) = face {
-        if let Some((code, glyph)) = face.inner.next_char(char_code as u32) {
+        if let Some((code, glyph)) = face.inner.borrow().next_char(char_code as u32) {
             next_char = FT_ULong::from(code);
             glyph_index = FT_UInt::from(glyph);
         }
@@ -1522,12 +1771,12 @@ pub fn FT_Load_Glyph(
     glyph_index: FT_UInt,
     load_flags: FT_Int32,
 ) -> Result<FT_GlyphSlot, FT_Error> {
-    if face.probe_only {
+    if face.probe_only || !has_active_size(face) {
         return Err(FT_Err_Invalid_Size_Handle);
     }
     let glyph_index = u16::try_from(glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
     let flags = load_flags_to_core(load_flags)?;
-    if glyph_index >= face.inner.info().num_glyphs {
+    if glyph_index >= face.inner.borrow().info().num_glyphs {
         return Err(FT_Err_Invalid_Glyph_Index);
     }
     let transform = if load_flags & FT_LOAD_IGNORE_TRANSFORM != 0 {
@@ -1551,6 +1800,7 @@ pub fn FT_Load_Glyph(
         None
     };
     face.inner
+        .borrow()
         .load_glyph_with_transform(glyph_index, flags, transform)
         .map(|slot| slot_to_ffi(face, slot, flags))
         .map_err(error_to_ft)
@@ -1561,7 +1811,7 @@ pub fn FT_Get_Advance(
     glyph_index: FT_UInt,
     load_flags: FT_Int32,
 ) -> Result<FT_Fixed, FT_Error> {
-    if face.probe_only {
+    if face.probe_only || !has_active_size(face) {
         return Err(FT_Err_Invalid_Size_Handle);
     }
     let fast_only = load_flags & FT_ADVANCE_FLAG_FAST_ONLY_I32 != 0;
@@ -1572,18 +1822,19 @@ pub fn FT_Get_Advance(
     let glyph_index = u16::try_from(glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
     let flags = load_flags_to_core(load_flags)?;
     // Match the same driver-side glyph index guard used by `FT_Load_Glyph`.
-    if glyph_index >= face.inner.info().num_glyphs {
+    if glyph_index >= face.inner.borrow().info().num_glyphs {
         return Err(FT_Err_Invalid_Glyph_Index);
     }
     if use_fast_horizontal_advance(flags) {
         // C `tt_get_advances` returns raw hmtx advances; `ft_face_scale_advances_`
         // scales them directly to 16.16 with `FT_MulFix(1024 * advance, x_scale)`.
         return Ok(FT_Fixed::from(
-            face.inner.glyph_hori_advance_16dot16(glyph_index),
+            face.inner.borrow().glyph_hori_advance_16dot16(glyph_index),
         ));
     }
     let slot = face
         .inner
+        .borrow()
         .load_glyph(glyph_index, flags)
         .map_err(error_to_ft)?;
     let advance = if flags.contains(api::LoadFlags::VERTICAL_LAYOUT) {
@@ -1637,7 +1888,7 @@ pub fn FT_Render_Glyph(
 }
 
 pub fn FT_Size_Metrics(face: &FT_Face) -> FT_Size_MetricsRec {
-    face.inner.size_metrics().into()
+    face.inner.borrow().size_metrics().into()
 }
 
 #[inline]
@@ -1747,7 +1998,7 @@ fn move_long_sign(value: FT_Long, sign: i32) -> (FT_ULong, i32) {
 }
 
 pub fn FT_Face_Info(face: &FT_Face) -> FT_FaceRecPublic {
-    let info = face.inner.info();
+    let info = face.inner.borrow().info();
     FT_FaceRecPublic {
         num_faces: info.num_faces as FT_Long,
         face_index: info.face_index as FT_Long,
@@ -1768,6 +2019,7 @@ pub fn FT_Face_Info(face: &FT_Face) -> FT_FaceRecPublic {
         max_advance_height: info.max_advance_height as i16,
         underline_position: info.underline_position,
         underline_thickness: info.underline_thickness,
+        size: active_size_handle(face),
         ..FT_FaceRecPublic::default()
     }
 }
@@ -1836,7 +2088,8 @@ pub fn FT_Load_Sfnt_Table(
         Ok(t) => t,
         Err(_) => return Err(FT_Err_Table_Missing as FT_Error),
     };
-    let font = face.inner.font();
+    let inner = face.inner.borrow();
+    let font = inner.font();
     let table_len = match font.sfnt_table_len(tag_u32) {
         Ok(len) => len,
         Err(_) => return Err(FT_Err_Table_Missing as FT_Error),
@@ -1886,7 +2139,8 @@ pub fn FT_Sfnt_Table_Info(
         *length = FT_Sfnt_Table_Count(face) as FT_ULong;
         return FT_Err_Ok;
     }
-    let font = face.inner.font();
+    let inner = face.inner.borrow();
+    let font = inner.font();
     let index = match usize::try_from(table_index) {
         Ok(i) => i,
         Err(_) => return FT_Err_Table_Missing as FT_Error,
@@ -1903,7 +2157,7 @@ pub fn FT_Sfnt_Table_Info(
 
 /// Returns the total number of SFNT tables in the font.
 pub fn FT_Sfnt_Table_Count(face: &FT_Face) -> usize {
-    face.inner.font().sfnt_tables().len()
+    face.inner.borrow().font().sfnt_tables().len()
 }
 
 fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags) -> FT_GlyphSlot {
@@ -1929,7 +2183,7 @@ fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags)
         )
     };
     let outline = slot.slot_outline().map(outline_to_ffi_snapshot);
-    let source_face = face.inner.clone();
+    let source_face = face.inner.borrow().clone();
     FT_GlyphSlot {
         glyph_index,
         metrics,

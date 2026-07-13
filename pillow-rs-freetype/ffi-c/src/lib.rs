@@ -215,6 +215,8 @@ pub struct FT_GlyphSlotRec {
 pub struct FT_SizeRec {
     pub metrics: FT_Size_Metrics,
     pub internal: *mut c_void,
+    rust_size: rust_ffi::FT_Size,
+    owner: FT_Face,
 }
 
 #[repr(C)]
@@ -231,6 +233,7 @@ pub struct FT_LibraryRec {
 
 struct FaceState {
     inner: rust_ffi::FT_Face,
+    size_records: Vec<FT_Size>,
     charmaps: Box<[FT_CharMapRec]>,
     charmap_ptrs: Box<[FT_CharMap]>,
     postscript_name: Option<CString>,
@@ -242,6 +245,7 @@ impl FaceState {
         let postscript_name = postscript_name_cstring(&inner);
         Self {
             inner,
+            size_records: Vec::new(),
             charmaps: Box::new([]),
             charmap_ptrs: Box::new([]),
             postscript_name,
@@ -301,6 +305,31 @@ impl FaceState {
         self.variant_list = values;
         self.variant_list.push(0);
         self.variant_list.as_mut_ptr()
+    }
+
+    fn push_size_record(&mut self, size: FT_Size) {
+        self.size_records.push(size);
+    }
+
+    fn remove_size_record(&mut self, size: FT_Size) -> bool {
+        let Some(index) = self
+            .size_records
+            .iter()
+            .position(|record| ptr::eq(*record, size))
+        else {
+            return false;
+        };
+        self.size_records.remove(index);
+        true
+    }
+}
+
+impl Drop for FaceState {
+    fn drop(&mut self) {
+        for size in self.size_records.drain(..) {
+            // SAFETY: `size_records` contains only boxes allocated by this wrapper.
+            unsafe { drop_size(size) };
+        }
     }
 }
 
@@ -540,6 +569,13 @@ pub fn abi_size_metrics(face: FT_Face) -> Option<FT_Size_Metrics> {
     let size = NonNull::new(size)?;
     // SAFETY: `size` is owned by the live face for the duration of this copy.
     Some(unsafe { size.as_ref().metrics })
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_active_size(face: FT_Face) -> Option<FT_Size> {
+    let face = NonNull::new(face)?;
+    // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
+    Some(unsafe { (*face.as_ptr()).size })
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -972,16 +1008,22 @@ pub extern "C" fn FT_New_Memory_Face(
     match rust_ffi::FT_New_Memory_Face(rust_library, data, face_index, 20.0) {
         Ok(inner) => {
             let metrics = rust_size_metrics_to_abi(rust_ffi::FT_Size_Metrics(&inner));
+            let rust_size = rust_ffi::FT_Face_Info(&inner).size;
             let mut face = Box::new(FT_FaceRec {
                 glyph: ptr::null_mut(),
                 size: Box::into_raw(Box::new(FT_SizeRec {
                     metrics,
                     internal: ptr::null_mut(),
+                    rust_size,
+                    owner: ptr::null_mut(),
                 })),
                 internal: ptr::null_mut(),
             });
             let face_ptr = (&mut *face) as *mut FT_FaceRec;
             let mut state = Box::new(FaceState::new(inner));
+            // SAFETY: `face.size` was allocated above and is owned by `state`.
+            unsafe { (*face.size).owner = face_ptr };
+            state.push_size_record(face.size);
             state.refresh_charmaps(face_ptr);
             face.internal = Box::into_raw(state).cast::<c_void>();
             // SAFETY: `out` is a valid out pointer checked above.
@@ -1001,7 +1043,6 @@ pub extern "C" fn FT_Done_Face(face: FT_Face) -> FT_Error {
     unsafe {
         let face = Box::from_raw(face.as_ptr());
         drop_glyph(face.glyph);
-        drop_size(face.size);
         if !face.internal.is_null() {
             drop(Box::from_raw(face.internal.cast::<FaceState>()));
         }
@@ -1106,6 +1147,104 @@ pub extern "C" fn FT_Request_Size(face: FT_Face, req: *const FT_Size_RequestRec)
         update_size_metrics(face, &state.inner);
     }
     error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_New_Size(face: FT_Face, asize: *mut FT_Size) -> FT_Error {
+    let Some(_face_ptr) = non_null_mut(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(out) = non_null_mut(asize) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(state) = face_state_mut(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+
+    // SAFETY: `out` is a valid output pointer checked above.
+    unsafe { *out.as_ptr() = ptr::null_mut() };
+    let mut rust_size: rust_ffi::FT_Size = ptr::null_mut();
+    let error = rust_ffi::FT_New_Size(Some(&state.inner), Some(&mut rust_size));
+    if error != rust_ffi::FT_Err_Ok {
+        return error;
+    }
+
+    let size = Box::into_raw(Box::new(FT_SizeRec {
+        metrics: rust_size_metrics_to_abi(rust_ffi::FT_Size_Metrics(&state.inner)),
+        internal: ptr::null_mut(),
+        rust_size,
+        owner: face,
+    }));
+    state.push_size_record(size);
+    // SAFETY: `out` is a valid output pointer checked above.
+    unsafe { *out.as_ptr() = size };
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Activate_Size(size: FT_Size) -> FT_Error {
+    let Some(size_ptr) = non_null_mut(size) else {
+        return rust_ffi::FT_Err_Invalid_Size_Handle;
+    };
+    // SAFETY: `size_ptr` is a live size record allocated by this wrapper.
+    let (owner, rust_size) = unsafe {
+        let record = size_ptr.as_ref();
+        (record.owner, record.rust_size)
+    };
+    let Some(face_ptr) = non_null_mut(owner) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(state) = face_state_mut(owner) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let error = rust_ffi::FT_Activate_Size(rust_size);
+    if error == rust_ffi::FT_Err_Ok {
+        // SAFETY: `face_ptr` is a live parent face and `size` is one of its size records.
+        unsafe { (*face_ptr.as_ptr()).size = size };
+        update_size_metrics(owner, &state.inner);
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Done_Size(size: FT_Size) -> FT_Error {
+    let Some(size_ptr) = non_null_mut(size) else {
+        return rust_ffi::FT_Err_Invalid_Size_Handle;
+    };
+    // SAFETY: `size_ptr` is a live size record allocated by this wrapper.
+    let (owner, rust_size) = unsafe {
+        let record = size_ptr.as_ref();
+        (record.owner, record.rust_size)
+    };
+    let Some(face_ptr) = non_null_mut(owner) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(state) = face_state_mut(owner) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+
+    let error = rust_ffi::FT_Done_Size(rust_size);
+    if error != rust_ffi::FT_Err_Ok {
+        return error;
+    }
+    let was_active = unsafe { (*face_ptr.as_ptr()).size == size };
+    let removed = state.remove_size_record(size);
+    if !removed {
+        return rust_ffi::FT_Err_Invalid_Size_Handle;
+    }
+    if was_active {
+        let fallback = state
+            .size_records
+            .first()
+            .copied()
+            .unwrap_or(ptr::null_mut());
+        // SAFETY: `face_ptr` is a live parent face; fallback is either null or still face-owned.
+        unsafe { (*face_ptr.as_ptr()).size = fallback };
+        update_size_metrics(owner, &state.inner);
+    }
+    // SAFETY: the record has been removed from `state.size_records` and is consumed here.
+    unsafe { drop_size(size) };
+    rust_ffi::FT_Err_Ok
 }
 
 #[unsafe(no_mangle)]
