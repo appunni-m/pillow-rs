@@ -48,6 +48,7 @@ pub struct SbitBitmap {
     pub width: u32,
     pub rows: u32,
     pub pitch: i32,
+    pub is_mono: bool,
     pub num_grays: u16,
     pub buffer: Vec<u8>,
 }
@@ -292,18 +293,12 @@ fn load_simple_image(
     image_record: SbitImageRecord,
 ) -> Result<SbitGlyph, FontError> {
     // FreeType `sfnt/ttsbit.c:1083-1130` routes image format 1 through the
-    // byte-aligned decoder; for 8-bit strikes `sfnt/ttsbit.c:543-611` exposes
-    // a gray bitmap with pitch equal to width.
+    // byte-aligned decoder.  `tt_sbit_decoder_alloc_bitmap` maps bit depth 1
+    // to MONO and bit depth 8 to GRAY before copying row-aligned image bytes.
     if image_record.format != 1 {
         return Err(FontError::InvalidFont(format!(
             "unsupported embedded bitmap image format {}",
             image_record.format
-        )));
-    }
-    if strike.bit_depth != 8 {
-        return Err(FontError::InvalidFont(format!(
-            "unsupported embedded bitmap bit depth {}",
-            strike.bit_depth
         )));
     }
     let start = image_record
@@ -329,9 +324,17 @@ fn load_simple_image(
     let raw_width = *image
         .get(1)
         .ok_or_else(|| FontError::InvalidFont("embedded bitmap small metrics missing".into()))?;
+    let (is_mono, row_bytes, num_grays) = match strike.bit_depth {
+        1 => (true, usize::from(raw_width).div_ceil(8), 2),
+        8 => (false, usize::from(raw_width), 256),
+        depth => {
+            return Err(FontError::InvalidFont(format!(
+                "unsupported embedded bitmap bit depth {depth}"
+            )));
+        }
+    };
     let metrics = read_small_metrics(image)?;
     let bitmap_start = 5usize;
-    let row_bytes = usize::from(raw_width);
     let rows = usize::from(raw_height);
     let bitmap_len = row_bytes
         .checked_mul(rows)
@@ -348,8 +351,9 @@ fn load_simple_image(
         bitmap: SbitBitmap {
             width: u32::from(raw_width),
             rows: u32::from(raw_height),
-            pitch: i32::from(raw_width),
-            num_grays: 256,
+            pitch: row_bytes as i32,
+            is_mono,
+            num_grays,
             buffer,
         },
     })

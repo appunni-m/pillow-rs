@@ -638,7 +638,11 @@ fn sbit_glyph_slot(
         width: sbit.bitmap.width,
         rows: sbit.bitmap.rows,
         pitch: sbit.bitmap.pitch,
-        pixel_mode: PixelMode::Gray,
+        pixel_mode: if sbit.bitmap.is_mono {
+            PixelMode::Mono
+        } else {
+            PixelMode::Gray
+        },
         num_grays: sbit.bitmap.num_grays,
         left: bitmap_left,
         top: bitmap_top,

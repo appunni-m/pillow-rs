@@ -239,6 +239,31 @@
             ]
           },
           {
+            "id": "sbit-mono-format1-sbits-only",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fixtures/assets/fonts/sbit_mono_format1.ttf",
+                "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT format-1 1-bit monochrome embedded bitmap for glyph 1."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_SBITS_ONLY"
+              ]
+            },
+            "coverage": [
+              "sbit:mono-format1-bitmap-success"
+            ]
+          },
+          {
             "id": "sbit-gray-format1-default-render",
             "assets": {
               "font": {
