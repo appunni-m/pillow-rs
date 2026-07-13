@@ -244,6 +244,26 @@
             ]
           },
           {
+            "id": "latin-adjust-bottom-cedilla",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-small-ignore.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 290,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:bottom-accent-separation"
+            ]
+          },
+          {
             "id": "latin-adjust-bottom-tilde",
             "assets": {
               "font": {

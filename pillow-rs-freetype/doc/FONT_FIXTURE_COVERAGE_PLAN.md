@@ -1948,23 +1948,24 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-13 | SBIT equal-offset Missing_Bitmap fixture | `font-fixture-sbit` now emits `fixtures/assets/fonts/sbit_missing_bitmap.ttf`, a compact source-backed TrueType face with one EBLC/EBDT strike at 20 ppem. Glyph 1 uses EBLC index format 1 with equal image offsets, matching FreeType's NoBitmap branch in `src/sfnt/ttsbit.c:1241-1441` and the top-level `Missing_Bitmap` return. Core now accepts `FT_LOAD_SBITS_ONLY`, parses just enough EBLC strike metadata to find the empty image record, and returns the exact `FT_Err_Missing_Bitmap` through Rust FFI, C ABI, and WASM ABI without adding bitmap decoding. Concrete cases remain 6,778 with zero implicit rows; runtime comparison remains 6,774 / 6,774 with four runtime-pending rows. Route audit moves real parity to 3,419 and pending-core to 15. Refreshed condition coverage is 16,433 / 18,294 lines, 23,628 / 26,306 regions, 3,963 / 4,666 branches, and 1,045 / 1,182 functions. The remaining SBIT blocker is the recursive composite missing-subglyph row: pinned C returns `Invalid_Composite` from `src/sfnt/ttsbit.c:1436-1441`, which still needs a compact composite SBIT fixture and recursive loader support |
 | 2026-07-13 | TrueType JROF not-taken branch probe | The source-backed `hinter-control-matrix.ttf` `controlFlowMatrix` glyph now starts with a no-output `JROF` probe that pushes `offset=1` and `condition=1`, consumes both operands, and does not jump. The existing `FT_Load_Glyph.matrix_load@hinter-control-flow-matrix` public row reaches the bytecode; pinned C, Rust FFI, C ABI, and WASM ABI agree while `tt/hinter/exec.rs:1602` covers the not-taken side (`condition != 0`) without adding public rows or implicit expansion. Concrete cases remain 6,779 with zero implicit rows; runtime comparison remains 6,775 / 6,775 with four explicit pending rows. Refreshed condition coverage stays at 16,282 / 18,090 lines and 1,030 / 1,150 functions while regions move to 23,362 / 25,927 and branches move to 3,944 / 4,626; `tt/hinter/exec.rs` moves to 2,740 / 2,945 regions and 374 / 416 branches. Route audit remains real-parity 3,419 |
 | 2026-07-13 | Format-14 UVS condition probes | `build_cmap_fixtures.py` extends the compact format-14 UVS fixture with a zero-glyph non-default mapping and a non-default-only selector, adds `cmap-platform0-variation.ttf` for the active platform-0 Unicode charmap branch, and adds one non-default-offset-out-of-range malformed format-14 subtable to the existing malformed cmap matrix. Six grouped public UVS variants cover below-default-range probes, glyph-id-zero non-default filtering, non-default-only char lists, and platform-0 default-lookup routing through exact pinned C, Rust FFI, C ABI, and WASM ABI parity. Concrete cases rise from 6,779 to 6,785 with zero implicit rows; runtime comparison rises from 6,775 / 6,775 to 6,781 / 6,781 with four explicit pending rows. Refreshed condition coverage moves from 16,282 / 18,090 lines, 23,361 / 25,927 regions, and 3,943 / 4,626 branches to 16,282 / 18,090 lines, 23,362 / 25,927 regions, and 3,953 / 4,626 branches; `src/tt/cmap.rs` reaches 164 / 164 branches. The remaining cmap lines are only 64-bit-unreachable `usize` overflow closures at lines 786-789, 866-867, and 914-915. Route audit reports real-parity rising from 3,419 to 3,425 with pending-core 16 and implicit cases remaining zero |
+| 2026-07-13 | Latin bottom cedilla adjustment row | `build_autohint_script_fixtures.py` appends U+0122 to the source-backed `fonts/autohint/latin-small-ignore.ttf` as a compact two-contour bottom-accent glyph, preserving existing glyph indices. One explicit `FT_LOAD_FORCE_AUTOHINT` row selects it through `FT_Load_Char`, proving the FreeType bottom adjustment database path where `afadjust.c:167` maps U+0122 to `AF_ADJUST_DOWN` and `aflatin.c:3619,3821-3829` applies the lowest-contour bottom separation branch. Focused coverage covered previously missed `src/autohint/latin.rs` lines 2592, 2595, 2599, and 3951; full condition coverage moves from 16,282 / 18,090 lines, 23,361 / 25,927 regions, and 3,943 / 4,626 branches to 16,286 / 18,090 lines, 23,366 / 25,927 regions, and 3,948 / 4,626 branches, with functions unchanged at 1,030 / 1,150. Concrete cases rise from 6,779 to 6,780 with zero implicit rows; runtime comparison rises from 6,775 / 6,775 to 6,776 / 6,776 with four explicit pending rows. Route audit reports real-parity rising from 3,419 to 3,420 with pending-core 16 |
 
 ## Residual Coverage Classification - 2026-07-13
 
-Fresh `test-unified-condition-coverage` still reports 1,816 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,804 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,785 |
-| Runnable parity comparisons | 6,781 / 6,781 |
+| Concrete explicit cases | 6,786 |
+| Runnable parity comparisons | 6,782 / 6,782 |
 | Pending cases | 4 |
-| Covered Rust lines | 16,489 / 18,305 (90.0792%) |
-| Rust region coverage | 23,637 / 26,216 (90.1625%) |
-| Rust branch/condition coverage | 3,968 / 4,668 (85.0043%) |
-| Rust function coverage | 1,062 / 1,182 (89.8477%) |
-| Route audit split | real-parity 3,430; raw-slot-null-validation 4; pending-core 11; shape-incomplete-fallback 0 |
+| Covered Rust lines | 16,286 / 18,090 (90.0276%) |
+| Rust region coverage | 23,366 / 25,927 (90.1223%) |
+| Rust branch/condition coverage | 3,948 / 4,626 (85.3437%) |
+| Rust function coverage | 1,030 / 1,150 (89.5652%) |
+| Route audit split | real-parity 3,431; raw-slot-null-validation 4; pending-core 11; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
