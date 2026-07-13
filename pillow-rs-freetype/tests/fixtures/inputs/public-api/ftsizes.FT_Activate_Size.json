@@ -155,13 +155,15 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/bitmap/embedded-strikes.ttf"
+            "id": "fixtures/assets/fonts/sbit_gray_format1.ttf"
           }
         },
         "params": {
           "open": "FT_New_Memory_Face",
           "face_index": 0,
+          "strike_index": 0,
           "sequence": [
+            "FT_Set_Pixel_Sizes initial_size 12px",
             "FT_New_Size secondary_size",
             "FT_Activate_Size secondary_size",
             "FT_Select_Size strike_index=0",
@@ -177,7 +179,7 @@
         "area:size_select"
       ],
       "expectation": {
-        "status": "build_dependent",
+        "status": "ok",
         "output_shape": {
           "return_sequence": "array<FT_Error>",
           "active_size_identity": "handle_identity",
@@ -194,7 +196,7 @@
           ]
         },
         "fixture_requirements": [
-          "Bitmap or SFNT embedded-strike font with at least one deterministic fixed size for FT_Select_Size"
+          "Compact EBLC/EBDT fixture with at least one deterministic fixed size for FT_Select_Size"
         ]
       }
     },

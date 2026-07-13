@@ -69,6 +69,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_set_pixel_sizes",
     "fontdone_wasm_set_char_size",
     "fontdone_wasm_request_size",
+    "fontdone_wasm_select_size",
     "fontdone_wasm_get_char_index",
     "fontdone_wasm_get_char_variant_index",
     "fontdone_wasm_get_char_variant_is_default",
@@ -148,6 +149,7 @@ REAL_PARITY_OPERATIONS = {
     "set_pixel_sizes",
     "set_char_size",
     "freetype.request_size",
+    "freetype.select_size",
     "size_metrics",
     "get_char_index",
     "charmap.get_char_index",
@@ -236,11 +238,11 @@ REAL_PARITY_OPERATIONS = {
     "ftsizes.new_size_sequence",
     "ftsizes.done_size_sequence",
     "ftsizes.activate_size_sequence",
+    "ftsizes.activate_select_size_sequence",
 }
 
 EXPLICIT_UNSUPPORTED_OPERATIONS = {
     "freetype.face_properties",
-    "freetype.select_size",
 }
 
 COMPILE_CONTRACT_PREFIXES = (
@@ -661,11 +663,6 @@ def has_null_lifecycle_handle(row: ConcreteInput) -> bool:
 
 
 def pending_core_reason(row: ConcreteInput) -> str | None:
-    if row.operation == "ftsizes.activate_select_size_sequence":
-        return (
-            "FT_Select_Size active-size mutation needs real strike selection "
-            "support before this sequence can run as exact parity"
-        )
     if (
         row.case_id
         == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"

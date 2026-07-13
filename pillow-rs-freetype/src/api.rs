@@ -9,7 +9,8 @@
 use crate::error::FontError;
 use crate::font::{
     ActiveSizeState, BBox, FaceInfo, Font, GlyphSlotLoad, GlyphSlotLoadFormat, GlyphSlotMetrics,
-    KerningMode, LoadMode, LoadedOutline, SizeMetrics, SizeRequest, SizeRequestError, SubGlyphInfo,
+    KerningMode, LoadMode, LoadedOutline, SelectSizeError, SizeMetrics, SizeRequest,
+    SizeRequestError, SubGlyphInfo,
 };
 use crate::render::{PixelMode, RenderMode, RenderedBitmap, render_loaded_outline};
 use crate::tt::hinter::NativeHintMode;
@@ -313,6 +314,13 @@ impl Face {
     /// Request the active size, equivalent to `FT_Request_Size`.
     pub fn request_size(&mut self, request: SizeRequest) -> Result<(), SizeRequestError> {
         self.font.request_size(request)?;
+        self.render_fonts.clear();
+        Ok(())
+    }
+
+    /// Select an embedded bitmap strike, equivalent to `FT_Select_Size`.
+    pub fn select_size(&mut self, strike_index: usize) -> Result<(), SelectSizeError> {
+        self.font.select_size(strike_index)?;
         self.render_fonts.clear();
         Ok(())
     }

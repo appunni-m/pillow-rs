@@ -1159,6 +1159,18 @@ pub extern "C" fn FT_Request_Size(face: FT_Face, req: *const FT_Size_RequestRec)
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Select_Size(face: FT_Face, strike_index: FT_Int) -> FT_Error {
+    let Some(state) = face_state_mut(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let error = rust_ffi::FT_Select_Size(Some(&mut state.inner), strike_index);
+    if error == rust_ffi::FT_Err_Ok {
+        update_size_metrics(face, &state.inner);
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_New_Size(face: FT_Face, asize: *mut FT_Size) -> FT_Error {
     let Some(_face_ptr) = non_null_mut(face) else {
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;

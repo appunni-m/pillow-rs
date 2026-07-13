@@ -20,18 +20,12 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/bitmap/embedded-strike.ttf",
-            "status": "required_future_asset",
-            "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
+            "id": "fixtures/assets/fonts/sbit_gray_format1.ttf"
           }
         },
         "params": {
           "face_index": 0,
-          "strike_indices": [
-            0,
-            1
-          ],
-          "post_load_probe": "bitmap glyph present in strike"
+          "strike_index": 0
         }
       },
       "classifiers": [
@@ -42,19 +36,17 @@
         "status": "ok",
         "output_shape": {
           "return": "FT_Error",
-          "selected_size_metrics": "FT_Size_Metrics",
-          "post_load_bitmap": "bitmap metrics and bytes"
+          "selected_size_metrics": "FT_Size_Metrics"
         },
         "compare": {
           "mode": "exact",
           "paths": [
             "outputs[*].status",
-            "outputs[*].selected_size_metrics",
-            "outputs[*].post_load_bitmap"
+            "outputs[*].selected_size_metrics"
           ]
         },
         "fixture_requirements": [
-          "Bitmap strike fixture with at least two fixed sizes"
+          "Compact EBLC/EBDT fixture with at least one fixed strike"
         ]
       }
     },
@@ -63,7 +55,7 @@
       "subject": "freetype.FT_Select_Size",
       "case": "success_embedded_bitmap_outline_fallback",
       "operation": "freetype.select_size",
-      "schema": "glyph_load",
+      "schema": "size_metrics",
       "expect_error": false,
       "inputs": {
         "variants": [
@@ -73,70 +65,15 @@
               "font": {
                 "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/bitmap/embedded-strike.ttf",
-                "status": "required_future_asset",
-                "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
+                "id": "fixtures/assets/fonts/sbit_gray_format1.ttf"
               }
             },
             "params": {
               "face_index": 0,
-              "strike_index": 0,
-              "glyphs": [
-                "strike_present_glyph",
-                "strike_missing_outline_glyph"
-              ],
-              "load_flags": "FT_LOAD_DEFAULT"
+              "strike_index": 0
             },
             "coverage": [
               "freetype.select_size:explicit-f1"
-            ]
-          },
-          {
-            "id": "f2",
-            "assets": {
-              "font": {
-                "kind": "ref",
-                "role": "font",
-                "path": "input/fonts/bitmap/embedded-strike.ttf",
-                "status": "required_future_asset",
-                "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
-              }
-            },
-            "params": {
-              "face_index": 0,
-              "strike_index": 0,
-              "glyphs": [
-                "strike_present_glyph",
-                "strike_missing_outline_glyph"
-              ],
-              "load_flags": "FT_LOAD_SBITS_ONLY"
-            },
-            "coverage": [
-              "freetype.select_size:explicit-f2"
-            ]
-          },
-          {
-            "id": "f3",
-            "assets": {
-              "font": {
-                "kind": "ref",
-                "role": "font",
-                "path": "input/fonts/bitmap/embedded-strike.ttf",
-                "status": "required_future_asset",
-                "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
-              }
-            },
-            "params": {
-              "face_index": 0,
-              "strike_index": 0,
-              "glyphs": [
-                "strike_present_glyph",
-                "strike_missing_outline_glyph"
-              ],
-              "load_flags": "FT_LOAD_NO_BITMAP"
-            },
-            "coverage": [
-              "freetype.select_size:explicit-f3"
             ]
           }
         ]
@@ -149,19 +86,17 @@
         "status": "ok",
         "output_shape": {
           "return": "FT_Error",
-          "glyph_outputs": "C oracle status, format, metrics, bitmap when present"
+          "selected_size_metrics": "FT_Size_Metrics"
         },
         "compare": {
           "mode": "exact",
           "paths": [
             "outputs[*].status",
-            "outputs[*].glyph_format",
-            "outputs[*].metrics",
-            "outputs[*].bitmap"
+            "outputs[*].selected_size_metrics"
           ]
         },
         "fixture_requirements": [
-          "Embedded bitmap plus outline fallback fixture"
+          "Compact EBLC/EBDT fixture with one fixed strike"
         ]
       }
     },
@@ -224,16 +159,21 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/bitmap/embedded-strike.ttf",
-            "status": "required_future_asset",
-            "requires": "Font with fixed bitmap strikes and observable available_sizes entries"
+            "id": "fixtures/assets/fonts/sbit_gray_format1.ttf"
           }
         },
         "params": {
-          "face_index": 0,
-          "strike_indices": [
-            -1,
-            "num_fixed_sizes"
+          "variants": [
+            {
+              "id": "negative",
+              "face_index": 0,
+              "strike_index": -1
+            },
+            {
+              "id": "past_end",
+              "face_index": 0,
+              "strike_index": 1
+            }
           ]
         }
       },

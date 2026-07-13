@@ -3662,6 +3662,55 @@ fn rust_activate_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
     ))
 }
 
+fn rust_activate_select_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let initial = FT_Face_Info(&face).size;
+    let set_initial_error = FT_Set_Pixel_Sizes(&mut face, 0, 12);
+    let mut secondary = std::ptr::null_mut();
+    let new_error = FT_New_Size(Some(&face), Some(&mut secondary));
+    let activate_secondary_error = FT_Activate_Size(secondary);
+    let after_secondary_activation =
+        size_identity_label(FT_Face_Info(&face).size, initial, secondary);
+    let select_error = FT_Select_Size(
+        Some(&mut face),
+        select_size_strike_index_param(&case.inputs.params)?,
+    );
+    let selected_metrics = if select_error == FT_Err_Ok {
+        size_metrics_json(&FT_Size_Metrics(&face))
+    } else {
+        Value::Null
+    };
+    let activate_initial_error = FT_Activate_Size(initial);
+    let after_initial_activation =
+        size_identity_label(FT_Face_Info(&face).size, initial, secondary);
+    let inactive_metrics = if activate_initial_error == FT_Err_Ok {
+        size_metrics_json(&FT_Size_Metrics(&face))
+    } else {
+        Value::Null
+    };
+
+    let errors = [
+        set_initial_error,
+        new_error,
+        activate_secondary_error,
+        select_error,
+        activate_initial_error,
+    ];
+    let output = json!({
+        "return_sequence": errors,
+        "active_size_identity": {
+            "after_secondary_activation": after_secondary_activation,
+            "after_initial_activation": after_initial_activation
+        },
+        "selected_strike_metrics": selected_metrics,
+        "inactive_size_metrics": inactive_metrics
+    });
+    Ok(lifecycle_sequence_output(
+        first_lifecycle_error(&errors),
+        output,
+    ))
+}
+
 fn otvalid_null_face_output(err: FT_Error) -> RunOutput {
     error_with_output(err, json!({"outputs_touched": false}))
 }
@@ -7747,6 +7796,22 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             push_face_size(params, &mut args)?;
             Ok(args)
         }
+        "freetype.select_size" => {
+            let strike_index = select_size_strike_index_param(params)?;
+            if lifecycle_handle_param(params, "face") == Some("null") {
+                return Ok(vec![
+                    "--select-size-null".to_string(),
+                    strike_index.to_string(),
+                ]);
+            }
+            let mut args = vec!["--select-size".to_string()];
+            if push_font_source(case, &mut args).is_err() {
+                return oracle_fallback_args(case);
+            }
+            push_face_size(params, &mut args)?;
+            args.push(strike_index.to_string());
+            Ok(args)
+        }
         "set_char_size" => {
             if lifecycle_handle_param(params, "face") == Some("null") {
                 let char_width = i64_param(params, "char_width").unwrap_or(768);
@@ -7825,6 +7890,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             let mut args = vec!["--activate-size-sequence".to_string()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftsizes.activate_select_size_sequence" => {
+            let mut args = vec!["--activate-select-size-sequence".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(select_size_strike_index_param(params)?.to_string());
             Ok(args)
         }
         "ftotval.open_type_validate" => {
@@ -9088,6 +9160,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftsizes.done_size_sequence" => rust_done_size_sequence(case),
         "ftsizes.activate_size" => rust_activate_size(case),
         "ftsizes.activate_size_sequence" => rust_activate_size_sequence(case),
+        "ftsizes.activate_select_size_sequence" => rust_activate_select_size_sequence(case),
         "ftsnames.get_sfnt_name_count" => {
             let face = open_face(case)?;
             Ok(ok(rust_sfnt_name_count_output(Some(&face))))
@@ -9354,6 +9427,8 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftsizes.new_size_sequence" => c_new_size_sequence(case),
         "ftsizes.done_size_sequence" => c_done_size_sequence(case),
         "ftsizes.activate_size_sequence" => c_activate_size_sequence(case),
+        "ftsizes.activate_select_size_sequence" => c_activate_select_size_sequence(case),
+        "freetype.select_size" => c_select_size(case),
         "constant"
         | "constant_map"
         | "record_layout"
@@ -9374,7 +9449,6 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.get_transform"
         | "freetype.reference_face"
         | "freetype.face_properties"
-        | "freetype.select_size"
         | "ftotval.open_type_validate"
         | "ftotval.open_type_free"
         | "freetype.new_face" => run_rust_ffi(case),
@@ -9899,6 +9973,8 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftsizes.new_size_sequence" => wasm_new_size_sequence(case),
         "ftsizes.done_size_sequence" => wasm_done_size_sequence(case),
         "ftsizes.activate_size_sequence" => wasm_activate_size_sequence(case),
+        "ftsizes.activate_select_size_sequence" => wasm_activate_select_size_sequence(case),
+        "freetype.select_size" => wasm_select_size(case),
         "constant"
         | "constant_map"
         | "record_layout"
@@ -9919,7 +9995,6 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.get_transform"
         | "freetype.reference_face"
         | "freetype.face_properties"
-        | "freetype.select_size"
         | "ftotval.open_type_validate"
         | "ftotval.open_type_free"
         | "freetype.new_face" => run_rust_ffi(case),
@@ -10854,7 +10929,16 @@ fn wasm_get_subglyph_info(handle: usize, case: &InputCase) -> Result<RunOutput, 
 
 fn rust_select_size(case: &InputCase) -> Result<RunOutput, String> {
     let strike_index = select_size_strike_index_param(&case.inputs.params)?;
-    Ok(error(FT_Select_Size(None, strike_index)))
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(error(FT_Select_Size(None, strike_index)));
+    }
+    let mut face = open_face(case)?;
+    let err = FT_Select_Size(Some(&mut face), strike_index);
+    if err == FT_Err_Ok {
+        Ok(ok(size_metrics_json(&FT_Size_Metrics(&face))))
+    } else {
+        Ok(error(err))
+    }
 }
 
 fn select_size_strike_index_param(params: &Value) -> Result<FT_Int, String> {
@@ -13091,6 +13175,26 @@ fn c_size_metrics_json(face: c_abi::FT_Face) -> Result<Value, String> {
     }))
 }
 
+fn c_select_size(case: &InputCase) -> Result<RunOutput, String> {
+    let strike_index = select_size_strike_index_param(&case.inputs.params)?;
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(error(c_abi::FT_Select_Size(
+            std::ptr::null_mut(),
+            strike_index,
+        )));
+    }
+    let (library, face) = c_open_face(case)?;
+    let err = c_abi::FT_Select_Size(face, strike_index);
+    let output = if err == FT_Err_Ok {
+        c_size_metrics_json(face).map(ok)
+    } else {
+        Ok(error(err))
+    };
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
 fn c_active_size(face: c_abi::FT_Face) -> c_abi::FT_Size {
     c_abi::abi_active_size(face).unwrap_or(std::ptr::null_mut())
 }
@@ -13314,6 +13418,53 @@ fn c_activate_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
     ))
 }
 
+fn c_activate_select_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let initial = c_active_size(face);
+    let set_initial_error = c_abi::FT_Set_Pixel_Sizes(face, 0, 12);
+    let mut secondary = std::ptr::null_mut();
+    let new_error = c_abi::FT_New_Size(face, &mut secondary);
+    let activate_secondary_error = c_abi::FT_Activate_Size(secondary);
+    let after_secondary_activation = size_identity_label(c_active_size(face), initial, secondary);
+    let select_error =
+        c_abi::FT_Select_Size(face, select_size_strike_index_param(&case.inputs.params)?);
+    let selected_metrics = if select_error == FT_Err_Ok {
+        c_size_metrics_json(face)?
+    } else {
+        Value::Null
+    };
+    let activate_initial_error = c_abi::FT_Activate_Size(initial);
+    let after_initial_activation = size_identity_label(c_active_size(face), initial, secondary);
+    let inactive_metrics = if activate_initial_error == FT_Err_Ok {
+        c_size_metrics_json(face)?
+    } else {
+        Value::Null
+    };
+
+    let errors = [
+        set_initial_error,
+        new_error,
+        activate_secondary_error,
+        select_error,
+        activate_initial_error,
+    ];
+    let output = json!({
+        "return_sequence": errors,
+        "active_size_identity": {
+            "after_secondary_activation": after_secondary_activation,
+            "after_initial_activation": after_initial_activation
+        },
+        "selected_strike_metrics": selected_metrics,
+        "inactive_size_metrics": inactive_metrics
+    });
+    c_done_face(face);
+    c_done_library(library);
+    Ok(lifecycle_sequence_output(
+        first_lifecycle_error(&errors),
+        output,
+    ))
+}
+
 fn c_done_face(face: c_abi::FT_Face) {
     if !face.is_null() {
         let _ = c_abi::FT_Done_Face(face);
@@ -13397,6 +13548,22 @@ fn wasm_size_metrics_value(handle: usize) -> Result<Value, String> {
     } else {
         Err(format!("fontdone_wasm_size_metrics returned {err}"))
     }
+}
+
+fn wasm_select_size(case: &InputCase) -> Result<RunOutput, String> {
+    let strike_index = select_size_strike_index_param(&case.inputs.params)?;
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        return Ok(error(wasm_abi::fontdone_wasm_select_size(0, strike_index)));
+    }
+    let handle = wasm_open_face(case)?;
+    let err = wasm_abi::fontdone_wasm_select_size(handle, strike_index);
+    let output = if err == FT_Err_Ok {
+        wasm_size_metrics_value(handle).map(ok)
+    } else {
+        Ok(error(err))
+    };
+    wasm_done_face(handle);
+    output
 }
 
 fn wasm_glyph_metrics_fields_json(handle: usize) -> Result<Value, String> {
@@ -13615,6 +13782,63 @@ fn wasm_activate_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
             "secondary_size": secondary_metrics
         },
         "glyph_metrics_by_active_size": [secondary_glyph_metrics, initial_glyph_metrics]
+    });
+    wasm_done_face(handle);
+    Ok(lifecycle_sequence_output(
+        first_lifecycle_error(&errors),
+        output,
+    ))
+}
+
+fn wasm_activate_select_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let initial = wasm_abi::fontdone_wasm_active_size(handle);
+    let set_initial_error = wasm_abi::fontdone_wasm_set_pixel_sizes(handle, 0, 12);
+    let status = wasm_abi::fontdone_wasm_new_size(handle);
+    let secondary = status.handle;
+    let new_error = status.error;
+    let activate_secondary_error = wasm_abi::fontdone_wasm_activate_size(secondary);
+    let after_secondary_activation = size_identity_label_usize(
+        wasm_abi::fontdone_wasm_active_size(handle),
+        initial,
+        secondary,
+    );
+    let select_error = wasm_abi::fontdone_wasm_select_size(
+        handle,
+        select_size_strike_index_param(&case.inputs.params)?,
+    );
+    let selected_metrics = if select_error == FT_Err_Ok {
+        wasm_size_metrics_value(handle)?
+    } else {
+        Value::Null
+    };
+    let activate_initial_error = wasm_abi::fontdone_wasm_activate_size(initial);
+    let after_initial_activation = size_identity_label_usize(
+        wasm_abi::fontdone_wasm_active_size(handle),
+        initial,
+        secondary,
+    );
+    let inactive_metrics = if activate_initial_error == FT_Err_Ok {
+        wasm_size_metrics_value(handle)?
+    } else {
+        Value::Null
+    };
+
+    let errors = [
+        set_initial_error,
+        new_error,
+        activate_secondary_error,
+        select_error,
+        activate_initial_error,
+    ];
+    let output = json!({
+        "return_sequence": errors,
+        "active_size_identity": {
+            "after_secondary_activation": after_secondary_activation,
+            "after_initial_activation": after_initial_activation
+        },
+        "selected_strike_metrics": selected_metrics,
+        "inactive_size_metrics": inactive_metrics
     });
     wasm_done_face(handle);
     Ok(lifecycle_sequence_output(
@@ -18468,6 +18692,7 @@ fn comparison_schema(case: &InputCase) -> &str {
         "face_macro_flags" => return "macro_probe",
         "record_layout" => return "record_layout",
         "freetype.request_size" => return "request_size_result",
+        "freetype.select_size" => return "size_metrics",
         "set_char_size" => return "request_size_result",
         "freetype.select_charmap" => {
             return if case.inputs.params.get("encodings").is_some() {
@@ -18545,7 +18770,6 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "freetype.get_postscript_name"
             | "freetype.face_properties"
             | "freetype.get_subglyph_info"
-            | "freetype.select_size"
             | "freetype.new_face"
             | "ftgasp.get_gasp"
             | "tttables.get_cmap_format"

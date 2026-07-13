@@ -899,6 +899,11 @@ pub extern "C" fn fontdone_wasm_request_size(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_select_size(handle: usize, strike_index: FT_Int) -> FT_Error {
+    rust_ffi::FT_Select_Size(face_mut(handle).map(|face| &mut face.face), strike_index)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_char_index(handle: usize, char_code: FT_ULong) -> FT_UInt {
     let Some(face) = face_ref(handle) else {
         return 0;
