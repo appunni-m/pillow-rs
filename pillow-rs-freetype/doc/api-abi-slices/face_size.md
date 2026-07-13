@@ -213,6 +213,16 @@ Those tests prove current semantic Rust behavior for the covered helpers; they
 do not prove C ABI record layout, exported symbol names, pointer ownership, or
 full FreeType error behavior.
 
+As of 2026-07-13, the `FT_New_Size`, `FT_Done_Size`, and
+`FT_Activate_Size` null-validation rows are real wrapper validation routes, but
+the non-null success sequence rows are not real parity.  A correct
+implementation needs a face-owned `FT_Size` handle model that preserves the
+initial size, allocates inactive secondary sizes, switches active size by
+handle identity, mutates the active size through `FT_Set_*` and
+`FT_Request_Size`, and exposes direct C ABI and WASM ABI lifecycle calls.  A
+Rust-FFI-only proof or a generic `Unimplemented_Feature` fallback must stay
+classified as pending core work.
+
 ## Shared Dynamic C/Rust Size Test Shape
 
 Add one generated manifest consumed by both a C oracle helper and a Rust test:

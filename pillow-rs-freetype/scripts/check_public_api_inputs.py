@@ -651,6 +651,16 @@ def has_null_lifecycle_handle(row: ConcreteInput) -> bool:
 
 
 def pending_core_reason(row: ConcreteInput) -> str | None:
+    if row.operation in {
+        "ftsizes.new_size_sequence",
+        "ftsizes.done_size_sequence",
+        "ftsizes.activate_size_sequence",
+        "ftsizes.activate_select_size_sequence",
+    }:
+        return (
+            "size lifecycle success requires a real face-owned FT_Size handle "
+            "model plus direct C ABI and WASM ABI routes"
+        )
     if (
         row.case_id
         == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"
