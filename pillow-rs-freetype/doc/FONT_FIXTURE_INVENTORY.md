@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 164 | 121 | 43 | 132 | 871 KiB |
+| Active fixtures | 170 | 127 | 43 | 138 | 899 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 7 | 7 | 0 | 7 | 193 KiB |
 
@@ -177,6 +177,12 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `702884925f08` | 4.5 | 1 | `fixtures/assets/fonts/sbit_strike_count_overflow.ttf` | source-backed TrueType control whose EBLC table declares more than 65535 strikes; owns the invalid strike-count early-return path with exact public `FT_Err_Invalid_Argument` |
 | `cb7e78116e14` | 4.6 | 1 | `fixtures/assets/fonts/sbit_composite_missing_subglyph.ttf` | source-backed TrueType control with one EBLC/EBDT strike at 20 ppem; glyph 2 is an image-format-8 compound bitmap using index-format-1 offsets and references glyph 1 whose image offsets are empty, owning recursive internal SBIT missing-subglyph coverage with exact public `FT_Err_Invalid_Argument` |
 | `70a04fe1fd6e` | 4.6 | 1 | `fixtures/assets/fonts/sbit_composite_missing_subglyph_format3.ttf` | source-backed TrueType control with one EBLC/EBDT strike at 20 ppem; glyph 2 is an image-format-9 compound bitmap using index-format-3 offsets and references glyph 1 whose image offsets are empty, covering the big-metrics recursive SBIT branch with exact public `FT_Err_Invalid_Argument` |
+| `7f1d0297f30c` | 4.6 | 1 | `fixtures/assets/fonts/sbit_composite_success_format8.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT image-format-8 compound glyph 2 that references glyph 1's simple 8-bit gray bitmap at zero offset; owns successful compound SBIT assembly and root metric restoration |
+| `ec49c5dfbc85` | 4.6 | 1 | `fixtures/assets/fonts/sbit_composite_success_format9.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT image-format-9 compound glyph 2 using big metrics and referencing glyph 1's simple 8-bit gray bitmap at zero offset |
+| `c62e0fc0bf81` | 4.6 | 1 | `fixtures/assets/fonts/sbit_composite_mono_success_format8.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT image-format-8 compound glyph 2 that references a 1-bit MONO simple child at zero offset |
+| `9d31e54db7a2` | 4.6 | 1 | `fixtures/assets/fonts/sbit_composite_bgra_success_format8.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT image-format-8 compound glyph 2 that references a 32-bit BGRA simple child at zero offset |
+| `929db80f55b0` | 4.6 | 1 | `fixtures/assets/fonts/sbit_composite_negative_offset_format8.ttf` | source-backed TrueType control with one image-format-8 compound glyph 2 whose component has a negative x offset; owns FreeType's invalid compound placement public error |
+| `37af69c48d70` | 4.6 | 1 | `fixtures/assets/fonts/sbit_composite_out_of_bounds_format8.ttf` | source-backed TrueType control with one image-format-8 compound glyph 2 whose component exceeds the root bitmap width; owns FreeType's invalid compound placement public error |
 | `1a9a79de515d` | 4.6 | 1 | `fixtures/assets/fonts/sbit_composite_missing_count.ttf` | source-backed TrueType control whose image-format-8 compound bitmap ends before the component count; owns malformed compound-count coverage and exact public `FT_Err_Invalid_Argument` |
 | `bb4de2bed025` | 4.6 | 1 | `fixtures/assets/fonts/sbit_composite_truncated_records.ttf` | source-backed TrueType control whose image-format-9 compound bitmap declares more component records than the EBDT image contains; owns truncated compound-record coverage and exact public `FT_Err_Invalid_Argument` |
 | `673afef54053` | 4.4 | 1 | `fonts/glyf/hinter-empty-fpgm.ttf` | derived source-backed TrueType control with empty `fpgm`, non-empty `prep`, present `cvt`, and the same glyph programs as `hinter-control-matrix.ttf`; owns native prepare-context empty-font-program coverage |
@@ -248,6 +254,11 @@ listed because they enter different hinting and scaling conditions.
 | `hhea-zero-win-fallback.ttf` | face open and active size metrics only | 20 | hhea and OS/2 typo metrics are zero, so public `FT_Size_Metrics` selects the OS/2 Windows ascent/descent fallback branch |
 | `sbit_unsupported_bit_depth_format1.ttf` | gid 1 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` to prove unsupported bit depth 7 public error parity |
 | `sbit_unsupported_image_format.ttf` | gid 1 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` to prove unsupported image format 10 public error parity |
+| `sbit_composite_success_format8.ttf` | gid 2 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` to prove image-format-8 compound bitmap assembly through a simple gray child |
+| `sbit_composite_success_format9.ttf` | gid 2 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` to prove image-format-9 compound big-metrics assembly |
+| `sbit_composite_mono_success_format8.ttf` | gid 2 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` to prove packed MONO compound zero-offset assembly |
+| `sbit_composite_bgra_success_format8.ttf` | gid 2 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_COLOR | FT_LOAD_SBITS_ONLY` to prove BGRA compound zero-offset assembly |
+| `sbit_composite_negative_offset_format8.ttf`, `sbit_composite_out_of_bounds_format8.ttf` | gid 2 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` to prove invalid compound component placement errors |
 | `post-format-1.ttf` | gid 1 | name lookup only | `post` format 1.0 with non-258 glyph count returns FreeType's default `.notdef` instead of Mac standard names |
 | `post-format-1-standard-count.ttf` | gid 36 (`A`) | name lookup only | `post` format 1.0 with exactly 258 glyph slots returns FreeType's Mac standard name and reverse name index for gid 36 |
 | `post-missing.ttf` | gid 1 | name lookup only | absent optional `post` table proves public `FT_Get_Glyph_Name` returns `FT_Err_Invalid_Argument`, not `FT_Err_Post_Table_Missing`, and preserves the filled buffer after clearing byte zero |

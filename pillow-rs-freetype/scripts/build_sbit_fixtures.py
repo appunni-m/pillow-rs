@@ -55,11 +55,12 @@ def bitmap_size_table(
     x_ppem: int = 20,
     y_ppem: int = 20,
     bit_depth: int = 1,
+    index_subtable_count: int = 1,
 ) -> bytes:
     horizontal = eblc_line_metrics()
     vertical = bytes(12)
     strike = (
-        struct.pack(">IIII", index_array_offset, index_tables_size, 1, 0)
+        struct.pack(">IIII", index_array_offset, index_tables_size, index_subtable_count, 0)
         + horizontal
         + vertical
         + struct.pack(
@@ -300,6 +301,101 @@ def compound_missing_subglyph_tables(index_format: int, image_format: int) -> tu
     return eblc, ebdt
 
 
+def compound_image_format8(metrics: bytes, components: list[tuple[int, int, int]]) -> bytes:
+    records = b"".join(struct.pack(">Hbb", glyph, dx, dy) for glyph, dx, dy in components)
+    return metrics + b"\0" + struct.pack(">H", len(components)) + records
+
+
+def compound_image_format9(metrics: bytes, components: list[tuple[int, int, int]]) -> bytes:
+    records = b"".join(struct.pack(">Hbb", glyph, dx, dy) for glyph, dx, dy in components)
+    return metrics + struct.pack(">H", len(components)) + records
+
+
+def compound_pair_tables(
+    bit_depth: int,
+    simple_image: bytes,
+    image_format: int,
+    compound_image: bytes,
+) -> tuple[bytes, bytes]:
+    index_array = struct.pack(">HHI", 1, 1, 16) + struct.pack(">HHI", 2, 2, 32)
+    simple_subtable = (
+        struct.pack(">HHI", 1, 1, 4)
+        + struct.pack(">II", 0, len(simple_image))
+    )
+    compound_subtable = (
+        struct.pack(">HHI", 1, image_format, 4)
+        + struct.pack(">II", len(simple_image), len(simple_image) + len(compound_image))
+    )
+    index_tables = index_array + simple_subtable + compound_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        2,
+        bit_depth=bit_depth,
+        index_subtable_count=2,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000) + simple_image + compound_image
+    return eblc, ebdt
+
+
+def compound_success_format8_tables() -> tuple[bytes, bytes]:
+    simple_image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x80, 0xC0, 0xFF])
+    compound_image = compound_image_format8(
+        bytes([2, 2, 1, 2, 3]),
+        [(1, 0, 0)],
+    )
+    return compound_pair_tables(8, simple_image, 8, compound_image)
+
+
+def compound_success_format9_tables() -> tuple[bytes, bytes]:
+    simple_image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x80, 0xC0, 0xFF])
+    compound_image = compound_image_format9(
+        bytes([2, 2, 1, 2, 3, 0, 0, 3]),
+        [(1, 0, 0)],
+    )
+    return compound_pair_tables(8, simple_image, 9, compound_image)
+
+
+def compound_mono_success_format8_tables() -> tuple[bytes, bytes]:
+    simple_image = bytes([2, 9, 1, 2, 10]) + bytes([0xA5, 0x80, 0x5A, 0x00])
+    compound_image = compound_image_format8(
+        bytes([2, 9, 1, 2, 10]),
+        [(1, 0, 0)],
+    )
+    return compound_pair_tables(1, simple_image, 8, compound_image)
+
+
+def compound_bgra_success_format8_tables() -> tuple[bytes, bytes]:
+    simple_image = bytes([1, 2, 1, 1, 3]) + bytes(
+        [0x10, 0x20, 0x30, 0xFF, 0x40, 0x50, 0x60, 0x80]
+    )
+    compound_image = compound_image_format8(
+        bytes([1, 2, 1, 1, 3]),
+        [(1, 0, 0)],
+    )
+    return compound_pair_tables(32, simple_image, 8, compound_image)
+
+
+def compound_negative_offset_tables() -> tuple[bytes, bytes]:
+    simple_image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x80, 0xC0, 0xFF])
+    compound_image = compound_image_format8(
+        bytes([2, 2, 1, 2, 3]),
+        [(1, -1, 0)],
+    )
+    return compound_pair_tables(8, simple_image, 8, compound_image)
+
+
+def compound_out_of_bounds_tables() -> tuple[bytes, bytes]:
+    simple_image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x80, 0xC0, 0xFF])
+    compound_image = compound_image_format8(
+        bytes([2, 2, 1, 2, 3]),
+        [(1, 1, 0)],
+    )
+    return compound_pair_tables(8, simple_image, 8, compound_image)
+
+
 def compound_malformed_tables(
     index_format: int,
     image_format: int,
@@ -410,6 +506,21 @@ def build_composite_missing_subglyph(name: str, index_format: int, image_format:
     save_sbit_font(name, eblc, ebdt)
 
 
+def build_composite_success() -> None:
+    eblc, ebdt = compound_success_format8_tables()
+    save_sbit_font("sbit_composite_success_format8.ttf", eblc, ebdt)
+    eblc, ebdt = compound_success_format9_tables()
+    save_sbit_font("sbit_composite_success_format9.ttf", eblc, ebdt)
+    eblc, ebdt = compound_mono_success_format8_tables()
+    save_sbit_font("sbit_composite_mono_success_format8.ttf", eblc, ebdt)
+    eblc, ebdt = compound_bgra_success_format8_tables()
+    save_sbit_font("sbit_composite_bgra_success_format8.ttf", eblc, ebdt)
+    eblc, ebdt = compound_negative_offset_tables()
+    save_sbit_font("sbit_composite_negative_offset_format8.ttf", eblc, ebdt)
+    eblc, ebdt = compound_out_of_bounds_tables()
+    save_sbit_font("sbit_composite_out_of_bounds_format8.ttf", eblc, ebdt)
+
+
 def build_composite_malformed(
     name: str,
     index_format: int,
@@ -421,6 +532,7 @@ def build_composite_malformed(
 
 
 def build_composite_missing_subglyphs() -> None:
+    build_composite_success()
     build_composite_missing_subglyph("sbit_composite_missing_subglyph.ttf", 1, 8)
     build_composite_missing_subglyph("sbit_composite_missing_subglyph_format3.ttf", 3, 9)
     build_composite_malformed("sbit_composite_missing_count.ttf", 1, 8, "missing_count")
