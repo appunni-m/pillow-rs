@@ -239,27 +239,25 @@ pub fn FT_Get_Sfnt_LangTag(
 }
 
 pub fn FT_New_Size(face: Option<&FT_Face>, size: Option<&mut FT_Size>) -> FT_Error {
-    if face.is_none() {
-        return FT_Err_Invalid_Face_Handle as FT_Error;
+    match (face.is_none(), size.is_none()) {
+        (true, _) => FT_Err_Invalid_Face_Handle as FT_Error,
+        (_, true) => FT_Err_Invalid_Argument as FT_Error,
+        _ => FT_Err_Unimplemented_Feature as FT_Error,
     }
-    if size.is_none() {
-        return FT_Err_Invalid_Argument as FT_Error;
-    }
-    FT_Err_Unimplemented_Feature as FT_Error
 }
 
 pub fn FT_Done_Size(size: FT_Size) -> FT_Error {
-    if size.is_null() {
-        return FT_Err_Invalid_Size_Handle;
+    match size.is_null() {
+        true => FT_Err_Invalid_Size_Handle,
+        false => FT_Err_Unimplemented_Feature as FT_Error,
     }
-    FT_Err_Unimplemented_Feature as FT_Error
 }
 
 pub fn FT_Activate_Size(size: FT_Size) -> FT_Error {
-    if size.is_null() {
-        return FT_Err_Invalid_Size_Handle;
+    match size.is_null() {
+        true => FT_Err_Invalid_Size_Handle,
+        false => FT_Err_Unimplemented_Feature as FT_Error,
     }
-    FT_Err_Unimplemented_Feature as FT_Error
 }
 
 const FT_TRIG_SCALE: FT_Fixed = 0xDBD9_5B16;
