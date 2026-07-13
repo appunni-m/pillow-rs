@@ -59,6 +59,7 @@
     <GlyphID id="53" name="renderTinySdfSegment"/>
     <GlyphID id="54" name="emboldenSharpTurn"/>
     <GlyphID id="55" name="emboldenZeroAreaBowtie"/>
+    <GlyphID id="56" name="renderSmartDropoutNeighbor"/>
   </GlyphOrder>
 
   <head>
@@ -105,9 +106,9 @@
   <maxp>
     <!-- Most of this table will be recalculated by the compiler -->
     <tableVersion value="0x10000"/>
-    <numGlyphs value="56"/>
-    <maxPoints value="4"/>
-    <maxContours value="1"/>
+    <numGlyphs value="57"/>
+    <maxPoints value="12"/>
+    <maxContours value="3"/>
     <maxCompositePoints value="6"/>
     <maxCompositeContours value="2"/>
     <maxZones value="2"/>
@@ -230,6 +231,7 @@
     <mtx name="renderTinySdfSegment" width="700" lsb="100"/>
     <mtx name="emboldenSharpTurn" width="700" lsb="0"/>
     <mtx name="emboldenZeroAreaBowtie" width="700" lsb="0"/>
+    <mtx name="renderSmartDropoutNeighbor" width="700" lsb="205"/>
     <mtx name="withInstructions" width="700" lsb="0"/>
   </hmtx>
 
@@ -291,6 +293,7 @@
       <map code="0xe034" name="renderTinySdfSegment"/>
       <map code="0xe035" name="emboldenSharpTurn"/>
       <map code="0xe036" name="emboldenZeroAreaBowtie"/>
+      <map code="0xe037" name="renderSmartDropoutNeighbor"/>
     </cmap_format_4>
     <cmap_format_4 platformID="3" platEncID="1" language="0">
       <map code="0xe000" name="base"/><!-- ???? -->
@@ -348,6 +351,7 @@
       <map code="0xe034" name="renderTinySdfSegment"/>
       <map code="0xe035" name="emboldenSharpTurn"/>
       <map code="0xe036" name="emboldenZeroAreaBowtie"/>
+      <map code="0xe037" name="renderSmartDropoutNeighbor"/>
     </cmap_format_4>
   </cmap>
 
@@ -552,6 +556,37 @@
           SCANCTRL[ ]	/* ScanConversionControl */
           PUSHB[ ]	/* 1 value pushed */
           5
+          SCANTYPE[ ]	/* ScanType */
+        </assembly>
+      </instructions>
+    </TTGlyph>
+
+    <TTGlyph name="renderSmartDropoutNeighbor" xMin="205" yMin="0" xMax="360" yMax="700">
+      <contour>
+        <pt x="205" y="0" on="1"/>
+        <pt x="245" y="0" on="1"/>
+        <pt x="245" y="700" on="1"/>
+        <pt x="205" y="700" on="1"/>
+      </contour>
+      <contour>
+        <pt x="250" y="0" on="1"/>
+        <pt x="265" y="0" on="1"/>
+        <pt x="265" y="700" on="1"/>
+        <pt x="250" y="700" on="1"/>
+      </contour>
+      <contour>
+        <pt x="320" y="0" on="1"/>
+        <pt x="360" y="0" on="1"/>
+        <pt x="360" y="700" on="1"/>
+        <pt x="320" y="700" on="1"/>
+      </contour>
+      <instructions>
+        <assembly>
+          PUSHB[ ]	/* 1 value pushed */
+          255
+          SCANCTRL[ ]	/* ScanConversionControl */
+          PUSHB[ ]	/* 1 value pushed */
+          4
           SCANTYPE[ ]	/* ScanType */
         </assembly>
       </instructions>
@@ -1115,6 +1150,7 @@
       <psName name="renderTinySdfSegment"/>
       <psName name="emboldenSharpTurn"/>
       <psName name="emboldenZeroAreaBowtie"/>
+      <psName name="renderSmartDropoutNeighbor"/>
     </extraNames>
   </post>
 

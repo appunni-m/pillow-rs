@@ -1160,6 +1160,31 @@
             ]
           },
           {
+            "id": "hinter-render-smart-dropout-neighbor-mono",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 32
+              },
+              "glyph_index": 56,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "render/mono:smart-dropout-neighbor-already-set"
+            ]
+          },
+          {
             "id": "hinter-render-conic-chain-sdf",
             "assets": {
               "font": {
