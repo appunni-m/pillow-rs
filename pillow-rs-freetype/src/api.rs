@@ -471,20 +471,31 @@ impl Face {
         };
         let vertical_layout = flags.contains(LoadFlags::VERTICAL_LAYOUT);
         let native_hint_mode = flags.native_hint_mode();
-        if flags.contains(LoadFlags::SBITS_ONLY) {
-            if flags.contains(LoadFlags::NO_SCALE) || flags.contains(LoadFlags::NO_BITMAP) {
-                return Err(FontError::InvalidArgument(
-                    "embedded bitmap strike not selected".into(),
-                ));
+        let sbits_only = flags.contains(LoadFlags::SBITS_ONLY);
+        let sbit_allowed = !flags.contains(LoadFlags::NO_SCALE)
+            && !flags.contains(LoadFlags::NO_RECURSE)
+            && !flags.contains(LoadFlags::NO_BITMAP);
+        if sbits_only && !sbit_allowed {
+            return Err(FontError::InvalidArgument(
+                "embedded bitmap strike not selected".into(),
+            ));
+        }
+        if sbit_allowed {
+            // C `FT_Load_Glyph` first tries SVG, then embedded bitmaps before
+            // outline loading (`base/ftobjs.c:1028-1050`). The TrueType driver
+            // repeats that SBIT attempt in `truetype/ttgload.c:2401-2474`.
+            match font.load_sbit_only_glyph(glyph_index) {
+                Ok(sbit) => return Ok(sbit_glyph_slot(glyph_index, sbit, vertical_layout)),
+                Err(_) if sbits_only => {
+                    // For scalable TrueType faces with `FT_LOAD_SBITS_ONLY`,
+                    // failed SBIT loading is replaced with Invalid_Argument
+                    // (`truetype/ttgload.c:2467-2474`).
+                    return Err(FontError::InvalidArgument(
+                        "embedded bitmap image not available".into(),
+                    ));
+                }
+                Err(_) => {}
             }
-            // C `TT_Load_Glyph` first tries `load_sbit_image`, but for
-            // scalable TrueType faces with `FT_LOAD_SBITS_ONLY` any failed
-            // sbit load is then replaced with `Invalid_Argument`
-            // (`truetype/ttgload.c:2401-2469`).
-            let sbit = font.load_sbit_only_glyph(glyph_index).map_err(|_| {
-                FontError::InvalidArgument("embedded bitmap image not available".into())
-            })?;
-            return Ok(sbit_glyph_slot(glyph_index, sbit, vertical_layout));
         }
         let mut loaded = if flags.contains(LoadFlags::NO_RECURSE) {
             font.glyph_slot_load_no_recurse(glyph_index)?
