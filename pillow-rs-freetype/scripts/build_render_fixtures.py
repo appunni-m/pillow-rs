@@ -13,7 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "tests" / "fixtures" / "fonts" / "glyf"
 
 UNITS_PER_EM = 1024
-GLYPH_ORDER = [".notdef", "horizontal_dropout_guard", "vertical_dropout_guard"]
+GLYPH_ORDER = [
+    ".notdef",
+    "horizontal_dropout_guard",
+    "vertical_dropout_guard",
+    "conic_bbox_extrema",
+]
 
 
 def empty_glyph():
@@ -58,16 +63,28 @@ def vertical_dropout_guard_glyph():
     return pen.glyph()
 
 
+def conic_bbox_extrema_glyph():
+    pen = TTGlyphPen(None)
+
+    pen.moveTo((128, 0))
+    pen.qCurveTo((-128, 768), (512, 0))
+    pen.closePath()
+
+    return pen.glyph()
+
+
 def build_render_coverage() -> None:
     glyphs = {
         ".notdef": empty_glyph(),
         "horizontal_dropout_guard": horizontal_dropout_guard_glyph(),
         "vertical_dropout_guard": vertical_dropout_guard_glyph(),
+        "conic_bbox_extrema": conic_bbox_extrema_glyph(),
     }
     metrics = {
         ".notdef": (256, 0),
         "horizontal_dropout_guard": (256, 0),
         "vertical_dropout_guard": (256, 0),
+        "conic_bbox_extrema": (640, 0),
     }
 
     builder = FontBuilder(UNITS_PER_EM, isTTF=True)
@@ -76,6 +93,7 @@ def build_render_coverage() -> None:
         {
             0xE100: "horizontal_dropout_guard",
             0xE101: "vertical_dropout_guard",
+            0xE102: "conic_bbox_extrema",
         }
     )
     builder.setupGlyf(glyphs)
