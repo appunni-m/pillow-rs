@@ -432,11 +432,11 @@ The latest SBIT public-error rows add two explicit
 and WASM ABI prove the same public guard without adding bitmap decoding, font
 bytes, or implicit expansion.
 The latest TrueType interpreter probes extend the source-backed
-`hinter-control-matrix.ttf` `stackStateMatrix` bytecode with no-output
-indexed-stack fallback, inverse `MIN`, and `SCANCTRL` false-side sequences. The
-existing public `FT_Load_Glyph` row proves pinned C, Rust FFI, C ABI, and WASM
-ABI still agree while `tt/hinter/exec.rs` covers the CINDEX/MINDEX fallback and
-branch-side gaps without adding concrete cases.
+`hinter-control-matrix.ttf` bytecode with no-output indexed-stack fallback,
+inverse `MIN`, `SCANCTRL` false-side, and twilight zone-pointer MD/MDRP/SHC
+sequences. The existing public `FT_Load_Glyph` rows prove pinned C, Rust FFI,
+C ABI, and WASM ABI still agree while `tt/hinter/exec.rs` covers the
+CINDEX/MINDEX and zone-pointer branch-side gaps without adding concrete cases.
 The latest autohint script probe extends `script-coverage.ttf` with one
 serifed three-stem Latin `m` glyph selected by an explicit
 `FT_LOAD_FORCE_AUTOHINT` public row. Pinned C, Rust FFI, C ABI, and WASM ABI
@@ -456,7 +456,7 @@ without introducing a script loop or implicit expansion.
 | Rust function coverage | 1,105 / 1,259 (87.7681%) |
 | Rust instantiation coverage | 1,108 / 1,262 (87.7971%) |
 | Rust region coverage | 24,454 / 27,180 (89.9706%) |
-| Rust branch/condition coverage | 4,048 / 4,730 (85.5814%) |
+| Rust branch/condition coverage | 4,051 / 4,730 (85.6448%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 155 |
 | Stored active font binaries | 112 files, 832 KiB |
@@ -491,7 +491,7 @@ Current largest uncovered buckets:
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 650 / 810 | 134 / 184 | 30 / 35 | 918 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
 | `src/ffi/handles.rs` | 1,839 / 1,872 | 333 / 368 | 203 / 204 | 2,492 / 2,540 | Public FFI route audit; wrappers stay thin and must delegate to core |
-| `src/tt/hinter/exec.rs` | 1,352 / 1,379 | 378 / 416 | 40 / 43 | 2,741 / 2,945 | Add one TrueType program role per remaining VM state/opcode family |
+| `src/tt/hinter/exec.rs` | 1,352 / 1,379 | 381 / 416 | 40 / 43 | 2,741 / 2,945 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 893 / 941 | 381 / 426 | 18 / 19 | 1,187 / 1,247 | CJK topology rows in the compact multiscript fixture |
 | `src/api.rs` | 754 / 780 | 161 / 188 | 77 / 78 | 1,082 / 1,112 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
@@ -747,21 +747,21 @@ Per-file source gap ledger:
 
 | Source | Missing lines | Line coverage | Missing funcs | Missing regions | Missing branches |
 |---|---:|---:|---:|---:|---:|
-| `src/render.rs` | 552 | 1720/2272 (75.70%) | 43 | 791 | 77 |
-| `src/autohint/latin.rs` | 297 | 2531/2828 (89.50%) | 3 | 570 | 290 |
+| `src/render.rs` | 551 | 1721/2272 (75.75%) | 43 | 790 | 75 |
+| `src/autohint/latin.rs` | 290 | 2538/2828 (89.75%) | 3 | 559 | 276 |
 | `src/autohint/globals_data.rs` | 230 | 63/293 (21.50%) | 1 | 117 | 0 |
-| `src/font.rs` | 215 | 1772/1987 (89.18%) | 32 | 297 | 43 |
+| `src/font.rs` | 227 | 2015/2242 (89.88%) | 39 | 338 | 44 |
 | `src/grays.rs` | 160 | 650/810 (80.25%) | 5 | 221 | 50 |
 | `src/scaler.rs` | 153 | 1073/1226 (87.52%) | 13 | 133 | 30 |
-| `src/autohint/cjk.rs` | 48 | 893/941 (94.90%) | 1 | 62 | 47 |
+| `src/autohint/cjk.rs` | 48 | 893/941 (94.90%) | 1 | 60 | 45 |
 | `src/autohint/types.rs` | 32 | 71/103 (68.93%) | 7 | 25 | 1 |
-| `src/ffi/handles.rs` | 27 | 1610/1637 (98.35%) | 1 | 33 | 23 |
-| `src/tt/hinter/exec.rs` | 27 | 1352/1379 (98.04%) | 3 | 206 | 43 |
-| `src/api.rs` | 23 | 723/746 (96.92%) | 1 | 29 | 28 |
+| `src/ffi/handles.rs` | 33 | 1839/1872 (98.24%) | 1 | 48 | 35 |
+| `src/tt/hinter/exec.rs` | 27 | 1352/1379 (98.04%) | 3 | 204 | 35 |
+| `src/api.rs` | 26 | 754/780 (96.67%) | 1 | 30 | 27 |
 | `src/tt/cmap.rs` | 14 | 726/740 (98.11%) | 3 | 14 | 0 |
 | `src/autohint/globals.rs` | 11 | 214/225 (95.11%) | 1 | 17 | 14 |
 | `src/tt/fvar.rs` | 7 | 91/98 (92.86%) | 4 | 13 | 0 |
-| `src/ffi/convert.rs` | 4 | 138/142 (97.18%) | 0 | 4 | 0 |
+| `src/ffi/convert.rs` | 6 | 145/151 (96.03%) | 0 | 6 | 0 |
 | `src/tt/hinter/iup.rs` | 3 | 99/102 (97.06%) | 0 | 4 | 8 |
 | `src/tt/post.rs` | 3 | 95/98 (96.94%) | 0 | 13 | 2 |
 | `src/tt/gasp.rs` | 2 | 45/47 (95.74%) | 2 | 6 | 0 |
@@ -1978,6 +1978,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-13 | SBIT incompatible flag public errors | `FT_Err_Missing_Bitmap.sbit_glyph_without_image` now includes two explicit variants for `FT_LOAD_SBITS_ONLY | FT_LOAD_NO_BITMAP` and `FT_LOAD_SBITS_ONLY | FT_LOAD_NO_SCALE` over the existing compact `sbit_missing_bitmap.ttf` fixture. Pinned C returns `FT_Err_Invalid_Argument` for both incompatible load-flag combinations before selecting an embedded bitmap strike; Rust FFI, C ABI, and WASM ABI prove the same public result without adding bitmap-success decoding. Focused `load_glyph` parity passes with 6,799 checked concrete cases and 348 load-glyph runtime rows. Full condition coverage passes with 6,799 concrete cases, 6,796 / 6,796 runtime rows, three FTMM pending rows, 17,019 / 18,901 lines, 24,448 / 27,180 regions, 4,038 / 4,730 branches, 1,105 / 1,259 functions, and 1,108 / 1,262 instantiations. Route audit reports 3,455 real-parity rows and zero implicit cases |
 | 2026-07-13 | TrueType CINDEX out-of-range branch probe | The source-backed `hinter-control-matrix.ttf` `stackStateMatrix` glyph now appends a no-output indexed-stack fallback probe, then the existing `FT_Load_Glyph.matrix_load@hinter-stack-state-matrix` public row executes it. Pinned C, Rust FFI, C ABI, and WASM ABI agree while `tt/hinter/exec.rs` covers the CINDEX out-of-range fallback without adding a public row or increasing concrete cases. Full condition coverage remains at 6,799 concrete cases, 6,796 / 6,796 runtime rows, three FTMM pending rows, 17,019 / 18,901 lines, 24,448 / 27,180 regions, 1,105 / 1,259 functions, and 1,108 / 1,262 instantiations; branch coverage moves from 4,038 / 4,730 to 4,039 / 4,730, and `tt/hinter/exec.rs` moves from 374 / 416 to 375 / 416 branches. Route audit remains 3,455 real-parity rows and zero implicit cases |
 | 2026-07-13 | TrueType indexed-stack and Latin serif-m probes | The source-backed `hinter-control-matrix.ttf` `stackStateMatrix` glyph now also appends no-output `MINDEX`, inverse `MIN`, and `SCANCTRL` threshold probes, reusing the existing `FT_Load_Glyph.matrix_load@hinter-stack-state-matrix` public row and moving `tt/hinter/exec.rs` to 378 / 416 branch outcomes without case growth. `script-coverage.ttf` also adds one serifed three-stem Latin `m` selected by one explicit `FT_LOAD_FORCE_AUTOHINT` row, covering the Latin 12-edge serif symmetry movement path. Full condition coverage now passes with 6,800 concrete cases, 6,797 / 6,797 runtime rows, three FTMM pending rows, 17,021 / 18,901 lines, 24,454 / 27,180 regions, 4,048 / 4,730 branches, 1,105 / 1,259 functions, and 1,108 / 1,262 instantiations. Route audit reports 3,456 real-parity rows and zero implicit cases |
+| 2026-07-14 | TrueType twilight zone-pointer branch probes | The source-backed `hinter-control-matrix.ttf` now packs three no-output zone-pointer probes into existing public rows: `branchEdgeMatrix` runs twilight `zp0` MD/MDRP paths with invalid or twilight-only points, and `pointMoveMatrix` briefly switches `zp2` to the twilight zone before `SHC[0]`. Pinned C, Rust FFI, C ABI, and WASM ABI agree with unchanged glyph outputs while `tt/hinter/exec.rs` moves from 378 / 416 to 381 / 416 branch outcomes without adding fonts, JSON rows, implicit expansion, or line regressions. Full condition coverage stays at 6,800 concrete cases, 6,797 / 6,797 runtime rows, three FTMM pending rows, 17,021 / 18,901 lines, 24,454 / 27,180 regions, 1,105 / 1,259 functions, and 1,108 / 1,262 instantiations; branch coverage moves to 4,051 / 4,730. Route audit remains 3,456 real-parity rows and zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-13
 
@@ -1992,7 +1993,7 @@ source lines. The current split is:
 | Pending cases | 3 |
 | Covered Rust lines | 17,021 / 18,901 (90.0534%) |
 | Rust region coverage | 24,454 / 27,180 (89.9706%) |
-| Rust branch/condition coverage | 4,048 / 4,730 (85.5814%) |
+| Rust branch/condition coverage | 4,051 / 4,730 (85.6448%) |
 | Rust function coverage | 1,105 / 1,259 (87.7681%) |
 | Route audit split | real-parity 3,456; generic-fallback 916; raw-slot-null-validation 4; pending-core 10; shape-incomplete-fallback 0 |
 
