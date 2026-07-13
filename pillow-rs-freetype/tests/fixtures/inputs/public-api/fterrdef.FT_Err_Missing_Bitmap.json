@@ -280,6 +280,87 @@
             "coverage": [
               "sbit:unsupported-index-format-public-invalid-argument"
             ]
+          },
+          {
+            "id": "invalid-eblc-version",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_invalid_eblc_version.ttf",
+                "requirements": "Synthetic scalable SFNT whose EBLC table has an unsupported version while EBDT is present."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+              "internal_sbit_source": "freetype/src/sfnt/ttsbit.c:567-571",
+              "face_index": 0,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
+              ],
+              "glyph_record": "EBLC version is unsupported, so no valid strike is selected"
+            },
+            "coverage": [
+              "sbit:invalid-eblc-version-public-invalid-argument"
+            ]
+          },
+          {
+            "id": "empty-ebdt",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_empty_ebdt.ttf",
+                "requirements": "Synthetic scalable SFNT with a valid EBLC header and zero-length EBDT table."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+              "internal_sbit_source": "freetype/src/sfnt/ttsbit.c:567-588",
+              "face_index": 0,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
+              ],
+              "glyph_record": "EBDT table is present but empty, so no valid strike is selected"
+            },
+            "coverage": [
+              "sbit:empty-ebdt-public-invalid-argument"
+            ]
+          },
+          {
+            "id": "strike-count-overflow",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_strike_count_overflow.ttf",
+                "requirements": "Synthetic scalable SFNT whose EBLC table declares more than 65535 strikes without physical bitmap-size records."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+              "internal_sbit_source": "freetype/src/sfnt/ttsbit.c:567-588",
+              "face_index": 0,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
+              ],
+              "glyph_record": "EBLC declares an impossible strike count, so no valid strike is selected"
+            },
+            "coverage": [
+              "sbit:strike-count-overflow-public-invalid-argument"
+            ]
           }
         ]
       },
