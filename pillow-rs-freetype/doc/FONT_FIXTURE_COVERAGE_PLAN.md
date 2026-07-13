@@ -485,10 +485,13 @@ valid deltas, invalid negative deltas, glyph-name lookup, and name-index lookup
 through public parity. The malformed controls exposed two correctness fixes:
 unsupported `post` formats must not set `FT_FACE_FLAG_GLYPH_NAMES`, and missing
 format 2.0 custom names surface as `.notdef`. Remaining lines are the direct
-invalid-index guard plus format 3.0 and unsupported direct fallbacks inside the
-private resolver; current public wrappers validate or reject those states before
-calling into `post.rs`. Keep them classified unless a supported public route is
-identified.
+invalid-index guard (`src/tt/post.rs:47`) plus format 3.0
+(`src/tt/post.rs:66`) and unsupported-format (`src/tt/post.rs:70`) direct
+fallbacks inside the private resolver. `FT_Get_Glyph_Name` rejects
+`glyph_index >= num_glyphs` before calling into `post.rs`, `FT_Get_Name_Index`
+only scans `0..num_glyphs`, and both wrappers reject format 3.0/unsupported
+formats through `FT_FACE_FLAG_GLYPH_NAMES` before the private resolver runs.
+Keep them classified unless a supported public route is identified.
 
 Immediate `name` residuals: compact public `FT_Get_Postscript_Name` rows now
 cover unsupported name records, invalid Apple string offsets, Unicode family
