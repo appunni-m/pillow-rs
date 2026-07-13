@@ -20,6 +20,7 @@ pub mod maxp;
 pub mod name;
 pub mod os2;
 pub mod post;
+pub mod sbit;
 pub mod vhea;
 pub mod vmtx;
 

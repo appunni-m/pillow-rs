@@ -17779,6 +17779,9 @@ fn font_error_to_ft(error: FontError) -> FT_Error {
         FontError::InvalidOutline(_) => FT_Err_Invalid_Outline,
         FontError::CannotRenderGlyph(_) => FT_Err_Cannot_Render_Glyph,
         FontError::UnsupportedLoadFlags(_) => FT_Err_Unimplemented_Feature,
+        FontError::InvalidArgument(_) => FT_Err_Invalid_Argument,
+        FontError::MissingBitmap => FT_Err_Missing_Bitmap as FT_Error,
+        FontError::InvalidComposite => FT_Err_Invalid_Composite as FT_Error,
     }
 }
 

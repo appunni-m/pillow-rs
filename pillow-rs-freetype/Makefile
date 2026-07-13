@@ -33,6 +33,7 @@ help:
 	@printf "  make font-fixture-name Rebuild compact name table fixtures\n"
 	@printf "  make font-fixture-post Rebuild compact post table fixtures\n"
 	@printf "  make font-fixture-render Rebuild compact render path fixtures\n"
+	@printf "  make font-fixture-sbit Rebuild compact embedded bitmap/SBIT fixtures\n"
 	@printf "  make font-fixture-sfnt Rebuild compact SFNT table fixtures\n"
 	@printf "\nBuild:\n"
 	@printf "  make build            Build the crate\n"
@@ -286,6 +287,10 @@ font-fixture-name:
 .PHONY: font-fixture-sfnt
 font-fixture-sfnt: font-fixture-hinter
 	$(PYTHON) scripts/build_sfnt_fixtures.py
+
+.PHONY: font-fixture-sbit
+font-fixture-sbit: font-fixture-hinter
+	$(PYTHON) scripts/build_sbit_fixtures.py
 
 .PHONY: fmt
 fmt:

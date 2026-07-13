@@ -849,7 +849,7 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,422 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,423 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 8 | `FT_New_Size`, `FT_Done_Size`, `FT_Activate_Size`, `FT_OpenType_Validate`, and `FT_OpenType_Free` null rows execute pinned C oracle status checks and wrapper validation; size lifecycle null rows now use direct C/WASM lifecycle exports, and success rows live in real parity. |
 | Wrapper null-validation route | 1 | `FT_Get_SubGlyph_Info` null-output rows intentionally validate the thin Rust/C/WASM wrapper guard after a native-C proof row establishes the composite slot state. |
 | Raw-slot null-validation route | 4 | Runtime rows intentionally validate raw glyph-slot pointer handling after a concrete slot state is established. |
@@ -860,9 +860,9 @@ Current route-audit totals:
 | Null-error fallback | 21 | Keep only exact null-handle probes; route implemented null cases directly. |
 | Void fallback | 2 | Replace with real null/noop wrapper rows or classify as void API contract. |
 | Explicit unsupported | 12 | Keep only where the public surface is intentionally unsupported. |
-| Pending core | 13 | Convert to runnable parity when the named dependencies or compact fixtures exist. |
+| Pending core | 12 | Convert to runnable parity when the named dependencies or compact fixtures exist. |
 | Explicit unsupported stubs | 12 | Implement or keep visibly unsupported; do not count as coverage. |
-| Pending core implementation | 13 | Named-instance Adobe MM, `FT_MM_Var`, `gvar`/HVAR, live non-SFNT face support, synthetic unloaded/unsupported slot states, compact overlap rendering, compact sbit missing-bitmap fixtures, MVAR table variation rows, `FT_Select_Size` active-size mutation, and ftsynth bitmap-slot synthesis rows remain pending. |
+| Pending core implementation | 12 | Named-instance Adobe MM, `FT_MM_Var`, `gvar`/HVAR, live non-SFNT face support, synthetic unloaded/unsupported slot states, compact overlap rendering, recursive composite SBIT missing-subglyph behavior, MVAR table variation rows, `FT_Select_Size` active-size mutation, and ftsynth bitmap-slot synthesis rows remain pending. |
 
 The former two shape-incomplete ftsynth bitmap declarations are now explicit
 pending-core rows. FreeType `src/base/ftsynth.c:106-180` accepts
@@ -870,7 +870,8 @@ pending-core rows. FreeType `src/base/ftsynth.c:106-180` accepts
 `FT_GlyphSlot_Own_Bitmap` and `FT_Bitmap_Embolden`, then updates slot advance,
 metrics, and `bitmap_top`.  Rust currently handles only outline slots in
 `src/ffi/handles.rs`, so these rows require core bitmap-slot behavior plus an
-executable embedded-bitmap strike route before they can become real parity.
+embedded-bitmap strike that loads a real bitmap slot before they can become
+real parity.
 
 | Route | Current behavior | Coverage risk | Required disposition |
 |---|---|---|---|
@@ -1942,6 +1943,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-13 | TrueType ODD/EVEN zero-result branch probe | The source-backed `hinter-control-matrix.ttf` `stackStateMatrix` glyph now appends no-output zero-valued `ODD` and `EVEN` probes, popping both results inside the existing `FT_Load_Glyph.matrix_load@hinter-stack-state-matrix` row. Pinned C, Rust FFI, C ABI, and WASM ABI agree while `tt/hinter/exec.rs` covers the opposite branch outcomes for `ODD` and `EVEN` without new public rows or implicit expansion. Concrete cases remain 6,778 with zero implicit rows; runtime comparison remains 6,774 / 6,774 with four explicit pending rows. Refreshed condition coverage is 16,282 / 18,090 lines, 23,360 / 25,927 regions, 3,942 / 4,626 branches, and 1,030 / 1,150 functions; `tt/hinter/exec.rs` moves to 2,739 / 2,945 regions and 373 / 416 branches |
 | 2026-07-13 | CJK far-below standard snap branch row | `build_autohint_script_fixtures.py` extends the existing `fonts/autohint/cjk-snap-below-standard.ttf` with U+4E1E, a 40 FU selected Hani stem measured against the existing U+7530 100 FU standard stem. One explicit `FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_MONO` row selects it, proving the lower-side no-snap branch in FreeType `af_cjk_snap_width` (`afcjk.c:1440-1480`) where `width <= FT_PIX_ROUND(reference) - 48`; focused condition coverage flips `src/autohint/cjk.rs:808` from the baseline true-only side to the false side, and the full report now records that branch as 3 / 3. Concrete cases rise from 6,778 to 6,779 with zero implicit rows; runtime comparison rises from 6,774 / 6,774 to 6,775 / 6,775 with four explicit pending rows. Refreshed condition coverage moves from 16,282 / 18,090 lines, 23,358 / 25,927 regions, and 3,940 / 4,626 branches to 16,282 / 18,090 lines, 23,359 / 25,927 regions, and 3,941 / 4,626 branches; functions remain 1,030 / 1,150. Route audit reports real-parity rising from 3,418 to 3,419 with pending-core 16 and implicit cases remaining zero |
 | 2026-07-13 | Size lifecycle success routes | `FT_New_Size.create_secondary_size_success`, `FT_Done_Size.remove_secondary_size_success`, and `FT_Activate_Size.switches_current_face_size` now execute real face-owned secondary size handles in safe Rust core plus direct thin C ABI and WASM ABI exports. The model mirrors FreeType `src/base/ftobjs.c`: `FT_New_Size` appends an inactive face-owned size, `FT_Activate_Size` assigns the active face size, and `FT_Done_Size` removes the size and falls back to the list head when the active size is destroyed. Focused exact parity passes for all `ftsizes` rows across Rust FFI, C ABI, and WASM ABI, including direct C/WASM null-validation routes. Full condition coverage is 16,489 / 18,305 lines, 23,637 / 26,216 regions, 3,968 / 4,668 branches, and 1,062 / 1,182 functions; `src/ffi/handles.rs` reaches 1,794 / 1,829 lines, 2,437 / 2,483 regions, 326 / 366 branches, and 197 / 198 functions. Route audit moves real-parity from 3,419 to 3,422 and pending-core from 16 to 13, with generic fallback at 926 and implicit cases still zero |
+| 2026-07-13 | SBIT equal-offset Missing_Bitmap fixture | `font-fixture-sbit` now emits `fixtures/assets/fonts/sbit_missing_bitmap.ttf`, a compact source-backed TrueType face with one EBLC/EBDT strike at 20 ppem. Glyph 1 uses EBLC index format 1 with equal image offsets, matching FreeType's NoBitmap branch in `src/sfnt/ttsbit.c:1241-1441` and the top-level `Missing_Bitmap` return. Core now accepts `FT_LOAD_SBITS_ONLY`, parses just enough EBLC strike metadata to find the empty image record, and returns the exact `FT_Err_Missing_Bitmap` through Rust FFI, C ABI, and WASM ABI without adding bitmap decoding. Concrete cases remain 6,778 with zero implicit rows; runtime comparison remains 6,774 / 6,774 with four runtime-pending rows. Route audit moves real parity to 3,419 and pending-core to 15. Refreshed condition coverage is 16,433 / 18,294 lines, 23,628 / 26,306 regions, 3,963 / 4,666 branches, and 1,045 / 1,182 functions. The remaining SBIT blocker is the recursive composite missing-subglyph row: pinned C returns `Invalid_Composite` from `src/sfnt/ttsbit.c:1436-1441`, which still needs a compact composite SBIT fixture and recursive loader support |
 
 ## Residual Coverage Classification - 2026-07-13
 
@@ -1958,7 +1960,7 @@ source lines. The current split is:
 | Rust region coverage | 23,637 / 26,216 (90.1625%) |
 | Rust branch/condition coverage | 3,968 / 4,668 (85.0043%) |
 | Rust function coverage | 1,062 / 1,182 (89.8477%) |
-| Route audit split | real-parity 3,422; raw-slot-null-validation 4; pending-core 13; shape-incomplete-fallback 0 |
+| Route audit split | real-parity 3,423; raw-slot-null-validation 4; pending-core 12; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
@@ -2258,6 +2260,6 @@ Work must resume here unless a newer user request changes priority:
    coverage until the core Adobe MM, `FT_MM_Var`, `gvar`/HVAR, and live
    non-SFNT-face behavior exists. The ftsynth embedded-strike bitmap rows are
    route-audit pending-core rows, not runtime pending rows, until core
-   bitmap-slot synthesis and an executable embedded-bitmap route exist.
+   bitmap-slot synthesis and a real bitmap-strike load route exist.
 5. Keep the deprecated corpus isolated until final cleanup is separately
    reviewed and approved.

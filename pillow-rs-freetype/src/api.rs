@@ -72,6 +72,10 @@ impl LoadFlags {
     pub const MONOCHROME_RENDER: Self = Self(1 << 10);
     /// Recompute scalable glyph metrics without device-width tables.
     pub const COMPUTE_METRICS: Self = Self(1 << 12);
+    /// Load only embedded bitmap strikes, equivalent to `FT_LOAD_SBITS_ONLY`.
+    pub const SBITS_ONLY: Self = Self(1 << 13);
+    /// Disable embedded bitmap strikes, equivalent to `FT_LOAD_NO_BITMAP`.
+    pub const NO_BITMAP: Self = Self(1 << 14);
 
     /// Return true if all bits in `other` are set.
     pub fn contains(self, other: Self) -> bool {
@@ -467,6 +471,17 @@ impl Face {
         };
         let vertical_layout = flags.contains(LoadFlags::VERTICAL_LAYOUT);
         let native_hint_mode = flags.native_hint_mode();
+        if flags.contains(LoadFlags::SBITS_ONLY) {
+            if flags.contains(LoadFlags::NO_SCALE) || flags.contains(LoadFlags::NO_BITMAP) {
+                return Err(FontError::InvalidArgument(
+                    "embedded bitmap strike not selected".into(),
+                ));
+            }
+            font.load_sbit_only_glyph(glyph_index)?;
+            return Err(FontError::UnsupportedLoadFlags(
+                "embedded bitmap image decoding".into(),
+            ));
+        }
         let mut loaded = if flags.contains(LoadFlags::NO_RECURSE) {
             font.glyph_slot_load_no_recurse(glyph_index)?
         } else if flags.contains(LoadFlags::NO_SCALE) {
