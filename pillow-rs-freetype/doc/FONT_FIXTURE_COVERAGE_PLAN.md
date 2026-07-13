@@ -1937,6 +1937,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-13 | CJK wide standard snap fixture | `build_autohint_script_fixtures.py` now emits `fonts/autohint/cjk-wide-stem-snap.ttf`, where U+7530 supplies a 100 FU Hani standard stem and U+4ED6 supplies a 170 FU selected stem. One explicit `FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_MONO` public row keeps the selected stem inside FreeType's `af_cjk_snap_width` reference search window but above `FT_PIX_ROUND(reference) + 48`, proving the upper-side no-snap branch in `afcjk.c:1440-1480` through exact Rust FFI, C ABI, and WASM ABI parity. Concrete cases are 6,774 with zero implicit rows; runtime comparison is 6,770 / 6,770 with four explicit pending rows. Refreshed condition coverage is 16,279 / 18,090 lines, 23,355 / 25,927 regions, 3,934 / 4,626 branches, and 1,030 / 1,150 functions; `src/autohint/cjk.rs` gains one covered region and one covered branch. Route audit reports 3,414 real-parity rows |
 | 2026-07-13 | Render smart-dropout neighbor row | The source-backed `hinter-control-matrix.ttf` now includes U+E037/gid 56, a compact scan-type-4 glyph whose bytecode sets `SCANCTRL 255; SCANTYPE 4`. One explicit `FT_Render_Glyph.matrix_render` row selects it with `FT_LOAD_DEFAULT` and `FT_RENDER_MODE_MONO`, proving pinned C, Rust FFI, C ABI, and WASM ABI agree while the black rasterizer skips a smart-dropout primary because the alternate pixel is already set. This preserves FreeType's scan-mode handoff from `ttgload.c:838-840` and smart-dropout/alternate-pixel behavior from `ftraster.c:2176-2199,2377-2418`. Combined with the CJK probe above, concrete cases are 6,775 with zero implicit rows and runtime comparison is 6,771 / 6,771 with four explicit pending rows. Refreshed condition coverage is 16,280 / 18,090 lines, 23,356 / 25,927 regions, 3,935 / 4,626 branches, and 1,030 / 1,150 functions; `render.rs` reaches 1,721 / 2,272 lines, 2,426 / 3,216 regions, and 350 / 426 branches. Route audit reports 3,415 real-parity rows |
 | 2026-07-13 | CJK degenerate glyph IUP zero-shift row | One explicit `FT_LOAD_FORCE_AUTOHINT` row selects U+4EEC from the existing source-backed `fonts/autohint/cjk-blue-edge-cases.ttf`, whose glyph has three one-point contours. Pinned C accepts the glyph and the public load path reaches the shared Latin segment start condition for single-point contours (`aflatin.c:1901-1907`) plus the zero-delta `af_iup_shift` return (`afhints.c:1592-1603`) without adding a glyph loop or mutating fixture outputs. Concrete cases are 6,776 with zero implicit rows; runtime comparison is 6,772 / 6,772 with four explicit pending rows. Refreshed condition coverage is 16,281 / 18,090 lines, 23,357 / 25,927 regions, 3,938 / 4,626 branches, and 1,030 / 1,150 functions; `src/autohint/latin.rs` gains one covered line, one region, and three branch outcomes. Route audit reports 3,416 real-parity rows |
+| 2026-07-13 | No-recurse empty-glyph loader row | `FT_Load_Glyph.matrix_load` adds one explicit `dejavu-null-no-recurse` row over existing `input/fonts/DejaVuSans.ttf` gid 1 with `FT_LOAD_NO_RECURSE`, proving the public empty-glyph path where no composite recursion exists. FreeType `ttgload.c:1534-1560` zeroes metrics for empty glyf records, `ttgload.c:1800-1808` returns no-recurse subglyphs only inside the composite branch, and `ttgload.c:2556-2566` leaves non-composite empty slots as outline loads; Rust FFI, C ABI, and WASM ABI already matched this behavior. Concrete cases rise from 6,775 to 6,776 with zero implicit rows, runtime comparison rises from 6,771 / 6,771 to 6,772 / 6,772 with four explicit pending rows, and refreshed condition coverage moves from 16,280 / 18,090 lines, 23,356 / 25,927 regions, and 3,935 / 4,626 branches to 16,281 / 18,090 lines, 23,357 / 25,927 regions, and 3,936 / 4,626 branches. Route audit reports real-parity rising from 3,415 to 3,416 with pending-core 16 and shape-incomplete-fallback 0; `font.rs:1994` leaves the full missing-line report while the malformed short-glyf guard around `font.rs:2002` remains classified as residual |
 
 ## Residual Coverage Classification - 2026-07-13
 
@@ -1946,14 +1947,14 @@ source lines. The current split is:
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,776 |
-| Runnable parity comparisons | 6,772 / 6,772 |
+| Concrete explicit cases | 6,777 |
+| Runnable parity comparisons | 6,773 / 6,773 |
 | Pending cases | 4 |
-| Covered Rust lines | 16,281 / 18,090 (90.0000%) |
-| Rust region coverage | 23,357 / 25,927 (90.0876%) |
-| Rust branch/condition coverage | 3,938 / 4,626 (85.1275%) |
+| Covered Rust lines | 16,282 / 18,090 (90.0055%) |
+| Rust region coverage | 23,358 / 25,927 (90.0914%) |
+| Rust branch/condition coverage | 3,939 / 4,626 (85.1492%) |
 | Rust function coverage | 1,030 / 1,150 (89.5652%) |
-| Route audit split | real-parity 3,416; raw-slot-null-validation 4; pending-core 16; shape-incomplete-fallback 0 |
+| Route audit split | real-parity 3,417; raw-slot-null-validation 4; pending-core 16; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|

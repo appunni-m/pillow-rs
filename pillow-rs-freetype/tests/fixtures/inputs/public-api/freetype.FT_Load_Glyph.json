@@ -166,6 +166,30 @@
             ]
           },
           {
+            "id": "dejavu-null-no-recurse",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 10
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_NO_RECURSE"
+              ]
+            },
+            "coverage": [
+              "font:no-recurse-empty-glyph"
+            ]
+          },
+          {
             "id": "dejavu-a-default",
             "assets": {
               "font": {
