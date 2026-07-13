@@ -2162,6 +2162,35 @@ non-null size lifecycle arms at lines 245, 252, and 259 remain missed for the
 size APIs. Those three lines are blocked by the real multi-size implementation,
 not by missing null-validation inputs.
 
+### FTSynth Large-CBox Orientation Guard - 2026-07-13
+
+`FT_GlyphSlot_AdjustWeight.negative_bounds_outline_weight_uses_unsigned_abs`
+now has one additional concrete variant over existing compact
+`fonts/glyf/hinter-control-matrix.ttf` glyph 49 at 65,535 ppem. The selected
+outline's scaled control box exceeds FreeType's orientation helper coordinate
+guard, so `FT_Outline_Get_Orientation` returns `FT_ORIENTATION_NONE` while the
+public glyph-slot mutation still succeeds and updates the exact slot metrics,
+advance, outline points, and control box through Rust FFI, C ABI, and WASM ABI
+routes.
+
+Verified counts after
+`FONTDONE_UNIFIED_ORACLE_REFRESH=1 make -C pillow-rs-freetype test-unified-condition-coverage`:
+
+| Measure | Count |
+|---|---:|
+| Logical public API cases | 4,163 |
+| Concrete explicit cases | 6,766 |
+| Runnable parity comparisons | 6,762 / 6,762 |
+| Pending cases | 4 |
+| Covered Rust lines | 16,261 / 18,090 (89.8894%) |
+| Rust region coverage | 23,333 / 25,927 (89.9950%) |
+| Rust branch/condition coverage | 3,922 / 4,626 (84.7817%) |
+| Rust function coverage | 1,030 / 1,150 (89.5652%) |
+
+The delta from baseline commit `e3f33921` is one additional concrete public
+case plus +1 covered line, +1 covered region, and +1 covered branch.
+`src/api.rs:1059` no longer appears in the full missing-line report.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
