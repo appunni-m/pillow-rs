@@ -1919,8 +1919,17 @@ fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags)
     let bitmap = slot.bitmap.clone().map(Into::into);
     let bitmap_left = slot.bitmap_left;
     let bitmap_top = slot.bitmap_top;
-    let outline_cbox = bbox_to_ffi(slot.outline_cbox);
-    let outline_bbox = bbox_to_ffi(slot.outline_bbox);
+    // FreeType's `FT_LOAD_NO_RECURSE` composite path (`ttgload.c`) computes
+    // metrics from the composite glyph header bbox, but leaves `slot->outline`
+    // empty because the slot format is `FT_GLYPH_FORMAT_COMPOSITE`.
+    let (outline_cbox, outline_bbox) = if slot.format == api::GlyphFormat::Composite {
+        (FT_BBox::default(), FT_BBox::default())
+    } else {
+        (
+            bbox_to_ffi(slot.outline_cbox),
+            bbox_to_ffi(slot.outline_bbox),
+        )
+    };
     let outline = slot.slot_outline().map(outline_to_ffi_snapshot);
     let source_face = face.inner.clone();
     FT_GlyphSlot {

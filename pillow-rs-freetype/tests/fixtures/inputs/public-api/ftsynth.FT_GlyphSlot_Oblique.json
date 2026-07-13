@@ -210,61 +210,69 @@
       "case_id": "ftsynth.FT_GlyphSlot_Oblique.null_or_non_outline_noop",
       "subject": "ftsynth.FT_GlyphSlot_Oblique",
       "case": "null_or_non_outline_noop",
-      "operation": "ftsynth.glyphslot_oblique_noop",
+      "operation": "ftsynth.glyphslot_oblique_after_load",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
         "assets": {
-          "bitmap_strike_font": {
+          "outline_font": {
             "kind": "ref",
-            "id": "input/fonts/bitmap/embedded-strike.ttf",
+            "id": "fonts/glyf/glyf-component-matrix.ttf",
             "role": "font",
-            "status": "required_future_asset"
-          },
-          "synthetic_slots": {
-            "kind": "ref",
-            "id": "slots/synthetic/unsupported-glyph-formats.json",
-            "role": "slot_model",
-            "status": "required_future_asset"
+            "requires": "gid 4 loads as FT_GLYPH_FORMAT_COMPOSITE with FT_LOAD_NO_RECURSE"
           }
         },
         "params": {
-          "scenarios": [
-            {
-              "slot_pointer": null
-            },
-            {
-              "loaded_bitmap_slot": "bitmap_strike_font:glyph-1"
-            },
-            {
-              "slot_ref": "synthetic_slots:none"
-            }
-          ],
-          "initial_slot_snapshot": "sentinel_fields"
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "size_ppem": 20,
+          "load": {
+            "operation": "FT_Load_Glyph",
+            "glyph_index": 4,
+            "load_flags": [
+              "FT_LOAD_NO_RECURSE"
+            ]
+          },
+          "capture_before_after": true
         }
       },
       "classifiers": [
         "kind:function",
         "header:ftsynth",
         "behavior:no-op",
-        "format:non-outline"
+        "format:composite",
+        "coverage:non-outline-slot"
       ],
       "expectation": {
         "status": "ok",
         "output_shape": {
-          "void_return": "no_status",
-          "slot_after": "unchanged sentinel for non-null non-outline slots",
-          "null_call_completed": "bool"
+          "slot_format": "FT_GLYPH_FORMAT_COMPOSITE",
+          "outline_points_before": [],
+          "outline_points_after": [],
+          "metrics_before": "FT_Glyph_Metrics",
+          "metrics_after": "FT_Glyph_Metrics",
+          "advance_before": "FT_Vector",
+          "advance_after": "FT_Vector"
         },
         "compare": {
           "mode": "exact",
           "paths": [
-            "slot_after",
-            "null_call_completed"
+            "slot_format",
+            "outline_points_before",
+            "outline_points_after",
+            "metrics_before",
+            "metrics_after",
+            "advance_before",
+            "advance_after"
           ]
         },
+        "source_refs": [
+          "freetype/src/base/ftsynth.c:FT_GlyphSlot_Oblique",
+          "freetype/src/base/ftsynth.c:FT_GlyphSlot_Slant",
+          "freetype/src/base/ftobjs.c:FT_Load_Glyph"
+        ],
         "fixture_requirements": [
-          "Add a bitmap strike fixture and synthetic non-outline slot records for non-outline no-op checks."
+          "Use a real composite slot produced by FT_LOAD_NO_RECURSE so the public no-op branch is exercised without synthetic slot records."
         ]
       }
     }
