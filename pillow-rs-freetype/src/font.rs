@@ -1412,6 +1412,15 @@ impl Font {
         ft_mul_fix(advance, self.size_metrics.x_scale)
     }
 
+    fn glyph_index_vert_advance_26dot6(&self, glyph_index: u16) -> i32 {
+        let advance = if let Some(vmtx) = &self.data.vmtx {
+            i32::from(vmtx.get(glyph_index).advance_height)
+        } else {
+            vertical_advance_font_units(&self.data)
+        };
+        ft_mul_fix(advance, self.size_metrics.y_scale)
+    }
+
     pub(crate) fn glyph_index_hori_advance_16dot16(&self, glyph_index: u16) -> i32 {
         let advance = self.data.hmtx.get(glyph_index).advance_width as i32;
         ft_mul_fix(advance * 1024, self.size_metrics.x_scale)
@@ -1487,12 +1496,25 @@ impl Font {
         Ok(self.slot_load_from_scaled(glyph, scaled, grid_fit_for_layout(vertical_layout)))
     }
 
-    pub(crate) fn load_sbit_only_glyph(&self, glyph: u16) -> Result<(), FontError> {
+    pub(crate) fn load_sbit_only_glyph(
+        &self,
+        glyph_index: u16,
+    ) -> Result<tt::sbit::SbitGlyph, FontError> {
         let sbit = self.data.sbit.as_ref().ok_or_else(|| {
             FontError::InvalidArgument("embedded bitmap strike not selected".into())
         })?;
         let metrics = self.size_metrics();
-        sbit.load_glyph_status(glyph, metrics.x_ppem, metrics.y_ppem, 0)
+        let mut sbit_glyph = sbit.load_glyph(glyph_index, metrics.x_ppem, metrics.y_ppem, 0)?;
+        // FreeType `truetype/ttgload.c:2401-2469` fills missing scalable SBIT
+        // advances from the glyph's linear TrueType advances after
+        // `load_sbit_image`.
+        if sbit_glyph.metrics.hori_advance == 0 {
+            sbit_glyph.metrics.hori_advance = self.glyph_index_hori_advance_26dot6(glyph_index);
+        }
+        if sbit_glyph.metrics.vert_advance == 0 {
+            sbit_glyph.metrics.vert_advance = self.glyph_index_vert_advance_26dot6(glyph_index);
+        }
+        Ok(sbit_glyph)
     }
 
     pub(crate) fn glyph_metrics_for_index_force_autohint(
