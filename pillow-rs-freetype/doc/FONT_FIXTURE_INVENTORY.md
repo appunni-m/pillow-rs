@@ -255,7 +255,7 @@ listed because they enter different hinting and scaling conditions.
 | `sbit_unsupported_bit_depth_format1.ttf` | gid 1 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` to prove unsupported bit depth 7 public error parity |
 | `sbit_unsupported_image_format.ttf` | gid 1 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` to prove unsupported image format 10 public error parity |
 | `sbit_composite_success_format8.ttf` | gid 2 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` to prove image-format-8 compound bitmap assembly through a simple gray child |
-| `sbit_composite_success_format9.ttf` | gid 2 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` to prove image-format-9 compound big-metrics assembly |
+| `sbit_composite_success_format9.ttf` | gid 2 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` and with `FT_LOAD_VERTICAL_LAYOUT | FT_LOAD_SBITS_ONLY` to prove image-format-9 compound big-metrics assembly and the public vertical-layout bitmap slot path |
 | `sbit_composite_mono_success_format8.ttf` | gid 2 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` to prove packed MONO compound zero-offset assembly |
 | `sbit_composite_bgra_success_format8.ttf` | gid 2 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_COLOR | FT_LOAD_SBITS_ONLY` to prove BGRA compound zero-offset assembly |
 | `sbit_composite_negative_offset_format8.ttf`, `sbit_composite_out_of_bounds_format8.ttf` | gid 2 | 20 | selected by `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` to prove invalid compound component placement errors |
