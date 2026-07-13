@@ -10,7 +10,8 @@
     "degenerate_outline_weight_keeps_points_and_updates_metrics",
     "negative_bounds_outline_weight_uses_unsigned_abs",
     "bitmap_weight_owns_emboldens_and_updates_top",
-    "null_or_unsupported_format_noop"
+    "null_or_unsupported_format_noop",
+    "null_slot_noop"
   ],
   "metadata": {
     "abi": {
@@ -725,6 +726,54 @@
         ],
         "fixture_requirements": [
           "Use a real composite slot produced by FT_LOAD_NO_RECURSE so the public no-op branch is exercised without synthetic slot records."
+        ]
+      }
+    },
+    {
+      "case_id": "ftsynth.FT_GlyphSlot_AdjustWeight.null_slot_noop",
+      "subject": "ftsynth.FT_GlyphSlot_AdjustWeight",
+      "case": "null_slot_noop",
+      "operation": "ftsynth.glyphslot_null_noop",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "function": "FT_GlyphSlot_AdjustWeight",
+          "xdelta_16_16": 3277,
+          "ydelta_16_16": 3277,
+          "slot_pointer": null
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsynth",
+        "behavior:no-op",
+        "format:null-slot",
+        "coverage:null-slot"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "function": "string",
+          "slot": "null",
+          "completed": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "function",
+            "slot",
+            "first",
+            "second",
+            "completed"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftsynth.c:FT_GlyphSlot_AdjustWeight"
+        ],
+        "fixture_requirements": [
+          "No font fixture is required; this exercises the public void helper with a raw null FT_GlyphSlot."
         ]
       }
     }

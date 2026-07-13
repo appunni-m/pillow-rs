@@ -5,7 +5,8 @@
     "signature_and_wrapper_strength",
     "outline_embolden_mutates_geometry_and_metrics",
     "bitmap_embolden_mutates_bitmap_and_metrics",
-    "null_or_unsupported_format_noop"
+    "null_or_unsupported_format_noop",
+    "null_slot_noop"
   ],
   "metadata": {
     "abi": {
@@ -207,53 +208,117 @@
       "case_id": "ftsynth.FT_GlyphSlot_Embolden.null_or_unsupported_format_noop",
       "subject": "ftsynth.FT_GlyphSlot_Embolden",
       "case": "null_or_unsupported_format_noop",
-      "operation": "ftsynth.glyphslot_embolden_noop",
+      "operation": "ftsynth.glyphslot_embolden_after_load",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
         "assets": {
-          "synthetic_slots": {
+          "outline_font": {
             "kind": "ref",
-            "id": "slots/synthetic/unsupported-glyph-formats.json",
-            "role": "slot_model",
-            "status": "required_future_asset"
+            "id": "fonts/glyf/glyf-component-matrix.ttf",
+            "role": "font",
+            "requires": "gid 4 loads as FT_GLYPH_FORMAT_COMPOSITE with FT_LOAD_NO_RECURSE"
           }
         },
         "params": {
-          "scenarios": [
-            {
-              "slot_pointer": null
-            },
-            {
-              "slot_ref": "synthetic_slots:composite"
-            },
-            {
-              "slot_ref": "synthetic_slots:none"
-            }
-          ],
-          "initial_slot_snapshot": "sentinel_fields"
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "size_ppem": 20,
+          "load": {
+            "operation": "FT_Load_Glyph",
+            "glyph_index": 4,
+            "load_flags": [
+              "FT_LOAD_NO_RECURSE"
+            ]
+          },
+          "capture_before_after": true
         }
       },
       "classifiers": [
         "kind:function",
         "header:ftsynth",
         "behavior:no-op",
-        "format:unsupported"
+        "format:composite",
+        "coverage:non-outline-slot"
       ],
       "expectation": {
         "status": "ok",
         "output_shape": {
-          "void_return": "no_status",
-          "slot_after": "unchanged sentinel for non-null unsupported slots",
-          "null_call_completed": "bool"
+          "slot_format": "FT_GLYPH_FORMAT_COMPOSITE",
+          "outline_points_before": [],
+          "outline_points_after": [],
+          "metrics_before": "FT_Glyph_Metrics",
+          "metrics_after": "FT_Glyph_Metrics",
+          "advance_before": "FT_Vector",
+          "advance_after": "FT_Vector"
         },
         "compare": {
           "mode": "exact",
           "paths": [
-            "slot_after",
-            "null_call_completed"
+            "slot_format",
+            "outline_points_before",
+            "outline_points_after",
+            "metrics_before",
+            "metrics_after",
+            "advance_before",
+            "advance_after"
           ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftsynth.c:FT_GlyphSlot_Embolden",
+          "freetype/src/base/ftsynth.c:FT_GlyphSlot_AdjustWeight",
+          "freetype/src/base/ftobjs.c:FT_Load_Glyph"
+        ],
+        "fixture_requirements": [
+          "Use a real composite slot produced by FT_LOAD_NO_RECURSE so the public no-op branch is exercised without synthetic slot records."
+        ]
+      }
+    },
+    {
+      "case_id": "ftsynth.FT_GlyphSlot_Embolden.null_slot_noop",
+      "subject": "ftsynth.FT_GlyphSlot_Embolden",
+      "case": "null_slot_noop",
+      "operation": "ftsynth.glyphslot_null_noop",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "function": "FT_GlyphSlot_Embolden",
+          "slot_pointer": null
         }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsynth",
+        "behavior:no-op",
+        "format:null-slot",
+        "coverage:null-slot"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "function": "string",
+          "slot": "null",
+          "completed": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "function",
+            "slot",
+            "first",
+            "second",
+            "completed"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftsynth.c:FT_GlyphSlot_Embolden",
+          "freetype/src/base/ftsynth.c:FT_GlyphSlot_AdjustWeight"
+        ],
+        "fixture_requirements": [
+          "No font fixture is required; this exercises the public wrapper with a raw null FT_GlyphSlot."
+        ]
       }
     }
   ]

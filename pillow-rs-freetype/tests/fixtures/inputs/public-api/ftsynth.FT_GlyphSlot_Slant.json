@@ -5,7 +5,8 @@
     "signature_and_matrix_contract",
     "horizontal_and_vertical_slant_mutate_outline",
     "zero_slant_preserves_outline",
-    "null_or_non_outline_noop"
+    "null_or_non_outline_noop",
+    "null_slot_noop"
   ],
   "metadata": {
     "abi": {
@@ -294,6 +295,54 @@
         ],
         "fixture_requirements": [
           "Use a real composite slot produced by FT_LOAD_NO_RECURSE so the public no-op branch is exercised without synthetic slot records."
+        ]
+      }
+    },
+    {
+      "case_id": "ftsynth.FT_GlyphSlot_Slant.null_slot_noop",
+      "subject": "ftsynth.FT_GlyphSlot_Slant",
+      "case": "null_slot_noop",
+      "operation": "ftsynth.glyphslot_null_noop",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "function": "FT_GlyphSlot_Slant",
+          "xslant_16_16": 13107,
+          "yslant_16_16": 4096,
+          "slot_pointer": null
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsynth",
+        "behavior:no-op",
+        "format:null-slot",
+        "coverage:null-slot"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "function": "string",
+          "slot": "null",
+          "completed": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "function",
+            "slot",
+            "first",
+            "second",
+            "completed"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftsynth.c:FT_GlyphSlot_Slant"
+        ],
+        "fixture_requirements": [
+          "No font fixture is required; this exercises the public void helper with a raw null FT_GlyphSlot."
         ]
       }
     }

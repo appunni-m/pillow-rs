@@ -10546,7 +10546,9 @@ subjects:
       - id: bitmap_weight_owns_emboldens_and_updates_top
         description: For bitmap glyphs, C rounds strengths to full pixels, owns the bitmap if needed, emboldens bitmap bytes, updates metrics/advances, and increases bitmap_top by ystr pixels.
       - id: null_or_unsupported_format_noop
-        description: Null slots and glyph formats other than OUTLINE or BITMAP return without mutation or error reporting.
+        description: Glyph formats other than OUTLINE or BITMAP return without mutation or error reporting.
+      - id: null_slot_noop
+        description: Passing a null FT_GlyphSlot to the void public helper completes without mutation or error reporting.
     # needs-input: operation=load_glyph followed by FT_GlyphSlot_AdjustWeight; fixture_asset=outline TrueType/CFF glyphs, bitmap strike glyphs, and synthetic unsupported slot-format records; params={font, glyph_index, ppem, load_flags, xdelta, ydelta, initial_slot_snapshot}; expected output shape={slot_format, outline_points/cbox or bitmap descriptor/bytes, metrics, advance, bitmap_top, unchanged sentinel for noop}; comparison=exact C oracle mutated fields and bytes, with void/no-status semantics.
 
   - id: ftsynth.FT_GlyphSlot_Embolden
@@ -10562,7 +10564,9 @@ subjects:
       - id: bitmap_embolden_mutates_bitmap_and_metrics
         description: Bitmap glyphs are owned, emboldened, and have descriptor, byte buffer, metrics, advances, and bitmap_top updated exactly as C reports.
       - id: null_or_unsupported_format_noop
-        description: Null slots and unsupported glyph formats return without observable mutation because the wrapped AdjustWeight path no-ops.
+        description: Unsupported glyph formats return without observable mutation because the wrapped AdjustWeight path no-ops.
+      - id: null_slot_noop
+        description: Passing a null FT_GlyphSlot to the wrapper completes without mutation or error reporting.
     # needs-input: operation=load_glyph followed by FT_GlyphSlot_Embolden; fixture_asset=outline glyph fonts, embedded bitmap strike font, and synthetic unsupported slot-format records; params={font, glyph_index, ppem, load_flags, initial_slot_snapshot}; expected output shape={slot_format, outline_points/cbox or bitmap descriptor/bytes, metrics, advance, bitmap_top, unchanged sentinel for noop}; comparison=exact C oracle mutated fields and bitmap bytes.
 
   - id: ftsynth.FT_GlyphSlot_Oblique
@@ -10578,7 +10582,9 @@ subjects:
       - id: metrics_and_cbox_match_c_after_shear
         description: The post-slant outline coordinates and derived control box match C's FT_Outline_Transform fixed-point rounding exactly.
       - id: null_or_non_outline_noop
-        description: Null slots and non-outline glyph formats, including bitmap glyphs, return without mutation.
+        description: Non-outline glyph formats, including bitmap glyphs, return without mutation.
+      - id: null_slot_noop
+        description: Passing a null FT_GlyphSlot to the wrapper completes without mutation or error reporting.
     # needs-input: operation=load_glyph followed by FT_GlyphSlot_Oblique; fixture_asset=outline glyphs with vertical stems/diagonals plus bitmap strike glyph; params={font, glyph_index, ppem, load_flags, initial_slot_snapshot}; expected output shape={outline_points, cbox, metrics, advance, bitmap/noop sentinel}; comparison=exact C oracle 26.6 coordinates and unchanged fields for no-op cases.
 
   - id: ftsynth.FT_GlyphSlot_Slant
@@ -10594,7 +10600,9 @@ subjects:
       - id: zero_slant_preserves_outline
         description: Zero xslant and yslant leave all outline points and public slot fields unchanged apart from any C-internal no-op traversal effects.
       - id: null_or_non_outline_noop
-        description: Null slots and glyph formats other than OUTLINE return without mutation or error reporting.
+        description: Glyph formats other than OUTLINE return without mutation or error reporting.
+      - id: null_slot_noop
+        description: Passing a null FT_GlyphSlot to the void public helper completes without mutation or error reporting.
     # needs-input: operation=load_glyph followed by FT_GlyphSlot_Slant; fixture_asset=outline glyphs with positive/negative coordinates and bitmap strike glyph; params={font, glyph_index, ppem, load_flags, xslant, yslant, initial_slot_snapshot}; expected output shape={outline_points, cbox, metrics, advance, unchanged sentinel for zero/non-outline/null}; comparison=exact C oracle 26.6 point values and unchanged public fields.
 
   - id: ftsystem.FT_StreamRec
