@@ -57,6 +57,17 @@ def write_prep_idef() -> None:
     save_font("hinter-prep-idef.ttf", font)
 
 
+def write_prep_redefine_defs() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    prep = font["prep"].program.getBytecode()
+    # FreeType allows definitions in prep.  Redefine existing FDEF 1 and IDEF
+    # 0x8F so this stays within the font's maxp definition budgets.
+    prep += bytes.fromhex("b0 01 2c b0 01 21 2d")
+    prep += bytes.fromhex("b0 8f 89 b0 01 21 2d")
+    font["prep"].program = program_from_bytes(prep)
+    save_font("hinter-prep-redefine-defs.ttf", font)
+
+
 def write_fpgm_loopcall() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     font["glyf"]["base"].program = program_from_bytes(bytes.fromhex("b1 02 01 2a"))
@@ -66,8 +77,9 @@ def write_fpgm_loopcall() -> None:
 def write_fpgm_nested_fdef() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     fpgm = font["fpgm"].program.getBytecode()
-    # Define an unused nested FDEF to exercise FreeType's Nested_DEFS error.
-    fpgm += bytes.fromhex("b0 00 2c b0 00 2c b0 01 21 2d 2d")
+    # Redefine existing FDEF 1 so maxp budgets are already satisfied, then put
+    # a nested FDEF in the body to exercise FreeType's Nested_DEFS error.
+    fpgm += bytes.fromhex("b0 01 2c b0 00 2c b0 01 21 2d 2d")
     font["fpgm"].program = program_from_bytes(fpgm)
     save_font("hinter-fpgm-nested-fdef.ttf", font)
 
@@ -100,6 +112,7 @@ def main() -> None:
     write_empty_fpgm()
     write_prep_definitions()
     write_prep_idef()
+    write_prep_redefine_defs()
     write_fpgm_loopcall()
     write_fpgm_nested_fdef()
     write_fpgm_idef_opcode_overflow()
