@@ -454,6 +454,30 @@
             ]
           },
           {
+            "id": "latin-malformed-standard-force-autohint",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/autohint/latin-malformed-standard.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 2,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:malformed-standard-glyph-ignored"
+            ]
+          },
+          {
             "id": "sfnt-no-os2-force-autohint-vertical",
             "assets": {
               "font": {

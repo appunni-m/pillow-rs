@@ -49,6 +49,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `99ab69fa2b56` | 1.1 | 1 | `fonts/autohint/digit-notdef-cmap.ttf` | source-backed glyf, 3 glyphs, U+0030 explicitly maps to glyph 0 while U+006F selects a Latin ring; owns the face-global digit-width scan glyph-zero branch |
 | `38431987e24e` | 11.7 | 1 | `fonts/autohint/indic-coverage.ttf` | glyf, 37 glyphs, 29 mappings, native hinting, Devanagari geometry |
 | `b4ff2e5f559c` | 10.7 | 1 | `fonts/autohint/latin-greek-cyrillic.ttf` | glyf, 39 glyphs, distinct Latin/Greek/Cyrillic geometry |
+| `053fcf674ea8` | 1.1 | 1 | `fonts/autohint/latin-malformed-standard.ttf` | source-backed glyf, 4 glyphs, valid U+0041 load glyph plus U+006F mapped to a deliberately truncated final glyph; owns the ignored malformed Latin standard-character load during autohint metrics setup |
 | `1ff7a44a2e54` | 5.5 | 1 | `fonts/autohint/script-coverage.ttf` | source-backed glyf, 61 glyphs, 109 Unicode mappings, one compact glyph per autohint script tag plus standard-character aliases |
 | `c454a86ebd36` | 143.3 | 1 | `fonts/native/dejavu-coverage.ttf` | retain-GID glyf, 6,128 slots and 121 Unicode mappings; Latin/Greek blue strings, Cyrillic, emoji, native hinting, legacy kern, GPOS/GSUB/GDEF, MATH, post names; controlled format-4 `idRangeOffset` segment |
 | `8f92c06e515e` | 771.3 | 211 | `input/fonts/generated/sfnt-name-records.ttf` | glyf, 6,253 glyphs, broad cmap, name-record source for 211 aliases |
@@ -215,6 +216,7 @@ listed because they enter different hinting and scaling conditions.
 | `cjk-coverage.ttf` | U+0049 gid 19 | 20 | compact four-edge micro-serif with close cross-links and intermediate-edge overlap rejection |
 | `cjk-width-order.ttf` | U+56D7 gid 1 | 20 | Hani fallback standard character without U+7530; wide-then-narrow stems exercise CJK standard-width insertion sort and quantization |
 | `digit-notdef-cmap.ttf` | U+006F gid 2, with U+0030 cmap-covered as gid 0 | 20 | public force-autohint metrics setup scans an explicitly covered digit that resolves to glyph 0, exercising the face-global digit-width skip branch without selecting `.notdef` as the rendered glyph |
+| `latin-malformed-standard.ttf` | U+0041 gid 2, with U+006F gid 3 truncated to a two-byte glyf record | 20 | public force-autohint load keeps the selected Latin glyph valid while standard-width initialization tries and ignores the malformed `o` standard glyph, matching pinned FreeType's metrics fallback behavior |
 | `script-coverage.ttf` | all generated `SCRIPT_PROBES` codepoints from `scripts/build_autohint_script_fixtures.py` | 20 | explicit `FT_LOAD_FORCE_AUTOHINT` script-selection rows for all 59 compact script glyphs; this proves each selected script tag through real Rust/C ABI/WASM parity without an implicit script matrix |
 | `hdmx_observable.ttf` | U+0041 gid 36 (`A`) | 20 | default, compute-metrics, mono hdmx, and mono suppression conditions |
 | `hhea-zero-typo-fallback.ttf` | face open and active size metrics only | 20 | hhea ascent/descent/lineGap are zero and OS/2 `USE_TYPO_METRICS` is clear, so public `FT_Size_Metrics` selects the OS/2 typo fallback branch |

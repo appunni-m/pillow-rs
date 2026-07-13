@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+import struct
 from pathlib import Path
 
 from fontTools.fontBuilder import FontBuilder
 from fontTools.pens.ttGlyphPen import TTGlyphPen
+from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables._g_l_y_f import Glyph, GlyphCoordinates
 from fontTools.ttLib.tables.ttProgram import Program
 
@@ -317,6 +319,43 @@ def one_point_contour_glyph(points: list[tuple[int, int]]):
     glyph.yMin = min(y for _, y in points)
     glyph.yMax = max(y for _, y in points)
     return glyph
+
+
+def table_offsets(path: Path) -> dict[str, tuple[int, int]]:
+    data = path.read_bytes()
+    num_tables = struct.unpack(">H", data[4:6])[0]
+    tables: dict[str, tuple[int, int]] = {}
+    for index in range(num_tables):
+        entry = 12 + index * 16
+        tag = data[entry : entry + 4].decode("ascii")
+        offset = struct.unpack(">L", data[entry + 8 : entry + 12])[0]
+        length = struct.unpack(">L", data[entry + 12 : entry + 16])[0]
+        tables[tag] = (offset, length)
+    return tables
+
+
+def truncate_glyph_loca(path: Path, glyph_name: str, byte_len: int) -> None:
+    font = TTFont(path, recalcTimestamp=False)
+    glyph_order = font.getGlyphOrder()
+    glyph_id = glyph_order.index(glyph_name)
+    locations = list(font["loca"].locations)
+    start = locations[glyph_id]
+    locations[glyph_id + 1] = start + byte_len
+    loca_format = font["head"].indexToLocFormat
+    font.close()
+
+    tables = table_offsets(path)
+    loca_offset, _ = tables["loca"]
+    data = bytearray(path.read_bytes())
+    if loca_format == 0:
+        if byte_len % 2 != 0:
+            raise ValueError("short loca glyph lengths must be even")
+        entry = loca_offset + (glyph_id + 1) * 2
+        data[entry : entry + 2] = struct.pack(">H", locations[glyph_id + 1] // 2)
+    else:
+        entry = loca_offset + (glyph_id + 1) * 4
+        data[entry : entry + 4] = struct.pack(">L", locations[glyph_id + 1])
+    path.write_bytes(data)
 
 
 def glyph_name(tag: str) -> str:
@@ -1085,6 +1124,61 @@ def build_latin_standard_fallbacks() -> None:
         font.save(OUT_DIR / filename)
 
 
+def build_latin_malformed_standard() -> None:
+    glyph_order = [".notdef", "space", "latin_A", "latin_o_malformed"]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -120, 520, 720),
+        "space": empty_glyph(),
+        "latin_A": rectangle_glyph(100, 0, 540, 680),
+        "latin_o_malformed": rectangle_glyph(90, 0, 510, 520),
+    }
+    metrics = {
+        ".notdef": (600, 80),
+        "space": (300, 0),
+        "latin_A": (700, 100),
+        "latin_o_malformed": (620, 90),
+    }
+    cmap = {
+        0x20: "space",
+        0x41: "latin_A",
+        0x6F: "latin_o_malformed",
+    }
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint Latin Malformed Standard",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint Latin Malformed Standard Regular",
+            "fullName": "Autohint Latin Malformed Standard Regular",
+            "psName": "AutohintLatinMalformedStandard-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    path = OUT_DIR / "latin-malformed-standard.ttf"
+    font.save(path)
+    truncate_glyph_loca(path, "latin_o_malformed", 2)
+
+
 def main() -> None:
     build_script_coverage()
     build_cjk_empty_standard()
@@ -1098,6 +1192,7 @@ def main() -> None:
     build_cjk_duplicate_edge()
     build_digit_notdef_cmap()
     build_latin_standard_fallbacks()
+    build_latin_malformed_standard()
 
 
 if __name__ == "__main__":
