@@ -260,6 +260,23 @@ def stacked_contour_glyph():
     )
 
 
+def serif_m_symmetry_glyph():
+    """Three serifed stems with 12 horizontal-dimension edges."""
+    return rectangles_glyph(
+        [
+            (100, 0, 150, 500),
+            (70, 0, 180, 120),
+            (70, 380, 180, 500),
+            (300, 0, 350, 500),
+            (270, 0, 380, 120),
+            (270, 380, 380, 500),
+            (500, 0, 550, 500),
+            (470, 0, 580, 120),
+            (470, 380, 580, 500),
+        ]
+    )
+
+
 def nonreciprocal_chain_glyph():
     # U+51A1: two major-direction segments share one opposite segment so CJK
     # link cleanup sees a non-reciprocal chain and assigns a serif fallback.
@@ -367,6 +384,7 @@ def build_script_coverage() -> None:
     glyph_order.extend(glyph_name(tag) for tag, _ in SCRIPT_PROBES)
     glyph_order.extend(name for name, _, _ in DIGIT_WIDTH_PROBES)
     glyph_order.append("latin_double_top")
+    glyph_order.append("latin_serif_m_symmetry")
 
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
@@ -400,6 +418,9 @@ def build_script_coverage() -> None:
     glyphs["latin_double_top"] = stacked_contour_glyph()
     metrics["latin_double_top"] = (700, 100)
     cmap[0x01D5] = "latin_double_top"
+    glyphs["latin_serif_m_symmetry"] = serif_m_symmetry_glyph()
+    metrics["latin_serif_m_symmetry"] = (700, 70)
+    cmap[0x01D7] = "latin_serif_m_symmetry"
 
     font = FontBuilder(UNITS_PER_EM, isTTF=True)
     font.setupGlyphOrder(glyph_order)
