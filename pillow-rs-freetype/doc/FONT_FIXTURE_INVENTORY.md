@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 157 | 114 | 43 | 125 | 839 KiB |
+| Active fixtures | 161 | 118 | 43 | 129 | 857 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 7 | 7 | 0 | 7 | 193 KiB |
 
@@ -160,6 +160,10 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `270d82716a52` | 4.6 | 1 | `fixtures/assets/fonts/sbit_missing_bitmap.ttf` | source-backed TrueType control with one EBLC/EBDT strike at 20 ppem and a glyph-1 index-format-1 record whose equal image offsets exercise the internal SBIT missing-image branch; public scalable `FT_LOAD_SBITS_ONLY` reports `FT_Err_Invalid_Argument` |
 | `18159d790c14` | 4.6 | 1 | `fixtures/assets/fonts/sbit_gray_format1.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT strike; glyph 1 uses index format 1 and image format 1 with 8-bit gray small metrics plus bitmap bytes, owning the scalable `FT_LOAD_SBITS_ONLY` bitmap-success path and FreeType's fallback from missing SBIT vertical advance to the glyph linear vertical advance |
 | `eda68c0e2927` | 4.6 | 1 | `fixtures/assets/fonts/sbit_mono_format1.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT strike; glyph 1 uses index format 1 and image format 1 with 1-bit monochrome small metrics plus a 9-pixel-wide bitmap, owning the scalable `FT_LOAD_SBITS_ONLY` MONO bitmap-success path and final-byte pitch/mask behavior |
+| `c30ebb38710e` | 4.6 | 1 | `fixtures/assets/fonts/sbit_gray2_format1.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT strike; glyph 1 uses index format 1 and image format 1 with 2-bit packed grayscale small metrics plus bitmap bytes, owning exact `FT_PIXEL_MODE_GRAY2`, pitch, `num_grays`, and buffer parity through `FT_Load_Glyph` |
+| `f6c196691dde` | 4.6 | 1 | `fixtures/assets/fonts/sbit_gray4_format1.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT strike; glyph 1 uses index format 1 and image format 1 with 4-bit packed grayscale small metrics plus bitmap bytes, owning exact `FT_PIXEL_MODE_GRAY4`, pitch, `num_grays`, and buffer parity through `FT_Load_Glyph` |
+| `08f208b72acc` | 4.6 | 1 | `fixtures/assets/fonts/sbit_bgra_format1.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT strike; glyph 1 uses index format 1 and image format 1 with 32-bit packed BGRA bitmap bytes, owning exact `FT_PIXEL_MODE_BGRA`, pitch, `num_grays`, and buffer parity through `FT_LOAD_COLOR | FT_LOAD_SBITS_ONLY` |
+| `06991368d003` | 4.6 | 1 | `fixtures/assets/fonts/sbit_gray_format3.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT strike; glyph 1 uses index format 3 and image format 1 with 8-bit gray small metrics, owning the successful two-byte offset-array SBIT lookup path |
 | `6e02745a630e` | 4.6 | 1 | `fixtures/assets/fonts/sbit_no_matching_strike.ttf` | source-backed TrueType control with only a 19 ppem EBLC/EBDT strike; loading at 20 ppem owns the no-selected-SBIT-strike branch and exact public `FT_Err_Invalid_Argument` |
 | `9dd3c473b4a1` | 4.6 | 1 | `fixtures/assets/fonts/sbit_range_miss.ttf` | source-backed TrueType control with a selected 20 ppem strike whose range covers glyph 2 only; loading glyph 1 owns the SBIT range-miss branch and exact public `FT_Err_Invalid_Argument` |
 | `02fba33ce7ba` | 4.6 | 1 | `fixtures/assets/fonts/sbit_missing_range_array.ttf` | source-backed TrueType control whose bitmapSizeTable points the EBLC indexSubTableArray beyond the table; owns Rust range-array absence coverage and exact public `FT_Err_Invalid_Argument` |

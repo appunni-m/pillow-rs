@@ -14,6 +14,7 @@ use crate::font::{
 };
 use crate::render::{PixelMode, RenderMode, RenderedBitmap, render_loaded_outline};
 use crate::tt::hinter::NativeHintMode;
+use crate::tt::sbit::SbitPixelMode;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -638,11 +639,7 @@ fn sbit_glyph_slot(
         width: sbit.bitmap.width,
         rows: sbit.bitmap.rows,
         pitch: sbit.bitmap.pitch,
-        pixel_mode: if sbit.bitmap.is_mono {
-            PixelMode::Mono
-        } else {
-            PixelMode::Gray
-        },
+        pixel_mode: sbit_pixel_mode_to_render(sbit.bitmap.pixel_mode),
         num_grays: sbit.bitmap.num_grays,
         left: bitmap_left,
         top: bitmap_top,
@@ -923,6 +920,16 @@ impl GlyphSlot {
     }
 }
 
+fn sbit_pixel_mode_to_render(mode: SbitPixelMode) -> PixelMode {
+    match mode {
+        SbitPixelMode::Mono => PixelMode::Mono,
+        SbitPixelMode::Gray2 => PixelMode::Gray2,
+        SbitPixelMode::Gray4 => PixelMode::Gray4,
+        SbitPixelMode::Gray => PixelMode::Gray,
+        SbitPixelMode::Bgra => PixelMode::Bgra,
+    }
+}
+
 fn embolden_rendered_bitmap(bitmap: &mut RenderedBitmap, x_pixels: i32, y_pixels: i32) -> bool {
     if x_pixels < 0 || y_pixels < 0 {
         return false;
@@ -936,7 +943,12 @@ fn embolden_rendered_bitmap(bitmap: &mut RenderedBitmap, x_pixels: i32, y_pixels
     }
     match bitmap.pixel_mode {
         PixelMode::Gray => embolden_8bit_positive_pitch_bitmap(bitmap, x_pixels, y_pixels),
-        PixelMode::Mono | PixelMode::Lcd | PixelMode::LcdV => false,
+        PixelMode::Mono
+        | PixelMode::Gray2
+        | PixelMode::Gray4
+        | PixelMode::Lcd
+        | PixelMode::LcdV
+        | PixelMode::Bgra => false,
     }
 }
 

@@ -133,11 +133,7 @@ def gray_format1_tables() -> tuple[bytes, bytes]:
     return eblc, ebdt
 
 
-def mono_format1_tables() -> tuple[bytes, bytes]:
-    # The same image format with a 1-bit strike exposes FT_PIXEL_MODE_MONO and
-    # a byte pitch of ceil(width / 8).  A 9-pixel width keeps the final-byte mask
-    # observable without needing another glyph.
-    image = bytes([2, 9, 1, 2, 10]) + bytes([0xA5, 0x80, 0x5A, 0x00])
+def packed_format1_tables(bit_depth: int, image: bytes) -> tuple[bytes, bytes]:
     index_array = struct.pack(">HHI", 1, 1, 8)
     index_subtable = (
         struct.pack(">HHI", 1, 1, 4)
@@ -149,7 +145,57 @@ def mono_format1_tables() -> tuple[bytes, bytes]:
         len(index_tables),
         1,
         1,
-        bit_depth=1,
+        bit_depth=bit_depth,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000) + image
+    return eblc, ebdt
+
+
+def mono_format1_tables() -> tuple[bytes, bytes]:
+    # The same image format with a 1-bit strike exposes FT_PIXEL_MODE_MONO and
+    # a byte pitch of ceil(width / 8).  A 9-pixel width keeps the final-byte mask
+    # observable without needing another glyph.
+    image = bytes([2, 9, 1, 2, 10]) + bytes([0xA5, 0x80, 0x5A, 0x00])
+    return packed_format1_tables(1, image)
+
+
+def gray2_format1_tables() -> tuple[bytes, bytes]:
+    # FreeType's byte-aligned SBIT decoder exposes bit depth 2 as
+    # FT_PIXEL_MODE_GRAY2 with a pitch of ceil(width / 4).
+    image = bytes([2, 5, 1, 2, 6]) + bytes([0x1B, 0x80, 0xE4, 0x40])
+    return packed_format1_tables(2, image)
+
+
+def gray4_format1_tables() -> tuple[bytes, bytes]:
+    # Bit depth 4 maps to FT_PIXEL_MODE_GRAY4 with a pitch of ceil(width / 2).
+    image = bytes([2, 3, 1, 2, 4]) + bytes([0x12, 0x30, 0xAB, 0xC0])
+    return packed_format1_tables(4, image)
+
+
+def bgra_format1_tables() -> tuple[bytes, bytes]:
+    # Bit depth 32 uses packed BGRA bytes and FreeType reports
+    # FT_PIXEL_MODE_BGRA with pitch width * 4.
+    image = bytes([1, 2, 1, 1, 3]) + bytes(
+        [0x10, 0x20, 0x30, 0xFF, 0x40, 0x50, 0x60, 0x80]
+    )
+    return packed_format1_tables(32, image)
+
+
+def gray_format3_tables() -> tuple[bytes, bytes]:
+    image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x80, 0xC0, 0xFF])
+    index_array = struct.pack(">HHI", 1, 1, 8)
+    index_subtable = (
+        struct.pack(">HHI", 3, 1, 4)
+        + struct.pack(">HH", 0, len(image))
+    )
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        1,
+        bit_depth=8,
     )
     eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
     ebdt = struct.pack(">I", 0x00020000) + image
@@ -292,6 +338,26 @@ def build_mono_format1_bitmap() -> None:
     save_sbit_font("sbit_mono_format1.ttf", eblc, ebdt)
 
 
+def build_gray2_format1_bitmap() -> None:
+    eblc, ebdt = gray2_format1_tables()
+    save_sbit_font("sbit_gray2_format1.ttf", eblc, ebdt)
+
+
+def build_gray4_format1_bitmap() -> None:
+    eblc, ebdt = gray4_format1_tables()
+    save_sbit_font("sbit_gray4_format1.ttf", eblc, ebdt)
+
+
+def build_bgra_format1_bitmap() -> None:
+    eblc, ebdt = bgra_format1_tables()
+    save_sbit_font("sbit_bgra_format1.ttf", eblc, ebdt)
+
+
+def build_gray_format3_bitmap() -> None:
+    eblc, ebdt = gray_format3_tables()
+    save_sbit_font("sbit_gray_format3.ttf", eblc, ebdt)
+
+
 def build_sbit_error_branch_fixtures() -> None:
     ebdt = struct.pack(">I", 0x00020000)
     save_sbit_font("sbit_empty_ebdt.ttf", valid_empty_eblc(), b"")
@@ -335,6 +401,10 @@ def main() -> None:
     build_missing_bitmap()
     build_gray_format1_bitmap()
     build_mono_format1_bitmap()
+    build_gray2_format1_bitmap()
+    build_gray4_format1_bitmap()
+    build_bgra_format1_bitmap()
+    build_gray_format3_bitmap()
     build_sbit_error_branch_fixtures()
     build_composite_missing_subglyphs()
 
