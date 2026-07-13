@@ -59,23 +59,24 @@
       "case_id": "fterrdef.FT_Err_Post_Table_Missing.sfnt_without_post_table",
       "subject": "fterrdef.FT_Err_Post_Table_Missing",
       "case": "sfnt_without_post_table",
-      "operation": "FT_Get_Glyph_Name",
+      "operation": "freetype.get_glyph_name",
       "schema": "api_result",
-      "expect_error": true,
+      "expect_error": false,
       "inputs": {
         "assets": {
-          "fixture": {
+          "font": {
             "kind": "ref",
-            "role": "font_or_public_input",
-            "id": "fixtures/assets/fonts/post_table_missing.ttf",
-            "requirements": "TrueType/OpenType SFNT with post table absent, exercised through glyph-name/post-table-dependent query and compared to C's exact classification."
+            "role": "font",
+            "path": "fonts/metadata/post-missing.ttf",
+            "requires": "Compact SFNT with no post table, proving the public FT_Get_Glyph_Name classification for an absent optional post service."
           }
         },
         "params": {
-          "expected_error_symbol": "FT_Err_Post_Table_Missing",
-          "expected_error_value_source": "pinned fterrdef.h",
-          "pinned_source": "freetype/src/sfnt/ttload.c:1325 and sfnt load_post service; no direct FT_THROW(Post_Table_Missing) emitter found in source scan",
+          "expected_status": "FT_Err_Invalid_Argument",
+          "pinned_source": "freetype/src/sfnt/ttpost.c public glyph-name service; absent post service is surfaced as Invalid_Argument, not FT_Err_Post_Table_Missing",
           "face_index": 0,
+          "buffer_initial": "0xAA",
+          "buffer_max": 64,
           "glyph_index": 1,
           "table": "post",
           "compare_c_classification_exactly": true
@@ -89,49 +90,46 @@
         "requires:fixture"
       ],
       "expectation": {
-        "status": "build_dependent",
+        "status": "ok",
         "output_shape": {
           "status": "FT_Error",
-          "observed_state": "public fields and pointer/nullness classifications described by the operation",
-          "diagnostic_source": "pinned FreeType source location",
-          "error": "FT_Error when this source path is reachable",
-          "error_symbol": "C-classified FT_Err_*"
+          "buffer": "cleared first byte followed by preserved fill bytes",
+          "diagnostic_source": "pinned FreeType source location"
         },
         "compare": {
           "mode": "exact_error",
           "paths": [
-            "error",
-            "error_symbol",
-            "output_face.nullness",
-            "output_face.identity_class",
-            "slot_state.mutation_class"
+            "status",
+            "buffer_hex"
           ]
         },
-        "error": "FT_Err_Post_Table_Missing",
-        "fixture_requirements": "TrueType/OpenType SFNT with post table absent, exercised through glyph-name/post-table-dependent query and compared to C's exact classification."
+        "error": "FT_Err_Invalid_Argument",
+        "fixture_requirements": "Compact SFNT with post table absent; public FT_Get_Glyph_Name returns Invalid_Argument like C."
       }
     },
     {
       "case_id": "fterrdef.FT_Err_Post_Table_Missing.post_table_optional_control",
       "subject": "fterrdef.FT_Err_Post_Table_Missing",
       "case": "post_table_optional_control",
-      "operation": "FT_Get_Glyph_Name",
+      "operation": "freetype.get_glyph_name",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
         "assets": {
-          "fixture": {
+          "font": {
             "kind": "ref",
-            "role": "font_or_public_input",
-            "id": "fixtures/assets/fonts/post_table_present_control.ttf",
-            "requirements": "Matching valid source font with post table present; glyph-name query succeeds and returns exact C bytes."
+            "role": "font",
+            "path": "fonts/metadata/post-format-1.ttf",
+            "requires": "Matching compact SFNT with a present post table; glyph-name query succeeds and returns exact C bytes."
           }
         },
         "params": {
           "pinned_source": "freetype/src/sfnt/ttpost.c; freetype/src/sfnt/ttload.c:1325",
           "face_index": 0,
-          "glyph_index": 1,
-          "name_buffer_len": 64
+          "buffer_initial": "0xAA",
+          "buffer_max": 64,
+          "glyph_index": "gid:1",
+          "expected_name": ".notdef"
         }
       },
       "classifiers": [
@@ -149,14 +147,13 @@
           "diagnostic_source": "pinned FreeType source location"
         },
         "compare": {
-          "mode": "exact",
+          "mode": "bytes",
           "paths": [
             "status",
-            "public_fields",
-            "output_bytes_or_values"
+            "buffer_hex"
           ]
         },
-        "fixture_requirements": "Matching valid source font with post table present; glyph-name query succeeds and returns exact C bytes."
+        "fixture_requirements": "Matching compact SFNT with post table present; glyph-name query succeeds and returns exact C bytes."
       }
     }
   ]

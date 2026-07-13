@@ -5588,15 +5588,15 @@ subjects:
     kind: error
     symbol: FT_Err_Post_Table_Missing
     header: freetype/fterrdef.h
-    description: SFNT error code for a missing required PostScript post table.
+    description: SFNT error code for a missing required PostScript post table; pinned public FT_Get_Glyph_Name exposes absent optional SFNT post data as FT_Err_Invalid_Argument instead.
     cases:
       - id: value_matches_header
         description: Numeric value is exactly 148, matching FT_ERRORDEF_(Post_Table_Missing, 0x94) in the pinned header.
       - id: sfnt_without_post_table
-        description: Loading or querying a TrueType face whose post table is absent must match C's exact public error classification when that table is required.
+        description: Querying glyph names on a compact SFNT whose post table is absent returns C's exact public FT_Err_Invalid_Argument classification, proving FT_Err_Post_Table_Missing is not surfaced by this public route.
       - id: post_table_optional_control
-        description: A valid font with a present post table succeeds for glyph-name or post-table-dependent queries, proving the missing-table case is not generic font corruption.
-    # needs-input: operation=new_memory_face plus glyph-name/post-table query endpoints such as FT_Get_Glyph_Name where exposed; fixture_asset=fixtures/assets/fonts/post_table_missing.ttf and a matching valid source font; params face_index=0, glyph name queries for valid glyph ids and out-of-range controls; output shape=FT_Error, returned glyph-name bytes, face flags, and table presence classification; comparison=exact C oracle error 0x94 where reachable and exact output bytes for present-table success.
+        description: A compact font with a present post table succeeds for glyph-name queries, proving the absent-post control is not generic font corruption.
+    # needs-input: operation=new_memory_face plus any route that actually requires a post table and surfaces FT_Err_Post_Table_Missing if one exists; current maintained FT_Get_Glyph_Name controls prove absent optional post name data returns FT_Err_Invalid_Argument and present post data succeeds. Do not model error 0x94 for glyph-name queries without a C oracle route that emits it.
 
   - id: fterrdef.FT_Err_Raster_Corrupted
     kind: error
