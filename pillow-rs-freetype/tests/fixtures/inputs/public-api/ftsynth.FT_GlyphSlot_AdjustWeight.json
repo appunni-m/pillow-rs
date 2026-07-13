@@ -579,6 +579,87 @@
       }
     },
     {
+      "case_id": "ftsynth.FT_GlyphSlot_AdjustWeight.negative_bounds_outline_weight_uses_unsigned_abs@large-cbox-guard",
+      "subject": "ftsynth.FT_GlyphSlot_AdjustWeight",
+      "case": "negative_bounds_outline_weight_uses_unsigned_abs",
+      "operation": "ftsynth.glyphslot_adjust_weight_after_load",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "ref",
+            "id": "fonts/glyf/hinter-control-matrix.ttf",
+            "role": "font",
+            "requires": "scalable outline glyph whose high-ppem cbox exceeds FreeType's orientation helper coordinate guard"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "size_ppem": 65535,
+          "load": {
+            "operation": "FT_Load_Glyph",
+            "glyph_index": 49,
+            "load_flags": [
+              "FT_LOAD_NO_HINTING",
+              "FT_LOAD_NO_BITMAP"
+            ]
+          },
+          "adjustments": [
+            {
+              "xdelta_16_16": 3277,
+              "ydelta_16_16": 3277
+            }
+          ],
+          "capture_before_after": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsynth",
+        "format:outline",
+        "operation:glyph-slot-mutation",
+        "coverage:large-cbox-orientation-guard"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "slot_format": "FT_GLYPH_FORMAT_OUTLINE",
+          "outline_points_before": [
+            "FT_Vector"
+          ],
+          "outline_points_after": [
+            "FT_Vector"
+          ],
+          "outline_cbox_after": "FT_BBox",
+          "metrics_after": "FT_Glyph_Metrics",
+          "advance_after": "FT_Vector"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "slot_format",
+            "outline_points_after",
+            "outline_cbox_after",
+            "metrics_after.width",
+            "metrics_after.height",
+            "metrics_after.horiAdvance",
+            "metrics_after.vertAdvance",
+            "metrics_after.horiBearingY",
+            "advance_after"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftoutln.c:1055-1117",
+          "freetype/src/base/ftsynth.c:FT_GlyphSlot_AdjustWeight"
+        ],
+        "fixture_requirements": [
+          "Use a high-ppem outline slot whose cbox exceeds the orientation helper's coordinate guard while the public glyph-slot mutation still succeeds."
+        ]
+      }
+    },
+    {
       "case_id": "ftsynth.FT_GlyphSlot_AdjustWeight.bitmap_weight_owns_emboldens_and_updates_top",
       "subject": "ftsynth.FT_GlyphSlot_AdjustWeight",
       "case": "bitmap_weight_owns_emboldens_and_updates_top",
