@@ -378,6 +378,70 @@
               "tt/name:variation-coordinate-fractional-synthesized",
               "tt/name:variation-axis-tag-sanitized"
             ]
+          },
+          {
+            "id": "encoded-missing-subfamily-rounding-last-one",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-missing-subfamily.ttf"
+              }
+            },
+            "params": {
+              "face_index": 327680
+            },
+            "coverage": [
+              "tt/name:variation-coordinate-rounding-last-one-synthesized"
+            ]
+          },
+          {
+            "id": "encoded-missing-subfamily-rounding-decrement",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-missing-subfamily.ttf"
+              }
+            },
+            "params": {
+              "face_index": 393216
+            },
+            "coverage": [
+              "tt/name:variation-coordinate-rounding-decrement-synthesized"
+            ]
+          },
+          {
+            "id": "encoded-missing-subfamily-rounding-tie-even",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-missing-subfamily.ttf"
+              }
+            },
+            "params": {
+              "face_index": 458752
+            },
+            "coverage": [
+              "tt/name:variation-coordinate-rounding-tie-even-synthesized"
+            ]
+          },
+          {
+            "id": "encoded-missing-subfamily-negative-fractional-coordinate",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-missing-subfamily.ttf"
+              }
+            },
+            "params": {
+              "face_index": 524288
+            },
+            "coverage": [
+              "tt/name:variation-coordinate-negative-fractional-synthesized"
+            ]
           }
         ]
       },
