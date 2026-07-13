@@ -1945,6 +1945,31 @@ public surface:
 | Render mono/profile | Remaining `render.rs` mono/profile helpers such as the old intersection rasterizer and low-level line/bezier helper families | No current `FT_Render_Glyph` row reaches these as public code; the profile-based horizontal and vertical dropout guards are already covered | Keep visible as private/no-route until a real public operation requires them or they are independently proven duplicate/obsolete |
 | Size lifecycle | Rust FFI-only implementation sketch for `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` success sequences | Focused Rust FFI parity can pass, but the route is insufficient if C ABI and WASM comparisons are mapped back through Rust FFI while public ABI exports remain unimplemented | A mergeable implementation must keep wrappers thin but real: expose and route actual C ABI/WASM size lifecycle calls, or document the public ABI blocker instead of committing a Rust-only proof |
 
+### Render/Raster Residual Audit - 2026-07-13
+
+The current `route-audit` split for `FT_Render_Glyph` is 178 real-parity rows,
+one `null-error-fallback` row, and three `pending-core` rows. The non-real
+routes are `freetype.FT_Render_Glyph.error_null_or_unowned_slot`,
+`freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format`, and the
+two `ftimage.FT_OUTLINE_OVERLAP.smooth_overlap_behavior` variants. The null
+row lacks a maintained glyph-slot selector, the unloaded/unsupported-slot row
+needs explicit synthetic slot-state runner support, and overlap remains a core
+fixture/behavior gap rather than a generic render-mode row.
+
+Remaining uncovered render/raster source families:
+
+| Source family | Classification | Decision |
+|---|---|---|
+| `grays::{rasterize,rasterize_shifted_in_box}` wrapper lines | Private/no-route from `FT_Render_Glyph`; direct outline surfaces own any future public `FT_Raster_Params` or clipping route | Do not add synthetic render rows. Add a real outline-render route only when the ABI surface exists and exact C/Rust/C-ABI/WASM parity can be compared |
+| `grays::{ft_div_mod,Worker::render_scanline}` | Obsolete/no-call scanline helper path; current gray rendering reaches the DDA line/conic/cubic raster path instead | Keep visible until independently proven duplicate and removed in a cleanup not justified by coverage alone |
+| `grays.rs` trace and debug-dump lines | Coverage instrumentation artifacts gated by debug logging or environment-controlled dumps | Do not add parity rows for logging-only execution |
+| `render::render_loaded_char_mode_for_index` | Safe convenience helper with no current public FreeType manifest route; `FT_Render_Glyph` exercises the loaded slot render path instead | Leave as private/no-route unless a real safe Rust API parity obligation is added |
+| `render::render_normal` and `render::render_sdf` zero-extent guards | Mostly shadowed by `render_loaded_outline` empty/box checks for valid `FT_Render_Glyph` rows | Add no row unless a valid C fixture reaches the same guard and moves coverage |
+| `render::SdfFlattener` cubic or invalid-contour paths | Fixture/font reachable only after a real public cubic-outline loader route exists; current compact CFF probe would make C render cubic charstrings while Rust does not preserve that outline through this path | Implement cubic outline loading/parity first, then add the smallest SDF row |
+| `render::MonoProfileBuilder`, `rasterize_mono_intersections`, and low-level line/bezier wrappers | Private/no-route or obsolete duplicate mono raster helpers; current mono output uses `MonoOutlineProfileBuilder`, and the horizontal/vertical dropout guards are already covered by `render-coverage.ttf` rows | Do not grow `FT_Render_Glyph` JSON with duplicate topology. Remove only with independent semantic proof |
+| `render::MonoOutlineProfileBuilder` branch residuals | Potentially fixture/font reachable, but only for exact topology branches not already covered by `hinter-control-matrix.ttf` or `render-coverage.ttf` | Add compact glyphs only after a focused candidate moves measured condition coverage with exact parity |
+| `ftimage.FT_OUTLINE_OVERLAP.smooth_overlap_behavior` | Pending core/fixture route; needs compact overlap-heavy source-backed outline/font coverage and matching overlap behavior before becoming a real render row | Keep pending; do not substitute a no-value `FT_Render_Glyph` row |
+
 Readable zero-count functions from `llvm-cxxfilt` fall into this first
 ledger. Treat this as the next owner list, not as deletion evidence:
 
