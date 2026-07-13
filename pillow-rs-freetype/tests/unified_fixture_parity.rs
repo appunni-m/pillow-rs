@@ -3432,7 +3432,17 @@ fn rust_open_type_validate(case: &InputCase) -> Result<RunOutput, String> {
             )
         }));
     }
-    Ok(error(FT_Err_Unimplemented_Feature as FT_Error))
+    let face = open_face(case)?;
+    let err = FT_OpenType_Validate(
+        Some(&face),
+        0,
+        Some(&mut base),
+        Some(&mut gdef),
+        Some(&mut gpos),
+        Some(&mut gsub),
+        Some(&mut jstf),
+    );
+    Ok(error(err))
 }
 
 fn rust_open_type_free(case: &InputCase) -> Result<RunOutput, String> {
