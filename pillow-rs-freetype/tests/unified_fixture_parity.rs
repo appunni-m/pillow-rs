@@ -16717,12 +16717,22 @@ fn outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> 
     }
     let outline = outline_render_outline(case)?;
     let (width, height) = outline_render_target_box(&case.inputs.params)?;
-    match fontdone::grays::rasterize_in_box(outline, width, height) {
-        Ok(raster) => Ok(ok(outline_render_bitmap_payload(
-            width,
-            height,
-            &raster.pixels,
-        ))),
+    let no_contours = outline.points.is_empty() || outline.n_contours == 0;
+    let explicit_target_box = case.inputs.params.get("target_box").is_some();
+    let raster = if explicit_target_box {
+        fontdone::grays::rasterize_in_box(outline, width, height)
+    } else {
+        fontdone::grays::rasterize(outline)
+    };
+    match raster {
+        Ok(raster) => {
+            let buffer = if no_contours {
+                vec![0; width * height]
+            } else {
+                raster.pixels
+            };
+            Ok(ok(outline_render_bitmap_payload(width, height, &buffer)))
+        }
         Err(fontdone::FontError::InvalidOutline(_)) => Ok(error(FT_Err_Invalid_Outline)),
         Err(err) => Err(err.to_string()),
     }
