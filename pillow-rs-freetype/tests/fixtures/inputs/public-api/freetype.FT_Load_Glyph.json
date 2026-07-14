@@ -214,6 +214,203 @@
             ]
           },
           {
+            "id": "dejavu-a-default-nonsquare-pixels",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 12,
+                "y": 18
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "scaler:native-default-nonsquare-pixel-size"
+            ]
+          },
+          {
+            "id": "dejavu-a-default-char-size-asymmetric-y",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "preload_char_size": {
+                "char_width": 0,
+                "char_height": 1152,
+                "horz_resolution": 72,
+                "vert_resolution": 96
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "scaler:native-default-preload-char-size-asymmetric-y"
+            ]
+          },
+          {
+            "id": "dejavu-agrave-no-hinting-composite",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 130,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "scaler:no-hinting-composite"
+            ]
+          },
+          {
+            "id": "render-coverage-default-autohint-fallback",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "scaler:default-autohint-fallback-no-fpgm"
+            ]
+          },
+          {
+            "id": "dejavu-space-force-autohint-empty",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 3,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "scaler:force-autohint-empty-outline"
+            ]
+          },
+          {
+            "id": "dejavu-a-force-autohint-target-mono",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_MONO"
+              ]
+            },
+            "coverage": [
+              "scaler:force-autohint-target-mono"
+            ]
+          },
+          {
+            "id": "dejavu-a-force-autohint-target-lcd",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_LCD"
+              ]
+            },
+            "coverage": [
+              "scaler:force-autohint-target-lcd"
+            ]
+          },
+          {
+            "id": "dejavu-a-force-autohint-target-lcd-v",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_LCD_V"
+              ]
+            },
+            "coverage": [
+              "scaler:force-autohint-target-lcd-v"
+            ]
+          },
+          {
             "id": "sbit-gray-format1-sbits-only",
             "assets": {
               "font": {

@@ -13460,23 +13460,40 @@ fn c_new_face_from_bytes(
 }
 
 fn c_open_face(case: &InputCase) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
-    c_open_face_with_size(case, pixel_size_param(&case.inputs.params)?)
+    c_open_face_with_size_or_char_size(case, pixel_size_param(&case.inputs.params)?)
+}
+
+fn c_open_face_with_size_or_char_size(
+    case: &InputCase,
+    pixel_size: (u32, u32),
+) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let err = if let Some(row) = preload_char_size_row(&case.inputs.params)? {
+        c_abi::FT_Set_Char_Size(
+            face,
+            row.char_width,
+            row.char_height,
+            row.horz_resolution,
+            row.vert_resolution,
+        )
+    } else {
+        let (pixel_width, pixel_height) = pixel_size;
+        c_abi::FT_Set_Pixel_Sizes(face, pixel_width, pixel_height)
+    };
+    if err == FT_Err_Ok {
+        Ok((library, face))
+    } else {
+        c_done_face(face);
+        c_done_library(library);
+        Err(format!("FT size setup returned {err}"))
+    }
 }
 
 fn c_open_face_with_size(
     case: &InputCase,
     pixel_size: (u32, u32),
 ) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
-    let (library, face) = c_new_face_without_size(case)?;
-    let (pixel_width, pixel_height) = pixel_size;
-    let err = c_abi::FT_Set_Pixel_Sizes(face, pixel_width, pixel_height);
-    if err == FT_Err_Ok {
-        Ok((library, face))
-    } else {
-        c_done_face(face);
-        c_done_library(library);
-        Err(format!("FT_Set_Pixel_Sizes returned {err}"))
-    }
+    c_open_face_with_size_or_char_size(case, pixel_size)
 }
 
 fn c_slot_json(face: c_abi::FT_Face) -> Result<Value, String> {
@@ -13974,10 +13991,13 @@ fn wasm_new_face_from_bytes(bytes: &[u8], face_index: i64) -> Result<usize, Stri
 }
 
 fn wasm_open_face(case: &InputCase) -> Result<usize, String> {
-    wasm_open_face_with_size(case, pixel_size_param(&case.inputs.params)?)
+    wasm_open_face_with_size_or_char_size(case, pixel_size_param(&case.inputs.params)?)
 }
 
-fn wasm_open_face_with_size(case: &InputCase, pixel_size: (u32, u32)) -> Result<usize, String> {
+fn wasm_open_face_with_size_or_char_size(
+    case: &InputCase,
+    pixel_size: (u32, u32),
+) -> Result<usize, String> {
     let bytes = font_bytes(case)?;
     let status = wasm_abi::fontdone_wasm_open_face(
         bytes.as_ptr(),
@@ -13988,14 +14008,28 @@ fn wasm_open_face_with_size(case: &InputCase, pixel_size: (u32, u32)) -> Result<
     if status.error != FT_Err_Ok {
         return Err(format!("fontdone_wasm_open_face returned {}", status.error));
     }
-    let (pixel_width, pixel_height) = pixel_size;
-    let err = wasm_abi::fontdone_wasm_set_pixel_sizes(status.handle, pixel_width, pixel_height);
+    let err = if let Some(row) = preload_char_size_row(&case.inputs.params)? {
+        wasm_abi::fontdone_wasm_set_char_size(
+            status.handle,
+            row.char_width,
+            row.char_height,
+            row.horz_resolution,
+            row.vert_resolution,
+        )
+    } else {
+        let (pixel_width, pixel_height) = pixel_size;
+        wasm_abi::fontdone_wasm_set_pixel_sizes(status.handle, pixel_width, pixel_height)
+    };
     if err == FT_Err_Ok {
         Ok(status.handle)
     } else {
         wasm_done_face(status.handle);
-        Err(format!("fontdone_wasm_set_pixel_sizes returned {err}"))
+        Err(format!("fontdone_wasm size setup returned {err}"))
     }
+}
+
+fn wasm_open_face_with_size(case: &InputCase, pixel_size: (u32, u32)) -> Result<usize, String> {
+    wasm_open_face_with_size_or_char_size(case, pixel_size)
 }
 
 fn wasm_new_memory_face(case: &InputCase) -> Result<RunOutput, String> {
@@ -14682,10 +14716,13 @@ fn rust_new_face_from_bytes(data: &[u8], face_index: i64) -> Result<FT_Face, Str
 }
 
 fn open_face(case: &InputCase) -> Result<FT_Face, String> {
-    open_face_with_size(case, pixel_size_param(&case.inputs.params)?)
+    open_face_with_size_or_char_size(case, pixel_size_param(&case.inputs.params)?)
 }
 
-fn open_face_with_size(case: &InputCase, pixel_size: (u32, u32)) -> Result<FT_Face, String> {
+fn open_face_with_size_or_char_size(
+    case: &InputCase,
+    pixel_size: (u32, u32),
+) -> Result<FT_Face, String> {
     let data = font_bytes(case)?;
     let library = FT_Init_FreeType();
     let mut face = FT_New_Memory_Face(
@@ -14695,13 +14732,27 @@ fn open_face_with_size(case: &InputCase, pixel_size: (u32, u32)) -> Result<FT_Fa
         20.0,
     )
     .map_err(|err| format!("FT_New_Memory_Face returned {err}"))?;
-    let (pixel_width, pixel_height) = pixel_size;
-    let err = FT_Set_Pixel_Sizes(&mut face, pixel_width, pixel_height);
+    let err = if let Some(row) = preload_char_size_row(&case.inputs.params)? {
+        FT_Set_Char_Size(
+            &mut face,
+            row.char_width,
+            row.char_height,
+            row.horz_resolution,
+            row.vert_resolution,
+        )
+    } else {
+        let (pixel_width, pixel_height) = pixel_size;
+        FT_Set_Pixel_Sizes(&mut face, pixel_width, pixel_height)
+    };
     if err == FT_Err_Ok {
         Ok(face)
     } else {
-        Err(format!("FT_Set_Pixel_Sizes returned {err}"))
+        Err(format!("FT size setup returned {err}"))
     }
+}
+
+fn open_face_with_size(case: &InputCase, pixel_size: (u32, u32)) -> Result<FT_Face, String> {
+    open_face_with_size_or_char_size(case, pixel_size)
 }
 
 fn open_api_face(case: &InputCase) -> Result<ApiFace, String> {
@@ -20350,6 +20401,13 @@ fn char_size_rows(params: &Value) -> Result<Vec<CharSizeRow>, String> {
         return Ok(vec![char_size_row(params)?]);
     }
     Err("missing char size request or requests".to_string())
+}
+
+fn preload_char_size_row(params: &Value) -> Result<Option<CharSizeRow>, String> {
+    params
+        .get("preload_char_size")
+        .map(char_size_row)
+        .transpose()
 }
 
 fn char_size_row(value: &Value) -> Result<CharSizeRow, String> {
