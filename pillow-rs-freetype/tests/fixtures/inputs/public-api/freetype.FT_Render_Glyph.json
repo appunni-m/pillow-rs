@@ -585,6 +585,87 @@
             ]
           },
           {
+            "id": "render-coverage-default-autohint-fallback",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL",
+              "font_render_text": "\ue100",
+              "assert_font_render_mode_agrees": true
+            },
+            "coverage": [
+              "scaler:render-default-autohint-fallback-no-fpgm"
+            ]
+          },
+          {
+            "id": "dejavu-space-force-autohint-empty-outline",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 3,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL",
+              "font_render_text": " ",
+              "assert_font_render_mode_agrees": true
+            },
+            "coverage": [
+              "scaler:render-force-autohint-empty-outline"
+            ]
+          },
+          {
+            "id": "hinter-empty-fpgm-default-prep-blocks-fallback",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-empty-fpgm.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL",
+              "font_render_text": "\ue000",
+              "assert_font_render_mode_agrees": true
+            },
+            "coverage": [
+              "scaler:render-default-empty-fpgm-prep-blocks-fallback"
+            ]
+          },
+          {
             "id": "dejavu-a-force-autohint",
             "assets": {
               "font": {
