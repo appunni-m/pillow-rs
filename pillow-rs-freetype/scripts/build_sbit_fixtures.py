@@ -208,6 +208,13 @@ def unsupported_image_format_tables() -> tuple[bytes, bytes]:
     return eblc, ebdt
 
 
+def missing_small_metrics_width_tables() -> tuple[bytes, bytes]:
+    # Offsets select a non-empty image, but the image stops after the height
+    # byte.  That reaches FreeType's malformed small-metrics branch through the
+    # normal public FT_LOAD_SBITS_ONLY path.
+    return packed_format1_tables(8, bytes([2]))
+
+
 def gray_format3_tables() -> tuple[bytes, bytes]:
     image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x80, 0xC0, 0xFF])
     index_array = struct.pack(">HHI", 1, 1, 8)
@@ -573,6 +580,11 @@ def build_unsupported_image_format_bitmap() -> None:
     save_sbit_font("sbit_unsupported_image_format.ttf", eblc, ebdt)
 
 
+def build_missing_small_metrics_width_bitmap() -> None:
+    eblc, ebdt = missing_small_metrics_width_tables()
+    save_sbit_font("sbit_missing_small_metrics_width.ttf", eblc, ebdt)
+
+
 def build_gray_format3_bitmap() -> None:
     eblc, ebdt = gray_format3_tables()
     save_sbit_font("sbit_gray_format3.ttf", eblc, ebdt)
@@ -652,6 +664,7 @@ def main() -> None:
     build_bgra_format1_bitmap()
     build_unsupported_bit_depth_bitmap()
     build_unsupported_image_format_bitmap()
+    build_missing_small_metrics_width_bitmap()
     build_gray_format3_bitmap()
     build_sbit_error_branch_fixtures()
     build_composite_missing_subglyphs()
