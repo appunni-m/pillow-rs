@@ -270,7 +270,7 @@
                 "kind": "ref",
                 "role": "font",
                 "id": "fixtures/assets/fonts/sbit_gray_format1_vmtx.ttf",
-                "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray embedded bitmap for glyph 1 and a vmtx table used for scalable SBIT vertical-advance fallback."
+                "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray embedded bitmap for glyph 1, zero embedded horizontal advance, and a vmtx table used for scalable SBIT advance fallback."
               }
             },
             "params": {
@@ -285,7 +285,7 @@
               ]
             },
             "coverage": [
-              "sbit:gray-format1-vmtx-vertical-advance-fallback"
+              "sbit:gray-format1-vmtx-horizontal-and-vertical-advance-fallback"
             ]
           },
           {

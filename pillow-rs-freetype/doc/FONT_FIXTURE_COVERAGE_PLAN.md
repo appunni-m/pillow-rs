@@ -504,11 +504,12 @@ The latest Type 1 face-flag row adds one generated 1.7 KiB
 agree that `/isFixedPitch true` sets the public fixed-width face flag on a
 Type 1 face, covering the Type 1 fixed-pitch branch without adding any
 implicit inputs.
-The latest SBIT vertical-metrics row adds one generated 4.8 KiB
+The latest SBIT advance-fallback row adds one generated 4.8 KiB
 `sbit_gray_format1_vmtx.ttf` fixture and one explicit `FT_Load_Glyph` variant.
-It reuses the compact gray format-1 bitmap but adds `vhea/vmtx` so the public
-scalable-SBIT missing-vertical-advance fallback is proven against pinned C with
-real vertical metrics instead of the synthesized hhea/OS/2 fallback.
+It reuses the compact gray format-1 bitmap but sets the embedded horizontal
+advance to zero and adds `vhea/vmtx`, so the public scalable-SBIT missing
+horizontal and vertical advance fallbacks are proven against pinned C with real
+font metrics instead of synthesized defaults.
 The latest SBIT packed-compound row adds one generated 4.7 KiB
 `sbit_composite_mono_carry_success_format8.ttf` fixture and one explicit
 `FT_Load_Glyph.matrix_load` variant.  Glyph 2 is an image-format-8 compound
@@ -2099,10 +2100,11 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | SBIT vmtx vertical-advance fallback row | `font-fixture-sbit` now emits `sbit_gray_format1_vmtx.ttf`, a compact gray format-1 EBLC/EBDT fixture with added `vhea/vmtx` vertical metrics. One explicit `FT_Load_Glyph.matrix_load@sbit-gray-format1-vmtx-sbits-only` variant selects glyph 1 with `FT_LOAD_SBITS_ONLY`, proving pinned C, Rust FFI, C ABI, and WASM ABI all fill the missing scalable SBIT vertical advance from `vmtx` instead of the synthesized font-wide fallback. Focused `matrix_load` parity passes 1,710 / 1,710. Full condition coverage passes with 6,836 concrete cases, 6,833 / 6,833 runtime rows, three FTMM pending rows, 17,555 / 19,542 lines, 25,304 / 28,159 regions, 4,159 / 4,880 branches, 1,135 / 1,312 functions, and 1,138 / 1,315 instantiations. Route audit reports 3,518 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 | 2026-07-14 | SBIT packed compound x-offset blit | `font-fixture-sbit` now emits `sbit_composite_mono_shifted_success_format8.ttf`, a compact MONO compound control whose glyph 2 references glyph 1 at `dx=1`. Pinned C returns a successful shifted packed bitmap, while the previous Rust path returned `FT_Err_Invalid_Argument` from the packed nonzero-offset guard. Core now mirrors FreeType `sfnt/ttsbit.c:730-782` for byte-aligned packed compound blits by ORing shifted component bytes into the root bitmap. Focused `FT_Load_Glyph.matrix_load@sbit-composite-mono-shifted-success-format8` parity passes 1 / 1 and full `load_glyph` parity passes 373 / 373. Full condition coverage passes with 6,837 concrete cases, 6,834 / 6,834 runtime rows, three FTMM pending rows, 17,637 / 19,653 lines, 25,416 / 28,307 regions, 4,171 / 4,896 branches, 1,139 / 1,323 functions, and 1,142 / 1,326 instantiations. `tt/sbit.rs` moves from 422 / 553 lines and 43 / 56 branches to 504 / 664 lines and 55 / 72 branches. Route audit reports 3,519 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 | 2026-07-14 | OpenType validate missing-service route | `FT_OpenType_Validate.service_missing_error` now uses existing `fonts/type1/simple-type1.pfb` instead of the nonexistent non-OpenType placeholder and calls pinned C FreeType for the non-null face path. Pinned `ftotval.c` returns `FT_Err_Unimplemented_Feature` when a valid Type 1 face has no `OPENTYPE_VALIDATE` service; the preserved Rust wrapper already returns the same public error. Focused `make -C pillow-rs-freetype test-case CASE=ftotval.FT_OpenType_Validate` passes 6 / 6. Full condition coverage stays at 6,844 concrete cases, 6,841 / 6,841 runtime rows, three FTMM pending rows, 17,771 / 19,781 lines, 25,586 / 28,478 regions, 4,179 / 4,904 branches, 1,145 / 1,329 functions, and 1,148 / 1,332 instantiations. Route audit moves this one row from generic fallback to real parity: real-parity 3,530 -> 3,531 and generic-fallback 913 -> 912, with zero implicit cases |
+| 2026-07-14 | SBIT horizontal advance fallback | The existing `sbit_gray_format1_vmtx.ttf` fixture now sets image-format-1 small-metrics `horiAdvance` to zero while keeping the same explicit `FT_Load_Glyph.matrix_load@sbit-gray-format1-vmtx-sbits-only` row. Pinned C fills the missing scalable SBIT horizontal advance from the glyph's TrueType `hmtx` advance, and Rust FFI, C ABI, and WASM ABI agree exactly. Focused parity passes 1 / 1. Full condition coverage passes with 6,844 concrete cases, 6,841 / 6,841 runtime rows, three FTMM pending rows, 17,772 / 19,781 lines, 25,588 / 28,478 regions, 4,180 / 4,904 branches, 1,145 / 1,329 functions, and 1,148 / 1,332 instantiations. `font.rs:1556` is no longer listed in the missing-lines report, and implicit cases remain zero |
 
 ## Residual Coverage Classification - 2026-07-14
 
-Fresh `test-unified-condition-coverage` still reports 2,011 uncovered core
+Fresh `test-unified-condition-coverage` still reports 2,009 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
@@ -2111,11 +2113,11 @@ source lines. The current split is:
 | Concrete explicit cases | 6,844 |
 | Runnable parity comparisons | 6,841 / 6,841 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,771 / 19,781 (89.8387%) |
-| Rust region coverage | 25,586 / 28,478 (89.8448%) |
-| Rust branch/condition coverage | 4,179 / 4,904 (85.2162%) |
+| Covered Rust lines | 17,772 / 19,781 (89.8438%) |
+| Rust region coverage | 25,588 / 28,478 (89.8518%) |
+| Rust branch/condition coverage | 4,180 / 4,904 (85.2365%) |
 | Rust function coverage | 1,145 / 1,329 (86.1550%) |
-| Route audit split | real-parity 3,530; generic-fallback 913; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; shape-incomplete-fallback 0 |
+| Route audit split | real-parity 3,531; generic-fallback 912; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
