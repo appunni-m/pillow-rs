@@ -522,6 +522,11 @@ The latest SBIT packed-depth rows add two generated 4.7 KiB fixtures:
 `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` and proves the distinct
 2-bit and 4-bit packed compound dispatch arms against pinned C, Rust FFI,
 C ABI, and WASM ABI without multiplying offsets, sizes, or render modes.
+The latest SBIT zero-width component row adds one generated 4.7 KiB fixture:
+`sbit_composite_mono_zero_width_component_format8.ttf`.  Glyph 2 is a compound
+MONO bitmap that references a zero-width glyph 1 component, proving the packed
+compound blitter's empty-line no-op branch against pinned C, Rust FFI, C ABI,
+and WASM ABI through the existing public `FT_Load_Glyph.matrix_load` route.
 The latest TrueType overlap rows append four glyphs to the existing generated
 `render-coverage.ttf` fixture.  Gid 6 sets the simple-glyph first-point
 `OVERLAP_SIMPLE` flag, gid 7 sets the first-component `OVERLAP_COMPOUND` flag,
@@ -2101,30 +2106,31 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | SBIT packed compound x-offset blit | `font-fixture-sbit` now emits `sbit_composite_mono_shifted_success_format8.ttf`, a compact MONO compound control whose glyph 2 references glyph 1 at `dx=1`. Pinned C returns a successful shifted packed bitmap, while the previous Rust path returned `FT_Err_Invalid_Argument` from the packed nonzero-offset guard. Core now mirrors FreeType `sfnt/ttsbit.c:730-782` for byte-aligned packed compound blits by ORing shifted component bytes into the root bitmap. Focused `FT_Load_Glyph.matrix_load@sbit-composite-mono-shifted-success-format8` parity passes 1 / 1 and full `load_glyph` parity passes 373 / 373. Full condition coverage passes with 6,837 concrete cases, 6,834 / 6,834 runtime rows, three FTMM pending rows, 17,637 / 19,653 lines, 25,416 / 28,307 regions, 4,171 / 4,896 branches, 1,139 / 1,323 functions, and 1,142 / 1,326 instantiations. `tt/sbit.rs` moves from 422 / 553 lines and 43 / 56 branches to 504 / 664 lines and 55 / 72 branches. Route audit reports 3,519 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 | 2026-07-14 | OpenType validate missing-service route | `FT_OpenType_Validate.service_missing_error` now uses existing `fonts/type1/simple-type1.pfb` instead of the nonexistent non-OpenType placeholder and calls pinned C FreeType for the non-null face path. Pinned `ftotval.c` returns `FT_Err_Unimplemented_Feature` when a valid Type 1 face has no `OPENTYPE_VALIDATE` service; the preserved Rust wrapper already returns the same public error. Focused `make -C pillow-rs-freetype test-case CASE=ftotval.FT_OpenType_Validate` passes 6 / 6. Full condition coverage stays at 6,844 concrete cases, 6,841 / 6,841 runtime rows, three FTMM pending rows, 17,771 / 19,781 lines, 25,586 / 28,478 regions, 4,179 / 4,904 branches, 1,145 / 1,329 functions, and 1,148 / 1,332 instantiations. Route audit moves this one row from generic fallback to real parity: real-parity 3,530 -> 3,531 and generic-fallback 913 -> 912, with zero implicit cases |
 | 2026-07-14 | SBIT horizontal advance fallback | The existing `sbit_gray_format1_vmtx.ttf` fixture now sets image-format-1 small-metrics `horiAdvance` to zero while keeping the same explicit `FT_Load_Glyph.matrix_load@sbit-gray-format1-vmtx-sbits-only` row. Pinned C fills the missing scalable SBIT horizontal advance from the glyph's TrueType `hmtx` advance, and Rust FFI, C ABI, and WASM ABI agree exactly. Focused parity passes 1 / 1. Full condition coverage passes with 6,844 concrete cases, 6,841 / 6,841 runtime rows, three FTMM pending rows, 17,772 / 19,781 lines, 25,588 / 28,478 regions, 4,180 / 4,904 branches, 1,145 / 1,329 functions, and 1,148 / 1,332 instantiations. `font.rs:1556` is no longer listed in the missing-lines report, and implicit cases remain zero |
+| 2026-07-14 | SBIT zero-width packed component | `font-fixture-sbit` now emits `sbit_composite_mono_zero_width_component_format8.ttf`, a compact compound MONO control whose glyph 2 references glyph 1 with small-metrics width zero. Pinned C treats the component blit as a successful no-op and returns the blank root bitmap; Rust FFI, C ABI, and WASM ABI agree exactly. Focused parity passes 1 / 1. Full condition coverage passes with 6,845 concrete cases, 6,842 / 6,842 runtime rows, three FTMM pending rows, 17,773 / 19,781 lines, 25,589 / 28,478 regions, 4,181 / 4,904 branches, 1,145 / 1,329 functions, and 1,148 / 1,332 instantiations. `tt/sbit.rs:623` is no longer listed in the missing-lines report; route audit reports 3,532 real-parity rows and zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-14
 
-Fresh `test-unified-condition-coverage` still reports 2,009 uncovered core
+Fresh `test-unified-condition-coverage` still reports 2,008 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,166 |
-| Concrete explicit cases | 6,844 |
-| Runnable parity comparisons | 6,841 / 6,841 |
+| Concrete explicit cases | 6,845 |
+| Runnable parity comparisons | 6,842 / 6,842 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,772 / 19,781 (89.8438%) |
-| Rust region coverage | 25,588 / 28,478 (89.8518%) |
-| Rust branch/condition coverage | 4,180 / 4,904 (85.2365%) |
+| Covered Rust lines | 17,773 / 19,781 (89.8488%) |
+| Rust region coverage | 25,589 / 28,478 (89.8553%) |
+| Rust branch/condition coverage | 4,181 / 4,904 (85.2569%) |
 | Rust function coverage | 1,145 / 1,329 (86.1550%) |
-| Route audit split | real-parity 3,531; generic-fallback 912; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; shape-incomplete-fallback 0 |
+| Route audit split | real-parity 3,532; generic-fallback 912; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
 | Fixture/font reachable | `autohint/latin.rs`, `autohint/cjk.rs`, `scaler.rs`, `tt/hinter/exec.rs`, and parts of `render.rs` still have real branch gaps tied to glyph topology, script selection, bytecode state, or render geometry | Add or extend compact source-backed fonts and explicit public rows only when the selected glyph moves the measured branch or line |
 | Public unsupported implementation paths | `FT_OpenType_Validate` non-null behavior still returns preserved stubs today | Implement the real public behavior first, then add parity rows; do not add fake success fixtures |
 | Public-construction unreachable guards | Short required `head`/`hhea` tables fail face construction before `face_to_ffi`; short optional `vhea` currently fails in `Font::truetype`; `tt/post.rs` format-1 exact-258 Mac names are now covered, leaving only helper arms that public `FT_Get_Glyph_Name`/`FT_Get_Name_Index` skip through invalid-glyph validation or face-flag gates; `tt/cmap.rs` format-14 branch outcomes are now closed, leaving only checked-multiply overflow closures at lines 786-789, 866-867, and 914-915 that cannot overflow on 64-bit from u32 counts; `tt/fvar.rs` checked-multiply overflow closures likewise cannot overflow from u16 counts | Leave visible and documented unless parser semantics change or a true public route appears |
-| SBIT residuals | `tt/sbit.rs` unsupported simple bit-depth, image-format, compound success, one packed MONO nonzero x-offset path, tail-bit carry, and GRAY2/GRAY4 packed-depth dispatch arms are now covered through public rows; remaining misses are the unused/private load-status helper, checked arithmetic and 64-bit conversion guards, impossible compound count/component-read guards, impossible metric-conversion/pixel-mode mismatch guards, and defensive packed-blit overflow/truncation guards | Leave private helper and impossible overflow guards visible; add only real C-observable SBIT rows that move measured coverage through exact parity |
+| SBIT residuals | `tt/sbit.rs` unsupported simple bit-depth, image-format, compound success, one packed MONO nonzero x-offset path, tail-bit carry, GRAY2/GRAY4 packed-depth dispatch arms, and zero-width packed component no-op are now covered through public rows; remaining misses are the unused/private load-status helper, checked arithmetic and 64-bit conversion guards, impossible compound count/component-read guards, impossible metric-conversion/pixel-mode mismatch guards, and defensive packed-blit overflow/truncation guards | Leave private helper and impossible overflow guards visible; add only real C-observable SBIT rows that move measured coverage through exact parity |
 | Defensive invalid helper guards | `RoundMode::from_u8`'s invalid-value fallback remains missed after all valid FreeType `TT_Round_*` constants are routed through public `FT_Load_Glyph` rows | Leave visible; do not add a synthetic invalid round-state path unless a real public opcode or ABI surface can supply one |
 | Private/no-route helpers | `Font::layout_glyphs`, `Font::layout_bounds`, `layout_bounds_from_glyphs`, `grays::rasterize`, `grays::rasterize_shifted_in_box`, `grays::render_scanline`, and `render::render_loaded_char_mode_for_index` are not selected by the current public FreeType fixtures | Do not call these through synthetic tests; either expose a real public operation with C parity or prove and remove independently of coverage |
 | Coverage instrumentation artifacts | `Font::load_sfnt_table` and several wrapper functions show zero-count closure symbols even while the public body is heavily executed; many missed `api.rs` and `font.rs` lines are trailing call arguments in covered functions | Use function bodies, contiguous blocks, and branch counters to choose cases; do not grow JSON for tail-line artifacts alone |
