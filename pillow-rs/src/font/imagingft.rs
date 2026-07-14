@@ -74,7 +74,7 @@ pub fn getmetrics(font: &Font) -> (u32, u32) {
 
 pub fn getlength(font: &Font, text: &str) -> f32 {
     match font {
-        Font::TrueType(t) => glyph_run(t, text).map_or(0.0, |r| r.max_pen as f32 / 64.0),
+        Font::TrueType(t) => length_from_nohint_run(t, text).map_or(0.0, |v| v as f32 / 64.0),
         Font::Bitmap(b) => b.text_bbox(text).0 as f32,
     }
 }
@@ -146,6 +146,7 @@ fn pack_rgba(
 // ── FFI helpers ──────────────────────────────────────────────────────
 
 const KERN_DEFAULT: u32 = 0; // FT_KERNING_DEFAULT as u32
+const NO_HINTING: i32 = ffi::FT_LOAD_NO_HINTING;
 const RDR: i32 = 4; // FT_LOAD_RENDER
 const TGT_NORM: i32 = 0; // FT_LOAD_TARGET_NORMAL
 
@@ -167,6 +168,32 @@ fn pixel(x: i64) -> i32 {
     (((x + 32) & -64) >> 6) as i32
 }
 
+fn floor26(x: i64) -> i32 {
+    ((x & -64) >> 6) as i32
+}
+
+fn ceil26(x: i64) -> i32 {
+    (((x + 63) & -64) >> 6) as i32
+}
+
+fn length_from_nohint_run(ttf: &TrueTypeFont, text: &str) -> Option<i32> {
+    let face = &ttf.engine.face;
+    let mut total = 0i32;
+    let mut prev: Option<u32> = None;
+
+    for ch in text.chars() {
+        let g = gid(face, ch);
+        if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
+            total = total.saturating_add(kern_26dot6(face, p, g));
+        }
+        let slot = ffi::FT_Load_Glyph(face, g, NO_HINTING).ok()?;
+        total = total.saturating_add(slot.metrics.horiAdvance as i32);
+        prev = Some(g);
+    }
+
+    Some(total)
+}
+
 // ── Glyph run (no render, for metrics/advance/bbox) ─────────────────
 
 struct GlyphRun {
@@ -179,8 +206,7 @@ struct RunGlyph {
     gid: u32,
     pen_before: i32,
     advance: i32,
-    bitmap_left: i32,
-    bitmap_top: i32,
+    outline_cbox: ffi::FT_BBox,
     #[allow(dead_code)]
     bitmap: Option<ffi::FT_Bitmap>,
 }
@@ -201,26 +227,22 @@ fn glyph_run(ttf: &TrueTypeFont, text: &str) -> Option<GlyphRun> {
 
     for ch in text.chars() {
         let g = gid(face, ch);
-        if g == 0 {
-            prev = None;
-            continue;
-        }
-        if let Some(p) = prev {
+        if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
             pen = pen.saturating_add(kern_26dot6(face, p, g));
         }
 
         let pen_before = pen;
 
-        // Load glyph (no render, just get advance and metrics)
+        // Pillow _imagingft.c:text_layout_fallback loads glyph 0 for missing
+        // characters and stores glyph->metrics.horiAdvance for the layout run.
         let slot = ffi::FT_Load_Glyph(face, g, 0).ok()?;
-        let adv = slot.advance.x as i32;
+        let adv = slot.metrics.horiAdvance as i32;
 
         out.push(RunGlyph {
             gid: g,
             pen_before,
             advance: adv,
-            bitmap_left: slot.bitmap_left as i32,
-            bitmap_top: slot.bitmap_top as i32,
+            outline_cbox: slot.outline_cbox,
             bitmap: None, // no render
         });
 
@@ -239,31 +261,34 @@ fn bbox_from_run(ttf: &TrueTypeFont, text: &str) -> (i32, i32, i32, i32) {
         return (0, 0, 0, 0);
     };
     if run.glyphs.is_empty() {
-        return (0, round26(run.max_pen), 0, 0);
+        return (0, 0, 0, 0);
     }
 
-    let asc = pixel(ttf.engine.metrics.ascender);
-    let (mut l, mut t, mut r, mut b) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
+    let mut x_min = 0;
+    let mut x_max = 0;
+    let mut y_min = 0;
+    let mut y_max = 0;
 
     for g in &run.glyphs {
-        let x = round26(g.pen_before) + g.bitmap_left;
-        let y = asc - g.bitmap_top;
-        // For bbox, use the glyph's advance to determine right edge
-        let g_r = x + round26(g.advance);
-        // For bottom, use default height when no bitmap
-        l = l.min(x);
-        t = t.min(y);
-        r = r.max(g_r);
-        b = b.max(y);
+        let px = pixel(i64::from(g.pen_before));
+        let advanced = pixel(i64::from(g.pen_before.saturating_add(g.advance)));
+        x_max = x_max.max(px).max(advanced);
+
+        let cbox = g.outline_cbox;
+        let glyph_x_min = px + floor26(cbox.xMin);
+        let glyph_x_max = px + ceil26(cbox.xMax);
+        let glyph_y_min = floor26(cbox.yMin);
+        let glyph_y_max = ceil26(cbox.yMax);
+
+        x_min = x_min.min(glyph_x_min);
+        x_max = x_max.max(glyph_x_max);
+        y_min = y_min.min(glyph_y_min);
+        y_max = y_max.max(glyph_y_max);
     }
 
-    if l == i32::MAX {
-        let rp = round26(run.max_pen);
-        return (0, 0, rp, 0);
-    }
-    // Right edge: furthest pixel from pen position
-    r = r.max(round26(run.max_pen));
-    (l, t, r, b)
+    x_max = x_max.max(round26(run.max_pen));
+    let y_anchor = pixel(ttf.engine.metrics.ascender);
+    (x_min, y_anchor - y_max, x_max, y_anchor - y_min)
 }
 
 // ── Mask render ──────────────────────────────────────────────────────
@@ -272,19 +297,26 @@ fn mask_from_run(ttf: &TrueTypeFont, text: &str) -> (u32, u32, Vec<u8>) {
     if text.is_empty() {
         return (0, 0, vec![]);
     }
+    let bbox = bbox_from_run(ttf, text);
+    let w = (bbox.2 - bbox.0).max(0) as u32;
+    let h = (bbox.3 - bbox.1).max(0) as u32;
+    let wu = w as usize;
+    let hu = h as usize;
+    let mut canvas = vec![0u8; wu.checked_mul(hu).unwrap_or(0)];
+    if w == 0 || h == 0 {
+        return (w, h, canvas);
+    }
+
     let face = &ttf.engine.face;
-    let asc = pixel(ttf.engine.metrics.ascender);
     let mut pen = 0i32;
     let mut prev: Option<u32> = None;
-    let mut placed: Vec<(i32, i32, ffi::FT_Bitmap)> = Vec::new(); // (x, y, bitmap)
+    let mut rendered: Vec<(i32, i32, i32, Option<ffi::FT_Bitmap>)> = Vec::new();
+    let mut x_min = 0;
+    let mut y_max = 0;
 
     for ch in text.chars() {
         let g = gid(face, ch);
-        if g == 0 {
-            prev = None;
-            continue;
-        }
-        if let Some(p) = prev {
+        if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
             pen = pen.saturating_add(kern_26dot6(face, p, g));
         }
 
@@ -299,51 +331,49 @@ fn mask_from_run(ttf: &TrueTypeFont, text: &str) -> (u32, u32, Vec<u8>) {
             },
         };
 
-        let x = round26(pen) + slot.bitmap_left as i32;
-        let y = asc - slot.bitmap_top as i32;
-        if let Some(bm) = slot.bitmap {
-            if bm.width > 0 && bm.rows > 0 {
-                placed.push((x, y, bm));
-            }
-        }
-        pen = pen.saturating_add(slot.advance.x as i32);
+        let px = round26(pen);
+        x_min = x_min.min(px + slot.bitmap_left as i32);
+        y_max = y_max.max(slot.bitmap_top as i32);
+        rendered.push((
+            pen,
+            slot.bitmap_left as i32,
+            slot.bitmap_top as i32,
+            slot.bitmap,
+        ));
+        pen = pen.saturating_add(slot.metrics.horiAdvance as i32);
         prev = Some(g);
     }
 
-    if placed.is_empty() {
-        return (0, 0, vec![]);
-    }
+    let x_origin = -x_min * 64;
+    let y_origin = -y_max * 64;
 
-    let (mut l, mut t, mut r, mut b) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
-    for &(x, y, ref bm) in &placed {
-        l = l.min(x);
-        t = t.min(y);
-        r = r.max(x + bm.width as i32);
-        b = b.max(y + bm.rows as i32);
-    }
-    if l == i32::MAX {
-        return (0, 0, vec![]);
-    }
-
-    let w = (r - l).max(0) as u32;
-    let h = (b - t).max(0) as u32;
-    let wu = w as usize;
-    let hu = h as usize;
-    let mut canvas = vec![0u8; wu.checked_mul(hu).unwrap_or(0)];
-    if canvas.is_empty() {
-        return (w, h, canvas);
-    }
-
-    for (x, y, bm) in &placed {
+    for (pen_before, bitmap_left, bitmap_top, bitmap) in &rendered {
+        let Some(bm) = bitmap else {
+            continue;
+        };
         let sx = bm.width as usize;
         let sy = bm.rows as usize;
-        let dx = (*x - l).max(0) as usize;
-        let dy = (*y - t).max(0) as usize;
-        if dx >= wu || dy + sy > hu {
+        if sx == 0 || sy == 0 {
+            continue;
+        }
+        let px = pixel(i64::from(x_origin.saturating_add(*pen_before)));
+        let py = pixel(i64::from(y_origin));
+        let dx = px + *bitmap_left;
+        let dy = -(py + *bitmap_top);
+        if dx < 0 || dy < 0 {
+            continue;
+        }
+        let dx = dx as usize;
+        let dy = dy as usize;
+        if dx >= wu || dy >= hu {
             continue;
         }
         let cw = sx.min(wu - dx);
+        let ch = sy.min(hu - dy);
         for row in 0..sy {
+            if row >= ch {
+                break;
+            }
             let src = row * sx;
             let dst = (dy + row) * wu + dx;
             if let (Some(sr), Some(dr)) =
