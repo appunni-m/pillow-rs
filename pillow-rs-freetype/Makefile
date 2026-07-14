@@ -53,6 +53,7 @@ help:
 	@printf "  make api-abi-audit    Generate C/Servo/fontdone API and ABI surface audit\n"
 	@printf "  make api-abi-check    Check manifest/input coverage and thin FFI ABI surfaces\n"
 	@printf "  make route-audit      Classify public input rows by real, fallback, pending, or unsupported route\n"
+	@printf "  make real-parity-verify Run coverage parity, route audit, FFI gates, fmt, and clippy\n"
 	@printf "\nSingle Feature Testing (<1 min per operation, use for debugging):\n"
 	@printf "  make test-op OP=<op>      Run parity filtered to one operation (always refreshes oracle)\n"
 	@printf "  make test-case CASE=<s>   Run parity filtered to case/subject substring (always refreshes oracle)\n"
@@ -104,6 +105,9 @@ test: test-unified-fixtures test-ffi
 
 .PHONY: test-parity
 test-parity: test-unified-fixtures test-ffi
+
+.PHONY: real-parity-verify
+real-parity-verify: test-unified-condition-coverage route-audit test-ffi test-ffi-compat lint
 
 .PHONY: unified-oracle
 unified-oracle: oracle-fetch

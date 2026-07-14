@@ -18,13 +18,13 @@ use super::convert::{
     load_flags_to_core, render_mode_to_core,
 };
 use super::types::{
-    FT_Angle, FT_BBox, FT_Bitmap, FT_Bool, FT_Byte, FT_Bytes, FT_Char, FT_CharMap,
-    FT_CharMapRecPublic, FT_Encoding, FT_Error, FT_F26Dot6, FT_FaceRecPublic, FT_Fixed,
-    FT_Glyph_Format, FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_Long, FT_Matrix,
-    FT_Orientation, FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag,
-    FT_SfntLangTag, FT_SfntName, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
-    FT_Size_RequestRec, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector,
-    TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
+    FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bool, FT_Byte, FT_Bytes, FT_Char, FT_CharMap,
+    FT_CharMapRecPublic, FT_Encoding, FT_Error, FT_F26Dot6, FT_Fixed, FT_Glyph_Format,
+    FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_Long, FT_Matrix, FT_Orientation,
+    FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag,
+    FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec,
+    FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector, TT_Header,
+    TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -41,6 +41,18 @@ pub fn FT_Error_String(error_code: FT_Error) -> Option<&'static CStr> {
     None
 }
 
+pub fn FT_Bitmap_Init(abitmap: Option<&mut FT_Bitmap_C>) {
+    if let Some(bitmap) = abitmap {
+        // FreeType `FT_Bitmap_Init` in `src/base/ftbitmap.c` assigns the
+        // static zero `null_bitmap` record and treats NULL as a no-op.
+        *bitmap = FT_Bitmap_C::default();
+    }
+}
+
+pub fn FT_Bitmap_New(abitmap: Option<&mut FT_Bitmap_C>) {
+    FT_Bitmap_Init(abitmap);
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FT_Library {
     inner: api::Library,
@@ -51,10 +63,26 @@ pub struct FT_Library {
 pub struct FT_Face {
     // Public FT_FaceRec fields read by Pillow _imagingft.c via
     // face->family_name/style_name/num_glyphs and face->size->metrics.
+    pub num_faces: FT_Long,
+    pub face_index: FT_Long,
+    pub face_flags: FT_Long,
+    pub style_flags: FT_Long,
     pub family_name: Option<String>,
     pub style_name: Option<String>,
     pub num_glyphs: FT_Long,
+    pub bbox: FT_BBox,
+    pub units_per_EM: FT_UShort,
+    pub ascender: FT_Short,
+    pub descender: FT_Short,
+    pub height: FT_Short,
+    pub max_advance_width: FT_Short,
+    pub max_advance_height: FT_Short,
+    pub underline_position: FT_Short,
+    pub underline_thickness: FT_Short,
+    pub size: FT_Size,
     pub size_metrics: FT_Size_MetricsRec,
+    pub active_charmap_index: FT_Int,
+    pub charmaps: Box<[FT_CharMapRecPublic]>,
     inner: Rc<RefCell<api::Face>>,
     sizes: Rc<RefCell<FaceSizeState>>,
     probe_only: bool,
@@ -66,7 +94,7 @@ pub struct FT_Face {
     sfnt_vhea: Option<Box<TT_VertHeader>>,
     sfnt_post: Option<Box<TT_Postscript>>,
     sfnt_pclt: Option<Box<TT_PCLT>>,
-    charmaps: Box<[FT_CharMapRecInternal]>,
+    charmap_metadata: Box<[(FT_Long, FT_ULong)]>,
     transform_matrix: FT_Matrix,
     transform_delta: FT_Vector,
     refcount: usize,
@@ -242,18 +270,21 @@ fn sync_active_size_state(face: &mut FT_Face) {
     if let Some(entry) = face.sizes.borrow_mut().active_entry_mut() {
         entry.state = state;
     }
+    face.size = active_size_handle(face);
     face.size_metrics = face.inner.borrow().size_metrics().into();
 }
 
-#[derive(Clone, Copy)]
-#[repr(C)]
-struct FT_CharMapRecInternal {
-    public: FT_CharMapRecPublic,
-    format: FT_Long,
-    language_id: FT_ULong,
+fn sync_active_charmap_index(face: &mut FT_Face) {
+    face.active_charmap_index = face
+        .inner
+        .borrow()
+        .charmap_index()
+        .and_then(|index| FT_Int::try_from(index).ok())
+        .unwrap_or(-1);
 }
 
 type CharmapMetadata = (FT_Long, FT_ULong, FT_Int);
+type FaceCharmapRecords = (Box<[FT_CharMapRecPublic]>, Box<[(FT_Long, FT_ULong)]>);
 type CharmapMetadataRegistry = BTreeMap<usize, CharmapMetadata>;
 
 #[derive(Clone)]
@@ -1046,7 +1077,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         .ok()
         .and_then(|data| parse_tt_pclt(&data))
         .map(Box::new);
-    let charmaps = charmaps_to_ffi(&inner);
+    let (charmaps, charmap_metadata) = charmaps_to_ffi(&inner);
     let inner = Rc::new(RefCell::new(inner));
     // FreeType `FT_Open_Face`/`FT_New_Memory_Face` negative face-index probes
     // start with `face->size == NULL`; `FT_New_Size` may allocate one later.
@@ -1055,11 +1086,38 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     } else {
         FaceSizeState::new(size_state)
     }));
+    let active_size = sizes.borrow().active_handle();
+    let active_charmap_index = inner
+        .borrow()
+        .charmap_index()
+        .and_then(|index| FT_Int::try_from(index).ok())
+        .unwrap_or(-1);
     let face = FT_Face {
+        num_faces: info.num_faces as FT_Long,
+        face_index: info.face_index as FT_Long,
+        face_flags: FT_Long::from(info.face_flags),
+        style_flags: FT_Long::from(info.style_flags),
         family_name: Some(info.family_name),
         style_name: Some(info.style_name),
         num_glyphs: FT_Long::from(info.num_glyphs),
+        bbox: FT_BBox {
+            xMin: FT_Long::from(info.bbox.x_min),
+            yMin: FT_Long::from(info.bbox.y_min),
+            xMax: FT_Long::from(info.bbox.x_max),
+            yMax: FT_Long::from(info.bbox.y_max),
+        },
+        units_per_EM: info.units_per_em,
+        ascender: info.ascender,
+        descender: info.descender,
+        height: info.height,
+        max_advance_width: info.max_advance_width as FT_Short,
+        max_advance_height: info.max_advance_height as FT_Short,
+        underline_position: info.underline_position,
+        underline_thickness: info.underline_thickness,
+        size: active_size,
         size_metrics,
+        active_charmap_index,
+        charmaps,
         inner,
         sizes,
         probe_only,
@@ -1071,7 +1129,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         sfnt_vhea,
         sfnt_post,
         sfnt_pclt,
-        charmaps,
+        charmap_metadata,
         transform_matrix: FT_Matrix {
             xx: 1 << 16,
             xy: 0,
@@ -1304,24 +1362,23 @@ fn parse_tt_pclt(data: &[u8]) -> Option<TT_PCLT> {
     })
 }
 
-fn charmaps_to_ffi(face: &api::Face) -> Box<[FT_CharMapRecInternal]> {
+fn charmaps_to_ffi(face: &api::Face) -> FaceCharmapRecords {
     let infos = face.font().charmaps();
-    let charmaps = infos
-        .iter()
-        .map(|info| FT_CharMapRecInternal {
-            public: FT_CharMapRecPublic {
-                face: ptr::null_mut(),
-                encoding: charmap_encoding(info.platform_id, info.encoding_id),
-                platform_id: info.platform_id,
-                encoding_id: info.encoding_id,
-            },
-            format: FT_Long::from(info.format),
-            language_id: FT_ULong::from(info.language_id),
-        })
-        .collect::<Vec<_>>()
-        .into_boxed_slice();
-    register_charmap_metadata(&charmaps);
-    charmaps
+    let mut charmaps = Vec::with_capacity(infos.len());
+    let mut metadata = Vec::with_capacity(infos.len());
+    for info in infos {
+        charmaps.push(FT_CharMapRecPublic {
+            face: ptr::null_mut(),
+            encoding: charmap_encoding(info.platform_id, info.encoding_id),
+            platform_id: info.platform_id,
+            encoding_id: info.encoding_id,
+        });
+        metadata.push((FT_Long::from(info.format), FT_ULong::from(info.language_id)));
+    }
+    let charmaps = charmaps.into_boxed_slice();
+    let metadata = metadata.into_boxed_slice();
+    register_charmap_metadata(&charmaps, &metadata);
+    (charmaps, metadata)
 }
 
 fn charmap_metadata_registry() -> &'static Mutex<CharmapMetadataRegistry> {
@@ -1329,27 +1386,25 @@ fn charmap_metadata_registry() -> &'static Mutex<CharmapMetadataRegistry> {
     REGISTRY.get_or_init(|| Mutex::new(BTreeMap::new()))
 }
 
-fn register_charmap_metadata(charmaps: &[FT_CharMapRecInternal]) {
+fn register_charmap_metadata(charmaps: &[FT_CharMapRecPublic], metadata: &[(FT_Long, FT_ULong)]) {
     if let Ok(mut registry) = charmap_metadata_registry().lock() {
         for (index, record) in charmaps.iter().enumerate() {
-            register_charmap_record_locked(&mut registry, index, record);
+            if let Some(&(format, language_id)) = metadata.get(index) {
+                register_charmap_record_locked(&mut registry, index, record, format, language_id);
+            }
         }
-    }
-}
-
-fn register_charmap_record(index: usize, record: &FT_CharMapRecInternal) {
-    if let Ok(mut registry) = charmap_metadata_registry().lock() {
-        register_charmap_record_locked(&mut registry, index, record);
     }
 }
 
 fn register_charmap_record_locked(
     registry: &mut CharmapMetadataRegistry,
     index: usize,
-    record: &FT_CharMapRecInternal,
+    record: &FT_CharMapRecPublic,
+    format: FT_Long,
+    language_id: FT_ULong,
 ) {
-    let key = (&record.public as *const FT_CharMapRecPublic) as usize;
-    registry.insert(key, (record.format, record.language_id, index as FT_Int));
+    let key = (record as *const FT_CharMapRecPublic) as usize;
+    registry.insert(key, (format, language_id, index as FT_Int));
 }
 
 fn registered_charmap_metadata(charmap: FT_CharMap) -> Option<CharmapMetadata> {
@@ -1622,58 +1677,8 @@ pub fn FT_Get_Kerning(
     FT_Err_Ok
 }
 
-pub fn FT_Face_Charmap_Count(face: &FT_Face) -> FT_UInt {
-    FT_UInt::try_from(face.charmaps.len()).unwrap_or(FT_UInt::MAX)
-}
-
-pub fn FT_Face_Charmap(face: &FT_Face, index: FT_UInt) -> FT_CharMap {
-    let Ok(index) = usize::try_from(index) else {
-        return ptr::null_mut();
-    };
-    face.charmaps.get(index).map_or(ptr::null_mut(), |record| {
-        register_charmap_record(index, record);
-        (&record.public as *const FT_CharMapRecPublic)
-            .cast_mut()
-            .cast()
-    })
-}
-
-pub fn FT_Face_Charmap_Info(face: &FT_Face, index: FT_UInt) -> Option<FT_CharMapRecPublic> {
-    let index = usize::try_from(index).ok()?;
-    face.charmaps.get(index).map(|record| record.public)
-}
-
-pub fn FT_Face_Active_Charmap_Index(face: &FT_Face) -> FT_Int {
-    face.inner
-        .borrow()
-        .charmap_index()
-        .and_then(|index| FT_Int::try_from(index).ok())
-        .unwrap_or(-1)
-}
-
-pub fn FT_Charmap_Info(face: &FT_Face, charmap: FT_CharMap) -> Option<FT_CharMapRecPublic> {
-    let index = charmap_index_in_face(face, charmap)?;
-    face.charmaps.get(index).map(|record| record.public)
-}
-
-pub fn FT_Charmap_Format(face: &FT_Face, charmap: FT_CharMap) -> Option<FT_Long> {
-    let index = charmap_index_in_face(face, charmap)?;
-    face.charmaps.get(index).map(|record| record.format)
-}
-
-pub fn FT_Charmap_Language_ID(face: &FT_Face, charmap: FT_CharMap) -> Option<FT_ULong> {
-    let index = charmap_index_in_face(face, charmap)?;
-    face.charmaps.get(index).map(|record| record.language_id)
-}
-
 pub fn FT_Get_Charmap_Index(charmap: FT_CharMap) -> FT_Int {
     registered_charmap_metadata(charmap).map_or(-1, |(_, _, index)| index)
-}
-
-pub fn FT_Get_Charmap_Index_For_Face(face: &FT_Face, charmap: FT_CharMap) -> FT_Int {
-    charmap_index_in_face(face, charmap)
-        .and_then(|index| FT_Int::try_from(index).ok())
-        .unwrap_or(-1)
 }
 
 pub fn FT_Set_Charmap(face: Option<&mut FT_Face>, charmap: FT_CharMap) -> FT_Error {
@@ -1686,11 +1691,15 @@ pub fn FT_Set_Charmap(face: Option<&mut FT_Face>, charmap: FT_CharMap) -> FT_Err
     let Some(index) = charmap_index_in_face(face, charmap) else {
         return FT_Err_Invalid_Argument;
     };
-    if face.charmaps.get(index).map(|record| record.format) == Some(14) {
+    if face.charmap_metadata.get(index).map(|record| record.0) == Some(14) {
         return FT_Err_Invalid_Argument;
     }
-    match face.inner.borrow_mut().set_charmap(index) {
-        Ok(()) => FT_Err_Ok,
+    let result = face.inner.borrow_mut().set_charmap(index);
+    match result {
+        Ok(()) => {
+            sync_active_charmap_index(face);
+            FT_Err_Ok
+        }
         Err(_) => FT_Err_Invalid_Argument,
     }
 }
@@ -1702,7 +1711,7 @@ fn charmap_index_in_face(face: &FT_Face, charmap: FT_CharMap) -> Option<usize> {
     let target = charmap.cast_const().cast::<FT_CharMapRecPublic>();
     face.charmaps
         .iter()
-        .position(|record| ptr::eq(&record.public as *const FT_CharMapRecPublic, target))
+        .position(|record| ptr::eq(record as *const FT_CharMapRecPublic, target))
 }
 
 pub fn FT_Select_Charmap(face: Option<&mut FT_Face>, encoding: FT_Encoding) -> FT_Error {
@@ -1710,20 +1719,30 @@ pub fn FT_Select_Charmap(face: Option<&mut FT_Face>, encoding: FT_Encoding) -> F
         return FT_Err_Invalid_Face_Handle as FT_Error;
     };
     match i64::from(encoding) {
-        FT_ENCODING_UNICODE => match face.inner.borrow_mut().select_unicode_charmap() {
-            Ok(()) => FT_Err_Ok,
-            Err(_) => FT_Err_Invalid_CharMap_Handle,
-        },
+        FT_ENCODING_UNICODE => {
+            let result = face.inner.borrow_mut().select_unicode_charmap();
+            match result {
+                Ok(()) => {
+                    sync_active_charmap_index(face);
+                    FT_Err_Ok
+                }
+                Err(_) => FT_Err_Invalid_CharMap_Handle,
+            }
+        }
         _ => {
             let Some(index) = face
                 .charmaps
                 .iter()
-                .position(|charmap| charmap.public.encoding == encoding)
+                .position(|charmap| charmap.encoding == encoding)
             else {
                 return FT_Err_Invalid_Argument;
             };
-            match face.inner.borrow_mut().set_charmap(index) {
-                Ok(()) => FT_Err_Ok,
+            let result = face.inner.borrow_mut().set_charmap(index);
+            match result {
+                Ok(()) => {
+                    sync_active_charmap_index(face);
+                    FT_Err_Ok
+                }
                 Err(_) => FT_Err_Invalid_Argument,
             }
         }
@@ -1951,10 +1970,6 @@ pub fn FT_Render_Glyph(
         .map_err(error_to_ft)
 }
 
-pub fn FT_Size_Metrics(face: &FT_Face) -> FT_Size_MetricsRec {
-    face.inner.borrow().size_metrics().into()
-}
-
 #[inline]
 fn ft_long_to_i64(value: FT_Long) -> i64 {
     // `FT_Long` is `i64` on this host and can be narrower on other targets.
@@ -2061,33 +2076,6 @@ fn move_long_sign(value: FT_Long, sign: i32) -> (FT_ULong, i32) {
     }
 }
 
-pub fn FT_Face_Info(face: &FT_Face) -> FT_FaceRecPublic {
-    let info = face.inner.borrow().info();
-    FT_FaceRecPublic {
-        num_faces: info.num_faces as FT_Long,
-        face_index: info.face_index as FT_Long,
-        face_flags: FT_Long::from(info.face_flags),
-        style_flags: FT_Long::from(info.style_flags),
-        num_glyphs: FT_Long::from(info.num_glyphs),
-        bbox: FT_BBox {
-            xMin: FT_Long::from(info.bbox.x_min),
-            yMin: FT_Long::from(info.bbox.y_min),
-            xMax: FT_Long::from(info.bbox.x_max),
-            yMax: FT_Long::from(info.bbox.y_max),
-        },
-        units_per_EM: info.units_per_em,
-        ascender: info.ascender,
-        descender: info.descender,
-        height: info.height,
-        max_advance_width: info.max_advance_width as i16,
-        max_advance_height: info.max_advance_height as i16,
-        underline_position: info.underline_position,
-        underline_thickness: info.underline_thickness,
-        size: active_size_handle(face),
-        ..FT_FaceRecPublic::default()
-    }
-}
-
 pub fn FT_Get_Sfnt_Table(face: &FT_Face, tag: FT_Sfnt_Tag) -> FT_Pointer {
     let tag = i64::from(tag);
     if tag == FT_SFNT_OS2 {
@@ -2136,10 +2124,6 @@ pub fn FT_Get_Sfnt_Table(face: &FT_Face, tag: FT_Sfnt_Tag) -> FT_Pointer {
     }
     // FT_SFNT_MAX or any unrecognised tag returns null.
     ptr::null_mut()
-}
-
-pub fn FT_Get_Sfnt_OS2(face: &FT_Face) -> Option<TT_OS2> {
-    face.sfnt_os2.as_deref().copied()
 }
 
 pub fn FT_Load_Sfnt_Table(
@@ -2208,7 +2192,7 @@ pub fn FT_Sfnt_Table_Info(
     if tag.is_none() {
         // C `sfnt_table_info` returns the table count when `tag == NULL`,
         // ignoring `table_index` (sfnt/sfdriver.c:156-158).
-        *length = FT_Sfnt_Table_Count(face) as FT_ULong;
+        *length = font.sfnt_tables().len() as FT_ULong;
         return FT_Err_Ok;
     }
     let index = match usize::try_from(table_index) {
@@ -2223,11 +2207,6 @@ pub fn FT_Sfnt_Table_Info(
     }
     *length = info.length as FT_ULong;
     FT_Err_Ok
-}
-
-/// Returns the total number of SFNT tables in the font.
-pub fn FT_Sfnt_Table_Count(face: &FT_Face) -> usize {
-    face.inner.borrow().font().sfnt_tables().len()
 }
 
 fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags) -> FT_GlyphSlot {

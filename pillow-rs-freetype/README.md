@@ -176,8 +176,8 @@ let library = FT_Init_FreeType();
 FT_Done_FreeType(Some(library));
 
 // Face loading
-let face = FT_New_Memory_Face(&library, font_bytes, 0, 20.0)?;
-let flags = FT_Face_Info(&face).face_flags;
+let mut face = FT_New_Memory_Face(&library, font_bytes, 0, 20.0)?;
+let flags = face.face_flags;
 
 // Glyph loading and rendering
 let slot = FT_Load_Glyph(&face, glyph_index, FT_LOAD_DEFAULT)?;
@@ -185,14 +185,17 @@ let slot = FT_Load_Char(&face, 'A' as u64, FT_LOAD_RENDER)?;
 let slot = FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL)?;
 
 // Metrics and geometry
-let metrics = FT_Size_Metrics(&face);
+let metrics = face.size_metrics;
 let advance = FT_Get_Advance(&face, glyph_index, FT_LOAD_DEFAULT)?;
 let cbox = FT_Outline_Get_CBox(&face, glyph_index, FT_LOAD_DEFAULT)?;
 
 // Kerning, charmaps, SFNT tables
 let (x, y) = FT_Get_Kerning(&face, left, right, FT_KERNING_DEFAULT);
 let char_index = FT_Get_Char_Index(&face, codepoint);
-FT_Set_Charmap(&mut face, charmap_index)?;
+let charmap = face.charmaps.first()
+    .map(|record| (record as *const FT_CharMapRecPublic).cast_mut().cast())
+    .unwrap_or(std::ptr::null_mut());
+FT_Set_Charmap(Some(&mut face), charmap);
 let table = FT_Load_Sfnt_Table(&face, 0x68656164, 0, Some(&mut len))?;
 ```
 

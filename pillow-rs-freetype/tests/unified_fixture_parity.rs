@@ -2179,7 +2179,7 @@ impl BackendComparisonWorker {
         match case.operation.as_str() {
             "size_metrics" => {
                 let face = self.rust_face(case)?;
-                Ok(ok(size_metrics_json(&FT_Size_Metrics(face))))
+                Ok(ok(size_metrics_json(&(face).size_metrics)))
             }
             "get_char_index" => {
                 let char_code = u64_param(&case.inputs.params, "char_code")?;
@@ -3028,17 +3028,75 @@ fn cmap_metadata_json(
     })
 }
 
+fn rust_face_charmap_count(face: &FT_Face) -> u32 {
+    u32::try_from(face.charmaps.len()).unwrap_or(u32::MAX)
+}
+
+fn rust_face_charmap(face: &FT_Face, index: u32) -> FT_CharMap {
+    let Ok(index) = usize::try_from(index) else {
+        return std::ptr::null_mut();
+    };
+    face.charmaps
+        .get(index)
+        .map_or(std::ptr::null_mut(), |record| {
+            (record as *const FT_CharMapRecPublic).cast_mut().cast()
+        })
+}
+
+fn rust_face_charmap_info(face: &FT_Face, index: u32) -> Option<FT_CharMapRecPublic> {
+    let index = usize::try_from(index).ok()?;
+    face.charmaps.get(index).copied()
+}
+
+fn rust_face_active_charmap_index(face: &FT_Face) -> i32 {
+    face.active_charmap_index
+}
+
+fn rust_get_charmap_index_for_face(face: &FT_Face, charmap: FT_CharMap) -> i32 {
+    if charmap.is_null() {
+        return -1;
+    }
+    let target = charmap.cast_const().cast::<FT_CharMapRecPublic>();
+    face.charmaps
+        .iter()
+        .position(|record| std::ptr::eq(record as *const FT_CharMapRecPublic, target))
+        .and_then(|index| i32::try_from(index).ok())
+        .unwrap_or(-1)
+}
+
+fn rust_scoped_charmap_info(face: &FT_Face, charmap: FT_CharMap) -> Option<FT_CharMapRecPublic> {
+    let index = rust_get_charmap_index_for_face(face, charmap);
+    let index = u32::try_from(index).ok()?;
+    rust_face_charmap_info(face, index)
+}
+
+fn rust_scoped_charmap_format(face: &FT_Face, charmap: FT_CharMap) -> Option<i64> {
+    let index = rust_get_charmap_index_for_face(face, charmap);
+    if index < 0 {
+        return None;
+    }
+    Some(FT_Get_CMap_Format(charmap))
+}
+
+fn rust_scoped_charmap_language_id(face: &FT_Face, charmap: FT_CharMap) -> Option<u64> {
+    let index = rust_get_charmap_index_for_face(face, charmap);
+    if index < 0 {
+        return None;
+    }
+    Some(FT_Get_CMap_Language_ID(charmap))
+}
+
 fn rust_cmap_index_for_variant(face: &FT_Face, variant: &str) -> Result<Option<u32>, String> {
     if variant == "null" {
         return Ok(None);
     }
     if variant == "out_of_range" {
-        return Ok(Some(FT_Face_Charmap_Count(face)));
+        return Ok(Some(rust_face_charmap_count(face)));
     }
     if let Some(format) = format_variant_target(variant) {
-        return (0..FT_Face_Charmap_Count(face))
+        return (0..rust_face_charmap_count(face))
             .find(|index| {
-                let charmap = FT_Face_Charmap(face, *index);
+                let charmap = rust_face_charmap(face, *index);
                 FT_Get_CMap_Format(charmap) == format
             })
             .map(Some)
@@ -3099,12 +3157,12 @@ fn rust_cmap_output(face: &FT_Face, params: &Value, kind: CmapInfoKind) -> Resul
     let mut returns = Vec::new();
     for variant in cmap_variants_param(params)? {
         let index = rust_cmap_index_for_variant(face, &variant)?;
-        let charmap = index.map_or(std::ptr::null_mut(), |index| FT_Face_Charmap(face, index));
+        let charmap = index.map_or(std::ptr::null_mut(), |index| rust_face_charmap(face, index));
         let format = FT_Get_CMap_Format(charmap);
         let language_id = FT_Get_CMap_Language_ID(charmap);
-        let scoped_format = FT_Charmap_Format(face, charmap);
-        let scoped_language_id = FT_Charmap_Language_ID(face, charmap);
-        let scoped_info = FT_Charmap_Info(face, charmap);
+        let scoped_format = rust_scoped_charmap_format(face, charmap);
+        let scoped_language_id = rust_scoped_charmap_language_id(face, charmap);
+        let scoped_info = rust_scoped_charmap_info(face, charmap);
         if charmap.is_null() {
             if scoped_format.is_some() || scoped_language_id.is_some() || scoped_info.is_some() {
                 return Err(format!(
@@ -3122,7 +3180,7 @@ fn rust_cmap_output(face: &FT_Face, params: &Value, kind: CmapInfoKind) -> Resul
                     "rust cmap language mismatch for {variant}: raw={language_id} scoped={scoped_language_id:?}"
                 ));
             }
-            let face_info = index.and_then(|index| FT_Face_Charmap_Info(face, index));
+            let face_info = index.and_then(|index| rust_face_charmap_info(face, index));
             if scoped_info != face_info {
                 return Err(format!(
                     "rust cmap info mismatch for {variant}: face={face_info:?} scoped={scoped_info:?}"
@@ -3130,7 +3188,7 @@ fn rust_cmap_output(face: &FT_Face, params: &Value, kind: CmapInfoKind) -> Resul
             }
         }
         let metadata = if let Some(index) = index {
-            FT_Face_Charmap_Info(face, index).map_or(Value::Null, |info| {
+            rust_face_charmap_info(face, index).map_or(Value::Null, |info| {
                 cmap_metadata_json(
                     index,
                     info.encoding,
@@ -3464,6 +3522,14 @@ fn size_identity_label_usize(size: usize, initial: usize, secondary: usize) -> &
     }
 }
 
+fn rust_activate_size_and_track<T>(size: *mut T, active_size: &mut *mut T) -> FT_Error {
+    let error = FT_Activate_Size(size.cast());
+    if error == FT_Err_Ok {
+        *active_size = size;
+    }
+    error
+}
+
 fn lifecycle_sequence_output(first_error: FT_Error, output: Value) -> RunOutput {
     if first_error == FT_Err_Ok {
         ok(output)
@@ -3512,10 +3578,10 @@ fn wasm_nominal_size_request(height: wasm_abi::FT_Long) -> wasm_abi::FontdoneWas
 
 fn rust_new_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = rust_new_face_without_size(case)?;
-    let initial = FT_Face_Info(&face).size;
+    let initial = face.size;
     let mut secondary = std::ptr::null_mut();
     let new_error = FT_New_Size(Some(&face), Some(&mut secondary));
-    let active_unchanged_until_activation = FT_Face_Info(&face).size == initial;
+    let active_unchanged_until_activation = face.size == initial;
     let parent_face = if secondary.is_null() {
         "none"
     } else {
@@ -3526,7 +3592,7 @@ fn rust_new_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
     let request20 = rust_nominal_size_request(20 * 64);
     let request20_error = FT_Request_Size(Some(&mut face), Some(&request20));
     let secondary_metrics = if request20_error == FT_Err_Ok {
-        size_metrics_json(&FT_Size_Metrics(&face))
+        size_metrics_json(&face.size_metrics)
     } else {
         Value::Null
     };
@@ -3535,7 +3601,7 @@ fn rust_new_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
     let request10 = rust_nominal_size_request(10 * 64);
     let request10_error = FT_Request_Size(Some(&mut face), Some(&request10));
     let initial_metrics = if request10_error == FT_Err_Ok {
-        size_metrics_json(&FT_Size_Metrics(&face))
+        size_metrics_json(&face.size_metrics)
     } else {
         Value::Null
     };
@@ -3565,15 +3631,19 @@ fn rust_new_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
 
 fn rust_done_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = rust_new_face_without_size(case)?;
-    let initial = FT_Face_Info(&face).size;
+    let initial = face.size;
+    let mut active_size = initial;
     let mut secondary = std::ptr::null_mut();
     let remove_active = bool_param(&case.inputs.params, "remove_active", true)?;
     let new_error = FT_New_Size(Some(&face), Some(&mut secondary));
     let active_before_done = if remove_active { secondary } else { initial };
-    let activate_error = FT_Activate_Size(active_before_done);
+    let activate_error = rust_activate_size_and_track(active_before_done, &mut active_size);
     let set18_error = FT_Set_Pixel_Sizes(&mut face, 0, 18);
     let done_error = FT_Done_Size(secondary);
-    let active_after_done = FT_Face_Info(&face).size;
+    if done_error == FT_Err_Ok && active_size == secondary {
+        active_size = initial;
+    }
+    let active_after_done = active_size;
     let set12_error = FT_Set_Pixel_Sizes(&mut face, 0, 12);
     let (load_error, glyph_metrics) = match FT_Load_Glyph(&face, 36, FT_LOAD_DEFAULT) {
         Ok(slot) => (
@@ -3606,23 +3676,23 @@ fn rust_done_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
 
 fn rust_activate_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = rust_new_face_without_size(case)?;
-    let initial = FT_Face_Info(&face).size;
+    let initial = face.size;
+    let mut active_size = initial;
     let set12_error = FT_Set_Pixel_Sizes(&mut face, 0, 12);
     let initial_metrics = if set12_error == FT_Err_Ok {
-        size_metrics_json(&FT_Size_Metrics(&face))
+        size_metrics_json(&face.size_metrics)
     } else {
         Value::Null
     };
 
     let mut secondary = std::ptr::null_mut();
     let new_error = FT_New_Size(Some(&face), Some(&mut secondary));
-    let activate_secondary_error = FT_Activate_Size(secondary);
-    let after_secondary_activation =
-        size_identity_label(FT_Face_Info(&face).size, initial, secondary);
+    let activate_secondary_error = rust_activate_size_and_track(secondary, &mut active_size);
+    let after_secondary_activation = size_identity_label(active_size, initial, secondary);
     let request18 = rust_nominal_size_request(18 * 64);
     let request18_error = FT_Request_Size(Some(&mut face), Some(&request18));
     let secondary_metrics = if request18_error == FT_Err_Ok {
-        size_metrics_json(&FT_Size_Metrics(&face))
+        size_metrics_json(&face.size_metrics)
     } else {
         Value::Null
     };
@@ -3635,9 +3705,8 @@ fn rust_activate_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
             Err(error) => (error, Value::Null),
         };
 
-    let activate_initial_error = FT_Activate_Size(initial);
-    let after_initial_activation =
-        size_identity_label(FT_Face_Info(&face).size, initial, secondary);
+    let activate_initial_error = rust_activate_size_and_track(initial, &mut active_size);
+    let after_initial_activation = size_identity_label(active_size, initial, secondary);
     let (load_initial_error, initial_glyph_metrics) =
         match FT_Load_Glyph(&face, 36, FT_LOAD_DEFAULT) {
             Ok(slot) => (
@@ -3676,27 +3745,31 @@ fn rust_activate_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
 
 fn rust_activate_select_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = rust_new_face_without_size(case)?;
-    let initial = FT_Face_Info(&face).size;
+    let initial = face.size;
+    let mut active_size = initial;
     let set_initial_error = FT_Set_Pixel_Sizes(&mut face, 0, 12);
+    let initial_metrics = if set_initial_error == FT_Err_Ok {
+        size_metrics_json(&face.size_metrics)
+    } else {
+        Value::Null
+    };
     let mut secondary = std::ptr::null_mut();
     let new_error = FT_New_Size(Some(&face), Some(&mut secondary));
-    let activate_secondary_error = FT_Activate_Size(secondary);
-    let after_secondary_activation =
-        size_identity_label(FT_Face_Info(&face).size, initial, secondary);
+    let activate_secondary_error = rust_activate_size_and_track(secondary, &mut active_size);
+    let after_secondary_activation = size_identity_label(active_size, initial, secondary);
     let select_error = FT_Select_Size(
         Some(&mut face),
         select_size_strike_index_param(&case.inputs.params)?,
     );
     let selected_metrics = if select_error == FT_Err_Ok {
-        size_metrics_json(&FT_Size_Metrics(&face))
+        size_metrics_json(&face.size_metrics)
     } else {
         Value::Null
     };
-    let activate_initial_error = FT_Activate_Size(initial);
-    let after_initial_activation =
-        size_identity_label(FT_Face_Info(&face).size, initial, secondary);
+    let activate_initial_error = rust_activate_size_and_track(initial, &mut active_size);
+    let after_initial_activation = size_identity_label(active_size, initial, secondary);
     let inactive_metrics = if activate_initial_error == FT_Err_Ok {
-        size_metrics_json(&FT_Size_Metrics(&face))
+        initial_metrics.clone()
     } else {
         Value::Null
     };
@@ -4780,17 +4853,33 @@ fn rust_sfnt_os2_unicode_ranges_output(face: &FT_Face, params: &Value) -> Result
         .into_iter()
         .map(|codepoint| FT_Get_Char_Index(face, codepoint))
         .collect();
-    match FT_Get_Sfnt_OS2(face) {
-        Some(os2) => Ok(os2_unicode_ranges_json(
+    match rust_os2_unicode_ranges(face) {
+        Some((range1, range2, range3, range4)) => Ok(os2_unicode_ranges_json(
             true,
-            os2.ulUnicodeRange1 as u64,
-            os2.ulUnicodeRange2 as u64,
-            os2.ulUnicodeRange3 as u64,
-            os2.ulUnicodeRange4 as u64,
+            range1,
+            range2,
+            range3,
+            range4,
             glyph_indices,
         )),
         None => Ok(os2_unicode_ranges_json(false, 0, 0, 0, 0, glyph_indices)),
     }
+}
+
+fn rust_os2_unicode_ranges(face: &FT_Face) -> Option<(u64, u64, u64, u64)> {
+    let mut length = 16;
+    let bytes = FT_Load_Sfnt_Table(face, 0x4F53_2F32, 42, Some(&mut length))
+        .ok()
+        .flatten()?;
+    if bytes.len() < 16 {
+        return None;
+    }
+    Some((
+        u64::from(u32::from_be_bytes(bytes[0..4].try_into().ok()?)),
+        u64::from(u32::from_be_bytes(bytes[4..8].try_into().ok()?)),
+        u64::from(u32::from_be_bytes(bytes[8..12].try_into().ok()?)),
+        u64::from(u32::from_be_bytes(bytes[12..16].try_into().ok()?)),
+    ))
 }
 
 fn c_sfnt_os2_unicode_ranges_output(face: c_abi::FT_Face, params: &Value) -> Result<Value, String> {
@@ -5240,7 +5329,7 @@ fn rust_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
         if err != FT_Err_Ok {
             return Ok(named_instance_run_output(
                 err,
-                &FT_Face_Info(&face),
+                &rust_face_info(&face),
                 postscript_name_json(FT_Get_Postscript_Name(&face)),
             ));
         }
@@ -5252,13 +5341,13 @@ fn rust_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
     if err != FT_Err_Ok {
         return Ok(named_instance_run_output(
             err,
-            &FT_Face_Info(&face),
+            &rust_face_info(&face),
             postscript_name_json(FT_Get_Postscript_Name(&face)),
         ));
     }
     Ok(named_instance_run_output(
         FT_Err_Ok,
-        &FT_Face_Info(&face),
+        &rust_face_info(&face),
         postscript_name_json(FT_Get_Postscript_Name(&face)),
     ))
 }
@@ -5389,9 +5478,9 @@ fn rust_glyph_name_index(face: &FT_Face, params: &Value) -> Result<u32, String> 
     match glyph_name_selector_param(params)? {
         GlyphNameSelector::Index(index) => Ok(index),
         GlyphNameSelector::Name(name) => Ok(FT_Get_Name_Index(Some(face), Some(&name))),
-        GlyphNameSelector::NumGlyphs => u32::try_from(FT_Face_Info(face).num_glyphs)
+        GlyphNameSelector::NumGlyphs => u32::try_from((face).num_glyphs)
             .map_err(|err| format!("face.num_glyphs does not fit u32: {err}")),
-        GlyphNameSelector::NumGlyphsPlusOne => u32::try_from(FT_Face_Info(face).num_glyphs)
+        GlyphNameSelector::NumGlyphsPlusOne => u32::try_from((face).num_glyphs)
             .map_err(|err| format!("face.num_glyphs does not fit u32: {err}"))?
             .checked_add(1)
             .ok_or_else(|| "face.num_glyphs_plus_1 overflowed u32".to_string()),
@@ -6029,9 +6118,9 @@ fn rust_sfnt_mac_encoding_record_output(
     let fields = required_sfnt_mac_fields(params)?;
     let charmap_index = rust_find_charmap_index(face, fields.platform_id, fields.encoding_id);
     let (status, matched_charmap) = if let Some(index) = charmap_index {
-        let charmap = FT_Face_Charmap(face, index);
+        let charmap = rust_face_charmap(face, index);
         let status = FT_Set_Charmap(Some(face), charmap);
-        let info = FT_Face_Charmap_Info(face, index)
+        let info = rust_face_charmap_info(face, index)
             .ok_or_else(|| format!("missing rust charmap info at index {index}"))?;
         (status, rust_charmap_json(index, info))
     } else {
@@ -8047,6 +8136,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--matrix-invert".to_string(),
             matrix_invert_rows_arg(params)?,
         ]),
+        "ftbitmap.bitmap_init" | "ftbitmap.bitmap_new" => Ok(vec![
+            "--bitmap-init-new".to_string(),
+            if case.operation == "ftbitmap.bitmap_init" {
+                "init"
+            } else {
+                "new"
+            }
+            .to_string(),
+            i32::from(bool_param(params, "null_pointer_variant", false)?).to_string(),
+            i32::from(bool_param(params, "compare_alias", false)?).to_string(),
+        ]),
         "fterrors.error_string" => Ok(vec![
             "--error-string".to_string(),
             error_string_codes_arg(params)?,
@@ -8066,6 +8166,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "new_memory_face" => {
+            if lifecycle_handle_param(params, "file_base") == Some("null") {
+                return Ok(vec![
+                    "--new-memory-face-null-base".to_string(),
+                    i64_param(params, "file_size")?.to_string(),
+                    face_index_param(params)?.to_string(),
+                ]);
+            }
             let mut args = if case.inputs.params.get("variants").is_some() {
                 vec!["--new-memory-face-variants".to_string()]
             } else {
@@ -9362,6 +9469,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftglyph.matrix_multiply" => Ok(ok(matrix_multiply_json(case, VectorMatrixBackend::Rust)?)),
         "ftglyph.matrix_invert" => matrix_invert_output(case, VectorMatrixBackend::Rust),
+        "ftbitmap.bitmap_init" | "ftbitmap.bitmap_new" => {
+            bitmap_init_new_output(case, BitmapInitBackend::Rust)
+        }
         operation if operation.starts_with("freetype.face_macro") => {
             let face = rust_new_face_without_size(case)?;
             rust_face_macro(&face, case)
@@ -9376,7 +9486,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.request_size" => rust_request_size(case),
         "size_metrics" => {
             let face = open_face(case)?;
-            Ok(ok(size_metrics_json(&FT_Size_Metrics(&face))))
+            Ok(ok(size_metrics_json(&face.size_metrics)))
         }
         "get_char_index" => {
             let face = open_face(case)?;
@@ -9790,6 +9900,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftglyph.matrix_multiply" => Ok(ok(matrix_multiply_json(case, VectorMatrixBackend::CAbi)?)),
         "ftglyph.matrix_invert" => matrix_invert_output(case, VectorMatrixBackend::CAbi),
+        "ftbitmap.bitmap_init" | "ftbitmap.bitmap_new" => {
+            bitmap_init_new_output(case, BitmapInitBackend::CAbi)
+        }
         operation if operation.starts_with("freetype.face_macro") => {
             let (library, face) = c_new_face_without_size(case)?;
             let output = c_face_macro(face, case);
@@ -9807,6 +9920,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "new_memory_face" => {
             if case.inputs.params.get("variants").is_some() {
                 return c_new_memory_face_variants(case);
+            }
+            if lifecycle_handle_param(&case.inputs.params, "file_base") == Some("null") {
+                return c_new_memory_face_null_base(case);
             }
             let bytes = font_bytes(case)?;
             let mut library = std::ptr::null_mut();
@@ -10345,6 +10461,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftglyph.matrix_multiply" => Ok(ok(matrix_multiply_json(case, VectorMatrixBackend::Wasm)?)),
         "ftglyph.matrix_invert" => matrix_invert_output(case, VectorMatrixBackend::Wasm),
+        "ftbitmap.bitmap_init" | "ftbitmap.bitmap_new" => {
+            bitmap_init_new_output(case, BitmapInitBackend::Wasm)
+        }
         operation if operation.starts_with("freetype.face_macro") => {
             let handle = wasm_new_face_without_size(case)?;
             let output = wasm_face_macro(handle, case);
@@ -11272,7 +11391,7 @@ fn rust_select_size(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = open_face(case)?;
     let err = FT_Select_Size(Some(&mut face), strike_index);
     if err == FT_Err_Ok {
-        Ok(ok(size_metrics_json(&FT_Size_Metrics(&face))))
+        Ok(ok(size_metrics_json(&face.size_metrics)))
     } else {
         Ok(error(err))
     }
@@ -12749,7 +12868,7 @@ fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result
     .map_err(|err| format!("{} Font constructor returned {err}", case.case_id))?;
     if bool_param(&case.inputs.params, "assert_font_face_count_agrees", false)? {
         let face = open_face(case)?;
-        let expected = usize::try_from(FT_Face_Info(&face).num_faces)
+        let expected = usize::try_from(face.num_faces)
             .map_err(|err| format!("{} FT_FaceRec.num_faces invalid: {err}", case.case_id))?;
         let actual = Font::face_count(data.as_ref()).map_err(|err| {
             format!(
@@ -12884,7 +13003,7 @@ fn assert_font_convenience_helpers_agree(
 ) -> Result<(), String> {
     if bool_param(&case.inputs.params, "assert_font_getmetrics_agrees", false)? {
         let face = open_face(case)?;
-        let metrics = FT_Size_Metrics(&face);
+        let metrics = face.size_metrics;
         let expected = (
             u32_from_positive_26dot6(metrics.ascender, "ascender")?,
             u32_from_positive_26dot6(-metrics.descender, "descender")?,
@@ -13193,7 +13312,7 @@ fn face_macro_flags_json(case: &InputCase) -> Result<Value, String> {
 
 fn rust_face_macro(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
     Ok(ok(face_macro_json(
-        &FT_Face_Info(face),
+        &rust_face_info(face),
         face_macro_param(case)?,
     )?))
 }
@@ -13211,7 +13330,7 @@ fn wasm_face_macro(handle: usize, case: &InputCase) -> Result<RunOutput, String>
 
 fn rust_face_flags(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
     Ok(ok(face_flags_json(
-        &FT_Face_Info(face),
+        &rust_face_info(face),
         face_flag_param(case)?,
     )?))
 }
@@ -13225,6 +13344,27 @@ fn wasm_face_flags(handle: usize, case: &InputCase) -> Result<RunOutput, String>
     let info =
         wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
     Ok(ok(face_flags_json(&info, face_flag_param(case)?)?))
+}
+
+fn rust_face_info(face: &FT_Face) -> FT_FaceRecPublic {
+    FT_FaceRecPublic {
+        num_faces: face.num_faces,
+        face_index: face.face_index,
+        face_flags: face.face_flags,
+        style_flags: face.style_flags,
+        num_glyphs: face.num_glyphs,
+        bbox: face.bbox,
+        units_per_EM: face.units_per_EM,
+        ascender: face.ascender,
+        descender: face.descender,
+        height: face.height,
+        max_advance_width: face.max_advance_width,
+        max_advance_height: face.max_advance_height,
+        underline_position: face.underline_position,
+        underline_thickness: face.underline_thickness,
+        size: face.size,
+        ..FT_FaceRecPublic::default()
+    }
 }
 
 fn face_flags_json(info: &FT_FaceRecPublic, flag_name: &str) -> Result<Value, String> {
@@ -13862,6 +14002,22 @@ fn wasm_new_memory_face(case: &InputCase) -> Result<RunOutput, String> {
     if case.inputs.params.get("variants").is_some() {
         return wasm_new_memory_face_variants(case);
     }
+    if lifecycle_handle_param(&case.inputs.params, "file_base") == Some("null") {
+        let file_size = usize::try_from(i64_param(&case.inputs.params, "file_size")?)
+            .map_err(|err| err.to_string())?;
+        let status = wasm_abi::fontdone_wasm_open_face(
+            ptr::null(),
+            file_size,
+            face_index_param(&case.inputs.params)?,
+            20.0,
+        );
+        return if status.error == FT_Err_Ok {
+            wasm_done_face(status.handle);
+            Ok(ok(json!({"opened": true})))
+        } else {
+            Ok(error(status.error))
+        };
+    }
     let bytes = font_bytes(case)?;
     let status = wasm_abi::fontdone_wasm_open_face(
         bytes.as_ptr(),
@@ -14347,6 +14503,11 @@ fn rust_new_memory_face(case: &InputCase) -> Result<RunOutput, String> {
     if case.inputs.params.get("variants").is_some() {
         return rust_new_memory_face_variants(case);
     }
+    if lifecycle_handle_param(&case.inputs.params, "file_base") == Some("null") {
+        // C `FT_New_Memory_Face` rejects a null file_base before parsing data.
+        // The safe Rust core receives slices, so this row validates wrapper input policy.
+        return Ok(error(FT_Err_Invalid_Argument));
+    }
     let data = font_bytes(case)?;
     let library = FT_Init_FreeType();
     match FT_New_Memory_Face(
@@ -14413,6 +14574,31 @@ fn c_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
     });
     c_done_library(library);
     output
+}
+
+fn c_new_memory_face_null_base(case: &InputCase) -> Result<RunOutput, String> {
+    let mut library = std::ptr::null_mut();
+    let init_err = c_abi::FT_Init_FreeType(&mut library);
+    if init_err != FT_Err_Ok {
+        return Ok(error(init_err));
+    }
+    let mut face = std::ptr::null_mut();
+    let err = c_abi::FT_New_Memory_Face(
+        library,
+        ptr::null(),
+        i64_param(&case.inputs.params, "file_size")?,
+        face_index_param(&case.inputs.params)?,
+        &mut face,
+    );
+    if err == FT_Err_Ok {
+        c_done_face(face);
+    }
+    c_done_library(library);
+    if err == FT_Err_Ok {
+        Ok(ok(json!({"opened": true})))
+    } else {
+        Ok(error(err))
+    }
 }
 
 fn wasm_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
@@ -14542,7 +14728,7 @@ fn rust_set_pixel_sizes(case: &InputCase) -> Result<RunOutput, String> {
             let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
             let err = FT_Set_Pixel_Sizes(&mut face, pixel_width, pixel_height);
             if err == FT_Err_Ok {
-                Ok(ok(size_metrics_json(&FT_Size_Metrics(&face))))
+                Ok(ok(size_metrics_json(&face.size_metrics)))
             } else {
                 Ok(error(err))
             }
@@ -14566,7 +14752,7 @@ fn rust_set_char_size(case: &InputCase) -> Result<RunOutput, String> {
             row.vert_resolution,
         );
         let output = if err == FT_Err_Ok {
-            size_metrics_json(&FT_Size_Metrics(&face))
+            size_metrics_json(&face.size_metrics)
         } else {
             Value::Null
         };
@@ -14683,7 +14869,7 @@ fn rust_request_size(case: &InputCase) -> Result<RunOutput, String> {
             first_error = err;
         }
         let metrics = if err == FT_Err_Ok && !row.face_is_null {
-            size_metrics_json(&FT_Size_Metrics(&face))
+            size_metrics_json(&face.size_metrics)
         } else {
             Value::Null
         };
@@ -15037,10 +15223,10 @@ fn rust_set_charmap(case: &InputCase) -> Result<RunOutput, String> {
         let mut first_error = FT_Err_Ok;
         let mut rows = Vec::new();
         for variant in variants {
-            let before = rust_active_charmap_json(&face, FT_Face_Active_Charmap_Index(&face))?;
+            let before = rust_active_charmap_json(&face, rust_face_active_charmap_index(&face))?;
             let charmap = match variant.as_str() {
                 "null" => std::ptr::null_mut(),
-                "from_other_face" => FT_Face_Charmap(
+                "from_other_face" => rust_face_charmap(
                     foreign
                         .as_ref()
                         .ok_or_else(|| "missing foreign rust face".to_string())?,
@@ -15052,7 +15238,7 @@ fn rust_set_charmap(case: &InputCase) -> Result<RunOutput, String> {
             if first_error == FT_Err_Ok && err != FT_Err_Ok {
                 first_error = err;
             }
-            let after = rust_active_charmap_json(&face, FT_Face_Active_Charmap_Index(&face))?;
+            let after = rust_active_charmap_json(&face, rust_face_active_charmap_index(&face))?;
             rows.push(set_charmap_row_json(
                 &variant,
                 None,
@@ -15065,18 +15251,19 @@ fn rust_set_charmap(case: &InputCase) -> Result<RunOutput, String> {
         return Ok(set_charmap_output(first_error, rows));
     }
 
-    let indices = set_charmap_indices_for_count(FT_Face_Charmap_Count(&face), &case.inputs.params)?;
+    let indices =
+        set_charmap_indices_for_count(rust_face_charmap_count(&face), &case.inputs.params)?;
     let probe_chars = set_charmap_probe_chars(&case.inputs.params)?;
     let mut first_error = FT_Err_Ok;
     let mut rows = Vec::new();
     for index in indices {
-        let before = rust_active_charmap_json(&face, FT_Face_Active_Charmap_Index(&face))?;
-        let charmap = FT_Face_Charmap(&face, index);
+        let before = rust_active_charmap_json(&face, rust_face_active_charmap_index(&face))?;
+        let charmap = rust_face_charmap(&face, index);
         let err = FT_Set_Charmap(Some(&mut face), charmap);
         if first_error == FT_Err_Ok && err != FT_Err_Ok {
             first_error = err;
         }
-        let after = rust_active_charmap_json(&face, FT_Face_Active_Charmap_Index(&face))?;
+        let after = rust_active_charmap_json(&face, rust_face_active_charmap_index(&face))?;
         let char_indices = set_charmap_char_indices(&probe_chars, |char_code| {
             FT_Get_Char_Index(&face, char_code)
         });
@@ -15405,7 +15592,7 @@ fn rust_charmap_inventory_output(face: &mut FT_Face, params: &Value) -> Result<V
         selection_statuses.push(json!({"encoding": encoding, "status": err}));
     }
     let charmaps = rust_charmap_inventory_json(face)?;
-    let active_charmap_index = FT_Face_Active_Charmap_Index(face);
+    let active_charmap_index = rust_face_active_charmap_index(face);
     let selected = rust_active_charmap_json(face, active_charmap_index)?;
     let glyph_indexes = charmap_probe_chars(params)?
         .into_iter()
@@ -15532,9 +15719,9 @@ fn charmap_inventory_output_json(
 }
 
 fn rust_charmap_inventory_json(face: &FT_Face) -> Result<Vec<Value>, String> {
-    (0..FT_Face_Charmap_Count(face))
+    (0..rust_face_charmap_count(face))
         .map(|index| {
-            let info = FT_Face_Charmap_Info(face, index)
+            let info = rust_face_charmap_info(face, index)
                 .ok_or_else(|| format!("missing rust charmap info at index {index}"))?;
             Ok(charmap_inventory_record_json(
                 index,
@@ -15588,7 +15775,7 @@ fn rust_active_charmap_json(face: &FT_Face, active_index: i32) -> Result<Value, 
     }
     let index = u32::try_from(active_index)
         .map_err(|err| format!("active rust charmap index does not fit u32: {err}"))?;
-    let info = FT_Face_Charmap_Info(face, index)
+    let info = rust_face_charmap_info(face, index)
         .ok_or_else(|| format!("missing rust active charmap info at index {index}"))?;
     Ok(charmap_inventory_record_json(
         index,
@@ -15651,13 +15838,13 @@ fn charmap_inventory_record_json(
 }
 
 fn rust_owned_charmap_indexes_output(face: &FT_Face) -> Result<Value, String> {
-    let indices = (0..FT_Face_Charmap_Count(face))
+    let indices = (0..rust_face_charmap_count(face))
         .map(|index| {
-            let charmap = FT_Face_Charmap(face, index);
-            let info = FT_Face_Charmap_Info(face, index)
+            let charmap = rust_face_charmap(face, index);
+            let info = rust_face_charmap_info(face, index)
                 .ok_or_else(|| format!("missing rust charmap info at index {index}"))?;
             let raw_index = FT_Get_Charmap_Index(charmap);
-            let scoped_index = FT_Get_Charmap_Index_For_Face(face, charmap);
+            let scoped_index = rust_get_charmap_index_for_face(face, charmap);
             if raw_index != scoped_index {
                 return Err(format!(
                     "rust charmap index mismatch at {index}: raw={raw_index} scoped={scoped_index}"
@@ -15911,7 +16098,7 @@ fn rust_charmap_index_variants_output(
             let value = match variant.as_str() {
                 "null" => {
                     let raw_index = FT_Get_Charmap_Index(std::ptr::null_mut());
-                    let scoped_index = FT_Get_Charmap_Index_For_Face(face, std::ptr::null_mut());
+                    let scoped_index = rust_get_charmap_index_for_face(face, std::ptr::null_mut());
                     if raw_index != scoped_index {
                         return Err(format!(
                             "rust null charmap index mismatch: raw={raw_index} scoped={scoped_index}"
@@ -15920,9 +16107,9 @@ fn rust_charmap_index_variants_output(
                     raw_index
                 }
                 "foreign_face_charmap" => {
-                    let charmap = FT_Face_Charmap(foreign, 0);
+                    let charmap = rust_face_charmap(foreign, 0);
                     let raw_index = FT_Get_Charmap_Index(charmap);
-                    let scoped_index = FT_Get_Charmap_Index_For_Face(foreign, charmap);
+                    let scoped_index = rust_get_charmap_index_for_face(foreign, charmap);
                     if raw_index != scoped_index {
                         return Err(format!(
                             "rust foreign charmap index mismatch: raw={raw_index} scoped={scoped_index}"
@@ -20553,9 +20740,9 @@ fn required_charmap_fields(params: &Value, context: &str) -> Result<RequiredChar
 }
 
 fn rust_find_charmap_index(face: &FT_Face, platform_id: u16, encoding_id: u16) -> Option<u32> {
-    let count = FT_Face_Charmap_Count(face);
+    let count = rust_face_charmap_count(face);
     (0..count).find(|index| {
-        FT_Face_Charmap_Info(face, *index)
+        rust_face_charmap_info(face, *index)
             .is_some_and(|info| info.platform_id == platform_id && info.encoding_id == encoding_id)
     })
 }
@@ -20595,7 +20782,7 @@ fn rust_select_charmap_by_fields(face: &mut FT_Face, case: &InputCase) -> Result
     let Some(index) = rust_find_charmap_index(face, fields.platform_id, fields.encoding_id) else {
         return Ok(FT_Err_Invalid_Argument);
     };
-    let charmap = FT_Face_Charmap(face, index);
+    let charmap = rust_face_charmap(face, index);
     Ok(FT_Set_Charmap(Some(face), charmap))
 }
 
@@ -21368,7 +21555,7 @@ fn rust_resolved_glyph_index(face: &FT_Face, params: &Value) -> Result<u32, Stri
     match glyph_index_selector_param(params)? {
         GlyphIndexSelector::Index(glyph_index) => Ok(glyph_index),
         GlyphIndexSelector::FromCharCode(char_code) => Ok(FT_Get_Char_Index(face, char_code)),
-        GlyphIndexSelector::NumGlyphs => u32::try_from(FT_Face_Info(face).num_glyphs)
+        GlyphIndexSelector::NumGlyphs => u32::try_from((face).num_glyphs)
             .map_err(|err| format!("face.num_glyphs does not fit u32: {err}")),
     }
 }
@@ -21420,6 +21607,185 @@ fn glyph_load_input_param(value: &Value) -> Result<GlyphLoadInput, String> {
         return glyph_index_param(value).map(GlyphLoadInput::GlyphIndex);
     }
     u64_param(value, "char_code").map(GlyphLoadInput::CharCode)
+}
+
+#[derive(Clone, Copy)]
+enum BitmapInitBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn bitmap_init_new_output(
+    case: &InputCase,
+    backend: BitmapInitBackend,
+) -> Result<RunOutput, String> {
+    let use_null = bool_param(&case.inputs.params, "null_pointer_variant", false)?;
+    let compare_alias = bool_param(&case.inputs.params, "compare_alias", false)?;
+    let op = case.operation.as_str();
+    let mut bitmap = dirty_bitmap_record();
+    match backend {
+        BitmapInitBackend::Rust => {
+            let target = (!use_null).then_some(&mut bitmap);
+            if op == "ftbitmap.bitmap_init" {
+                FT_Bitmap_Init(target);
+            } else {
+                FT_Bitmap_New(target);
+            }
+        }
+        BitmapInitBackend::CAbi => {
+            let mut c_bitmap = dirty_c_bitmap_record();
+            let target = if use_null {
+                ptr::null_mut()
+            } else {
+                &mut c_bitmap
+            };
+            if op == "ftbitmap.bitmap_init" {
+                c_abi::FT_Bitmap_Init(target);
+            } else {
+                c_abi::FT_Bitmap_New(target);
+            }
+            bitmap = bitmap_from_c_record(&c_bitmap);
+        }
+        BitmapInitBackend::Wasm => {
+            let mut wasm_bitmap = dirty_wasm_bitmap_record();
+            let target = if use_null {
+                ptr::null_mut()
+            } else {
+                &mut wasm_bitmap
+            };
+            if op == "ftbitmap.bitmap_init" {
+                wasm_abi::fontdone_wasm_bitmap_init(target);
+            } else {
+                wasm_abi::fontdone_wasm_bitmap_new(target);
+            }
+            bitmap = bitmap_from_wasm_record(&wasm_bitmap);
+        }
+    }
+
+    let mut output = json!({
+        "bitmap": bitmap_record_json(&bitmap),
+        "null_pointer_write_state": if use_null { "null_noop" } else { "written" },
+        "symbol_presence": {
+            "init": true,
+            "new": true
+        }
+    });
+    if compare_alias {
+        output["alias_bitmap"] = bitmap_record_json(&bitmap_init_new_alias(op, backend));
+    }
+    Ok(ok(output))
+}
+
+fn bitmap_init_new_alias(op: &str, backend: BitmapInitBackend) -> FT_Bitmap_C {
+    match backend {
+        BitmapInitBackend::Rust => {
+            let mut bitmap = dirty_bitmap_record();
+            if op == "ftbitmap.bitmap_init" {
+                FT_Bitmap_New(Some(&mut bitmap));
+            } else {
+                FT_Bitmap_Init(Some(&mut bitmap));
+            }
+            bitmap
+        }
+        BitmapInitBackend::CAbi => {
+            let mut bitmap = dirty_c_bitmap_record();
+            if op == "ftbitmap.bitmap_init" {
+                c_abi::FT_Bitmap_New(&mut bitmap);
+            } else {
+                c_abi::FT_Bitmap_Init(&mut bitmap);
+            }
+            bitmap_from_c_record(&bitmap)
+        }
+        BitmapInitBackend::Wasm => {
+            let mut bitmap = dirty_wasm_bitmap_record();
+            if op == "ftbitmap.bitmap_init" {
+                wasm_abi::fontdone_wasm_bitmap_new(&mut bitmap);
+            } else {
+                wasm_abi::fontdone_wasm_bitmap_init(&mut bitmap);
+            }
+            bitmap_from_wasm_record(&bitmap)
+        }
+    }
+}
+
+fn dirty_bitmap_record() -> FT_Bitmap_C {
+    FT_Bitmap_C {
+        rows: 7,
+        width: 9,
+        pitch: -11,
+        buffer: ptr::with_exposed_provenance_mut::<FT_Byte>(0x7f),
+        num_grays: 13,
+        pixel_mode: 15,
+        palette_mode: 17,
+        palette: ptr::with_exposed_provenance_mut(0x7f),
+    }
+}
+
+fn dirty_c_bitmap_record() -> c_abi::FT_Bitmap {
+    c_abi::FT_Bitmap {
+        rows: 7,
+        width: 9,
+        pitch: -11,
+        buffer: ptr::with_exposed_provenance_mut(0x7f),
+        num_grays: 13,
+        pixel_mode: 15,
+        palette_mode: 17,
+        palette: ptr::with_exposed_provenance_mut(0x7f),
+    }
+}
+
+fn dirty_wasm_bitmap_record() -> wasm_abi::FontdoneWasmBitmap {
+    wasm_abi::FontdoneWasmBitmap {
+        rows: 7,
+        width: 9,
+        pitch: -11,
+        buffer: ptr::with_exposed_provenance(0x7f),
+        buffer_len: 19,
+        num_grays: 13,
+        pixel_mode: 15,
+        palette_mode: 17,
+        palette: ptr::with_exposed_provenance(0x7f),
+    }
+}
+
+fn bitmap_from_c_record(bitmap: &c_abi::FT_Bitmap) -> FT_Bitmap_C {
+    FT_Bitmap_C {
+        rows: bitmap.rows,
+        width: bitmap.width,
+        pitch: bitmap.pitch,
+        buffer: bitmap.buffer,
+        num_grays: bitmap.num_grays,
+        pixel_mode: bitmap.pixel_mode as FT_Byte,
+        palette_mode: bitmap.palette_mode,
+        palette: bitmap.palette,
+    }
+}
+
+fn bitmap_from_wasm_record(bitmap: &wasm_abi::FontdoneWasmBitmap) -> FT_Bitmap_C {
+    FT_Bitmap_C {
+        rows: bitmap.rows,
+        width: bitmap.width,
+        pitch: bitmap.pitch,
+        buffer: bitmap.buffer.cast_mut(),
+        num_grays: bitmap.num_grays,
+        pixel_mode: bitmap.pixel_mode as FT_Byte,
+        palette_mode: bitmap.palette_mode,
+        palette: bitmap.palette.cast_mut(),
+    }
+}
+
+fn bitmap_record_json(bitmap: &FT_Bitmap_C) -> Value {
+    json!({
+        "rows": bitmap.rows,
+        "width": bitmap.width,
+        "pitch": bitmap.pitch,
+        "buffer_is_null": bitmap.buffer.is_null(),
+        "num_grays": bitmap.num_grays,
+        "pixel_mode": bitmap.pixel_mode,
+        "palette_mode": bitmap.palette_mode,
+        "palette_is_null": bitmap.palette.is_null()
+    })
 }
 
 #[derive(Debug, Clone, Copy)]
