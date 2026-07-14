@@ -2279,6 +2279,7 @@ impl Font {
             slot_advance_width,
             vertical_bearing_x_advance_width,
             autohint_vertical,
+            native_vertical,
             ..
         } = scaled;
         let slot_outline = scaled_slot_outline_from_outline(
@@ -2301,6 +2302,9 @@ impl Font {
 
         if let Some(vertical) = autohint_vertical {
             metrics.vert_bearing_x = vertical.bearing_x;
+            metrics.vert_bearing_y = vertical.bearing_y;
+            metrics.vert_advance = vertical.advance;
+        } else if let Some(vertical) = native_vertical {
             metrics.vert_bearing_y = vertical.bearing_y;
             metrics.vert_advance = vertical.advance;
         } else if let Some(vmtx) = &self.data.vmtx {

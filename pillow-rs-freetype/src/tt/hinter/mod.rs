@@ -78,6 +78,8 @@ pub struct HintOutcome {
     pub advance_width: i32,
     pub pp1_x: i32,
     pub pp2_x: i32,
+    pub pp3_y: i32,
+    pub pp4_y: i32,
     /// Outline dropout flags derived from TrueType scan-control state.
     pub outline_flags: u32,
     /// Per-contour black rasterizer dropout controls.
@@ -152,8 +154,8 @@ pub fn hint_glyph(
     raw_advance_width: i32,
     pp1_x: i32,
     raw_pp1_x: i32,
-    raw_ascender: i32,
-    raw_descender: i32,
+    raw_pp3_y: i32,
+    raw_pp4_y: i32,
     cvt: &[i32],
     fpgm: &[u8],
     prep: &[u8],
@@ -217,12 +219,14 @@ pub fn hint_glyph(
         zone.orus_y.push(p.y);
     }
 
+    let seed_pp3_y = crate::fixed::ft_mul_fix(raw_pp3_y, scale.y_scale);
+    let seed_pp4_y = crate::fixed::ft_mul_fix(raw_pp4_y, scale.y_scale);
     if scale.metrics_legacy_phantoms {
         // Metrics parity branch contract: seed horizontal phantoms at zero and
-        // leave vertical phantoms unused.  C computes pp2 in font units first
-        // (`pp1_fu + advance_fu`) and then scales that combined value
-        // (ttgload.c:1339-1342, 958-962); scaling advance alone can differ by
-        // one 26.6 unit at FT_PIX_ROUND thresholds.
+        // keep vertical phantoms seeded from the loader.  C computes pp2 in
+        // font units first (`pp1_fu + advance_fu`) and then scales that
+        // combined value (ttgload.c:1339-1342, 958-962); scaling advance
+        // alone can differ by one 26.6 unit at FT_PIX_ROUND thresholds.
         zone.cur_x.push(0);
         zone.cur_y.push(0);
         zone.orus_x.push(0);
@@ -232,13 +236,13 @@ pub fn hint_glyph(
         zone.orus_x.push(raw_advance_width);
         zone.orus_y.push(0);
         zone.cur_x.push(0);
-        zone.cur_y.push(0);
+        zone.cur_y.push(seed_pp3_y);
         zone.orus_x.push(0);
-        zone.orus_y.push(0);
+        zone.orus_y.push(raw_pp3_y);
         zone.cur_x.push(0);
-        zone.cur_y.push(0);
+        zone.cur_y.push(seed_pp4_y);
         zone.orus_x.push(0);
-        zone.orus_y.push(0);
+        zone.orus_y.push(raw_pp4_y);
     } else {
         // Add phantom points.
         // FreeType seeds horizontal phantoms as pp1 = xMin - lsb and
@@ -252,18 +256,16 @@ pub fn hint_glyph(
         zone.cur_y.push(0);
         zone.orus_x.push(raw_pp1_x + raw_advance_width);
         zone.orus_y.push(0);
-        // pp3, pp4: vertical phantom points.  Without vmtx, FreeType synthesizes
-        // them from OS/2 typo metrics or hhea ascender/descender in font units.
+        // pp3, pp4: vertical phantom points.  FreeType seeds them from vmtx
+        // or synthesized vertical metrics before scaling (`ttgload.c:1337-1347`).
         zone.cur_x.push(0);
-        zone.cur_y
-            .push(crate::fixed::ft_mul_fix(raw_ascender, scale.y_scale));
+        zone.cur_y.push(seed_pp3_y);
         zone.orus_x.push(0);
-        zone.orus_y.push(raw_ascender);
+        zone.orus_y.push(raw_pp3_y);
         zone.cur_x.push(0);
-        zone.cur_y
-            .push(crate::fixed::ft_mul_fix(raw_descender, scale.y_scale));
+        zone.cur_y.push(seed_pp4_y);
         zone.orus_x.push(0);
-        zone.orus_y.push(raw_descender);
+        zone.orus_y.push(raw_pp4_y);
     }
 
     // Copy cur → org for the bytecode interpreter's initial state
@@ -353,6 +355,14 @@ pub fn hint_glyph(
     } else {
         (seed_pp1_x, seed_pp2_x)
     };
+    let (pp3_y, pp4_y) = if use_current_phantoms {
+        (
+            zone.cur_y.get(n_points + 2).copied().unwrap_or(seed_pp3_y),
+            zone.cur_y.get(n_points + 3).copied().unwrap_or(seed_pp4_y),
+        )
+    } else {
+        (seed_pp3_y, seed_pp4_y)
+    };
     let outline_flags = outline_flags_from_scan_control(ctx.gs.scan_control, ctx.gs.scan_type);
     let mut contour_dropouts =
         vec![dropout_control_from_outline_flags(outline_flags); contours.len()];
@@ -388,6 +398,8 @@ pub fn hint_glyph(
         advance_width: pp2 - pp1,
         pp1_x: pp1,
         pp2_x: pp2,
+        pp3_y,
+        pp4_y,
         outline_flags,
         contour_dropouts,
         point_tags,

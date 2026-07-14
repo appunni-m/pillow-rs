@@ -2109,23 +2109,24 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | SBIT horizontal advance fallback | The existing `sbit_gray_format1_vmtx.ttf` fixture now sets image-format-1 small-metrics `horiAdvance` to zero while keeping the same explicit `FT_Load_Glyph.matrix_load@sbit-gray-format1-vmtx-sbits-only` row. Pinned C fills the missing scalable SBIT horizontal advance from the glyph's TrueType `hmtx` advance, and Rust FFI, C ABI, and WASM ABI agree exactly. Focused parity passes 1 / 1. Full condition coverage passes with 6,844 concrete cases, 6,841 / 6,841 runtime rows, three FTMM pending rows, 17,772 / 19,781 lines, 25,588 / 28,478 regions, 4,180 / 4,904 branches, 1,145 / 1,329 functions, and 1,148 / 1,332 instantiations. `font.rs:1556` is no longer listed in the missing-lines report, and implicit cases remain zero |
 | 2026-07-14 | SBIT zero-width packed component | `font-fixture-sbit` now emits `sbit_composite_mono_zero_width_component_format8.ttf`, a compact compound MONO control whose glyph 2 references glyph 1 with small-metrics width zero. Pinned C treats the component blit as a successful no-op and returns the blank root bitmap; Rust FFI, C ABI, and WASM ABI agree exactly. Focused parity passes 1 / 1. Full condition coverage passes with 6,845 concrete cases, 6,842 / 6,842 runtime rows, three FTMM pending rows, 17,773 / 19,781 lines, 25,589 / 28,478 regions, 4,181 / 4,904 branches, 1,145 / 1,329 functions, and 1,148 / 1,332 instantiations. `tt/sbit.rs:623` is no longer listed in the missing-lines report; route audit reports 3,532 real-parity rows and zero implicit cases |
 | 2026-07-14 | Latin tilde separation branch probes | `script-coverage.ttf` now adds seven compact Latin accent glyphs selected by explicit `FT_LOAD_FORCE_AUTOHINT` rows: U+00F1 top tilde, U+1E4D second-top tilde, U+00E3/U+00D1 top no-measure/flat, and U+1E1B/U+1E1A/U+1E75 bottom tilde/no-measure/flat. Pinned C, Rust FFI, C ABI, and WASM ABI agree exactly. Focused `FT_LOAD_FORCE_AUTOHINT` parity passes 192 / 192. Full condition coverage passes with 6,852 concrete cases, 6,849 / 6,849 runtime rows, three FTMM pending rows, 17,784 / 19,781 lines, 25,607 / 28,478 regions, 4,203 / 4,904 branches, 1,145 / 1,329 functions, and 1,148 / 1,332 instantiations. `autohint/latin.rs` moves from 2,538 / 2,828 lines and 1,006 / 1,282 branches to 2,549 / 2,828 lines and 1,028 / 1,282 branches, without implicit cases |
+| 2026-07-14 | Native vertical-layout metrics parity | `FT_LOAD_VERTICAL_LAYOUT.vertical_layout_metrics` no longer uses the generic `load_glyph_pair` placeholder. It now has explicit `load_glyph` variants over `input/fonts/vertical/cjk-vertical-metrics.ttf` for horizontal-control glyph 36, vertical-layout glyph 36, and empty vmtx glyph 1. The real row exposed a Rust/C mismatch: Rust scaled `vmtx.tsb` directly, while FreeType `ttgload.c:1337-1347,1991-2079` derives vertical metrics from pp3/pp4 and the final hinted cbox. Core now carries native pp3/pp4 through the TrueType hinter and computes `vertBearingY` / `vertAdvance` from those phantoms. Focused `make -C pillow-rs-freetype test-case CASE=freetype.FT_LOAD_VERTICAL_LAYOUT` passes 4 / 4 exact Rust FFI, C ABI, and WASM ABI comparisons. Full condition coverage passes with 6,854 concrete cases, 6,851 / 6,851 runtime rows, three FTMM pending rows, 17,831 / 19,829 lines, 25,701 / 28,573 regions, 4,212 / 4,914 branches, 1,147 / 1,331 functions, and 1,150 / 1,334 instantiations. Route audit reports 3,542 real-parity rows, 911 generic-fallback rows, and zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-14
 
-Fresh `test-unified-condition-coverage` still reports 2,008 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,998 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,166 |
-| Concrete explicit cases | 6,845 |
-| Runnable parity comparisons | 6,842 / 6,842 |
+| Concrete explicit cases | 6,854 |
+| Runnable parity comparisons | 6,851 / 6,851 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,773 / 19,781 (89.8488%) |
-| Rust region coverage | 25,589 / 28,478 (89.8553%) |
-| Rust branch/condition coverage | 4,181 / 4,904 (85.2569%) |
-| Rust function coverage | 1,145 / 1,329 (86.1550%) |
-| Route audit split | real-parity 3,532; generic-fallback 912; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; shape-incomplete-fallback 0 |
+| Covered Rust lines | 17,831 / 19,829 (89.9238%) |
+| Rust region coverage | 25,701 / 28,573 (89.9486%) |
+| Rust branch/condition coverage | 4,212 / 4,914 (85.7143%) |
+| Rust function coverage | 1,147 / 1,331 (86.1758%) |
+| Route audit split | real-parity 3,542; generic-fallback 911; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
