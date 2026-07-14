@@ -108,7 +108,12 @@ typedef struct FT_Bitmap_ {
   unsigned char* buffer;
   FT_UShort num_grays;
   FT_Pixel_Mode pixel_mode;
+  unsigned char palette_mode;
+  void* palette;
 } FT_Bitmap;
+
+void FT_Bitmap_Init(FT_Bitmap* abitmap);
+void FT_Bitmap_New(FT_Bitmap* abitmap);
 
 typedef struct FT_SfntName_ {
   FT_UShort platform_id;

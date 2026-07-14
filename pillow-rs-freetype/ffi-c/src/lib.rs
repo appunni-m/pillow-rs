@@ -132,6 +132,22 @@ pub struct FT_Bitmap {
     pub buffer: *mut c_uchar,
     pub num_grays: FT_UShort,
     pub pixel_mode: FT_Pixel_Mode,
+    pub palette_mode: c_uchar,
+    pub palette: *mut c_void,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Bitmap_Init(abitmap: *mut FT_Bitmap) {
+    // FreeType accepts NULL here and otherwise overwrites the public record
+    // with the static zero `null_bitmap`.
+    if let Some(bitmap) = unsafe { abitmap.as_mut() } {
+        *bitmap = FT_Bitmap::default();
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Bitmap_New(abitmap: *mut FT_Bitmap) {
+    FT_Bitmap_Init(abitmap);
 }
 
 #[repr(C)]
@@ -256,21 +272,17 @@ impl FaceState {
     }
 
     fn refresh_charmaps(&mut self, face: FT_Face) {
-        let count = usize::try_from(rust_ffi::FT_Face_Charmap_Count(&self.inner)).unwrap_or(0);
-        let mut records = Vec::with_capacity(count);
-        for index in 0..count {
-            let Ok(index_u32) = FT_UInt::try_from(index) else {
-                continue;
-            };
-            if let Some(info) = rust_ffi::FT_Face_Charmap_Info(&self.inner, index_u32) {
-                records.push(FT_CharMapRec {
-                    face,
-                    encoding: info.encoding,
-                    platform_id: info.platform_id,
-                    encoding_id: info.encoding_id,
-                });
-            }
-        }
+        let records = self
+            .inner
+            .charmaps
+            .iter()
+            .map(|record| FT_CharMapRec {
+                face,
+                encoding: record.encoding,
+                platform_id: record.platform_id,
+                encoding_id: record.encoding_id,
+            })
+            .collect::<Vec<_>>();
         let mut charmaps = records.into_boxed_slice();
         let charmap_ptrs = charmaps
             .iter_mut()
@@ -465,7 +477,7 @@ pub fn abi_face_info(face: FT_Face) -> Option<rust_ffi::FT_FaceRecPublic> {
     let internal = unsafe { (*face.as_ptr()).internal };
     let state = NonNull::new(internal.cast::<FaceState>())?;
     // SAFETY: `state` is owned by the live face for the duration of this scalar copy.
-    Some(rust_ffi::FT_Face_Info(&unsafe { state.as_ref() }.inner))
+    Some(rust_face_info(&unsafe { state.as_ref() }.inner))
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -489,7 +501,7 @@ pub fn abi_charmap_info_by_index(face: FT_Face, index: FT_UInt) -> Option<FT_Cha
 #[cfg(feature = "abi-test-support")]
 pub fn abi_active_charmap_index(face: FT_Face) -> Option<FT_Int> {
     let state = face_state(face)?;
-    Some(rust_ffi::FT_Face_Active_Charmap_Index(&state.inner))
+    Some(state.inner.active_charmap_index)
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -1061,8 +1073,8 @@ pub extern "C" fn FT_New_Memory_Face(
     let rust_library = unsafe { &*((*library.as_ptr()).internal.cast::<rust_ffi::FT_Library>()) };
     match rust_ffi::FT_New_Memory_Face(rust_library, data, face_index, 20.0) {
         Ok(inner) => {
-            let metrics = rust_size_metrics_to_abi(rust_ffi::FT_Size_Metrics(&inner));
-            let rust_size = rust_ffi::FT_Face_Info(&inner).size;
+            let metrics = rust_size_metrics_to_abi(inner.size_metrics);
+            let rust_size = inner.size;
             let mut face = Box::new(FT_FaceRec {
                 glyph: ptr::null_mut(),
                 size: Box::into_raw(Box::new(FT_SizeRec {
@@ -1244,7 +1256,7 @@ pub extern "C" fn FT_New_Size(face: FT_Face, asize: *mut FT_Size) -> FT_Error {
     }
 
     let size = Box::into_raw(Box::new(FT_SizeRec {
-        metrics: rust_size_metrics_to_abi(rust_ffi::FT_Size_Metrics(&state.inner)),
+        metrics: rust_size_metrics_to_abi(state.inner.size_metrics),
         internal: ptr::null_mut(),
         rust_size,
         owner: face,
@@ -1268,14 +1280,13 @@ pub extern "C" fn FT_Activate_Size(size: FT_Size) -> FT_Error {
     let Some(face_ptr) = non_null_mut(owner) else {
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
-    let Some(state) = face_state_mut(owner) else {
+    let Some(_state) = face_state_mut(owner) else {
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
     let error = rust_ffi::FT_Activate_Size(rust_size);
     if error == rust_ffi::FT_Err_Ok {
         // SAFETY: `face_ptr` is a live parent face and `size` is one of its size records.
         unsafe { (*face_ptr.as_ptr()).size = size };
-        update_size_metrics(owner, &state.inner);
     }
     error
 }
@@ -1314,7 +1325,6 @@ pub extern "C" fn FT_Done_Size(size: FT_Size) -> FT_Error {
             .unwrap_or(ptr::null_mut());
         // SAFETY: `face_ptr` is a live parent face; fallback is either null or still face-owned.
         unsafe { (*face_ptr.as_ptr()).size = fallback };
-        update_size_metrics(owner, &state.inner);
     }
     // SAFETY: the record has been removed from `state.size_records` and is consumed here.
     unsafe { drop_size(size) };
@@ -1436,10 +1446,7 @@ pub extern "C" fn FT_Set_Charmap(face: FT_Face, charmap: FT_CharMap) -> FT_Error
     let Some(index) = state.charmap_index(charmap) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
-    let Some(rust_charmap) = FT_UInt::try_from(index)
-        .ok()
-        .map(|index| rust_ffi::FT_Face_Charmap(&state.inner, index))
-    else {
+    let Some(rust_charmap) = rust_face_charmap(&state.inner, index) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
     rust_ffi::FT_Set_Charmap(Some(&mut state.inner), rust_charmap)
@@ -1459,10 +1466,9 @@ pub extern "C" fn FT_Get_Charmap_Index(charmap: FT_CharMap) -> FT_Int {
     let Some(index) = state.charmap_index(charmap.as_ptr()) else {
         return -1;
     };
-    let Some(index) = FT_UInt::try_from(index).ok() else {
+    let Some(rust_charmap) = rust_face_charmap(&state.inner, index) else {
         return -1;
     };
-    let rust_charmap = rust_ffi::FT_Face_Charmap(&state.inner, index);
     rust_ffi::FT_Get_Charmap_Index(rust_charmap) as FT_Int
 }
 
@@ -1480,10 +1486,9 @@ pub extern "C" fn FT_Get_CMap_Format(charmap: FT_CharMap) -> FT_Long {
     let Some(index) = state.charmap_index(charmap.as_ptr()) else {
         return -1;
     };
-    let Some(index) = FT_UInt::try_from(index).ok() else {
+    let Some(rust_charmap) = rust_face_charmap(&state.inner, index) else {
         return -1;
     };
-    let rust_charmap = rust_ffi::FT_Face_Charmap(&state.inner, index);
     rust_ffi::FT_Get_CMap_Format(rust_charmap) as FT_Long
 }
 
@@ -1501,10 +1506,9 @@ pub extern "C" fn FT_Get_CMap_Language_ID(charmap: FT_CharMap) -> FT_ULong {
     let Some(index) = state.charmap_index(charmap.as_ptr()) else {
         return 0;
     };
-    let Some(index) = FT_UInt::try_from(index).ok() else {
+    let Some(rust_charmap) = rust_face_charmap(&state.inner, index) else {
         return 0;
     };
-    let rust_charmap = rust_ffi::FT_Face_Charmap(&state.inner, index);
     rust_ffi::FT_Get_CMap_Language_ID(rust_charmap) as FT_ULong
 }
 
@@ -2010,7 +2014,36 @@ fn update_size_metrics(face: FT_Face, rust_face: &rust_ffi::FT_Face) {
         return;
     };
     // SAFETY: `size_ptr` points to the live size record owned by `face`.
-    unsafe { (*size_ptr.as_ptr()).metrics = rust_size_metrics_to_abi(rust_ffi::FT_Size_Metrics(rust_face)) };
+    unsafe { (*size_ptr.as_ptr()).metrics = rust_size_metrics_to_abi(rust_face.size_metrics) };
+}
+
+fn rust_face_info(face: &rust_ffi::FT_Face) -> rust_ffi::FT_FaceRecPublic {
+    rust_ffi::FT_FaceRecPublic {
+        num_faces: face.num_faces,
+        face_index: face.face_index,
+        face_flags: face.face_flags,
+        style_flags: face.style_flags,
+        num_glyphs: face.num_glyphs,
+        bbox: face.bbox,
+        units_per_EM: face.units_per_EM,
+        ascender: face.ascender,
+        descender: face.descender,
+        height: face.height,
+        max_advance_width: face.max_advance_width,
+        max_advance_height: face.max_advance_height,
+        underline_position: face.underline_position,
+        underline_thickness: face.underline_thickness,
+        size: face.size,
+        ..rust_ffi::FT_FaceRecPublic::default()
+    }
+}
+
+fn rust_face_charmap(face: &rust_ffi::FT_Face, index: usize) -> Option<rust_ffi::FT_CharMap> {
+    face.charmaps.get(index).map(|record| {
+        (record as *const rust_ffi::FT_CharMapRecPublic)
+            .cast_mut()
+            .cast()
+    })
 }
 
 fn rust_slot_to_abi(
@@ -2033,6 +2066,8 @@ fn rust_slot_to_abi(
             buffer: buffer.as_mut_ptr(),
             num_grays: bitmap.num_grays,
             pixel_mode: bitmap.pixel_mode,
+            palette_mode: 0,
+            palette: ptr::null_mut(),
         })
         .unwrap_or_default();
     FT_GlyphSlotRec {

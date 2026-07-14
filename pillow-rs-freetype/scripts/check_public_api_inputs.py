@@ -39,6 +39,8 @@ WASM_EXPORTS = {
     "fontdone_wasm_done_size",
     "fontdone_wasm_active_size",
     "fontdone_wasm_done_freetype",
+    "fontdone_wasm_bitmap_init",
+    "fontdone_wasm_bitmap_new",
     "fontdone_wasm_face_check_truetype_patents",
     "fontdone_wasm_face_set_unpatented_hinting",
     "fontdone_wasm_outline_get_cbox",
@@ -219,6 +221,8 @@ REAL_PARITY_OPERATIONS = {
     "freetype.get_subglyph_info",
     "freetype.load_glyph_outline",
     "ftbbox.outline_get_bbox",
+    "ftimage.outline_decompose",
+    "ftoutln.outline_decompose",
     "ftoutln.outline_get_cbox",
     "ftoutln.get_orientation",
     "ftglyph.glyph_get_cbox",
@@ -226,6 +230,8 @@ REAL_PARITY_OPERATIONS = {
     "ftglyph.get_glyph",
     "ftglyph.glyph_copy",
     "ftglyph.record_inspect",
+    "ftbitmap.bitmap_init",
+    "ftbitmap.bitmap_new",
     "ftcache.sbit_cache_lookup",
     "ftcache.manager_reset",
     "ftoutln.outline_render",
@@ -249,6 +255,46 @@ REAL_PARITY_OPERATIONS = {
 EXPLICIT_UNSUPPORTED_OPERATIONS = {
     "freetype.face_properties",
 }
+
+RUNTIME_PENDING_OPERATIONS = {
+    "ftmm.set_named_instance",
+}
+
+PLACEHOLDER_STYLE_CATEGORIES = {
+    "generic-fallback",
+    "generic-error-fallback",
+    "null-error-fallback",
+    "explicit-unsupported",
+    "raw-slot-null-validation",
+    "void-fallback",
+    "wrapper-null-validation",
+}
+
+SUPPLEMENTARY_SAFE_API_FLAGS = {
+    "assert_font_render_mode_agrees": "Font render helpers",
+    "assert_font_truetype_constructor_agrees": "Font constructors",
+    "assert_font_face_count_agrees": "Font face-count helper",
+    "assert_font_empty_text_render": "Font render helpers",
+    "assert_font_getmetrics_agrees": "Font convenience metrics",
+    "assert_font_getlength_agrees": "Font convenience metrics",
+    "assert_font_glyph_metrics_agrees": "Font convenience metrics",
+    "assert_font_getmask_agrees": "Font convenience masks",
+    "assert_font_empty_text_mask": "Font convenience masks",
+    "assert_font_getkerning_agrees": "Font convenience kerning",
+    "assert_font_hori_advance_agrees": "Font convenience advances",
+    "assert_font_charmap_accessors_agree": "Font charmap convenience accessors",
+}
+
+NON_FREETYPE_GOAL_SURFACES = (
+    "Pillow adapter methods in imagingft.rs model Pillow _imagingft.c rather "
+    "than a public C FreeType API.",
+    "High-level fontdone::Font convenience methods are supplementary unless "
+    "routed through a public FreeType manifest row.",
+    "Former local fontdone::ffi::handles inspection helpers were removed from "
+    "the Rust facade; face metrics, face flags, active size, and charmaps now "
+    "use public FT_Face-shaped fields, and SFNT/CMAP metadata routes through "
+    "public FreeType-shaped functions.",
+)
 
 COMPILE_CONTRACT_PREFIXES = (
     "abi.",
@@ -711,6 +757,8 @@ def pending_core_reason(row: ConcreteInput) -> str | None:
 
 
 def size_null_validation_reason(row: ConcreteInput) -> str | None:
+    if row.operation == "new_memory_face" and lifecycle_handle(row, "file_base") == "null":
+        return "FT_New_Memory_Face null file_base validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if row.operation == "ftsizes.new_size":
         if lifecycle_handle(row, "face") == "null":
             return "FT_New_Size null face validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
@@ -817,7 +865,13 @@ def shape_fallback_reason(row: ConcreteInput) -> str | None:
         lifecycle_handle(row, name) == "null" for name in ("pathname", "library", "aface")
     ):
         return "new_face null-handle row uses generic oracle fallback"
-    if operation in {"new_memory_face", "set_pixel_sizes"} and not has_runtime_asset(row):
+    if (
+        operation == "new_memory_face"
+        and not has_runtime_asset(row)
+        and lifecycle_handle(row, "file_base") != "null"
+    ):
+        return "new_memory_face lacks runtime font asset"
+    if operation == "set_pixel_sizes" and not has_runtime_asset(row):
         if lifecycle_handle(row, "face") != "null":
             return f"{operation} lacks runtime font asset"
     if operation in {"freetype.done_freetype", "freetype.done_face"} and not has_runtime_asset(row):
@@ -884,6 +938,14 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     return ("generic-fallback", "no explicit maintained route classification")
 
 
+def supplementary_safe_api_flags(row: ConcreteInput) -> list[str]:
+    return [
+        flag
+        for flag in sorted(SUPPLEMENTARY_SAFE_API_FLAGS)
+        if row.params.get(flag) is True
+    ]
+
+
 def runtime_id(row: ConcreteInput) -> str:
     if row.variant_id:
         return f"{row.case_id}@{row.variant_id}"
@@ -894,6 +956,7 @@ def build_route_audit(items: dict[str, ManifestSubject]) -> dict[str, object]:
     rows = []
     for row in concrete_inputs(items):
         category, reason = route_category(row)
+        supplementary_flags = supplementary_safe_api_flags(row)
         rows.append(
             {
                 "subject": row.subject,
@@ -905,21 +968,61 @@ def build_route_audit(items: dict[str, ManifestSubject]) -> dict[str, object]:
                 "reason": reason,
                 "expect_error": row.expect_error,
                 "expectation_status": row.expectation_status,
+                "supplementary_safe_api_flags": supplementary_flags,
             }
         )
 
     category_counts: dict[str, int] = {}
     operation_counts: dict[str, dict[str, int]] = {}
     examples: dict[tuple[str, str], str] = {}
+    pending_core_rows: list[str] = []
+    runtime_pending_rows: list[str] = []
+    placeholder_style_rows: list[str] = []
+    supplementary_counts: dict[str, int] = {}
+    supplementary_examples: dict[str, str] = {}
     for row in rows:
         category_counts[row["category"]] = category_counts.get(row["category"], 0) + 1
         by_category = operation_counts.setdefault(row["operation"], {})
         by_category[row["category"]] = by_category.get(row["category"], 0) + 1
         examples.setdefault((row["operation"], row["category"]), row["runtime_id"])
+        if row["category"] == "pending-core":
+            pending_core_rows.append(row["runtime_id"])
+            if row["operation"] in RUNTIME_PENDING_OPERATIONS:
+                runtime_pending_rows.append(row["runtime_id"])
+        if row["category"] in PLACEHOLDER_STYLE_CATEGORIES:
+            placeholder_style_rows.append(row["runtime_id"])
+        flags = row["supplementary_safe_api_flags"]
+        assert isinstance(flags, list)
+        for flag in flags:
+            label = SUPPLEMENTARY_SAFE_API_FLAGS[flag]
+            supplementary_counts[label] = supplementary_counts.get(label, 0) + 1
+            supplementary_examples.setdefault(label, row["runtime_id"])
 
     return {
         "total_concrete_cases": len(rows),
         "category_counts": dict(sorted(category_counts.items())),
+        "goal_ledger": {
+            "runtime_pending": len(runtime_pending_rows),
+            "route_core_pending": len(pending_core_rows),
+            "green_placeholder_style_rows": len(placeholder_style_rows),
+        },
+        "runtime_pending_rows": sorted(runtime_pending_rows),
+        "route_core_pending_rows": sorted(pending_core_rows),
+        "placeholder_style_category_counts": {
+            category: category_counts.get(category, 0)
+            for category in sorted(PLACEHOLDER_STYLE_CATEGORIES)
+            if category_counts.get(category, 0)
+        },
+        "supplementary_safe_api_assertions": {
+            "total_assertions": sum(supplementary_counts.values()),
+            "counts": dict(sorted(supplementary_counts.items())),
+            "examples": dict(sorted(supplementary_examples.items())),
+            "note": (
+                "These assertions prove high-level Rust convenience behavior on "
+                "existing public FreeType rows, but they are not independent C "
+                "FreeType public API routes."
+            ),
+        },
         "operation_counts": dict(sorted(operation_counts.items())),
         "examples": {
             f"{operation}|{category}": example
@@ -953,6 +1056,76 @@ def write_route_audit(report: dict[str, object], json_path: Path, md_path: Path)
     assert isinstance(category_counts, dict)
     for category, count in category_counts.items():
         lines.append(f"| {category} | {count} |")
+
+    goal_ledger = report["goal_ledger"]
+    assert isinstance(goal_ledger, dict)
+    lines.extend(
+        [
+            "",
+            "## Goal Ledger",
+            "",
+            "| Ledger | Cases |",
+            "|---|---:|",
+            f"| runtime pending | {goal_ledger['runtime_pending']} |",
+            f"| full route/core pending | {goal_ledger['route_core_pending']} |",
+            f"| green placeholder-style rows | {goal_ledger['green_placeholder_style_rows']} |",
+            "",
+            "Runtime pending is the subset of `pending-core` rows that the unified runtime parity suite reports as pending. "
+            "The full route/core pending ledger also includes audit-visible rows that are not current runnable runtime parity cases.",
+        ]
+    )
+
+    pending_rows = report["route_core_pending_rows"]
+    assert isinstance(pending_rows, list)
+    if pending_rows:
+        lines.extend(["", "### Pending Rows", ""])
+        for runtime_id in pending_rows:
+            lines.append(f"- `{runtime_id}`")
+
+    placeholder_counts = report["placeholder_style_category_counts"]
+    assert isinstance(placeholder_counts, dict)
+    if placeholder_counts:
+        lines.extend(
+            [
+                "",
+                "### Placeholder-Style Categories",
+                "",
+                "| Category | Cases |",
+                "|---|---:|",
+            ]
+        )
+        for category, count in placeholder_counts.items():
+            lines.append(f"| {category} | {count} |")
+
+    supplementary = report["supplementary_safe_api_assertions"]
+    assert isinstance(supplementary, dict)
+    supplementary_counts = supplementary["counts"]
+    assert isinstance(supplementary_counts, dict)
+    if supplementary_counts:
+        lines.extend(
+            [
+                "",
+                "## Supplementary Non-FreeType Goal Assertions",
+                "",
+                str(supplementary["note"]),
+                "",
+                "| Surface | Rows | Example |",
+                "|---|---:|---|",
+            ]
+        )
+        supplementary_examples = supplementary["examples"]
+        assert isinstance(supplementary_examples, dict)
+        for surface, count in supplementary_counts.items():
+            example = supplementary_examples.get(surface, "")
+            lines.append(f"| {surface} | {count} | `{example}` |")
+        lines.extend(
+            [
+                "",
+                "The following surfaces should not drive the public FreeType manifest or coverage goal:",
+            ]
+        )
+        for surface in NON_FREETYPE_GOAL_SURFACES:
+            lines.append(f"- {surface}")
 
     lines.extend(
         [

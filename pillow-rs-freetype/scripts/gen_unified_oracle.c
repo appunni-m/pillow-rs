@@ -8,6 +8,7 @@
 #include <freetype/ftcache.h>
 #include <freetype/ftadvanc.h>
 #include <freetype/ftbbox.h>
+#include <freetype/ftbitmap.h>
 #include <freetype/ftcolor.h>
 #include <freetype/ftdriver.h>
 #include <freetype/ftglyph.h>
@@ -113,6 +114,61 @@ static void print_status(FT_Error err) {
     } else {
         printf("\"status\":{\"kind\":\"error\",\"error_code\":%d}", err);
     }
+}
+
+static void dirty_bitmap(FT_Bitmap* bitmap) {
+    bitmap->rows = 7;
+    bitmap->width = 9;
+    bitmap->pitch = -11;
+    bitmap->buffer = (unsigned char*)0x7f;
+    bitmap->num_grays = 13;
+    bitmap->pixel_mode = 15;
+    bitmap->palette_mode = 17;
+    bitmap->palette = (void*)0x7f;
+}
+
+static void print_bitmap_fields(const FT_Bitmap* bitmap) {
+    printf("{\"rows\":%u,\"width\":%u,\"pitch\":%d,\"buffer_is_null\":", bitmap->rows, bitmap->width, bitmap->pitch);
+    print_json_bool(bitmap->buffer == NULL);
+    printf(",\"num_grays\":%u,\"pixel_mode\":%u,\"palette_mode\":%u,\"palette_is_null\":",
+           bitmap->num_grays, bitmap->pixel_mode, bitmap->palette_mode);
+    print_json_bool(bitmap->palette == NULL);
+    printf("}");
+}
+
+static int emit_bitmap_init_new(const char* op, const char* null_arg, const char* alias_arg) {
+    int use_null = atoi(null_arg) != 0;
+    int compare_alias = atoi(alias_arg) != 0;
+    FT_Bitmap bitmap;
+    FT_Bitmap alias_bitmap;
+    dirty_bitmap(&bitmap);
+    dirty_bitmap(&alias_bitmap);
+
+    if (streq(op, "init")) {
+        FT_Bitmap_Init(use_null ? NULL : &bitmap);
+    } else {
+        FT_Bitmap_New(use_null ? NULL : &bitmap);
+    }
+    if (compare_alias) {
+        if (streq(op, "init")) {
+            FT_Bitmap_New(&alias_bitmap);
+        } else {
+            FT_Bitmap_Init(&alias_bitmap);
+        }
+    }
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"bitmap\":");
+    print_bitmap_fields(&bitmap);
+    printf(",\"null_pointer_write_state\":\"%s\",\"symbol_presence\":{\"init\":true,\"new\":true}",
+           use_null ? "null_noop" : "written");
+    if (compare_alias) {
+        printf(",\"alias_bitmap\":");
+        print_bitmap_fields(&alias_bitmap);
+    }
+    printf("}}\n");
+    return 0;
 }
 
 static int emit_constant(const char* symbol) {
@@ -6152,6 +6208,26 @@ static int emit_select_size_null(int argc, char** argv) {
     return 0;
 }
 
+static int emit_new_memory_face_null_base(int argc, char** argv) {
+    (void)argc;
+    FT_Long file_size = atol(argv[2]);
+    FT_Long face_index = atol(argv[3]);
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (!err) {
+        FT_Face face = (FT_Face)0x1;
+        err = FT_New_Memory_Face(library, NULL, file_size, face_index, &face);
+        if (!err && face) {
+            FT_Done_Face(face);
+        }
+        FT_Done_FreeType(library);
+    }
+    printf("{");
+    print_status(err);
+    printf(",\"output\":null}\n");
+    return 0;
+}
+
 static int emit_face_or_slot(int argc, char** argv) {
     const char* command = argv[1];
     const char* source_kind = argv[2];
@@ -8249,6 +8325,9 @@ static int dispatch(int argc, char** argv) {
     if (argc == 3 && streq(argv[1], "--matrix-invert")) {
         return emit_matrix_invert(argv[2]);
     }
+    if (argc == 5 && streq(argv[1], "--bitmap-init-new")) {
+        return emit_bitmap_init_new(argv[2], argv[3], argv[4]);
+    }
     if (argc == 4 && streq(argv[1], "--trigon")) {
         return emit_trigon(argv[2], argv[3]);
     }
@@ -8428,6 +8507,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--select-size-null")) {
         return emit_select_size_null(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--new-memory-face-null-base")) {
+        return emit_new_memory_face_null_base(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--select-charmaps")) {
         return emit_select_charmaps(argc, argv);

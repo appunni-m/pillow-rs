@@ -4,6 +4,8 @@
 #![allow(non_camel_case_types, non_snake_case)]
 
 use std::alloc::{Layout, alloc, dealloc};
+use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::ffi::{c_uchar, c_void};
 use std::ptr;
 use std::slice;
@@ -105,6 +107,22 @@ pub struct FontdoneWasmBitmap {
     pub buffer_len: usize,
     pub num_grays: u16,
     pub pixel_mode: i32,
+    pub palette_mode: u8,
+    pub palette: *const c_void,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_bitmap_init(abitmap: *mut FontdoneWasmBitmap) {
+    // Mirrors FreeType's null-tolerant `FT_Bitmap_Init` for the WASM ABI
+    // bitmap record.
+    if let Some(bitmap) = unsafe { abitmap.as_mut() } {
+        *bitmap = FontdoneWasmBitmap::default();
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_bitmap_new(abitmap: *mut FontdoneWasmBitmap) {
+    fontdone_wasm_bitmap_init(abitmap);
 }
 
 #[repr(C)]
@@ -216,8 +234,61 @@ pub struct FontdoneWasmSizeRequest {
 
 struct WasmFaceState {
     face: rust_ffi::FT_Face,
+    active_size: usize,
+    size_handles: Vec<usize>,
+    size_metrics: BTreeMap<usize, rust_ffi::FT_Size_Metrics>,
     slot: Option<rust_ffi::FT_GlyphSlot>,
     variant_list: Vec<FT_UInt32>,
+}
+
+thread_local! {
+    static SIZE_HANDLE_OWNERS: RefCell<BTreeMap<usize, usize>> = const { RefCell::new(BTreeMap::new()) };
+}
+
+fn register_wasm_size_handle(face_handle: usize, size_handle: usize) {
+    if size_handle == 0 {
+        return;
+    }
+    SIZE_HANDLE_OWNERS.with(|owners| {
+        owners.borrow_mut().insert(size_handle, face_handle);
+    });
+}
+
+fn unregister_wasm_size_handle(size_handle: usize) {
+    SIZE_HANDLE_OWNERS.with(|owners| {
+        owners.borrow_mut().remove(&size_handle);
+    });
+}
+
+fn wasm_size_owner(size_handle: usize) -> Option<usize> {
+    SIZE_HANDLE_OWNERS.with(|owners| owners.borrow().get(&size_handle).copied())
+}
+
+fn make_wasm_face_state(face: rust_ffi::FT_Face) -> Box<WasmFaceState> {
+    let active_size = face.size as usize;
+    let mut size_metrics = BTreeMap::new();
+    if active_size != 0 {
+        size_metrics.insert(active_size, face.size_metrics);
+    }
+    Box::new(WasmFaceState {
+        face,
+        active_size,
+        size_handles: if active_size == 0 {
+            Vec::new()
+        } else {
+            vec![active_size]
+        },
+        size_metrics,
+        slot: None,
+        variant_list: Vec::new(),
+    })
+}
+
+fn update_wasm_active_size_metrics(face: &mut WasmFaceState) {
+    if face.active_size != 0 {
+        face.size_metrics
+            .insert(face.active_size, face.face.size_metrics);
+    }
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -259,7 +330,7 @@ pub struct AbiBitmapSnapshot {
 #[cfg(feature = "abi-test-support")]
 pub fn abi_face_info(handle: usize) -> Option<rust_ffi::FT_FaceRecPublic> {
     let face = face_ref(handle)?;
-    Some(rust_ffi::FT_Face_Info(&face.face))
+    Some(rust_face_info(&face.face))
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -363,15 +434,16 @@ pub extern "C" fn fontdone_wasm_open_face(
     let data = unsafe { slice::from_raw_parts(file_base, file_size) };
     let library = rust_ffi::FT_Init_FreeType();
     match rust_ffi::FT_New_Memory_Face(&library, data, face_index, size_pt) {
-        Ok(face) => FontdoneWasmStatus {
-            error: rust_ffi::FT_Err_Ok,
-            handle: Box::into_raw(Box::new(WasmFaceState {
-                face,
-                slot: None,
-                variant_list: Vec::new(),
-            }))
-            .addr(),
-        },
+        Ok(face) => {
+            let state = make_wasm_face_state(face);
+            let active_size = state.active_size;
+            let handle = Box::into_raw(state).addr();
+            register_wasm_size_handle(handle, active_size);
+            FontdoneWasmStatus {
+                error: rust_ffi::FT_Err_Ok,
+                handle,
+            }
+        }
         Err(error) => FontdoneWasmStatus { error, handle: 0 },
     }
 }
@@ -382,6 +454,11 @@ pub extern "C" fn fontdone_wasm_done_face(handle: usize) -> FT_Error {
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     }
     let ptr = ptr::with_exposed_provenance_mut::<WasmFaceState>(handle);
+    if let Some(face) = face_ref(handle) {
+        for size_handle in &face.size_handles {
+            unregister_wasm_size_handle(*size_handle);
+        }
+    }
     // SAFETY: `handle` must come from `fontdone_wasm_open_face` and is consumed here.
     unsafe { drop(Box::from_raw(ptr)) };
     rust_ffi::FT_Err_Ok
@@ -389,7 +466,7 @@ pub extern "C" fn fontdone_wasm_done_face(handle: usize) -> FT_Error {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_new_size(handle: usize) -> FontdoneWasmStatus {
-    let Some(face) = face_ref(handle) else {
+    let Some(face) = face_mut(handle) else {
         return FontdoneWasmStatus {
             error: rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error,
             handle: 0,
@@ -397,6 +474,12 @@ pub extern "C" fn fontdone_wasm_new_size(handle: usize) -> FontdoneWasmStatus {
     };
     let mut size: rust_ffi::FT_Size = ptr::null_mut();
     let error = rust_ffi::FT_New_Size(Some(&face.face), Some(&mut size));
+    if error == rust_ffi::FT_Err_Ok {
+        let size_handle = size as usize;
+        face.size_handles.push(size_handle);
+        face.size_metrics.insert(size_handle, face.face.size_metrics);
+        register_wasm_size_handle(handle, size_handle);
+    }
     FontdoneWasmStatus {
         error,
         handle: if error == rust_ffi::FT_Err_Ok {
@@ -409,7 +492,7 @@ pub extern "C" fn fontdone_wasm_new_size(handle: usize) -> FontdoneWasmStatus {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_new_size_out(handle: usize, out: *mut usize) -> FT_Error {
-    let Some(face) = face_ref(handle) else {
+    let Some(face) = face_mut(handle) else {
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
     let Some(out) = ptr::NonNull::new(out) else {
@@ -418,8 +501,12 @@ pub extern "C" fn fontdone_wasm_new_size_out(handle: usize, out: *mut usize) -> 
     let mut size: rust_ffi::FT_Size = ptr::null_mut();
     let error = rust_ffi::FT_New_Size(Some(&face.face), Some(&mut size));
     if error == rust_ffi::FT_Err_Ok {
+        let size_handle = size as usize;
+        face.size_handles.push(size_handle);
+        face.size_metrics.insert(size_handle, face.face.size_metrics);
+        register_wasm_size_handle(handle, size_handle);
         // SAFETY: `out` was checked for null and is only written with an opaque handle value.
-        unsafe { *out.as_ptr() = size as usize };
+        unsafe { *out.as_ptr() = size_handle };
     }
     error
 }
@@ -427,20 +514,37 @@ pub extern "C" fn fontdone_wasm_new_size_out(handle: usize, out: *mut usize) -> 
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_activate_size(size_handle: usize) -> FT_Error {
     let size = ptr::with_exposed_provenance_mut::<rust_ffi::FT_SizeRec>(size_handle);
-    rust_ffi::FT_Activate_Size(size)
+    let error = rust_ffi::FT_Activate_Size(size);
+    if error == rust_ffi::FT_Err_Ok {
+        if let Some(owner) = wasm_size_owner(size_handle).and_then(face_mut) {
+            owner.active_size = size_handle;
+        }
+    }
+    error
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_done_size(size_handle: usize) -> FT_Error {
     let size = ptr::with_exposed_provenance_mut::<rust_ffi::FT_SizeRec>(size_handle);
-    rust_ffi::FT_Done_Size(size)
+    let owner_handle = wasm_size_owner(size_handle);
+    let error = rust_ffi::FT_Done_Size(size);
+    if error == rust_ffi::FT_Err_Ok {
+        unregister_wasm_size_handle(size_handle);
+        if let Some(owner) = owner_handle.and_then(face_mut) {
+            let was_active = owner.active_size == size_handle;
+            owner.size_handles.retain(|handle| *handle != size_handle);
+            owner.size_metrics.remove(&size_handle);
+            if was_active {
+                owner.active_size = owner.size_handles.first().copied().unwrap_or(0);
+            }
+        }
+    }
+    error
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_active_size(handle: usize) -> usize {
-    face_ref(handle).map_or(0, |face| {
-        rust_ffi::FT_Face_Info(&face.face).size as usize
-    })
+    face_ref(handle).map_or(0, |face| face.active_size)
 }
 
 #[unsafe(no_mangle)]
@@ -917,7 +1021,11 @@ pub extern "C" fn fontdone_wasm_set_pixel_sizes(
     let Some(face) = face_mut(handle) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
-    rust_ffi::FT_Set_Pixel_Sizes(&mut face.face, pixel_width, pixel_height)
+    let error = rust_ffi::FT_Set_Pixel_Sizes(&mut face.face, pixel_width, pixel_height);
+    if error == rust_ffi::FT_Err_Ok {
+        update_wasm_active_size_metrics(face);
+    }
+    error
 }
 
 #[unsafe(no_mangle)]
@@ -931,13 +1039,17 @@ pub extern "C" fn fontdone_wasm_set_char_size(
     let Some(face) = face_mut(handle) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
-    rust_ffi::FT_Set_Char_Size(
+    let error = rust_ffi::FT_Set_Char_Size(
         &mut face.face,
         char_width,
         char_height,
         horz_resolution,
         vert_resolution,
-    )
+    );
+    if error == rust_ffi::FT_Err_Ok {
+        update_wasm_active_size_metrics(face);
+    }
+    error
 }
 
 #[unsafe(no_mangle)]
@@ -958,15 +1070,26 @@ pub extern "C" fn fontdone_wasm_request_size(
             vertResolution: req.vertResolution,
         })
     };
-    rust_ffi::FT_Request_Size(
-        face_mut(handle).map(|face| &mut face.face),
-        request.as_ref(),
-    )
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let error = rust_ffi::FT_Request_Size(Some(&mut face.face), request.as_ref());
+    if error == rust_ffi::FT_Err_Ok {
+        update_wasm_active_size_metrics(face);
+    }
+    error
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_select_size(handle: usize, strike_index: FT_Int) -> FT_Error {
-    rust_ffi::FT_Select_Size(face_mut(handle).map(|face| &mut face.face), strike_index)
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let error = rust_ffi::FT_Select_Size(Some(&mut face.face), strike_index);
+    if error == rust_ffi::FT_Err_Ok {
+        update_wasm_active_size_metrics(face);
+    }
+    error
 }
 
 #[unsafe(no_mangle)]
@@ -1097,14 +1220,14 @@ pub extern "C" fn fontdone_wasm_select_charmap(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_charmap_count(handle: usize) -> FT_UInt {
-    face_ref(handle).map_or(0, |face| rust_ffi::FT_Face_Charmap_Count(&face.face))
+    face_ref(handle).map_or(0, |face| {
+        FT_UInt::try_from(face.face.charmaps.len()).unwrap_or(FT_UInt::MAX)
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_active_charmap_index(handle: usize) -> FT_Int {
-    face_ref(handle).map_or(-1, |face| {
-        rust_ffi::FT_Face_Active_Charmap_Index(&face.face)
-    })
+    face_ref(handle).map_or(-1, |face| face.face.active_charmap_index)
 }
 
 #[unsafe(no_mangle)]
@@ -1116,7 +1239,7 @@ pub extern "C" fn fontdone_wasm_get_charmap(
     let Some(face) = face_ref(handle) else {
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
-    let Some(info) = rust_ffi::FT_Face_Charmap_Info(&face.face, index) else {
+    let Some(info) = rust_face_charmap_info(&face.face, index) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
     if out.is_null() {
@@ -1139,7 +1262,7 @@ pub extern "C" fn fontdone_wasm_get_cmap_format(handle: usize, index: FT_UInt) -
     let Some(face) = face_ref(handle) else {
         return -1;
     };
-    let charmap = rust_ffi::FT_Face_Charmap(&face.face, index);
+    let charmap = rust_face_charmap(&face.face, index);
     rust_ffi::FT_Get_CMap_Format(charmap) as FT_Long
 }
 
@@ -1148,7 +1271,7 @@ pub extern "C" fn fontdone_wasm_get_cmap_language_id(handle: usize, index: FT_UI
     let Some(face) = face_ref(handle) else {
         return 0;
     };
-    let charmap = rust_ffi::FT_Face_Charmap(&face.face, index);
+    let charmap = rust_face_charmap(&face.face, index);
     rust_ffi::FT_Get_CMap_Language_ID(charmap) as FT_ULong
 }
 
@@ -1157,7 +1280,7 @@ pub extern "C" fn fontdone_wasm_set_charmap(handle: usize, index: FT_UInt) -> FT
     let Some(face) = face_mut(handle) else {
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
-    let charmap = rust_ffi::FT_Face_Charmap(&face.face, index);
+    let charmap = rust_face_charmap(&face.face, index);
     rust_ffi::FT_Set_Charmap(Some(&mut face.face), charmap)
 }
 
@@ -1171,7 +1294,7 @@ pub extern "C" fn fontdone_wasm_set_charmap_from_face(
         let Some(charmap_face) = face_ref(charmap_face_handle) else {
             return rust_ffi::FT_Err_Invalid_CharMap_Handle as FT_Error;
         };
-        rust_ffi::FT_Face_Charmap(&charmap_face.face, index)
+        rust_face_charmap(&charmap_face.face, index)
     };
     let Some(face) = face_mut(handle) else {
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
@@ -1761,7 +1884,11 @@ pub extern "C" fn fontdone_wasm_size_metrics(
     let Some(face) = face_ref(handle) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
-    let metrics = rust_ffi::FT_Size_Metrics(&face.face);
+    let metrics = face
+        .size_metrics
+        .get(&face.active_size)
+        .copied()
+        .unwrap_or(face.face.size_metrics);
     // SAFETY: `out` is non-null and caller provides writable storage.
     unsafe {
         *out = FontdoneWasmSizeMetrics {
@@ -1778,6 +1905,46 @@ pub extern "C" fn fontdone_wasm_size_metrics(
     rust_ffi::FT_Err_Ok
 }
 
+fn rust_face_info(face: &rust_ffi::FT_Face) -> rust_ffi::FT_FaceRecPublic {
+    rust_ffi::FT_FaceRecPublic {
+        num_faces: face.num_faces,
+        face_index: face.face_index,
+        face_flags: face.face_flags,
+        style_flags: face.style_flags,
+        num_glyphs: face.num_glyphs,
+        bbox: face.bbox,
+        units_per_EM: face.units_per_EM,
+        ascender: face.ascender,
+        descender: face.descender,
+        height: face.height,
+        max_advance_width: face.max_advance_width,
+        max_advance_height: face.max_advance_height,
+        underline_position: face.underline_position,
+        underline_thickness: face.underline_thickness,
+        size: face.size,
+        ..rust_ffi::FT_FaceRecPublic::default()
+    }
+}
+
+fn rust_face_charmap(face: &rust_ffi::FT_Face, index: FT_UInt) -> rust_ffi::FT_CharMap {
+    let Ok(index) = usize::try_from(index) else {
+        return ptr::null_mut();
+    };
+    face.charmaps.get(index).map_or(ptr::null_mut(), |record| {
+        (record as *const rust_ffi::FT_CharMapRecPublic)
+            .cast_mut()
+            .cast()
+    })
+}
+
+fn rust_face_charmap_info(
+    face: &rust_ffi::FT_Face,
+    index: FT_UInt,
+) -> Option<rust_ffi::FT_CharMapRecPublic> {
+    let index = usize::try_from(index).ok()?;
+    face.charmaps.get(index).copied()
+}
+
 fn slot_to_wasm(slot: &rust_ffi::FT_GlyphSlot) -> FontdoneWasmGlyphSlot {
     let bitmap = slot
         .bitmap
@@ -1790,6 +1957,8 @@ fn slot_to_wasm(slot: &rust_ffi::FT_GlyphSlot) -> FontdoneWasmGlyphSlot {
             buffer_len: bitmap.buffer.len(),
             num_grays: bitmap.num_grays,
             pixel_mode: bitmap.pixel_mode,
+            palette_mode: 0,
+            palette: ptr::null(),
         })
         .unwrap_or_default();
     FontdoneWasmGlyphSlot {
