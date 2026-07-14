@@ -308,6 +308,20 @@ def top_tilde_flat_glyph():
     )
 
 
+def top_tilde_flat_loop_glyph():
+    return mixed_contour_glyph(
+        [
+            (100, 0, 500, 500),
+            [
+                (140, 560, True),
+                (235, 560, True),
+                (335, 560, True),
+                (430, 560, True),
+            ],
+        ]
+    )
+
+
 def horizontal_flat_loop_glyph():
     return mixed_contour_glyph(
         [
@@ -358,6 +372,20 @@ def bottom_tilde_flat_glyph():
         [
             [
                 (140, 60, True),
+                (430, 60, True),
+            ],
+            (100, 120, 500, 620),
+        ]
+    )
+
+
+def bottom_tilde_flat_loop_glyph():
+    return mixed_contour_glyph(
+        [
+            [
+                (140, 60, True),
+                (235, 60, True),
+                (335, 60, True),
                 (430, 60, True),
             ],
             (100, 120, 500, 620),
@@ -548,9 +576,11 @@ def build_script_coverage() -> None:
     glyph_order.append("latin_tilde_top2")
     glyph_order.append("latin_tilde_top_measure_zero")
     glyph_order.append("latin_tilde_top_flat")
+    glyph_order.append("latin_tilde_top_flat_loop")
     glyph_order.append("latin_tilde_bottom")
     glyph_order.append("latin_tilde_bottom_measure_zero")
     glyph_order.append("latin_tilde_bottom_flat")
+    glyph_order.append("latin_tilde_bottom_flat_loop")
     glyph_order.append("latin_tilde_top2_topflag")
     glyph_order.append("latin_top_bottom_accent")
     glyph_order.append("latin_serif_m_symmetry")
@@ -599,6 +629,9 @@ def build_script_coverage() -> None:
     glyphs["latin_tilde_top_flat"] = top_tilde_flat_glyph()
     metrics["latin_tilde_top_flat"] = (700, 100)
     cmap[0x00D1] = "latin_tilde_top_flat"
+    glyphs["latin_tilde_top_flat_loop"] = top_tilde_flat_loop_glyph()
+    metrics["latin_tilde_top_flat_loop"] = (700, 100)
+    cmap[0x00C3] = "latin_tilde_top_flat_loop"
     glyphs["latin_tilde_bottom"] = bottom_tilde_glyph()
     metrics["latin_tilde_bottom"] = (700, 100)
     cmap[0x1E1B] = "latin_tilde_bottom"
@@ -608,6 +641,9 @@ def build_script_coverage() -> None:
     glyphs["latin_tilde_bottom_flat"] = bottom_tilde_flat_glyph()
     metrics["latin_tilde_bottom_flat"] = (700, 100)
     cmap[0x1E75] = "latin_tilde_bottom_flat"
+    glyphs["latin_tilde_bottom_flat_loop"] = bottom_tilde_flat_loop_glyph()
+    metrics["latin_tilde_bottom_flat_loop"] = (700, 100)
+    cmap[0x1E74] = "latin_tilde_bottom_flat_loop"
     glyphs["latin_tilde_top2_topflag"] = top_tilde_glyph(extra_top=True)
     metrics["latin_tilde_top2_topflag"] = (700, 100)
     cmap[0x1EAA] = "latin_tilde_top2_topflag"
