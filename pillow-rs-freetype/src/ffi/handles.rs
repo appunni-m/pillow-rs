@@ -36,6 +36,12 @@ pub struct FT_Library {
 
 #[derive(Clone)]
 pub struct FT_Face {
+    // Public FT_FaceRec fields read by Pillow _imagingft.c via
+    // face->family_name/style_name/num_glyphs and face->size->metrics.
+    pub family_name: Option<String>,
+    pub style_name: Option<String>,
+    pub num_glyphs: FT_Long,
+    pub size_metrics: FT_Size_MetricsRec,
     inner: Rc<RefCell<api::Face>>,
     sizes: Rc<RefCell<FaceSizeState>>,
     probe_only: bool,
@@ -218,11 +224,12 @@ fn has_active_size(face: &FT_Face) -> bool {
     !active_size_handle(face).is_null()
 }
 
-fn sync_active_size_state(face: &FT_Face) {
+fn sync_active_size_state(face: &mut FT_Face) {
     let state = face.inner.borrow().active_size_state();
     if let Some(entry) = face.sizes.borrow_mut().active_entry_mut() {
         entry.state = state;
     }
+    face.size_metrics = face.inner.borrow().size_metrics().into();
 }
 
 #[derive(Clone, Copy)]
@@ -991,8 +998,10 @@ pub fn FT_New_Memory_Face(
 
 fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     let font = inner.font();
+    let info = inner.info();
     let postscript_name = inner.postscript_name().map(str::to_owned);
     let size_state = inner.active_size_state();
+    let size_metrics = inner.size_metrics().into();
     let sfnt_os2 = font.os2_table().map(os2_to_ffi).map(Box::new);
     let sfnt_head = font
         .load_sfnt_table(0x68656164, 0, None)
@@ -1034,6 +1043,10 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         FaceSizeState::new(size_state)
     }));
     let face = FT_Face {
+        family_name: Some(info.family_name),
+        style_name: Some(info.style_name),
+        num_glyphs: FT_Long::from(info.num_glyphs),
+        size_metrics,
         inner,
         sizes,
         probe_only,
