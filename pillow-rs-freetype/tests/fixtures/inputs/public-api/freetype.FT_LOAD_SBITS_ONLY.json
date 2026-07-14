@@ -52,35 +52,90 @@
       "case_id": "freetype.FT_LOAD_SBITS_ONLY.embedded_bitmap_only_behavior",
       "subject": "freetype.FT_LOAD_SBITS_ONLY",
       "case": "embedded_bitmap_only_behavior",
-      "operation": "freetype.load_glyph_pair",
-      "schema": "glyph_slot_error_delta",
+      "operation": "load_glyph",
+      "schema": "glyph_slot_bitmap",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font_with_sbit": {
-            "kind": "ref",
-            "role": "font",
-            "id": "fonts/bitmap/embedded-strike.ttf",
-            "missing": true
+        "variants": [
+          {
+            "id": "embedded-gray-bitmap",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fixtures/assets/fonts/sbit_gray_format1.ttf",
+                "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray embedded bitmap for glyph 1."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_SBITS_ONLY"
+              ]
+            },
+            "coverage": [
+              "sbit:load-sbits-only-embedded-bitmap-success"
+            ]
           },
-          "font_without_sbit": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+          {
+            "id": "outline-font-no-sbit",
+            "expect_error": true,
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_SBITS_ONLY"
+              ],
+              "expected_error_symbol": "FT_Err_Invalid_Argument"
+            },
+            "coverage": [
+              "sbit:load-sbits-only-outline-font-error"
+            ]
+          },
+          {
+            "id": "sbit-font-no-matching-strike",
+            "expect_error": true,
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fixtures/assets/fonts/sbit_no_matching_strike.ttf",
+                "requirements": "Synthetic scalable SFNT with a 19 ppem EBLC strike while the public load path requests 20 ppem."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_SBITS_ONLY"
+              ],
+              "expected_error_symbol": "FT_Err_Invalid_Argument"
+            },
+            "coverage": [
+              "sbit:load-sbits-only-no-matching-strike-error"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "strike_selector": {
-            "kind": "embedded_bitmap_strike"
-          },
-          "glyph_selector": {
-            "kind": "bitmap_available_and_missing"
-          },
-          "load_flags": [
-            "FT_LOAD_SBITS_ONLY"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:flag",
@@ -91,24 +146,22 @@
       "expectation": {
         "status": "ok",
         "output_shape": {
-          "with_sbit": {
-            "status": "FT_Error",
-            "slot_format": "glyph_format",
-            "bitmap": "FT_Bitmap"
-          },
-          "without_sbit": {
-            "status": "FT_Error",
-            "error": "public_error"
-          }
+          "success": "Exact glyph slot with embedded FT_Bitmap when a matching strike exists.",
+          "error": "Exact public FT_Error when FT_LOAD_SBITS_ONLY cannot load a bitmap strike."
         },
         "compare": {
-          "mode": "exact",
+          "mode": "bytes",
+          "compare_error_output": true,
           "paths": [
-            "with_sbit.status",
-            "with_sbit.slot_format",
-            "with_sbit.bitmap",
-            "without_sbit.status",
-            "without_sbit.error"
+            "format",
+            "metrics",
+            "advance",
+            "bitmap.pixel_mode",
+            "bitmap.rows",
+            "bitmap.width",
+            "bitmap.pitch",
+            "bitmap.num_grays",
+            "bitmap.buffer_hex"
           ]
         },
         "source_refs": [
@@ -118,7 +171,7 @@
           "freetype/src/truetype/ttgload.c:2467-2474"
         ],
         "fixture_requirements": [
-          "Deterministic bitmap-strike font with one glyph available in embedded bitmap and one unavailable at the selected strike"
+          "Uses maintained compact SBIT fixtures generated by make font-fixture-sbit."
         ]
       }
     }
