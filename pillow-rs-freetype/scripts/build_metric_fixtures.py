@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fontTools.ttLib import TTFont
+from fontTools.ttLib import TTFont, newTable
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,10 +66,41 @@ def write_hhea_zero_no_os2_fallback() -> None:
     save_font("hhea-zero-no-os2-fallback.ttf", font)
 
 
+def write_vertical_zero_advance() -> None:
+    font = base_font()
+    glyph_order = font.getGlyphOrder()
+    vmtx = newTable("vmtx")
+    vmtx.metrics = {name: (0, 0) for name in glyph_order}
+    font["vmtx"] = vmtx
+
+    vhea = newTable("vhea")
+    vhea.tableVersion = 0x00010000
+    vhea.ascent = 0
+    vhea.descent = 0
+    vhea.lineGap = 0
+    vhea.caretSlopeRise = 1
+    vhea.caretSlopeRun = 0
+    vhea.caretOffset = 0
+    vhea.reserved0 = 0
+    vhea.reserved1 = 0
+    vhea.reserved2 = 0
+    vhea.reserved3 = 0
+    vhea.reserved4 = 0
+    vhea.metricDataFormat = 0
+    vhea.numberOfVMetrics = len(glyph_order)
+    vhea.advanceHeightMax = 0
+    vhea.minTopSideBearing = 0
+    vhea.minBottomSideBearing = 0
+    vhea.yMaxExtent = 0
+    font["vhea"] = vhea
+    save_font("vertical-zero-advance.ttf", font)
+
+
 def main() -> None:
     write_hhea_zero_typo_fallback()
     write_hhea_zero_win_fallback()
     write_hhea_zero_no_os2_fallback()
+    write_vertical_zero_advance()
 
 
 if __name__ == "__main__":
