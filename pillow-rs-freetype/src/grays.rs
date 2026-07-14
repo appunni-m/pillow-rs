@@ -1,8 +1,8 @@
 //! Smooth anti-aliased rasterizer — faithful port of `src/smooth/ftgrays.c`.
 //!
 //! Mirrors FreeType 2.14.3's `FT_INT64` source path (`gray_render_line`,
-//! `gray_render_conic` DDA, `gray_render_cubic`, `gray_convert_glyph` band
-//! bisection, `gray_sweep`).
+//! `gray_render_conic` DDA, `gray_render_cubic`, `gray_convert_glyph`,
+//! `gray_sweep`).
 //!
 //! The pinned FreeType oracle defines `FT_INT64`, so conic flattening uses
 //! the 64-bit forward-difference path and line rasterization uses the matching
@@ -40,21 +40,6 @@ fn fract(x: i64) -> i32 {
 #[inline]
 fn add_int(a: i32, b: i32) -> i32 {
     a.wrapping_add(b)
-}
-
-/// FreeType `FT_DIV_MOD`: signed division with a non-negative remainder.
-///
-/// The quotient is floored when the remainder would otherwise be negative.
-/// `render_scanline` relies on this for DDA step distribution across cells.
-#[inline]
-fn ft_div_mod(dividend: i64, divisor: i64) -> (i32, i32) {
-    let mut quotient = i32_from_i64(dividend / divisor);
-    let mut remainder = i32_from_i64(dividend % divisor);
-    if remainder < 0 {
-        quotient -= 1;
-        remainder += i32_from_i64(divisor);
-    }
-    (quotient, remainder)
 }
 
 /// `FT_UDIVPREP`: precompute `0xFFFF_FFFF / b` reciprocal for fast division.
@@ -480,74 +465,6 @@ impl<'a> Worker<'a> {
         }
     }
 
-    // ── gray_render_scanline (ftgrays.c:639) ──────────────────────────────
-    #[allow(clippy::too_many_arguments)]
-    fn render_scanline(&mut self, ey: i32, x1: i64, y1: i32, x2: i64, y2: i32) {
-        let mut ex1 = trunc(x1);
-        let ex2 = trunc(x2);
-
-        #[cfg(debug_assertions)]
-        if log::log_enabled!(target: "autohint::rasterizer", log::Level::Trace) {
-            log::trace!(target: "autohint::rasterizer", "[SCANLINE] ey={ey} x1={x1} y1={y1} x2={x2} y2={y2}");
-        }
-
-        if y1 == y2 {
-            self.set_cell(ex2, ey);
-            return;
-        }
-
-        let fx1 = fract(x1);
-        let fx2 = fract(x2);
-
-        if ex1 == ex2 {
-            self.integrate(y2 - y1, fx1 + fx2);
-            return;
-        }
-
-        let mut dx = x2 - x1;
-        let dy = (y2 - y1) as i64;
-        let (p, first, incr);
-        if dx > 0 {
-            p = (ONE_PIXEL - fx1 as i64) * dy;
-            first = i32_from_i64(ONE_PIXEL);
-            incr = 1;
-        } else {
-            p = fx1 as i64 * dy;
-            first = 0;
-            incr = -1;
-            dx = -dx;
-        }
-
-        let (mut delta, mut mod_) = ft_div_mod(p, dx);
-        self.integrate(delta, fx1 + first);
-        let mut y1 = y1 + delta;
-        ex1 += incr;
-        self.set_cell(ex1, ey);
-
-        if ex1 != ex2 {
-            let p = ONE_PIXEL * dy;
-            let (lift, rem) = ft_div_mod(p, dx);
-            loop {
-                delta = lift;
-                mod_ += rem;
-                if mod_ >= i32_from_i64(dx) {
-                    mod_ -= i32_from_i64(dx);
-                    delta += 1;
-                }
-                self.integrate(delta, i32_from_i64(ONE_PIXEL));
-                y1 += delta;
-                ex1 += incr;
-                self.set_cell(ex1, ey);
-                if ex1 == ex2 {
-                    break;
-                }
-            }
-        }
-
-        let fx1 = i32_from_i64(ONE_PIXEL) - first;
-        self.integrate(y2 - y1, fx1 + fx2);
-    }
-
     // ── gray_render_line (ftgrays.c:878, FT_INT64 path) ────────────────────
     fn render_line(&mut self, to_x: i64, to_y: i64) {
         let mut ey1 = trunc(self.y);
@@ -919,7 +836,9 @@ impl<'a> Worker<'a> {
                     }
                 }
                 CURVE_TAG_CUBIC => {
-                    if cursor + 2 > limit
+                    // FreeType ftgrays.c:1623-1661 accepts exactly two trailing
+                    // cubic controls and closes the curve to v_start.
+                    if cursor + 1 > limit
                         || curve_tag_at(pts, tags, usize_from_i32(cursor + 1)) != CURVE_TAG_CUBIC
                     {
                         return Err(FontError::InvalidOutline(
@@ -970,21 +889,6 @@ impl<'a> Worker<'a> {
         if log::log_enabled!(target: "autohint::rasterizer", log::Level::Trace) {
             log::trace!(target: "autohint::rasterizer", "[SWEEP] fill=0x{:x} min_ey={} max_ey={} min_ex={} max_ex={}",
                 fill, self.min_ey, self.max_ey, self.min_ex, self.max_ex);
-        }
-
-        if std::env::var("GRAYS_DUMP_CELLS").is_ok() {
-            eprintln!(
-                "[RUST CELLS] min_ey={} max_ey={} min_ex={} max_ex={}",
-                self.min_ey, self.max_ey, self.min_ex, self.max_ex
-            );
-            for y in self.min_ey..self.max_ey {
-                let yi = usize_from_i32(y - self.min_ey);
-                eprint!("{y:3}:");
-                for cell in &self.scanlines[yi] {
-                    eprint!(" ({:3}, c:{:4}, a:{:6})", cell.x, cell.cover, cell.area);
-                }
-                eprintln!();
-            }
         }
 
         for y in self.min_ey..self.max_ey {
