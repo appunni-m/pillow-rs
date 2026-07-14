@@ -437,13 +437,10 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
                 fpos,
                 opos,
                 pos: opos,
-                flags: 0,
                 dir: seg_dir,
-                link: usize::MAX,
-                serif: usize::MAX,
                 first: seg_idx,
                 last: seg_idx,
-                blue_edge: None,
+                ..AFEdge::default()
             };
             axis.segments[seg_idx].edge_next = seg_idx;
             let mut insert_at = axis.edges.len();
@@ -618,7 +615,7 @@ pub fn cjk_link_segments(hints: &mut GlyphHints, dim: Dimension) {
             if i == j {
                 continue;
             }
-            if axis.segments[i].dir as i8 + axis.segments[j].dir as i8 != 0 {
+            if axis.segments[i].dir.as_i8() + axis.segments[j].dir.as_i8() != 0 {
                 continue;
             }
 

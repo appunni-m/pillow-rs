@@ -175,7 +175,7 @@ impl AfLatinMetrics {
     pub fn new(upem: i32, num_glyphs: u16) -> Self {
         AfLatinMetrics {
             units_per_em: upem,
-            axis: [AfLatinAxisMetrics::new(), AfLatinAxisMetrics::new()],
+            axis: [AfLatinAxisMetrics::default(), AfLatinAxisMetrics::default()],
             non_base_glyphs: vec![false; num_glyphs as usize],
             digit_glyphs: vec![false; num_glyphs as usize],
             digits_have_same_width: true,
@@ -380,7 +380,7 @@ impl GlyphHints {
             contours: Vec::new(),
             contour_y_minima: Vec::new(),
             contour_y_maxima: Vec::new(),
-            axis: [AxisHints::new(), AxisHints::new()],
+            axis: [AxisHints::default(), AxisHints::default()],
             ppem: 0,
             other_flags: 0,
             scaler_flags: 0,

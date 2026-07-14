@@ -1972,9 +1972,10 @@ fn adjustment_database_lookup(codepoint: u32) -> u32 {
 }
 
 fn recompute_vertical_extrema(hints: &mut GlyphHints) {
-    let mut new_minima = vec![0; hints.contours.len()];
-    let mut new_maxima = vec![0; hints.contours.len()];
-    for ci in 0..hints.contours.len() {
+    let contour_count = hints.num_contours();
+    let mut new_minima = vec![0; contour_count];
+    let mut new_maxima = vec![0; contour_count];
+    for ci in 0..contour_count {
         let (min_y, max_y) = contour_y_bounds(hints, ci);
         new_minima[ci] = min_y;
         new_maxima[ci] = max_y;
@@ -3320,12 +3321,12 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
 /// Absolute direction: flips Left→Right, Down→Up. Used for segment matching.
 #[inline]
 fn abs_dir(d: Direction) -> Direction {
-    match d {
-        Direction::Up => Direction::Up,
-        Direction::Down => Direction::Up,
-        Direction::Right => Direction::Right,
-        Direction::Left => Direction::Right,
-        Direction::None => Direction::None,
+    if d.is_vertical() {
+        Direction::Up
+    } else if d.is_horizontal() {
+        Direction::Right
+    } else {
+        Direction::None
     }
 }
 
@@ -3418,13 +3419,10 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
                 fpos,
                 opos,
                 pos: opos, // C: edge->pos = edge->opos (aflatin.c:2293)
-                flags: 0,
                 dir: seg_dir,
-                link: usize::MAX,
-                serif: usize::MAX,
                 first: seg_idx,
                 last: seg_idx,
-                blue_edge: None,
+                ..AFEdge::default()
             };
             // FreeType's af_axis_hints_new_edge (afhints.c:254-264) inserts
             // edges sorted by fpos. For equal positions, major-direction edges
@@ -3663,7 +3661,7 @@ fn link_segments_inner(
             major_dir);
         for (i, seg) in axis.segments.iter().enumerate() {
             log::trace!(target: "autohint::pipeline", "  S{i}: pos={} dir={} u=[{},{}] h={} delta={}",
-                seg.pos, seg.dir as i8,
+                seg.pos, seg.dir.as_i8(),
                 seg.min_coord, seg.max_coord,
                 seg.height, seg.delta);
         }
@@ -3690,7 +3688,7 @@ fn link_segments_inner(
             let seg2_dir = axis.segments[j].dir;
             let pos2 = axis.segments[j].pos as i32;
             // opposite directions, seg2 to the "right" of seg1
-            if (seg1_dir as i8 + seg2_dir as i8 == 0) && pos2 > pos1 {
+            if (seg1_dir.as_i8() + seg2_dir.as_i8() == 0) && pos2 > pos1 {
                 let mut min_c = axis.segments[i].min_coord as i32;
                 let mut max_c = axis.segments[i].max_coord as i32;
                 if min_c < axis.segments[j].min_coord as i32 {
