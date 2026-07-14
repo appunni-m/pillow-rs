@@ -22,6 +22,7 @@ GLYPH_ORDER = [
     "folded_profile_dropout",
     "overlap_simple_flag",
     "overlap_compound_flag",
+    "overlap_heavy_flag",
 ]
 
 
@@ -132,6 +133,26 @@ def overlap_compound_flag_glyph():
     return glyph
 
 
+def overlap_heavy_flag_glyph():
+    pen = TTGlyphPen(None)
+
+    pen.moveTo((0, 0))
+    pen.lineTo((224, 0))
+    pen.lineTo((224, 224))
+    pen.lineTo((0, 224))
+    pen.closePath()
+
+    pen.moveTo((96, 32))
+    pen.lineTo((320, 32))
+    pen.lineTo((320, 256))
+    pen.lineTo((96, 256))
+    pen.closePath()
+
+    glyph = pen.glyph()
+    glyph.flags[0] |= 0x40
+    return glyph
+
+
 def build_render_coverage() -> None:
     glyphs = {
         ".notdef": empty_glyph(),
@@ -142,6 +163,7 @@ def build_render_coverage() -> None:
         "folded_profile_dropout": folded_profile_dropout_glyph(),
         "overlap_simple_flag": overlap_simple_flag_glyph(),
         "overlap_compound_flag": overlap_compound_flag_glyph(),
+        "overlap_heavy_flag": overlap_heavy_flag_glyph(),
     }
     metrics = {
         ".notdef": (256, 0),
@@ -152,6 +174,7 @@ def build_render_coverage() -> None:
         "folded_profile_dropout": (256, 0),
         "overlap_simple_flag": (256, 0),
         "overlap_compound_flag": (256, 0),
+        "overlap_heavy_flag": (384, 0),
     }
 
     builder = FontBuilder(UNITS_PER_EM, isTTF=True)
@@ -165,6 +188,7 @@ def build_render_coverage() -> None:
             0xE104: "folded_profile_dropout",
             0xE105: "overlap_simple_flag",
             0xE106: "overlap_compound_flag",
+            0xE107: "overlap_heavy_flag",
         }
     )
     builder.setupGlyf(glyphs)
