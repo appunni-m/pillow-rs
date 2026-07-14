@@ -94,6 +94,28 @@
               "font/style_flags:bold-condition-true",
               "font/style_flags:italic-condition-true"
             ]
+          },
+          {
+            "id": "type1-fixed-pitch",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/type1/fixed-pitch-type1.pfb"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_FIXED_WIDTH",
+              "read_fields": [
+                "face_flags",
+                "family_name",
+                "style_name"
+              ]
+            },
+            "coverage": [
+              "font/face_flags:type1-fixed-pitch"
+            ]
           }
         ]
       },

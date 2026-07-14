@@ -34,6 +34,7 @@ def build_simple_type1(
     notice: str,
     *,
     weight: str = "Regular",
+    is_fixed_pitch: bool = False,
     cleartext_replacements: list[tuple[bytes, bytes]] | None = None,
 ) -> None:
     font = T1Font.__new__(T1Font)
@@ -47,7 +48,7 @@ def build_simple_type1(
             "FamilyName": family_name,
             "Weight": weight,
             "ItalicAngle": 0,
-            "isFixedPitch": False,
+            "isFixedPitch": is_fixed_pitch,
             "UnderlinePosition": -100,
             "UnderlineThickness": 50,
         },
@@ -123,6 +124,13 @@ def main() -> None:
         "Generated for fontdone Type 1 metadata coverage",
         weight="Bold",
         cleartext_replacements=[(b"/isFixedPitch false def", b"/isFixedPitch maybe def")],
+    )
+    build_simple_type1(
+        OUT_DIR / "fixed-pitch-type1.pfb",
+        "FixedPitchTypeOne",
+        "Fixed Pitch Type One",
+        "Generated for fontdone Type 1 fixed-pitch face-flag coverage",
+        is_fixed_pitch=True,
     )
     build_simple_type1(
         INPUT_OUT_DIR / "attach-afm-base.pfb",
