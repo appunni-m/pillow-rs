@@ -5,17 +5,70 @@
 //! (4,097/4,097 unified parity).
 
 use super::{Font, TrueTypeFont};
+use crate::error::PilError;
+use fontdone::ffi;
+
+pub(super) struct TrueTypeEngine {
+    face: ffi::FT_Face,
+    pub(super) size_pt: f32,
+    family_name: String,
+    style_name: String,
+    metrics: ffi::FT_Size_Metrics,
+}
+
+pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<TrueTypeFont, PilError> {
+    let library = ffi::FT_Init_FreeType();
+    let mut face = ffi::FT_New_Memory_Face(&library, &data, 0, size)
+        .map_err(|e| PilError::ValueError(format!("FT_New_Memory_Face: error {e}")))?;
+
+    // Pillow _imagingft.c:getfont requests nominal size with width/height
+    // set to size * 64 after FT_New_Memory_Face.
+    let width = (size * 64.0) as ffi::FT_Long;
+    let request = ffi::FT_Size_RequestRec {
+        type_: ffi::FT_SIZE_REQUEST_TYPE_NOMINAL as ffi::FT_Size_Request_Type,
+        width,
+        height: width,
+        horiResolution: 0,
+        vertResolution: 0,
+    };
+    if ffi::FT_Request_Size(Some(&mut face), Some(&request)) != ffi::FT_Err_Ok {
+        return Err(PilError::ValueError("FT_Request_Size failed".into()));
+    }
+
+    let family_name = face.family_name.clone().unwrap_or_else(|| "Unknown".into());
+    let style_name = face.style_name.clone().unwrap_or_else(|| "Regular".into());
+    let metrics = face.size_metrics;
+
+    Ok(TrueTypeFont {
+        engine: TrueTypeEngine {
+            face,
+            size_pt: size,
+            family_name,
+            style_name,
+            metrics,
+        },
+    })
+}
 
 // ── Public API ───────────────────────────────────────────────────────
 
 pub fn getname(font: &Font) -> (&str, &str) {
-    match font { Font::TrueType(t) => t.inner.getname(), Font::Bitmap(_) => ("Aileron", "Regular") }
+    match font {
+        Font::TrueType(t) => (t.engine.family_name.as_str(), t.engine.style_name.as_str()),
+        Font::Bitmap(_) => ("Aileron", "Regular"),
+    }
 }
 
 pub fn getmetrics(font: &Font) -> (u32, u32) {
     match font {
-        Font::TrueType(t) => t.inner.getmetrics(),
-        Font::Bitmap(b) => { let (_, h) = b.text_bbox("A"); (h, 0) }
+        Font::TrueType(t) => (
+            pixel(t.engine.metrics.ascender) as u32,
+            (-pixel(t.engine.metrics.descender)) as u32,
+        ),
+        Font::Bitmap(b) => {
+            let (_, h) = b.text_bbox("A");
+            (h, 0)
+        }
     }
 }
 
@@ -29,7 +82,10 @@ pub fn getlength(font: &Font, text: &str) -> f32 {
 pub fn getbbox(font: &Font, text: &str) -> (i32, i32, i32, i32) {
     match font {
         Font::TrueType(t) => bbox_from_run(t, text),
-        Font::Bitmap(b) => { let (w, h) = b.text_bbox(text); (0, 0, w as i32, h as i32) }
+        Font::Bitmap(b) => {
+            let (w, h) = b.text_bbox(text);
+            (0, 0, w as i32, h as i32)
+        }
     }
 }
 
@@ -40,37 +96,62 @@ pub fn getmask(font: &Font, text: &str) -> (u32, u32, Vec<u8>) {
     }
 }
 
-pub fn render_text(font: &Font, text: &str, fill: (u8,u8,u8,u8), _spacing: f32) -> (u32,u32,Vec<u8>) {
+pub fn render_text(
+    font: &Font,
+    text: &str,
+    fill: (u8, u8, u8, u8),
+    _spacing: f32,
+) -> (u32, u32, Vec<u8>) {
     pack_rgba(getmask(font, text), fill, false)
 }
-pub fn render_text_binary(font: &Font, text: &str, fill: (u8,u8,u8,u8), _spacing: f32) -> (u32,u32,Vec<u8>) {
+pub fn render_text_binary(
+    font: &Font,
+    text: &str,
+    fill: (u8, u8, u8, u8),
+    _spacing: f32,
+) -> (u32, u32, Vec<u8>) {
     pack_rgba(getmask(font, text), fill, true)
 }
 
-fn pack_rgba((w, h, mask): (u32, u32, Vec<u8>), fill: (u8,u8,u8,u8), binary: bool) -> (u32,u32,Vec<u8>) {
-    if w == 0 || h == 0 { return (w, h, mask); }
-    let len = match (w as usize).checked_mul(h as usize).and_then(|v| v.checked_mul(4)) {
-        Some(v) => v, None => return (0, 0, vec![]),
+fn pack_rgba(
+    (w, h, mask): (u32, u32, Vec<u8>),
+    fill: (u8, u8, u8, u8),
+    binary: bool,
+) -> (u32, u32, Vec<u8>) {
+    if w == 0 || h == 0 {
+        return (w, h, mask);
+    }
+    let len = match (w as usize)
+        .checked_mul(h as usize)
+        .and_then(|v| v.checked_mul(4))
+    {
+        Some(v) => v,
+        None => return (0, 0, vec![]),
     };
     let mut canvas = vec![0u8; len];
     for (i, cov) in mask.into_iter().enumerate() {
         let c = if binary && cov < 128 { 0 } else { cov };
-        if c == 0 { continue; }
+        if c == 0 {
+            continue;
+        }
         let o = i * 4;
-        canvas[o]=fill.0; canvas[o+1]=fill.1; canvas[o+2]=fill.2; canvas[o+3]=c;
+        canvas[o] = fill.0;
+        canvas[o + 1] = fill.1;
+        canvas[o + 2] = fill.2;
+        canvas[o + 3] = c;
     }
     (w, h, canvas)
 }
 
 // ── FFI helpers ──────────────────────────────────────────────────────
 
-use fontdone::ffi as ffi;
-
 const KERN_DEFAULT: u32 = 0; // FT_KERNING_DEFAULT as u32
-const RDR: i32 = 4;          // FT_LOAD_RENDER
-const TGT_NORM: i32 = 0;     // FT_LOAD_TARGET_NORMAL
+const RDR: i32 = 4; // FT_LOAD_RENDER
+const TGT_NORM: i32 = 0; // FT_LOAD_TARGET_NORMAL
 
-fn gid(face: &ffi::FT_Face, ch: char) -> u32 { ffi::FT_Get_Char_Index(face, ch as u64) }
+fn gid(face: &ffi::FT_Face, ch: char) -> u32 {
+    ffi::FT_Get_Char_Index(face, ch as u64)
+}
 
 fn kern_26dot6(face: &ffi::FT_Face, l: u32, r: u32) -> i32 {
     let mut v = ffi::FT_Vector::default();
@@ -78,7 +159,13 @@ fn kern_26dot6(face: &ffi::FT_Face, l: u32, r: u32) -> i32 {
     v.x as i32
 }
 
-fn round26(v: i32) -> i32 { fontdone::scaler::pixel_round(v) }
+fn round26(v: i32) -> i32 {
+    pixel(i64::from(v))
+}
+
+fn pixel(x: i64) -> i32 {
+    (((x + 32) & -64) >> 6) as i32
+}
 
 // ── Glyph run (no render, for metrics/advance/bbox) ─────────────────
 
@@ -100,8 +187,13 @@ struct RunGlyph {
 
 /// Load each glyph WITHOUT rendering, collect advances and metrics.
 fn glyph_run(ttf: &TrueTypeFont, text: &str) -> Option<GlyphRun> {
-    if text.is_empty() { return Some(GlyphRun { glyphs: vec![], max_pen: 0 }); }
-    let face = &ttf.face;
+    if text.is_empty() {
+        return Some(GlyphRun {
+            glyphs: vec![],
+            max_pen: 0,
+        });
+    }
+    let face = &ttf.engine.face;
     let mut pen = 0i32;
     let mut prev: Option<u32> = None;
     let mut out = Vec::new();
@@ -109,8 +201,13 @@ fn glyph_run(ttf: &TrueTypeFont, text: &str) -> Option<GlyphRun> {
 
     for ch in text.chars() {
         let g = gid(face, ch);
-        if g == 0 { prev = None; continue; }
-        if let Some(p) = prev { pen = pen.saturating_add(kern_26dot6(face, p, g)); }
+        if g == 0 {
+            prev = None;
+            continue;
+        }
+        if let Some(p) = prev {
+            pen = pen.saturating_add(kern_26dot6(face, p, g));
+        }
 
         let pen_before = pen;
 
@@ -119,7 +216,9 @@ fn glyph_run(ttf: &TrueTypeFont, text: &str) -> Option<GlyphRun> {
         let adv = slot.advance.x as i32;
 
         out.push(RunGlyph {
-            gid: g, pen_before, advance: adv,
+            gid: g,
+            pen_before,
+            advance: adv,
             bitmap_left: slot.bitmap_left as i32,
             bitmap_top: slot.bitmap_top as i32,
             bitmap: None, // no render
@@ -129,14 +228,21 @@ fn glyph_run(ttf: &TrueTypeFont, text: &str) -> Option<GlyphRun> {
         max_pen = max_pen.max(pen);
         prev = Some(g);
     }
-    Some(GlyphRun { glyphs: out, max_pen })
+    Some(GlyphRun {
+        glyphs: out,
+        max_pen,
+    })
 }
 
 fn bbox_from_run(ttf: &TrueTypeFont, text: &str) -> (i32, i32, i32, i32) {
-    let Some(run) = glyph_run(ttf, text) else { return (0,0,0,0); };
-    if run.glyphs.is_empty() { return (0, round26(run.max_pen), 0, 0); }
+    let Some(run) = glyph_run(ttf, text) else {
+        return (0, 0, 0, 0);
+    };
+    if run.glyphs.is_empty() {
+        return (0, round26(run.max_pen), 0, 0);
+    }
 
-    let asc = (ttf.ascender_26dot6 >> 6) as i32;
+    let asc = pixel(ttf.engine.metrics.ascender);
     let (mut l, mut t, mut r, mut b) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
 
     for g in &run.glyphs {
@@ -163,23 +269,33 @@ fn bbox_from_run(ttf: &TrueTypeFont, text: &str) -> (i32, i32, i32, i32) {
 // ── Mask render ──────────────────────────────────────────────────────
 
 fn mask_from_run(ttf: &TrueTypeFont, text: &str) -> (u32, u32, Vec<u8>) {
-    if text.is_empty() { return (0,0,vec![]); }
-    let face = &ttf.face;
-    let asc = (ttf.ascender_26dot6 >> 6) as i32;
+    if text.is_empty() {
+        return (0, 0, vec![]);
+    }
+    let face = &ttf.engine.face;
+    let asc = pixel(ttf.engine.metrics.ascender);
     let mut pen = 0i32;
     let mut prev: Option<u32> = None;
     let mut placed: Vec<(i32, i32, ffi::FT_Bitmap)> = Vec::new(); // (x, y, bitmap)
 
     for ch in text.chars() {
         let g = gid(face, ch);
-        if g == 0 { prev = None; continue; }
-        if let Some(p) = prev { pen = pen.saturating_add(kern_26dot6(face, p, g)); }
+        if g == 0 {
+            prev = None;
+            continue;
+        }
+        if let Some(p) = prev {
+            pen = pen.saturating_add(kern_26dot6(face, p, g));
+        }
 
         let slot = match ffi::FT_Load_Glyph(face, g, RDR | TGT_NORM) {
             Ok(s) => s,
             Err(_) => match ffi::FT_Load_Glyph(face, g, 0) {
                 Ok(s) => s,
-                Err(_) => { prev = None; continue; },
+                Err(_) => {
+                    prev = None;
+                    continue;
+                }
             },
         };
 
@@ -194,32 +310,48 @@ fn mask_from_run(ttf: &TrueTypeFont, text: &str) -> (u32, u32, Vec<u8>) {
         prev = Some(g);
     }
 
-    if placed.is_empty() { return (0,0,vec![]); }
+    if placed.is_empty() {
+        return (0, 0, vec![]);
+    }
 
     let (mut l, mut t, mut r, mut b) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
     for &(x, y, ref bm) in &placed {
-        l = l.min(x); t = t.min(y);
-        r = r.max(x + bm.width as i32); b = b.max(y + bm.rows as i32);
+        l = l.min(x);
+        t = t.min(y);
+        r = r.max(x + bm.width as i32);
+        b = b.max(y + bm.rows as i32);
     }
-    if l == i32::MAX { return (0,0,vec![]); }
+    if l == i32::MAX {
+        return (0, 0, vec![]);
+    }
 
     let w = (r - l).max(0) as u32;
     let h = (b - t).max(0) as u32;
-    let wu = w as usize; let hu = h as usize;
+    let wu = w as usize;
+    let hu = h as usize;
     let mut canvas = vec![0u8; wu.checked_mul(hu).unwrap_or(0)];
-    if canvas.is_empty() { return (w, h, canvas); }
+    if canvas.is_empty() {
+        return (w, h, canvas);
+    }
 
     for (x, y, bm) in &placed {
-        let sx = bm.width as usize; let sy = bm.rows as usize;
+        let sx = bm.width as usize;
+        let sy = bm.rows as usize;
         let dx = (*x - l).max(0) as usize;
         let dy = (*y - t).max(0) as usize;
-        if dx >= wu || dy + sy > hu { continue; }
+        if dx >= wu || dy + sy > hu {
+            continue;
+        }
         let cw = sx.min(wu - dx);
         for row in 0..sy {
             let src = row * sx;
             let dst = (dy + row) * wu + dx;
-            if let (Some(sr), Some(dr)) = (bm.buffer.get(src..src + cw), canvas.get_mut(dst..dst + cw)) {
-                for (dc, sc) in dr.iter_mut().zip(sr) { *dc = (*dc).max(*sc); }
+            if let (Some(sr), Some(dr)) =
+                (bm.buffer.get(src..src + cw), canvas.get_mut(dst..dst + cw))
+            {
+                for (dc, sc) in dr.iter_mut().zip(sr) {
+                    *dc = (*dc).max(*sc);
+                }
             }
         }
     }
