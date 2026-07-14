@@ -6,7 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 import struct
 
-from fontTools.ttLib import TTFont
+from fontTools.ttLib import TTFont, newTable
 from fontTools.ttLib.tables.DefaultTable import DefaultTable
 
 
@@ -430,10 +430,49 @@ def compound_malformed_tables(
     return eblc, ebdt
 
 
-def save_sbit_font(name: str, eblc: bytes, ebdt: bytes) -> None:
+def add_vertical_metrics(font: TTFont, glyph_index: int, advance_height: int) -> None:
+    glyph_order = font.getGlyphOrder()
+    if glyph_index >= len(glyph_order):
+        raise ValueError(f"glyph index {glyph_index} not present in base font")
+    vhea = newTable("vhea")
+    vhea.tableVersion = 0x00010000
+    vhea.ascent = 800
+    vhea.descent = -200
+    vhea.lineGap = 0
+    vhea.advanceHeightMax = advance_height
+    vhea.minTopSideBearing = 0
+    vhea.minBottomSideBearing = 0
+    vhea.yMaxExtent = 800
+    vhea.caretSlopeRise = 1
+    vhea.caretSlopeRun = 0
+    vhea.caretOffset = 0
+    vhea.reserved0 = 0
+    vhea.reserved1 = 0
+    vhea.reserved2 = 0
+    vhea.reserved3 = 0
+    vhea.reserved4 = 0
+    vhea.metricDataFormat = 0
+    vhea.numberOfVMetrics = len(glyph_order)
+    font["vhea"] = vhea
+
+    vmtx = newTable("vmtx")
+    vmtx.metrics = {name: (advance_height, 0) for name in glyph_order}
+    vmtx.metrics[glyph_order[glyph_index]] = (advance_height, 0)
+    font["vmtx"] = vmtx
+
+
+def save_sbit_font(
+    name: str,
+    eblc: bytes,
+    ebdt: bytes,
+    *,
+    vertical_metrics: tuple[int, int] | None = None,
+) -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     font["EBLC"] = raw_table("EBLC", eblc)
     font["EBDT"] = raw_table("EBDT", ebdt)
+    if vertical_metrics is not None:
+        add_vertical_metrics(font, *vertical_metrics)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUT_DIR / name
     if out.exists() or out.is_symlink():
@@ -452,6 +491,7 @@ def build_missing_bitmap() -> None:
 def build_gray_format1_bitmap() -> None:
     eblc, ebdt = gray_format1_tables()
     save_sbit_font("sbit_gray_format1.ttf", eblc, ebdt)
+    save_sbit_font("sbit_gray_format1_vmtx.ttf", eblc, ebdt, vertical_metrics=(1, 880))
 
 
 def build_mono_format1_bitmap() -> None:

@@ -504,26 +504,31 @@ The latest Type 1 face-flag row adds one generated 1.7 KiB
 agree that `/isFixedPitch true` sets the public fixed-width face flag on a
 Type 1 face, covering the Type 1 fixed-pitch branch without adding any
 implicit inputs.
+The latest SBIT vertical-metrics row adds one generated 4.8 KiB
+`sbit_gray_format1_vmtx.ttf` fixture and one explicit `FT_Load_Glyph` variant.
+It reuses the compact gray format-1 bitmap but adds `vhea/vmtx` so the public
+scalable-SBIT missing-vertical-advance fallback is proven against pinned C with
+real vertical metrics instead of the synthesized hhea/OS/2 fallback.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,835 |
-| Additional grouped variants | 2,670 |
+| Concrete explicit cases | 6,836 |
+| Additional grouped variants | 2,671 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,832 |
-| Exact parity | 6,832 / 6,832 |
+| Runnable parity comparisons | 6,833 |
+| Exact parity | 6,833 / 6,833 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,554 / 19,542 (89.8270%) |
+| Covered Rust lines | 17,555 / 19,542 (89.8322%) |
 | Rust function coverage | 1,135 / 1,312 (86.5091%) |
 | Rust instantiation coverage | 1,138 / 1,315 (86.5399%) |
-| Rust region coverage | 25,300 / 28,159 (89.8469%) |
-| Rust branch/condition coverage | 4,158 / 4,880 (85.2049%) |
+| Rust region coverage | 25,304 / 28,159 (89.8611%) |
+| Rust branch/condition coverage | 4,159 / 4,880 (85.2254%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
-| Active fixture font paths | 171 |
-| Stored active font binaries | 128 files, 901 KiB |
+| Active fixture font paths | 172 |
+| Stored active font binaries | 129 files, 906 KiB |
 | Active symlink aliases | 43 |
-| Unique active font contents | 139 SHA-256 identities |
+| Unique active font contents | 140 SHA-256 identities |
 | Deprecated brute-force fonts | 101 files, 99 unique contents, 23 MiB |
 
 The current coverage target is not only line coverage. The maintained
@@ -547,7 +552,7 @@ Current largest uncovered buckets:
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
 | `src/render.rs` | 1,721 / 2,277 | 351 / 426 | 121 / 164 | 2,426 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 2,068 / 2,291 | 234 / 278 | 189 / 228 | 2,856 / 3,195 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/font.rs` | 2,069 / 2,291 | 235 / 278 | 189 / 228 | 2,860 / 3,195 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,538 / 2,828 | 1,006 / 1,282 | 70 / 73 | 3,648 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
 | `src/scaler.rs` | 1,073 / 1,226 | 158 / 188 | 49 / 62 | 1,147 / 1,280 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
@@ -2057,23 +2062,24 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | Ftsynth rendered LCD bitmap embolden rows | The existing `FT_GlyphSlot_AdjustWeight.bitmap_weight_owns_emboldens_and_updates_top` case now adds three rendered-outline bitmap variants over `input/fonts/DejaVuSans.ttf`: normal gray, horizontal LCD, and vertical LCD. The LCD row exposed a real C/Rust mismatch where Rust treated LCD bitmap emboldening as unsupported and skipped slot metric/advance side effects; core now mirrors FreeType `base/ftbitmap.c:330-336` by treating LCD/LCD_V as 8-bit buffers and multiplying only the bitmap embolden footprint along the subpixel axis. Focused ftsynth bitmap parity passes 8 / 8 variants. Full condition coverage passes with 6,833 concrete cases, 6,830 / 6,830 runtime rows, three FTMM pending rows, 17,552 / 19,542 lines, 25,293 / 28,155 regions, 4,156 / 4,880 branches, 1,135 / 1,312 functions, and 1,138 / 1,315 instantiations. Route audit reports 3,515 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 | 2026-07-14 | Ftsynth empty rendered bitmap no-op row | The existing `FT_GlyphSlot_AdjustWeight.bitmap_weight_owns_emboldens_and_updates_top` case adds one rendered DejaVuSans gid 3 empty-outline variant. Pinned C exposes a bitmap-format slot with no bitmap buffer, so `FT_Bitmap_Embolden` returns before ftsynth metric side effects; Rust FFI, C ABI, and WASM ABI now prove the same public no-op through `GlyphSlot::adjust_bitmap_weight`'s no-bitmap branch. Focused ftsynth bitmap parity passes 9 / 9 variants. Full condition coverage passes with 6,834 concrete cases, 6,831 / 6,831 runtime rows, three FTMM pending rows, 17,553 / 19,542 lines, 25,298 / 28,159 regions, 4,157 / 4,880 branches, 1,135 / 1,312 functions, and 1,138 / 1,315 instantiations. Route audit reports 3,516 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 | 2026-07-14 | Type 1 fixed-pitch face-flag row | `font-fixture-type1` now emits `fixed-pitch-type1.pfb`, a compact Type 1 face with `/isFixedPitch true`. One explicit `FT_FACE_FLAG_FIXED_WIDTH.face_property_fixed_width_font@type1-fixed-pitch` variant proves pinned C, Rust FFI, C ABI, and WASM ABI all set `FT_FACE_FLAG_FIXED_WIDTH` for the Type 1 fixed-pitch face, covering `font.rs`'s Type 1 fixed-width branch without harness changes or implicit expansion. Focused face-flag parity passes 3 / 3 variants. Full condition coverage passes with 6,835 concrete cases, 6,832 / 6,832 runtime rows, three FTMM pending rows, 17,554 / 19,542 lines, 25,300 / 28,159 regions, 4,158 / 4,880 branches, 1,135 / 1,312 functions, and 1,138 / 1,315 instantiations. Route audit reports 3,517 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
+| 2026-07-14 | SBIT vmtx vertical-advance fallback row | `font-fixture-sbit` now emits `sbit_gray_format1_vmtx.ttf`, a compact gray format-1 EBLC/EBDT fixture with added `vhea/vmtx` vertical metrics. One explicit `FT_Load_Glyph.matrix_load@sbit-gray-format1-vmtx-sbits-only` variant selects glyph 1 with `FT_LOAD_SBITS_ONLY`, proving pinned C, Rust FFI, C ABI, and WASM ABI all fill the missing scalable SBIT vertical advance from `vmtx` instead of the synthesized font-wide fallback. Focused `matrix_load` parity passes 1,710 / 1,710. Full condition coverage passes with 6,836 concrete cases, 6,833 / 6,833 runtime rows, three FTMM pending rows, 17,555 / 19,542 lines, 25,304 / 28,159 regions, 4,159 / 4,880 branches, 1,135 / 1,312 functions, and 1,138 / 1,315 instantiations. Route audit reports 3,518 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-14
 
-Fresh `test-unified-condition-coverage` still reports 1,988 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,987 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,835 |
-| Runnable parity comparisons | 6,832 / 6,832 |
+| Concrete explicit cases | 6,836 |
+| Runnable parity comparisons | 6,833 / 6,833 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,554 / 19,542 (89.8270%) |
-| Rust region coverage | 25,300 / 28,159 (89.8469%) |
-| Rust branch/condition coverage | 4,158 / 4,880 (85.2049%) |
+| Covered Rust lines | 17,555 / 19,542 (89.8322%) |
+| Rust region coverage | 25,304 / 28,159 (89.8611%) |
+| Rust branch/condition coverage | 4,159 / 4,880 (85.2254%) |
 | Rust function coverage | 1,135 / 1,312 (86.5091%) |
-| Route audit split | real-parity 3,517; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
+| Route audit split | real-parity 3,518; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
