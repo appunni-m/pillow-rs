@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import subprocess
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -26,8 +25,204 @@ MATRIX_PATH = FIXTURE_DIR / "imagingft_matrix.json"
 FONT_PATH = ROOT / "pillow-rs-freetype" / "tests" / "fixtures" / "input" / "fonts" / "DejaVuSans.ttf"
 FONT_REF = "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf"
 FREETYPE_FIXTURE_DIR = ROOT / "pillow-rs-freetype" / "tests" / "fixtures"
-NATIVE_TT_MATRIX = FREETYPE_FIXTURE_DIR / "native_tt_default_matrix.json"
 LARGE_PIXEL_ROW_LIMIT = 3_816
+COMPACT_PIXEL_SIZES = [7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 24, 28, 32, 40]
+
+
+def codepoints(text: str) -> list[int]:
+    return [ord(ch) for ch in text]
+
+
+def unique_codepoints(values: list[int]) -> list[int]:
+    seen: set[int] = set()
+    out: list[int] = []
+    for value in values:
+        if value not in seen:
+            out.append(value)
+            seen.add(value)
+    return out
+
+
+COMPACT_PIXEL_FONTS = [
+    {
+        "id": "dejavu-native",
+        "path": FREETYPE_FIXTURE_DIR / "fonts" / "native" / "dejavu-coverage.ttf",
+        "ref": "../pillow-rs-freetype/tests/fixtures/fonts/native/dejavu-coverage.ttf",
+        "codepoints": unique_codepoints(
+            codepoints('!"#%&()+0128@ABCEHIJLMOQSTUVWXZabcdefghijklmnopqrstuvwxyz')
+            + [
+                0x00C0,
+                0x00C5,
+                0x00C7,
+                0x00D6,
+                0x00DF,
+                0x00E0,
+                0x00E4,
+                0x00E9,
+                0x00F6,
+                0x0108,
+                0x011C,
+                0x011D,
+                0x0153,
+                0x0392,
+                0x0393,
+                0x0394,
+                0x0395,
+                0x0396,
+                0x0398,
+                0x039E,
+                0x039F,
+                0x03A9,
+                0x03B1,
+                0x03B2,
+                0x03B3,
+            ]
+        ),
+    },
+    {
+        "id": "latin-basic",
+        "path": FREETYPE_FIXTURE_DIR / "fonts" / "autohint" / "basic-latin.ttf",
+        "ref": "../pillow-rs-freetype/tests/fixtures/fonts/autohint/basic-latin.ttf",
+        "codepoints": unique_codepoints(
+            [0x20]
+            + codepoints("0123456789AHOVXafijmnopqx")
+            + [
+                0x00C0,
+                0x00E9,
+                0x0301,
+                0x0393,
+                0x03B1,
+                0x0411,
+                0x043E,
+                0x0915,
+                0x0925,
+                0x0930,
+                0x093E,
+                0x094D,
+                0x3007,
+                0x4E00,
+                0x4E09,
+                0x53E3,
+                0x65E5,
+                0x6C38,
+                0x7530,
+            ]
+        ),
+    },
+    {
+        "id": "latin-greek-cyrillic",
+        "path": FREETYPE_FIXTURE_DIR / "fonts" / "autohint" / "latin-greek-cyrillic.ttf",
+        "ref": "../pillow-rs-freetype/tests/fixtures/fonts/autohint/latin-greek-cyrillic.ttf",
+        "codepoints": unique_codepoints(
+            [0x20]
+            + codepoints("0123456789AHOVXamnopqx")
+            + [
+                0x00C0,
+                0x00E9,
+                0x0301,
+                0x0393,
+                0x03B1,
+                0x03BF,
+                0x0411,
+                0x043E,
+                0x0915,
+                0x0925,
+                0x0930,
+                0x093E,
+                0x094D,
+                0x3007,
+                0x4E00,
+                0x4E09,
+                0x53E3,
+                0x65E5,
+                0x6C38,
+                0x7530,
+            ]
+        ),
+    },
+    {
+        "id": "indic",
+        "path": FREETYPE_FIXTURE_DIR / "fonts" / "autohint" / "indic-coverage.ttf",
+        "ref": "../pillow-rs-freetype/tests/fixtures/fonts/autohint/indic-coverage.ttf",
+        "codepoints": unique_codepoints(
+            [0x20]
+            + codepoints("A")
+            + [
+                0x0393,
+                0x03B1,
+                0x0411,
+                0x043E,
+                0x0915,
+                0x0920,
+                0x0925,
+                0x0930,
+                0x093E,
+                0x094D,
+                0x0966,
+                0x0967,
+                0x0968,
+                0x0969,
+                0x096A,
+                0x096B,
+                0x096C,
+                0x096D,
+                0x096E,
+                0x096F,
+                0x3007,
+                0x4E00,
+                0x4E09,
+                0x53E3,
+                0x65E5,
+                0x6C38,
+                0x7530,
+            ]
+        ),
+    },
+    {
+        "id": "cjk",
+        "path": FREETYPE_FIXTURE_DIR / "fonts" / "autohint" / "cjk-coverage.ttf",
+        "ref": "../pillow-rs-freetype/tests/fixtures/fonts/autohint/cjk-coverage.ttf",
+        "codepoints": unique_codepoints(
+            [0x20]
+            + codepoints("!AHIMOVno")
+            + [
+                0x00C3,
+                0x00D8,
+                0x00F8,
+                0x0393,
+                0x03B1,
+                0x0411,
+                0x043E,
+                0x0915,
+                0x0925,
+                0x0930,
+                0x093E,
+                0x094D,
+                0x1E1A,
+                0x1E4C,
+                0x3007,
+                0x4E00,
+                0x4E09,
+                0x4E2A,
+                0x4E3B,
+                0x4ED6,
+                0x519B,
+                0x519C,
+                0x519D,
+                0x53E3,
+                0x65E5,
+                0x6C38,
+                0x7530,
+            ]
+        ),
+    },
+    {
+        "id": "render-coverage",
+        "path": FREETYPE_FIXTURE_DIR / "fonts" / "glyf" / "render-coverage.ttf",
+        "ref": "../pillow-rs-freetype/tests/fixtures/fonts/glyf/render-coverage.ttf",
+        "codepoints": [0xE100, 0xE101, 0xE102, 0xE103, 0xE104],
+    },
+]
 
 
 def sha256(data: bytes) -> str:
@@ -55,7 +250,17 @@ def add_scalar(rows: list[dict], row_id: str, operation: str, text: str, expecte
     )
 
 
-def add_raw(rows: list[dict], row_id: str, operation: str, text: str, mode: str, size, data: bytes, offset=None):
+def add_raw(
+    rows: list[dict],
+    row_id: str,
+    operation: str,
+    text: str,
+    mode: str,
+    size,
+    data: bytes,
+    offset=None,
+    status: str = "parity",
+):
     row = {
         "id": row_id,
         "operation": operation,
@@ -63,7 +268,7 @@ def add_raw(rows: list[dict], row_id: str, operation: str, text: str, mode: str,
         "size": 20,
         "text": text,
         "mode": mode,
-        "status": "incomplete",
+        "status": status,
         "expected_size": list(size),
         "expected_sha256": sha256(data),
         "expected_raw": write_raw(row_id, data),
@@ -100,37 +305,41 @@ def add_hash_only_raw(
     rows.append(row)
 
 
-def ensure_native_tt_matrix() -> None:
-    if NATIVE_TT_MATRIX.exists():
-        return
-    result = subprocess.run(
-        ["make", "-C", str(ROOT / "pillow-rs-freetype"), "fixture-native-tt-default"],
-        cwd=ROOT,
-        check=False,
-        text=True,
-        capture_output=True,
-    )
-    if result.returncode != 0:
+def compact_pixel_rows() -> list[dict]:
+    rows: list[dict] = []
+    for font in COMPACT_PIXEL_FONTS:
+        for size_pt in COMPACT_PIXEL_SIZES:
+            for codepoint in font["codepoints"]:
+                rows.append(
+                    {
+                        "id": f"{font['id']}_s{size_pt}_u{codepoint:04x}",
+                        "font": font["ref"],
+                        "font_path": font["path"],
+                        "size_pt": size_pt,
+                        "char": chr(codepoint),
+                    }
+                )
+    if len(rows) < LARGE_PIXEL_ROW_LIMIT:
         raise SystemExit(
-            "failed to generate native TrueType matrix for imagingft fixtures\n"
-            f"stdout:\n{result.stdout}\n"
-            f"stderr:\n{result.stderr}"
+            f"compact imagingft pixel matrix has {len(rows)} rows; "
+            f"expected at least {LARGE_PIXEL_ROW_LIMIT}"
         )
+    return rows[:LARGE_PIXEL_ROW_LIMIT]
 
 
 def add_large_pixel_matrix(rows: list[dict]) -> None:
-    ensure_native_tt_matrix()
-    native = json.loads(NATIVE_TT_MATRIX.read_text(encoding="utf-8"))
-    selected = [
-        row
-        for row in native["rows"]
-        if row["operation"] == "getmask" and row.get("ref_raw") and row.get("ref_sha256")
-    ][:LARGE_PIXEL_ROW_LIMIT]
+    selected = compact_pixel_rows()
+    font_cache: dict[tuple[Path, int], ImageFont.FreeTypeFont] = {}
 
     for row in selected:
-        font_path = FREETYPE_FIXTURE_DIR / "input" / "fonts_autohint" / f"{row['font']}.ttf"
-        font_ref = f"../pillow-rs-freetype/tests/fixtures/input/fonts_autohint/{row['font']}.ttf"
-        font = ImageFont.truetype(str(font_path), int(row["size_pt"]))
+        font_path = row["font_path"]
+        font_ref = row["font"]
+        size_pt = int(row["size_pt"])
+        font_key = (font_path, size_pt)
+        font = font_cache.get(font_key)
+        if font is None:
+            font = ImageFont.truetype(str(font_path), size_pt)
+            font_cache[font_key] = font
         mask = font.getmask(row["char"], mode="L")
         mask_bytes = bytes(mask)
 
@@ -174,14 +383,12 @@ def main() -> None:
 
     for text in ("Hello", "AV", "jQ"):
         slug = "".join(ch if ch.isalnum() else f"{ord(ch):x}" for ch in text).lower()
-        scalar_status = "incomplete" if text == "AV" else "parity"
         add_scalar(
             rows,
             f"dejavusans20_{slug}_getbbox",
             "getbbox",
             text,
             list(font.getbbox(text)),
-            scalar_status,
         )
         add_scalar(
             rows,
@@ -189,7 +396,6 @@ def main() -> None:
             "getlength",
             text,
             font.getlength(text),
-            scalar_status,
         )
 
         mask = font.getmask(text, mode="L")
