@@ -566,6 +566,31 @@
             ]
           },
           {
+            "id": "sbit-composite-mono-carry-success-format8",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fixtures/assets/fonts/sbit_composite_mono_carry_success_format8.ttf",
+                "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT compound image-format-8 glyph 2 referencing glyph 1's 10-bit MONO embedded bitmap at a 7-pixel x offset, forcing the packed compound blitter to carry tail bits into a second target byte."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 2,
+              "load_flags": [
+                "FT_LOAD_SBITS_ONLY"
+              ]
+            },
+            "coverage": [
+              "sbit:compound-format8-mono-shift-carry-success"
+            ]
+          },
+          {
             "id": "sbit-composite-bgra-success-format8",
             "assets": {
               "font": {

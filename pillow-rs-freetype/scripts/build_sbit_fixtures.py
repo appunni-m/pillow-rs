@@ -376,6 +376,17 @@ def compound_mono_shifted_success_format8_tables() -> tuple[bytes, bytes]:
     return compound_pair_tables(1, simple_image, 8, compound_image)
 
 
+def compound_mono_carry_success_format8_tables() -> tuple[bytes, bytes]:
+    # A 10-bit component shifted by 7 pixels leaves a two-bit tail; FreeType's
+    # packed compound blitter carries that tail into a second target byte.
+    simple_image = bytes([2, 10, 1, 2, 11]) + bytes([0xA5, 0xC0, 0x5A, 0x80])
+    compound_image = compound_image_format8(
+        bytes([2, 17, 1, 2, 18]),
+        [(1, 7, 0)],
+    )
+    return compound_pair_tables(1, simple_image, 8, compound_image)
+
+
 def compound_bgra_success_format8_tables() -> tuple[bytes, bytes]:
     simple_image = bytes([1, 2, 1, 1, 3]) + bytes(
         [0x10, 0x20, 0x30, 0xFF, 0x40, 0x50, 0x60, 0x80]
@@ -564,6 +575,8 @@ def build_composite_success() -> None:
     save_sbit_font("sbit_composite_mono_success_format8.ttf", eblc, ebdt)
     eblc, ebdt = compound_mono_shifted_success_format8_tables()
     save_sbit_font("sbit_composite_mono_shifted_success_format8.ttf", eblc, ebdt)
+    eblc, ebdt = compound_mono_carry_success_format8_tables()
+    save_sbit_font("sbit_composite_mono_carry_success_format8.ttf", eblc, ebdt)
     eblc, ebdt = compound_bgra_success_format8_tables()
     save_sbit_font("sbit_composite_bgra_success_format8.ttf", eblc, ebdt)
     eblc, ebdt = compound_negative_offset_tables()
