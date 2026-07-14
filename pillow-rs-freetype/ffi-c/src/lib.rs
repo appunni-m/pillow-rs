@@ -388,6 +388,11 @@ pub fn abi_c_string_bytes(ptr: *const c_char) -> Vec<u8> {
     unsafe { CStr::from_ptr(ptr).to_bytes().to_vec() }
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Error_String(error_code: FT_Error) -> *const c_char {
+    rust_ffi::FT_Error_String(error_code).map_or(ptr::null(), |text| text.as_ptr().cast())
+}
+
 #[cfg(feature = "abi-test-support")]
 pub fn abi_uint32_list(ptr: *const FT_UInt32) -> Option<Vec<FT_UInt32>> {
     if ptr.is_null() {

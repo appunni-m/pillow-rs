@@ -2,6 +2,7 @@
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::ffi::CStr;
 use std::ptr;
 use std::rc::{Rc, Weak};
 use std::sync::{Mutex, OnceLock};
@@ -27,6 +28,18 @@ use super::types::{
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
+
+pub fn FT_Error_String(error_code: FT_Error) -> Option<&'static CStr> {
+    if !(0..FT_Err_Max).contains(&error_code) {
+        return None;
+    }
+    // Pinned FreeType is built with FT_ENABLE_ERROR_STRINGS=OFF, so
+    // `src/base/fterrors.c` returns NULL after the range check.
+    if !FT_CONFIG_OPTION_ERROR_STRINGS_ENABLED {
+        return None;
+    }
+    None
+}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FT_Library {

@@ -843,6 +843,24 @@ pub extern "C" fn fontdone_wasm_matrix_invert(matrix: *mut FontdoneWasmMatrix) -
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_error_string(
+    error_code: FT_Error,
+    out: *mut FontdoneWasmString,
+) -> FT_Bool {
+    // SAFETY: the caller provides writable storage for the output record or null.
+    let Some(out) = (unsafe { out.as_mut() }) else {
+        return 0;
+    };
+    let Some(text) = rust_ffi::FT_Error_String(error_code) else {
+        *out = FontdoneWasmString::default();
+        return 0;
+    };
+    out.string = text.as_ptr().cast();
+    out.string_len = u32::try_from(text.to_bytes().len()).unwrap_or(u32::MAX);
+    1
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_set_pixel_sizes(
     handle: usize,
     pixel_width: FT_UInt,

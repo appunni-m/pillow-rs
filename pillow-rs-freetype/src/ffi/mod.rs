@@ -18,7 +18,7 @@ pub use convert::{
 pub use handles::{
     FT_Activate_Size, FT_Angle_Diff, FT_Atan2, FT_CeilFix, FT_Charmap_Format, FT_Charmap_Info,
     FT_Charmap_Language_ID, FT_Cos, FT_DivFix, FT_Done_Face, FT_Done_FreeType, FT_Done_Size,
-    FT_Face, FT_Face_Active_Charmap_Index, FT_Face_Charmap, FT_Face_Charmap_Count,
+    FT_Error_String, FT_Face, FT_Face_Active_Charmap_Index, FT_Face_Charmap, FT_Face_Charmap_Count,
     FT_Face_Charmap_Info, FT_Face_CheckTrueTypePatents, FT_Face_GetCharVariantIndex,
     FT_Face_GetCharVariantIsDefault, FT_Face_GetCharsOfVariant, FT_Face_GetVariantSelectors,
     FT_Face_GetVariantsOfChar, FT_Face_Info, FT_Face_SetUnpatentedHinting, FT_FloorFix,
