@@ -235,6 +235,49 @@ def gray_format3_tables() -> tuple[bytes, bytes]:
     return eblc, ebdt
 
 
+def with_eblc_version(eblc: bytes, version: int) -> bytes:
+    return struct.pack(">I", version) + eblc[4:]
+
+
+def two_strikes_y_mismatch_tables() -> tuple[bytes, bytes]:
+    image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x80, 0xC0, 0xFF])
+    first_tables = (
+        struct.pack(">HHI", 1, 1, 8)
+        + struct.pack(">HHI", 1, 1, 4)
+        + struct.pack(">II", 0, len(image))
+    )
+    second_tables = first_tables
+    first_offset = 8 + 96
+    second_offset = first_offset + len(first_tables)
+    first_strike = bitmap_size_table(
+        first_offset,
+        len(first_tables),
+        1,
+        1,
+        x_ppem=20,
+        y_ppem=19,
+        bit_depth=8,
+    )
+    second_strike = bitmap_size_table(
+        second_offset,
+        len(second_tables),
+        1,
+        1,
+        x_ppem=20,
+        y_ppem=20,
+        bit_depth=8,
+    )
+    eblc = (
+        struct.pack(">II", 0x00020000, 2)
+        + first_strike
+        + second_strike
+        + first_tables
+        + second_tables
+    )
+    ebdt = struct.pack(">I", 0x00020000) + image
+    return eblc, ebdt
+
+
 def no_matching_strike_eblc() -> bytes:
     index_array = struct.pack(">HHI", 1, 1, 8)
     index_subtable = struct.pack(">HHI", 1, 1, 0) + struct.pack(">II", 0, 0)
@@ -264,7 +307,11 @@ def unsupported_index_format_eblc() -> bytes:
 
 
 def invalid_version_eblc() -> bytes:
-    return struct.pack(">II", 0x00030000, 0)
+    return struct.pack(">II", 0x00040000, 0)
+
+
+def too_short_eblc() -> bytes:
+    return b"\0" * 7
 
 
 def strike_count_overflow_eblc() -> bytes:
@@ -403,6 +450,33 @@ def compound_mono_carry_success_format8_tables() -> tuple[bytes, bytes]:
     return compound_pair_tables(1, simple_image, 8, compound_image)
 
 
+def compound_mono_aligned_success_format8_tables() -> tuple[bytes, bytes]:
+    simple_image = bytes([2, 8, 1, 2, 9]) + bytes([0xA5, 0x5A])
+    compound_image = compound_image_format8(
+        bytes([2, 8, 1, 2, 9]),
+        [(1, 0, 0)],
+    )
+    return compound_pair_tables(1, simple_image, 8, compound_image)
+
+
+def compound_mono_shifted_aligned_success_format8_tables() -> tuple[bytes, bytes]:
+    simple_image = bytes([2, 8, 1, 2, 9]) + bytes([0xA5, 0x5A])
+    compound_image = compound_image_format8(
+        bytes([2, 9, 1, 2, 10]),
+        [(1, 1, 0)],
+    )
+    return compound_pair_tables(1, simple_image, 8, compound_image)
+
+
+def compound_mono_zero_height_component_format8_tables() -> tuple[bytes, bytes]:
+    simple_image = bytes([0, 1, 1, 0, 1])
+    compound_image = compound_image_format8(
+        bytes([1, 1, 1, 1, 2]),
+        [(1, 0, 0)],
+    )
+    return compound_pair_tables(1, simple_image, 8, compound_image)
+
+
 def compound_gray2_success_format8_tables() -> tuple[bytes, bytes]:
     simple_image = bytes([2, 5, 1, 2, 6]) + bytes([0x1B, 0x80, 0xE4, 0x40])
     compound_image = compound_image_format8(
@@ -441,11 +515,29 @@ def compound_negative_offset_tables() -> tuple[bytes, bytes]:
     return compound_pair_tables(8, simple_image, 8, compound_image)
 
 
+def compound_negative_y_offset_tables() -> tuple[bytes, bytes]:
+    simple_image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x80, 0xC0, 0xFF])
+    compound_image = compound_image_format8(
+        bytes([2, 2, 1, 2, 3]),
+        [(1, 0, -1)],
+    )
+    return compound_pair_tables(8, simple_image, 8, compound_image)
+
+
 def compound_out_of_bounds_tables() -> tuple[bytes, bytes]:
     simple_image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x80, 0xC0, 0xFF])
     compound_image = compound_image_format8(
         bytes([2, 2, 1, 2, 3]),
         [(1, 1, 0)],
+    )
+    return compound_pair_tables(8, simple_image, 8, compound_image)
+
+
+def compound_out_of_bounds_y_tables() -> tuple[bytes, bytes]:
+    simple_image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x80, 0xC0, 0xFF])
+    compound_image = compound_image_format8(
+        bytes([2, 2, 1, 2, 3]),
+        [(1, 0, 1)],
     )
     return compound_pair_tables(8, simple_image, 8, compound_image)
 
@@ -521,10 +613,12 @@ def save_sbit_font(
     ebdt: bytes,
     *,
     vertical_metrics: tuple[int, int] | None = None,
+    table_tags: tuple[str, str] = ("EBLC", "EBDT"),
 ) -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
-    font["EBLC"] = raw_table("EBLC", eblc)
-    font["EBDT"] = raw_table("EBDT", ebdt)
+    index_tag, data_tag = table_tags
+    font[index_tag] = raw_table(index_tag, eblc)
+    font[data_tag] = raw_table(data_tag, ebdt)
     if vertical_metrics is not None:
         add_vertical_metrics(font, *vertical_metrics)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -590,8 +684,18 @@ def build_gray_format3_bitmap() -> None:
     save_sbit_font("sbit_gray_format3.ttf", eblc, ebdt)
 
 
+def build_sbit_table_tag_and_strike_probes() -> None:
+    eblc, ebdt = gray_format1_tables()
+    save_sbit_font("sbit_cblc_cbdt_gray_format1.ttf", eblc, ebdt, table_tags=("CBLC", "CBDT"))
+    save_sbit_font("sbit_bloc_bdat_gray_format1.ttf", eblc, ebdt, table_tags=("bloc", "bdat"))
+    save_sbit_font("sbit_byte_swapped_version.ttf", with_eblc_version(eblc, 0x00000200), ebdt)
+    eblc, ebdt = two_strikes_y_mismatch_tables()
+    save_sbit_font("sbit_two_strikes_y_mismatch.ttf", eblc, ebdt)
+
+
 def build_sbit_error_branch_fixtures() -> None:
     ebdt = struct.pack(">I", 0x00020000)
+    save_sbit_font("sbit_too_short_eblc.ttf", too_short_eblc(), ebdt)
     save_sbit_font("sbit_empty_ebdt.ttf", valid_empty_eblc(), b"")
     save_sbit_font("sbit_invalid_eblc_version.ttf", invalid_version_eblc(), ebdt)
     save_sbit_font("sbit_strike_count_overflow.ttf", strike_count_overflow_eblc(), ebdt)
@@ -620,6 +724,12 @@ def build_composite_success() -> None:
     save_sbit_font("sbit_composite_mono_shifted_success_format8.ttf", eblc, ebdt)
     eblc, ebdt = compound_mono_carry_success_format8_tables()
     save_sbit_font("sbit_composite_mono_carry_success_format8.ttf", eblc, ebdt)
+    eblc, ebdt = compound_mono_aligned_success_format8_tables()
+    save_sbit_font("sbit_composite_mono_aligned_success_format8.ttf", eblc, ebdt)
+    eblc, ebdt = compound_mono_shifted_aligned_success_format8_tables()
+    save_sbit_font("sbit_composite_mono_shifted_aligned_success_format8.ttf", eblc, ebdt)
+    eblc, ebdt = compound_mono_zero_height_component_format8_tables()
+    save_sbit_font("sbit_composite_mono_zero_height_component_format8.ttf", eblc, ebdt)
     eblc, ebdt = compound_gray2_success_format8_tables()
     save_sbit_font("sbit_composite_gray2_success_format8.ttf", eblc, ebdt)
     eblc, ebdt = compound_gray4_success_format8_tables()
@@ -628,8 +738,12 @@ def build_composite_success() -> None:
     save_sbit_font("sbit_composite_bgra_success_format8.ttf", eblc, ebdt)
     eblc, ebdt = compound_negative_offset_tables()
     save_sbit_font("sbit_composite_negative_offset_format8.ttf", eblc, ebdt)
+    eblc, ebdt = compound_negative_y_offset_tables()
+    save_sbit_font("sbit_composite_negative_y_offset_format8.ttf", eblc, ebdt)
     eblc, ebdt = compound_out_of_bounds_tables()
     save_sbit_font("sbit_composite_out_of_bounds_format8.ttf", eblc, ebdt)
+    eblc, ebdt = compound_out_of_bounds_y_tables()
+    save_sbit_font("sbit_composite_out_of_bounds_y_format8.ttf", eblc, ebdt)
 
 
 def build_composite_malformed(
@@ -666,6 +780,7 @@ def main() -> None:
     build_unsupported_image_format_bitmap()
     build_missing_small_metrics_width_bitmap()
     build_gray_format3_bitmap()
+    build_sbit_table_tag_and_strike_probes()
     build_sbit_error_branch_fixtures()
     build_composite_missing_subglyphs()
 

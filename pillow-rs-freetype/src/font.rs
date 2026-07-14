@@ -1567,14 +1567,17 @@ impl Font {
         })?;
         let metrics = self.size_metrics();
         let mut sbit_glyph = sbit.load_glyph(glyph_index, metrics.x_ppem, metrics.y_ppem, 0)?;
-        // FreeType `truetype/ttgload.c:2401-2469` fills missing scalable SBIT
-        // advances from the glyph's linear TrueType advances after
-        // `load_sbit_image`.
-        if sbit_glyph.metrics.hori_advance == 0 {
-            sbit_glyph.metrics.hori_advance = self.glyph_index_hori_advance_26dot6(glyph_index);
-        }
-        if sbit_glyph.metrics.vert_advance == 0 {
-            sbit_glyph.metrics.vert_advance = self.glyph_index_vert_advance_26dot6(glyph_index);
+        if sbit.kind() == tt::sbit::SbitTableKind::Eblc {
+            // FreeType `truetype/ttgload.c:2401-2469` fills missing scalable
+            // EBLC/bloc SBIT advances from the glyph's linear TrueType advances
+            // after `load_sbit_image`; CBLC/CBDT color bitmap loads keep the
+            // zero advances reported by `sfnt/ttsbit.c`.
+            if sbit_glyph.metrics.hori_advance == 0 {
+                sbit_glyph.metrics.hori_advance = self.glyph_index_hori_advance_26dot6(glyph_index);
+            }
+            if sbit_glyph.metrics.vert_advance == 0 {
+                sbit_glyph.metrics.vert_advance = self.glyph_index_vert_advance_26dot6(glyph_index);
+            }
         }
         Ok(sbit_glyph)
     }
