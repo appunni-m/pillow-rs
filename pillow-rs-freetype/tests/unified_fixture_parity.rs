@@ -16639,13 +16639,15 @@ fn outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> 
     }
     let outline = outline_render_outline(case)?;
     let (width, height) = outline_render_target_box(&case.inputs.params)?;
-    let raster =
-        fontdone::grays::rasterize_in_box(outline, width, height).map_err(|err| err.to_string())?;
-    Ok(ok(outline_render_bitmap_payload(
-        raster.width,
-        raster.height,
-        &raster.pixels,
-    )))
+    match fontdone::grays::rasterize_in_box(outline, width, height) {
+        Ok(raster) => Ok(ok(outline_render_bitmap_payload(
+            width,
+            height,
+            &raster.pixels,
+        ))),
+        Err(fontdone::FontError::InvalidOutline(_)) => Ok(error(FT_Err_Invalid_Outline)),
+        Err(err) => Err(err.to_string()),
+    }
 }
 
 fn outline_render_outline(case: &InputCase) -> Result<fontdone::outline::Outline, String> {
@@ -16655,6 +16657,98 @@ fn outline_render_outline(case: &InputCase) -> Result<fontdone::outline::Outline
         "outlines/render/even-odd-overlap.json" => Ok(outline_render_even_odd_overlap()),
         "outlines/render/clipped-crossing-lines.json" => Ok(outline_render_clipped_crossing()),
         "outlines/render/cubic-closed-loop.json" => Ok(outline_render_cubic_loop()),
+        "outlines/render/empty-outline.json" => Ok(outline_render_empty()),
+        "outlines/render/line-above-clip.json" => Ok(outline_render_line_above_clip()),
+        "outlines/render/line-below-clip.json" => Ok(outline_render_line_below_clip()),
+        "outlines/render/line-partial-above-clip.json" => {
+            Ok(outline_render_line_partial_above_clip())
+        }
+        "outlines/render/line-partial-below-clip.json" => {
+            Ok(outline_render_line_partial_below_clip())
+        }
+        "outlines/render/conic-below-clip.json" => Ok(outline_render_conic_below_clip()),
+        "outlines/render/conic-partial-above-clip.json" => {
+            Ok(outline_render_conic_partial_above_clip())
+        }
+        "outlines/render/conic-partial-below-clip.json" => {
+            Ok(outline_render_conic_partial_below_clip())
+        }
+        "outlines/render/conic-above-control-inside.json" => Ok(outline_render_conic_with_points(
+            (8, 40),
+            (16, 16),
+            (24, 40),
+        )),
+        "outlines/render/conic-above-to-inside.json" => Ok(outline_render_conic_with_points(
+            (8, 40),
+            (16, 40),
+            (24, 16),
+        )),
+        "outlines/render/conic-below-control-inside.json" => Ok(outline_render_conic_with_points(
+            (8, -16),
+            (16, 16),
+            (24, -16),
+        )),
+        "outlines/render/conic-below-to-inside.json" => Ok(outline_render_conic_with_points(
+            (8, -16),
+            (16, -16),
+            (24, 16),
+        )),
+        "outlines/render/cubic-above-clip.json" => Ok(outline_render_cubic_above_clip()),
+        "outlines/render/cubic-below-clip.json" => Ok(outline_render_cubic_below_clip()),
+        "outlines/render/cubic-partial-above-clip.json" => {
+            Ok(outline_render_cubic_partial_above_clip())
+        }
+        "outlines/render/cubic-partial-below-clip.json" => {
+            Ok(outline_render_cubic_partial_below_clip())
+        }
+        "outlines/render/cubic-above-c2-inside.json" => Ok(outline_render_cubic_with_points(
+            (8, 40),
+            (8, 40),
+            (24, 16),
+            (24, 40),
+        )),
+        "outlines/render/cubic-above-c1-inside.json" => Ok(outline_render_cubic_with_points(
+            (8, 40),
+            (8, 16),
+            (24, 40),
+            (24, 40),
+        )),
+        "outlines/render/cubic-above-start-inside.json" => Ok(outline_render_cubic_with_points(
+            (8, 16),
+            (8, 40),
+            (24, 40),
+            (24, 40),
+        )),
+        "outlines/render/cubic-below-c2-inside.json" => Ok(outline_render_cubic_with_points(
+            (8, -16),
+            (8, -16),
+            (24, 16),
+            (24, -16),
+        )),
+        "outlines/render/cubic-below-c1-inside.json" => Ok(outline_render_cubic_with_points(
+            (8, -16),
+            (8, 16),
+            (24, -16),
+            (24, -16),
+        )),
+        "outlines/render/cubic-below-start-inside.json" => Ok(outline_render_cubic_with_points(
+            (8, 16),
+            (8, -16),
+            (24, -16),
+            (24, -16),
+        )),
+        "outlines/render/cubic-third-flatness.json" => Ok(outline_render_cubic_third_flatness()),
+        "outlines/render/cubic-fourth-flatness.json" => Ok(outline_render_cubic_fourth_flatness()),
+        "outlines/render/cubic-close-to-start.json" => Ok(outline_render_cubic_close_to_start()),
+        "outlines/render/invalid-contour-order.json" => Ok(outline_render_invalid_contour_order()),
+        "outlines/render/invalid-starts-cubic.json" => Ok(outline_render_invalid_starts_cubic()),
+        "outlines/render/invalid-conic-bad-tag.json" => Ok(outline_render_invalid_conic_bad_tag()),
+        "outlines/render/invalid-cubic-single-control.json" => {
+            Ok(outline_render_invalid_cubic_single_control())
+        }
+        "outlines/render/invalid-cubic-second-not-cubic.json" => {
+            Ok(outline_render_invalid_cubic_second_not_cubic())
+        }
         _ => Ok(outline_render_square()),
     }
 }
@@ -16724,6 +16818,21 @@ fn outline_render_square() -> fontdone::outline::Outline {
     }
 }
 
+fn outline_render_empty() -> fontdone::outline::Outline {
+    fontdone::outline::Outline {
+        n_contours: 0,
+        contours: Vec::new(),
+        points: Vec::new(),
+        tags: Vec::new(),
+        contour_dropouts: Vec::new(),
+        flags: 0,
+        cbox_x_min: 0,
+        cbox_y_min: 0,
+        cbox_x_max: 32,
+        cbox_y_max: 32,
+    }
+}
+
 fn outline_render_even_odd_overlap() -> fontdone::outline::Outline {
     let mut outline = outline_render_square();
     outline.n_contours = 2;
@@ -16753,6 +16862,22 @@ fn outline_render_even_odd_overlap() -> fontdone::outline::Outline {
     outline.tags = vec![1; 8];
     outline.flags = 0x02;
     outline
+}
+
+fn outline_render_line_above_clip() -> fontdone::outline::Outline {
+    outline_render_rect(8, 40, 24, 48)
+}
+
+fn outline_render_line_below_clip() -> fontdone::outline::Outline {
+    outline_render_rect(8, -16, 24, -8)
+}
+
+fn outline_render_line_partial_above_clip() -> fontdone::outline::Outline {
+    outline_render_rect(8, 24, 24, 40)
+}
+
+fn outline_render_line_partial_below_clip() -> fontdone::outline::Outline {
+    outline_render_rect(8, -8, 24, 8)
 }
 
 fn outline_render_clipped_crossing() -> fontdone::outline::Outline {
@@ -16791,6 +16916,53 @@ fn outline_render_clipped_crossing() -> fontdone::outline::Outline {
     }
 }
 
+fn outline_render_conic_below_clip() -> fontdone::outline::Outline {
+    outline_render_conic_with_points((8, -16), (16, -24), (24, -16))
+}
+
+fn outline_render_conic_partial_above_clip() -> fontdone::outline::Outline {
+    outline_render_conic_with_points((8, 40), (16, 48), (24, 16))
+}
+
+fn outline_render_conic_partial_below_clip() -> fontdone::outline::Outline {
+    outline_render_conic_with_points((8, -16), (16, -24), (24, 16))
+}
+
+fn outline_render_conic_with_points(
+    start: (i32, i32),
+    control: (i32, i32),
+    to: (i32, i32),
+) -> fontdone::outline::Outline {
+    fontdone::outline::Outline {
+        n_contours: 1,
+        contours: vec![2],
+        points: vec![
+            fontdone::outline::OutlinePoint {
+                x: start.0 * 64,
+                y: start.1 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: control.0 * 64,
+                y: control.1 * 64,
+                on_curve: false,
+            },
+            fontdone::outline::OutlinePoint {
+                x: to.0 * 64,
+                y: to.1 * 64,
+                on_curve: true,
+            },
+        ],
+        tags: vec![1, 0, 1],
+        contour_dropouts: Vec::new(),
+        flags: 0,
+        cbox_x_min: 0,
+        cbox_y_min: 0,
+        cbox_x_max: 32,
+        cbox_y_max: 32,
+    }
+}
+
 fn outline_render_cubic_loop() -> fontdone::outline::Outline {
     fontdone::outline::Outline {
         n_contours: 1,
@@ -16814,6 +16986,244 @@ fn outline_render_cubic_loop() -> fontdone::outline::Outline {
             fontdone::outline::OutlinePoint {
                 x: 24 * 64,
                 y: 16 * 64,
+                on_curve: true,
+            },
+        ],
+        tags: vec![1, 2, 2, 1],
+        contour_dropouts: Vec::new(),
+        flags: 0,
+        cbox_x_min: 0,
+        cbox_y_min: 0,
+        cbox_x_max: 32,
+        cbox_y_max: 32,
+    }
+}
+
+fn outline_render_cubic_above_clip() -> fontdone::outline::Outline {
+    outline_render_cubic_with_points((8, 40), (8, 52), (24, 52), (24, 40))
+}
+
+fn outline_render_cubic_below_clip() -> fontdone::outline::Outline {
+    outline_render_cubic_with_points((8, -16), (8, -28), (24, -28), (24, -16))
+}
+
+fn outline_render_cubic_partial_above_clip() -> fontdone::outline::Outline {
+    outline_render_cubic_with_points((8, 40), (8, 52), (24, 16), (24, 16))
+}
+
+fn outline_render_cubic_partial_below_clip() -> fontdone::outline::Outline {
+    outline_render_cubic_with_points((8, -16), (8, -28), (24, 16), (24, 16))
+}
+
+fn outline_render_cubic_third_flatness() -> fontdone::outline::Outline {
+    outline_render_cubic_with_points((16, 16), (0, 16), (16, 16), (16, 16))
+}
+
+fn outline_render_cubic_fourth_flatness() -> fontdone::outline::Outline {
+    outline_render_cubic_with_points((16, 16), (16, 0), (16, 16), (16, 16))
+}
+
+fn outline_render_cubic_close_to_start() -> fontdone::outline::Outline {
+    fontdone::outline::Outline {
+        n_contours: 1,
+        contours: vec![2],
+        points: vec![
+            fontdone::outline::OutlinePoint {
+                x: 8 * 64,
+                y: 16 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 8 * 64,
+                y: 28 * 64,
+                on_curve: false,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 24 * 64,
+                y: 28 * 64,
+                on_curve: false,
+            },
+        ],
+        tags: vec![1, 2, 2],
+        contour_dropouts: Vec::new(),
+        flags: 0,
+        cbox_x_min: 0,
+        cbox_y_min: 0,
+        cbox_x_max: 32,
+        cbox_y_max: 32,
+    }
+}
+
+fn outline_render_invalid_contour_order() -> fontdone::outline::Outline {
+    let mut outline = outline_render_square();
+    outline.contours = vec![-1];
+    outline
+}
+
+fn outline_render_invalid_starts_cubic() -> fontdone::outline::Outline {
+    let mut outline = outline_render_cubic_loop();
+    outline.tags[0] = 2;
+    outline.points[0].on_curve = false;
+    outline
+}
+
+fn outline_render_invalid_conic_bad_tag() -> fontdone::outline::Outline {
+    fontdone::outline::Outline {
+        n_contours: 1,
+        contours: vec![2],
+        points: vec![
+            fontdone::outline::OutlinePoint {
+                x: 8 * 64,
+                y: 16 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 16 * 64,
+                y: 28 * 64,
+                on_curve: false,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 24 * 64,
+                y: 16 * 64,
+                on_curve: false,
+            },
+        ],
+        tags: vec![1, 0, 2],
+        contour_dropouts: Vec::new(),
+        flags: 0,
+        cbox_x_min: 0,
+        cbox_y_min: 0,
+        cbox_x_max: 32,
+        cbox_y_max: 32,
+    }
+}
+
+fn outline_render_invalid_cubic_single_control() -> fontdone::outline::Outline {
+    fontdone::outline::Outline {
+        n_contours: 1,
+        contours: vec![1],
+        points: vec![
+            fontdone::outline::OutlinePoint {
+                x: 8 * 64,
+                y: 16 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 16 * 64,
+                y: 28 * 64,
+                on_curve: false,
+            },
+        ],
+        tags: vec![1, 2],
+        contour_dropouts: Vec::new(),
+        flags: 0,
+        cbox_x_min: 0,
+        cbox_y_min: 0,
+        cbox_x_max: 32,
+        cbox_y_max: 32,
+    }
+}
+
+fn outline_render_invalid_cubic_second_not_cubic() -> fontdone::outline::Outline {
+    fontdone::outline::Outline {
+        n_contours: 1,
+        contours: vec![2],
+        points: vec![
+            fontdone::outline::OutlinePoint {
+                x: 8 * 64,
+                y: 16 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 16 * 64,
+                y: 28 * 64,
+                on_curve: false,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 24 * 64,
+                y: 16 * 64,
+                on_curve: true,
+            },
+        ],
+        tags: vec![1, 2, 1],
+        contour_dropouts: Vec::new(),
+        flags: 0,
+        cbox_x_min: 0,
+        cbox_y_min: 0,
+        cbox_x_max: 32,
+        cbox_y_max: 32,
+    }
+}
+
+fn outline_render_rect(
+    x_min: i32,
+    y_min: i32,
+    x_max: i32,
+    y_max: i32,
+) -> fontdone::outline::Outline {
+    fontdone::outline::Outline {
+        n_contours: 1,
+        contours: vec![3],
+        points: vec![
+            fontdone::outline::OutlinePoint {
+                x: x_min * 64,
+                y: y_min * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: x_max * 64,
+                y: y_min * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: x_max * 64,
+                y: y_max * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: x_min * 64,
+                y: y_max * 64,
+                on_curve: true,
+            },
+        ],
+        tags: vec![1; 4],
+        contour_dropouts: Vec::new(),
+        flags: 0,
+        cbox_x_min: 0,
+        cbox_y_min: 0,
+        cbox_x_max: 32,
+        cbox_y_max: 32,
+    }
+}
+
+fn outline_render_cubic_with_points(
+    start: (i32, i32),
+    c1: (i32, i32),
+    c2: (i32, i32),
+    to: (i32, i32),
+) -> fontdone::outline::Outline {
+    fontdone::outline::Outline {
+        n_contours: 1,
+        contours: vec![3],
+        points: vec![
+            fontdone::outline::OutlinePoint {
+                x: start.0 * 64,
+                y: start.1 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: c1.0 * 64,
+                y: c1.1 * 64,
+                on_curve: false,
+            },
+            fontdone::outline::OutlinePoint {
+                x: c2.0 * 64,
+                y: c2.1 * 64,
+                on_curve: false,
+            },
+            fontdone::outline::OutlinePoint {
+                x: to.0 * 64,
+                y: to.1 * 64,
                 on_curve: true,
             },
         ],

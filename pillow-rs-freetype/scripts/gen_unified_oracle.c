@@ -3537,7 +3537,14 @@ static int emit_outline_render(int argc, char** argv) {
     unsigned int bitmap_width = 32;
     unsigned int bitmap_rows = 32;
 
-    if (strstr(case_id, "@even-odd-overlap")) {
+    if (strstr(case_id, "@zero-width-target")) {
+        bitmap_width = 0;
+    } else if (strstr(case_id, "@zero-height-target")) {
+        bitmap_rows = 0;
+    } else if (strstr(case_id, "@empty-outline")) {
+        n_contours = 0;
+        n_points = 0;
+    } else if (strstr(case_id, "@even-odd-overlap")) {
         points[4].x = 12 * 64;
         points[4].y = 12 * 64;
         points[5].x = 28 * 64;
@@ -3570,6 +3577,193 @@ static int emit_outline_render(int argc, char** argv) {
         points[3].y = 16 * 64;
         tags[1] = FT_CURVE_TAG_CUBIC;
         tags[2] = FT_CURVE_TAG_CUBIC;
+    } else if (strstr(case_id, "@line-above-clip")) {
+        points[0].x = 8 * 64;
+        points[0].y = 40 * 64;
+        points[1].x = 24 * 64;
+        points[1].y = 40 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 48 * 64;
+        points[3].x = 8 * 64;
+        points[3].y = 48 * 64;
+    } else if (strstr(case_id, "@line-below-clip")) {
+        points[0].x = 8 * 64;
+        points[0].y = -16 * 64;
+        points[1].x = 24 * 64;
+        points[1].y = -16 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = -8 * 64;
+        points[3].x = 8 * 64;
+        points[3].y = -8 * 64;
+    } else if (strstr(case_id, "@line-partial-above-clip")) {
+        points[0].x = 8 * 64;
+        points[0].y = 24 * 64;
+        points[1].x = 24 * 64;
+        points[1].y = 24 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 40 * 64;
+        points[3].x = 8 * 64;
+        points[3].y = 40 * 64;
+    } else if (strstr(case_id, "@line-partial-below-clip")) {
+        points[0].x = 8 * 64;
+        points[0].y = -8 * 64;
+        points[1].x = 24 * 64;
+        points[1].y = -8 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 8 * 64;
+        points[3].x = 8 * 64;
+        points[3].y = 8 * 64;
+    } else if (strstr(case_id, "@conic-below-clip")) {
+        points[0].x = 8 * 64;
+        points[0].y = -16 * 64;
+        points[1].x = 16 * 64;
+        points[1].y = -24 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = -16 * 64;
+        tags[1] = FT_CURVE_TAG_CONIC;
+        contours[0] = 2;
+        n_points = 3;
+    } else if (strstr(case_id, "@conic-partial-above-clip")) {
+        points[0].x = 8 * 64;
+        points[0].y = 40 * 64;
+        points[1].x = 16 * 64;
+        points[1].y = 48 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 16 * 64;
+        tags[1] = FT_CURVE_TAG_CONIC;
+        contours[0] = 2;
+        n_points = 3;
+    } else if (strstr(case_id, "@conic-partial-below-clip")) {
+        points[0].x = 8 * 64;
+        points[0].y = -16 * 64;
+        points[1].x = 16 * 64;
+        points[1].y = -24 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 16 * 64;
+        tags[1] = FT_CURVE_TAG_CONIC;
+        contours[0] = 2;
+        n_points = 3;
+    } else if (strstr(case_id, "@cubic-above-clip")) {
+        points[0].x = 8 * 64;
+        points[0].y = 40 * 64;
+        points[1].x = 8 * 64;
+        points[1].y = 52 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 52 * 64;
+        points[3].x = 24 * 64;
+        points[3].y = 40 * 64;
+        tags[1] = FT_CURVE_TAG_CUBIC;
+        tags[2] = FT_CURVE_TAG_CUBIC;
+    } else if (strstr(case_id, "@cubic-below-clip")) {
+        points[0].x = 8 * 64;
+        points[0].y = -16 * 64;
+        points[1].x = 8 * 64;
+        points[1].y = -28 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = -28 * 64;
+        points[3].x = 24 * 64;
+        points[3].y = -16 * 64;
+        tags[1] = FT_CURVE_TAG_CUBIC;
+        tags[2] = FT_CURVE_TAG_CUBIC;
+    } else if (strstr(case_id, "@cubic-partial-above-clip")) {
+        points[0].x = 8 * 64;
+        points[0].y = 40 * 64;
+        points[1].x = 8 * 64;
+        points[1].y = 52 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 16 * 64;
+        points[3].x = 24 * 64;
+        points[3].y = 16 * 64;
+        tags[1] = FT_CURVE_TAG_CUBIC;
+        tags[2] = FT_CURVE_TAG_CUBIC;
+    } else if (strstr(case_id, "@cubic-partial-below-clip")) {
+        points[0].x = 8 * 64;
+        points[0].y = -16 * 64;
+        points[1].x = 8 * 64;
+        points[1].y = -28 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 16 * 64;
+        points[3].x = 24 * 64;
+        points[3].y = 16 * 64;
+        tags[1] = FT_CURVE_TAG_CUBIC;
+        tags[2] = FT_CURVE_TAG_CUBIC;
+    } else if (strstr(case_id, "@cubic-third-flatness")) {
+        points[0].x = 16 * 64;
+        points[0].y = 16 * 64;
+        points[1].x = 0;
+        points[1].y = 16 * 64;
+        points[2].x = 16 * 64;
+        points[2].y = 16 * 64;
+        points[3].x = 16 * 64;
+        points[3].y = 16 * 64;
+        tags[1] = FT_CURVE_TAG_CUBIC;
+        tags[2] = FT_CURVE_TAG_CUBIC;
+    } else if (strstr(case_id, "@cubic-fourth-flatness")) {
+        points[0].x = 16 * 64;
+        points[0].y = 16 * 64;
+        points[1].x = 16 * 64;
+        points[1].y = 0;
+        points[2].x = 16 * 64;
+        points[2].y = 16 * 64;
+        points[3].x = 16 * 64;
+        points[3].y = 16 * 64;
+        tags[1] = FT_CURVE_TAG_CUBIC;
+        tags[2] = FT_CURVE_TAG_CUBIC;
+    } else if (strstr(case_id, "@cubic-close-to-start")) {
+        points[0].x = 8 * 64;
+        points[0].y = 16 * 64;
+        points[1].x = 8 * 64;
+        points[1].y = 28 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 28 * 64;
+        tags[1] = FT_CURVE_TAG_CUBIC;
+        tags[2] = FT_CURVE_TAG_CUBIC;
+        contours[0] = 2;
+        n_points = 3;
+    } else if (strstr(case_id, "@invalid-contour-order")) {
+        contours[0] = -1;
+    } else if (strstr(case_id, "@invalid-starts-cubic")) {
+        points[0].x = 8 * 64;
+        points[0].y = 16 * 64;
+        points[1].x = 8 * 64;
+        points[1].y = 28 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 28 * 64;
+        points[3].x = 24 * 64;
+        points[3].y = 16 * 64;
+        tags[0] = FT_CURVE_TAG_CUBIC;
+        tags[1] = FT_CURVE_TAG_CUBIC;
+        tags[2] = FT_CURVE_TAG_CUBIC;
+    } else if (strstr(case_id, "@invalid-conic-bad-tag")) {
+        points[0].x = 8 * 64;
+        points[0].y = 16 * 64;
+        points[1].x = 16 * 64;
+        points[1].y = 28 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 16 * 64;
+        tags[1] = FT_CURVE_TAG_CONIC;
+        tags[2] = FT_CURVE_TAG_CUBIC;
+        contours[0] = 2;
+        n_points = 3;
+    } else if (strstr(case_id, "@invalid-cubic-single-control")) {
+        points[0].x = 8 * 64;
+        points[0].y = 16 * 64;
+        points[1].x = 16 * 64;
+        points[1].y = 28 * 64;
+        tags[1] = FT_CURVE_TAG_CUBIC;
+        contours[0] = 1;
+        n_points = 2;
+    } else if (strstr(case_id, "@invalid-cubic-second-not-cubic")) {
+        points[0].x = 8 * 64;
+        points[0].y = 16 * 64;
+        points[1].x = 16 * 64;
+        points[1].y = 28 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 16 * 64;
+        tags[1] = FT_CURVE_TAG_CUBIC;
+        tags[2] = FT_CURVE_TAG_ON;
+        contours[0] = 2;
+        n_points = 3;
     }
 
     FT_Outline outline;
