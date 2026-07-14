@@ -197,6 +197,45 @@
         },
         "error": "Invalid_Argument"
       }
+    },
+    {
+      "case_id": "freetype.FT_Select_Size.error_strike_index_past_end_direct",
+      "subject": "freetype.FT_Select_Size",
+      "case": "error_strike_index_out_of_range",
+      "operation": "freetype.select_size",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fixtures/assets/fonts/sbit_gray_format1.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "strike_index": 2
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "error"
+          ]
+        },
+        "error": "Invalid_Argument"
+      }
     }
   ]
 }
