@@ -2159,6 +2159,30 @@
             ]
           },
           {
+            "id": "hinter-composite-native-mixed-empty-component",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 23,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "scaler:native-composite-mixed-empty-component-tags"
+            ]
+          },
+          {
             "id": "glyf-depth-boundary-no-scale",
             "assets": {
               "font": {
