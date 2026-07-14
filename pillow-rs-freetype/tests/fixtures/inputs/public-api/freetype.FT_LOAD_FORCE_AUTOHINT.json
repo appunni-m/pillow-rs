@@ -4456,6 +4456,26 @@
             "coverage": [
               "autohint/latin:branch-lowercase-z"
             ]
+          },
+          {
+            "id": "branch-dejavu-extralight-u006c-11",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "deprecated/fonts_autohint/DejaVuSans-ExtraLight.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 11,
+              "char_code": 108,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:branch-blue-next-walk-extralight"
+            ]
           }
         ]
       },
