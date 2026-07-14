@@ -23,6 +23,7 @@ GLYPH_ORDER = [
     "overlap_simple_flag",
     "overlap_compound_flag",
     "overlap_heavy_flag",
+    "overlap_wide_overflow_flag",
 ]
 
 
@@ -153,6 +154,20 @@ def overlap_heavy_flag_glyph():
     return glyph
 
 
+def overlap_wide_overflow_flag_glyph():
+    pen = TTGlyphPen(None)
+
+    pen.moveTo((0, 0))
+    pen.lineTo((9000, 0))
+    pen.lineTo((9000, 4))
+    pen.lineTo((0, 4))
+    pen.closePath()
+
+    glyph = pen.glyph()
+    glyph.flags[0] |= 0x40
+    return glyph
+
+
 def build_render_coverage() -> None:
     glyphs = {
         ".notdef": empty_glyph(),
@@ -164,6 +179,7 @@ def build_render_coverage() -> None:
         "overlap_simple_flag": overlap_simple_flag_glyph(),
         "overlap_compound_flag": overlap_compound_flag_glyph(),
         "overlap_heavy_flag": overlap_heavy_flag_glyph(),
+        "overlap_wide_overflow_flag": overlap_wide_overflow_flag_glyph(),
     }
     metrics = {
         ".notdef": (256, 0),
@@ -175,6 +191,7 @@ def build_render_coverage() -> None:
         "overlap_simple_flag": (256, 0),
         "overlap_compound_flag": (256, 0),
         "overlap_heavy_flag": (384, 0),
+        "overlap_wide_overflow_flag": (9216, 0),
     }
 
     builder = FontBuilder(UNITS_PER_EM, isTTF=True)
@@ -189,6 +206,7 @@ def build_render_coverage() -> None:
             0xE105: "overlap_simple_flag",
             0xE106: "overlap_compound_flag",
             0xE107: "overlap_heavy_flag",
+            0xE108: "overlap_wide_overflow_flag",
         }
     )
     builder.setupGlyf(glyphs)
