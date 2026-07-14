@@ -6955,6 +6955,12 @@ fn runtime_face_cache_key(case: &InputCase) -> Result<String, String> {
     let mut hasher = Sha256::new();
     hasher.update(bytes.as_ref());
     let font_key = format!("sha256:{}:face:{face_index}", hex_bytes(&hasher.finalize()));
+    if let Some(row) = preload_char_size_row(&case.inputs.params)? {
+        return Ok(format!(
+            "{font_key}:char:{}:{}:{}:{}",
+            row.char_width, row.char_height, row.horz_resolution, row.vert_resolution
+        ));
+    }
     let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
     Ok(format!("{font_key}:pixel:{pixel_width}:{pixel_height}"))
 }
@@ -9339,6 +9345,14 @@ fn push_asset_source(asset: &Asset, args: &mut Vec<String>) -> Result<(), String
 
 fn push_face_size(params: &Value, args: &mut Vec<String>) -> Result<(), String> {
     args.push(face_index_param(params)?.to_string());
+    if let Some(row) = preload_char_size_row(params)? {
+        args.push(format!(
+            "char:{}:{}:{}:{}",
+            row.char_width, row.char_height, row.horz_resolution, row.vert_resolution
+        ));
+        args.push("0".to_string());
+        return Ok(());
+    }
     let (x, y) = pixel_size_param(params).unwrap_or((0, 0));
     args.push(x.to_string());
     args.push(y.to_string());
@@ -14761,8 +14775,21 @@ fn open_api_face(case: &InputCase) -> Result<ApiFace, String> {
         usize::try_from(face_index_param(&case.inputs.params)?).map_err(|err| err.to_string())?;
     let mut face = ApiFace::from_memory(data.as_ref(), face_index, 20.0)
         .map_err(|err| format!("Face::from_memory returned {err}"))?;
-    let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
-    face.set_pixel_sizes(pixel_width, pixel_height);
+    if let Some(row) = preload_char_size_row(&case.inputs.params)? {
+        let char_width = i32::try_from(row.char_width)
+            .map_err(|err| format!("preload char_width does not fit i32: {err}"))?;
+        let char_height = i32::try_from(row.char_height)
+            .map_err(|err| format!("preload char_height does not fit i32: {err}"))?;
+        face.set_char_size(
+            char_width,
+            char_height,
+            row.horz_resolution,
+            row.vert_resolution,
+        );
+    } else {
+        let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+        face.set_pixel_sizes(pixel_width, pixel_height);
+    }
     Ok(face)
 }
 
