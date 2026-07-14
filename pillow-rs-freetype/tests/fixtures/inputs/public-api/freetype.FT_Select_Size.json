@@ -108,25 +108,34 @@
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
-          }
-        },
-        "params": {
-          "variants": [
-            {
+        "variants": [
+          {
+            "id": "null-face",
+            "params": {
               "face": "null",
               "strike_index": 0
             },
-            {
-              "font": "DejaVuSans.ttf",
+            "coverage": [
+              "freetype.select_size:null-face-error"
+            ]
+          },
+          {
+            "id": "no-fixed-sizes",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
               "strike_index": 0
-            }
-          ]
-        }
+            },
+            "coverage": [
+              "freetype.select_size:no-fixed-size-error"
+            ]
+          }
+        ]
       },
       "classifiers": [
         "kind:function",

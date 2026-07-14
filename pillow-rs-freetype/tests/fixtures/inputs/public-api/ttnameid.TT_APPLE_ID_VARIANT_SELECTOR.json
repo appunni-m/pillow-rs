@@ -122,27 +122,25 @@
       "case_id": "ttnameid.TT_APPLE_ID_VARIANT_SELECTOR.variation_selector_cmap_runtime",
       "subject": "ttnameid.TT_APPLE_ID_VARIANT_SELECTOR",
       "case": "variation_selector_cmap_runtime",
-      "operation": "variation.get_char_variant_index",
+      "operation": "freetype.face_get_char_variant_index",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "input/fonts/name-cmap/apple-variation-selector.ttf",
             "role": "font",
-            "requirements": "SFNT font with variation selector cmap data for base U+4E00 and selector U+FE00."
+            "path": "fonts/cmap/cmap-format-language-matrix.ttf"
           }
         },
         "params": {
-          "function_group": "variation.get_char_variant_index",
           "face_index": 0,
           "platform_id": "TT_PLATFORM_APPLE_UNICODE",
           "platform_id_value": 0,
           "encoding_id": "TT_APPLE_ID_VARIANT_SELECTOR",
           "encoding_id_value": 5,
-          "base_codepoint": "U+4E00",
-          "selector": "U+FE00"
+          "charcode": "U+0042",
+          "variant_selector": "U+FE0F"
         }
       },
       "classifiers": [
@@ -150,38 +148,25 @@
         "header:ttnameid",
         "area:apple-unicode-encoding-id",
         "runtime:sfnt",
-        "requires:future-font",
+        "runtime:variation-selector",
         "public-api-slice:1180-1199"
       ],
       "metadata": {
         "source_behavior": "C reports Apple Unicode encodingID 5 as variation selector data and the variation-selector APIs expose selectors and variant glyph indices."
       },
       "expectation": {
-        "status": "build_dependent",
+        "status": "ok",
         "fixture_requirements": [
-          "Missing asset: input/fonts/name-cmap/apple-variation-selector.ttf must be provided. SFNT font with variation selector cmap data for base U+4E00 and selector U+FE00."
+          "Compact SFNT with a platform 0, encoding 5 cmap format 14 subtable and a non-default UVS mapping."
         ],
         "output_shape": {
-          "status": "FT_Error",
-          "platform_id": "FT_UShort",
-          "encoding_id": "FT_UShort",
-          "charmap_metadata": {
-            "platform_id": "FT_UShort",
-            "encoding_id": "FT_UShort"
-          },
-          "variant_selectors": "array<FT_ULong>",
-          "variant_glyph_index": "FT_UInt"
+          "return": "FT_UInt",
+          "meaning": "glyph_index"
         },
         "compare": {
           "mode": "exact",
           "paths": [
-            "status",
-            "platform_id",
-            "encoding_id",
-            "charmap_metadata.platform_id",
-            "charmap_metadata.encoding_id",
-            "variant_selectors",
-            "variant_glyph_index"
+            "result"
           ]
         },
         "sources_checked": [

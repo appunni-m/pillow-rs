@@ -2120,23 +2120,42 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | SBIT malformed small-metrics width | `font-fixture-sbit` now emits `sbit_missing_small_metrics_width.ttf`, a compact EBLC/EBDT control whose image offsets select exactly one byte. The new `FT_Err_Missing_Bitmap.sbit_glyph_without_image@missing-small-metrics-width` row proves pinned C, Rust FFI, C ABI, and WASM ABI all return exact public `FT_Err_Invalid_Argument` through `FT_LOAD_COLOR | FT_LOAD_SBITS_ONLY`. Focused Missing_Bitmap parity passes 17 / 17. Full condition coverage passes with 6,858 concrete cases, 6,855 / 6,855 runtime rows, three FTMM pending rows, 17,839 / 19,838 lines, 25,712 / 28,583 regions, 4,215 / 4,917 branches, 1,149 / 1,332 functions, and 1,152 / 1,335 instantiations. Route audit classifies the row as real parity, moving real-parity 3,572 -> 3,573 with zero implicit cases. `tt/sbit.rs:335` is no longer listed in the missing-line report; `tt/sbit.rs` moves to 511 / 664 lines and 33 / 90 functions |
 | 2026-07-14 | CJK malformed blue-string load skip | `font-fixture-autohint-scripts` now emits `cjk-malformed-blue.ttf`, a compact Hani control with a valid U+7530 selected glyph and a deliberately truncated U+4E2A bottom-fill blue glyph. One explicit `FT_LOAD_FORCE_AUTOHINT.load_char_force_autohint_behavior@cjk-malformed-blue-load-error-20` row proves pinned C, Rust FFI, C ABI, and WASM ABI all ignore the malformed blue-string load during CJK metrics setup and still load the public glyph exactly. Focused parity passes 1 / 1. Full condition coverage passes with 6,859 concrete cases, 6,856 / 6,856 runtime rows, three FTMM pending rows, 17,840 / 19,838 lines, 25,713 / 28,583 regions, 4,216 / 4,917 branches, 1,149 / 1,332 functions, and 1,152 / 1,335 instantiations. Route audit classifies the row as real parity, moving real-parity 3,573 -> 3,574 with zero implicit cases. `autohint/cjk.rs:208` is no longer listed in the missing-line report; `autohint/cjk.rs` moves to 894 / 941 lines and 382 / 426 branches |
 | 2026-07-14 | Autohint helper/default route cleanup | Existing public `FT_LOAD_FORCE_AUTOHINT` rows now exercise `Direction::{is_horizontal,is_vertical,as_i8}`, `GlyphHints::num_contours`, `AfLatinAxisMetrics::default`, `AxisHints::default`, and `AFEdge::default` through the normal Latin/CJK autohint construction and segment-linking paths instead of leaving duplicate helper logic uncovered. No fixture, font, input JSON, manifest row, or route count changed. Focused `make -C pillow-rs-freetype test-case CASE=freetype.FT_LOAD_FORCE_AUTOHINT` passes 193 / 193 exact Rust FFI, C ABI, and WASM ABI comparisons. Full condition coverage passes with 6,861 concrete cases, 6,858 / 6,858 runtime rows, three FTMM pending rows, 17,945 / 19,944 lines, 25,808 / 28,675 regions, 4,221 / 4,919 branches, 1,160 / 1,339 functions, and 1,163 / 1,342 instantiations. Measured against the pre-cleanup current-branch baseline, covered lines move 17,919 -> 17,945 and `autohint/types.rs` reaches 103 / 103 lines and 14 / 14 functions. Route audit remains zero implicit cases with 3,578 real-parity rows |
+| 2026-07-14 | Apple variation-selector route cleanup | `TT_APPLE_ID_VARIANT_SELECTOR.variation_selector_cmap_runtime` no longer points at the missing `input/fonts/name-cmap/apple-variation-selector.ttf` future asset or generic `variation.get_char_variant_index` operation. It now uses the maintained compact `fonts/cmap/cmap-format-language-matrix.ttf` fixture and calls real `freetype.face_get_char_variant_index` for U+0042 plus U+FE0F. Full condition coverage still passes with 6,861 concrete cases, 6,858 / 6,858 runtime rows, three FTMM pending rows, 17,945 / 19,944 lines, 25,808 / 28,675 regions, 4,221 / 4,919 branches, and 1,160 / 1,339 functions. Route audit moves one false-green placeholder to real parity without changing case count: real-parity 3,578 -> 3,579 and generic-fallback 882 -> 881 |
+| 2026-07-14 | FT_Select_Size null-face variant split | `FT_Select_Size.error_no_fixed_sizes_or_null_face` no longer hides the null-face and no-fixed-size probes inside `params.variants`. It now uses the maintained `inputs.variants` model so `null-face` and `no-fixed-sizes` are separate concrete rows, both routed through pinned C, Rust FFI, C ABI, and WASM ABI. Focused `make -C pillow-rs-freetype test-case CASE=freetype.FT_Select_Size` passes 6 / 6. Full condition coverage passes with 6,862 concrete cases, 6,859 / 6,859 runtime rows, three FTMM pending rows, 17,946 / 19,944 lines, 25,809 / 28,675 regions, 4,222 / 4,919 branches, and 1,160 / 1,339 functions. `src/ffi/handles.rs:858` is no longer listed in the missed-line report; route audit rises to 3,580 real-parity rows with zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-14
 
-Fresh `test-unified-condition-coverage` still reports 1,999 uncovered core
-source lines. The current split is:
+Fresh `test-unified-condition-coverage` reports 1,998 uncovered source lines
+after the Apple variation-selector route cleanup and `FT_Select_Size`
+null-face variant split. The current split is:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,166 |
-| Concrete explicit cases | 6,861 |
-| Runnable parity comparisons | 6,858 / 6,858 |
+| Concrete explicit cases | 6,862 |
+| Runnable parity comparisons | 6,859 / 6,859 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,945 / 19,944 (89.9769%) |
-| Rust region coverage | 25,808 / 28,675 (90.0017%) |
-| Rust branch/condition coverage | 4,221 / 4,919 (85.8101%) |
+| Covered Rust lines | 17,946 / 19,944 (89.9819%) |
+| Rust region coverage | 25,809 / 28,675 (90.0052%) |
+| Rust branch/condition coverage | 4,222 / 4,919 (85.8305%) |
 | Rust function coverage | 1,160 / 1,339 (86.6318%) |
-| Route audit split | real-parity 3,578; generic-fallback 882; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; explicit-unsupported 6; compile-contract 2,229; real-null-validation 8; void-fallback 2; wrapper-null-validation 1 |
+| Route audit split | real-parity 3,580; generic-fallback 881; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; explicit-unsupported 6; compile-contract 2,229; real-null-validation 8; void-fallback 2; wrapper-null-validation 1 |
+
+### Coverage Goal Surface Split - 2026-07-14
+
+The 100% coverage target must be interpreted against public FreeType parity,
+not every historical Rust convenience method that happens to live in
+`fontdone`. Current audit boundaries:
+
+| Surface | Current status | Coverage decision |
+|---|---|---|
+| Public C FreeType subjects in `tests/manifest.yaml` | 1,543 public API input files, 4,166 logical cases, 6,862 concrete explicit rows, and zero implicit expansion | This is the primary fixture-driven coverage surface. Add compact fonts and explicit input rows here only when C FreeType, Rust FFI, C ABI, and WASM ABI can be compared exactly |
+| Runtime real parity rows | 3,580 real-parity rows plus 8 real null-validation rows | These rows are valid coverage evidence and should keep growing by retiring false-green placeholders or implementing real missing behavior |
+| Green placeholder rows | 1,040 rows: 881 generic fallback, 139 generic-error fallback, 7 null-error fallback, 6 explicit unsupported, 4 raw-slot null-validation, 2 void fallback, and 1 wrapper null-validation | Retire only when the replacement is a real public route or an explicitly documented unsupported/pending state. Do not add rows that merely increase this count |
+| Compile/static ABI contract rows | 2,229 rows | Keep separate from runtime glyph/font parity. They validate constants, layout, macros, imports, and ABI shapes, but they are not evidence for render/parser/hinter behavior |
+| Extra `fontdone::ffi::handles` helpers not present as public C FreeType functions | `FT_Face_Info`, `FT_Size_Metrics`, `FT_Face_Charmap_Count`, `FT_Face_Charmap`, `FT_Face_Charmap_Info`, `FT_Face_Active_Charmap_Index`, `FT_Charmap_Info`, `FT_Charmap_Format`, `FT_Charmap_Language_ID`, `FT_Get_Charmap_Index_For_Face`, `FT_Get_Sfnt_OS2`, and `FT_Sfnt_Table_Count` | Do not let these helpers define new manifest subjects. They are wrapper support or local inspection helpers; move or narrow them only as a boundary cleanup, not as a way to hide FreeType behavior |
+| Pillow adapter surface in `pillow-rs/src/font/imagingft.rs` | `getname`, `getmetrics`, `getlength`, `getbbox`, `getmask`, `render_text`, and `render_text_binary` model Pillow `_imagingft.c`, not C FreeType public API | Keep this logic in `pillow-rs` and its own parity matrix. Do not count these as missing FreeType manifest paths |
+| High-level `fontdone::Font` convenience/PIL-style methods | `Font::getname`, `getmetrics`, `getlength`, `getbbox`, `getmask`, `layout_glyphs`, and related layout helpers still account for many `font.rs` misses | Treat as legacy/convenience surface unless a method backs an existing public FreeType route. Do not add synthetic fixture tests just to call these helpers; either route through real C FreeType parity or refactor the surface out of the FreeType coverage goal with independent compatibility proof |
 
 | Bucket | Evidence | Action |
 |---|---|---|
