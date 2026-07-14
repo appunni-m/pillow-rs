@@ -119,6 +119,27 @@
             "coverage": [
               "ftbbox.outline_get_bbox:explicit-gglyph_with_off-curve_extrema"
             ]
+          },
+          {
+            "id": "arabic-presentation-ymax-control-extrema",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/os2/unicode-range-arabic-presentation-forms-b.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "glyph_index": 482
+            },
+            "coverage": [
+              "ftbbox.outline_get_bbox:scaler-ymax-control-extrema"
+            ]
           }
         ]
       },
