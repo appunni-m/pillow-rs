@@ -9607,11 +9607,19 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             outline_render_runtime_output(case)
         }
         "ftadvanc.get_advance" => {
-            let face = open_face(case)?;
+            let face = if advance_preserve_probe_face(case)? {
+                rust_new_face_without_size(case)?
+            } else {
+                open_face(case)?
+            };
             rust_get_advance_with_face(&face, case)
         }
         "ftadvanc.get_advances" => {
-            let face = open_face(case)?;
+            let face = if advance_preserve_probe_face(case)? {
+                rust_new_face_without_size(case)?
+            } else {
+                open_face(case)?
+            };
             let (start, count) = advance_range_param(&case.inputs.params)?;
             match FT_Get_Advances(&face, start, count, load_flags_param(&case.inputs.params)?) {
                 Ok(advances) => Ok(ok(advances_json(&advances))),
@@ -10210,7 +10218,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             outline_render_runtime_output(case)
         }
         "ftadvanc.get_advance" => {
-            let (library, face) = c_open_face(case)?;
+            let (library, face) = if advance_preserve_probe_face(case)? {
+                c_new_face_without_size(case)?
+            } else {
+                c_open_face(case)?
+            };
             let mut advance = 0;
             let err = c_abi::FT_Get_Advance(
                 face,
@@ -10227,7 +10239,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             }
         }
         "ftadvanc.get_advances" => {
-            let (library, face) = c_open_face(case)?;
+            let (library, face) = if advance_preserve_probe_face(case)? {
+                c_new_face_without_size(case)?
+            } else {
+                c_open_face(case)?
+            };
             let (start, count) = advance_range_param(&case.inputs.params)?;
             let out_len = usize::try_from(count).map_err(|err| err.to_string())?;
             let mut advances = vec![0; out_len];
@@ -10693,7 +10709,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             outline_render_runtime_output(case)
         }
         "ftadvanc.get_advance" => {
-            let handle = wasm_open_face(case)?;
+            let handle = if advance_preserve_probe_face(case)? {
+                wasm_new_face_without_size(case)?
+            } else {
+                wasm_open_face(case)?
+            };
             let mut advance = 0;
             let err = wasm_abi::fontdone_wasm_get_advance(
                 handle,
@@ -10709,7 +10729,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             }
         }
         "ftadvanc.get_advances" => {
-            let handle = wasm_open_face(case)?;
+            let handle = if advance_preserve_probe_face(case)? {
+                wasm_new_face_without_size(case)?
+            } else {
+                wasm_open_face(case)?
+            };
             let (start, count) = advance_range_param(&case.inputs.params)?;
             let out_len = usize::try_from(count).map_err(|err| err.to_string())?;
             let mut advances = vec![0; out_len];
@@ -21381,6 +21405,14 @@ fn wasm_resolved_glyph_index(handle: usize, params: &Value) -> Result<u32, Strin
 
 fn advance_range_param(value: &Value) -> Result<(u32, u32), String> {
     Ok((u32_param(value, "start")?, u32_param(value, "count")?))
+}
+
+fn advance_preserve_probe_face(case: &InputCase) -> Result<bool, String> {
+    let preserve = bool_param(&case.inputs.params, "preserve_probe_face", false)?;
+    if preserve && !is_face_probe(case)? {
+        return Err("preserve_probe_face requires a negative face_index".to_string());
+    }
+    Ok(preserve)
 }
 
 fn glyph_load_input_param(value: &Value) -> Result<GlyphLoadInput, String> {
