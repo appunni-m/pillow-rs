@@ -393,6 +393,15 @@ def bottom_tilde_flat_loop_glyph():
     )
 
 
+def bottom_tall_accent_glyph():
+    return rectangles_glyph(
+        [
+            (100, 0, 500, 500),
+            (190, -620, 410, -80),
+        ]
+    )
+
+
 def top_and_bottom_accent_glyph():
     return mixed_contour_glyph(
         [
@@ -581,6 +590,7 @@ def build_script_coverage() -> None:
     glyph_order.append("latin_tilde_bottom_measure_zero")
     glyph_order.append("latin_tilde_bottom_flat")
     glyph_order.append("latin_tilde_bottom_flat_loop")
+    glyph_order.append("latin_bottom_tall_accent")
     glyph_order.append("latin_tilde_top2_topflag")
     glyph_order.append("latin_top_bottom_accent")
     glyph_order.append("latin_serif_m_symmetry")
@@ -644,6 +654,9 @@ def build_script_coverage() -> None:
     glyphs["latin_tilde_bottom_flat_loop"] = bottom_tilde_flat_loop_glyph()
     metrics["latin_tilde_bottom_flat_loop"] = (700, 100)
     cmap[0x1E74] = "latin_tilde_bottom_flat_loop"
+    glyphs["latin_bottom_tall_accent"] = bottom_tall_accent_glyph()
+    metrics["latin_bottom_tall_accent"] = (700, 100)
+    cmap[0x0122] = "latin_bottom_tall_accent"
     glyphs["latin_tilde_top2_topflag"] = top_tilde_glyph(extra_top=True)
     metrics["latin_tilde_top2_topflag"] = (700, 100)
     cmap[0x1EAA] = "latin_tilde_top2_topflag"
