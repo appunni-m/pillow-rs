@@ -878,6 +878,66 @@ def build_cjk_blue_edge_cases() -> None:
     font.save(OUT_DIR / "cjk-blue-edge-cases.ttf")
 
 
+def build_cjk_malformed_blue() -> None:
+    glyph_order = [
+        ".notdef",
+        "space",
+        "hani_standard",
+        "bottom_fill_malformed",
+    ]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -120, 520, 720),
+        "space": empty_glyph(),
+        "hani_standard": rectangle_glyph(100, 0, 620, 560),
+        "bottom_fill_malformed": rectangle_glyph(120, 0, 560, 360),
+    }
+    metrics = {
+        ".notdef": (600, 80),
+        "space": (300, 0),
+        "hani_standard": (700, 100),
+        "bottom_fill_malformed": (700, 120),
+    }
+    cmap = {
+        0x20: "space",
+        0x4E2A: "bottom_fill_malformed",
+        0x7530: "hani_standard",
+    }
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint CJK Malformed Blue",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint CJK Malformed Blue Regular",
+            "fullName": "Autohint CJK Malformed Blue Regular",
+            "psName": "AutohintCJKMalformedBlue-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    path = OUT_DIR / "cjk-malformed-blue.ttf"
+    font.save(path)
+    truncate_glyph_loca(path, "bottom_fill_malformed", 2)
+
+
 def build_cjk_tiny_stem() -> None:
     glyph_order = [".notdef", "space", "hani_tiny_stem"]
     glyphs = {
@@ -1432,6 +1492,7 @@ def main() -> None:
     build_latin_small_ignore()
     build_latin_width_clusters()
     build_cjk_blue_edge_cases()
+    build_cjk_malformed_blue()
     build_cjk_tiny_stem()
     build_cjk_snap_below_standard()
     build_cjk_multi_width_snap()
