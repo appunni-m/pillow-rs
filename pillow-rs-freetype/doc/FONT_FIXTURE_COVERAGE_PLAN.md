@@ -969,13 +969,13 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,568 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,572 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 8 | `FT_New_Size`, `FT_Done_Size`, `FT_Activate_Size`, `FT_OpenType_Validate`, and `FT_OpenType_Free` null rows execute pinned C oracle status checks and wrapper validation; size lifecycle null rows now use direct C/WASM lifecycle exports, and success rows live in real parity. |
 | Wrapper null-validation route | 1 | `FT_Get_SubGlyph_Info` null-output rows intentionally validate the thin Rust/C/WASM wrapper guard after a native-C proof row establishes the composite slot state. |
 | Raw-slot null-validation route | 4 | Runtime rows intentionally validate raw glyph-slot pointer handling after a concrete slot state is established. |
 | Compile/header/scalar contract | 2,229 | Valid for ABI/header contracts, not runtime core coverage. |
 | Shape-incomplete fallback | 0 | Keep this at zero; future incomplete declarations must become executable variants or explicit pending rows in the same change. |
-| Generic modeled fallback | 888 | Classify operation-by-operation as real parity, unsupported, or pending. |
+| Generic modeled fallback | 884 | Classify operation-by-operation as real parity, unsupported, or pending. |
 | Generic modeled error fallback | 139 | Replace implemented surfaces with real error-path execution. |
 | Null-error fallback | 7 | Keep only exact null-handle probes; route implemented null cases directly. |
 | Void fallback | 2 | Replace with real null/noop wrapper rows or classify as void API contract. |
@@ -1885,6 +1885,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Support explicit repeat rows only where stateful public behavior needs them | `repeat_count` is accepted only as a concrete input on existing `FT_Render_Glyph` public rows. It lets one case compare a deliberate sequence across Rust/C/C-ABI/WASM without reintroducing hidden Cartesian discovery or generic fixture generation |
 | 2026-07-12 | Compare safe facade errors through selected public rows | Error-side coverage for `Face::load_glyph` must be proven by the same `FT_Load_Glyph` fixture cases and exact C/Rust/C-ABI/WASM parity, not by synthetic helper calls or broad routing |
 | 2026-07-12 | Route size null validation before size lifecycle success | Null pointer validation belongs in the thin FFI wrapper and can be proven through existing `ftsizes` public rows. Non-null `FT_New_Size`, `FT_Done_Size`, and `FT_Activate_Size` success lifecycle rows stay generic/unsupported until real multi-size handle ownership is implemented instead of being modeled as C parity |
+| 2026-07-14 | Match disabled `FT_Error_String` build behavior | The pinned FreeType oracle is built with `FT_ENABLE_ERROR_STRINGS=OFF`, so `FT_Error_String` returns `NULL` after its public range check even for valid base error codes. Public fixtures must compare that compiled behavior exactly instead of materializing strings from `fterrdef.h` |
 | 2026-07-12 | Add new topology glyphs instead of mutating productive rows | Changing the existing U+7530 field glyph reduced net coverage by losing already-covered CJK paths. Additive CJK topology probes must use separate glyphs and explicit public variants so new behavior can only expand the measured union |
 | 2026-07-12 | Use a separate Hani fallback-standard font for width sorting | CJK standard-width initialization always tries U+7530 before U+56D7. A dedicated two-glyph font without U+7530 exercises the fallback standard character and descending width order without changing productive U+7530 geometry or broadening discovery |
 | 2026-07-11 | Pack no-output TT guard probes into existing branch-edge glyphs | Invalid coordinate reads exercise defensive zone access while preserving the same public `FT_Load_Glyph` output and avoiding extra Cartesian case growth |
@@ -2114,10 +2115,11 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | Pixel-mode survey placeholder retirement | `FT_PIXEL_MODE_MONO.embedded_bitmap_mono_preserves_mode`, `FT_Pixel_Mode.bitmap_pixel_mode_matches_render_output`, and `FT_PIXEL_MODE_MAX.not_emitted_as_runtime_bitmap_mode` no longer use the generic `freetype.load_embedded_bitmap`, `freetype.render_glyph_bitmap`, or `freetype.bitmap_pixel_mode_survey` routes. They now use explicit `load_glyph` variants over DejaVuSans rendered outline modes and the maintained compact SBIT MONO, GRAY2, GRAY4, and BGRA fixtures, proving exact emitted `FT_Bitmap.pixel_mode` values rather than a modeled survey. Focused parity passes `5 / 5` for `FT_PIXEL_MODE_MONO`, `9 / 9` for `FT_Pixel_Mode`, and `9 / 9` for `FT_PIXEL_MODE_MAX`. Full condition coverage remains 6,856 concrete cases, 6,853 / 6,853 runtime rows, three FTMM pending rows, 17,831 / 19,829 lines, 25,701 / 28,573 regions, 4,212 / 4,914 branches, 1,147 / 1,331 functions, and 1,150 / 1,334 instantiations. Route audit moves 17 rows from generic fallback to real parity without concrete-case growth: real-parity 3,545 -> 3,562 and generic-fallback 910 -> 893, with zero implicit cases |
 | 2026-07-14 | Bitmap glyph-format placeholder split | `FT_GLYPH_FORMAT_BITMAP.produced_by_rendered_or_embedded_bitmap` no longer uses the generic `freetype.load_render_glyph` row with a missing `fonts/bitmap/embedded-strike.ttf` asset. It now has two explicit `load_glyph` variants: a rendered DejaVuSans outline and the compact `sbit_gray_format1.ttf` embedded bitmap. Focused `make -C pillow-rs-freetype test-case CASE=ftimage.FT_GLYPH_FORMAT_BITMAP` passes 3 / 3 exact Rust FFI, C ABI, and WASM ABI comparisons. Full condition coverage passes with 6,857 concrete cases, 6,854 / 6,854 runtime rows, three FTMM pending rows, 17,831 / 19,829 lines, 25,701 / 28,573 regions, 4,212 / 4,914 branches, 1,147 / 1,331 functions, and 1,150 / 1,334 instantiations. Route audit moves this public row from one generic fallback to two real parity variants: real-parity 3,562 -> 3,564 and generic-fallback 893 -> 892, with zero implicit cases |
 | 2026-07-14 | SFNT language-tag route classification | `FT_Get_Sfnt_LangTag` rows already execute pinned C `FT_Get_Sfnt_LangTag`, Rust FFI, C ABI, and WASM ABI for format-1 success, format-0 invalid-table behavior, invalid pointer/argument variants, and the `FT_SfntLangTag` record shape. The route audit had not listed `ftsnames.get_sfnt_lang_tag` as a real parity operation, so those four exact comparisons were still counted as generic fallback. Focused `make -C pillow-rs-freetype test-case CASE=ftsnames.FT_Get_Sfnt_LangTag` and `CASE=ftsnames.FT_SfntLangTag` pass 4 / 4 and 2 / 2 respectively. Full condition coverage remains 6,857 concrete cases, 6,854 / 6,854 runtime rows, three FTMM pending rows, 17,831 / 19,829 lines, 25,701 / 28,573 regions, 4,212 / 4,914 branches, 1,147 / 1,331 functions, and 1,150 / 1,334 instantiations. Route audit moves four rows from generic fallback to real parity: real-parity 3,564 -> 3,568 and generic-fallback 892 -> 888, with zero implicit cases |
+| 2026-07-14 | Error-string route execution | `FT_Error_String` no longer uses the generic `--error` placeholder. The existing four manifest rows now call pinned C `FT_Error_String`, Rust FFI, C ABI, and WASM ABI with valid, negative, too-large, and module-expression error codes. Pinned FreeType is built with `FT_ENABLE_ERROR_STRINGS=OFF`, so C returns `NULL` after the range check; Rust mirrors that disabled-string behavior instead of fabricating strings. Focused `make -C pillow-rs-freetype test-case CASE=fterrors.FT_Error_String` passes 4 / 4 exact Rust FFI, C ABI, and WASM ABI comparisons. Full condition coverage passes with 6,857 concrete cases, 6,854 / 6,854 runtime rows, three FTMM pending rows, 17,838 / 19,838 lines, 25,709 / 28,583 regions, 4,215 / 4,917 branches, 1,148 / 1,332 functions, and 1,151 / 1,335 instantiations. Route audit moves four rows from generic fallback to real parity: real-parity 3,568 -> 3,572 and generic-fallback 888 -> 884, with zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-14
 
-Fresh `test-unified-condition-coverage` still reports 1,998 uncovered core
+Fresh `test-unified-condition-coverage` still reports 2,000 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
@@ -2126,11 +2128,11 @@ source lines. The current split is:
 | Concrete explicit cases | 6,857 |
 | Runnable parity comparisons | 6,854 / 6,854 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,831 / 19,829 (89.9238%) |
-| Rust region coverage | 25,701 / 28,573 (89.9486%) |
-| Rust branch/condition coverage | 4,212 / 4,914 (85.7143%) |
-| Rust function coverage | 1,147 / 1,331 (86.1758%) |
-| Route audit split | real-parity 3,568; generic-fallback 888; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; shape-incomplete-fallback 0 |
+| Covered Rust lines | 17,838 / 19,838 (89.9183%) |
+| Rust region coverage | 25,709 / 28,583 (89.9451%) |
+| Rust branch/condition coverage | 4,215 / 4,917 (85.7230%) |
+| Rust function coverage | 1,148 / 1,332 (86.1862%) |
+| Route audit split | real-parity 3,572; generic-fallback 884; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|

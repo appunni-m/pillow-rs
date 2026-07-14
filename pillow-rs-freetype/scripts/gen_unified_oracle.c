@@ -7801,6 +7801,44 @@ static int handle_error(int argc, char** argv) {
     return 0;
 }
 
+static void print_error_string_query(FT_Error error_code) {
+    const char* text = FT_Error_String(error_code);
+    printf("{\"code\":%d,\"null\":%s,\"bytes\":\"",
+           error_code,
+           text ? "false" : "true");
+    if (text) {
+        print_hex_bytes((const unsigned char*)text, (long)strlen(text));
+    }
+    printf("\",\"length\":%zu}", text ? strlen(text) : 0);
+}
+
+static int emit_error_string(int argc, char** argv) {
+    if (argc != 3) {
+        fprintf(stderr, "--error-string requires comma-separated error codes\n");
+        return 2;
+    }
+    char* rows = (char*)malloc(strlen(argv[2]) + 1);
+    if (!rows) {
+        return 1;
+    }
+    strcpy(rows, argv[2]);
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"build_has_error_strings\":%s,\"queries\":[",
+           FT_Error_String(FT_Err_Ok) ? "true" : "false");
+    char* token = strtok(rows, ",");
+    int first = 1;
+    while (token) {
+        if (!first) printf(",");
+        first = 0;
+        print_error_string_query((FT_Error)strtol(token, NULL, 10));
+        token = strtok(NULL, ",");
+    }
+    printf("]}}\n");
+    free(rows);
+    return 0;
+}
+
 static int emit_load_char_null_face(int argc, char** argv) {
     if (argc != 4) {
         fprintf(stderr, "--load-char-null-face requires CHAR FLAGS\n");
@@ -8118,6 +8156,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--error")) {
         return handle_error(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--error-string")) {
+        return emit_error_string(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--load-char-null-face")) {
         return emit_load_char_null_face(argc, argv);

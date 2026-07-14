@@ -4728,6 +4728,101 @@ fn wasm_postscript_name_json(handle: usize) -> Value {
     })
 }
 
+fn error_string_codes_arg(params: &Value) -> Result<String, String> {
+    Ok(error_string_codes(params)?
+        .into_iter()
+        .map(|code| code.to_string())
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn error_string_codes(params: &Value) -> Result<Vec<i32>, String> {
+    let mut codes = Vec::new();
+    if let Some(value) = params.get("error_code") {
+        codes.push(error_string_code_value(value, "error_code")?);
+    }
+    if let Some(values) = params.get("error_codes") {
+        for value in values
+            .as_array()
+            .ok_or_else(|| "error_codes must be an array".to_string())?
+        {
+            codes.push(error_string_code_value(value, "error_codes")?);
+        }
+    }
+    if let Some(value) = params.get("base_error") {
+        codes.push(error_string_code_value(value, "base_error")?);
+    }
+    if let Some(value) = params.get("module_error_expression") {
+        codes.push(error_string_code_value(value, "module_error_expression")?);
+    }
+    if codes.is_empty() {
+        return Err("FT_Error_String case must query at least one error code".to_string());
+    }
+    Ok(codes)
+}
+
+fn error_string_code_value(value: &Value, key: &str) -> Result<i32, String> {
+    let code = if let Some(object) = value.as_object() {
+        if let Some(raw) = object.get("value_from_pinned_header") {
+            i64_value(raw, key)?
+        } else if let Some(symbol) = object.get("symbol").and_then(Value::as_str) {
+            rust_constant(symbol)?
+        } else {
+            return Err(format!(
+                "{key} object must contain value_from_pinned_header or symbol"
+            ));
+        }
+    } else {
+        i64_value(value, key)?
+    };
+    i32::try_from(code).map_err(|err| format!("{key} does not fit FT_Error: {err}"))
+}
+
+fn error_string_output<F>(params: &Value, mut lookup: F) -> Result<Value, String>
+where
+    F: FnMut(i32) -> Option<Vec<u8>>,
+{
+    let queries = error_string_codes(params)?
+        .into_iter()
+        .map(|code| {
+            let bytes = lookup(code);
+            json!({
+                "code": code,
+                "null": bytes.is_none(),
+                "bytes": bytes.as_deref().map(hex_bytes).unwrap_or_default(),
+                "length": bytes.as_ref().map_or(0, Vec::len)
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "build_has_error_strings": FT_CONFIG_OPTION_ERROR_STRINGS_ENABLED,
+        "queries": queries
+    }))
+}
+
+fn rust_error_string(case: &InputCase) -> Result<RunOutput, String> {
+    Ok(ok(error_string_output(&case.inputs.params, |code| {
+        FT_Error_String(code).map(|text| text.to_bytes().to_vec())
+    })?))
+}
+
+fn c_error_string(case: &InputCase) -> Result<RunOutput, String> {
+    Ok(ok(error_string_output(&case.inputs.params, |code| {
+        let ptr = c_abi::FT_Error_String(code);
+        (!ptr.is_null()).then(|| c_abi::abi_c_string_bytes(ptr))
+    })?))
+}
+
+fn wasm_error_string(case: &InputCase) -> Result<RunOutput, String> {
+    Ok(ok(error_string_output(&case.inputs.params, |code| {
+        let mut out = wasm_abi::FontdoneWasmString::default();
+        if wasm_abi::fontdone_wasm_error_string(code, &mut out) == 0 {
+            return None;
+        }
+        Some(c_abi::abi_byte_slice(out.string, out.string_len))
+    })?))
+}
+
 fn has_postscript_name_variants(params: &Value) -> bool {
     params.get("face_variants").is_some() || params.get("named_instances").is_some()
 }
@@ -7748,6 +7843,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--matrix-invert".to_string(),
             matrix_invert_rows_arg(params)?,
         ]),
+        "fterrors.error_string" => Ok(vec![
+            "--error-string".to_string(),
+            error_string_codes_arg(params)?,
+        ]),
         operation if operation.starts_with("freetype.face_macro") => {
             let mut args = vec!["--face-macro".to_string()];
             push_font_source(case, &mut args)?;
@@ -9224,6 +9323,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 &case.inputs.params,
             )?))
         }
+        "fterrors.error_string" => rust_error_string(case),
         "freetype.library_version" => Ok(ok(rust_library_version_output(&case.inputs.params)?)),
         "ftmodapi.get_truetype_engine_type" => {
             Ok(ok(rust_truetype_engine_output(&case.inputs.params)?))
@@ -9764,6 +9864,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output.map(ok)
         }
+        "fterrors.error_string" => c_error_string(case),
         "sfnt.load_sfnt_table" => {
             let (library, face) = c_open_face(case)?;
             let output = c_load_sfnt_table_output(face, &case.inputs.params);
@@ -10262,6 +10363,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_done_face(handle);
             output.map(ok)
         }
+        "fterrors.error_string" => wasm_error_string(case),
         "sfnt.load_sfnt_table" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_load_sfnt_table_output(handle, &case.inputs.params);
@@ -16325,6 +16427,9 @@ fn outline_render_bitmap_payload(width: usize, height: usize, buffer: &[u8]) -> 
 }
 
 fn rust_constant(symbol: &str) -> Result<i64, String> {
+    if symbol == "FT_Err_Max" {
+        return Ok(i64::from(FT_Err_Max));
+    }
     generated_rust_constant(symbol).ok_or_else(|| format!("unsupported rust constant {symbol}"))
 }
 
@@ -18775,6 +18880,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "freetype.get_glyph_name"
             | "freetype.get_name_index"
             | "freetype.get_postscript_name"
+            | "fterrors.error_string"
             | "freetype.face_properties"
             | "freetype.get_subglyph_info"
             | "freetype.new_face"

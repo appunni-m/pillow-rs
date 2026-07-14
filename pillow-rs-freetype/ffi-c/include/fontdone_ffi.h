@@ -98,6 +98,8 @@ typedef struct FT_Size_RequestRec_ {
 } FT_Size_RequestRec;
 typedef FT_Size_RequestRec* FT_Size_Request;
 
+const char* FT_Error_String(FT_Error error_code);
+
 typedef struct FT_Bitmap_ {
   uint32_t rows;
   uint32_t width;

@@ -20,6 +20,8 @@ pub const FT_Err_Invalid_CharMap_Handle: FT_Error = 0x26;
 pub const FT_Err_Out_Of_Memory: FT_Error = 0x40;
 pub const FT_Err_Raster_Overflow: FT_Error = 0x62;
 pub const FT_Err_Invalid_CharMap_Format: FT_Error = 0x96;
+pub const FT_Err_Max: FT_Error = 0xBB;
+pub const FT_CONFIG_OPTION_ERROR_STRINGS_ENABLED: bool = false;
 
 pub const FT_LOAD_DEFAULT: FT_Int32 = 0;
 pub const FT_LOAD_NO_SCALE: FT_Int32 = 1 << 0;
