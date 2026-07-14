@@ -3061,7 +3061,8 @@
               ]
             },
             "coverage": [
-              "tt/hinter:function-call-loop-and-conditional-flow"
+              "tt/hinter:function-call-loop-and-conditional-flow",
+              "tt/hinter:undefined-function-call-noop"
             ]
           },
           {

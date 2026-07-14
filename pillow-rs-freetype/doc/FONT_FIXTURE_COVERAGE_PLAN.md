@@ -2436,6 +2436,7 @@ Route audit now reports `6,797` concrete cases with `3,453` real-parity
 routes, `916` generic fallbacks, and `10` pending-core rows.  Runtime parity
 passes `6,794 / 6,794`; the remaining three pending rows are the explicit
 FTMM named-instance obligations.
+| 2026-07-14 | TrueType undefined function call no-op | The existing source-backed `hinter-control-matrix.ttf` control-flow glyph now executes undefined `CALL` and `LOOPCALL` probes against function 9. Pinned C FreeType treats a missing FDEF as a successful no-op for these instructions, and Rust already matched that behavior; the row makes the public path visible without changing glyph output, adding fonts, or increasing concrete cases. Exact Rust FFI, C ABI, and WASM ABI parity passes with 6,696 / 6,696 runtime rows and four explicit pending rows. Refreshed condition coverage is 15,823 / 17,764 lines, 22,712 / 25,453 regions, and 3,769 / 4,524 branches; `tt/hinter/exec.rs` moves to 1,298 / 1,340 lines, 2,678 / 2,901 regions, and 355 / 410 branches |
 
 ## Immediate Next Actions
 
