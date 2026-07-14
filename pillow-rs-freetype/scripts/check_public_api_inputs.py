@@ -184,6 +184,7 @@ REAL_PARITY_OPERATIONS = {
     "ftsnames.get_sfnt_name",
     "ftsnames.get_sfnt_name_by_record",
     "ftsnames.get_sfnt_name_group",
+    "ftsnames.get_sfnt_lang_tag",
     "sfnt.get_name",
     "sfnt.get_sfnt_name",
     "sfnt.get_os2_unicode_ranges",

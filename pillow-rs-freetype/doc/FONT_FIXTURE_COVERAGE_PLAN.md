@@ -969,20 +969,20 @@ Current route-audit totals:
 
 | Route category | Concrete rows | Required disposition |
 |---|---:|---|
-| Real C/Rust/C-ABI/WASM parity route | 3,512 | Use these rows for structural coverage evidence. |
+| Real C/Rust/C-ABI/WASM parity route | 3,568 | Use these rows for structural coverage evidence. |
 | Real null-validation route | 8 | `FT_New_Size`, `FT_Done_Size`, `FT_Activate_Size`, `FT_OpenType_Validate`, and `FT_OpenType_Free` null rows execute pinned C oracle status checks and wrapper validation; size lifecycle null rows now use direct C/WASM lifecycle exports, and success rows live in real parity. |
 | Wrapper null-validation route | 1 | `FT_Get_SubGlyph_Info` null-output rows intentionally validate the thin Rust/C/WASM wrapper guard after a native-C proof row establishes the composite slot state. |
 | Raw-slot null-validation route | 4 | Runtime rows intentionally validate raw glyph-slot pointer handling after a concrete slot state is established. |
 | Compile/header/scalar contract | 2,229 | Valid for ABI/header contracts, not runtime core coverage. |
 | Shape-incomplete fallback | 0 | Keep this at zero; future incomplete declarations must become executable variants or explicit pending rows in the same change. |
-| Generic modeled fallback | 913 | Classify operation-by-operation as real parity, unsupported, or pending. |
-| Generic modeled error fallback | 141 | Replace implemented surfaces with real error-path execution. |
+| Generic modeled fallback | 888 | Classify operation-by-operation as real parity, unsupported, or pending. |
+| Generic modeled error fallback | 139 | Replace implemented surfaces with real error-path execution. |
 | Null-error fallback | 7 | Keep only exact null-handle probes; route implemented null cases directly. |
 | Void fallback | 2 | Replace with real null/noop wrapper rows or classify as void API contract. |
 | Explicit unsupported | 6 | Keep only where the public surface is intentionally unsupported. |
-| Pending core | 7 | Convert to runnable parity when the named dependencies or compact fixtures exist. |
+| Pending core | 5 | Convert to runnable parity when the named dependencies or compact fixtures exist. |
 | Explicit unsupported stubs | 6 | Implement or keep visibly unsupported; do not count as coverage. |
-| Pending core implementation | 7 | Adobe MM named-instance reset, `FT_MM_Var` namedstyle coordinates, `gvar`/HVAR glyph-output deltas, synthetic unloaded/unsupported render-slot states, and MVAR table variation rows remain pending. |
+| Pending core implementation | 5 | Adobe MM named-instance reset, `FT_MM_Var` namedstyle coordinates, `gvar`/HVAR glyph-output deltas, synthetic unloaded/unsupported render-slot states, and MVAR table variation rows remain pending. |
 
 The former shape-incomplete ftsynth bitmap declarations are now exact real
 parity rows through the compact format-1 SBIT strike.  They should remain in
@@ -2113,6 +2113,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | FT_LOAD_SBITS_ONLY placeholder retirement | `FT_LOAD_SBITS_ONLY.embedded_bitmap_only_behavior` no longer uses the missing `fonts/bitmap/embedded-strike.ttf` and generic `freetype.load_glyph_pair` route. It is now an explicit `load_glyph` group over maintained fixtures: `sbit_gray_format1.ttf` proves a matching embedded bitmap succeeds, `DejaVuSans.ttf` proves an outline-only face returns the public error under `FT_LOAD_SBITS_ONLY`, and `sbit_no_matching_strike.ttf` proves a valid SBIT face with the wrong strike also errors. Focused `make -C pillow-rs-freetype test-case CASE=freetype.FT_LOAD_SBITS_ONLY` passes 4 / 4 exact Rust FFI, C ABI, and WASM ABI comparisons. Full condition coverage passes with 6,856 concrete cases, 6,853 / 6,853 runtime rows, three FTMM pending rows, 17,831 / 19,829 lines, 25,701 / 28,573 regions, 4,212 / 4,914 branches, 1,147 / 1,331 functions, and 1,150 / 1,334 instantiations. Route audit moves this public flag row from generic fallback to real parity variants: real-parity 3,542 -> 3,545 and generic-fallback 911 -> 910, with zero implicit cases |
 | 2026-07-14 | Pixel-mode survey placeholder retirement | `FT_PIXEL_MODE_MONO.embedded_bitmap_mono_preserves_mode`, `FT_Pixel_Mode.bitmap_pixel_mode_matches_render_output`, and `FT_PIXEL_MODE_MAX.not_emitted_as_runtime_bitmap_mode` no longer use the generic `freetype.load_embedded_bitmap`, `freetype.render_glyph_bitmap`, or `freetype.bitmap_pixel_mode_survey` routes. They now use explicit `load_glyph` variants over DejaVuSans rendered outline modes and the maintained compact SBIT MONO, GRAY2, GRAY4, and BGRA fixtures, proving exact emitted `FT_Bitmap.pixel_mode` values rather than a modeled survey. Focused parity passes `5 / 5` for `FT_PIXEL_MODE_MONO`, `9 / 9` for `FT_Pixel_Mode`, and `9 / 9` for `FT_PIXEL_MODE_MAX`. Full condition coverage remains 6,856 concrete cases, 6,853 / 6,853 runtime rows, three FTMM pending rows, 17,831 / 19,829 lines, 25,701 / 28,573 regions, 4,212 / 4,914 branches, 1,147 / 1,331 functions, and 1,150 / 1,334 instantiations. Route audit moves 17 rows from generic fallback to real parity without concrete-case growth: real-parity 3,545 -> 3,562 and generic-fallback 910 -> 893, with zero implicit cases |
 | 2026-07-14 | Bitmap glyph-format placeholder split | `FT_GLYPH_FORMAT_BITMAP.produced_by_rendered_or_embedded_bitmap` no longer uses the generic `freetype.load_render_glyph` row with a missing `fonts/bitmap/embedded-strike.ttf` asset. It now has two explicit `load_glyph` variants: a rendered DejaVuSans outline and the compact `sbit_gray_format1.ttf` embedded bitmap. Focused `make -C pillow-rs-freetype test-case CASE=ftimage.FT_GLYPH_FORMAT_BITMAP` passes 3 / 3 exact Rust FFI, C ABI, and WASM ABI comparisons. Full condition coverage passes with 6,857 concrete cases, 6,854 / 6,854 runtime rows, three FTMM pending rows, 17,831 / 19,829 lines, 25,701 / 28,573 regions, 4,212 / 4,914 branches, 1,147 / 1,331 functions, and 1,150 / 1,334 instantiations. Route audit moves this public row from one generic fallback to two real parity variants: real-parity 3,562 -> 3,564 and generic-fallback 893 -> 892, with zero implicit cases |
+| 2026-07-14 | SFNT language-tag route classification | `FT_Get_Sfnt_LangTag` rows already execute pinned C `FT_Get_Sfnt_LangTag`, Rust FFI, C ABI, and WASM ABI for format-1 success, format-0 invalid-table behavior, invalid pointer/argument variants, and the `FT_SfntLangTag` record shape. The route audit had not listed `ftsnames.get_sfnt_lang_tag` as a real parity operation, so those four exact comparisons were still counted as generic fallback. Focused `make -C pillow-rs-freetype test-case CASE=ftsnames.FT_Get_Sfnt_LangTag` and `CASE=ftsnames.FT_SfntLangTag` pass 4 / 4 and 2 / 2 respectively. Full condition coverage remains 6,857 concrete cases, 6,854 / 6,854 runtime rows, three FTMM pending rows, 17,831 / 19,829 lines, 25,701 / 28,573 regions, 4,212 / 4,914 branches, 1,147 / 1,331 functions, and 1,150 / 1,334 instantiations. Route audit moves four rows from generic fallback to real parity: real-parity 3,564 -> 3,568 and generic-fallback 892 -> 888, with zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-14
 
@@ -2129,7 +2130,7 @@ source lines. The current split is:
 | Rust region coverage | 25,701 / 28,573 (89.9486%) |
 | Rust branch/condition coverage | 4,212 / 4,914 (85.7143%) |
 | Rust function coverage | 1,147 / 1,331 (86.1758%) |
-| Route audit split | real-parity 3,564; generic-fallback 892; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; shape-incomplete-fallback 0 |
+| Route audit split | real-parity 3,568; generic-fallback 888; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
