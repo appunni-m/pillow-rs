@@ -6198,7 +6198,10 @@ static int emit_face_or_slot(int argc, char** argv) {
         free(data);
         return 0;
     }
-    if (!err) {
+    int preserve_probe_face =
+        face_index < 0 &&
+        (streq(command, "--get-advance") || streq(command, "--get-advances"));
+    if (!err && !preserve_probe_face) {
         err = FT_Set_Pixel_Sizes(face, pixel_width, pixel_height);
     }
 

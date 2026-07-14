@@ -58,8 +58,8 @@
       "case_id": "fterrdef.FT_Err_Invalid_Size_Handle.null_or_detached_size_rejected",
       "subject": "fterrdef.FT_Err_Invalid_Size_Handle",
       "case": "null_or_detached_size_rejected",
-      "operation": "FT_Activate_Size_or_FT_Done_Size",
-      "schema": "api_result",
+      "operation": "ftadvanc.get_advance",
+      "schema": "error",
       "expect_error": true,
       "inputs": {
         "assets": {
@@ -73,12 +73,12 @@
         "params": {
           "expected_error_symbol": "FT_Err_Invalid_Size_Handle",
           "expected_error_value_source": "pinned fterrdef.h",
-          "pinned_source": "freetype/src/base/ftobjs.c:3049,3078,3450,4481; freetype/src/truetype/ttdriver.c:463; freetype/src/base/ftadvanc.c:40",
-          "face_index": 0,
-          "size_handle_cases": [
-            "null",
-            "detached",
-            "destroyed"
+          "pinned_source": "freetype/src/base/ftadvanc.c:36-40",
+          "face_index": -1,
+          "preserve_probe_face": true,
+          "glyph_index": 36,
+          "load_flags": [
+            "FT_LOAD_NO_HINTING"
           ]
         }
       },
@@ -87,26 +87,24 @@
         "header:fterrdef",
         "area:error-code",
         "error-trigger",
-        "requires:abi-handle-facade"
+        "operation:advance",
+        "coverage:probe-face-no-active-size"
       ],
       "expectation": {
         "status": "error",
         "error": "FT_Err_Invalid_Size_Handle",
-        "fixture_requirements": "ABI harness support for constructing null and stale FT_Size handles without undefined behavior.",
+        "fixture_requirements": "A negative face_index probe opened without allocating an active FT_Size, then passed to FT_Get_Advance.",
         "output_shape": {
           "error": "FT_Error",
           "error_symbol": "FT_Err_*",
-          "size_handle": "nullness_or_identity_class",
-          "output_preservation": "mutation_class",
+          "output": "null",
           "diagnostic_source": "pinned FreeType source location"
         },
         "compare": {
           "mode": "exact_error",
           "paths": [
-            "error",
-            "error_symbol",
-            "size_handle.identity_class",
-            "output_preservation.mutation_class"
+            "status",
+            "error"
           ]
         }
       }
