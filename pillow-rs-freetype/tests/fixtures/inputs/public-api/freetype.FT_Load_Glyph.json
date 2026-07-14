@@ -264,6 +264,31 @@
             ]
           },
           {
+            "id": "sbit-gray-format1-vmtx-sbits-only",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fixtures/assets/fonts/sbit_gray_format1_vmtx.ttf",
+                "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray embedded bitmap for glyph 1 and a vmtx table used for scalable SBIT vertical-advance fallback."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_SBITS_ONLY"
+              ]
+            },
+            "coverage": [
+              "sbit:gray-format1-vmtx-vertical-advance-fallback"
+            ]
+          },
+          {
             "id": "sbit-gray2-format1-sbits-only",
             "assets": {
               "font": {
