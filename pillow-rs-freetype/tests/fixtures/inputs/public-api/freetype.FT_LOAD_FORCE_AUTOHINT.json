@@ -344,6 +344,26 @@
             ]
           },
           {
+            "id": "script-latin-bottom-tall-accent",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 290,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:bottom-accent-height-guard"
+            ]
+          },
+          {
             "id": "latin-blue-empty-degenerate-flat-loop",
             "assets": {
               "font": {
