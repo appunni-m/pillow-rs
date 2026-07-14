@@ -498,26 +498,32 @@ The latest ftsynth bitmap-strength row adds two horizontal-only adjustments to
 the existing MONO SBIT `FT_GlyphSlot_AdjustWeight` variant.  It keeps the
 explicit case count flat while proving FreeType's positive-pitch mono bitmap
 padding and same-row embolden paths through the public slot mutation route.
+The latest Type 1 face-flag row adds one generated 1.7 KiB
+`fixed-pitch-type1.pfb` fixture and a single explicit
+`FT_FACE_FLAG_FIXED_WIDTH` variant.  Pinned C, Rust FFI, C ABI, and WASM ABI
+agree that `/isFixedPitch true` sets the public fixed-width face flag on a
+Type 1 face, covering the Type 1 fixed-pitch branch without adding any
+implicit inputs.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,834 |
-| Additional grouped variants | 2,669 |
+| Concrete explicit cases | 6,835 |
+| Additional grouped variants | 2,670 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,831 |
-| Exact parity | 6,831 / 6,831 |
+| Runnable parity comparisons | 6,832 |
+| Exact parity | 6,832 / 6,832 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,553 / 19,542 (89.8219%) |
+| Covered Rust lines | 17,554 / 19,542 (89.8270%) |
 | Rust function coverage | 1,135 / 1,312 (86.5091%) |
 | Rust instantiation coverage | 1,138 / 1,315 (86.5399%) |
-| Rust region coverage | 25,298 / 28,159 (89.8398%) |
-| Rust branch/condition coverage | 4,157 / 4,880 (85.1844%) |
+| Rust region coverage | 25,300 / 28,159 (89.8469%) |
+| Rust branch/condition coverage | 4,158 / 4,880 (85.2049%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
-| Active fixture font paths | 170 |
-| Stored active font binaries | 127 files, 899 KiB |
+| Active fixture font paths | 171 |
+| Stored active font binaries | 128 files, 901 KiB |
 | Active symlink aliases | 43 |
-| Unique active font contents | 138 SHA-256 identities |
+| Unique active font contents | 139 SHA-256 identities |
 | Deprecated brute-force fonts | 101 files, 99 unique contents, 23 MiB |
 
 The current coverage target is not only line coverage. The maintained
@@ -541,7 +547,7 @@ Current largest uncovered buckets:
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
 | `src/render.rs` | 1,721 / 2,277 | 351 / 426 | 121 / 164 | 2,426 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 2,067 / 2,291 | 233 / 278 | 189 / 228 | 2,854 / 3,195 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/font.rs` | 2,068 / 2,291 | 234 / 278 | 189 / 228 | 2,856 / 3,195 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,538 / 2,828 | 1,006 / 1,282 | 70 / 73 | 3,648 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
 | `src/scaler.rs` | 1,073 / 1,226 | 158 / 188 | 49 / 62 | 1,147 / 1,280 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
@@ -2050,23 +2056,24 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | Ftsynth MONO horizontal bitmap embolden rows | The existing `FT_GlyphSlot_AdjustWeight.bitmap_weight_owns_emboldens_and_updates_top@sbit-mono-format1` variant now carries two additional explicit adjustments: `xdelta_16_16=4096, ydelta_16_16=0` and `xdelta_16_16=24576, ydelta_16_16=0`. These keep the concrete case count flat while the row output compares additional public mutation states inside the existing variant. Pinned C, Rust FFI, C ABI, and WASM ABI agree exactly on the resulting MONO bitmap bytes, top, metrics, and advance. Focused ftsynth bitmap parity passes 5 / 5 variants. Full condition coverage passes with 6,830 concrete cases, 6,827 / 6,827 runtime rows, three FTMM pending rows, 17,544 / 19,535 lines, 25,279 / 28,142 regions, 4,156 / 4,880 branches, 1,133 / 1,310 functions, and 1,136 / 1,313 instantiations. Route audit remains 3,512 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 | 2026-07-14 | Ftsynth rendered LCD bitmap embolden rows | The existing `FT_GlyphSlot_AdjustWeight.bitmap_weight_owns_emboldens_and_updates_top` case now adds three rendered-outline bitmap variants over `input/fonts/DejaVuSans.ttf`: normal gray, horizontal LCD, and vertical LCD. The LCD row exposed a real C/Rust mismatch where Rust treated LCD bitmap emboldening as unsupported and skipped slot metric/advance side effects; core now mirrors FreeType `base/ftbitmap.c:330-336` by treating LCD/LCD_V as 8-bit buffers and multiplying only the bitmap embolden footprint along the subpixel axis. Focused ftsynth bitmap parity passes 8 / 8 variants. Full condition coverage passes with 6,833 concrete cases, 6,830 / 6,830 runtime rows, three FTMM pending rows, 17,552 / 19,542 lines, 25,293 / 28,155 regions, 4,156 / 4,880 branches, 1,135 / 1,312 functions, and 1,138 / 1,315 instantiations. Route audit reports 3,515 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 | 2026-07-14 | Ftsynth empty rendered bitmap no-op row | The existing `FT_GlyphSlot_AdjustWeight.bitmap_weight_owns_emboldens_and_updates_top` case adds one rendered DejaVuSans gid 3 empty-outline variant. Pinned C exposes a bitmap-format slot with no bitmap buffer, so `FT_Bitmap_Embolden` returns before ftsynth metric side effects; Rust FFI, C ABI, and WASM ABI now prove the same public no-op through `GlyphSlot::adjust_bitmap_weight`'s no-bitmap branch. Focused ftsynth bitmap parity passes 9 / 9 variants. Full condition coverage passes with 6,834 concrete cases, 6,831 / 6,831 runtime rows, three FTMM pending rows, 17,553 / 19,542 lines, 25,298 / 28,159 regions, 4,157 / 4,880 branches, 1,135 / 1,312 functions, and 1,138 / 1,315 instantiations. Route audit reports 3,516 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
+| 2026-07-14 | Type 1 fixed-pitch face-flag row | `font-fixture-type1` now emits `fixed-pitch-type1.pfb`, a compact Type 1 face with `/isFixedPitch true`. One explicit `FT_FACE_FLAG_FIXED_WIDTH.face_property_fixed_width_font@type1-fixed-pitch` variant proves pinned C, Rust FFI, C ABI, and WASM ABI all set `FT_FACE_FLAG_FIXED_WIDTH` for the Type 1 fixed-pitch face, covering `font.rs`'s Type 1 fixed-width branch without harness changes or implicit expansion. Focused face-flag parity passes 3 / 3 variants. Full condition coverage passes with 6,835 concrete cases, 6,832 / 6,832 runtime rows, three FTMM pending rows, 17,554 / 19,542 lines, 25,300 / 28,159 regions, 4,158 / 4,880 branches, 1,135 / 1,312 functions, and 1,138 / 1,315 instantiations. Route audit reports 3,517 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-14
 
-Fresh `test-unified-condition-coverage` still reports 1,989 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,988 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,834 |
-| Runnable parity comparisons | 6,831 / 6,831 |
+| Concrete explicit cases | 6,835 |
+| Runnable parity comparisons | 6,832 / 6,832 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,553 / 19,542 (89.8219%) |
-| Rust region coverage | 25,298 / 28,159 (89.8398%) |
-| Rust branch/condition coverage | 4,157 / 4,880 (85.1844%) |
+| Covered Rust lines | 17,554 / 19,542 (89.8270%) |
+| Rust region coverage | 25,300 / 28,159 (89.8469%) |
+| Rust branch/condition coverage | 4,158 / 4,880 (85.2049%) |
 | Rust function coverage | 1,135 / 1,312 (86.5091%) |
-| Route audit split | real-parity 3,516; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
+| Route audit split | real-parity 3,517; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
