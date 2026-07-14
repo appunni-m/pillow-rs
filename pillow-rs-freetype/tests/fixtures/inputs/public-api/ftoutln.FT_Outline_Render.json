@@ -31,6 +31,12 @@
             "coverage": ["grays:even-odd-fill-high-coverage"]
           },
           {
+            "id": "even-odd-quad-wind",
+            "assets": {"outline": {"kind": "ref", "id": "outlines/render/even-odd-quad-wind.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
+            "coverage": ["grays:even-odd-fill-unmasked-overflow"]
+          },
+          {
             "id": "clipped-crossing-lines",
             "assets": {"outline": {"kind": "ref", "id": "outlines/render/clipped-crossing-lines.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-16x16.json", "asset_kind": "bitmap_model"}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid", "target_box": {"width": 16, "height": 16}},

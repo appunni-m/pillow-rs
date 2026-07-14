@@ -16734,6 +16734,7 @@ fn outline_render_outline(case: &InputCase) -> Result<fontdone::outline::Outline
         "outlines/render/direct-spans-clipped.json" => Ok(outline_render_square()),
         "outlines/render/even-odd-overlap.json" => Ok(outline_render_even_odd_overlap()),
         "outlines/render/even-odd-double-wind.json" => Ok(outline_render_even_odd_double_wind()),
+        "outlines/render/even-odd-quad-wind.json" => Ok(outline_render_even_odd_quad_wind()),
         "outlines/render/clipped-crossing-lines.json" => Ok(outline_render_clipped_crossing()),
         "outlines/render/cubic-closed-loop.json" => Ok(outline_render_cubic_loop()),
         "outlines/render/empty-outline.json" => Ok(outline_render_empty()),
@@ -16980,6 +16981,39 @@ fn outline_render_even_odd_double_wind() -> fontdone::outline::Outline {
         },
     ]);
     outline.tags = vec![1; 8];
+    outline.flags = 0x02;
+    outline
+}
+
+fn outline_render_even_odd_quad_wind() -> fontdone::outline::Outline {
+    let mut outline = outline_render_square();
+    outline.n_contours = 4;
+    outline.contours = vec![3, 7, 11, 15];
+    for _ in 1..4 {
+        outline.points.extend([
+            fontdone::outline::OutlinePoint {
+                x: 8 * 64,
+                y: 8 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 8 * 64,
+                y: 24 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 24 * 64,
+                y: 24 * 64,
+                on_curve: true,
+            },
+            fontdone::outline::OutlinePoint {
+                x: 24 * 64,
+                y: 8 * 64,
+                on_curve: true,
+            },
+        ]);
+    }
+    outline.tags = vec![1; 16];
     outline.flags = 0x02;
     outline
 }
