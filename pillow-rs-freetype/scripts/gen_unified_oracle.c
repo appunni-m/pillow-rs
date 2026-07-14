@@ -3512,7 +3512,7 @@ static int emit_outline_render(int argc, char** argv) {
     }
 
     const char* case_id = argc > 3 ? argv[3] : "";
-    FT_Vector points[8];
+    FT_Vector points[16];
     points[0].x = 8 * 64;
     points[0].y = 8 * 64;
     points[1].x = 24 * 64;
@@ -3521,7 +3521,15 @@ static int emit_outline_render(int argc, char** argv) {
     points[2].y = 24 * 64;
     points[3].x = 8 * 64;
     points[3].y = 24 * 64;
-    char tags[8] = {
+    char tags[16] = {
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
         FT_CURVE_TAG_ON,
         FT_CURVE_TAG_ON,
         FT_CURVE_TAG_ON,
@@ -3531,7 +3539,7 @@ static int emit_outline_render(int argc, char** argv) {
         FT_CURVE_TAG_ON,
         FT_CURVE_TAG_ON,
     };
-    short contours[2] = {3, 7};
+    short contours[4] = {3, 7, 11, 15};
     short n_contours = 1;
     short n_points = 4;
     unsigned int bitmap_width = 32;
@@ -3569,6 +3577,19 @@ static int emit_outline_render(int argc, char** argv) {
         points[7].y = 24 * 64;
         n_contours = 2;
         n_points = 8;
+    } else if (strstr(case_id, "@even-odd-quad-wind")) {
+        for (int i = 4; i < 16; i += 4) {
+            points[i].x = 8 * 64;
+            points[i].y = 8 * 64;
+            points[i + 1].x = 8 * 64;
+            points[i + 1].y = 24 * 64;
+            points[i + 2].x = 24 * 64;
+            points[i + 2].y = 24 * 64;
+            points[i + 3].x = 24 * 64;
+            points[i + 3].y = 8 * 64;
+        }
+        n_contours = 4;
+        n_points = 16;
     } else if (strstr(case_id, "@clipped-crossing-lines")) {
         points[0].x = -8 * 64;
         points[0].y = 8 * 64;
@@ -3893,7 +3914,9 @@ static int emit_outline_render(int argc, char** argv) {
     outline.tags = tags;
     outline.contours = contours;
     outline.flags = 0;
-    if (strstr(case_id, "@even-odd-overlap") || strstr(case_id, "@even-odd-double-wind")) {
+    if (strstr(case_id, "@even-odd-overlap") ||
+        strstr(case_id, "@even-odd-double-wind") ||
+        strstr(case_id, "@even-odd-quad-wind")) {
         outline.flags = FT_OUTLINE_EVEN_ODD_FILL;
     }
 
