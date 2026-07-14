@@ -365,6 +365,26 @@ def bottom_tilde_flat_glyph():
     )
 
 
+def top_and_bottom_accent_glyph():
+    return mixed_contour_glyph(
+        [
+            [
+                (190, -90, True),
+                (410, -90, True),
+                (410, -30, True),
+                (190, -30, True),
+            ],
+            (100, 0, 500, 500),
+            [
+                (210, 550, True),
+                (390, 550, True),
+                (390, 610, True),
+                (210, 610, True),
+            ],
+        ]
+    )
+
+
 def serif_m_symmetry_glyph():
     """Three serifed stems with 12 horizontal-dimension edges."""
     return rectangles_glyph(
@@ -531,6 +551,8 @@ def build_script_coverage() -> None:
     glyph_order.append("latin_tilde_bottom")
     glyph_order.append("latin_tilde_bottom_measure_zero")
     glyph_order.append("latin_tilde_bottom_flat")
+    glyph_order.append("latin_tilde_top2_topflag")
+    glyph_order.append("latin_top_bottom_accent")
     glyph_order.append("latin_serif_m_symmetry")
 
     glyphs = {
@@ -586,6 +608,12 @@ def build_script_coverage() -> None:
     glyphs["latin_tilde_bottom_flat"] = bottom_tilde_flat_glyph()
     metrics["latin_tilde_bottom_flat"] = (700, 100)
     cmap[0x1E75] = "latin_tilde_bottom_flat"
+    glyphs["latin_tilde_top2_topflag"] = top_tilde_glyph(extra_top=True)
+    metrics["latin_tilde_top2_topflag"] = (700, 100)
+    cmap[0x1EAA] = "latin_tilde_top2_topflag"
+    glyphs["latin_top_bottom_accent"] = top_and_bottom_accent_glyph()
+    metrics["latin_top_bottom_accent"] = (700, 100)
+    cmap[0x1EAD] = "latin_top_bottom_accent"
     glyphs["latin_serif_m_symmetry"] = serif_m_symmetry_glyph()
     metrics["latin_serif_m_symmetry"] = (700, 70)
     cmap[0x01D7] = "latin_serif_m_symmetry"
