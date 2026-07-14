@@ -524,18 +524,19 @@ C ABI, and WASM ABI without multiplying offsets, sizes, or render modes.
 The latest TrueType overlap rows append two glyphs to the existing generated
 `render-coverage.ttf` fixture.  Gid 6 sets the simple-glyph first-point
 `OVERLAP_SIMPLE` flag, gid 7 sets the first-component `OVERLAP_COMPOUND` flag,
-and two explicit `freetype.load_glyph_outline` variants prove pinned C, Rust
-FFI, C ABI, and WASM ABI all expose
-`FT_OUTLINE_OVERLAP | FT_OUTLINE_HIGH_PRECISION` in the public outline flags.
+and three explicit `freetype.load_glyph_outline` variants prove pinned C, Rust
+FFI, C ABI, and WASM ABI expose `FT_OUTLINE_OVERLAP` for no-scale loads and
+`FT_OUTLINE_OVERLAP | FT_OUTLINE_HIGH_PRECISION` for scaled loads below
+24 ppem.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,166 |
-| Concrete explicit cases | 6,843 |
-| Additional grouped variants | 2,677 |
+| Concrete explicit cases | 6,844 |
+| Additional grouped variants | 2,678 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,840 |
-| Exact parity | 6,840 / 6,840 |
+| Runnable parity comparisons | 6,841 |
+| Exact parity | 6,841 / 6,841 |
 | Pending cases | 3 |
 | Covered Rust lines | 17,678 / 19,689 (89.7862%) |
 | Rust function coverage | 1,143 / 1,327 (86.1341%) |
@@ -1840,7 +1841,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Name string out-of-range fallback controls | 116 unique hashes | 0 | 6,665 | 6,661 / 6,661 | 4 | 15,225 / 17,756 lines; 22,092 / 25,444 regions; 3,686 / 4,522 branches | Two compact name-table controls cover successful fallback after malformed name string offsets: `FT_New_Memory_Face` proves an out-of-range English Windows typographic family record falls back to Apple Roman, and `FT_Get_Postscript_Name` proves an out-of-range Apple PostScript record returns null. `tt/name.rs` reaches 333 / 333 lines, 30 / 30 functions, and 121 / 138 branch outcomes |
 | 2026-07-14 | SBIT packed compound tail carry | 141 unique hashes | 0 | 6,839 | 6,836 / 6,836 | 3 | 17,647 / 19,660 lines; 25,434 / 28,320 regions; 4,171 / 4,896 branches | One compact `sbit_composite_mono_carry_success_format8.ttf` fixture selects a 10-bit MONO component at a 7-pixel x offset through `FT_Load_Glyph.matrix_load`. Pinned C, Rust FFI, C ABI, and WASM ABI agree exactly, and `tt/sbit.rs` lines 694-696 are no longer in the missing-line report without adding implicit cases |
 | 2026-07-14 | SBIT packed compound GRAY2/GRAY4 dispatch | 143 unique hashes | 0 | 6,841 | 6,838 / 6,838 | 3 | 17,649 / 19,660 lines; 25,436 / 28,320 regions; 4,171 / 4,896 branches | Two compact `sbit_composite_gray2_success_format8.ttf` and `sbit_composite_gray4_success_format8.ttf` fixtures select image-format-8 compound glyph 2 through `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY`. Pinned C, Rust FFI, C ABI, and WASM ABI agree exactly, and `tt/sbit.rs` lines 601-602 are no longer in the missing-line report without adding implicit cases |
-| 2026-07-14 | TrueType overlap outline flags | 143 unique hashes | 0 | 6,843 | 6,840 / 6,840 | 3 | 17,678 / 19,689 lines; 25,465 / 28,349 regions; 4,175 / 4,900 branches | `build_render_fixtures.py` appends gids 6 and 7 to `render-coverage.ttf`: gid 6 has the first simple-glyph flag byte set to `0x41`, and gid 7 has first component flags `0x0404`. Two explicit `ftimage.FT_GLYPH_FORMAT_OUTLINE.outline_payload_matches_format` rows select them with `FT_LOAD_NO_HINTING`, proving pinned C, Rust FFI, C ABI, and WASM ABI agree on public `FT_Outline.flags`. Core now mirrors FreeType `ttgload.c:459-461,530-532,1917-1920,2569-2576`: retain `OVERLAP_SIMPLE` and first-component `OVERLAP_COMPOUND` in `FT_OUTLINE_OVERLAP`, mask public point tags back to curve bits, and add high precision below 24 ppem. Route audit reports 3,525 real-parity rows and zero implicit cases |
+| 2026-07-14 | TrueType overlap outline flags | 143 unique hashes | 0 | 6,844 | 6,841 / 6,841 | 3 | 17,678 / 19,689 lines; 25,465 / 28,349 regions; 4,175 / 4,900 branches | `build_render_fixtures.py` appends gids 6 and 7 to `render-coverage.ttf`: gid 6 has the first simple-glyph flag byte set to `0x41`, and gid 7 has first component flags `0x0404`. Three explicit `ftimage.FT_GLYPH_FORMAT_OUTLINE.outline_payload_matches_format` rows select scaled simple, no-scale simple, and scaled compound overlap loads, proving pinned C, Rust FFI, C ABI, and WASM ABI agree on public `FT_Outline.flags`. Core now mirrors FreeType `ttgload.c:459-461,530-532,1917-1920,2569-2576`: retain `OVERLAP_SIMPLE` and first-component `OVERLAP_COMPOUND` in `FT_OUTLINE_OVERLAP`, mask public point tags back to curve bits, and add high precision below 24 ppem. Route audit reports 3,526 real-parity rows and zero implicit cases |
 
 ## Decision Log
 
@@ -2097,14 +2098,14 @@ source lines. The current split is:
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,166 |
-| Concrete explicit cases | 6,843 |
-| Runnable parity comparisons | 6,840 / 6,840 |
+| Concrete explicit cases | 6,844 |
+| Runnable parity comparisons | 6,841 / 6,841 |
 | Pending cases | 3 |
 | Covered Rust lines | 17,678 / 19,689 (89.7862%) |
 | Rust region coverage | 25,465 / 28,349 (89.8268%) |
 | Rust branch/condition coverage | 4,175 / 4,900 (85.2041%) |
 | Rust function coverage | 1,143 / 1,327 (86.1341%) |
-| Route audit split | real-parity 3,525; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
+| Route audit split | real-parity 3,526; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|

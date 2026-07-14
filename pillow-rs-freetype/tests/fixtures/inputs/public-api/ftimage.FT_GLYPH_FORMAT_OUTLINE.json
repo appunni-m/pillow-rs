@@ -466,6 +466,37 @@
             ]
           },
           {
+            "id": "render-coverage-overlap-simple-flag-no-scale",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "compare_cbox": true,
+              "capture_arrays": [
+                "points",
+                "tags",
+                "contours",
+                "flags"
+              ],
+              "glyph_index": 6,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "coverage": [
+              "tt/glyf:overlap-simple-outline-flag-no-scale"
+            ]
+          },
+          {
             "id": "render-coverage-overlap-compound-flag",
             "assets": {
               "font": {
