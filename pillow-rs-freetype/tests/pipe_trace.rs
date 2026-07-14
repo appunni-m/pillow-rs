@@ -70,6 +70,7 @@ fn trace_one_glyph() {
         sub_lsb: raw.sub_lsb,
         instructions: raw.instructions.clone(),
         components: Vec::new(),
+        outline_flags: raw.outline_flags,
     };
 
     let metrics = font.face_globals.get_metrics(gid);

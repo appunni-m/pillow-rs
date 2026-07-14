@@ -20,6 +20,8 @@ GLYPH_ORDER = [
     "conic_bbox_extrema",
     "subpixel_short_box",
     "folded_profile_dropout",
+    "overlap_simple_flag",
+    "overlap_compound_flag",
 ]
 
 
@@ -107,6 +109,29 @@ def folded_profile_dropout_glyph():
     return pen.glyph()
 
 
+def overlap_simple_flag_glyph():
+    pen = TTGlyphPen(None)
+
+    pen.moveTo((0, 0))
+    pen.lineTo((192, 0))
+    pen.lineTo((192, 192))
+    pen.lineTo((0, 192))
+    pen.closePath()
+
+    glyph = pen.glyph()
+    glyph.flags[0] |= 0x40
+    return glyph
+
+
+def overlap_compound_flag_glyph():
+    pen = TTGlyphPen({"subpixel_short_box": None})
+    pen.addComponent("subpixel_short_box", (1, 0, 0, 1, 0, 0))
+
+    glyph = pen.glyph()
+    glyph.components[0].flags |= 0x0400
+    return glyph
+
+
 def build_render_coverage() -> None:
     glyphs = {
         ".notdef": empty_glyph(),
@@ -115,6 +140,8 @@ def build_render_coverage() -> None:
         "conic_bbox_extrema": conic_bbox_extrema_glyph(),
         "subpixel_short_box": subpixel_short_box_glyph(),
         "folded_profile_dropout": folded_profile_dropout_glyph(),
+        "overlap_simple_flag": overlap_simple_flag_glyph(),
+        "overlap_compound_flag": overlap_compound_flag_glyph(),
     }
     metrics = {
         ".notdef": (256, 0),
@@ -123,6 +150,8 @@ def build_render_coverage() -> None:
         "conic_bbox_extrema": (640, 0),
         "subpixel_short_box": (256, 0),
         "folded_profile_dropout": (256, 0),
+        "overlap_simple_flag": (256, 0),
+        "overlap_compound_flag": (256, 0),
     }
 
     builder = FontBuilder(UNITS_PER_EM, isTTF=True)
@@ -134,6 +163,8 @@ def build_render_coverage() -> None:
             0xE102: "conic_bbox_extrema",
             0xE103: "subpixel_short_box",
             0xE104: "folded_profile_dropout",
+            0xE105: "overlap_simple_flag",
+            0xE106: "overlap_compound_flag",
         }
     )
     builder.setupGlyf(glyphs)

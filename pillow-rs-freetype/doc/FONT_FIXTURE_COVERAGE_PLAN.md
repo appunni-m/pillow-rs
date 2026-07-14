@@ -521,21 +521,27 @@ The latest SBIT packed-depth rows add two generated 4.7 KiB fixtures:
 `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` and proves the distinct
 2-bit and 4-bit packed compound dispatch arms against pinned C, Rust FFI,
 C ABI, and WASM ABI without multiplying offsets, sizes, or render modes.
+The latest TrueType overlap rows append two glyphs to the existing generated
+`render-coverage.ttf` fixture.  Gid 6 sets the simple-glyph first-point
+`OVERLAP_SIMPLE` flag, gid 7 sets the first-component `OVERLAP_COMPOUND` flag,
+and two explicit `freetype.load_glyph_outline` variants prove pinned C, Rust
+FFI, C ABI, and WASM ABI all expose
+`FT_OUTLINE_OVERLAP | FT_OUTLINE_HIGH_PRECISION` in the public outline flags.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,166 |
-| Concrete explicit cases | 6,841 |
-| Additional grouped variants | 2,675 |
+| Concrete explicit cases | 6,843 |
+| Additional grouped variants | 2,677 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,838 |
-| Exact parity | 6,838 / 6,838 |
+| Runnable parity comparisons | 6,840 |
+| Exact parity | 6,840 / 6,840 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,649 / 19,660 (89.7711%) |
-| Rust function coverage | 1,139 / 1,323 (86.0922%) |
-| Rust instantiation coverage | 1,142 / 1,326 (86.1237%) |
-| Rust region coverage | 25,436 / 28,320 (89.8164%) |
-| Rust branch/condition coverage | 4,171 / 4,896 (85.1920%) |
+| Covered Rust lines | 17,678 / 19,689 (89.7862%) |
+| Rust function coverage | 1,143 / 1,327 (86.1341%) |
+| Rust instantiation coverage | 1,146 / 1,330 (86.1654%) |
+| Rust region coverage | 25,465 / 28,349 (89.8268%) |
+| Rust branch/condition coverage | 4,175 / 4,900 (85.2041%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 174 |
 | Stored active font binaries | 131 files, 916 KiB |
@@ -564,14 +570,14 @@ Current largest uncovered buckets:
 | File | Lines | Branches | Functions | Regions | Coverage path |
 |---|---:|---:|---:|---:|---|
 | `src/render.rs` | 1,721 / 2,277 | 351 / 426 | 121 / 164 | 2,426 / 3,221 | Render-mode and glyph-to-bitmap rows over focused outline, mono, LCD, cubic, and transformed fixtures |
-| `src/font.rs` | 2,069 / 2,291 | 235 / 278 | 189 / 228 | 2,860 / 3,195 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
+| `src/font.rs` | 2,070 / 2,292 | 235 / 278 | 189 / 228 | 2,862 / 3,196 | Public route audit, charmap accessors, size variants, table lookup boundaries, layout/convenience wrappers |
 | `src/autohint/latin.rs` | 2,538 / 2,828 | 1,006 / 1,282 | 70 / 73 | 3,648 / 4,207 | Latin blue-zone, serif, diagonal, link, and adjustment glyph roles in existing compact fonts |
-| `src/scaler.rs` | 1,073 / 1,226 | 158 / 188 | 49 / 62 | 1,147 / 1,280 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
+| `src/scaler.rs` | 1,076 / 1,229 | 158 / 188 | 49 / 62 | 1,147 / 1,280 | Composite, no-scale, LCD/mono scaler entry points through public load/render rows |
 | `src/autohint/globals_data.rs` | 63 / 293 | 0 / 0 | 1 / 2 | 117 / 234 | Script coverage rows; do not delete lookup data for coverage |
 | `src/grays.rs` | 650 / 810 | 134 / 184 | 30 / 35 | 918 / 1,139 | Direct public outline/render rows that hit scan conversion edge cases |
-| `src/ffi/handles.rs` | 1,850 / 1,885 | 340 / 376 | 203 / 204 | 2,508 / 2,558 | Public FFI route audit; wrappers stay thin and must delegate to core |
-| `src/tt/sbit.rs` | 507 / 664 | 56 / 72 | 32 / 90 | 768 / 1,007 | Compact EBLC/EBDT fixtures for embedded bitmap success, malformed public errors, and compound assembly |
-| `src/tt/hinter/exec.rs` | 1,352 / 1,379 | 382 / 416 | 40 / 43 | 2,741 / 2,945 | Add one TrueType program role per remaining VM state/opcode family |
+| `src/ffi/handles.rs` | 1,858 / 1,892 | 340 / 376 | 203 / 204 | 2,522 / 2,571 | Public FFI route audit; wrappers stay thin and must delegate to core |
+| `src/tt/sbit.rs` | 509 / 664 | 56 / 72 | 32 / 90 | 770 / 1,007 | Compact EBLC/EBDT fixtures for embedded bitmap success, malformed public errors, and compound assembly |
+| `src/tt/hinter/exec.rs` | 1,351 / 1,379 | 381 / 416 | 40 / 43 | 2,740 / 2,945 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 893 / 941 | 381 / 426 | 18 / 19 | 1,187 / 1,247 | CJK topology rows in the compact multiscript fixture |
 | `src/api.rs` | 1,022 / 1,076 | 230 / 298 | 92 / 92 | 1,547 / 1,612 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
@@ -1834,6 +1840,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Name string out-of-range fallback controls | 116 unique hashes | 0 | 6,665 | 6,661 / 6,661 | 4 | 15,225 / 17,756 lines; 22,092 / 25,444 regions; 3,686 / 4,522 branches | Two compact name-table controls cover successful fallback after malformed name string offsets: `FT_New_Memory_Face` proves an out-of-range English Windows typographic family record falls back to Apple Roman, and `FT_Get_Postscript_Name` proves an out-of-range Apple PostScript record returns null. `tt/name.rs` reaches 333 / 333 lines, 30 / 30 functions, and 121 / 138 branch outcomes |
 | 2026-07-14 | SBIT packed compound tail carry | 141 unique hashes | 0 | 6,839 | 6,836 / 6,836 | 3 | 17,647 / 19,660 lines; 25,434 / 28,320 regions; 4,171 / 4,896 branches | One compact `sbit_composite_mono_carry_success_format8.ttf` fixture selects a 10-bit MONO component at a 7-pixel x offset through `FT_Load_Glyph.matrix_load`. Pinned C, Rust FFI, C ABI, and WASM ABI agree exactly, and `tt/sbit.rs` lines 694-696 are no longer in the missing-line report without adding implicit cases |
 | 2026-07-14 | SBIT packed compound GRAY2/GRAY4 dispatch | 143 unique hashes | 0 | 6,841 | 6,838 / 6,838 | 3 | 17,649 / 19,660 lines; 25,436 / 28,320 regions; 4,171 / 4,896 branches | Two compact `sbit_composite_gray2_success_format8.ttf` and `sbit_composite_gray4_success_format8.ttf` fixtures select image-format-8 compound glyph 2 through `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY`. Pinned C, Rust FFI, C ABI, and WASM ABI agree exactly, and `tt/sbit.rs` lines 601-602 are no longer in the missing-line report without adding implicit cases |
+| 2026-07-14 | TrueType overlap outline flags | 143 unique hashes | 0 | 6,843 | 6,840 / 6,840 | 3 | 17,678 / 19,689 lines; 25,465 / 28,349 regions; 4,175 / 4,900 branches | `build_render_fixtures.py` appends gids 6 and 7 to `render-coverage.ttf`: gid 6 has the first simple-glyph flag byte set to `0x41`, and gid 7 has first component flags `0x0404`. Two explicit `ftimage.FT_GLYPH_FORMAT_OUTLINE.outline_payload_matches_format` rows select them with `FT_LOAD_NO_HINTING`, proving pinned C, Rust FFI, C ABI, and WASM ABI agree on public `FT_Outline.flags`. Core now mirrors FreeType `ttgload.c:459-461,530-532,1917-1920,2569-2576`: retain `OVERLAP_SIMPLE` and first-component `OVERLAP_COMPOUND` in `FT_OUTLINE_OVERLAP`, mask public point tags back to curve bits, and add high precision below 24 ppem. Route audit reports 3,525 real-parity rows and zero implicit cases |
 
 ## Decision Log
 
@@ -2084,20 +2091,20 @@ than percentage because source line totals change as implementation is fixed.
 
 ## Residual Coverage Classification - 2026-07-14
 
-Fresh `test-unified-condition-coverage` still reports 2,016 uncovered core
+Fresh `test-unified-condition-coverage` still reports 2,011 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,166 |
-| Concrete explicit cases | 6,841 |
-| Runnable parity comparisons | 6,838 / 6,838 |
+| Concrete explicit cases | 6,843 |
+| Runnable parity comparisons | 6,840 / 6,840 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,649 / 19,660 (89.7711%) |
-| Rust region coverage | 25,436 / 28,320 (89.8164%) |
-| Rust branch/condition coverage | 4,171 / 4,896 (85.1920%) |
-| Rust function coverage | 1,139 / 1,323 (86.0922%) |
-| Route audit split | real-parity 3,523; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
+| Covered Rust lines | 17,678 / 19,689 (89.7862%) |
+| Rust region coverage | 25,465 / 28,349 (89.8268%) |
+| Rust branch/condition coverage | 4,175 / 4,900 (85.2041%) |
+| Rust function coverage | 1,143 / 1,327 (86.1341%) |
+| Route audit split | real-parity 3,525; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|

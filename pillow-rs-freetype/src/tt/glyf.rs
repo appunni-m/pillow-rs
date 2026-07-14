@@ -9,6 +9,7 @@ use crate::casts::{u16_from_i16, u16_from_u32, u32_from_usize};
 
 use crate::error::FontError;
 use crate::fixed::{ft_div_fix, ft_mul_fix};
+use crate::outline::OUTLINE_OVERLAP;
 use crate::tt::loca::get_glyph_location;
 
 // Simple glyph flag bits (TrueType spec, ttgload.c:53).
@@ -18,6 +19,7 @@ const Y_SHORT_VECTOR: u8 = 0x04;
 const REPEAT_FLAG: u8 = 0x08;
 const X_IS_SAME_OR_POSITIVE_SHORT: u8 = 0x10;
 const Y_IS_SAME_OR_POSITIVE_SHORT: u8 = 0x20;
+const OVERLAP_SIMPLE: u8 = 0x40;
 
 // Composite glyph flag bits (ttgload.c:69).
 const ARG_1_AND_2_ARE_WORDS: u16 = 0x0001;
@@ -29,6 +31,7 @@ const WE_HAVE_AN_X_Y_SCALE: u16 = 0x0040;
 const WE_HAVE_A_TWO_BY_TWO: u16 = 0x0080;
 const WE_HAVE_INSTRUCTIONS: u16 = 0x0100;
 const USE_MY_METRICS: u16 = 0x0200;
+const OVERLAP_COMPOUND: u16 = 0x0400;
 
 /// A single decoded outline point in font design units.
 #[derive(Debug, Clone, Copy)]
@@ -63,6 +66,8 @@ pub struct GlyphOutline {
     pub instructions: Vec<u8>,
     /// Component records for composite glyphs. Empty for simple glyphs.
     pub components: Vec<CompositeComponent>,
+    /// FreeType `FT_Outline.flags` bits carried by the glyph loader.
+    pub outline_flags: u32,
 }
 
 /// A 2×2 fixed-point transform for a composite component (16.16).
@@ -237,6 +242,7 @@ fn load_glyph_inner(
         // compute pp1.x = xmin - sub_lsb in scaler.rs — exactly
         // matching C's accidental-but-intentional behavior.
         let composite = parse_composite_components(bytes, 10)?;
+        let outline_flags = outline_flags_from_components(&composite.components);
         let mut points: Vec<OutlinePoint> = Vec::new();
         let mut end_pts: Vec<u16> = Vec::new();
         let mut num_contours_total = 0u16;
@@ -309,6 +315,9 @@ fn load_glyph_inner(
             // must not be inherited for a second hint pass.
             instructions: composite.instructions,
             components: composite.components,
+            // C: TT_Load_Glyph keeps OVERLAP_COMPOUND only from the first
+            // subglyph flags (`ttgload.c:1917-1920`).
+            outline_flags,
         })
     }
 }
@@ -358,6 +367,7 @@ fn load_glyph_scaled_inner(
 
     let composite = parse_composite_components(bytes, 10)
         .expect("load_glyph validated the composite glyph data");
+    let outline_flags = outline_flags_from_components(&composite.components);
     let mut points: Vec<OutlinePoint> = Vec::new();
     let mut end_pts: Vec<u16> = Vec::new();
     let mut num_contours_total = 0u16;
@@ -426,6 +436,7 @@ fn load_glyph_scaled_inner(
         sub_lsb: last_sub_lsb,
         instructions: composite.instructions,
         components: composite.components,
+        outline_flags,
     }
 }
 
@@ -576,6 +587,8 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
         points[i].on_curve = flag & ON_CURVE != 0;
     }
 
+    let outline_flags = outline_flags_from_simple_tags(&flags);
+
     Ok(GlyphOutline {
         num_contours,
         end_pts_of_contours: end_pts,
@@ -589,7 +602,30 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
         sub_lsb: 0,
         instructions,
         components: Vec::new(),
+        // C: TT_Load_Simple_Glyph retains OVERLAP_SIMPLE from the first point
+        // tag in `FT_Outline.flags`, then masks public point tags back to the
+        // curve bit (`ttgload.c:459-461, 530-532`).
+        outline_flags,
     })
+}
+
+fn outline_flags_from_components(components: &[CompositeComponent]) -> u32 {
+    if components
+        .first()
+        .is_some_and(|component| component.flags & OVERLAP_COMPOUND != 0)
+    {
+        OUTLINE_OVERLAP
+    } else {
+        0
+    }
+}
+
+fn outline_flags_from_simple_tags(flags: &[u8]) -> u32 {
+    if flags.first().is_some_and(|flag| flag & OVERLAP_SIMPLE != 0) {
+        OUTLINE_OVERLAP
+    } else {
+        0
+    }
 }
 
 fn parse_composite_components(data: &[u8], mut pos: usize) -> Result<CompositeGlyph, FontError> {
