@@ -78,6 +78,8 @@ impl LoadFlags {
     pub const SBITS_ONLY: Self = Self(1 << 13);
     /// Disable embedded bitmap strikes, equivalent to `FT_LOAD_NO_BITMAP`.
     pub const NO_BITMAP: Self = Self(1 << 14);
+    /// Return TrueType glyph-program errors instead of silently ignoring them.
+    pub const PEDANTIC: Self = Self(1 << 15);
 
     /// Return true if all bits in `other` are set.
     pub fn contains(self, other: Self) -> bool {
@@ -480,6 +482,7 @@ impl Face {
         };
         let vertical_layout = flags.contains(LoadFlags::VERTICAL_LAYOUT);
         let native_hint_mode = flags.native_hint_mode();
+        let pedantic_hinting = flags.contains(LoadFlags::PEDANTIC);
         let sbits_only = flags.contains(LoadFlags::SBITS_ONLY);
         let sbit_allowed = !flags.contains(LoadFlags::NO_SCALE)
             && !flags.contains(LoadFlags::NO_RECURSE)
@@ -524,28 +527,22 @@ impl Face {
                 native_hint_mode,
             )?
         } else if flags.contains(LoadFlags::NO_AUTOHINT) {
-            font.glyph_slot_load_no_autohint_with_layout_and_mode(
+            font.glyph_slot_load_no_autohint_with_layout_and_mode_and_pedantic(
                 glyph_index,
                 vertical_layout,
                 native_hint_mode,
+                pedantic_hinting,
             )?
         } else {
             // C `tt_loader_init` suppresses `size->widthp` when
             // `FT_LOAD_COMPUTE_METRICS` is set (ttgload.c:2299-2305).
-            if flags.contains(LoadFlags::COMPUTE_METRICS) {
-                font.glyph_slot_load_default_with_layout_and_mode_and_hdmx(
-                    glyph_index,
-                    vertical_layout,
-                    native_hint_mode,
-                    false,
-                )?
-            } else {
-                font.glyph_slot_load_default_with_layout_and_mode(
-                    glyph_index,
-                    vertical_layout,
-                    native_hint_mode,
-                )?
-            }
+            font.glyph_slot_load_default_with_layout_and_mode_and_hdmx_and_pedantic(
+                glyph_index,
+                vertical_layout,
+                native_hint_mode,
+                !flags.contains(LoadFlags::COMPUTE_METRICS),
+                pedantic_hinting,
+            )?
         };
 
         let render_requested = flags.contains(LoadFlags::RENDER);

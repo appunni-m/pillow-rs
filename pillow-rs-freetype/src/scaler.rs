@@ -1030,6 +1030,7 @@ fn scale_glyph_impl_with_context(
                 is_composite: outline_raw.is_composite,
                 reset_vectors_at_glyph_entry,
                 metrics_legacy_phantoms: legacy_hinter_phantoms,
+                pedantic_hinting: bytecode_context.is_some_and(|ctx| ctx.pedantic_hinting),
                 native_hint_mode,
                 phantom_x_override: composite_use_my_metrics_phantoms,
             };
@@ -1090,6 +1091,9 @@ fn scale_glyph_impl_with_context(
                     final_hint_context = Some(outcome.context);
                 }
                 Err(e) => {
+                    if bytecode_context.is_some_and(|ctx| ctx.pedantic_hinting) {
+                        return Err(e);
+                    }
                     log::debug!("[VM] gi={glyph_index}: {e}");
                 }
             }
@@ -1398,6 +1402,7 @@ fn scale_composite_components(
                 is_composite: false,
                 reset_vectors_at_glyph_entry: false,
                 metrics_legacy_phantoms: legacy_hinter_phantoms,
+                pedantic_hinting: false,
                 native_hint_mode,
                 phantom_x_override: None,
             };

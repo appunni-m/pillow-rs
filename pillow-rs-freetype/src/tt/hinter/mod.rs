@@ -67,6 +67,7 @@ pub struct HintScale {
     pub is_composite: bool,
     pub reset_vectors_at_glyph_entry: bool,
     pub metrics_legacy_phantoms: bool,
+    pub pedantic_hinting: bool,
     pub native_hint_mode: NativeHintMode,
     pub phantom_x_override: Option<(i32, i32)>,
 }
@@ -290,6 +291,7 @@ pub fn hint_glyph(
         ctx.x_scale = 1 << 16;
         ctx.y_scale = 1 << 16;
     }
+    ctx.pedantic_hinting = scale.pedantic_hinting;
 
     if !scale.metrics_legacy_phantoms || ctx.backward_compatibility == 0 {
         // C `TT_Hint_Glyph` rounds phantom points before bytecode execution

@@ -1532,10 +1532,28 @@ impl Font {
         native_hint_mode: NativeHintMode,
         use_hdmx: bool,
     ) -> Result<GlyphSlotLoad, FontError> {
-        let scaled = self.scale_glyph_for_metrics_default_with_mode_and_hdmx(
+        self.glyph_slot_load_default_with_layout_and_mode_and_hdmx_and_pedantic(
+            glyph,
+            vertical_layout,
+            native_hint_mode,
+            use_hdmx,
+            false,
+        )
+    }
+
+    pub(crate) fn glyph_slot_load_default_with_layout_and_mode_and_hdmx_and_pedantic(
+        &self,
+        glyph: u16,
+        vertical_layout: bool,
+        native_hint_mode: NativeHintMode,
+        use_hdmx: bool,
+        pedantic_hinting: bool,
+    ) -> Result<GlyphSlotLoad, FontError> {
+        let scaled = self.scale_glyph_for_metrics_default_with_mode_and_hdmx_and_pedantic(
             glyph,
             native_hint_mode,
             use_hdmx,
+            pedantic_hinting,
         )?;
         Ok(self.slot_load_from_scaled(glyph, scaled, grid_fit_for_layout(vertical_layout)))
     }
@@ -1844,7 +1862,26 @@ impl Font {
         vertical_layout: bool,
         native_hint_mode: NativeHintMode,
     ) -> Result<GlyphSlotLoad, FontError> {
-        let scaled = self.scale_glyph_no_autohint_for_metrics_with_mode(glyph, native_hint_mode)?;
+        self.glyph_slot_load_no_autohint_with_layout_and_mode_and_pedantic(
+            glyph,
+            vertical_layout,
+            native_hint_mode,
+            false,
+        )
+    }
+
+    pub(crate) fn glyph_slot_load_no_autohint_with_layout_and_mode_and_pedantic(
+        &self,
+        glyph: u16,
+        vertical_layout: bool,
+        native_hint_mode: NativeHintMode,
+        pedantic_hinting: bool,
+    ) -> Result<GlyphSlotLoad, FontError> {
+        let scaled = self.scale_glyph_no_autohint_for_metrics_with_mode_and_pedantic(
+            glyph,
+            native_hint_mode,
+            pedantic_hinting,
+        )?;
         Ok(self.slot_load_from_scaled(glyph, scaled, grid_fit_for_layout(vertical_layout)))
     }
 
@@ -2066,8 +2103,30 @@ impl Font {
         native_hint_mode: NativeHintMode,
         use_hdmx: bool,
     ) -> Result<scaler::ScaledGlyph, FontError> {
-        if self.data.fpgm.is_some() && self.data.cvt.is_some() {
-            let bytecode_context = self.native_bytecode_context_for_mode(native_hint_mode)?;
+        self.scale_glyph_for_metrics_default_with_mode_and_hdmx_and_pedantic(
+            glyph,
+            native_hint_mode,
+            use_hdmx,
+            false,
+        )
+    }
+
+    fn scale_glyph_for_metrics_default_with_mode_and_hdmx_and_pedantic(
+        &self,
+        glyph: u16,
+        native_hint_mode: NativeHintMode,
+        use_hdmx: bool,
+        pedantic_hinting: bool,
+    ) -> Result<scaler::ScaledGlyph, FontError> {
+        if let (Some(fpgm), Some(cvt)) = (&self.data.fpgm, &self.data.cvt) {
+            let mut owned_context = None;
+            let bytecode_context = self.bytecode_context_for_mode_with_pedantic(
+                native_hint_mode,
+                pedantic_hinting,
+                cvt,
+                fpgm,
+                &mut owned_context,
+            )?;
             let scaled = scaler::scale_glyph_for_metrics_with_bytecode_context_and_mode_and_hdmx(
                 &self.data,
                 glyph,
@@ -2110,8 +2169,24 @@ impl Font {
         glyph: u16,
         native_hint_mode: NativeHintMode,
     ) -> Result<scaler::ScaledGlyph, FontError> {
-        if self.data.fpgm.is_some() && self.data.cvt.is_some() {
-            let bytecode_context = self.native_bytecode_context_for_mode(native_hint_mode)?;
+        self.scale_glyph_no_autohint_for_load_with_mode_and_pedantic(glyph, native_hint_mode, false)
+    }
+
+    fn scale_glyph_no_autohint_for_load_with_mode_and_pedantic(
+        &self,
+        glyph: u16,
+        native_hint_mode: NativeHintMode,
+        pedantic_hinting: bool,
+    ) -> Result<scaler::ScaledGlyph, FontError> {
+        if let (Some(fpgm), Some(cvt)) = (&self.data.fpgm, &self.data.cvt) {
+            let mut owned_context = None;
+            let bytecode_context = self.bytecode_context_for_mode_with_pedantic(
+                native_hint_mode,
+                pedantic_hinting,
+                cvt,
+                fpgm,
+                &mut owned_context,
+            )?;
             scaler::scale_glyph_native_default_with_bytecode_context_and_mode(
                 &self.data,
                 glyph,
@@ -2137,8 +2212,28 @@ impl Font {
         glyph: u16,
         native_hint_mode: NativeHintMode,
     ) -> Result<scaler::ScaledGlyph, FontError> {
-        if self.data.fpgm.is_some() && self.data.cvt.is_some() {
-            let bytecode_context = self.native_bytecode_context_for_mode(native_hint_mode)?;
+        self.scale_glyph_no_autohint_for_metrics_with_mode_and_pedantic(
+            glyph,
+            native_hint_mode,
+            false,
+        )
+    }
+
+    fn scale_glyph_no_autohint_for_metrics_with_mode_and_pedantic(
+        &self,
+        glyph: u16,
+        native_hint_mode: NativeHintMode,
+        pedantic_hinting: bool,
+    ) -> Result<scaler::ScaledGlyph, FontError> {
+        if let (Some(fpgm), Some(cvt)) = (&self.data.fpgm, &self.data.cvt) {
+            let mut owned_context = None;
+            let bytecode_context = self.bytecode_context_for_mode_with_pedantic(
+                native_hint_mode,
+                pedantic_hinting,
+                cvt,
+                fpgm,
+                &mut owned_context,
+            )?;
             scaler::scale_glyph_for_metrics_with_bytecode_context_and_mode(
                 &self.data,
                 glyph,
@@ -2164,27 +2259,55 @@ impl Font {
         };
         let slot = self.bytecode_context.slot(mode);
         if slot.get().is_none() {
-            let scale = tt::hinter::HintScale {
-                x_scale: self.size_metrics.x_scale,
-                y_scale: self.size_metrics.y_scale,
-                tt_scale: self.size_metrics.tt_scale(),
-                ppem: self.size_metrics.tt_ppem(),
-                point_size: self.size_metrics.tt_point_size(),
-                storage_size: self.data.maxp.max_storage as usize,
-                max_function_defs: self.data.maxp.max_function_defs as usize,
-                max_instruction_defs: self.data.maxp.max_instruction_defs as usize,
-                twilight_points: self.data.maxp.max_twilight_points as usize,
-                is_composite: false,
-                reset_vectors_at_glyph_entry: false,
-                metrics_legacy_phantoms: false,
-                native_hint_mode: mode,
-                phantom_x_override: None,
-            };
-            let prep = self.data.prep.as_deref().unwrap_or(&[]);
-            let prepared = tt::hinter::prepare_context(cvt, fpgm, prep, &scale)?;
+            let prepared = self.prepare_native_bytecode_context_for_mode(mode, false, cvt, fpgm)?;
             let _ = slot.set(prepared);
         }
         Ok(slot.get())
+    }
+
+    fn bytecode_context_for_mode_with_pedantic<'a>(
+        &'a self,
+        mode: NativeHintMode,
+        pedantic_hinting: bool,
+        cvt: &[i32],
+        fpgm: &[u8],
+        owned_context: &'a mut Option<tt::hinter::exec::ExecContext>,
+    ) -> Result<Option<&'a tt::hinter::exec::ExecContext>, FontError> {
+        if pedantic_hinting {
+            *owned_context =
+                Some(self.prepare_native_bytecode_context_for_mode(mode, true, cvt, fpgm)?);
+            Ok(owned_context.as_ref())
+        } else {
+            self.native_bytecode_context_for_mode(mode)
+        }
+    }
+
+    fn prepare_native_bytecode_context_for_mode(
+        &self,
+        mode: NativeHintMode,
+        pedantic_hinting: bool,
+        cvt: &[i32],
+        fpgm: &[u8],
+    ) -> Result<tt::hinter::exec::ExecContext, FontError> {
+        let scale = tt::hinter::HintScale {
+            x_scale: self.size_metrics.x_scale,
+            y_scale: self.size_metrics.y_scale,
+            tt_scale: self.size_metrics.tt_scale(),
+            ppem: self.size_metrics.tt_ppem(),
+            point_size: self.size_metrics.tt_point_size(),
+            storage_size: self.data.maxp.max_storage as usize,
+            max_function_defs: self.data.maxp.max_function_defs as usize,
+            max_instruction_defs: self.data.maxp.max_instruction_defs as usize,
+            twilight_points: self.data.maxp.max_twilight_points as usize,
+            is_composite: false,
+            reset_vectors_at_glyph_entry: false,
+            metrics_legacy_phantoms: false,
+            pedantic_hinting,
+            native_hint_mode: mode,
+            phantom_x_override: None,
+        };
+        let prep = self.data.prep.as_deref().unwrap_or(&[]);
+        tt::hinter::prepare_context(cvt, fpgm, prep, &scale)
     }
 
     fn layout_glyphs(&self, text: &str) -> Result<Vec<PositionedGlyph>, FontError> {

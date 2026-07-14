@@ -211,7 +211,7 @@ impl ExecContext {
             ip: 0,
             cur_range: 0,
             is_composite: false,
-            pedantic_hinting: false,
+            pedantic_hinting: scale.pedantic_hinting,
             glyph_program: Vec::new(),
             cvt_program: Vec::new(),
             // C `TT_Load_Context` allocates the twilight zone from
