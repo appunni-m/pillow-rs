@@ -502,16 +502,16 @@ padding and same-row embolden paths through the public slot mutation route.
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,830 |
-| Additional grouped variants | 2,665 |
+| Concrete explicit cases | 6,833 |
+| Additional grouped variants | 2,668 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,827 |
-| Exact parity | 6,827 / 6,827 |
+| Runnable parity comparisons | 6,830 |
+| Exact parity | 6,830 / 6,830 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,544 / 19,535 (89.8080%) |
-| Rust function coverage | 1,133 / 1,310 (86.4885%) |
-| Rust instantiation coverage | 1,136 / 1,313 (86.5194%) |
-| Rust region coverage | 25,279 / 28,142 (89.8266%) |
+| Covered Rust lines | 17,552 / 19,542 (89.8168%) |
+| Rust function coverage | 1,135 / 1,312 (86.5091%) |
+| Rust instantiation coverage | 1,138 / 1,315 (86.5399%) |
+| Rust region coverage | 25,293 / 28,155 (89.8348%) |
 | Rust branch/condition coverage | 4,156 / 4,880 (85.1639%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 170 |
@@ -549,7 +549,7 @@ Current largest uncovered buckets:
 | `src/ffi/handles.rs` | 1,850 / 1,885 | 340 / 376 | 203 / 204 | 2,508 / 2,558 | Public FFI route audit; wrappers stay thin and must delegate to core |
 | `src/tt/hinter/exec.rs` | 1,352 / 1,379 | 382 / 416 | 40 / 43 | 2,741 / 2,945 | Add one TrueType program role per remaining VM state/opcode family |
 | `src/autohint/cjk.rs` | 893 / 941 | 381 / 426 | 18 / 19 | 1,187 / 1,247 | CJK topology rows in the compact multiscript fixture |
-| `src/api.rs` | 1,013 / 1,069 | 229 / 298 | 90 / 90 | 1,528 / 1,595 | Public API wrapper rows for render cache and glyph-slot surfaces |
+| `src/api.rs` | 1,021 / 1,076 | 229 / 298 | 92 / 92 | 1,542 / 1,608 | Public API wrapper rows for render cache and glyph-slot surfaces |
 
 Immediate `gasp` residuals: `src/tt/gasp.rs` is real parity and covers short
 physical table data plus truncated range arrays. The only remaining uncovered
@@ -2048,23 +2048,24 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | SBIT compound bitmap assembly | `font-fixture-sbit` now emits six compact compound controls: format-8 gray success, format-9 big-metrics success, MONO success, BGRA success, negative component offset, and component out-of-bounds. Core mirrors FreeType `sfnt/ttsbit.c:961-1012` by allocating the root bitmap from compound metrics, recursively loading components, ORing component bytes into the root canvas, and preserving root metrics. Focused `FT_Load_Glyph.matrix_load` parity passes 1,708 / 1,708. Full condition coverage passes with 6,829 concrete cases, 6,826 / 6,826 runtime rows, three FTMM pending rows, 17,544 / 19,534 lines, 25,277 / 28,141 regions, 4,154 / 4,880 branches, 1,133 / 1,310 functions, and 1,136 / 1,313 instantiations. `tt/sbit.rs` moves to 424 / 552 lines and 43 / 56 branches; absolute covered lines increased by 105 while the percentage shifted because real compound implementation code increased the denominator. Route audit reports 3,511 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 | 2026-07-14 | SBIT vertical-layout bitmap slot | One explicit `FT_Load_Glyph.matrix_load@sbit-composite-success-format9-vertical-layout` row reuses `sbit_composite_success_format9.ttf` with `FT_LOAD_VERTICAL_LAYOUT | FT_LOAD_SBITS_ONLY`. Pinned C returns the compound SBIT bitmap using vertical big metrics, and Rust FFI, C ABI, and WASM ABI agree exactly. This adds no font bytes and closes the public `sbit_glyph_slot` vertical-layout branch in `api.rs`. Focused `matrix_load` parity passes 1,709 / 1,709. Full condition coverage passes with 6,830 concrete cases, 6,827 / 6,827 runtime rows, three FTMM pending rows, 17,543 / 19,535 lines, 25,278 / 28,142 regions, 4,155 / 4,880 branches, 1,133 / 1,310 functions, and 1,136 / 1,313 instantiations. Route audit reports 3,512 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 | 2026-07-14 | Ftsynth MONO horizontal bitmap embolden rows | The existing `FT_GlyphSlot_AdjustWeight.bitmap_weight_owns_emboldens_and_updates_top@sbit-mono-format1` variant now carries two additional explicit adjustments: `xdelta_16_16=4096, ydelta_16_16=0` and `xdelta_16_16=24576, ydelta_16_16=0`. These keep the concrete case count flat while the row output compares additional public mutation states inside the existing variant. Pinned C, Rust FFI, C ABI, and WASM ABI agree exactly on the resulting MONO bitmap bytes, top, metrics, and advance. Focused ftsynth bitmap parity passes 5 / 5 variants. Full condition coverage passes with 6,830 concrete cases, 6,827 / 6,827 runtime rows, three FTMM pending rows, 17,544 / 19,535 lines, 25,279 / 28,142 regions, 4,156 / 4,880 branches, 1,133 / 1,310 functions, and 1,136 / 1,313 instantiations. Route audit remains 3,512 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
+| 2026-07-14 | Ftsynth rendered LCD bitmap embolden rows | The existing `FT_GlyphSlot_AdjustWeight.bitmap_weight_owns_emboldens_and_updates_top` case now adds three rendered-outline bitmap variants over `input/fonts/DejaVuSans.ttf`: normal gray, horizontal LCD, and vertical LCD. The LCD row exposed a real C/Rust mismatch where Rust treated LCD bitmap emboldening as unsupported and skipped slot metric/advance side effects; core now mirrors FreeType `base/ftbitmap.c:330-336` by treating LCD/LCD_V as 8-bit buffers and multiplying only the bitmap embolden footprint along the subpixel axis. Focused ftsynth bitmap parity passes 8 / 8 variants. Full condition coverage passes with 6,833 concrete cases, 6,830 / 6,830 runtime rows, three FTMM pending rows, 17,552 / 19,542 lines, 25,293 / 28,155 regions, 4,156 / 4,880 branches, 1,135 / 1,312 functions, and 1,138 / 1,315 instantiations. Route audit reports 3,515 real-parity rows, 913 generic-fallback rows, and zero implicit cases |
 
 ## Residual Coverage Classification - 2026-07-14
 
-Fresh `test-unified-condition-coverage` still reports 1,991 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,990 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,830 |
-| Runnable parity comparisons | 6,827 / 6,827 |
+| Concrete explicit cases | 6,833 |
+| Runnable parity comparisons | 6,830 / 6,830 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,544 / 19,535 (89.8080%) |
-| Rust region coverage | 25,279 / 28,142 (89.8266%) |
+| Covered Rust lines | 17,552 / 19,542 (89.8168%) |
+| Rust region coverage | 25,293 / 28,155 (89.8348%) |
 | Rust branch/condition coverage | 4,156 / 4,880 (85.1639%) |
-| Rust function coverage | 1,133 / 1,310 (86.4885%) |
-| Route audit split | real-parity 3,512; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
+| Rust function coverage | 1,135 / 1,312 (86.5091%) |
+| Route audit split | real-parity 3,515; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|

@@ -1054,6 +1054,114 @@
             "coverage": [
               "ftsynth:bitmap-adjust-weight-bgra-format1"
             ]
+          },
+          {
+            "id": "rendered-outline-gray",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/DejaVuSans.ttf",
+                "role": "font",
+                "requirements": "Scalable outline glyph rendered during FT_Load_Glyph to a normal grayscale bitmap slot before synthetic bitmap weight adjustment."
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "size_ppem": 20,
+              "load": {
+                "operation": "FT_Load_Glyph",
+                "glyph_indices": [
+                  36
+                ],
+                "load_flags": [
+                  "FT_LOAD_RENDER",
+                  "FT_LOAD_TARGET_NORMAL"
+                ]
+              },
+              "adjustments": [
+                {
+                  "xdelta_16_16": 4096,
+                  "ydelta_16_16": 0
+                }
+              ],
+              "capture_before_after": true
+            },
+            "coverage": [
+              "ftsynth:bitmap-adjust-weight-rendered-gray"
+            ]
+          },
+          {
+            "id": "rendered-outline-lcd",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/DejaVuSans.ttf",
+                "role": "font",
+                "requirements": "Scalable outline glyph rendered during FT_Load_Glyph to a horizontal LCD bitmap slot before synthetic bitmap weight adjustment."
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "size_ppem": 20,
+              "load": {
+                "operation": "FT_Load_Glyph",
+                "glyph_indices": [
+                  36
+                ],
+                "load_flags": [
+                  "FT_LOAD_RENDER",
+                  "FT_LOAD_TARGET_LCD"
+                ]
+              },
+              "adjustments": [
+                {
+                  "xdelta_16_16": 4096,
+                  "ydelta_16_16": 4096
+                }
+              ],
+              "capture_before_after": true
+            },
+            "coverage": [
+              "ftsynth:bitmap-adjust-weight-rendered-lcd"
+            ]
+          },
+          {
+            "id": "rendered-outline-lcd-v",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/DejaVuSans.ttf",
+                "role": "font",
+                "requirements": "Scalable outline glyph rendered during FT_Load_Glyph to a vertical LCD bitmap slot before synthetic bitmap weight adjustment."
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "size_ppem": 20,
+              "load": {
+                "operation": "FT_Load_Glyph",
+                "glyph_indices": [
+                  36
+                ],
+                "load_flags": [
+                  "FT_LOAD_RENDER",
+                  "FT_LOAD_TARGET_LCD_V"
+                ]
+              },
+              "adjustments": [
+                {
+                  "xdelta_16_16": 4096,
+                  "ydelta_16_16": 4096
+                }
+              ],
+              "capture_before_after": true
+            },
+            "coverage": [
+              "ftsynth:bitmap-adjust-weight-rendered-lcd-v"
+            ]
           }
         ]
       },

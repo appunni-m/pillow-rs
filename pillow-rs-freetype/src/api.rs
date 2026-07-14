@@ -957,7 +957,16 @@ fn embolden_rendered_bitmap(bitmap: &mut RenderedBitmap, x_pixels: i32, y_pixels
         // FreeType returns success for color glyphs without mutating bitmap
         // bytes, then ftsynth still applies slot metric/top side effects.
         PixelMode::Bgra => true,
-        PixelMode::Lcd | PixelMode::LcdV => false,
+        // FreeType `src/base/ftbitmap.c:330-336` treats LCD bitmaps as
+        // 8-bit buffers and scales only the bitmap embolden footprint by the
+        // subpixel axis.  The ftsynth slot metrics still use the original
+        // rounded 26.6 strengths.
+        PixelMode::Lcd => x_pixels.checked_mul(3).is_some_and(|x_pixels| {
+            embolden_8bit_positive_pitch_bitmap(bitmap, x_pixels, y_pixels)
+        }),
+        PixelMode::LcdV => y_pixels.checked_mul(3).is_some_and(|y_pixels| {
+            embolden_8bit_positive_pitch_bitmap(bitmap, x_pixels, y_pixels)
+        }),
     }
 }
 
