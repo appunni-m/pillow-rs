@@ -331,13 +331,40 @@
               ],
               "glyph_record": "EBLC version is unsupported, so no valid strike is selected"
             },
-            "coverage": [
-              "sbit:invalid-eblc-version-public-invalid-argument"
-            ]
-          },
-          {
-            "id": "empty-ebdt",
-            "assets": {
+        "coverage": [
+          "sbit:invalid-eblc-version-public-invalid-argument"
+        ]
+      },
+      {
+        "id": "too-short-eblc",
+        "assets": {
+          "fixture": {
+            "kind": "ref",
+            "role": "font_or_public_input",
+            "id": "fixtures/assets/fonts/sbit_too_short_eblc.ttf",
+            "requirements": "Synthetic scalable SFNT whose EBLC table is shorter than the 8-byte bitmap strike header while EBDT is present."
+          }
+        },
+        "params": {
+          "expected_error_symbol": "FT_Err_Invalid_Argument",
+          "expected_error_value_source": "pinned fterrdef.h",
+          "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+          "internal_sbit_source": "freetype/src/sfnt/ttsbit.c:82-89",
+          "face_index": 0,
+          "glyph_index": 1,
+          "load_flags": [
+            "FT_LOAD_COLOR",
+            "FT_LOAD_SBITS_ONLY"
+          ],
+          "glyph_record": "EBLC table is too short, so no valid strike is selected"
+        },
+        "coverage": [
+          "sbit:too-short-eblc-public-invalid-argument"
+        ]
+      },
+      {
+        "id": "empty-ebdt",
+        "assets": {
               "fixture": {
                 "kind": "ref",
                 "role": "font_or_public_input",

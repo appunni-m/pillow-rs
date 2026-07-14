@@ -5,9 +5,16 @@ use crate::tt::{TableDirectory, tag};
 
 #[derive(Debug, Clone)]
 pub struct SbitTable {
+    kind: SbitTableKind,
     eblc: Vec<u8>,
     ebdt: Vec<u8>,
     strikes: Vec<SbitStrike>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SbitTableKind {
+    Eblc,
+    Cblc,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -71,13 +78,16 @@ struct SbitImageRecord {
 }
 
 pub fn parse_sbit(directory: &TableDirectory, data: &[u8]) -> Option<SbitTable> {
-    let eblc = directory
-        .find(data, tag(b"EBLC"))
-        .or_else(|| directory.find(data, tag(b"CBLC")))
-        .or_else(|| directory.find(data, tag(b"bloc")))?;
+    let (kind, eblc) = if let Some(cblc) = directory.find(data, tag(b"CBLC")) {
+        (SbitTableKind::Cblc, cblc)
+    } else if let Some(eblc) = directory.find(data, tag(b"EBLC")) {
+        (SbitTableKind::Eblc, eblc)
+    } else {
+        (SbitTableKind::Eblc, directory.find(data, tag(b"bloc"))?)
+    };
     let ebdt = directory
-        .find(data, tag(b"EBDT"))
-        .or_else(|| directory.find(data, tag(b"CBDT")))
+        .find(data, tag(b"CBDT"))
+        .or_else(|| directory.find(data, tag(b"EBDT")))
         .or_else(|| directory.find(data, tag(b"bdat")))?;
     if ebdt.is_empty() || eblc.len() < 8 || !valid_eblc_version(read_u32(eblc, 0)?) {
         return None;
@@ -102,6 +112,7 @@ pub fn parse_sbit(directory: &TableDirectory, data: &[u8]) -> Option<SbitTable> 
     }
 
     Some(SbitTable {
+        kind,
         eblc: eblc.to_vec(),
         ebdt: ebdt.to_vec(),
         strikes,
@@ -109,6 +120,10 @@ pub fn parse_sbit(directory: &TableDirectory, data: &[u8]) -> Option<SbitTable> 
 }
 
 impl SbitTable {
+    pub fn kind(&self) -> SbitTableKind {
+        self.kind
+    }
+
     pub fn strike_count(&self) -> usize {
         self.strikes.len()
     }
@@ -136,17 +151,6 @@ impl SbitTable {
             })?;
 
         strike.find_image(&self.eblc, &self.ebdt, glyph_index, recurse_count)
-    }
-
-    pub fn load_glyph_status(
-        &self,
-        glyph_index: u16,
-        x_ppem: u16,
-        y_ppem: u16,
-        recurse_count: u32,
-    ) -> Result<(), FontError> {
-        self.load_glyph(glyph_index, x_ppem, y_ppem, recurse_count)
-            .map(|_| ())
     }
 }
 
@@ -453,8 +457,8 @@ fn read_big_metrics(data: &[u8]) -> Result<SbitMetrics, FontError> {
 }
 
 fn blank_compound_glyph(strike: SbitStrike, metrics: SbitMetrics) -> Result<SbitGlyph, FontError> {
-    let width = bitmap_dimension_from_metric(metrics.width, "width")?;
-    let rows = bitmap_dimension_from_metric(metrics.height, "height")?;
+    let width = metric_dimension(metrics.width);
+    let rows = metric_dimension(metrics.height);
     let (pixel_mode, row_bytes, num_grays) = bitmap_layout_for_bit_depth(strike.bit_depth, width)?;
     let len = row_bytes.checked_mul(rows).ok_or_else(|| {
         FontError::InvalidFont("embedded bitmap compound buffer length overflow".into())
@@ -472,17 +476,8 @@ fn blank_compound_glyph(strike: SbitStrike, metrics: SbitMetrics) -> Result<Sbit
     })
 }
 
-fn bitmap_dimension_from_metric(value: i32, name: &str) -> Result<usize, FontError> {
-    if value < 0 || value % 64 != 0 {
-        return Err(FontError::InvalidFont(format!(
-            "embedded bitmap compound {name} metric is invalid"
-        )));
-    }
-    usize::try_from(value / 64).map_err(|_| {
-        FontError::InvalidFont(format!(
-            "embedded bitmap compound {name} metric does not fit usize"
-        ))
-    })
+fn metric_dimension(value: i32) -> usize {
+    (value / 64) as usize
 }
 
 fn bitmap_layout_for_bit_depth(
@@ -507,11 +502,6 @@ fn blit_component_bitmap(
     dx: i32,
     dy: i32,
 ) -> Result<(), FontError> {
-    if target.pixel_mode != component.pixel_mode || target.num_grays != component.num_grays {
-        return Err(FontError::InvalidFont(
-            "embedded bitmap compound pixel mode mismatch".into(),
-        ));
-    }
     if dx < 0 || dy < 0 {
         return Err(FontError::InvalidFont(
             "embedded bitmap compound component outside target".into(),
@@ -519,16 +509,8 @@ fn blit_component_bitmap(
     }
     let dx = dx as u32;
     let dy = dy as u32;
-    let Some(right) = dx.checked_add(component.width) else {
-        return Err(FontError::InvalidFont(
-            "embedded bitmap compound component outside target".into(),
-        ));
-    };
-    let Some(bottom) = dy.checked_add(component.rows) else {
-        return Err(FontError::InvalidFont(
-            "embedded bitmap compound component outside target".into(),
-        ));
-    };
+    let right = dx + component.width;
+    let bottom = dy + component.rows;
     if right > target.width || bottom > target.rows {
         return Err(FontError::InvalidFont(
             "embedded bitmap compound component outside target".into(),
@@ -710,8 +692,12 @@ fn no_bitmap_error(recurse_count: u32) -> FontError {
 }
 
 fn valid_eblc_version(version: u32) -> bool {
+    // C: `sfnt/ttsbit.c:116-125` also accepts the byte-swapped major field
+    // used by FZShuSong-Z01, so `0x00000200` and `0x00000300` are valid too.
     let major = version & 0xFFFF_0000;
-    major == 0x0002_0000 || major == 0x0003_0000
+    let byte_swapped_major = version & 0x0000_FFFF;
+    matches!(major, 0x0002_0000 | 0x0003_0000)
+        || matches!(byte_swapped_major, 0x0000_0200 | 0x0000_0300)
 }
 
 fn read_u16(data: &[u8], offset: usize) -> Option<u16> {

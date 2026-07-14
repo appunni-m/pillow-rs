@@ -435,13 +435,113 @@
                 "FT_LOAD_SBITS_ONLY"
               ]
             },
-            "coverage": [
-              "sbit:gray-format3-bitmap-success"
+          "coverage": [
+            "sbit:gray-format3-bitmap-success"
+          ]
+        },
+        {
+          "id": "sbit-cblc-cbdt-gray-format1",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_cblc_cbdt_gray_format1.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem CBLC/CBDT format-1 8-bit gray embedded bitmap for glyph 1."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 1,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
             ]
           },
-          {
-            "id": "sbit-composite-success-format8",
-            "assets": {
+          "coverage": [
+            "sbit:cblc-cbdt-format1-bitmap-success"
+          ]
+        },
+        {
+          "id": "sbit-bloc-bdat-gray-format1",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_bloc_bdat_gray_format1.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem bloc/bdat format-1 8-bit gray embedded bitmap for glyph 1."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 1,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "coverage": [
+            "sbit:bloc-bdat-format1-bitmap-success"
+          ]
+        },
+        {
+          "id": "sbit-byte-swapped-version",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_byte_swapped_version.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray bitmap and FreeType-compatible byte-swapped EBLC version 0x00000200."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 1,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "coverage": [
+            "sbit:byte-swapped-eblc-version-success"
+          ]
+        },
+        {
+          "id": "sbit-two-strikes-y-mismatch",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_two_strikes_y_mismatch.ttf",
+              "requirements": "Synthetic scalable SFNT with a 20x19 strike before the matching 20x20 strike, proving y-ppem rejection before exact SBIT strike selection."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 1,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "coverage": [
+            "sbit:strike-y-ppem-mismatch-before-match"
+          ]
+        },
+        {
+          "id": "sbit-composite-success-format8",
+          "assets": {
               "font": {
                 "kind": "ref",
                 "role": "font",
@@ -611,13 +711,88 @@
                 "FT_LOAD_SBITS_ONLY"
               ]
             },
-            "coverage": [
-              "sbit:compound-format8-mono-shift-carry-success"
+          "coverage": [
+            "sbit:compound-format8-mono-shift-carry-success"
+          ]
+        },
+        {
+          "id": "sbit-composite-mono-aligned-success-format8",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_composite_mono_aligned_success_format8.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT compound image-format-8 glyph 2 referencing an 8-bit-wide MONO component at zero x offset."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 2,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
             ]
           },
-          {
-            "id": "sbit-composite-gray2-success-format8",
-            "assets": {
+          "coverage": [
+            "sbit:compound-format8-mono-byte-aligned-success"
+          ]
+        },
+        {
+          "id": "sbit-composite-mono-shifted-aligned-success-format8",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_composite_mono_shifted_aligned_success_format8.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT compound image-format-8 glyph 2 referencing an 8-bit-wide MONO component at nonzero x offset."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 2,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "coverage": [
+            "sbit:compound-format8-mono-shifted-byte-aligned-success"
+          ]
+        },
+        {
+          "id": "sbit-composite-mono-zero-height-component-format8",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_composite_mono_zero_height_component_format8.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT compound image-format-8 glyph 2 referencing a zero-height MONO component."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 2,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "coverage": [
+            "sbit:compound-format8-mono-zero-height-component"
+          ]
+        },
+        {
+          "id": "sbit-composite-gray2-success-format8",
+          "assets": {
               "font": {
                 "kind": "ref",
                 "role": "font",
@@ -712,13 +887,38 @@
                 "FT_LOAD_SBITS_ONLY"
               ]
             },
-            "coverage": [
-              "sbit:compound-negative-offset-public-error"
+          "coverage": [
+            "sbit:compound-negative-offset-public-error"
+          ]
+        },
+        {
+          "id": "sbit-composite-negative-y-offset-format8",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_composite_negative_y_offset_format8.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT compound image-format-8 glyph 2 referencing glyph 1's simple 8-bit gray embedded bitmap at negative y offset."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 2,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
             ]
           },
-          {
-            "id": "sbit-composite-out-of-bounds-format8",
-            "assets": {
+          "coverage": [
+            "sbit:compound-negative-y-offset-public-error"
+          ]
+        },
+        {
+          "id": "sbit-composite-out-of-bounds-format8",
+          "assets": {
               "font": {
                 "kind": "ref",
                 "role": "font",
@@ -737,12 +937,37 @@
                 "FT_LOAD_SBITS_ONLY"
               ]
             },
-            "coverage": [
-              "sbit:compound-out-of-bounds-public-error"
+          "coverage": [
+            "sbit:compound-out-of-bounds-public-error"
+          ]
+        },
+        {
+          "id": "sbit-composite-out-of-bounds-y-format8",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_composite_out_of_bounds_y_format8.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT compound image-format-8 glyph 2 referencing glyph 1's simple 8-bit gray embedded bitmap outside the root bitmap height."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 2,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
             ]
           },
-          {
-            "id": "sbit-gray-format1-default-render",
+          "coverage": [
+            "sbit:compound-out-of-bounds-y-public-error"
+          ]
+        },
+        {
+          "id": "sbit-gray-format1-default-render",
             "assets": {
               "font": {
                 "kind": "ref",
