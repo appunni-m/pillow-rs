@@ -2329,18 +2329,18 @@ impl SdfFlattener {
     }
 
     fn line_to(&mut self, x: i32, y: i32) {
-        if self.current_x != x || self.current_y != y {
-            self.segments.push(Segment {
-                x0: self.current_x,
-                y0: self.current_y,
-                x1: x,
-                y1: y,
-                contour: self.contour,
-                order: self.order,
-                contour_len: 0,
-            });
-            self.order += 1;
-        }
+        // FreeType's SDF subdivision keeps line edges verbatim
+        // (`ftsdf.c:1263-1271`), including degenerate zero-length edges.
+        self.segments.push(Segment {
+            x0: self.current_x,
+            y0: self.current_y,
+            x1: x,
+            y1: y,
+            contour: self.contour,
+            order: self.order,
+            contour_len: 0,
+        });
+        self.order += 1;
         self.current_x = x;
         self.current_y = y;
     }
