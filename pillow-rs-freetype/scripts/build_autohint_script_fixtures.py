@@ -260,6 +260,98 @@ def stacked_contour_glyph():
     )
 
 
+def top_tilde_glyph(extra_top: bool = False):
+    contours = [
+        (100, 0, 500, 500),
+        # A compact tilde contour: the middle on-curve point is flanked by
+        # off-curve controls at the same y so the Latin autohinter measures it
+        # as a tilde wave, not as a plain accent rectangle.
+        [
+            (140, 620, True),
+            (190, 580, False),
+            (240, 580, True),
+            (310, 580, False),
+            (370, 620, True),
+            (430, 540, True),
+        ],
+    ]
+    if extra_top:
+        contours.append((210, 660, 390, 700))
+    return mixed_contour_glyph(contours)
+
+
+def top_tilde_measure_zero_glyph():
+    return mixed_contour_glyph(
+        [
+            (100, 0, 500, 500),
+            [
+                (140, 620, True),
+                (190, 580, False),
+                (240, 580, True),
+                (310, 580, False),
+                (370, 540, True),
+                (430, 560, True),
+            ],
+        ]
+    )
+
+
+def top_tilde_flat_glyph():
+    return mixed_contour_glyph(
+        [
+            (100, 0, 500, 500),
+            [
+                (140, 560, True),
+                (430, 560, True),
+            ],
+        ]
+    )
+
+
+def bottom_tilde_glyph():
+    return mixed_contour_glyph(
+        [
+            [
+                (140, 80, True),
+                (190, 40, False),
+                (240, 40, True),
+                (310, 40, False),
+                (370, 80, True),
+                (430, 0, True),
+            ],
+            (100, 120, 500, 620),
+        ]
+    )
+
+
+def bottom_tilde_measure_zero_glyph():
+    return mixed_contour_glyph(
+        [
+            [
+                (140, 80, True),
+                (190, 40, False),
+                (240, 40, True),
+                (310, 40, False),
+                (370, 0, True),
+                (430, 20, True),
+            ],
+            (100, 120, 500, 620),
+        ]
+    )
+
+
+def bottom_tilde_flat_glyph():
+    return mixed_contour_glyph(
+        [
+            [
+                (140, 60, True),
+                (430, 60, True),
+            ],
+            (100, 120, 500, 620),
+        ]
+    )
+
+
 def serif_m_symmetry_glyph():
     """Three serifed stems with 12 horizontal-dimension edges."""
     return rectangles_glyph(
@@ -338,6 +430,41 @@ def one_point_contour_glyph(points: list[tuple[int, int]]):
     return glyph
 
 
+def mixed_contour_glyph(contours: list[object]):
+    coordinates: list[tuple[int, int]] = []
+    end_pts: list[int] = []
+    flags = bytearray()
+    for contour in contours:
+        if isinstance(contour, tuple):
+            left, bottom, right, top = contour
+            points = [
+                (left, bottom, True),
+                (left, top, True),
+                (right, top, True),
+                (right, bottom, True),
+            ]
+        else:
+            points = contour
+        for x, y, on_curve in points:
+            coordinates.append((x, y))
+            flags.append(1 if on_curve else 0)
+        end_pts.append(len(coordinates) - 1)
+
+    glyph = Glyph()
+    glyph.numberOfContours = len(contours)
+    glyph.coordinates = GlyphCoordinates(coordinates)
+    glyph.endPtsOfContours = end_pts
+    glyph.flags = flags
+    program = Program()
+    program.fromBytecode([])
+    glyph.program = program
+    glyph.xMin = min(x for x, _ in coordinates)
+    glyph.xMax = max(x for x, _ in coordinates)
+    glyph.yMin = min(y for _, y in coordinates)
+    glyph.yMax = max(y for _, y in coordinates)
+    return glyph
+
+
 def table_offsets(path: Path) -> dict[str, tuple[int, int]]:
     data = path.read_bytes()
     num_tables = struct.unpack(">H", data[4:6])[0]
@@ -384,6 +511,13 @@ def build_script_coverage() -> None:
     glyph_order.extend(glyph_name(tag) for tag, _ in SCRIPT_PROBES)
     glyph_order.extend(name for name, _, _ in DIGIT_WIDTH_PROBES)
     glyph_order.append("latin_double_top")
+    glyph_order.append("latin_tilde_top")
+    glyph_order.append("latin_tilde_top2")
+    glyph_order.append("latin_tilde_top_measure_zero")
+    glyph_order.append("latin_tilde_top_flat")
+    glyph_order.append("latin_tilde_bottom")
+    glyph_order.append("latin_tilde_bottom_measure_zero")
+    glyph_order.append("latin_tilde_bottom_flat")
     glyph_order.append("latin_serif_m_symmetry")
 
     glyphs = {
@@ -418,6 +552,27 @@ def build_script_coverage() -> None:
     glyphs["latin_double_top"] = stacked_contour_glyph()
     metrics["latin_double_top"] = (700, 100)
     cmap[0x01D5] = "latin_double_top"
+    glyphs["latin_tilde_top"] = top_tilde_glyph()
+    metrics["latin_tilde_top"] = (700, 100)
+    cmap[0x00F1] = "latin_tilde_top"
+    glyphs["latin_tilde_top2"] = top_tilde_glyph(extra_top=True)
+    metrics["latin_tilde_top2"] = (700, 100)
+    cmap[0x1E4D] = "latin_tilde_top2"
+    glyphs["latin_tilde_top_measure_zero"] = top_tilde_measure_zero_glyph()
+    metrics["latin_tilde_top_measure_zero"] = (700, 100)
+    cmap[0x00E3] = "latin_tilde_top_measure_zero"
+    glyphs["latin_tilde_top_flat"] = top_tilde_flat_glyph()
+    metrics["latin_tilde_top_flat"] = (700, 100)
+    cmap[0x00D1] = "latin_tilde_top_flat"
+    glyphs["latin_tilde_bottom"] = bottom_tilde_glyph()
+    metrics["latin_tilde_bottom"] = (700, 100)
+    cmap[0x1E1B] = "latin_tilde_bottom"
+    glyphs["latin_tilde_bottom_measure_zero"] = bottom_tilde_measure_zero_glyph()
+    metrics["latin_tilde_bottom_measure_zero"] = (700, 100)
+    cmap[0x1E1A] = "latin_tilde_bottom_measure_zero"
+    glyphs["latin_tilde_bottom_flat"] = bottom_tilde_flat_glyph()
+    metrics["latin_tilde_bottom_flat"] = (700, 100)
+    cmap[0x1E75] = "latin_tilde_bottom_flat"
     glyphs["latin_serif_m_symmetry"] = serif_m_symmetry_glyph()
     metrics["latin_serif_m_symmetry"] = (700, 70)
     cmap[0x01D7] = "latin_serif_m_symmetry"
