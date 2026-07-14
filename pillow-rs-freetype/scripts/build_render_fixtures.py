@@ -24,6 +24,7 @@ GLYPH_ORDER = [
     "overlap_compound_flag",
     "overlap_heavy_flag",
     "overlap_wide_overflow_flag",
+    "sdf_zero_length_segment",
 ]
 
 
@@ -168,6 +169,20 @@ def overlap_wide_overflow_flag_glyph():
     return glyph
 
 
+def sdf_zero_length_segment_glyph():
+    pen = TTGlyphPen(None)
+
+    # Keep a zero-length line segment in a non-empty outline so public SDF
+    # rendering reaches FreeType's degenerate segment path.
+    pen.moveTo((0, 0))
+    pen.lineTo((0, 0))
+    pen.lineTo((192, 0))
+    pen.lineTo((0, 192))
+    pen.closePath()
+
+    return pen.glyph()
+
+
 def build_render_coverage() -> None:
     glyphs = {
         ".notdef": empty_glyph(),
@@ -180,6 +195,7 @@ def build_render_coverage() -> None:
         "overlap_compound_flag": overlap_compound_flag_glyph(),
         "overlap_heavy_flag": overlap_heavy_flag_glyph(),
         "overlap_wide_overflow_flag": overlap_wide_overflow_flag_glyph(),
+        "sdf_zero_length_segment": sdf_zero_length_segment_glyph(),
     }
     metrics = {
         ".notdef": (256, 0),
@@ -192,6 +208,7 @@ def build_render_coverage() -> None:
         "overlap_compound_flag": (256, 0),
         "overlap_heavy_flag": (384, 0),
         "overlap_wide_overflow_flag": (9216, 0),
+        "sdf_zero_length_segment": (256, 0),
     }
 
     builder = FontBuilder(UNITS_PER_EM, isTTF=True)
@@ -207,6 +224,7 @@ def build_render_coverage() -> None:
             0xE106: "overlap_compound_flag",
             0xE107: "overlap_heavy_flag",
             0xE108: "overlap_wide_overflow_flag",
+            0xE109: "sdf_zero_length_segment",
         }
     )
     builder.setupGlyf(glyphs)
