@@ -57,313 +57,226 @@
       "case_id": "ftimage.FT_PIXEL_MODE_MAX.not_emitted_as_runtime_bitmap_mode",
       "subject": "ftimage.FT_PIXEL_MODE_MAX",
       "case": "not_emitted_as_runtime_bitmap_mode",
-      "operation": "freetype.bitmap_pixel_mode_survey",
-      "schema": "pixel_mode_distribution",
+      "operation": "load_glyph",
+      "schema": "bitmap_result",
       "expect_error": false,
       "inputs": {
         "variants": [
           {
-            "id": "f1-m1",
+            "id": "outline-render-gray",
             "assets": {
-              "outline_font": {
+              "font": {
                 "kind": "file",
                 "role": "font",
                 "path": "input/fonts/DejaVuSans.ttf"
-              },
-              "color_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/color/embedded-bgra-strikes.ttf",
-                "asset_kind": "font"
-              },
-              "monochrome_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/bitmap/monochrome-strikes.pcf",
-                "asset_kind": "font"
               }
             },
             "params": {
-              "load_flags": "FT_LOAD_DEFAULT",
-              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
-              "valid_success_pixel_modes": [
-                "FT_PIXEL_MODE_NONE",
-                "FT_PIXEL_MODE_MONO",
-                "FT_PIXEL_MODE_GRAY",
-                "FT_PIXEL_MODE_GRAY2",
-                "FT_PIXEL_MODE_GRAY4",
-                "FT_PIXEL_MODE_LCD",
-                "FT_PIXEL_MODE_LCD_V",
-                "FT_PIXEL_MODE_BGRA"
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_RENDER",
+                "FT_LOAD_TARGET_NORMAL"
               ],
-              "render_mode": "FT_RENDER_MODE_NORMAL"
+              "expected_pixel_mode": "FT_PIXEL_MODE_GRAY",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX"
             },
             "coverage": [
-              "freetype.bitmap_pixel_mode_survey:explicit-f1-m1"
+              "pixel-mode-max:outline-render-gray"
             ]
           },
           {
-            "id": "f2-m2",
+            "id": "outline-render-mono",
             "assets": {
-              "outline_font": {
+              "font": {
                 "kind": "file",
                 "role": "font",
                 "path": "input/fonts/DejaVuSans.ttf"
-              },
-              "color_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/color/embedded-bgra-strikes.ttf",
-                "asset_kind": "font"
-              },
-              "monochrome_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/bitmap/monochrome-strikes.pcf",
-                "asset_kind": "font"
               }
             },
             "params": {
-              "load_flags": "FT_LOAD_DEFAULT",
-              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
-              "valid_success_pixel_modes": [
-                "FT_PIXEL_MODE_NONE",
-                "FT_PIXEL_MODE_MONO",
-                "FT_PIXEL_MODE_GRAY",
-                "FT_PIXEL_MODE_GRAY2",
-                "FT_PIXEL_MODE_GRAY4",
-                "FT_PIXEL_MODE_LCD",
-                "FT_PIXEL_MODE_LCD_V",
-                "FT_PIXEL_MODE_BGRA"
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_RENDER",
+                "FT_LOAD_TARGET_MONO"
               ],
-              "render_mode": "FT_RENDER_MODE_MONO"
+              "expected_pixel_mode": "FT_PIXEL_MODE_MONO",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX"
             },
             "coverage": [
-              "freetype.bitmap_pixel_mode_survey:explicit-f2-m2"
+              "pixel-mode-max:outline-render-mono"
             ]
           },
           {
-            "id": "f3-m3",
+            "id": "outline-render-lcd",
             "assets": {
-              "outline_font": {
+              "font": {
                 "kind": "file",
                 "role": "font",
                 "path": "input/fonts/DejaVuSans.ttf"
-              },
-              "color_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/color/embedded-bgra-strikes.ttf",
-                "asset_kind": "font"
-              },
-              "monochrome_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/bitmap/monochrome-strikes.pcf",
-                "asset_kind": "font"
               }
             },
             "params": {
-              "load_flags": "FT_LOAD_DEFAULT",
-              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
-              "valid_success_pixel_modes": [
-                "FT_PIXEL_MODE_NONE",
-                "FT_PIXEL_MODE_MONO",
-                "FT_PIXEL_MODE_GRAY",
-                "FT_PIXEL_MODE_GRAY2",
-                "FT_PIXEL_MODE_GRAY4",
-                "FT_PIXEL_MODE_LCD",
-                "FT_PIXEL_MODE_LCD_V",
-                "FT_PIXEL_MODE_BGRA"
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_RENDER",
+                "FT_LOAD_TARGET_LCD"
               ],
-              "render_mode": "FT_RENDER_MODE_LCD"
+              "expected_pixel_mode": "FT_PIXEL_MODE_LCD",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX"
             },
             "coverage": [
-              "freetype.bitmap_pixel_mode_survey:explicit-f3-m3"
+              "pixel-mode-max:outline-render-lcd"
             ]
           },
           {
-            "id": "f4-m4",
+            "id": "outline-render-lcd-v",
             "assets": {
-              "outline_font": {
+              "font": {
                 "kind": "file",
                 "role": "font",
                 "path": "input/fonts/DejaVuSans.ttf"
-              },
-              "color_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/color/embedded-bgra-strikes.ttf",
-                "asset_kind": "font"
-              },
-              "monochrome_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/bitmap/monochrome-strikes.pcf",
-                "asset_kind": "font"
               }
             },
             "params": {
-              "load_flags": "FT_LOAD_DEFAULT",
-              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
-              "valid_success_pixel_modes": [
-                "FT_PIXEL_MODE_NONE",
-                "FT_PIXEL_MODE_MONO",
-                "FT_PIXEL_MODE_GRAY",
-                "FT_PIXEL_MODE_GRAY2",
-                "FT_PIXEL_MODE_GRAY4",
-                "FT_PIXEL_MODE_LCD",
-                "FT_PIXEL_MODE_LCD_V",
-                "FT_PIXEL_MODE_BGRA"
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_RENDER",
+                "FT_LOAD_TARGET_LCD_V"
               ],
-              "render_mode": "FT_RENDER_MODE_LCD_V"
+              "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX"
             },
             "coverage": [
-              "freetype.bitmap_pixel_mode_survey:explicit-f4-m4"
+              "pixel-mode-max:outline-render-lcd-v"
             ]
           },
           {
-            "id": "f5-m5",
+            "id": "sbit-mono",
             "assets": {
-              "outline_font": {
-                "kind": "file",
+              "font": {
+                "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/DejaVuSans.ttf"
-              },
-              "color_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/color/embedded-bgra-strikes.ttf",
-                "asset_kind": "font"
-              },
-              "monochrome_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/bitmap/monochrome-strikes.pcf",
-                "asset_kind": "font"
+                "id": "fixtures/assets/fonts/sbit_mono_format1.ttf",
+                "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT format-1 1-bit monochrome embedded bitmap for glyph 1."
               }
             },
             "params": {
-              "load_flags": "FT_LOAD_COLOR",
-              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
-              "valid_success_pixel_modes": [
-                "FT_PIXEL_MODE_NONE",
-                "FT_PIXEL_MODE_MONO",
-                "FT_PIXEL_MODE_GRAY",
-                "FT_PIXEL_MODE_GRAY2",
-                "FT_PIXEL_MODE_GRAY4",
-                "FT_PIXEL_MODE_LCD",
-                "FT_PIXEL_MODE_LCD_V",
-                "FT_PIXEL_MODE_BGRA"
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_SBITS_ONLY"
               ],
-              "render_mode": "FT_RENDER_MODE_NORMAL"
+              "expected_pixel_mode": "FT_PIXEL_MODE_MONO",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX"
             },
             "coverage": [
-              "freetype.bitmap_pixel_mode_survey:explicit-f5-m5"
+              "pixel-mode-max:sbit-mono"
             ]
           },
           {
-            "id": "f6-m6",
+            "id": "sbit-gray2",
             "assets": {
-              "outline_font": {
-                "kind": "file",
+              "font": {
+                "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/DejaVuSans.ttf"
-              },
-              "color_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/color/embedded-bgra-strikes.ttf",
-                "asset_kind": "font"
-              },
-              "monochrome_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/bitmap/monochrome-strikes.pcf",
-                "asset_kind": "font"
+                "id": "fixtures/assets/fonts/sbit_gray2_format1.ttf",
+                "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT format-1 2-bit grayscale embedded bitmap for glyph 1."
               }
             },
             "params": {
-              "load_flags": "FT_LOAD_COLOR",
-              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
-              "valid_success_pixel_modes": [
-                "FT_PIXEL_MODE_NONE",
-                "FT_PIXEL_MODE_MONO",
-                "FT_PIXEL_MODE_GRAY",
-                "FT_PIXEL_MODE_GRAY2",
-                "FT_PIXEL_MODE_GRAY4",
-                "FT_PIXEL_MODE_LCD",
-                "FT_PIXEL_MODE_LCD_V",
-                "FT_PIXEL_MODE_BGRA"
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_SBITS_ONLY"
               ],
-              "render_mode": "FT_RENDER_MODE_MONO"
+              "expected_pixel_mode": "FT_PIXEL_MODE_GRAY2",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX"
             },
             "coverage": [
-              "freetype.bitmap_pixel_mode_survey:explicit-f6-m6"
+              "pixel-mode-max:sbit-gray2"
             ]
           },
           {
-            "id": "f7-m7",
+            "id": "sbit-gray4",
             "assets": {
-              "outline_font": {
-                "kind": "file",
+              "font": {
+                "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/DejaVuSans.ttf"
-              },
-              "color_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/color/embedded-bgra-strikes.ttf",
-                "asset_kind": "font"
-              },
-              "monochrome_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/bitmap/monochrome-strikes.pcf",
-                "asset_kind": "font"
+                "id": "fixtures/assets/fonts/sbit_gray4_format1.ttf",
+                "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT format-1 4-bit grayscale embedded bitmap for glyph 1."
               }
             },
             "params": {
-              "load_flags": "FT_LOAD_COLOR",
-              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
-              "valid_success_pixel_modes": [
-                "FT_PIXEL_MODE_NONE",
-                "FT_PIXEL_MODE_MONO",
-                "FT_PIXEL_MODE_GRAY",
-                "FT_PIXEL_MODE_GRAY2",
-                "FT_PIXEL_MODE_GRAY4",
-                "FT_PIXEL_MODE_LCD",
-                "FT_PIXEL_MODE_LCD_V",
-                "FT_PIXEL_MODE_BGRA"
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_SBITS_ONLY"
               ],
-              "render_mode": "FT_RENDER_MODE_LCD"
+              "expected_pixel_mode": "FT_PIXEL_MODE_GRAY4",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX"
             },
             "coverage": [
-              "freetype.bitmap_pixel_mode_survey:explicit-f7-m7"
+              "pixel-mode-max:sbit-gray4"
             ]
           },
           {
-            "id": "f8-m8",
+            "id": "sbit-bgra",
             "assets": {
-              "outline_font": {
-                "kind": "file",
+              "font": {
+                "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/DejaVuSans.ttf"
-              },
-              "color_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/color/embedded-bgra-strikes.ttf",
-                "asset_kind": "font"
-              },
-              "monochrome_bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/bitmap/monochrome-strikes.pcf",
-                "asset_kind": "font"
+                "id": "fixtures/assets/fonts/sbit_bgra_format1.ttf",
+                "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT format-1 32-bit BGRA embedded bitmap for glyph 1."
               }
             },
             "params": {
-              "load_flags": "FT_LOAD_COLOR",
-              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX",
-              "valid_success_pixel_modes": [
-                "FT_PIXEL_MODE_NONE",
-                "FT_PIXEL_MODE_MONO",
-                "FT_PIXEL_MODE_GRAY",
-                "FT_PIXEL_MODE_GRAY2",
-                "FT_PIXEL_MODE_GRAY4",
-                "FT_PIXEL_MODE_LCD",
-                "FT_PIXEL_MODE_LCD_V",
-                "FT_PIXEL_MODE_BGRA"
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
               ],
-              "render_mode": "FT_RENDER_MODE_LCD_V"
+              "expected_pixel_mode": "FT_PIXEL_MODE_BGRA",
+              "forbidden_success_pixel_mode": "FT_PIXEL_MODE_MAX"
             },
             "coverage": [
-              "freetype.bitmap_pixel_mode_survey:explicit-f8-m8"
+              "pixel-mode-max:sbit-bgra"
             ]
           }
         ]
@@ -377,25 +290,28 @@
       "expectation": {
         "status": "ok",
         "output_shape": {
-          "outputs": "array",
           "status": "FT_Error",
-          "bitmap_pixel_mode": "FT_Pixel_Mode",
-          "forbidden_value_seen": "bool"
+          "bitmap": "FT_Bitmap metadata and bytes; pixel_mode must be a concrete value below FT_PIXEL_MODE_MAX"
         },
         "compare": {
-          "mode": "exact",
+          "mode": "bytes",
           "paths": [
-            "outputs[].status",
-            "outputs[].bitmap.pixel_mode",
-            "forbidden_value_seen"
+            "format",
+            "bitmap.pixel_mode",
+            "bitmap.rows",
+            "bitmap.width",
+            "bitmap.pitch",
+            "bitmap.num_grays",
+            "bitmap.buffer_hex"
           ]
         },
         "fixture_requirements": [
-          "Embedded color and monochrome bitmap fonts are future shared assets; the existing DejaVuSans outline font covers render paths now."
+          "Uses DejaVuSans outline rendering plus generated compact SBIT fixtures for packed and color embedded bitmap modes."
         ],
         "source_refs": [
           "freetype/include/freetype/ftimage.h:180-196",
-          "freetype/src/base/ftobjs.c:477-537"
+          "freetype/src/base/ftobjs.c:943-1177",
+          "freetype/src/sfnt/ttsbit.c:700-743"
         ]
       }
     }
