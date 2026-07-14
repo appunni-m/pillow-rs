@@ -52,67 +52,54 @@
       "case_id": "freetype.FT_LOAD_PEDANTIC.pedantic_error_behavior",
       "subject": "freetype.FT_LOAD_PEDANTIC",
       "case": "pedantic_error_behavior",
-      "operation": "freetype.load_glyph_pair",
-      "schema": "glyph_slot_error_delta",
-      "expect_error": false,
+      "operation": "load_glyph",
+      "schema": "api_result",
+      "expect_error": true,
       "inputs": {
         "assets": {
           "font": {
             "kind": "ref",
             "role": "font",
-            "id": "fonts/malformed/pedantic-bytecode-error.ttf",
-            "missing": true
+            "id": "fonts/glyf/hinter-control-matrix.ttf"
           }
         },
         "params": {
           "face_index": 0,
-          "pixel_size": {
-            "x": 0,
-            "y": 20
-          },
-          "glyph_selector": {
-            "kind": "bytecode_error_glyph"
-          },
-          "baseline_load_flags": [],
-          "pedantic_load_flags": [
+          "size": 20,
+          "glyph_index": 35,
+          "load_flags": [
             "FT_LOAD_PEDANTIC"
-          ]
+          ],
+          "assert_api_load_glyph_agrees": true
         }
       },
       "classifiers": [
         "kind:flag",
         "header:freetype",
         "area:public-api",
-        "coverage:runtime"
+        "coverage:runtime",
+        "tt/hinter:pedantic-glyph-program-error"
       ],
       "expectation": {
-        "status": "build_dependent",
+        "status": "error",
         "output_shape": {
-          "baseline": {
-            "status": "FT_Error",
-            "slot_format": "glyph_format"
-          },
-          "pedantic": {
-            "status": "FT_Error",
-            "slot_format": "glyph_format"
-          }
+          "return": "FT_Error",
+          "slot_mutation": "cleared_then_driver_or_c_oracle"
         },
         "compare": {
-          "mode": "exact",
+          "mode": "exact_error",
           "paths": [
-            "baseline.status",
-            "pedantic.status",
-            "baseline.slot_format",
-            "pedantic.slot_format"
+            "status",
+            "error",
+            "slot_snapshot"
           ]
         },
+        "error": "c_oracle",
         "source_refs": [
           "freetype/include/freetype/freetype.h:3501-3636",
-          "freetype/src/base/ftobjs.c:943-1177",
-          "freetype/src/truetype/ttgload.c:2203-2220"
-        ],
-        "fixture_requirements": [
-          "Malformed or edge-case TrueType fixture where pedantic bytecode/load errors differ from non-pedantic loading"
+          "freetype/src/truetype/ttgload.c:824-836",
+          "freetype/src/truetype/ttgload.c:2203-2220",
+          "freetype/src/truetype/ttobjs.c:1030-1048"
         ]
       }
     }

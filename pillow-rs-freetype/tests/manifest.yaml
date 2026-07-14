@@ -965,7 +965,6 @@ subjects:
         description: Numeric flag value matches the pinned FreeType header.
       - id: pedantic_error_behavior
         description: FT_Load_Glyph reports pedantic bytecode/load errors that non-pedantic loading may ignore.
-    # needs-input: operation=load_glyph; fixture_asset=malformed or bytecode-error TrueType fixture intentionally accepted without FT_LOAD_PEDANTIC; params glyph_index exercising the fault, load_flags=FT_LOAD_PEDANTIC; expected output shape=FT_Error status and any initialized slot fields from C oracle; comparison=exact status and field equality.
 
   - id: freetype.FT_LOAD_RENDER
     kind: flag

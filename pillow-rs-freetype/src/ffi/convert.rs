@@ -111,6 +111,9 @@ pub fn load_flags_to_core(flags: FT_Int32) -> Result<api::LoadFlags, FT_Error> {
     if flags & FT_LOAD_NO_AUTOHINT != 0 {
         core |= api::LoadFlags::NO_AUTOHINT;
     }
+    if flags & FT_LOAD_PEDANTIC != 0 {
+        core |= api::LoadFlags::PEDANTIC;
+    }
     if flags & FT_LOAD_VERTICAL_LAYOUT != 0 {
         core |= api::LoadFlags::VERTICAL_LAYOUT;
     }
