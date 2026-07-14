@@ -61,55 +61,57 @@
       "inputs": {
         "variants": [
           {
-            "id": "m1",
+            "id": "render-coverage-overlap-heavy-normal",
             "assets": {
               "font": {
                 "kind": "ref",
-                "id": "fonts/outline/overlap-heavy-glyphs.ttf",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf",
                 "asset_kind": "font"
-              },
-              "outline": {
-                "kind": "ref",
-                "id": "outlines/synthetic/overlapping-contours.json",
-                "asset_kind": "outline"
               }
             },
             "params": {
-              "outline_flags_matrix": [
-                "FT_OUTLINE_NONE",
-                "FT_OUTLINE_OVERLAP"
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "glyph_index": 8,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
               ],
-              "expected_behavior": "smooth renderer uses overlap oversampling path when the flag is set",
+              "expected_behavior": "smooth renderer uses FreeType's overlap oversampling path for flagged outline glyphs",
               "render_mode": "FT_RENDER_MODE_NORMAL"
             },
             "coverage": [
-              "render_glyph:explicit-m1"
+              "render/normal:overlap-oversampling"
             ]
           },
           {
-            "id": "m2",
+            "id": "render-coverage-overlap-heavy-light",
             "assets": {
               "font": {
                 "kind": "ref",
-                "id": "fonts/outline/overlap-heavy-glyphs.ttf",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf",
                 "asset_kind": "font"
-              },
-              "outline": {
-                "kind": "ref",
-                "id": "outlines/synthetic/overlapping-contours.json",
-                "asset_kind": "outline"
               }
             },
             "params": {
-              "outline_flags_matrix": [
-                "FT_OUTLINE_NONE",
-                "FT_OUTLINE_OVERLAP"
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "glyph_index": 8,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
               ],
-              "expected_behavior": "smooth renderer uses overlap oversampling path when the flag is set",
-              "render_mode": "FT_RENDER_MODE_LCD"
+              "expected_behavior": "FT_RENDER_MODE_LIGHT shares FreeType's gray overlap oversampling path",
+              "render_mode": "FT_RENDER_MODE_LIGHT"
             },
             "coverage": [
-              "render_glyph:explicit-m2"
+              "render/light:overlap-oversampling"
             ]
           }
         ]
@@ -124,9 +126,17 @@
       "expectation": {
         "status": "ok",
         "output_shape": {
-          "status": "FT_Error",
-          "bitmap": "FT_Bitmap",
-          "overlap_path_used": "bool"
+          "return": "FT_Error",
+          "slot_bitmap": [
+            "format",
+            "bitmap.width",
+            "bitmap.rows",
+            "bitmap.pitch",
+            "bitmap.pixel_mode",
+            "bitmap_left",
+            "bitmap_top",
+            "buffer_bytes"
+          ]
         },
         "compare": {
           "mode": "bytes",
@@ -136,16 +146,16 @@
             "bitmap.rows",
             "bitmap.width",
             "bitmap.pitch",
-            "bitmap.buffer",
-            "overlap_path_used"
+            "bitmap.buffer"
           ]
         },
         "fixture_requirements": [
-          "Future overlap-heavy outline/font fixture with contours that trigger C smooth overlap mitigation."
+          "Compact render-coverage.ttf glyph 8 carries FT_OUTLINE_OVERLAP and two overlapping contours with fractional pixel edges."
         ],
         "source_refs": [
           "freetype/include/freetype/ftimage.h:418-423",
-          "freetype/src/smooth/ftsmooth.c:626-637"
+          "freetype/src/smooth/ftsmooth.c:497-552",
+          "freetype/src/smooth/ftsmooth.c:621-637"
         ]
       }
     },

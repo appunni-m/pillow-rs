@@ -10,8 +10,8 @@ use crate::fixed::{ft_div_fix, ft_mul_fix, ft_vector_length, ft_vector_norm_len}
 use crate::font::Font;
 use crate::grays;
 use crate::outline::{
-    OUTLINE_HIGH_PRECISION, OUTLINE_IGNORE_DROPOUTS, OUTLINE_INCLUDE_STUBS, OUTLINE_SINGLE_PASS,
-    OUTLINE_SMART_DROPOUTS, Outline,
+    OUTLINE_HIGH_PRECISION, OUTLINE_IGNORE_DROPOUTS, OUTLINE_INCLUDE_STUBS, OUTLINE_OVERLAP,
+    OUTLINE_SINGLE_PASS, OUTLINE_SMART_DROPOUTS, Outline,
 };
 use crate::scaler;
 use crate::tt::hinter::NativeHintMode;
@@ -422,6 +422,10 @@ fn render_normal(
             buffer: Vec::new(),
         });
     }
+    if outline.flags & OUTLINE_OVERLAP != 0 {
+        return render_normal_overlap(outline, left, top, width, height, scratch);
+    }
+
     let mut target = vec![0u8; width * height];
     crate::grays::rasterize_shifted_in_box_to_with_scratch(
         &outline,
@@ -449,6 +453,114 @@ fn render_normal(
         top,
         buffer: target,
     })
+}
+
+fn render_normal_overlap(
+    mut outline: Outline,
+    left: i32,
+    top: i32,
+    width: usize,
+    height: usize,
+    scratch: &mut crate::grays::RasterScratch,
+) -> Result<RenderedBitmap, FontError> {
+    const SCALE: i32 = 4;
+    const SCALE_USIZE: usize = SCALE as usize;
+
+    if width > 0x7FFF / SCALE_USIZE {
+        return Err(FontError::RasterOverflow);
+    }
+
+    let oversampled_width = width
+        .checked_mul(SCALE_USIZE)
+        .ok_or(FontError::RasterOverflow)?;
+    let oversampled_height = height
+        .checked_mul(SCALE_USIZE)
+        .ok_or(FontError::RasterOverflow)?;
+    let oversampled_len = oversampled_width
+        .checked_mul(oversampled_height)
+        .ok_or(FontError::RasterOverflow)?;
+
+    for point in &mut outline.points {
+        point.x = point
+            .x
+            .checked_mul(SCALE)
+            .ok_or(FontError::RasterOverflow)?;
+        point.y = point
+            .y
+            .checked_mul(SCALE)
+            .ok_or(FontError::RasterOverflow)?;
+    }
+    let cbox_x_min = outline
+        .cbox_x_min
+        .checked_mul(SCALE)
+        .ok_or(FontError::RasterOverflow)?;
+    let cbox_x_max = outline
+        .cbox_x_max
+        .checked_mul(SCALE)
+        .ok_or(FontError::RasterOverflow)?;
+    let cbox_y_min = outline
+        .cbox_y_min
+        .checked_mul(SCALE)
+        .ok_or(FontError::RasterOverflow)?;
+    let cbox_y_max = outline
+        .cbox_y_max
+        .checked_mul(SCALE)
+        .ok_or(FontError::RasterOverflow)?;
+
+    let mut oversampled = vec![0u8; oversampled_len];
+    crate::grays::rasterize_shifted_in_box_to_with_scratch(
+        &outline,
+        0,
+        0,
+        oversampled_width,
+        oversampled_height,
+        &mut oversampled,
+        oversampled_width,
+        1,
+        0,
+        cbox_x_min,
+        cbox_x_max,
+        cbox_y_min,
+        cbox_y_max,
+        scratch,
+    )?;
+
+    let mut target = vec![0u8; width * height];
+    downsample_overlap_bitmap(&oversampled, oversampled_width, &mut target, width);
+    Ok(RenderedBitmap {
+        width: u32_from_usize(width),
+        rows: u32_from_usize(height),
+        pitch: i32_from_usize(width),
+        pixel_mode: PixelMode::Gray,
+        num_grays: PixelMode::Gray.num_grays(),
+        left,
+        top,
+        buffer: target,
+    })
+}
+
+fn downsample_overlap_bitmap(
+    oversampled: &[u8],
+    oversampled_width: usize,
+    target: &mut [u8],
+    width: usize,
+) {
+    const SCALE_USIZE: usize = 4;
+    const SCALE_AREA: u16 = (SCALE_USIZE * SCALE_USIZE) as u16;
+    const HALF_SCALE_AREA: u16 = SCALE_AREA / 2;
+
+    for (sample_y, row) in oversampled.chunks(oversampled_width).enumerate() {
+        let target_y = sample_y / SCALE_USIZE;
+        let target_row = target_y * width;
+        for (sample_x, &sample) in row.iter().enumerate() {
+            let target_index = target_row + sample_x / SCALE_USIZE;
+            let cover = (u16::from(sample) + HALF_SCALE_AREA) / SCALE_AREA;
+            let sum = u16::from(target[target_index]) + cover;
+            // ftsmooth.c:ft_smooth_overlap_spans accumulates 4x4 subpixel
+            // coverage and maps the only possible overflow value, 256, to 255.
+            target[target_index] = (sum - (sum >> 8)) as u8;
+        }
+    }
 }
 
 fn render_sdf(
