@@ -61,6 +61,12 @@
             "coverage": ["grays:empty-outline"]
           },
           {
+            "id": "zero-contours-nonempty-points",
+            "assets": {"outline": {"kind": "ref", "id": "outlines/render/zero-contours-nonempty-points.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
+            "coverage": ["grays:zero-contours-nonempty-points"]
+          },
+          {
             "id": "line-above-clip",
             "assets": {"outline": {"kind": "ref", "id": "outlines/render/line-above-clip.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
