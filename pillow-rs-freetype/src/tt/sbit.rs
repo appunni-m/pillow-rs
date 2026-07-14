@@ -539,17 +539,22 @@ fn blit_component_bitmap(
         .map_err(|_| FontError::InvalidFont("embedded bitmap target pitch invalid".into()))?;
     let component_pitch = usize::try_from(component.pitch)
         .map_err(|_| FontError::InvalidFont("embedded bitmap component pitch invalid".into()))?;
+    if let Some(bit_depth) = packed_bit_depth(target.pixel_mode) {
+        return blit_packed_component_bitmap(
+            target,
+            component,
+            dx as usize,
+            dy as usize,
+            target_pitch,
+            component_pitch,
+            bit_depth,
+        );
+    }
+
     let bytes_per_pixel = match target.pixel_mode {
         SbitPixelMode::Bgra => 4,
         SbitPixelMode::Gray => 1,
-        SbitPixelMode::Mono | SbitPixelMode::Gray2 | SbitPixelMode::Gray4 => {
-            if dx != 0 {
-                return Err(FontError::InvalidFont(
-                    "embedded bitmap packed compound x offset unsupported".into(),
-                ));
-            }
-            0
-        }
+        SbitPixelMode::Mono | SbitPixelMode::Gray2 | SbitPixelMode::Gray4 => unreachable!(),
     };
     let target_x = (dx as usize).checked_mul(bytes_per_pixel).ok_or_else(|| {
         FontError::InvalidFont("embedded bitmap compound x offset overflow".into())
@@ -587,6 +592,112 @@ fn blit_component_bitmap(
             *target_byte |= component_byte;
         }
     }
+    Ok(())
+}
+
+fn packed_bit_depth(pixel_mode: SbitPixelMode) -> Option<usize> {
+    match pixel_mode {
+        SbitPixelMode::Mono => Some(1),
+        SbitPixelMode::Gray2 => Some(2),
+        SbitPixelMode::Gray4 => Some(4),
+        SbitPixelMode::Gray | SbitPixelMode::Bgra => None,
+    }
+}
+
+fn blit_packed_component_bitmap(
+    target: &mut SbitBitmap,
+    component: &SbitBitmap,
+    dx: usize,
+    dy: usize,
+    target_pitch: usize,
+    component_pitch: usize,
+    bit_depth: usize,
+) -> Result<(), FontError> {
+    // FreeType `sfnt/ttsbit.c:730-782` treats compound x offsets as bit
+    // shifts for byte-aligned packed SBIT components, then ORs shifted bytes
+    // into the root bitmap.
+    let line_bits = (component.width as usize)
+        .checked_mul(bit_depth)
+        .ok_or_else(|| FontError::InvalidFont("embedded bitmap compound line overflow".into()))?;
+    if line_bits == 0 || component.rows == 0 {
+        return Ok(());
+    }
+    let row_bytes = line_bits.div_ceil(8);
+    let x_byte = dx >> 3;
+    let x_shift = dx & 7;
+
+    for row in 0..component.rows as usize {
+        let target_start = dy
+            .checked_add(row)
+            .and_then(|y| y.checked_mul(target_pitch))
+            .and_then(|start| start.checked_add(x_byte))
+            .ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap compound target offset overflow".into())
+            })?;
+        let component_start = row.checked_mul(component_pitch).ok_or_else(|| {
+            FontError::InvalidFont("embedded bitmap compound component offset overflow".into())
+        })?;
+        let component_end = component_start.checked_add(row_bytes).ok_or_else(|| {
+            FontError::InvalidFont("embedded bitmap compound component row overflow".into())
+        })?;
+        let target_len = (x_shift + line_bits).div_ceil(8);
+        let target_end = target_start.checked_add(target_len).ok_or_else(|| {
+            FontError::InvalidFont("embedded bitmap compound target row overflow".into())
+        })?;
+        let target_row = target
+            .buffer
+            .get_mut(target_start..target_end)
+            .ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap compound target row truncated".into())
+            })?;
+        let component_row = component
+            .buffer
+            .get(component_start..component_end)
+            .ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap compound component row truncated".into())
+            })?;
+
+        if x_shift == 0 {
+            let mut index = 0usize;
+            let mut remaining_bits = line_bits;
+            while remaining_bits >= 8 {
+                target_row[index] |= component_row[index];
+                index += 1;
+                remaining_bits -= 8;
+            }
+            if remaining_bits > 0 {
+                let mask = 0xFF00u32 >> remaining_bits;
+                target_row[index] |= (u32::from(component_row[index]) & mask) as u8;
+            }
+        } else {
+            let mut source_index = 0usize;
+            let mut target_index = 0usize;
+            let mut remaining_bits = line_bits;
+            let mut wval = 0u32;
+
+            while remaining_bits >= 8 {
+                wval |= u32::from(component_row[source_index]);
+                target_row[target_index] |= (wval >> x_shift) as u8;
+                target_index += 1;
+                source_index += 1;
+                wval <<= 8;
+                remaining_bits -= 8;
+            }
+
+            if remaining_bits > 0 {
+                let mask = 0xFF00u32 >> remaining_bits;
+                wval |= u32::from(component_row[source_index]) & mask;
+            }
+
+            target_row[target_index] |= (wval >> x_shift) as u8;
+            if x_shift + remaining_bits > 8 {
+                target_index += 1;
+                wval <<= 8;
+                target_row[target_index] |= (wval >> x_shift) as u8;
+            }
+        }
+    }
+
     Ok(())
 }
 

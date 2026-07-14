@@ -367,6 +367,15 @@ def compound_mono_success_format8_tables() -> tuple[bytes, bytes]:
     return compound_pair_tables(1, simple_image, 8, compound_image)
 
 
+def compound_mono_shifted_success_format8_tables() -> tuple[bytes, bytes]:
+    simple_image = bytes([2, 9, 1, 2, 10]) + bytes([0xA5, 0x80, 0x5A, 0x00])
+    compound_image = compound_image_format8(
+        bytes([2, 10, 1, 2, 11]),
+        [(1, 1, 0)],
+    )
+    return compound_pair_tables(1, simple_image, 8, compound_image)
+
+
 def compound_bgra_success_format8_tables() -> tuple[bytes, bytes]:
     simple_image = bytes([1, 2, 1, 1, 3]) + bytes(
         [0x10, 0x20, 0x30, 0xFF, 0x40, 0x50, 0x60, 0x80]
@@ -553,6 +562,8 @@ def build_composite_success() -> None:
     save_sbit_font("sbit_composite_success_format9.ttf", eblc, ebdt)
     eblc, ebdt = compound_mono_success_format8_tables()
     save_sbit_font("sbit_composite_mono_success_format8.ttf", eblc, ebdt)
+    eblc, ebdt = compound_mono_shifted_success_format8_tables()
+    save_sbit_font("sbit_composite_mono_shifted_success_format8.ttf", eblc, ebdt)
     eblc, ebdt = compound_bgra_success_format8_tables()
     save_sbit_font("sbit_composite_bgra_success_format8.ttf", eblc, ebdt)
     eblc, ebdt = compound_negative_offset_tables()
