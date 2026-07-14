@@ -255,6 +255,33 @@
             ]
           },
           {
+            "id": "missing-small-metrics-width",
+            "assets": {
+              "fixture": {
+                "kind": "ref",
+                "role": "font_or_public_input",
+                "id": "fixtures/assets/fonts/sbit_missing_small_metrics_width.ttf",
+                "requirements": "Synthetic scalable SFNT whose selected EBLC image offsets cover only the first small-metrics byte."
+              }
+            },
+            "params": {
+              "expected_error_symbol": "FT_Err_Invalid_Argument",
+              "expected_error_value_source": "pinned fterrdef.h",
+              "pinned_source": "freetype/src/truetype/ttgload.c:2467-2469",
+              "internal_sbit_source": "freetype/src/sfnt/ttsbit.c:544-589",
+              "face_index": 0,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_COLOR",
+                "FT_LOAD_SBITS_ONLY"
+              ],
+              "glyph_record": "image offsets select one byte, leaving small metrics width unavailable"
+            },
+            "coverage": [
+              "sbit:missing-small-metrics-width-public-invalid-argument"
+            ]
+          },
+          {
             "id": "unsupported-index-format",
             "assets": {
               "fixture": {
