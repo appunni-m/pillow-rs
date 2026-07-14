@@ -7910,6 +7910,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 args.push(string_array_param(params, "null_output_indices")?.join(","));
                 return Ok(args);
             }
+            if string_param(params, "face").ok() == Some("valid_without_OPENTYPE_VALIDATE_service")
+            {
+                let mut args = vec!["--open-type-validate-service-missing".to_string()];
+                push_font_source(case, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                return Ok(args);
+            }
             oracle_fallback_args(case)
         }
         "ftotval.open_type_free" => {

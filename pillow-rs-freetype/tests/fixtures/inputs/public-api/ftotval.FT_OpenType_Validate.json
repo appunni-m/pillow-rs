@@ -186,11 +186,12 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/non-opentype/bitmap-or-pcf-without-otvalid.pcf"
+            "id": "fonts/type1/simple-type1.pfb"
           }
         },
         "params": {
           "face": "valid_without_OPENTYPE_VALIDATE_service",
+          "face_index": 0,
           "validation_flags": [
             "FT_VALIDATE_OT"
           ],
@@ -219,7 +220,7 @@
         },
         "error": "FT_Err_Unimplemented_Feature",
         "fixture_requirements": [
-          "fonts/non-opentype/bitmap-or-pcf-without-otvalid.pcf must load as a face that has no OPENTYPE_VALIDATE service."
+          "fonts/type1/simple-type1.pfb must load as a Type 1 face that has no OPENTYPE_VALIDATE service."
         ],
         "source_refs": [
           "freetype/src/base/ftotval.c"
