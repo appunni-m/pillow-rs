@@ -18,6 +18,7 @@ pub type FT_UInt = c_uint;
 pub type FT_Int32 = i32;
 pub type FT_UInt32 = u32;
 pub type FT_Byte = c_uchar;
+pub type FT_Bytes = *const FT_Byte;
 pub type FT_Long = c_long;
 pub type FT_ULong = c_ulong;
 pub type FT_Pos = c_long;
@@ -391,6 +392,53 @@ pub fn abi_c_string_bytes(ptr: *const c_char) -> Vec<u8> {
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Error_String(error_code: FT_Error) -> *const c_char {
     rust_ffi::FT_Error_String(error_code).map_or(ptr::null(), |text| text.as_ptr().cast())
+}
+
+fn write_ft_bytes(out: *mut FT_Bytes, value: FT_Bytes) {
+    if let Some(out) = non_null_mut(out) {
+        // SAFETY: `out` is non-null and caller provides writable FT_Bytes storage.
+        unsafe { *out.as_ptr() = value };
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_OpenType_Validate(
+    face: FT_Face,
+    validation_flags: FT_UInt,
+    base_table: *mut FT_Bytes,
+    gdef_table: *mut FT_Bytes,
+    gpos_table: *mut FT_Bytes,
+    gsub_table: *mut FT_Bytes,
+    jstf_table: *mut FT_Bytes,
+) -> FT_Error {
+    let face = face_state(face).map(|state| &state.inner);
+    let mut base = ptr::null();
+    let mut gdef = ptr::null();
+    let mut gpos = ptr::null();
+    let mut gsub = ptr::null();
+    let mut jstf = ptr::null();
+    let err = rust_ffi::FT_OpenType_Validate(
+        face,
+        validation_flags,
+        (!base_table.is_null()).then_some(&mut base),
+        (!gdef_table.is_null()).then_some(&mut gdef),
+        (!gpos_table.is_null()).then_some(&mut gpos),
+        (!gsub_table.is_null()).then_some(&mut gsub),
+        (!jstf_table.is_null()).then_some(&mut jstf),
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        write_ft_bytes(base_table, base);
+        write_ft_bytes(gdef_table, gdef);
+        write_ft_bytes(gpos_table, gpos);
+        write_ft_bytes(gsub_table, gsub);
+        write_ft_bytes(jstf_table, jstf);
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_OpenType_Free(face: FT_Face, table: FT_Bytes) {
+    rust_ffi::FT_OpenType_Free(face_state(face).map(|state| &state.inner), table);
 }
 
 #[cfg(feature = "abi-test-support")]

@@ -25,6 +25,7 @@ pub type FT_Sfnt_Tag = u32;
 pub type FT_Short = i16;
 pub type FT_UShort = u16;
 pub type FT_Byte = u8;
+pub type FT_Bytes = *const FT_Byte;
 pub type FT_Size_Request_Type = i32;
 pub type FT_Encoding = i32;
 pub type FT_LcdFilter = i32;
@@ -858,6 +859,53 @@ pub extern "C" fn fontdone_wasm_error_string(
     out.string = text.as_ptr().cast();
     out.string_len = u32::try_from(text.to_bytes().len()).unwrap_or(u32::MAX);
     1
+}
+
+fn write_ft_bytes(out: *mut FT_Bytes, value: FT_Bytes) {
+    if !out.is_null() {
+        // SAFETY: `out` is non-null and caller provides writable FT_Bytes storage.
+        unsafe { *out = value };
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_open_type_validate(
+    handle: usize,
+    validation_flags: FT_UInt,
+    base_table: *mut FT_Bytes,
+    gdef_table: *mut FT_Bytes,
+    gpos_table: *mut FT_Bytes,
+    gsub_table: *mut FT_Bytes,
+    jstf_table: *mut FT_Bytes,
+) -> FT_Error {
+    let face = face_ref(handle).map(|face| &face.face);
+    let mut base = ptr::null();
+    let mut gdef = ptr::null();
+    let mut gpos = ptr::null();
+    let mut gsub = ptr::null();
+    let mut jstf = ptr::null();
+    let err = rust_ffi::FT_OpenType_Validate(
+        face,
+        validation_flags,
+        (!base_table.is_null()).then_some(&mut base),
+        (!gdef_table.is_null()).then_some(&mut gdef),
+        (!gpos_table.is_null()).then_some(&mut gpos),
+        (!gsub_table.is_null()).then_some(&mut gsub),
+        (!jstf_table.is_null()).then_some(&mut jstf),
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        write_ft_bytes(base_table, base);
+        write_ft_bytes(gdef_table, gdef);
+        write_ft_bytes(gpos_table, gpos);
+        write_ft_bytes(gsub_table, gsub);
+        write_ft_bytes(jstf_table, jstf);
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_open_type_free(handle: usize, table: FT_Bytes) {
+    rust_ffi::FT_OpenType_Free(face_ref(handle).map(|face| &face.face), table);
 }
 
 #[unsafe(no_mangle)]

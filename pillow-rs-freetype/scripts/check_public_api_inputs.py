@@ -51,6 +51,8 @@ WASM_EXPORTS = {
     "fontdone_wasm_mul_fix",
     "fontdone_wasm_div_fix",
     "fontdone_wasm_error_string",
+    "fontdone_wasm_open_type_validate",
+    "fontdone_wasm_open_type_free",
     "fontdone_wasm_round_fix",
     "fontdone_wasm_ceil_fix",
     "fontdone_wasm_floor_fix",
@@ -724,14 +726,14 @@ def size_null_validation_reason(row: ConcreteInput) -> str | None:
 def otvalid_null_validation_reason(row: ConcreteInput) -> str | None:
     if row.operation == "ftotval.open_type_validate":
         if param_is_null(row, "face"):
-            return "FT_OpenType_Validate null face validates through pinned C oracle and Rust FFI wrapper"
+            return "FT_OpenType_Validate null face validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         if "null_output_indices" in row.params:
-            return "FT_OpenType_Validate null output pointers validate through pinned C oracle and Rust FFI wrapper"
+            return "FT_OpenType_Validate null output pointers validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if row.operation == "ftotval.open_type_free":
         if param_is_null(row, "face"):
-            return "FT_OpenType_Free null face validates through pinned C oracle and Rust FFI wrapper"
+            return "FT_OpenType_Free null face validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         if param_is_null(row, "table") and has_runtime_asset(row):
-            return "FT_OpenType_Free null table validates through pinned C oracle and Rust FFI wrapper"
+            return "FT_OpenType_Free null table validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     return None
 
 
@@ -741,7 +743,7 @@ def otvalid_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.params.get("face") == "valid_without_OPENTYPE_VALIDATE_service"
         and has_runtime_asset(row)
     ):
-        return "FT_OpenType_Validate missing-service face validates through pinned C oracle and Rust FFI wrapper"
+        return "FT_OpenType_Validate missing-service face validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     return None
 
 

@@ -563,6 +563,14 @@ fn flag_value(value: &Value, key: &str) -> Result<i32, String> {
     i32::try_from(raw).map_err(|err| format!("{key} does not fit i32: {err}"))
 }
 
+fn validation_flags_param(value: &Value) -> Result<FT_UInt, String> {
+    let Some(raw) = value.get("validation_flags") else {
+        return Ok(0);
+    };
+    let flags = flag_value(raw, "validation_flags")?;
+    FT_UInt::try_from(flags).map_err(|err| format!("validation_flags does not fit u32: {err}"))
+}
+
 fn build_dependent_runtime_reason(case: &InputCase) -> Option<&'static str> {
     if case.expectation.is_build_dependent()
         && case.operation == "ftsnames.get_sfnt_name"
@@ -2572,6 +2580,8 @@ impl BackendComparisonWorker {
                     c_get_subglyph_info(face, case)
                 }
             }
+            "ftotval.open_type_validate" => c_open_type_validate(case),
+            "ftotval.open_type_free" => c_open_type_free(case),
             "render_glyph" => {
                 let load_flags = load_flags_param(&case.inputs.params)?;
                 let render_mode = render_mode_param(&case.inputs.params)?;
@@ -2806,6 +2816,8 @@ impl BackendComparisonWorker {
                     wasm_get_subglyph_info(handle, case)
                 }
             }
+            "ftotval.open_type_validate" => wasm_open_type_validate(case),
+            "ftotval.open_type_free" => wasm_open_type_free(case),
             "render_glyph" => {
                 let load_flags = load_flags_param(&case.inputs.params)?;
                 let render_mode = render_mode_param(&case.inputs.params)?;
@@ -3735,6 +3747,7 @@ where
 
 fn rust_open_type_validate(case: &InputCase) -> Result<RunOutput, String> {
     let params = &case.inputs.params;
+    let validation_flags = validation_flags_param(params)?;
     let mut base = ptr::null();
     let mut gdef = ptr::null();
     let mut gpos = ptr::null();
@@ -3743,7 +3756,7 @@ fn rust_open_type_validate(case: &InputCase) -> Result<RunOutput, String> {
     if param_is_null(params, "face") {
         let err = FT_OpenType_Validate(
             None,
-            0,
+            validation_flags,
             Some(&mut base),
             Some(&mut gdef),
             Some(&mut gpos),
@@ -3762,7 +3775,7 @@ fn rust_open_type_validate(case: &InputCase) -> Result<RunOutput, String> {
             let mut jstf = ptr::null();
             FT_OpenType_Validate(
                 Some(&face),
-                0,
+                validation_flags,
                 (label != "BASE").then_some(&mut base),
                 (label != "GDEF").then_some(&mut gdef),
                 (label != "GPOS").then_some(&mut gpos),
@@ -3774,13 +3787,165 @@ fn rust_open_type_validate(case: &InputCase) -> Result<RunOutput, String> {
     let face = open_face(case)?;
     let err = FT_OpenType_Validate(
         Some(&face),
-        0,
+        validation_flags,
         Some(&mut base),
         Some(&mut gdef),
         Some(&mut gpos),
         Some(&mut gsub),
         Some(&mut jstf),
     );
+    Ok(error(err))
+}
+
+fn c_open_type_validate(case: &InputCase) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    let validation_flags = validation_flags_param(params)?;
+    let mut base: c_abi::FT_Bytes = ptr::null();
+    let mut gdef: c_abi::FT_Bytes = ptr::null();
+    let mut gpos: c_abi::FT_Bytes = ptr::null();
+    let mut gsub: c_abi::FT_Bytes = ptr::null();
+    let mut jstf: c_abi::FT_Bytes = ptr::null();
+    if param_is_null(params, "face") {
+        let err = c_abi::FT_OpenType_Validate(
+            ptr::null_mut(),
+            validation_flags,
+            &mut base,
+            &mut gdef,
+            &mut gpos,
+            &mut gsub,
+            &mut jstf,
+        );
+        return Ok(otvalid_null_face_output(err));
+    }
+    if let Ok(labels) = string_array_param(params, "null_output_indices") {
+        let (library, face) = c_open_face(case)?;
+        let output = otvalid_null_output_rows(&labels, |label| {
+            let mut base: c_abi::FT_Bytes = ptr::null();
+            let mut gdef: c_abi::FT_Bytes = ptr::null();
+            let mut gpos: c_abi::FT_Bytes = ptr::null();
+            let mut gsub: c_abi::FT_Bytes = ptr::null();
+            let mut jstf: c_abi::FT_Bytes = ptr::null();
+            c_abi::FT_OpenType_Validate(
+                face,
+                validation_flags,
+                if label == "BASE" {
+                    ptr::null_mut()
+                } else {
+                    &mut base
+                },
+                if label == "GDEF" {
+                    ptr::null_mut()
+                } else {
+                    &mut gdef
+                },
+                if label == "GPOS" {
+                    ptr::null_mut()
+                } else {
+                    &mut gpos
+                },
+                if label == "GSUB" {
+                    ptr::null_mut()
+                } else {
+                    &mut gsub
+                },
+                if label == "JSTF" {
+                    ptr::null_mut()
+                } else {
+                    &mut jstf
+                },
+            )
+        });
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    }
+    let (library, face) = c_open_face(case)?;
+    let err = c_abi::FT_OpenType_Validate(
+        face,
+        validation_flags,
+        &mut base,
+        &mut gdef,
+        &mut gpos,
+        &mut gsub,
+        &mut jstf,
+    );
+    c_done_face(face);
+    c_done_library(library);
+    Ok(error(err))
+}
+
+fn wasm_open_type_validate(case: &InputCase) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    let validation_flags = validation_flags_param(params)?;
+    let mut base: wasm_abi::FT_Bytes = ptr::null();
+    let mut gdef: wasm_abi::FT_Bytes = ptr::null();
+    let mut gpos: wasm_abi::FT_Bytes = ptr::null();
+    let mut gsub: wasm_abi::FT_Bytes = ptr::null();
+    let mut jstf: wasm_abi::FT_Bytes = ptr::null();
+    if param_is_null(params, "face") {
+        let err = wasm_abi::fontdone_wasm_open_type_validate(
+            0,
+            validation_flags,
+            &mut base,
+            &mut gdef,
+            &mut gpos,
+            &mut gsub,
+            &mut jstf,
+        );
+        return Ok(otvalid_null_face_output(err));
+    }
+    if let Ok(labels) = string_array_param(params, "null_output_indices") {
+        let handle = wasm_open_face(case)?;
+        let output = otvalid_null_output_rows(&labels, |label| {
+            let mut base: wasm_abi::FT_Bytes = ptr::null();
+            let mut gdef: wasm_abi::FT_Bytes = ptr::null();
+            let mut gpos: wasm_abi::FT_Bytes = ptr::null();
+            let mut gsub: wasm_abi::FT_Bytes = ptr::null();
+            let mut jstf: wasm_abi::FT_Bytes = ptr::null();
+            wasm_abi::fontdone_wasm_open_type_validate(
+                handle,
+                validation_flags,
+                if label == "BASE" {
+                    ptr::null_mut()
+                } else {
+                    &mut base
+                },
+                if label == "GDEF" {
+                    ptr::null_mut()
+                } else {
+                    &mut gdef
+                },
+                if label == "GPOS" {
+                    ptr::null_mut()
+                } else {
+                    &mut gpos
+                },
+                if label == "GSUB" {
+                    ptr::null_mut()
+                } else {
+                    &mut gsub
+                },
+                if label == "JSTF" {
+                    ptr::null_mut()
+                } else {
+                    &mut jstf
+                },
+            )
+        });
+        wasm_done_face(handle);
+        return Ok(output);
+    }
+    let handle = wasm_open_face(case)?;
+    let err = wasm_abi::fontdone_wasm_open_type_validate(
+        handle,
+        validation_flags,
+        &mut base,
+        &mut gdef,
+        &mut gpos,
+        &mut gsub,
+        &mut jstf,
+    );
+    wasm_done_face(handle);
     Ok(error(err))
 }
 
@@ -3797,6 +3962,45 @@ fn rust_open_type_free(case: &InputCase) -> Result<RunOutput, String> {
     if param_is_null(params, "table") {
         let face = open_face(case)?;
         FT_OpenType_Free(Some(&face), ptr::null());
+        return Ok(ok(json!({"free_event_count": 0})));
+    }
+    Ok(error(FT_Err_Unimplemented_Feature as FT_Error))
+}
+
+fn c_open_type_free(case: &InputCase) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    if param_is_null(params, "face") {
+        let sentinel = 1usize as c_abi::FT_Bytes;
+        c_abi::FT_OpenType_Free(ptr::null_mut(), sentinel);
+        return Ok(ok(json!({
+            "free_event_count": 0,
+            "table_pointer_observed": "non_null_sentinel"
+        })));
+    }
+    if param_is_null(params, "table") {
+        let (library, face) = c_open_face(case)?;
+        c_abi::FT_OpenType_Free(face, ptr::null());
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(ok(json!({"free_event_count": 0})));
+    }
+    Ok(error(FT_Err_Unimplemented_Feature as FT_Error))
+}
+
+fn wasm_open_type_free(case: &InputCase) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    if param_is_null(params, "face") {
+        let sentinel = 1usize as wasm_abi::FT_Bytes;
+        wasm_abi::fontdone_wasm_open_type_free(0, sentinel);
+        return Ok(ok(json!({
+            "free_event_count": 0,
+            "table_pointer_observed": "non_null_sentinel"
+        })));
+    }
+    if param_is_null(params, "table") {
+        let handle = wasm_open_face(case)?;
+        wasm_abi::fontdone_wasm_open_type_free(handle, ptr::null());
+        wasm_done_face(handle);
         return Ok(ok(json!({"free_event_count": 0})));
     }
     Ok(error(FT_Err_Unimplemented_Feature as FT_Error))
@@ -9556,9 +9760,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.get_transform"
         | "freetype.reference_face"
         | "freetype.face_properties"
-        | "ftotval.open_type_validate"
-        | "ftotval.open_type_free"
         | "freetype.new_face" => run_rust_ffi(case),
+        "ftotval.open_type_validate" => c_open_type_validate(case),
+        "ftotval.open_type_free" => c_open_type_free(case),
         "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
             &case.inputs.params,
             AbiValueBackend::CAbi,
@@ -10103,9 +10307,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.get_transform"
         | "freetype.reference_face"
         | "freetype.face_properties"
-        | "ftotval.open_type_validate"
-        | "ftotval.open_type_free"
         | "freetype.new_face" => run_rust_ffi(case),
+        "ftotval.open_type_validate" => wasm_open_type_validate(case),
+        "ftotval.open_type_free" => wasm_open_type_free(case),
         "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
             &case.inputs.params,
             AbiValueBackend::Wasm,
