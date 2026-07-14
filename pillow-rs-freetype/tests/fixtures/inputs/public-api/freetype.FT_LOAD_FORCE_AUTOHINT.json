@@ -824,6 +824,26 @@
             ]
           },
           {
+            "id": "script-latin-tilde-top-flat-small",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 8,
+              "char_code": 209,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:tilde-top-flat-accent-small"
+            ]
+          },
+          {
             "id": "script-latin-serif-m-symmetry-12-edge",
             "assets": {
               "font": {
