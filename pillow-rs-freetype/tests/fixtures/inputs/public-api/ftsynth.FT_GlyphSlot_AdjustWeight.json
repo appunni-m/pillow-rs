@@ -1092,6 +1092,42 @@
             ]
           },
           {
+            "id": "rendered-empty-outline-gray",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "input/fonts/DejaVuSans.ttf",
+                "role": "font",
+                "requirements": "Scalable empty outline glyph rendered during FT_Load_Glyph to a zero-sized bitmap slot before synthetic bitmap weight adjustment."
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "size_ppem": 20,
+              "load": {
+                "operation": "FT_Load_Glyph",
+                "glyph_indices": [
+                  3
+                ],
+                "load_flags": [
+                  "FT_LOAD_RENDER",
+                  "FT_LOAD_TARGET_NORMAL"
+                ]
+              },
+              "adjustments": [
+                {
+                  "xdelta_16_16": 4096,
+                  "ydelta_16_16": 4096
+                }
+              ],
+              "capture_before_after": true
+            },
+            "coverage": [
+              "ftsynth:bitmap-adjust-weight-rendered-empty"
+            ]
+          },
+          {
             "id": "rendered-outline-lcd",
             "assets": {
               "font": {
