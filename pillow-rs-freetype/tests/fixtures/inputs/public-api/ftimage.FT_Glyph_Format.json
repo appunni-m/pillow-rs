@@ -55,45 +55,84 @@
       "case_id": "ftimage.FT_Glyph_Format.slot_format_matches_loaded_glyph",
       "subject": "ftimage.FT_Glyph_Format",
       "case": "slot_format_matches_loaded_glyph",
-      "operation": "freetype.load_render_get_glyph",
+      "operation": "load_glyph",
       "schema": "glyph_slot",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "outline_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+        "variants": [
+          {
+            "id": "outline",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "glyph-format:outline"
+            ]
           },
-          "bitmap_strike_font": {
-            "kind": "ref",
-            "id": "fonts/bitmap/embedded-strike.ttf"
+          {
+            "id": "rendered-bitmap",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_RENDER"
+              ]
+            },
+            "coverage": [
+              "glyph-format:rendered-bitmap"
+            ]
           },
-          "svg_font": {
-            "kind": "ref",
-            "id": "fonts/svg/otsvg-glyph.ttf"
+          {
+            "id": "composite-no-recurse",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/LiberationSerif-Regular.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_selector": "known_composite_glyph",
+              "load_flags": [
+                "FT_LOAD_NO_RECURSE"
+              ]
+            },
+            "coverage": [
+              "glyph-format:composite-no-recurse"
+            ]
           }
-        },
-        "params": {
-          "rows": [
-            {
-              "path": "load_outline",
-              "expected_format": "FT_GLYPH_FORMAT_OUTLINE"
-            },
-            {
-              "path": "render_outline",
-              "expected_format": "FT_GLYPH_FORMAT_BITMAP"
-            },
-            {
-              "path": "load_composite_no_recurse",
-              "expected_format": "FT_GLYPH_FORMAT_COMPOSITE"
-            },
-            {
-              "path": "load_svg_when_enabled",
-              "expected_format": "FT_GLYPH_FORMAT_SVG"
-            }
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:enum",
@@ -104,20 +143,25 @@
         "status": "build_dependent",
         "output_shape": {
           "status": "FT_Error",
-          "slot_format": "FT_Glyph_Format",
-          "detached_glyph_format": "FT_GlyphRec.format where applicable"
+          "format": "FT_Glyph_Format",
+          "glyph_index": "FT_UInt",
+          "advance": "FT_Vector",
+          "metrics": "FT_Glyph_Metrics",
+          "bitmap": "nullable FT_Bitmap snapshot"
         },
         "compare": {
           "mode": "exact",
           "paths": [
-            "rows[*].status",
-            "rows[*].slot_format",
-            "rows[*].detached_glyph_format",
-            "rows[*].payload_class"
+            "status",
+            "format",
+            "glyph_index",
+            "advance",
+            "metrics",
+            "bitmap"
           ]
         },
         "fixture_requirements": [
-          "bitmap and SVG rows require future shared assets; SVG row must record feature-disabled behavior explicitly."
+          "Uses maintained scalable fixtures to prove outline, rendered bitmap, and no-recurse composite slot formats through the public load route."
         ]
       }
     }
