@@ -639,6 +639,33 @@
             ]
           },
           {
+            "id": "dejavu-a-default-char-size-asymmetric-y-render",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "preload_char_size": {
+                "char_width": 0,
+                "char_height": 1152,
+                "horz_resolution": 72,
+                "vert_resolution": 96
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "render_mode": "FT_RENDER_MODE_NORMAL"
+            },
+            "coverage": [
+              "scaler:render-default-preload-char-size-asymmetric-y"
+            ]
+          },
+          {
             "id": "hinter-empty-fpgm-default-prep-blocks-fallback",
             "assets": {
               "font": {

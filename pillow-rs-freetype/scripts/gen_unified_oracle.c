@@ -6544,7 +6544,8 @@ static int emit_face_or_slot(int argc, char** argv) {
     const char* source_kind = argv[2];
     const char* source_value = argv[3];
     FT_Long face_index = atol(argv[4]);
-    FT_UInt pixel_width = (FT_UInt)strtoul(argv[5], NULL, 10);
+    const char* size_arg = argv[5];
+    FT_UInt pixel_width = (FT_UInt)strtoul(size_arg, NULL, 10);
     FT_UInt pixel_height = (FT_UInt)strtoul(argv[6], NULL, 10);
 
     unsigned char* data = NULL;
@@ -6589,7 +6590,31 @@ static int emit_face_or_slot(int argc, char** argv) {
         face_index < 0 &&
         (streq(command, "--get-advance") || streq(command, "--get-advances"));
     if (!err && !preserve_probe_face) {
-        err = FT_Set_Pixel_Sizes(face, pixel_width, pixel_height);
+        if (strncmp(size_arg, "char:", 5) == 0) {
+            FT_F26Dot6 char_width = 0;
+            FT_F26Dot6 char_height = 0;
+            FT_UInt horz_resolution = 0;
+            FT_UInt vert_resolution = 0;
+            int parsed = sscanf(
+                size_arg + 5,
+                "%ld:%ld:%u:%u",
+                &char_width,
+                &char_height,
+                &horz_resolution,
+                &vert_resolution);
+            if (parsed == 4) {
+                err = FT_Set_Char_Size(
+                    face,
+                    char_width,
+                    char_height,
+                    horz_resolution,
+                    vert_resolution);
+            } else {
+                err = FT_Err_Invalid_Argument;
+            }
+        } else {
+            err = FT_Set_Pixel_Sizes(face, pixel_width, pixel_height);
+        }
     }
 
     printf("{");
