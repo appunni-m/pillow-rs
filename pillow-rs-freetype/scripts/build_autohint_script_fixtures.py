@@ -308,6 +308,19 @@ def top_tilde_flat_glyph():
     )
 
 
+def horizontal_flat_loop_glyph():
+    return mixed_contour_glyph(
+        [
+            [
+                (100, 500, True),
+                (240, 500, True),
+                (380, 500, True),
+                (520, 500, True),
+            ],
+        ]
+    )
+
+
 def bottom_tilde_glyph():
     return mixed_contour_glyph(
         [
@@ -876,6 +889,78 @@ def build_cjk_blue_edge_cases() -> None:
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     font.save(OUT_DIR / "cjk-blue-edge-cases.ttf")
+
+
+def build_latin_blue_edge_cases() -> None:
+    glyph_order = [
+        ".notdef",
+        "space",
+        "latin_o",
+        "latin_A",
+        "blue_empty",
+        "blue_degenerate",
+        "blue_flat_loop",
+    ]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -120, 520, 720),
+        "space": empty_glyph(),
+        "latin_o": ring_glyph(90, 0, 510, 520, 190, 120, 410, 400),
+        "latin_A": rectangles_glyph(
+            [(100, 0, 180, 680), (420, 0, 500, 680), (180, 300, 420, 380)]
+        ),
+        "blue_empty": empty_glyph(),
+        "blue_degenerate": one_point_contour_glyph([(180, 640)]),
+        "blue_flat_loop": horizontal_flat_loop_glyph(),
+    }
+    metrics = {
+        ".notdef": (600, 80),
+        "space": (300, 0),
+        "latin_o": (620, 90),
+        "latin_A": (700, 100),
+        "blue_empty": (600, 0),
+        "blue_degenerate": (600, 180),
+        "blue_flat_loop": (620, 100),
+    }
+    cmap = {
+        0x20: "space",
+        0x41: "latin_A",
+        0x6F: "latin_o",
+        0x54: "blue_empty",
+        0x48: "blue_degenerate",
+        0x45: "blue_flat_loop",
+    }
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint Latin Blue Edge Cases",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint Latin Blue Edge Cases Regular",
+            "fullName": "Autohint Latin Blue Edge Cases Regular",
+            "psName": "AutohintLatinBlueEdgeCases-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "latin-blue-edge-cases.ttf")
 
 
 def build_cjk_malformed_blue() -> None:
@@ -1492,6 +1577,7 @@ def main() -> None:
     build_latin_small_ignore()
     build_latin_width_clusters()
     build_cjk_blue_edge_cases()
+    build_latin_blue_edge_cases()
     build_cjk_malformed_blue()
     build_cjk_tiny_stem()
     build_cjk_snap_below_standard()

@@ -304,6 +304,26 @@
             ]
           },
           {
+            "id": "latin-blue-empty-degenerate-flat-loop",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-blue-edge-cases.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 65,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:blue-empty-degenerate-flat-loop"
+            ]
+          },
+          {
             "id": "latin-single-touched-contour",
             "assets": {
               "font": {
@@ -321,6 +341,26 @@
             },
             "coverage": [
               "autohint/latin:iup-single-touched-contour"
+            ]
+          },
+          {
+            "id": "hebrew-liberationserif-bytecode-blue-correction",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "deprecated/fonts_autohint/LiberationSerif.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 1489,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:hebrew-bytecode-blue-correction"
             ]
           },
           {
