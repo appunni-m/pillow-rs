@@ -515,26 +515,32 @@ The latest SBIT packed-compound row adds one generated 4.7 KiB
 MONO bitmap that references a 10-bit child at a 7-pixel x offset, proving
 FreeType's packed compound tail-bit carry into the second target byte through
 pinned C, Rust FFI, C ABI, and WASM ABI parity.
+The latest SBIT packed-depth rows add two generated 4.7 KiB fixtures:
+`sbit_composite_gray2_success_format8.ttf` and
+`sbit_composite_gray4_success_format8.ttf`.  Each selects glyph 2 through
+`FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` and proves the distinct
+2-bit and 4-bit packed compound dispatch arms against pinned C, Rust FFI,
+C ABI, and WASM ABI without multiplying offsets, sizes, or render modes.
 
 | Measure | Current |
 |---|---:|
 | Logical public API cases | 4,166 |
-| Concrete explicit cases | 6,839 |
-| Additional grouped variants | 2,673 |
+| Concrete explicit cases | 6,841 |
+| Additional grouped variants | 2,675 |
 | Implicit cases | 0 |
-| Runnable parity comparisons | 6,836 |
-| Exact parity | 6,836 / 6,836 |
+| Runnable parity comparisons | 6,838 |
+| Exact parity | 6,838 / 6,838 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,647 / 19,660 (89.7609%) |
+| Covered Rust lines | 17,649 / 19,660 (89.7711%) |
 | Rust function coverage | 1,139 / 1,323 (86.0922%) |
 | Rust instantiation coverage | 1,142 / 1,326 (86.1237%) |
-| Rust region coverage | 25,434 / 28,320 (89.8093%) |
+| Rust region coverage | 25,436 / 28,320 (89.8164%) |
 | Rust branch/condition coverage | 4,171 / 4,896 (85.1920%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
-| Active fixture font paths | 172 |
-| Stored active font binaries | 129 files, 906 KiB |
+| Active fixture font paths | 174 |
+| Stored active font binaries | 131 files, 916 KiB |
 | Active symlink aliases | 43 |
-| Unique active font contents | 140 SHA-256 identities |
+| Unique active font contents | 143 SHA-256 identities |
 | Deprecated brute-force fonts | 101 files, 99 unique contents, 23 MiB |
 
 The current coverage target is not only line coverage. The maintained
@@ -1827,6 +1833,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Malformed name language-tag count guard | 114 unique hashes | 0 | 6,663 | 6,659 / 6,659 | 4 | 15,224 / 17,756 lines; 22,088 / 25,444 regions; 3,685 / 4,522 branches | One compact format-1 `name` table control omits the language-tag count field after a complete zero-record header. Public `FT_New_Memory_Face` now compares pinned C and Rust rejection through Rust FFI, C ABI, and WASM ABI; route audit counts the row as real parity and `tt/name.rs` moves to 332 / 333 lines and 29 / 30 functions |
 | 2026-07-12 | Name string out-of-range fallback controls | 116 unique hashes | 0 | 6,665 | 6,661 / 6,661 | 4 | 15,225 / 17,756 lines; 22,092 / 25,444 regions; 3,686 / 4,522 branches | Two compact name-table controls cover successful fallback after malformed name string offsets: `FT_New_Memory_Face` proves an out-of-range English Windows typographic family record falls back to Apple Roman, and `FT_Get_Postscript_Name` proves an out-of-range Apple PostScript record returns null. `tt/name.rs` reaches 333 / 333 lines, 30 / 30 functions, and 121 / 138 branch outcomes |
 | 2026-07-14 | SBIT packed compound tail carry | 141 unique hashes | 0 | 6,839 | 6,836 / 6,836 | 3 | 17,647 / 19,660 lines; 25,434 / 28,320 regions; 4,171 / 4,896 branches | One compact `sbit_composite_mono_carry_success_format8.ttf` fixture selects a 10-bit MONO component at a 7-pixel x offset through `FT_Load_Glyph.matrix_load`. Pinned C, Rust FFI, C ABI, and WASM ABI agree exactly, and `tt/sbit.rs` lines 694-696 are no longer in the missing-line report without adding implicit cases |
+| 2026-07-14 | SBIT packed compound GRAY2/GRAY4 dispatch | 143 unique hashes | 0 | 6,841 | 6,838 / 6,838 | 3 | 17,649 / 19,660 lines; 25,436 / 28,320 regions; 4,171 / 4,896 branches | Two compact `sbit_composite_gray2_success_format8.ttf` and `sbit_composite_gray4_success_format8.ttf` fixtures select image-format-8 compound glyph 2 through `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY`. Pinned C, Rust FFI, C ABI, and WASM ABI agree exactly, and `tt/sbit.rs` lines 601-602 are no longer in the missing-line report without adding implicit cases |
 
 ## Decision Log
 
@@ -1838,6 +1845,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-12 | Route cmap format-14 selector lists through the real call | Pinned C `FT_Face_GetVariantSelectors` finds the platform 0 encoding 5 format-14 charmap, returns a face-owned zero-terminated `FT_UInt32` selector list in subtable order, returns `NULL` for null face or no format-14 charmap, and allows the scratch result to be overwritten by the next FreeType call; fixtures must copy values immediately |
 | 2026-07-12 | Preserve C UVS list null-versus-empty distinctions | Pinned C `FT_Face_GetVariantsOfChar` returns a non-null zero-terminated empty list when a format-14 charmap exists but no selector applies to the character, while `FT_Face_GetCharsOfVariant` returns `NULL` for an absent selector or a selector record with both default and non-default offsets zero |
 | 2026-07-14 | Cover packed SBIT carry with one shifted compound glyph | The remaining packed compound blitter branch needed `x_shift + remaining_bits > 8`; a 10-bit MONO child shifted by seven pixels reaches that C behavior without multiplying bit depths, glyphs, or render modes |
+| 2026-07-14 | Cover GRAY2/GRAY4 packed compound dispatch with two rows | The packed compound blitter has separate FreeType pixel-mode dispatch for bit depths 2 and 4; one zero-offset compound child for each proves those arms without multiplying x-offset, size, or render-mode axes |
 | 2026-07-10 | Move old fonts before deleting them | Keeps active and legacy corpora distinct and allows safe obligation-by-obligation replacement |
 | 2026-07-10 | Optimize fonts before broad input expansion | Font-level feature density removes more redundant cases than harness micro-optimization |
 | 2026-07-10 | Mirror maxp's unbounded stream frame explicitly | Pinned FreeType reads maxp extras beyond the declared table length and ignores maxp load errors while constructing a zero-glyph face |
@@ -2081,22 +2089,22 @@ source lines. The current split is:
 
 | Measure | Count |
 |---|---:|
-| Logical public API cases | 4,165 |
-| Concrete explicit cases | 6,837 |
-| Runnable parity comparisons | 6,834 / 6,834 |
+| Logical public API cases | 4,166 |
+| Concrete explicit cases | 6,841 |
+| Runnable parity comparisons | 6,838 / 6,838 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,637 / 19,653 (89.7420%) |
-| Rust region coverage | 25,416 / 28,307 (89.7870%) |
+| Covered Rust lines | 17,649 / 19,660 (89.7711%) |
+| Rust region coverage | 25,436 / 28,320 (89.8164%) |
 | Rust branch/condition coverage | 4,171 / 4,896 (85.1920%) |
 | Rust function coverage | 1,139 / 1,323 (86.0922%) |
-| Route audit split | real-parity 3,519; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
+| Route audit split | real-parity 3,523; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 7; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
 | Fixture/font reachable | `autohint/latin.rs`, `autohint/cjk.rs`, `scaler.rs`, `tt/hinter/exec.rs`, and parts of `render.rs` still have real branch gaps tied to glyph topology, script selection, bytecode state, or render geometry | Add or extend compact source-backed fonts and explicit public rows only when the selected glyph moves the measured branch or line |
 | Public unsupported implementation paths | `FT_OpenType_Validate` non-null behavior still returns preserved stubs today | Implement the real public behavior first, then add parity rows; do not add fake success fixtures |
 | Public-construction unreachable guards | Short required `head`/`hhea` tables fail face construction before `face_to_ffi`; short optional `vhea` currently fails in `Font::truetype`; `tt/post.rs` format-1 exact-258 Mac names are now covered, leaving only helper arms that public `FT_Get_Glyph_Name`/`FT_Get_Name_Index` skip through invalid-glyph validation or face-flag gates; `tt/cmap.rs` format-14 branch outcomes are now closed, leaving only checked-multiply overflow closures at lines 786-789, 866-867, and 914-915 that cannot overflow on 64-bit from u32 counts; `tt/fvar.rs` checked-multiply overflow closures likewise cannot overflow from u16 counts | Leave visible and documented unless parser semantics change or a true public route appears |
-| SBIT residuals | `tt/sbit.rs` unsupported simple bit-depth, image-format, compound success, and one packed MONO nonzero x-offset path are now covered through public rows; remaining misses are the unused/private load-status helper, checked arithmetic and 64-bit conversion guards, impossible compound count/component-read guards, impossible metric-conversion/pixel-mode mismatch guards, defensive packed-blit overflow/truncation guards, and the GRAY2/GRAY4 packed-depth dispatch arms that share the C-matched packed blitter but do not yet have distinct public rows | Leave private helper and impossible overflow guards visible; add only real C-observable SBIT rows that move measured coverage through exact parity |
+| SBIT residuals | `tt/sbit.rs` unsupported simple bit-depth, image-format, compound success, one packed MONO nonzero x-offset path, tail-bit carry, and GRAY2/GRAY4 packed-depth dispatch arms are now covered through public rows; remaining misses are the unused/private load-status helper, checked arithmetic and 64-bit conversion guards, impossible compound count/component-read guards, impossible metric-conversion/pixel-mode mismatch guards, and defensive packed-blit overflow/truncation guards | Leave private helper and impossible overflow guards visible; add only real C-observable SBIT rows that move measured coverage through exact parity |
 | Defensive invalid helper guards | `RoundMode::from_u8`'s invalid-value fallback remains missed after all valid FreeType `TT_Round_*` constants are routed through public `FT_Load_Glyph` rows | Leave visible; do not add a synthetic invalid round-state path unless a real public opcode or ABI surface can supply one |
 | Private/no-route helpers | `Font::layout_glyphs`, `Font::layout_bounds`, `layout_bounds_from_glyphs`, `grays::rasterize`, `grays::rasterize_shifted_in_box`, `grays::render_scanline`, and `render::render_loaded_char_mode_for_index` are not selected by the current public FreeType fixtures | Do not call these through synthetic tests; either expose a real public operation with C parity or prove and remove independently of coverage |
 | Coverage instrumentation artifacts | `Font::load_sfnt_table` and several wrapper functions show zero-count closure symbols even while the public body is heavily executed; many missed `api.rs` and `font.rs` lines are trailing call arguments in covered functions | Use function bodies, contiguous blocks, and branch counters to choose cases; do not grow JSON for tail-line artifacts alone |
