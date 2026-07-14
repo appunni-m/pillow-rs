@@ -111,11 +111,11 @@ def empty_image_eblc() -> bytes:
     return eblc_with_index_tables(index_array, index_subtable)
 
 
-def gray_format1_tables() -> tuple[bytes, bytes]:
+def gray_format1_tables(hori_advance: int = 3) -> tuple[bytes, bytes]:
     # EBDT image format 1 stores small metrics followed by byte-aligned bitmap
     # bytes. With an 8-bit strike, FreeType exposes FT_PIXEL_MODE_GRAY and a
     # pitch equal to the bitmap width.
-    image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x80, 0xC0, 0xFF])
+    image = bytes([2, 2, 1, 2, hori_advance]) + bytes([0x11, 0x80, 0xC0, 0xFF])
     index_array = struct.pack(">HHI", 1, 1, 8)
     index_subtable = (
         struct.pack(">HHI", 1, 1, 4)
@@ -529,6 +529,8 @@ def build_missing_bitmap() -> None:
 def build_gray_format1_bitmap() -> None:
     eblc, ebdt = gray_format1_tables()
     save_sbit_font("sbit_gray_format1.ttf", eblc, ebdt)
+
+    eblc, ebdt = gray_format1_tables(hori_advance=0)
     save_sbit_font("sbit_gray_format1_vmtx.ttf", eblc, ebdt, vertical_metrics=(1, 880))
 
 
