@@ -2119,23 +2119,24 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | OpenType validation ABI route execution | `FT_OpenType_Validate` and `FT_OpenType_Free` no longer use the unified runner's Rust-FFI fallback for C ABI or WASM ABI legs. Thin C and WASM exports now delegate to the existing Rust FFI facade, preserving wrapper boundaries while validating raw output-pointer null handling, null-face behavior, missing-service behavior, and no-op free calls through the public ABI paths. Focused `make -C pillow-rs-freetype test-case CASE=ftotval.FT_OpenType_Validate` passes 6 / 6 and `CASE=ftotval.FT_OpenType_Free` passes 4 / 4 exact comparisons. Full condition coverage remains 6,857 concrete cases, 6,854 / 6,854 runtime rows, three FTMM pending rows, 17,838 / 19,838 lines, 25,709 / 28,583 regions, 4,215 / 4,917 branches, 1,148 / 1,332 functions, and 1,151 / 1,335 instantiations because the report excludes ABI wrapper crates. Route audit categories remain `real-parity 3,572`, `real-null-validation 8`, `generic-fallback 884`, and zero implicit cases; the audit reason now matches real C-oracle/Rust-FFI/C-ABI/WASM-ABI execution. Selected-table and malformed-table OpenType validation rows remain generic until the real OT validator exists |
 | 2026-07-14 | SBIT malformed small-metrics width | `font-fixture-sbit` now emits `sbit_missing_small_metrics_width.ttf`, a compact EBLC/EBDT control whose image offsets select exactly one byte. The new `FT_Err_Missing_Bitmap.sbit_glyph_without_image@missing-small-metrics-width` row proves pinned C, Rust FFI, C ABI, and WASM ABI all return exact public `FT_Err_Invalid_Argument` through `FT_LOAD_COLOR | FT_LOAD_SBITS_ONLY`. Focused Missing_Bitmap parity passes 17 / 17. Full condition coverage passes with 6,858 concrete cases, 6,855 / 6,855 runtime rows, three FTMM pending rows, 17,839 / 19,838 lines, 25,712 / 28,583 regions, 4,215 / 4,917 branches, 1,149 / 1,332 functions, and 1,152 / 1,335 instantiations. Route audit classifies the row as real parity, moving real-parity 3,572 -> 3,573 with zero implicit cases. `tt/sbit.rs:335` is no longer listed in the missing-line report; `tt/sbit.rs` moves to 511 / 664 lines and 33 / 90 functions |
 | 2026-07-14 | CJK malformed blue-string load skip | `font-fixture-autohint-scripts` now emits `cjk-malformed-blue.ttf`, a compact Hani control with a valid U+7530 selected glyph and a deliberately truncated U+4E2A bottom-fill blue glyph. One explicit `FT_LOAD_FORCE_AUTOHINT.load_char_force_autohint_behavior@cjk-malformed-blue-load-error-20` row proves pinned C, Rust FFI, C ABI, and WASM ABI all ignore the malformed blue-string load during CJK metrics setup and still load the public glyph exactly. Focused parity passes 1 / 1. Full condition coverage passes with 6,859 concrete cases, 6,856 / 6,856 runtime rows, three FTMM pending rows, 17,840 / 19,838 lines, 25,713 / 28,583 regions, 4,216 / 4,917 branches, 1,149 / 1,332 functions, and 1,152 / 1,335 instantiations. Route audit classifies the row as real parity, moving real-parity 3,573 -> 3,574 with zero implicit cases. `autohint/cjk.rs:208` is no longer listed in the missing-line report; `autohint/cjk.rs` moves to 894 / 941 lines and 382 / 426 branches |
+| 2026-07-14 | Autohint helper/default route cleanup | Existing public `FT_LOAD_FORCE_AUTOHINT` rows now exercise `Direction::{is_horizontal,is_vertical,as_i8}`, `GlyphHints::num_contours`, `AfLatinAxisMetrics::default`, `AxisHints::default`, and `AFEdge::default` through the normal Latin/CJK autohint construction and segment-linking paths instead of leaving duplicate helper logic uncovered. No fixture, font, input JSON, manifest row, or route count changed. Focused `make -C pillow-rs-freetype test-case CASE=freetype.FT_LOAD_FORCE_AUTOHINT` passes 193 / 193 exact Rust FFI, C ABI, and WASM ABI comparisons. Full condition coverage passes with 6,861 concrete cases, 6,858 / 6,858 runtime rows, three FTMM pending rows, 17,945 / 19,944 lines, 25,808 / 28,675 regions, 4,221 / 4,919 branches, 1,160 / 1,339 functions, and 1,163 / 1,342 instantiations. Measured against the pre-cleanup current-branch baseline, covered lines move 17,919 -> 17,945 and `autohint/types.rs` reaches 103 / 103 lines and 14 / 14 functions. Route audit remains zero implicit cases with 3,578 real-parity rows |
 
 ## Residual Coverage Classification - 2026-07-14
 
-Fresh `test-unified-condition-coverage` still reports 1,998 uncovered core
+Fresh `test-unified-condition-coverage` still reports 1,999 uncovered core
 source lines. The current split is:
 
 | Measure | Count |
 |---|---:|
 | Logical public API cases | 4,166 |
-| Concrete explicit cases | 6,859 |
-| Runnable parity comparisons | 6,856 / 6,856 |
+| Concrete explicit cases | 6,861 |
+| Runnable parity comparisons | 6,858 / 6,858 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,840 / 19,838 (89.9284%) |
-| Rust region coverage | 25,713 / 28,583 (89.9591%) |
-| Rust branch/condition coverage | 4,216 / 4,917 (85.7433%) |
-| Rust function coverage | 1,149 / 1,332 (86.2613%) |
-| Route audit split | real-parity 3,574; generic-fallback 884; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; shape-incomplete-fallback 0 |
+| Covered Rust lines | 17,945 / 19,944 (89.9769%) |
+| Rust region coverage | 25,808 / 28,675 (90.0017%) |
+| Rust branch/condition coverage | 4,221 / 4,919 (85.8101%) |
+| Rust function coverage | 1,160 / 1,339 (86.6318%) |
+| Route audit split | real-parity 3,578; generic-fallback 882; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; explicit-unsupported 6; compile-contract 2,229; real-null-validation 8; void-fallback 2; wrapper-null-validation 1 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
