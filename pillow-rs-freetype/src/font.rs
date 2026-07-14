@@ -2458,7 +2458,7 @@ fn no_scale_slot_outline(outline: &tt::glyf::GlyphOutline, pp1x: i32, cbox: BBox
             .collect(),
         tags: Vec::new(),
         contour_dropouts: Vec::new(),
-        flags: 0,
+        flags: outline.outline_flags,
         cbox_x_min: cbox.x_min,
         cbox_y_min: cbox.y_min,
         cbox_x_max: cbox.x_max,

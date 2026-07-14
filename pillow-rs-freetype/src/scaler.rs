@@ -783,7 +783,10 @@ fn scale_glyph_impl_with_context(
         } else {
             None
         };
-        let mut outline = Outline::default();
+        let mut outline = Outline {
+            flags: outline_raw.outline_flags,
+            ..Outline::default()
+        };
         // C `TT_Load_Glyph` applies `FT_OUTLINE_HIGH_PRECISION` to every
         // scaled TrueType slot below 24 ppem, even when the glyph has no
         // points (`src/truetype/ttgload.c:2569-2577`).
@@ -1178,7 +1181,7 @@ fn scale_glyph_impl_with_context(
     // C `TT_Load_Glyph` sets `FT_OUTLINE_HIGH_PRECISION` for scaled TrueType
     // outlines below 24 ppem before the black rasterizer sees them
     // (`src/truetype/ttgload.c:2569-2577`).
-    let mut outline_flags = tt_outline_flags;
+    let mut outline_flags = outline_raw.outline_flags | tt_outline_flags;
     if scale.ppem < 24 {
         outline_flags |= OUTLINE_HIGH_PRECISION;
     }

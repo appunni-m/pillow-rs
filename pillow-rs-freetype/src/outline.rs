@@ -17,6 +17,7 @@ pub(crate) const OUTLINE_SINGLE_PASS: u32 = 0x200;
 pub(crate) const OUTLINE_IGNORE_DROPOUTS: u32 = 0x8;
 pub(crate) const OUTLINE_SMART_DROPOUTS: u32 = 0x10;
 pub(crate) const OUTLINE_INCLUDE_STUBS: u32 = 0x20;
+pub(crate) const OUTLINE_OVERLAP: u32 = 0x40;
 
 /// FreeType's `FT_Outline`: flattened contours in 26.6 units.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
