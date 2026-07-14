@@ -3544,6 +3544,9 @@ static int emit_outline_render(int argc, char** argv) {
     } else if (strstr(case_id, "@empty-outline")) {
         n_contours = 0;
         n_points = 0;
+    } else if (strstr(case_id, "@zero-contours-nonempty-points")) {
+        n_contours = 0;
+        n_points = 4;
     } else if (strstr(case_id, "@even-odd-overlap")) {
         points[4].x = 12 * 64;
         points[4].y = 12 * 64;

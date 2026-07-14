@@ -16737,6 +16737,9 @@ fn outline_render_outline(case: &InputCase) -> Result<fontdone::outline::Outline
         "outlines/render/clipped-crossing-lines.json" => Ok(outline_render_clipped_crossing()),
         "outlines/render/cubic-closed-loop.json" => Ok(outline_render_cubic_loop()),
         "outlines/render/empty-outline.json" => Ok(outline_render_empty()),
+        "outlines/render/zero-contours-nonempty-points.json" => {
+            Ok(outline_render_zero_contours_nonempty_points())
+        }
         "outlines/render/line-above-clip.json" => Ok(outline_render_line_above_clip()),
         "outlines/render/line-below-clip.json" => Ok(outline_render_line_below_clip()),
         "outlines/render/line-partial-above-clip.json" => {
@@ -16910,6 +16913,13 @@ fn outline_render_empty() -> fontdone::outline::Outline {
         cbox_x_max: 32,
         cbox_y_max: 32,
     }
+}
+
+fn outline_render_zero_contours_nonempty_points() -> fontdone::outline::Outline {
+    let mut outline = outline_render_square();
+    outline.n_contours = 0;
+    outline.contours = Vec::new();
+    outline
 }
 
 fn outline_render_even_odd_overlap() -> fontdone::outline::Outline {
