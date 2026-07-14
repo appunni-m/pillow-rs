@@ -52,37 +52,82 @@
       "case_id": "freetype.FT_LOAD_VERTICAL_LAYOUT.vertical_layout_metrics",
       "subject": "freetype.FT_LOAD_VERTICAL_LAYOUT",
       "case": "vertical_layout_metrics",
-      "operation": "freetype.load_glyph_pair",
-      "schema": "glyph_slot_metrics_delta",
+      "operation": "load_glyph",
+      "schema": "glyph_slot",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "font": {
-            "kind": "ref",
-            "role": "font",
-            "id": "fonts/vertical/cjk-vertical-metrics.ttf",
-            "missing": true
+        "variants": [
+          {
+            "id": "cjk-horizontal-metrics",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "input/fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": []
+            },
+            "coverage": [
+              "load-flag:vertical-layout-horizontal-control"
+            ]
           },
-          "fallback_font": {
-            "kind": "file",
-            "role": "font",
-            "path": "input/fonts/DejaVuSans.ttf"
+          {
+            "id": "cjk-vertical-metrics",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "input/fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_VERTICAL_LAYOUT"
+              ]
+            },
+            "coverage": [
+              "load-flag:vertical-layout-vmtx"
+            ]
+          },
+          {
+            "id": "cjk-empty-vmtx",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "input/fonts/vertical/cjk-vertical-metrics.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_VERTICAL_LAYOUT"
+              ]
+            },
+            "coverage": [
+              "load-flag:vertical-layout-empty-vmtx"
+            ]
           }
-        },
-        "params": {
-          "face_index": 0,
-          "pixel_size": {
-            "x": 0,
-            "y": 20
-          },
-          "glyph_selector": {
-            "kind": "vertical_metrics_glyph"
-          },
-          "horizontal_load_flags": [],
-          "vertical_load_flags": [
-            "FT_LOAD_VERTICAL_LAYOUT"
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:flag",
@@ -93,26 +138,18 @@
       "expectation": {
         "status": "ok",
         "output_shape": {
-          "horizontal": {
-            "status": "FT_Error",
-            "advance": "FT_Vector",
-            "metrics": "FT_Glyph_Metrics"
-          },
-          "vertical": {
-            "status": "FT_Error",
-            "advance": "FT_Vector",
-            "metrics": "FT_Glyph_Metrics"
-          }
+          "status": "FT_Error",
+          "slot_format": "glyph_format",
+          "advance": "FT_Vector",
+          "metrics": "FT_Glyph_Metrics"
         },
         "compare": {
           "mode": "exact",
           "paths": [
-            "horizontal.status",
-            "vertical.status",
-            "horizontal.advance",
-            "vertical.advance",
-            "horizontal.metrics",
-            "vertical.metrics"
+            "status",
+            "slot_format",
+            "advance",
+            "metrics"
           ]
         },
         "source_refs": [

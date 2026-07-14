@@ -7,7 +7,7 @@
 use crate::casts::i32_from_f32;
 
 use crate::error::FontError;
-use crate::fixed::{ft_mul_div, ft_mul_fix};
+use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
 use crate::outline::{OUTLINE_HIGH_PRECISION, Outline, OutlinePoint};
 use crate::tables::FontData;
 use crate::tt::glyf::{GlyphOutline, load_glyph_with_scaled_component_offsets};
@@ -135,11 +135,20 @@ pub struct ScaledGlyph {
     /// Metrics synthesized by FreeType's auto-hinter from the pre-hint slot
     /// vector and the final hinted bbox.
     pub autohint_vertical: Option<AutohintVerticalMetrics>,
+    /// Metrics derived by the native TrueType path from pp3/pp4 and the final
+    /// hinted bbox.
+    pub native_vertical: Option<NativeVerticalMetrics>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AutohintVerticalMetrics {
     pub bearing_x: i32,
+    pub bearing_y: i32,
+    pub advance: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeVerticalMetrics {
     pub bearing_y: i32,
     pub advance: i32,
 }
@@ -819,6 +828,7 @@ fn scale_glyph_impl_with_context(
                 bbox_x_max: 0,
                 bbox_y_max: 0,
                 autohint_vertical,
+                native_vertical: None,
             },
             None,
         ));
@@ -858,6 +868,9 @@ fn scale_glyph_impl_with_context(
     };
     let mut phantom_pp1_x = scale.scale_x(pp1x_fu);
     let mut phantom_pp2_x = scale.scale_x(pp1x_fu + h_metric.advance_width as i32);
+    let (raw_pp3_y, raw_pp4_y) = vertical_phantom_font_units(data, glyph_index, outline_raw.ymax);
+    let mut phantom_pp3_y = ft_mul_fix(raw_pp3_y, y_adj);
+    let mut phantom_pp4_y = ft_mul_fix(raw_pp4_y, y_adj);
 
     #[cfg(debug_assertions)]
     if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
@@ -1021,12 +1034,6 @@ fn scale_glyph_impl_with_context(
                 phantom_x_override: composite_use_my_metrics_phantoms,
             };
             let prep = data.prep.as_deref().unwrap_or(&[]);
-            let (raw_ascender, raw_descender) = data
-                .os2
-                .as_ref()
-                .map_or((data.hhea.ascent as i32, data.hhea.descent as i32), |os2| {
-                    (os2.s_typo_ascender as i32, os2.s_typo_descender as i32)
-                });
             let hint_result = crate::tt::hinter::hint_glyph(
                 &mut scaled,
                 &raw_pts,
@@ -1036,8 +1043,8 @@ fn scale_glyph_impl_with_context(
                 h_metric.advance_width as i32,
                 scale.scale_x(pp1x_fu),
                 pp1x_fu,
-                raw_ascender,
-                raw_descender,
+                raw_pp3_y,
+                raw_pp4_y,
                 cvt,
                 fpgm,
                 prep,
@@ -1049,6 +1056,8 @@ fn scale_glyph_impl_with_context(
                 Ok(outcome) => {
                     phantom_pp1_x = outcome.pp1_x;
                     phantom_pp2_x = outcome.pp2_x;
+                    phantom_pp3_y = outcome.pp3_y;
+                    phantom_pp4_y = outcome.pp4_y;
                     tt_outline_flags = outcome.outline_flags;
                     contour_dropouts = outcome.contour_dropouts;
                     point_tags = outcome.point_tags;
@@ -1167,6 +1176,11 @@ fn scale_glyph_impl_with_context(
     } else {
         None
     };
+    let native_vertical = if use_autohint {
+        None
+    } else {
+        native_vertical_metrics(data, scale.y_scale, phantom_pp3_y, phantom_pp4_y, y_max)
+    };
 
     // Translate outline so its pixel bbox sits at (0,0).
     // The translation preserves subpixel fractional parts (only clears the
@@ -1229,6 +1243,7 @@ fn scale_glyph_impl_with_context(
             bbox_x_max: px_x_max,
             bbox_y_max: px_y_max,
             autohint_vertical,
+            native_vertical,
         },
         final_hint_context,
     ))
@@ -1308,6 +1323,48 @@ fn vertical_advance_font_units(data: &FontData) -> i32 {
         return os2.s_typo_ascender as i32 - os2.s_typo_descender as i32;
     }
     data.hhea.ascent as i32 - data.hhea.descent as i32
+}
+
+fn vertical_phantom_font_units(data: &FontData, glyph_index: u16, y_max: i32) -> (i32, i32) {
+    if let Some(vmtx) = &data.vmtx {
+        let vertical = vmtx.get(glyph_index);
+        let pp3_y = y_max + vertical.tsb as i32;
+        return (pp3_y, pp3_y - vertical.advance_height as i32);
+    }
+
+    let (ascender, descender) = data
+        .os2
+        .as_ref()
+        .map_or((data.hhea.ascent as i32, data.hhea.descent as i32), |os2| {
+            (os2.s_typo_ascender as i32, os2.s_typo_descender as i32)
+        });
+    let advance = ascender.saturating_sub(descender).abs();
+    (ascender, ascender - advance)
+}
+
+fn native_vertical_metrics(
+    data: &FontData,
+    y_scale: i32,
+    pp3_y: i32,
+    pp4_y: i32,
+    bbox_y_max: i32,
+) -> Option<NativeVerticalMetrics> {
+    data.vmtx.as_ref()?;
+
+    // C `compute_glyph_metrics` derives vmtx metrics from vertical phantoms
+    // after hinting, not by scaling raw `vmtx.tsb` directly
+    // (`src/truetype/ttgload.c:1991-2079`).
+    let top_fu = ft_div_fix(pp3_y.wrapping_sub(bbox_y_max), y_scale) as i16 as i32;
+    let advance_fu = if pp3_y <= pp4_y {
+        0
+    } else {
+        ft_div_fix(pp3_y.wrapping_sub(pp4_y), y_scale) as u16 as i32
+    };
+
+    Some(NativeVerticalMetrics {
+        bearing_y: ft_mul_fix(top_fu, y_scale),
+        advance: ft_mul_fix(advance_fu, y_scale),
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
