@@ -521,16 +521,20 @@ The latest SBIT packed-depth rows add two generated 4.7 KiB fixtures:
 `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY` and proves the distinct
 2-bit and 4-bit packed compound dispatch arms against pinned C, Rust FFI,
 C ABI, and WASM ABI without multiplying offsets, sizes, or render modes.
-The latest TrueType overlap rows append three glyphs to the existing generated
+The latest TrueType overlap rows append four glyphs to the existing generated
 `render-coverage.ttf` fixture.  Gid 6 sets the simple-glyph first-point
 `OVERLAP_SIMPLE` flag, gid 7 sets the first-component `OVERLAP_COMPOUND` flag,
-and gid 8 carries `OVERLAP_SIMPLE` on two overlapping contours with fractional
-pixel edges.  Three explicit `freetype.load_glyph_outline` variants prove
+gid 8 carries `OVERLAP_SIMPLE` on two overlapping contours with fractional
+pixel edges, and gid 9 is a wide flagged outline that reaches FreeType's
+smooth-overlap width overflow guard.  Three explicit
+`freetype.load_glyph_outline` variants prove
 pinned C, Rust FFI, C ABI, and WASM ABI expose `FT_OUTLINE_OVERLAP` for
 no-scale loads and `FT_OUTLINE_OVERLAP | FT_OUTLINE_HIGH_PRECISION` for scaled
 loads below 24 ppem.  Two explicit
 `ftimage.FT_OUTLINE_OVERLAP.smooth_overlap_behavior` render variants now prove
 FreeType's 4x smooth overlap oversampling path for NORMAL/LIGHT gray rendering.
+Two explicit `fterrdef.FT_Err_Raster_Overflow.raster_buffer_or_cell_overflow`
+variants prove the matching NORMAL/LIGHT width overflow error path.
 
 | Measure | Current |
 |---|---:|
@@ -541,11 +545,11 @@ FreeType's 4x smooth overlap oversampling path for NORMAL/LIGHT gray rendering.
 | Runnable parity comparisons | 6,841 |
 | Exact parity | 6,841 / 6,841 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,758 / 19,771 (89.8184%) |
+| Covered Rust lines | 17,771 / 19,781 (89.8387%) |
 | Rust function coverage | 1,145 / 1,329 (86.1550%) |
 | Rust instantiation coverage | 1,148 / 1,332 (86.1862%) |
-| Rust region coverage | 25,583 / 28,478 (89.8343%) |
-| Rust branch/condition coverage | 4,178 / 4,904 (85.1958%) |
+| Rust region coverage | 25,586 / 28,478 (89.8448%) |
+| Rust branch/condition coverage | 4,179 / 4,904 (85.2162%) |
 | Formal Rust MC/DC coverage | 0 / 0; not emitted by the installed toolchain |
 | Active fixture font paths | 174 |
 | Stored active font binaries | 131 files, 916 KiB |
@@ -1846,6 +1850,7 @@ than percentage because source line totals change as implementation is fixed.
 | 2026-07-14 | SBIT packed compound GRAY2/GRAY4 dispatch | 143 unique hashes | 0 | 6,841 | 6,838 / 6,838 | 3 | 17,649 / 19,660 lines; 25,436 / 28,320 regions; 4,171 / 4,896 branches | Two compact `sbit_composite_gray2_success_format8.ttf` and `sbit_composite_gray4_success_format8.ttf` fixtures select image-format-8 compound glyph 2 through `FT_Load_Glyph.matrix_load` with `FT_LOAD_SBITS_ONLY`. Pinned C, Rust FFI, C ABI, and WASM ABI agree exactly, and `tt/sbit.rs` lines 601-602 are no longer in the missing-line report without adding implicit cases |
 | 2026-07-14 | TrueType overlap outline flags | 143 unique hashes | 0 | 6,844 | 6,841 / 6,841 | 3 | 17,678 / 19,689 lines; 25,465 / 28,349 regions; 4,175 / 4,900 branches | `build_render_fixtures.py` appends gids 6 and 7 to `render-coverage.ttf`: gid 6 has the first simple-glyph flag byte set to `0x41`, and gid 7 has first component flags `0x0404`. Three explicit `ftimage.FT_GLYPH_FORMAT_OUTLINE.outline_payload_matches_format` rows select scaled simple, no-scale simple, and scaled compound overlap loads, proving pinned C, Rust FFI, C ABI, and WASM ABI agree on public `FT_Outline.flags`. Core now mirrors FreeType `ttgload.c:459-461,530-532,1917-1920,2569-2576`: retain `OVERLAP_SIMPLE` and first-component `OVERLAP_COMPOUND` in `FT_OUTLINE_OVERLAP`, mask public point tags back to curve bits, and add high precision below 24 ppem. Route audit reports 3,526 real-parity rows and zero implicit cases |
 | 2026-07-14 | Smooth overlap render parity | 143 unique hashes | 0 | 6,844 | 6,841 / 6,841 | 3 | 17,758 / 19,771 lines; 25,583 / 28,478 regions; 4,178 / 4,904 branches | `build_render_fixtures.py` appends gid 8 to `render-coverage.ttf`, a flagged two-contour overlap glyph with fractional pixel edges. `ftimage.FT_OUTLINE_OVERLAP.smooth_overlap_behavior` now has explicit NORMAL and LIGHT render variants over that glyph. Core `render_normal` mirrors FreeType `src/smooth/ftsmooth.c:497-552,621-637`: flagged gray outlines render through a 4x oversampled pass and downsample with the same span accumulation rule. Focused `make -C pillow-rs-freetype test-case CASE=FT_OUTLINE_OVERLAP` passes 4 / 4 exact comparisons; full condition coverage passes 6,841 / 6,841 with the same three FTMM runtime-pending rows. Route audit moves the two overlap variants from pending-core to real-parity (`real-parity 3,526 -> 3,528`, `pending-core 7 -> 5`) without increasing concrete cases. The newly added overflow/error guards remain visible as residual coverage work and are not counted as complete |
+| 2026-07-14 | Smooth overlap raster-overflow route | 143 unique hashes | 0 | 6,844 | 6,841 / 6,841 | 3 | 17,771 / 19,781 lines; 25,586 / 28,478 regions; 4,179 / 4,904 branches | `build_render_fixtures.py` appends gid 9 to `render-coverage.ttf`, a 9000 px wide flagged overlap outline at 1024 ppem. The existing `fterrdef.FT_Err_Raster_Overflow.raster_buffer_or_cell_overflow` row now uses explicit NORMAL and LIGHT `render_glyph` variants over that glyph instead of a future synthetic outline. Pinned C returns `FT_Err_Raster_Overflow` from `ftsmooth.c:511-515` when `bitmap->width * 4 > 0x7FFF`; Rust returns the same code before allocating the oversampled buffer. Focused `make -C pillow-rs-freetype test-case CASE=FT_Err_Raster_Overflow` passes 3 / 3 exact comparisons; full condition coverage still passes 6,841 / 6,841 with the same three FTMM runtime-pending rows. Route audit moves these two variants from generic-error-fallback to real-parity (`real-parity 3,528 -> 3,530`, `generic-error-fallback 141 -> 139`) without increasing concrete cases |
 
 ## Decision Log
 
@@ -2105,11 +2110,11 @@ source lines. The current split is:
 | Concrete explicit cases | 6,844 |
 | Runnable parity comparisons | 6,841 / 6,841 |
 | Pending cases | 3 |
-| Covered Rust lines | 17,758 / 19,771 (89.8184%) |
-| Rust region coverage | 25,583 / 28,478 (89.8343%) |
-| Rust branch/condition coverage | 4,178 / 4,904 (85.1958%) |
+| Covered Rust lines | 17,771 / 19,781 (89.8387%) |
+| Rust region coverage | 25,586 / 28,478 (89.8448%) |
+| Rust branch/condition coverage | 4,179 / 4,904 (85.2162%) |
 | Rust function coverage | 1,145 / 1,329 (86.1550%) |
-| Route audit split | real-parity 3,528; generic-fallback 913; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; shape-incomplete-fallback 0 |
+| Route audit split | real-parity 3,530; generic-fallback 913; generic-error-fallback 139; null-error-fallback 7; raw-slot-null-validation 4; pending-core 5; shape-incomplete-fallback 0 |
 
 | Bucket | Evidence | Action |
 |---|---|---|
@@ -2208,7 +2213,7 @@ Remaining uncovered render/raster source families:
 | `render::SdfFlattener` cubic or invalid-contour paths | Fixture/font reachable only after a real public cubic-outline loader route exists; current compact CFF probe would make C render cubic charstrings while Rust does not preserve that outline through this path | Implement cubic outline loading/parity first, then add the smallest SDF row |
 | `render::MonoProfileBuilder`, `rasterize_mono_intersections`, and low-level line/bezier wrappers | Private/no-route or obsolete duplicate mono raster helpers; current mono output uses `MonoOutlineProfileBuilder`, and the horizontal/vertical dropout guards are already covered by `render-coverage.ttf` rows | Do not grow `FT_Render_Glyph` JSON with duplicate topology. Remove only with independent semantic proof |
 | `render::MonoOutlineProfileBuilder` branch residuals | Potentially fixture/font reachable, but only for exact topology branches not already covered by `hinter-control-matrix.ttf` or `render-coverage.ttf`; the folded-profile non-adjacent upper-stub branch is now covered by `render-coverage-folded-dropout-mono` | Add compact glyphs only after a focused candidate moves measured condition coverage with exact parity |
-| `render::render_normal_overlap` overflow/error guards | Public-route defensive guards introduced with the 4x FreeType overlap path; current compact glyph proves the success path but not the oversized width or arithmetic-failure errors | Add an exact public raster-overflow row only if a compact source-backed font can reach pinned C's `ft_smooth_raster_overlap` width check without exhausting memory or weakening comparison |
+| `render::render_normal_overlap` residual error return | The compact wide glyph now proves the public width-overflow branch and `FontError::RasterOverflow` conversion. The remaining missed line is the propagated error return from the gray rasterizer call inside the overlap helper | Add no synthetic row. A future case must make pinned C return an error from the oversampled gray rasterizer after passing the width check, with exact public error parity |
 
 Readable zero-count functions from `llvm-cxxfilt` fall into this first
 ledger. Treat this as the next owner list, not as deletion evidence:

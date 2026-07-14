@@ -55,65 +55,71 @@
       "case_id": "fterrdef.FT_Err_Raster_Overflow.raster_buffer_or_cell_overflow",
       "subject": "fterrdef.FT_Err_Raster_Overflow",
       "case": "raster_buffer_or_cell_overflow",
-      "operation": "FT_Outline_Render",
-      "schema": "api_result",
+      "operation": "render_glyph",
+      "schema": "glyph_render_error",
       "expect_error": true,
       "inputs": {
         "variants": [
           {
-            "id": "m1",
+            "id": "overlap-wide-normal",
             "assets": {
-              "outline": {
+              "font": {
                 "kind": "ref",
-                "role": "synthetic_outline",
-                "id": "generated/raster/overflow-outline.json",
-                "requirements": "Oversized outline or constrained target bitmap that overflows monochrome or gray raster cells/bands."
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf",
+                "requirements": "Gid 9 carries FT_OUTLINE_OVERLAP on a 9000 px wide outline at 1024 ppem, crossing ftsmooth.c's overlap width limit while keeping rows small."
               }
             },
             "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 1024
+              },
+              "glyph_index": 9,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
               "expected_error_symbol": "FT_Err_Raster_Overflow",
-              "target_bitmap": "small_or_sentinel_target",
               "pinned_sources": [
-                "freetype/src/raster/ftraster.c:603",
-                "freetype/src/raster/ftraster.c:653",
-                "freetype/src/raster/ftraster.c:959",
-                "freetype/src/smooth/ftgrays.c:614",
-                "freetype/src/smooth/ftsmooth.c:323",
-                "freetype/src/raster/ftrend1.c:134",
-                "freetype/src/sdf/ftsdfrend.c:297"
+                "freetype/src/smooth/ftsmooth.c:511-515",
+                "freetype/src/smooth/ftsmooth.c:621-637"
               ],
               "render_mode": "FT_RENDER_MODE_NORMAL"
             },
             "coverage": [
-              "FT_Outline_Render:explicit-m1"
+              "render/normal:overlap-width-raster-overflow"
             ]
           },
           {
-            "id": "m2",
+            "id": "overlap-wide-light",
             "assets": {
-              "outline": {
+              "font": {
                 "kind": "ref",
-                "role": "synthetic_outline",
-                "id": "generated/raster/overflow-outline.json",
-                "requirements": "Oversized outline or constrained target bitmap that overflows monochrome or gray raster cells/bands."
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf",
+                "requirements": "Gid 9 carries FT_OUTLINE_OVERLAP on a 9000 px wide outline at 1024 ppem, crossing ftsmooth.c's overlap width limit while keeping rows small."
               }
             },
             "params": {
-              "expected_error_symbol": "FT_Err_Raster_Overflow",
-              "target_bitmap": "small_or_sentinel_target",
-              "pinned_sources": [
-                "freetype/src/raster/ftraster.c:603",
-                "freetype/src/raster/ftraster.c:653",
-                "freetype/src/raster/ftraster.c:959",
-                "freetype/src/smooth/ftgrays.c:614",
-                "freetype/src/smooth/ftsmooth.c:323",
-                "freetype/src/raster/ftrend1.c:134",
-                "freetype/src/sdf/ftsdfrend.c:297"
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 1024
+              },
+              "glyph_index": 9,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
               ],
-              "render_mode": "FT_RENDER_MODE_MONO"
+              "expected_error_symbol": "FT_Err_Raster_Overflow",
+              "pinned_sources": [
+                "freetype/src/smooth/ftsmooth.c:511-515",
+                "freetype/src/smooth/ftsmooth.c:621-637"
+              ],
+              "render_mode": "FT_RENDER_MODE_LIGHT"
             },
             "coverage": [
-              "FT_Outline_Render:explicit-m2"
+              "render/light:overlap-width-raster-overflow"
             ]
           }
         ]
@@ -128,22 +134,17 @@
       "expectation": {
         "status": "error",
         "error": "FT_Err_Raster_Overflow",
-        "fixture_requirements": "Oversized or resource-constrained raster fixture that C FreeType reports as Raster_Overflow, with a normal-size success control elsewhere.",
+        "fixture_requirements": "Source-backed overlap glyph whose preset bitmap width times ftsmooth.c overlap SCALE exceeds 0x7FFF while bitmap rows remain small.",
         "output_shape": {
           "error": "FT_Error",
           "error_symbol": "FT_Err_*",
-          "bitmap": "metadata_and_optional_partial_buffer_hash",
           "diagnostic_source": "pinned FreeType source location"
         },
         "compare": {
           "mode": "exact_error",
           "paths": [
             "error",
-            "error_symbol",
-            "bitmap.mutation_class",
-            "bitmap.width",
-            "bitmap.rows",
-            "bitmap.pitch"
+            "error_symbol"
           ]
         }
       }
