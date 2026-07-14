@@ -732,6 +732,16 @@ def otvalid_null_validation_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def otvalid_real_parity_reason(row: ConcreteInput) -> str | None:
+    if (
+        row.operation == "ftotval.open_type_validate"
+        and row.params.get("face") == "valid_without_OPENTYPE_VALIDATE_service"
+        and has_runtime_asset(row)
+    ):
+        return "FT_OpenType_Validate missing-service face validates through pinned C oracle and Rust FFI wrapper"
+    return None
+
+
 def wrapper_null_validation_reason(row: ConcreteInput) -> str | None:
     if row.operation == "freetype.get_subglyph_info" and "null_output_indices" in row.params:
         return (
@@ -851,6 +861,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     otvalid_null_reason = otvalid_null_validation_reason(row)
     if otvalid_null_reason:
         return ("real-null-validation", otvalid_null_reason)
+    otvalid_real_reason = otvalid_real_parity_reason(row)
+    if otvalid_real_reason:
+        return ("real-parity", otvalid_real_reason)
     wrapper_null_reason = wrapper_null_validation_reason(row)
     if wrapper_null_reason:
         return ("wrapper-null-validation", wrapper_null_reason)

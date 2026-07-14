@@ -4689,6 +4689,26 @@ static int emit_open_type_validate_null_outputs(int argc, char** argv) {
     return 0;
 }
 
+static int emit_open_type_validate_service_missing(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_Bytes base = NULL;
+    FT_Bytes gdef = NULL;
+    FT_Bytes gpos = NULL;
+    FT_Bytes gsub = NULL;
+    FT_Bytes jstf = NULL;
+    FT_Error err = FT_OpenType_Validate(face.face, 0, &base, &gdef, &gpos, &gsub, &jstf);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":null}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_open_type_free_null_face(int argc, char** argv) {
     (void)argc;
     (void)argv;
@@ -8280,6 +8300,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 6 && streq(argv[1], "--open-type-validate-null-outputs")) {
         return emit_open_type_validate_null_outputs(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--open-type-validate-service-missing")) {
+        return emit_open_type_validate_service_missing(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--open-type-free-null-face")) {
         return emit_open_type_free_null_face(argc, argv);
