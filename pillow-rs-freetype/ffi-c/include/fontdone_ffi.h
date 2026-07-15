@@ -112,10 +112,18 @@ typedef struct FT_Bitmap_ {
   void* palette;
 } FT_Bitmap;
 
+typedef struct FT_Color_ {
+  FT_Byte blue;
+  FT_Byte green;
+  FT_Byte red;
+  FT_Byte alpha;
+} FT_Color;
+
 void FT_Bitmap_Init(FT_Bitmap* abitmap);
 void FT_Bitmap_New(FT_Bitmap* abitmap);
 FT_Error FT_Bitmap_Copy(FT_Library library, const FT_Bitmap* source, FT_Bitmap* target);
 FT_Error FT_Bitmap_Embolden(FT_Library library, FT_Bitmap* bitmap, FT_Pos xStrength, FT_Pos yStrength);
+FT_Error FT_Bitmap_Blend(FT_Library library, const FT_Bitmap* source, FT_Vector source_offset, FT_Bitmap* target, FT_Vector* atarget_offset, FT_Color color);
 
 typedef struct FT_SfntName_ {
   FT_UShort platform_id;

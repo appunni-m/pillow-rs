@@ -332,6 +332,115 @@ static void print_bitmap_embolden_row(
     }
 }
 
+static void bitmap_blend_source(FT_Bitmap* bitmap, unsigned char* bytes, FT_Pixel_Mode mode, int negative) {
+    memset(bytes, 0, 96);
+    bitmap->rows = 3;
+    bitmap->width = 5;
+    bitmap->num_grays = 256;
+    bitmap->pixel_mode = mode;
+    bitmap->palette_mode = 0;
+    bitmap->palette = NULL;
+    int pitch = 5;
+    if (mode == FT_PIXEL_MODE_MONO) {
+        pitch = 1;
+        unsigned char values[3] = { 0xA8, 0x50, 0xF8 };
+        memcpy(bytes, values, sizeof(values));
+    } else if (mode == FT_PIXEL_MODE_GRAY2) {
+        pitch = 2;
+        unsigned char values[6] = { 0x1B, 0x40, 0xE4, 0x80, 0x6D, 0xC0 };
+        memcpy(bytes, values, sizeof(values));
+        bitmap->num_grays = 4;
+    } else if (mode == FT_PIXEL_MODE_GRAY4) {
+        pitch = 3;
+        unsigned char values[9] = { 0x17, 0x3F, 0x50, 0x9B, 0xDF, 0x10, 0x24, 0x68, 0xA0 };
+        memcpy(bytes, values, sizeof(values));
+        bitmap->num_grays = 16;
+    } else if (mode == FT_PIXEL_MODE_LCD || mode == FT_PIXEL_MODE_LCD_V) {
+        bitmap->rows = 2;
+        bitmap->width = 6;
+        pitch = 6;
+        for (int i = 0; i < 12; i++) {
+            bytes[i] = (unsigned char)(13 + i * 19);
+        }
+    } else if (mode == FT_PIXEL_MODE_BGRA) {
+        bitmap->rows = 2;
+        bitmap->width = 3;
+        pitch = 12;
+        unsigned char values[24] = {
+            10, 20, 30, 90, 20, 60, 80, 140, 0, 0, 0, 0,
+            40, 30, 20, 128, 90, 40, 10, 200, 8, 16, 32, 64
+        };
+        memcpy(bytes, values, sizeof(values));
+    } else {
+        for (int i = 0; i < 15; i++) {
+            bytes[i] = (unsigned char)(17 + i * 11);
+        }
+    }
+    bitmap->pitch = negative ? -pitch : pitch;
+    bitmap->buffer = bytes;
+}
+
+static int bitmap_blend_prepopulate(FT_Library library, FT_Bitmap* target, FT_Vector* target_offset) {
+    unsigned char pre_bytes[96];
+    FT_Bitmap pre_source;
+    bitmap_blend_source(&pre_source, pre_bytes, FT_PIXEL_MODE_GRAY, 0);
+    pre_source.width = 2;
+    pre_source.rows = 2;
+    pre_source.pitch = 2;
+    FT_Vector pre_source_offset = { 64, 128 };
+    FT_Color pre_color = { 31, 47, 79, 191 };
+    target_offset->x = 64;
+    target_offset->y = 128;
+    return FT_Bitmap_Blend(library, &pre_source, pre_source_offset, target, target_offset, pre_color);
+}
+
+static void print_blend_run_output(const FT_Bitmap* target, const FT_Vector* target_offset) {
+    size_t len = target->buffer ? bitmap_len(target) : 0;
+    printf("{\"target\":");
+    print_bitmap_fields(target);
+    printf(",\"target_bytes_hash\":");
+    print_byte_hash_or_null(target->buffer, len);
+    printf(",\"target_buffer_len\":%zu,\"target_offset\":{\"x\":%ld,\"y\":%ld}}",
+           len, target_offset->x, target_offset->y);
+}
+
+static int emit_bitmap_blend_success_run(
+    FT_Library library,
+    FT_Pixel_Mode mode,
+    int negative_source,
+    int existing_target,
+    FT_Vector source_offset,
+    FT_Vector target_offset,
+    FT_Color color) {
+    unsigned char source_bytes[96];
+    FT_Bitmap source;
+    FT_Bitmap target;
+    FT_Bitmap_Init(&target);
+    bitmap_blend_source(&source, source_bytes, mode, negative_source);
+    if (existing_target) {
+        FT_Error pre_err = bitmap_blend_prepopulate(library, &target, &target_offset);
+        if (pre_err) {
+            printf("{");
+            print_status(pre_err);
+            printf("}");
+            return 0;
+        }
+    }
+
+    FT_Error err = FT_Bitmap_Blend(library, &source, source_offset, &target, &target_offset, color);
+    printf("{");
+    print_status(err);
+    if (!err) {
+        printf(",\"output\":");
+        print_blend_run_output(&target, &target_offset);
+    }
+    printf("}");
+    if (target.buffer) {
+        FT_Bitmap_Done(library, &target);
+    }
+    return 0;
+}
+
 static int emit_bitmap_embolden(const char* scenario) {
     FT_Library library = NULL;
     FT_Error err = FT_Init_FreeType(&library);
@@ -388,6 +497,91 @@ static int emit_bitmap_embolden(const char* scenario) {
     }
 #undef EMIT_ROW
 
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static int emit_bitmap_blend(const char* scenario) {
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf("}\n");
+        return 0;
+    }
+
+    FT_Color color = { 29, 113, 211, 173 };
+    FT_Vector source_offset = { 31, 95 };
+    FT_Vector target_offset = { -33, 130 };
+
+    if (streq(scenario, "error_invalid_arguments_or_target_mode")) {
+        unsigned char source_bytes[96];
+        unsigned char target_bytes[96];
+        FT_Bitmap source;
+        FT_Bitmap target;
+        bitmap_blend_source(&source, source_bytes, FT_PIXEL_MODE_GRAY, 0);
+        bitmap_blend_source(&target, target_bytes, FT_PIXEL_MODE_GRAY, 0);
+        err = FT_Bitmap_Blend(library, &source, source_offset, &target, &target_offset, color);
+        printf("{");
+        print_status(err);
+        printf("}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    if (streq(scenario, "error_overflow_or_flow_mismatch")) {
+        unsigned char source_bytes[96];
+        FT_Bitmap source;
+        FT_Bitmap target;
+        FT_Bitmap_Init(&target);
+        bitmap_blend_source(&source, source_bytes, FT_PIXEL_MODE_GRAY, 0);
+        FT_Vector pre_offset = { 64, 128 };
+        err = bitmap_blend_prepopulate(library, &target, &pre_offset);
+        if (!err) {
+            target.pitch = -target.pitch;
+            err = FT_Bitmap_Blend(library, &source, source_offset, &target, &target_offset, color);
+        }
+        printf("{");
+        print_status(err);
+        printf("}\n");
+        if (target.buffer) {
+            target.pitch = target.pitch < 0 ? -target.pitch : target.pitch;
+            FT_Bitmap_Done(library, &target);
+        }
+        FT_Done_FreeType(library);
+        return 0;
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"runs\":[");
+    if (streq(scenario, "success_source_pixel_modes_and_flow")) {
+        FT_Pixel_Mode modes[7] = {
+            FT_PIXEL_MODE_MONO, FT_PIXEL_MODE_GRAY2, FT_PIXEL_MODE_GRAY4, FT_PIXEL_MODE_GRAY,
+            FT_PIXEL_MODE_LCD, FT_PIXEL_MODE_LCD_V, FT_PIXEL_MODE_BGRA
+        };
+        int first = 1;
+        for (int flow = 0; flow < 2; flow++) {
+            for (int i = 0; i < 7; i++) {
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                emit_bitmap_blend_success_run(library, modes[i], flow, 0, source_offset, target_offset, color);
+            }
+        }
+    } else if (streq(scenario, "success_existing_bgra_reallocates_or_preserves")) {
+        emit_bitmap_blend_success_run(library, FT_PIXEL_MODE_GRAY, 0, 1, source_offset, target_offset, color);
+    } else if (streq(scenario, "success_integerizes_offsets")) {
+        FT_Vector frac_source = { 127, -65 };
+        FT_Vector frac_target = { 95, 193 };
+        emit_bitmap_blend_success_run(library, FT_PIXEL_MODE_GRAY4, 0, 1, frac_source, frac_target, color);
+    } else if (streq(scenario, "success_empty_target_allocates_bgra")) {
+        emit_bitmap_blend_success_run(library, FT_PIXEL_MODE_GRAY, 0, 0, source_offset, target_offset, color);
+    } else {
+        fprintf(stderr, "unsupported bitmap blend scenario: %s\n", scenario);
+        FT_Done_FreeType(library);
+        return 2;
+    }
     printf("]}}\n");
     FT_Done_FreeType(library);
     return 0;
@@ -9170,6 +9364,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--bitmap-embolden")) {
         return emit_bitmap_embolden(argv[2]);
+    }
+    if (argc == 3 && streq(argv[1], "--bitmap-blend")) {
+        return emit_bitmap_blend(argv[2]);
     }
     if (argc == 4 && streq(argv[1], "--trigon")) {
         return emit_trigon(argv[2], argv[3]);

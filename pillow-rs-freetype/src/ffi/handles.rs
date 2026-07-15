@@ -19,7 +19,7 @@ use super::convert::{
 };
 use super::types::{
     FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bool, FT_Byte, FT_Bytes, FT_Char, FT_CharMap,
-    FT_CharMapRecPublic, FT_Encoding, FT_Error, FT_F26Dot6, FT_Fixed, FT_Glyph_Format,
+    FT_CharMapRecPublic, FT_Color, FT_Encoding, FT_Error, FT_F26Dot6, FT_Fixed, FT_Glyph_Format,
     FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_Long, FT_Matrix, FT_Orientation,
     FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag,
     FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec,
@@ -65,6 +65,25 @@ fn bitmap_buffer_len(bitmap: &FT_Bitmap_C) -> Option<usize> {
     usize::try_from(bitmap.pitch.unsigned_abs())
         .ok()?
         .checked_mul(usize::try_from(bitmap.rows).ok()?)
+}
+
+fn bitmap_pitch_abs(bitmap: &FT_Bitmap_C) -> Option<usize> {
+    usize::try_from(bitmap.pitch.unsigned_abs()).ok()
+}
+
+fn bitmap_owned_bytes(bitmap: &FT_Bitmap_C) -> Option<Vec<FT_Byte>> {
+    if bitmap.buffer.is_null() {
+        return None;
+    }
+    let len = bitmap_buffer_len(bitmap)?;
+    let registry = bitmap_buffer_registry()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let buffer = registry.get(&(bitmap.buffer as usize))?;
+    if buffer.len() < len {
+        return None;
+    }
+    Some(buffer[..len].to_vec())
 }
 
 pub fn FT_Bitmap_Set_Owned_Buffer(abitmap: Option<&mut FT_Bitmap_C>, bytes: Vec<FT_Byte>) {
@@ -544,6 +563,354 @@ fn convert_public_bitmap_to_gray(
     bitmap.pixel_mode = FT_PIXEL_MODE_GRAY as u8;
     bitmap.num_grays = num_grays;
     FT_Bitmap_Set_Owned_Buffer(Some(bitmap), target);
+    FT_Err_Ok
+}
+
+#[derive(Clone)]
+struct GrayBitmap {
+    rows: u32,
+    width: u32,
+    pitch: FT_Int,
+    bytes: Vec<FT_Byte>,
+}
+
+impl GrayBitmap {
+    fn row_range(&self, row: usize) -> Option<std::ops::Range<usize>> {
+        let pitch = usize::try_from(self.pitch.unsigned_abs()).ok()?;
+        let rows = usize::try_from(self.rows).ok()?;
+        let start = if self.pitch < 0 {
+            rows.checked_sub(1 + row)?.checked_mul(pitch)?
+        } else {
+            row.checked_mul(pitch)?
+        };
+        let width = usize::try_from(self.width).ok()?;
+        let end = start.checked_add(width)?;
+        (end <= self.bytes.len()).then_some(start..end)
+    }
+}
+
+fn bitmap_row_start(bitmap: &FT_Bitmap_C, row: usize) -> Option<usize> {
+    let pitch = bitmap_pitch_abs(bitmap)?;
+    let rows = usize::try_from(bitmap.rows).ok()?;
+    if bitmap.pitch < 0 {
+        rows.checked_sub(1 + row)?.checked_mul(pitch)
+    } else {
+        row.checked_mul(pitch)
+    }
+}
+
+fn gray_for_premultiplied_srgb_bgra(bgra: &[FT_Byte]) -> FT_Byte {
+    let a = u32::from(bgra[3]);
+    if a == 0 {
+        return 0;
+    }
+    let l = (4731u32 * u32::from(bgra[0]) * u32::from(bgra[0])
+        + 46868u32 * u32::from(bgra[1]) * u32::from(bgra[1])
+        + 13937u32 * u32::from(bgra[2]) * u32::from(bgra[2]))
+        >> 16;
+    (a - l / a) as FT_Byte
+}
+
+fn bitmap_to_gray(source: &FT_Bitmap_C) -> Result<GrayBitmap, FT_Error> {
+    let bytes = bitmap_owned_bytes(source).ok_or(FT_Err_Invalid_Argument)?;
+    let rows = usize::try_from(source.rows).map_err(|_| FT_Err_Out_Of_Memory as FT_Error)?;
+    let width = usize::try_from(source.width).map_err(|_| FT_Err_Out_Of_Memory as FT_Error)?;
+    let pitch = if source.pitch < 0 {
+        -FT_Int::try_from(width).map_err(|_| FT_Err_Out_Of_Memory as FT_Error)?
+    } else {
+        FT_Int::try_from(width).map_err(|_| FT_Err_Out_Of_Memory as FT_Error)?
+    };
+    let len = rows
+        .checked_mul(width)
+        .ok_or(FT_Err_Out_Of_Memory as FT_Error)?;
+    let mut gray = vec![0; len];
+
+    for row in 0..rows {
+        let src = bitmap_row_start(source, row).ok_or(FT_Err_Invalid_Argument)?;
+        let dst = if pitch < 0 {
+            (rows - 1 - row)
+                .checked_mul(width)
+                .ok_or(FT_Err_Out_Of_Memory as FT_Error)?
+        } else {
+            row.checked_mul(width)
+                .ok_or(FT_Err_Out_Of_Memory as FT_Error)?
+        };
+        match i32::from(source.pixel_mode) {
+            FT_PIXEL_MODE_MONO => {
+                for col in 0..width {
+                    let byte = *bytes.get(src + (col >> 3)).ok_or(FT_Err_Invalid_Argument)?;
+                    gray[dst + col] = (byte >> (7 - (col & 7))) & 1;
+                }
+            }
+            FT_PIXEL_MODE_GRAY | FT_PIXEL_MODE_LCD | FT_PIXEL_MODE_LCD_V => {
+                let end = src.checked_add(width).ok_or(FT_Err_Invalid_Argument)?;
+                let row_bytes = bytes.get(src..end).ok_or(FT_Err_Invalid_Argument)?;
+                gray[dst..dst + width].copy_from_slice(row_bytes);
+            }
+            FT_PIXEL_MODE_GRAY2 => {
+                for col in 0..width {
+                    let byte = *bytes.get(src + (col >> 2)).ok_or(FT_Err_Invalid_Argument)?;
+                    gray[dst + col] = (byte >> (6 - 2 * (col & 3))) & 0x03;
+                }
+            }
+            FT_PIXEL_MODE_GRAY4 => {
+                for col in 0..width {
+                    let byte = *bytes.get(src + (col >> 1)).ok_or(FT_Err_Invalid_Argument)?;
+                    gray[dst + col] = (byte >> (4 - 4 * (col & 1))) & 0x0F;
+                }
+            }
+            FT_PIXEL_MODE_BGRA => {
+                for col in 0..width {
+                    let start = src
+                        .checked_add(col.checked_mul(4).ok_or(FT_Err_Invalid_Argument)?)
+                        .ok_or(FT_Err_Invalid_Argument)?;
+                    let px = bytes.get(start..start + 4).ok_or(FT_Err_Invalid_Argument)?;
+                    gray[dst + col] = gray_for_premultiplied_srgb_bgra(px);
+                }
+            }
+            _ => return Err(FT_Err_Invalid_Argument),
+        }
+    }
+
+    Ok(GrayBitmap {
+        rows: source.rows,
+        width: source.width,
+        pitch,
+        bytes: gray,
+    })
+}
+
+fn pix_floor(value: FT_Pos) -> FT_Pos {
+    value & !63
+}
+
+pub fn FT_Bitmap_Blend(
+    library: Option<&FT_Library>,
+    source: Option<&FT_Bitmap_C>,
+    source_offset: FT_Vector,
+    target: Option<&mut FT_Bitmap_C>,
+    atarget_offset: Option<&mut FT_Vector>,
+    color: FT_Color,
+) -> FT_Error {
+    let (Some(_library), Some(source), Some(target), Some(atarget_offset)) =
+        (library, source, target, atarget_offset)
+    else {
+        return FT_Err_Invalid_Argument;
+    };
+
+    let target_mode = i32::from(target.pixel_mode);
+    if !(target_mode == FT_PIXEL_MODE_NONE
+        || (target_mode == FT_PIXEL_MODE_BGRA && !target.buffer.is_null()))
+    {
+        return FT_Err_Invalid_Argument;
+    }
+    if i32::from(source.pixel_mode) == FT_PIXEL_MODE_NONE {
+        return FT_Err_Ok;
+    }
+    if target_mode == FT_PIXEL_MODE_BGRA && (source.pitch ^ target.pitch) < 0 {
+        return FT_Err_Invalid_Argument;
+    }
+    if source.width == 0 || source.rows == 0 {
+        return FT_Err_Ok;
+    }
+
+    // FreeType `src/base/ftbitmap.c:762-1058` floors 26.6 offsets before
+    // computing final bounds; its negative target-pitch copy/blend branches
+    // are empty `/* XXX */` blocks, so this route intentionally no-ops those
+    // branches after preserving allocation and offset side effects.
+    let source_offset = FT_Vector {
+        x: pix_floor(source_offset.x),
+        y: pix_floor(source_offset.y),
+    };
+    let target_offset = FT_Vector {
+        x: pix_floor(atarget_offset.x),
+        y: pix_floor(atarget_offset.y),
+    };
+
+    let source_rows_26_6 = FT_Pos::from(source.rows) << 6;
+    if FT_Long::MIN + source_rows_26_6 + 64 > source_offset.y {
+        return FT_Err_Invalid_Argument;
+    }
+    let source_llx = source_offset.x;
+    let source_lly = source_offset.y - source_rows_26_6;
+    let source_width_26_6 = FT_Pos::from(source.width) << 6;
+    if FT_Long::MAX - source_width_26_6 - 64 < source_llx {
+        return FT_Err_Invalid_Argument;
+    }
+    let source_urx = source_llx + source_width_26_6;
+    let source_ury = source_offset.y;
+
+    let (target_llx, target_lly, target_urx, target_ury) = if target.width != 0 && target.rows != 0
+    {
+        let target_rows_26_6 = FT_Pos::from(target.rows) << 6;
+        if FT_Long::MIN + target_rows_26_6 > target_offset.y {
+            return FT_Err_Invalid_Argument;
+        }
+        let target_lly = target_offset.y - target_rows_26_6;
+        let target_width_26_6 = FT_Pos::from(target.width) << 6;
+        if FT_Long::MAX - target_width_26_6 < target_offset.x {
+            return FT_Err_Invalid_Argument;
+        }
+        (
+            target_offset.x,
+            target_lly,
+            target_offset.x + target_width_26_6,
+            target_offset.y,
+        )
+    } else {
+        (FT_Long::MAX, FT_Long::MAX, FT_Long::MIN, FT_Long::MIN)
+    };
+
+    let final_llx = source_llx.min(target_llx);
+    let final_lly = source_lly.min(target_lly);
+    let final_urx = source_urx.max(target_urx);
+    let final_ury = source_ury.max(target_ury);
+    let final_width = u32::try_from((final_urx - final_llx) >> 6)
+        .map_err(|_| FT_Err_Invalid_Argument)
+        .unwrap_or(0);
+    let final_rows = u32::try_from((final_ury - final_lly) >> 6)
+        .map_err(|_| FT_Err_Invalid_Argument)
+        .unwrap_or(0);
+    if final_width == 0 || final_rows == 0 {
+        return FT_Err_Ok;
+    }
+
+    let source_llx = source_llx - final_llx;
+    let source_lly = source_lly - final_lly;
+    let target_origin = if target.width != 0 && target.rows != 0 {
+        Some((target_llx - final_llx, target_lly - final_lly))
+    } else {
+        None
+    };
+
+    let final_pitch = match usize::try_from(final_width)
+        .ok()
+        .and_then(|w| w.checked_mul(4))
+    {
+        Some(value) => value,
+        None => return FT_Err_Out_Of_Memory as FT_Error,
+    };
+    if target_mode == FT_PIXEL_MODE_NONE {
+        target.width = final_width;
+        target.rows = final_rows;
+        target.pixel_mode = FT_PIXEL_MODE_BGRA as FT_Byte;
+        target.pitch = match FT_Int::try_from(final_pitch) {
+            Ok(value) => value,
+            Err(_) => return FT_Err_Out_Of_Memory as FT_Error,
+        };
+        target.num_grays = 256;
+        let len = match final_pitch.checked_mul(usize::try_from(final_rows).unwrap_or(0)) {
+            Some(value) => value,
+            None => return FT_Err_Out_Of_Memory as FT_Error,
+        };
+        FT_Bitmap_Set_Owned_Buffer(Some(target), vec![0; len]);
+    } else if target.width != final_width || target.rows != final_rows {
+        let old_bytes = bitmap_owned_bytes(target).ok_or(FT_Err_Invalid_Argument);
+        let old_pitch = match bitmap_pitch_abs(target) {
+            Some(value) => value,
+            None => return FT_Err_Invalid_Argument,
+        };
+        let len = match final_pitch.checked_mul(usize::try_from(final_rows).unwrap_or(0)) {
+            Some(value) => value,
+            None => return FT_Err_Out_Of_Memory as FT_Error,
+        };
+        let mut new_bytes = vec![0; len];
+        if target.pitch >= 0 {
+            if let Ok(old_bytes) = old_bytes {
+                let (target_llx, target_lly) = target_origin.unwrap_or((0, 0));
+                let x = usize::try_from(target_llx >> 6).unwrap_or(0);
+                let y = usize::try_from(target_lly >> 6).unwrap_or(0);
+                let rows = usize::try_from(target.rows).unwrap_or(0);
+                let dst_row = usize::try_from(final_rows)
+                    .unwrap_or(0)
+                    .saturating_sub(y)
+                    .saturating_sub(rows);
+                for row in 0..rows {
+                    let src = row.saturating_mul(old_pitch);
+                    let dst = (dst_row + row)
+                        .saturating_mul(final_pitch)
+                        .saturating_add(x.saturating_mul(4));
+                    let copy_len = old_pitch.min(final_pitch.saturating_sub(x.saturating_mul(4)));
+                    if src + copy_len <= old_bytes.len() && dst + copy_len <= new_bytes.len() {
+                        new_bytes[dst..dst + copy_len]
+                            .copy_from_slice(&old_bytes[src..src + copy_len]);
+                    }
+                }
+            }
+        }
+        target.width = final_width;
+        target.rows = final_rows;
+        target.pitch = if target.pitch < 0 {
+            -FT_Int::try_from(final_pitch).unwrap_or(FT_Int::MAX)
+        } else {
+            FT_Int::try_from(final_pitch).unwrap_or(FT_Int::MAX)
+        };
+        FT_Bitmap_Set_Owned_Buffer(Some(target), new_bytes);
+    }
+
+    let source_gray = if i32::from(source.pixel_mode) == FT_PIXEL_MODE_GRAY {
+        GrayBitmap {
+            rows: source.rows,
+            width: source.width,
+            pitch: source.pitch,
+            bytes: match bitmap_owned_bytes(source) {
+                Some(bytes) => bytes,
+                None => return FT_Err_Invalid_Argument,
+            },
+        }
+    } else {
+        match bitmap_to_gray(source) {
+            Ok(bitmap) => bitmap,
+            Err(err) => return err,
+        }
+    };
+
+    if target.pitch >= 0 && source_gray.pitch >= 0 {
+        let mut target_bytes = match bitmap_owned_bytes(target) {
+            Some(bytes) => bytes,
+            None => return FT_Err_Invalid_Argument,
+        };
+        let x = usize::try_from(source_llx >> 6).unwrap_or(0);
+        let y = usize::try_from(source_lly >> 6).unwrap_or(0);
+        let target_rows = usize::try_from(target.rows).unwrap_or(0);
+        let source_rows = usize::try_from(source_gray.rows).unwrap_or(0);
+        let target_pitch = match bitmap_pitch_abs(target) {
+            Some(value) => value,
+            None => return FT_Err_Invalid_Argument,
+        };
+        let dst_row = target_rows.saturating_sub(y).saturating_sub(source_rows);
+        let color_alpha = u32::from(color.alpha);
+        for row in 0..source_rows {
+            let Some(src_range) = source_gray.row_range(row) else {
+                return FT_Err_Invalid_Argument;
+            };
+            let mut dst = (dst_row + row)
+                .saturating_mul(target_pitch)
+                .saturating_add(x.saturating_mul(4));
+            for aa in &source_gray.bytes[src_range] {
+                let fa = color_alpha * u32::from(*aa) / 255;
+                let fb = u32::from(color.blue) * fa / 255;
+                let fg = u32::from(color.green) * fa / 255;
+                let fr = u32::from(color.red) * fa / 255;
+                let ba2 = 255 - fa;
+                if dst + 4 > target_bytes.len() {
+                    return FT_Err_Invalid_Argument;
+                }
+                target_bytes[dst] = (u32::from(target_bytes[dst]) * ba2 / 255 + fb) as FT_Byte;
+                target_bytes[dst + 1] =
+                    (u32::from(target_bytes[dst + 1]) * ba2 / 255 + fg) as FT_Byte;
+                target_bytes[dst + 2] =
+                    (u32::from(target_bytes[dst + 2]) * ba2 / 255 + fr) as FT_Byte;
+                target_bytes[dst + 3] =
+                    (u32::from(target_bytes[dst + 3]) * ba2 / 255 + fa) as FT_Byte;
+                dst += 4;
+            }
+        }
+        FT_Bitmap_Set_Owned_Buffer(Some(target), target_bytes);
+    }
+
+    atarget_offset.x = final_llx;
+    atarget_offset.y = final_lly + (FT_Pos::from(final_rows) << 6);
     FT_Err_Ok
 }
 
