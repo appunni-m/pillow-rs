@@ -114,6 +114,118 @@
       }
     },
     {
+      "case_id": "ftimage.FT_RASTER_FLAG_AA.smooth_zero_width_target@zero-width-target",
+      "subject": "ftimage.FT_RASTER_FLAG_AA",
+      "case": "smooth_requires_aa",
+      "operation": "ftoutln.outline_render",
+      "schema": "raster_params",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline": {
+            "kind": "ref",
+            "id": "outlines/synthetic/simple-rectangle.json",
+            "asset_kind": "outline"
+          }
+        },
+        "params": {
+          "renderer": "smooth",
+          "flags": [
+            "FT_RASTER_FLAG_AA"
+          ],
+          "target_box": {
+            "width": 0,
+            "height": 32
+          },
+          "target_bitmap": {
+            "pixel_mode": "FT_PIXEL_MODE_GRAY",
+            "buffer": "zeroed"
+          },
+          "expected_behavior": "FT_Outline_Render returns success without touching a non-null zero-width target bitmap"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftimage",
+        "area:raster-params",
+        "area:smooth-raster",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "bitmap": "FT_Bitmap"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "bitmap"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/smooth/ftgrays.c:2014-2016"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_RASTER_FLAG_AA.smooth_zero_height_target@zero-height-target",
+      "subject": "ftimage.FT_RASTER_FLAG_AA",
+      "case": "smooth_requires_aa",
+      "operation": "ftoutln.outline_render",
+      "schema": "raster_params",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline": {
+            "kind": "ref",
+            "id": "outlines/synthetic/simple-rectangle.json",
+            "asset_kind": "outline"
+          }
+        },
+        "params": {
+          "renderer": "smooth",
+          "flags": [
+            "FT_RASTER_FLAG_AA"
+          ],
+          "target_box": {
+            "width": 32,
+            "height": 0
+          },
+          "target_bitmap": {
+            "pixel_mode": "FT_PIXEL_MODE_GRAY",
+            "buffer": "zeroed"
+          },
+          "expected_behavior": "FT_Outline_Render returns success without touching a non-null zero-row target bitmap"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:ftimage",
+        "area:raster-params",
+        "area:smooth-raster",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "bitmap": "FT_Bitmap"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "bitmap"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/smooth/ftgrays.c:2014-2016"
+        ]
+      }
+    },
+    {
       "case_id": "ftimage.FT_RASTER_FLAG_AA.mono_rejects_aa",
       "subject": "ftimage.FT_RASTER_FLAG_AA",
       "case": "mono_rejects_aa",
