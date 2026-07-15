@@ -480,6 +480,21 @@ def latin_wide_segment_filter_glyph():
     )
 
 
+def latin_vertical_cusp_glyph():
+    return mixed_contour_glyph(
+        [
+            [
+                (100, 400, True),
+                (100, 500, True),
+                (100, 0, False),
+                (100, 490, True),
+                (300, 490, True),
+                (300, 400, True),
+            ],
+        ]
+    )
+
+
 def nonreciprocal_chain_glyph():
     # U+51A1: two major-direction segments share one opposite segment so CJK
     # link cleanup sees a non-reciprocal chain and assigns a serif fallback.
@@ -637,6 +652,7 @@ def build_script_coverage() -> None:
     glyph_order.append("latin_serif_m_symmetry")
     glyph_order.append("latin_serif_overlap_break")
     glyph_order.append("latin_tilde_top2_centering")
+    glyph_order.append("latin_vertical_cusp")
 
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
@@ -715,6 +731,9 @@ def build_script_coverage() -> None:
     glyphs["latin_tilde_top2_centering"] = top_tilde_centering_glyph()
     metrics["latin_tilde_top2_centering"] = (700, 100)
     cmap[0x1EB4] = "latin_tilde_top2_centering"
+    glyphs["latin_vertical_cusp"] = latin_vertical_cusp_glyph()
+    metrics["latin_vertical_cusp"] = (620, 100)
+    cmap[0x0245] = "latin_vertical_cusp"
 
     font = FontBuilder(UNITS_PER_EM, isTTF=True)
     font.setupGlyphOrder(glyph_order)

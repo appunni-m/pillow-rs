@@ -1861,6 +1861,30 @@
             ]
           },
           {
+            "id": "latin-script-vertical-cusp-force-autohint",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 79,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:vertical-cusp-segment-merge"
+            ]
+          },
+          {
             "id": "sfnt-no-os2-force-autohint-vertical",
             "assets": {
               "font": {
