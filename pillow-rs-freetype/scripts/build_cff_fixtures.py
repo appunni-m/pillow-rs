@@ -8,6 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from fontTools.fontBuilder import FontBuilder
+from fontTools.cffLib import TopDict
 from fontTools.misc.psCharStrings import T2CharString
 from fontTools.pens.t2CharStringPen import T2CharStringPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
@@ -37,6 +38,8 @@ CUBIC_GLYPH_ORDER = [
     "endchar_default_width",
     "hvcurveto_initial_width",
     "fixed_hmoveto",
+    "rlineto_initial_width",
+    "rrcurveto_initial_width",
 ]
 NAMES = {
     "familyName": "Hybrid OTTO Coverage",
@@ -138,6 +141,8 @@ def build_cubic_cff(path: Path) -> None:
         "endchar_default_width": (420, 0),
         "hvcurveto_initial_width": (420, 0),
         "fixed_hmoveto": (420, 0),
+        "rlineto_initial_width": (420, 0),
+        "rrcurveto_initial_width": (420, 0),
     }
     builder = FontBuilder(UNITS_PER_EM, isTTF=False)
     builder.setupGlyphOrder(CUBIC_GLYPH_ORDER)
@@ -157,6 +162,8 @@ def build_cubic_cff(path: Path) -> None:
             0x4C: "endchar_default_width",
             0x4D: "hvcurveto_initial_width",
             0x4E: "fixed_hmoveto",
+            0x4F: "rlineto_initial_width",
+            0x50: "rrcurveto_initial_width",
         }
     )
     builder.setupHorizontalMetrics(metrics)
@@ -325,11 +332,49 @@ def build_cubic_cff(path: Path) -> None:
                     "endchar",
                 ]
             ),
+            "rlineto_initial_width": t2_program_charstring(
+                [
+                    600,
+                    80,
+                    0,
+                    0,
+                    100,
+                    -80,
+                    0,
+                    "rlineto",
+                    "endchar",
+                ]
+            ),
+            "rrcurveto_initial_width": t2_program_charstring(
+                [
+                    600,
+                    60,
+                    0,
+                    60,
+                    100,
+                    120,
+                    0,
+                    "rrcurveto",
+                    "endchar",
+                ]
+            ),
         },
         {},
     )
     builder.setupMaxp()
-    builder.save(path)
+    recalc_font_bbox = TopDict.recalcFontBBox
+    try:
+        # fontTools' bounds walker treats these `rlineto` and `rrcurveto`
+        # programs as malformed because they intentionally begin with an odd
+        # operand count and no moveto.  FreeType reaches them through real
+        # public glyph loads and rejects them, so keep the raw charstrings and
+        # preserve the explicit compact fixture bbox.
+        TopDict.recalcFontBBox = lambda self: None
+        builder.font.recalcBBoxes = False
+        builder.font["CFF "].cff.topDictIndex[0].FontBBox = [0, 0, 900, 1200]
+        builder.save(path)
+    finally:
+        TopDict.recalcFontBBox = recalc_font_bbox
 
 
 def build_matching_glyf(path: Path) -> None:

@@ -439,8 +439,12 @@ impl<'a> Type2Decoder<'a> {
 
     fn rlineto(&mut self) -> Result<(), FontError> {
         if !self.width_seen && self.stack.len() % 2 == 1 {
-            self.stack.remove(0);
-            self.width_seen = true;
+            // FreeType's Type2 path (`src/psaux/psintrp.c`) limits optional
+            // width parsing to stems, moveto, and endchar; `rlineto` consumes
+            // dx/dy pairs directly and rejects an odd stack.
+            return Err(FontError::InvalidOutline(
+                "CFF: rlineto argument count".into(),
+            ));
         }
         if self.stack.is_empty() || !self.stack.len().is_multiple_of(2) {
             return Err(FontError::InvalidOutline(
@@ -476,8 +480,12 @@ impl<'a> Type2Decoder<'a> {
 
     fn rrcurveto(&mut self) -> Result<(), FontError> {
         if !self.width_seen && self.stack.len() % 6 == 1 {
-            self.stack.remove(0);
-            self.width_seen = true;
+            // FreeType's Type2 path (`src/psaux/psintrp.c`) does not consume
+            // an optional width for `rrcurveto`; it requires complete
+            // six-operand curve tuples.
+            return Err(FontError::InvalidOutline(
+                "CFF: rrcurveto argument count".into(),
+            ));
         }
         if self.stack.is_empty() || !self.stack.len().is_multiple_of(6) {
             return Err(FontError::InvalidOutline(
