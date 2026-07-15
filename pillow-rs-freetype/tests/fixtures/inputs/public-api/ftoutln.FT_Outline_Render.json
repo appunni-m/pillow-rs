@@ -43,6 +43,12 @@
             "coverage": ["grays:clip-box-outside-cells"]
           },
           {
+            "id": "right-edge-clip-outside-target",
+            "assets": {"outline": {"kind": "ref", "id": "outlines/render/right-edge-clip-outside-target.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA", "FT_RASTER_FLAG_CLIP"], "target": "bitmap", "source": "ignored_sentinel", "clip_box": {"xMin": 32, "yMin": 0, "xMax": 40, "yMax": 1}}, "library": "valid", "target_box": {"width": 32, "height": 32}},
+            "coverage": ["grays:right-edge-clip-target-bounds"]
+          },
+          {
             "id": "explicit-box-square",
             "assets": {"outline": {"kind": "ref", "id": "outlines/render/simple-filled-square.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid", "target_box": {"width": 32, "height": 32}},
