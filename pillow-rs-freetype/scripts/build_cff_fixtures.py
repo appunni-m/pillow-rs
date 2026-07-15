@@ -131,7 +131,7 @@ def build_cff(path: Path) -> None:
     builder.save(path)
 
 
-def build_cubic_cff(path: Path) -> None:
+def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
     names = {
         "familyName": "Pure CFF Cubic Coverage",
         "styleName": "Regular",
@@ -497,6 +497,8 @@ def build_cubic_cff(path: Path) -> None:
         {},
     )
     builder.setupMaxp()
+    if with_vertical_metrics:
+        add_vertical_metrics(builder.font)
     recalc_font_bbox = TopDict.recalcFontBBox
     try:
         # fontTools' bounds walker treats these `rlineto` and `rrcurveto`
@@ -565,6 +567,41 @@ def write_pure_cff_cubic() -> None:
     if out.exists() or out.is_symlink():
         out.unlink()
     build_cubic_cff(out)
+
+
+def add_vertical_metrics(font: TTFont) -> None:
+    glyph_order = font.getGlyphOrder()
+    vmtx = newTable("vmtx")
+    vmtx.metrics = {name: (880, 120) for name in glyph_order}
+    font["vmtx"] = vmtx
+
+    vhea = newTable("vhea")
+    vhea.tableVersion = 0x00010000
+    vhea.ascent = 760
+    vhea.descent = -120
+    vhea.lineGap = 0
+    vhea.advanceHeightMax = 880
+    vhea.minTopSideBearing = 120
+    vhea.minBottomSideBearing = 0
+    vhea.yMaxExtent = 880
+    vhea.caretSlopeRise = 1
+    vhea.caretSlopeRun = 0
+    vhea.caretOffset = 0
+    vhea.reserved1 = 0
+    vhea.reserved2 = 0
+    vhea.reserved3 = 0
+    vhea.reserved4 = 0
+    vhea.metricDataFormat = 0
+    vhea.numberOfVMetrics = len(glyph_order)
+    font["vhea"] = vhea
+
+
+def write_pure_cff_cubic_vmtx() -> None:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = OUT_DIR / "pure-cff-cubic-vmtx.otf"
+    if out.exists() or out.is_symlink():
+        out.unlink()
+    build_cubic_cff(out, with_vertical_metrics=True)
 
 
 def empty_program_table(tag: str):
@@ -677,6 +714,7 @@ def write_malformed_cff_faces() -> None:
 def main() -> None:
     write_hybrid_otto_face_info()
     write_pure_cff_cubic()
+    write_pure_cff_cubic_vmtx()
     write_pure_cff_empty_tt_programs()
     write_malformed_cff_faces()
 
