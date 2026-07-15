@@ -4859,6 +4859,26 @@
             "coverage": [
               "autohint/latin:branch-blue-delta2-upper-band"
             ]
+          },
+          {
+            "id": "branch-script-u0303-nonbase-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 771,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:nonbase-combining-mark"
+            ]
           }
         ]
       },

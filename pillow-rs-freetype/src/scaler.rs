@@ -1121,6 +1121,15 @@ fn scale_glyph_impl_with_context(
         // cbox/bbox.
         slot_advance_width = width;
     }
+    if use_autohint && slot_advance_width == 0 && phantom_pp1_x != 0 {
+        // C `af_loader_load_glyph` translates the hinted outline by
+        // `-loader->pp1.x` before computing slot metrics (afloader.c:522-532).
+        // Non-spacing marks keep zero advance, so the advance path does not
+        // otherwise expose this translation.
+        for point in &mut scaled {
+            point.x -= phantom_pp1_x;
+        }
+    }
     let vertical_bearing_x_advance_width = if native_hint_mode == NativeHintMode::Mono {
         if hdmx_slot_advance_width.is_some() {
             slot_advance_width
