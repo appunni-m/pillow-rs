@@ -57,6 +57,7 @@ CUBIC_GLYPH_ORDER = [
     "type2_no_endchar_eof",
     "rlineto_secondary_malformed",
     "rrcurveto_secondary_malformed",
+    "tiny_cubic_y_span",
 ]
 NAMES = {
     "familyName": "Hybrid OTTO Coverage",
@@ -82,6 +83,11 @@ def t2_charstring(rectangle: bool = False, cubic: str | None = None):
         # Exercises the fourth `split_sdf_cubic` flatness term via public SDF.
         pen.moveTo((0, 0))
         pen.curveTo((100, 0), (200, 80), (300, 0))
+    elif cubic == "tiny_y":
+        # At 24 ppem this remains below one scanline after scaling, which
+        # reaches FreeType black rasterizer's Bezier_Up early span rejection.
+        pen.moveTo((0, 0))
+        pen.curveTo((100, 4), (200, 8), (300, 12))
     elif rectangle:
         pen.moveTo((80, 0))
         pen.lineTo((520, 0))
@@ -177,6 +183,7 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
         "type2_no_endchar_eof": (420, 0),
         "rlineto_secondary_malformed": (420, 0),
         "rrcurveto_secondary_malformed": (420, 0),
+        "tiny_cubic_y_span": (420, 0),
     }
     builder = FontBuilder(UNITS_PER_EM, isTTF=False)
     builder.setupGlyphOrder(CUBIC_GLYPH_ORDER)
@@ -215,6 +222,7 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
             0x5F: "type2_no_endchar_eof",
             0x60: "rlineto_secondary_malformed",
             0x61: "rrcurveto_secondary_malformed",
+            0x62: "tiny_cubic_y_span",
         }
     )
     builder.setupHorizontalMetrics(metrics)
@@ -526,6 +534,7 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
                     "endchar",
                 ]
             ),
+            "tiny_cubic_y_span": t2_charstring(cubic="tiny_y"),
         },
         {},
     )
