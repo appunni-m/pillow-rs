@@ -944,6 +944,26 @@
             ]
           },
           {
+            "id": "latin-wide-segment-filter",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-remaining-topology.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 32,
+              "char_code": 579,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:wide-major-segment-filter"
+            ]
+          },
+          {
             "id": "script-adlam",
             "assets": {
               "font": {
