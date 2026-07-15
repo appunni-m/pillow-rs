@@ -7,6 +7,8 @@ from pathlib import Path
 
 from fontTools.fontBuilder import FontBuilder
 from fontTools.pens.ttGlyphPen import TTGlyphPen
+from fontTools.ttLib import TTFont, newTable
+from fontTools.ttLib.tables.ttProgram import Program
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -307,8 +309,21 @@ def build_render_coverage() -> None:
     builder.save(OUT_DIR / "render-coverage.ttf")
 
 
+def build_render_prep_only() -> None:
+    font = TTFont(OUT_DIR / "render-coverage.ttf", recalcTimestamp=False)
+    prep = newTable("prep")
+    program = Program()
+    # Three PUSHB[1] 0; POP pairs keep the program valid and side-effect-free
+    # while making prep_len > 7 so default-load fallback autohint is bypassed.
+    program.fromBytecode(bytes.fromhex("b0 00 21 b0 00 21 b0 00 21"))
+    prep.program = program
+    font["prep"] = prep
+    font.save(OUT_DIR / "render-prep-only.ttf", reorderTables=True)
+
+
 def main() -> None:
     build_render_coverage()
+    build_render_prep_only()
 
 
 if __name__ == "__main__":
