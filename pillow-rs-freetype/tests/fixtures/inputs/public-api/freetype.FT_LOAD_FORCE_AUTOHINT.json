@@ -924,6 +924,26 @@
             ]
           },
           {
+            "id": "script-latin-serif-overlap-break",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 580,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:serif-intermediate-overlap-break"
+            ]
+          },
+          {
             "id": "script-latin-tilde-top2-centering",
             "assets": {
               "font": {
