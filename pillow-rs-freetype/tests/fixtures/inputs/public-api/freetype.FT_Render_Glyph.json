@@ -1332,6 +1332,8 @@
                 "x": 0,
                 "y": 16
               },
+              "font_render_text": "\ue103",
+              "assert_font_render_mode_agrees": true,
               "glyph_index": 4,
               "load_flags": [
                 "FT_LOAD_NO_HINTING"
@@ -1357,6 +1359,8 @@
                 "x": 0,
                 "y": 16
               },
+              "font_render_text": "\ue100",
+              "assert_font_render_mode_agrees": true,
               "glyph_index": 1,
               "load_flags": [
                 "FT_LOAD_NO_HINTING"
@@ -1382,6 +1386,8 @@
                 "x": 0,
                 "y": 16
               },
+              "font_render_text": "\ue104",
+              "assert_font_render_mode_agrees": true,
               "glyph_index": 5,
               "load_flags": [
                 "FT_LOAD_NO_HINTING"
@@ -1407,6 +1413,8 @@
                 "x": 0,
                 "y": 16
               },
+              "font_render_text": "\ue101",
+              "assert_font_render_mode_agrees": true,
               "glyph_index": 2,
               "load_flags": [
                 "FT_LOAD_NO_HINTING"
@@ -1432,6 +1440,8 @@
                 "x": 0,
                 "y": 16
               },
+              "font_render_text": "\ue10b",
+              "assert_font_render_mode_agrees": true,
               "glyph_index": 12,
               "load_flags": [
                 "FT_LOAD_NO_HINTING"
@@ -1457,6 +1467,8 @@
                 "x": 0,
                 "y": 16
               },
+              "font_render_text": "\ue10c",
+              "assert_font_render_mode_agrees": true,
               "glyph_index": 13,
               "load_flags": [
                 "FT_LOAD_NO_HINTING"
@@ -1482,6 +1494,8 @@
                 "x": 0,
                 "y": 16
               },
+              "font_render_text": "\ue109",
+              "assert_font_render_mode_agrees": true,
               "glyph_index": 10,
               "load_flags": [
                 "FT_LOAD_NO_HINTING"
@@ -1507,6 +1521,8 @@
                 "x": 0,
                 "y": 16
               },
+              "font_render_text": "\ue10a",
+              "assert_font_render_mode_agrees": true,
               "glyph_index": 11,
               "load_flags": [
                 "FT_LOAD_NO_HINTING"
@@ -1515,6 +1531,33 @@
             },
             "coverage": [
               "render/sdf:centerline-segment"
+            ]
+          },
+          {
+            "id": "render-coverage-flat-horizontal-segment-sdf",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "font_render_text": "\ue10d",
+              "assert_font_render_mode_agrees": true,
+              "glyph_index": 14,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": [
+              "render/sdf:flat-horizontal-empty-rows"
             ]
           },
           {

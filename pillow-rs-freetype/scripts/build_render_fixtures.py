@@ -30,6 +30,7 @@ GLYPH_ORDER = [
     "sdf_centerline_segment",
     "mono_left_edge_dropout",
     "mono_bottom_edge_dropout",
+    "sdf_flat_horizontal_segment",
 ]
 
 
@@ -201,6 +202,19 @@ def sdf_centerline_segment_glyph():
     return pen.glyph()
 
 
+def sdf_flat_horizontal_segment_glyph():
+    pen = TTGlyphPen(None)
+
+    # Keep a non-empty outline whose control box collapses vertically so the
+    # SDF renderer takes its zero-rows early return on a public glyph route.
+    pen.moveTo((0, 0))
+    pen.lineTo((192, 0))
+    pen.lineTo((96, 0))
+    pen.closePath()
+
+    return pen.glyph()
+
+
 def mono_left_edge_dropout_glyph():
     pen = TTGlyphPen(None)
 
@@ -239,6 +253,7 @@ def build_render_coverage() -> None:
         "overlap_wide_overflow_flag": overlap_wide_overflow_flag_glyph(),
         "sdf_zero_length_segment": sdf_zero_length_segment_glyph(),
         "sdf_centerline_segment": sdf_centerline_segment_glyph(),
+        "sdf_flat_horizontal_segment": sdf_flat_horizontal_segment_glyph(),
         "mono_left_edge_dropout": mono_left_edge_dropout_glyph(),
         "mono_bottom_edge_dropout": mono_bottom_edge_dropout_glyph(),
     }
@@ -255,6 +270,7 @@ def build_render_coverage() -> None:
         "overlap_wide_overflow_flag": (9216, 0),
         "sdf_zero_length_segment": (256, 0),
         "sdf_centerline_segment": (256, 0),
+        "sdf_flat_horizontal_segment": (256, 0),
         "mono_left_edge_dropout": (256, 0),
         "mono_bottom_edge_dropout": (256, 0),
     }
@@ -276,6 +292,7 @@ def build_render_coverage() -> None:
             0xE10A: "sdf_centerline_segment",
             0xE10B: "mono_left_edge_dropout",
             0xE10C: "mono_bottom_edge_dropout",
+            0xE10D: "sdf_flat_horizontal_segment",
         }
     )
     builder.setupGlyf(glyphs)
