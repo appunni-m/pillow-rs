@@ -830,6 +830,7 @@ def build_latin_small_ignore() -> None:
         "latin_x",
         "latin_c",
         "latin_oslash",
+        "latin_small_top",
         "latin_g_cedilla",
     ]
     glyphs = {
@@ -852,6 +853,7 @@ def build_latin_small_ignore() -> None:
         # Keep U+00F8 on a unique glyph index so the adjustment database lookup
         # reaches AF_IGNORE_SMALL_TOP | AF_IGNORE_SMALL_BOTTOM for this row.
         "latin_oslash": ring_glyph(90, -40, 510, 560, 190, 100, 410, 420),
+        "latin_small_top": ring_glyph(90, 0, 510, 560, 190, 120, 410, 430),
         "latin_g_cedilla": rectangles_glyph(
             [
                 (90, 0, 520, 560),
@@ -866,6 +868,7 @@ def build_latin_small_ignore() -> None:
         "latin_x": (620, 120),
         "latin_c": (620, 90),
         "latin_oslash": (620, 90),
+        "latin_small_top": (620, 90),
         "latin_g_cedilla": (620, 90),
     }
     cmap = {
@@ -874,6 +877,7 @@ def build_latin_small_ignore() -> None:
         0x006F: "latin_o",
         0x0078: "latin_x",
         0x00F8: "latin_oslash",
+        0x0188: "latin_small_top",
         0x0122: "latin_g_cedilla",
     }
 
