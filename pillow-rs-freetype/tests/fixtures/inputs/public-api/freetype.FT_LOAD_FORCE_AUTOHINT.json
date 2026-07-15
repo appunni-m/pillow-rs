@@ -120,6 +120,26 @@
             ]
           },
           {
+            "id": "latin-many-widths",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-many-widths.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 111,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:many-standard-widths-cap"
+            ]
+          },
+          {
             "id": "latin-italic-no-horizontal",
             "assets": {
               "font": {
