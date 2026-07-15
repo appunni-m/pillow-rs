@@ -482,6 +482,369 @@
             ]
           },
           {
+            "id": "pure-cff-hlineto-missing-args-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 17,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:hlineto-missing-args-error"
+            ]
+          },
+          {
+            "id": "pure-cff-hmoveto-missing-args-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 18,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:hmoveto-missing-args-error"
+            ]
+          },
+          {
+            "id": "pure-cff-vmoveto-missing-args-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 19,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:vmoveto-missing-args-error"
+            ]
+          },
+          {
+            "id": "pure-cff-rmoveto-missing-args-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 20,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:rmoveto-missing-args-error"
+            ]
+          },
+          {
+            "id": "pure-cff-hvcurveto-missing-args-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 21,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:hvcurveto-missing-args-error"
+            ]
+          },
+          {
+            "id": "pure-cff-hvcurveto-trailing-args-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 22,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:hvcurveto-trailing-args-error"
+            ]
+          },
+          {
+            "id": "pure-cff-type2-escape-unsupported-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 23,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:type2-escaped-unsupported-error"
+            ]
+          },
+          {
+            "id": "pure-cff-type2-op-unsupported-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 24,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:type2-unsupported-op-error"
+            ]
+          },
+          {
+            "id": "pure-cff-type2-shortint-overflow-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 25,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:type2-shortint-overflow-error"
+            ]
+          },
+          {
+            "id": "pure-cff-rlineto-missing-args-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 26,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:rlineto-missing-args-error"
+            ]
+          },
+          {
+            "id": "pure-cff-rrcurveto-missing-args-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 27,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:rrcurveto-missing-args-error"
+            ]
+          },
+          {
+            "id": "pure-cff-type2-positive-overflow-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 28,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:type2-positive-overflow-error"
+            ]
+          },
+          {
+            "id": "pure-cff-type2-negative-overflow-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 29,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:type2-negative-overflow-error"
+            ]
+          },
+          {
+            "id": "pure-cff-type2-shortint-hmoveto-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 30,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "coverage": [
+              "tt/cff:type2-shortint-hmoveto"
+            ]
+          },
+          {
             "id": "dejavu-null-no-scale",
             "assets": {
               "font": {
