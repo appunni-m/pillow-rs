@@ -40,6 +40,20 @@ CUBIC_GLYPH_ORDER = [
     "fixed_hmoveto",
     "rlineto_initial_width",
     "rrcurveto_initial_width",
+    "hlineto_missing_args",
+    "hmoveto_missing_args",
+    "vmoveto_missing_args",
+    "rmoveto_missing_args",
+    "hvcurveto_missing_args",
+    "hvcurveto_trailing_args",
+    "type2_escape_unsupported",
+    "type2_op_unsupported",
+    "type2_shortint_overflow",
+    "rlineto_missing_args",
+    "rrcurveto_missing_args",
+    "type2_positive_overflow",
+    "type2_negative_overflow",
+    "type2_shortint_hmoveto",
 ]
 NAMES = {
     "familyName": "Hybrid OTTO Coverage",
@@ -143,6 +157,20 @@ def build_cubic_cff(path: Path) -> None:
         "fixed_hmoveto": (420, 0),
         "rlineto_initial_width": (420, 0),
         "rrcurveto_initial_width": (420, 0),
+        "hlineto_missing_args": (420, 0),
+        "hmoveto_missing_args": (420, 0),
+        "vmoveto_missing_args": (420, 0),
+        "rmoveto_missing_args": (420, 0),
+        "hvcurveto_missing_args": (420, 0),
+        "hvcurveto_trailing_args": (420, 0),
+        "type2_escape_unsupported": (420, 0),
+        "type2_op_unsupported": (420, 0),
+        "type2_shortint_overflow": (420, 0),
+        "rlineto_missing_args": (420, 0),
+        "rrcurveto_missing_args": (420, 0),
+        "type2_positive_overflow": (420, 0),
+        "type2_negative_overflow": (420, 0),
+        "type2_shortint_hmoveto": (420, 0),
     }
     builder = FontBuilder(UNITS_PER_EM, isTTF=False)
     builder.setupGlyphOrder(CUBIC_GLYPH_ORDER)
@@ -164,6 +192,20 @@ def build_cubic_cff(path: Path) -> None:
             0x4E: "fixed_hmoveto",
             0x4F: "rlineto_initial_width",
             0x50: "rrcurveto_initial_width",
+            0x51: "hlineto_missing_args",
+            0x52: "hmoveto_missing_args",
+            0x53: "vmoveto_missing_args",
+            0x54: "rmoveto_missing_args",
+            0x55: "hvcurveto_missing_args",
+            0x56: "hvcurveto_trailing_args",
+            0x57: "type2_escape_unsupported",
+            0x58: "type2_op_unsupported",
+            0x59: "type2_shortint_overflow",
+            0x5A: "rlineto_missing_args",
+            0x5B: "rrcurveto_missing_args",
+            0x5C: "type2_positive_overflow",
+            0x5D: "type2_negative_overflow",
+            0x5E: "type2_shortint_hmoveto",
         }
     )
     builder.setupHorizontalMetrics(metrics)
@@ -357,6 +399,99 @@ def build_cubic_cff(path: Path) -> None:
                     "rrcurveto",
                     "endchar",
                 ]
+            ),
+            "hlineto_missing_args": t2_program_charstring(
+                [
+                    "hlineto",
+                    "endchar",
+                ]
+            ),
+            "hmoveto_missing_args": t2_program_charstring(
+                [
+                    "hmoveto",
+                    "endchar",
+                ]
+            ),
+            "vmoveto_missing_args": t2_program_charstring(
+                [
+                    "vmoveto",
+                    "endchar",
+                ]
+            ),
+            "rmoveto_missing_args": t2_program_charstring(
+                [
+                    "rmoveto",
+                    "endchar",
+                ]
+            ),
+            "hvcurveto_missing_args": t2_program_charstring(
+                [
+                    10,
+                    20,
+                    30,
+                    "hvcurveto",
+                    "endchar",
+                ]
+            ),
+            "hvcurveto_trailing_args": t2_program_charstring(
+                [
+                    10,
+                    20,
+                    30,
+                    40,
+                    50,
+                    60,
+                    "hvcurveto",
+                    "endchar",
+                ]
+            ),
+            "type2_escape_unsupported": T2CharString(
+                bytecode=bytes([12, 0, 14]),
+                program=None,
+                private=None,
+                globalSubrs=[],
+            ),
+            "type2_op_unsupported": T2CharString(
+                bytecode=bytes([10, 14]),
+                program=None,
+                private=None,
+                globalSubrs=[],
+            ),
+            "type2_shortint_overflow": T2CharString(
+                bytecode=bytes([28]),
+                program=None,
+                private=None,
+                globalSubrs=[],
+            ),
+            "rlineto_missing_args": t2_program_charstring(
+                [
+                    "rlineto",
+                    "endchar",
+                ]
+            ),
+            "rrcurveto_missing_args": t2_program_charstring(
+                [
+                    "rrcurveto",
+                    "endchar",
+                ]
+            ),
+            "type2_positive_overflow": T2CharString(
+                bytecode=bytes([247]),
+                program=None,
+                private=None,
+                globalSubrs=[],
+            ),
+            "type2_negative_overflow": T2CharString(
+                bytecode=bytes([251]),
+                program=None,
+                private=None,
+                globalSubrs=[],
+            ),
+            "type2_shortint_hmoveto": T2CharString(
+                bytecode=bytes([28, 0, 0, 22, 14]),
+                program=None,
+                private=None,
+                globalSubrs=[],
             ),
         },
         {},
