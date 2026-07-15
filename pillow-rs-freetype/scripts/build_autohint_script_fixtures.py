@@ -667,6 +667,7 @@ def build_script_coverage() -> None:
     glyph_order.append("latin_serif_overlap_break")
     glyph_order.append("latin_tilde_top2_centering")
     glyph_order.append("latin_vertical_cusp")
+    glyph_order.append("latin_nonbase_tilde")
 
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
@@ -751,6 +752,9 @@ def build_script_coverage() -> None:
     glyphs["latin_vertical_cusp"] = latin_vertical_cusp_glyph()
     metrics["latin_vertical_cusp"] = (620, 100)
     cmap[0x0245] = "latin_vertical_cusp"
+    glyphs["latin_nonbase_tilde"] = top_tilde_glyph()
+    metrics["latin_nonbase_tilde"] = (0, 0)
+    cmap[0x0303] = "latin_nonbase_tilde"
 
     font = FontBuilder(UNITS_PER_EM, isTTF=True)
     font.setupGlyphOrder(glyph_order)
