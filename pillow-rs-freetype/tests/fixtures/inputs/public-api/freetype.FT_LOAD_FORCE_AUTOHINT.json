@@ -4719,6 +4719,27 @@
             ]
           },
           {
+            "id": "branch-script-u0245-target-mono-17",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 17,
+              "char_code": 581,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_MONO"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:branch-vertical-cusp-target-mono"
+            ]
+          },
+          {
             "id": "branch-script-u1e74-target-lcd-v-13",
             "assets": {
               "font": {
