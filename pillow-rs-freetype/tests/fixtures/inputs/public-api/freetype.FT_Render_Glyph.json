@@ -457,6 +457,56 @@
             ]
           },
           {
+            "id": "hinter-zero-height-no-scale-lcd",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 45,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ],
+              "render_mode": "FT_RENDER_MODE_LCD"
+            },
+            "coverage": [
+              "render:lcd-no-scale-zero-height"
+            ]
+          },
+          {
+            "id": "hinter-zero-width-no-scale-lcd-v",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 44,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ],
+              "render_mode": "FT_RENDER_MODE_LCD_V"
+            },
+            "coverage": [
+              "render:lcd-v-no-scale-zero-width"
+            ]
+          },
+          {
             "id": "dejavu-a-light",
             "assets": {
               "font": {
