@@ -177,6 +177,376 @@ pub fn FT_Bitmap_Copy(
     FT_Err_Ok
 }
 
+pub fn FT_Bitmap_Embolden(
+    library: Option<&FT_Library>,
+    bitmap: Option<&mut FT_Bitmap_C>,
+    x_strength: FT_Pos,
+    y_strength: FT_Pos,
+) -> FT_Error {
+    if library.is_none() {
+        return FT_Err_Invalid_Library_Handle as FT_Error;
+    }
+    let Some(bitmap) = bitmap else {
+        return FT_Err_Invalid_Argument;
+    };
+    if bitmap.buffer.is_null() {
+        return FT_Err_Invalid_Argument;
+    }
+
+    let Some(x_pixels) = ft_bitmap_strength_pixels(x_strength) else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(y_pixels) = ft_bitmap_strength_pixels(y_strength) else {
+        return FT_Err_Invalid_Argument;
+    };
+    if x_pixels == 0 && y_pixels == 0 {
+        return FT_Err_Ok;
+    }
+    if x_pixels < 0 || y_pixels < 0 {
+        return FT_Err_Invalid_Argument;
+    }
+
+    let mut x_pixels = x_pixels;
+    let mut y_pixels = y_pixels;
+    match i32::from(bitmap.pixel_mode) {
+        FT_PIXEL_MODE_GRAY2 | FT_PIXEL_MODE_GRAY4 => {
+            let (bits_per_pixel, num_grays) = if bitmap.pixel_mode == FT_PIXEL_MODE_GRAY2 as u8 {
+                (2, 4)
+            } else {
+                (4, 16)
+            };
+            let error = convert_public_bitmap_to_gray(bitmap, bits_per_pixel, num_grays);
+            if error != FT_Err_Ok {
+                return error;
+            }
+        }
+        FT_PIXEL_MODE_MONO => x_pixels = x_pixels.min(8),
+        FT_PIXEL_MODE_LCD => {
+            let Some(scaled) = x_pixels.checked_mul(3) else {
+                return FT_Err_Invalid_Argument;
+            };
+            x_pixels = scaled;
+        }
+        FT_PIXEL_MODE_LCD_V => {
+            let Some(scaled) = y_pixels.checked_mul(3) else {
+                return FT_Err_Invalid_Argument;
+            };
+            y_pixels = scaled;
+        }
+        FT_PIXEL_MODE_BGRA => return FT_Err_Ok,
+        _ => {}
+    }
+
+    let (Ok(x_pixels), Ok(y_pixels)) = (usize::try_from(x_pixels), usize::try_from(y_pixels))
+    else {
+        return FT_Err_Invalid_Argument;
+    };
+    let error = ft_bitmap_assure_buffer(bitmap, x_pixels, y_pixels);
+    if error != FT_Err_Ok {
+        return error;
+    }
+
+    let Some(mut bytes) = FT_Bitmap_Owned_Buffer_Bytes(Some(bitmap)) else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(pitch_abs) = ft_bitmap_pitch_abs(bitmap) else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Ok(rows) = usize::try_from(bitmap.rows) else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(required_len) = pitch_abs.checked_mul(rows.saturating_add(y_pixels)) else {
+        return FT_Err_Out_Of_Memory as FT_Error;
+    };
+    if bytes.len() < required_len {
+        return FT_Err_Invalid_Argument;
+    }
+
+    let pitch = bitmap.pitch as isize;
+    let start = if bitmap.pitch > 0 {
+        pitch_abs.checked_mul(y_pixels)
+    } else {
+        rows.checked_sub(1)
+            .and_then(|row| row.checked_mul(pitch_abs))
+    };
+    let Some(start) = start else {
+        return FT_Err_Invalid_Argument;
+    };
+    for row in 0..rows {
+        let Some(row_start) = (start as isize)
+            .checked_add((row as isize).saturating_mul(pitch))
+            .and_then(|offset| usize::try_from(offset).ok())
+        else {
+            return FT_Err_Invalid_Argument;
+        };
+        if row_start
+            .checked_add(pitch_abs)
+            .is_none_or(|end| end > bytes.len())
+        {
+            return FT_Err_Invalid_Argument;
+        }
+
+        for x in (0..pitch_abs).rev() {
+            let source = bytes[row_start + x];
+            for i in 1..=x_pixels {
+                if bitmap.pixel_mode == FT_PIXEL_MODE_MONO as u8 {
+                    // FreeType `src/base/ftbitmap.c:371-379` promotes the
+                    // byte to `int`, so the clamped `tmp >> 8` contributes 0.
+                    bytes[row_start + x] |= if i < 8 { source >> i } else { 0 };
+                    if x > 0 {
+                        bytes[row_start + x] |= bytes[row_start + x - 1] << (8 - i);
+                    }
+                } else if x >= i {
+                    let max_gray =
+                        u8::try_from(bitmap.num_grays.saturating_sub(1).min(255)).unwrap_or(255);
+                    let value = u16::from(bytes[row_start + x])
+                        .saturating_add(u16::from(bytes[row_start + x - i]));
+                    bytes[row_start + x] = if value > u16::from(max_gray) {
+                        max_gray
+                    } else {
+                        u8::try_from(value).unwrap_or(max_gray)
+                    };
+                    if bytes[row_start + x] == max_gray {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
+        for y in 1..=y_pixels {
+            let Some(dst_start) = (row_start as isize)
+                .checked_sub(pitch.saturating_mul(y as isize))
+                .and_then(|offset| usize::try_from(offset).ok())
+            else {
+                return FT_Err_Invalid_Argument;
+            };
+            if dst_start
+                .checked_add(pitch_abs)
+                .is_none_or(|end| end > bytes.len())
+            {
+                return FT_Err_Invalid_Argument;
+            }
+            for i in 0..pitch_abs {
+                bytes[dst_start + i] |= bytes[row_start + i];
+            }
+        }
+    }
+
+    let (Ok(x_add), Ok(y_add)) = (u32::try_from(x_pixels), u32::try_from(y_pixels)) else {
+        return FT_Err_Invalid_Argument;
+    };
+    let (Some(width), Some(rows)) = (
+        bitmap.width.checked_add(x_add),
+        bitmap.rows.checked_add(y_add),
+    ) else {
+        return FT_Err_Out_Of_Memory as FT_Error;
+    };
+    bitmap.width = width;
+    bitmap.rows = rows;
+    FT_Bitmap_Set_Owned_Buffer(Some(bitmap), bytes);
+    FT_Err_Ok
+}
+
+fn ft_bitmap_strength_pixels(strength: FT_Pos) -> Option<i32> {
+    let rounded = strength.checked_add(32)? & !63;
+    let pixels = rounded >> 6;
+    if pixels > i64::from(i32::MAX) {
+        return None;
+    }
+    i32::try_from(pixels).ok()
+}
+
+fn ft_bitmap_pitch_abs(bitmap: &FT_Bitmap_C) -> Option<usize> {
+    usize::try_from(bitmap.pitch.unsigned_abs()).ok()
+}
+
+fn ft_bitmap_assure_buffer(bitmap: &mut FT_Bitmap_C, x_pixels: usize, y_pixels: usize) -> FT_Error {
+    let (Ok(width), Ok(rows)) = (usize::try_from(bitmap.width), usize::try_from(bitmap.rows))
+    else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(pitch) = ft_bitmap_pitch_abs(bitmap) else {
+        return FT_Err_Invalid_Argument;
+    };
+    let (bpp, new_pitch) = match i32::from(bitmap.pixel_mode) {
+        FT_PIXEL_MODE_MONO => {
+            let Some(new_width) = width.checked_add(x_pixels) else {
+                return FT_Err_Out_Of_Memory as FT_Error;
+            };
+            (1usize, (new_width + 7) >> 3)
+        }
+        FT_PIXEL_MODE_GRAY2 => {
+            let Some(new_width) = width.checked_add(x_pixels) else {
+                return FT_Err_Out_Of_Memory as FT_Error;
+            };
+            (2, (new_width + 3) >> 2)
+        }
+        FT_PIXEL_MODE_GRAY4 => {
+            let Some(new_width) = width.checked_add(x_pixels) else {
+                return FT_Err_Out_Of_Memory as FT_Error;
+            };
+            (4, (new_width + 1) >> 1)
+        }
+        FT_PIXEL_MODE_GRAY | FT_PIXEL_MODE_LCD | FT_PIXEL_MODE_LCD_V => {
+            let Some(new_pitch) = width.checked_add(x_pixels) else {
+                return FT_Err_Out_Of_Memory as FT_Error;
+            };
+            (8, new_pitch)
+        }
+        _ => return FT_Err_Invalid_Glyph_Format,
+    };
+
+    let Some(required_len) = pitch.checked_mul(rows) else {
+        return FT_Err_Out_Of_Memory as FT_Error;
+    };
+    let Some(mut bytes) = FT_Bitmap_Owned_Buffer_Bytes(Some(bitmap)) else {
+        return FT_Err_Invalid_Argument;
+    };
+    if bytes.len() < required_len {
+        return FT_Err_Invalid_Argument;
+    }
+
+    if y_pixels == 0 && new_pitch <= pitch {
+        let bit_width = pitch.saturating_mul(8);
+        let Some(bit_last) = width
+            .checked_add(x_pixels)
+            .and_then(|value| value.checked_mul(bpp))
+        else {
+            return FT_Err_Out_Of_Memory as FT_Error;
+        };
+        if bit_last < bit_width {
+            let line_delta = bit_last >> 3;
+            let shift = bit_last & 7;
+            for row in 0..rows {
+                let Some(line) = row
+                    .checked_mul(pitch)
+                    .and_then(|base| base.checked_add(line_delta))
+                else {
+                    return FT_Err_Out_Of_Memory as FT_Error;
+                };
+                let Some(end) = row.checked_add(1).and_then(|next| next.checked_mul(pitch)) else {
+                    return FT_Err_Out_Of_Memory as FT_Error;
+                };
+                let mut write = line;
+                if shift > 0 {
+                    if write >= bytes.len() {
+                        return FT_Err_Invalid_Argument;
+                    }
+                    let mask = (0xFF00u16 >> shift) as u8;
+                    bytes[write] &= mask;
+                    write += 1;
+                }
+                if write < end {
+                    if end > bytes.len() {
+                        return FT_Err_Invalid_Argument;
+                    }
+                    bytes[write..end].fill(0);
+                }
+            }
+        }
+        FT_Bitmap_Set_Owned_Buffer(Some(bitmap), bytes);
+        return FT_Err_Ok;
+    }
+
+    let Some(new_rows) = rows.checked_add(y_pixels) else {
+        return FT_Err_Out_Of_Memory as FT_Error;
+    };
+    let Some(new_len) = new_rows.checked_mul(new_pitch) else {
+        return FT_Err_Out_Of_Memory as FT_Error;
+    };
+    let Some(row_len) = width
+        .checked_mul(bpp)
+        .and_then(|bits| bits.checked_add(7).map(|bits| bits >> 3))
+    else {
+        return FT_Err_Out_Of_Memory as FT_Error;
+    };
+    let mut new_bytes = vec![0; new_len];
+    if bitmap.pitch > 0 {
+        for row in 0..rows {
+            let src = row * pitch;
+            let dst = (row + y_pixels) * new_pitch;
+            new_bytes[dst..dst + row_len].copy_from_slice(&bytes[src..src + row_len]);
+        }
+    } else {
+        for row in 0..rows {
+            let src = row * pitch;
+            let dst = row * new_pitch;
+            new_bytes[dst..dst + row_len].copy_from_slice(&bytes[src..src + row_len]);
+        }
+    }
+    let Ok(new_pitch_i32) = i32::try_from(new_pitch) else {
+        return FT_Err_Out_Of_Memory as FT_Error;
+    };
+    bitmap.pitch = if bitmap.pitch < 0 {
+        -new_pitch_i32
+    } else {
+        new_pitch_i32
+    };
+    FT_Bitmap_Set_Owned_Buffer(Some(bitmap), new_bytes);
+    FT_Err_Ok
+}
+
+fn convert_public_bitmap_to_gray(
+    bitmap: &mut FT_Bitmap_C,
+    bits_per_pixel: usize,
+    num_grays: u16,
+) -> FT_Error {
+    let (Ok(width), Ok(rows)) = (usize::try_from(bitmap.width), usize::try_from(bitmap.rows))
+    else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(source_pitch) = ft_bitmap_pitch_abs(bitmap) else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(source_len) = source_pitch.checked_mul(rows) else {
+        return FT_Err_Out_Of_Memory as FT_Error;
+    };
+    let Some(source) = FT_Bitmap_Owned_Buffer_Bytes(Some(bitmap)) else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(new_len) = width.checked_mul(rows) else {
+        return FT_Err_Out_Of_Memory as FT_Error;
+    };
+    if source.len() < source_len {
+        return FT_Err_Invalid_Argument;
+    }
+    let mut target = vec![0; new_len];
+    let mask = ((1u16 << bits_per_pixel) - 1) as u8;
+    for row in 0..rows {
+        let src_row = if bitmap.pitch < 0 {
+            (rows - 1 - row) * source_pitch
+        } else {
+            row * source_pitch
+        };
+        let dst_row = if bitmap.pitch < 0 {
+            (rows - 1 - row) * width
+        } else {
+            row * width
+        };
+        for x in 0..width {
+            let bit_offset = x * bits_per_pixel;
+            let byte = source[src_row + bit_offset / 8];
+            let shift = 8 - bits_per_pixel - bit_offset % 8;
+            target[dst_row + x] = (byte >> shift) & mask;
+        }
+    }
+
+    let Ok(width_i32) = i32::try_from(width) else {
+        return FT_Err_Out_Of_Memory as FT_Error;
+    };
+    bitmap.pitch = if bitmap.pitch < 0 {
+        -width_i32
+    } else {
+        width_i32
+    };
+    bitmap.pixel_mode = FT_PIXEL_MODE_GRAY as u8;
+    bitmap.num_grays = num_grays;
+    FT_Bitmap_Set_Owned_Buffer(Some(bitmap), target);
+    FT_Err_Ok
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FT_Library {
     inner: api::Library,

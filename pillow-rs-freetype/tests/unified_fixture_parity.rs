@@ -8259,6 +8259,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--bitmap-copy".to_string(),
             string_param(params, "scenario")?.to_string(),
         ]),
+        "ftbitmap.bitmap_embolden" => Ok(vec![
+            "--bitmap-embolden".to_string(),
+            string_param(params, "scenario")?.to_string(),
+        ]),
         "fterrors.error_string" => Ok(vec![
             "--error-string".to_string(),
             error_string_codes_arg(params)?,
@@ -9616,6 +9620,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             bitmap_init_new_output(case, BitmapInitBackend::Rust)
         }
         "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::Rust),
+        "ftbitmap.bitmap_embolden" => bitmap_embolden_output(case, BitmapEmboldenBackend::Rust),
         operation if operation.starts_with("freetype.face_macro") => {
             let face = rust_new_face_without_size(case)?;
             rust_face_macro(&face, case)
@@ -10068,6 +10073,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             bitmap_init_new_output(case, BitmapInitBackend::CAbi)
         }
         "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::CAbi),
+        "ftbitmap.bitmap_embolden" => bitmap_embolden_output(case, BitmapEmboldenBackend::CAbi),
         operation if operation.starts_with("freetype.face_macro") => {
             let (library, face) = c_new_face_without_size(case)?;
             let output = c_face_macro(face, case);
@@ -10657,6 +10663,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             bitmap_init_new_output(case, BitmapInitBackend::Wasm)
         }
         "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::Wasm),
+        "ftbitmap.bitmap_embolden" => bitmap_embolden_output(case, BitmapEmboldenBackend::Wasm),
         operation if operation.starts_with("freetype.face_macro") => {
             let handle = wasm_new_face_without_size(case)?;
             let output = wasm_face_macro(handle, case);
@@ -23434,6 +23441,377 @@ fn bitmap_copy_target_bytes(
             FT_Bitmap_Owned_Buffer_Bytes(Some(&setup.target))
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum BitmapEmboldenBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn bitmap_embolden_output(
+    case: &InputCase,
+    backend: BitmapEmboldenBackend,
+) -> Result<RunOutput, String> {
+    let scenario = string_param(&case.inputs.params, "scenario")?;
+    let rows = bitmap_embolden_rows(scenario)?;
+    let mut output_rows = Vec::with_capacity(rows.len());
+    for row in rows {
+        let result = match backend {
+            BitmapEmboldenBackend::Rust => bitmap_embolden_rust(&row),
+            BitmapEmboldenBackend::CAbi => bitmap_embolden_c_abi(&row),
+            BitmapEmboldenBackend::Wasm => bitmap_embolden_wasm(&row),
+        };
+        output_rows.push(bitmap_embolden_row_json(&row, result?));
+    }
+    Ok(ok(json!({ "rows": output_rows })))
+}
+
+fn bitmap_embolden_rust(row: &BitmapEmboldenRow) -> Result<BitmapEmboldenResult, String> {
+    let mut bitmap = bitmap_embolden_record(row)?;
+    if let Some(bytes) = bitmap_embolden_bytes(row) {
+        FT_Bitmap_Set_Owned_Buffer(Some(&mut bitmap), bytes);
+    }
+    let library = FT_Init_FreeType();
+    let library = (!row.null_library).then_some(&library);
+    let bitmap_arg = (!row.null_bitmap).then_some(&mut bitmap);
+    let err = FT_Bitmap_Embolden(library, bitmap_arg, row.x_strength, row.y_strength);
+    let bytes = FT_Bitmap_Owned_Buffer_Bytes(Some(&bitmap));
+    Ok(BitmapEmboldenResult {
+        err,
+        bitmap: (!row.null_bitmap).then_some(bitmap),
+        bytes,
+    })
+}
+
+fn bitmap_embolden_c_abi(row: &BitmapEmboldenRow) -> Result<BitmapEmboldenResult, String> {
+    let source_bytes = bitmap_embolden_bytes(row).unwrap_or_default();
+    let mut bitmap = bitmap_embolden_record(row)?;
+    let mut c_bitmap = c_abi::FT_Bitmap {
+        rows: bitmap.rows,
+        width: bitmap.width,
+        pitch: bitmap.pitch,
+        buffer: if source_bytes.is_empty() {
+            ptr::null_mut()
+        } else {
+            source_bytes.as_ptr().cast_mut()
+        },
+        num_grays: bitmap.num_grays,
+        pixel_mode: bitmap.pixel_mode.into(),
+        palette_mode: bitmap.palette_mode,
+        palette: bitmap.palette,
+    };
+    let mut library = ptr::null_mut();
+    if !row.null_library {
+        let err = c_abi::FT_Init_FreeType(&mut library);
+        if err != FT_Err_Ok {
+            return Ok(BitmapEmboldenResult {
+                err,
+                bitmap: Some(bitmap),
+                bytes: Some(source_bytes),
+            });
+        }
+    }
+    let bitmap_ptr = if row.null_bitmap {
+        ptr::null_mut()
+    } else {
+        &mut c_bitmap
+    };
+    let err = c_abi::FT_Bitmap_Embolden(library, bitmap_ptr, row.x_strength, row.y_strength);
+    if !row.null_bitmap {
+        bitmap = bitmap_from_c_record(&c_bitmap);
+    }
+    let bytes = if err == FT_Err_Ok {
+        FT_Bitmap_Owned_Buffer_Bytes(Some(&bitmap))
+    } else if row.null_buffer || row.null_bitmap {
+        None
+    } else {
+        Some(source_bytes)
+    };
+    if !library.is_null() {
+        c_done_library(library);
+    }
+    Ok(BitmapEmboldenResult {
+        err,
+        bitmap: (!row.null_bitmap).then_some(bitmap),
+        bytes,
+    })
+}
+
+fn bitmap_embolden_wasm(row: &BitmapEmboldenRow) -> Result<BitmapEmboldenResult, String> {
+    let source_bytes = bitmap_embolden_bytes(row).unwrap_or_default();
+    let mut bitmap = bitmap_embolden_record(row)?;
+    let mut wasm_bitmap = wasm_abi::FontdoneWasmBitmap {
+        rows: bitmap.rows,
+        width: bitmap.width,
+        pitch: bitmap.pitch,
+        buffer: if source_bytes.is_empty() {
+            ptr::null()
+        } else {
+            source_bytes.as_ptr()
+        },
+        buffer_len: source_bytes.len(),
+        num_grays: bitmap.num_grays,
+        pixel_mode: bitmap.pixel_mode.into(),
+        palette_mode: bitmap.palette_mode,
+        palette: bitmap.palette,
+    };
+    let bitmap_ptr = if row.null_bitmap {
+        ptr::null_mut()
+    } else {
+        &mut wasm_bitmap
+    };
+    let err = wasm_abi::fontdone_wasm_bitmap_embolden(
+        if row.null_library { 0 } else { 1 },
+        bitmap_ptr,
+        row.x_strength,
+        row.y_strength,
+    );
+    if !row.null_bitmap {
+        bitmap = bitmap_from_wasm_record(&wasm_bitmap);
+    }
+    let bytes = if err == FT_Err_Ok {
+        FT_Bitmap_Owned_Buffer_Bytes(Some(&bitmap))
+    } else if row.null_buffer || row.null_bitmap {
+        None
+    } else {
+        Some(source_bytes)
+    };
+    Ok(BitmapEmboldenResult {
+        err,
+        bitmap: (!row.null_bitmap).then_some(bitmap),
+        bytes,
+    })
+}
+
+fn bitmap_embolden_row_json(row: &BitmapEmboldenRow, result: BitmapEmboldenResult) -> Value {
+    json!({
+        "label": row.label,
+        "pixel_mode": row.pixel_mode,
+        "negative_pitch": row.negative_pitch,
+        "x_strength": row.x_strength,
+        "y_strength": row.y_strength,
+        "error": result.err,
+        "bitmap": result.bitmap.as_ref().map(bitmap_record_json),
+        "buffer_hex": result.bytes.as_deref().map_or_else(String::new, hex_bytes),
+        "buffer_len": result.bytes.as_ref().map_or(0, Vec::len),
+        "buffer_identity_class": if result.bytes.is_some() { "owned" } else { "null" }
+    })
+}
+
+fn bitmap_embolden_rows(scenario: &str) -> Result<Vec<BitmapEmboldenRow>, String> {
+    let mut rows = Vec::new();
+    match scenario {
+        "success_gray_and_packed_modes" => {
+            for pixel_mode in [
+                FT_PIXEL_MODE_MONO,
+                FT_PIXEL_MODE_GRAY2,
+                FT_PIXEL_MODE_GRAY4,
+                FT_PIXEL_MODE_GRAY,
+                FT_PIXEL_MODE_LCD,
+                FT_PIXEL_MODE_LCD_V,
+                FT_PIXEL_MODE_BGRA,
+            ] {
+                rows.push(BitmapEmboldenRow::new(
+                    "mode",
+                    pixel_mode as u8,
+                    false,
+                    64,
+                    96,
+                ));
+            }
+        }
+        "success_strength_rounding_and_zero" => {
+            for (x_strength, y_strength) in [(0, 0), (32, 32), (64, 96), (512, 64)] {
+                rows.push(BitmapEmboldenRow::new(
+                    "strength",
+                    FT_PIXEL_MODE_GRAY as u8,
+                    false,
+                    x_strength,
+                    y_strength,
+                ));
+            }
+        }
+        "success_gray2_gray4_convert_to_gray" => {
+            for pixel_mode in [FT_PIXEL_MODE_GRAY2, FT_PIXEL_MODE_GRAY4] {
+                rows.push(BitmapEmboldenRow::new(
+                    "packed-positive",
+                    pixel_mode as u8,
+                    false,
+                    64,
+                    96,
+                ));
+                rows.push(BitmapEmboldenRow::new(
+                    "packed-negative",
+                    pixel_mode as u8,
+                    true,
+                    64,
+                    96,
+                ));
+            }
+        }
+        "error_mono_strength_limit" => {
+            rows.push(BitmapEmboldenRow::new(
+                "mono-clamps-xstrength",
+                FT_PIXEL_MODE_MONO as u8,
+                false,
+                1024,
+                64,
+            ));
+            rows.push(BitmapEmboldenRow::new(
+                "mono-clamps-xstrength-negative-pitch",
+                FT_PIXEL_MODE_MONO as u8,
+                true,
+                1024,
+                64,
+            ));
+        }
+        "error_invalid_arguments_or_modes" => {
+            rows.push(BitmapEmboldenRow {
+                label: "null-library",
+                null_library: true,
+                ..BitmapEmboldenRow::new("null-library", FT_PIXEL_MODE_GRAY as u8, false, 64, 64)
+            });
+            rows.push(BitmapEmboldenRow {
+                label: "null-bitmap",
+                null_bitmap: true,
+                ..BitmapEmboldenRow::new("null-bitmap", FT_PIXEL_MODE_GRAY as u8, false, 64, 64)
+            });
+            rows.push(BitmapEmboldenRow {
+                label: "null-buffer",
+                null_buffer: true,
+                ..BitmapEmboldenRow::new("null-buffer", FT_PIXEL_MODE_GRAY as u8, false, 64, 64)
+            });
+            rows.push(BitmapEmboldenRow::new(
+                "unsupported-mode",
+                99,
+                false,
+                64,
+                64,
+            ));
+            rows.push(BitmapEmboldenRow::new(
+                "negative-strength",
+                FT_PIXEL_MODE_GRAY as u8,
+                false,
+                -64,
+                0,
+            ));
+        }
+        "ownership_reallocates_bitmap_buffer" => {
+            rows.push(BitmapEmboldenRow::new(
+                "realloc-positive-pitch",
+                FT_PIXEL_MODE_GRAY as u8,
+                false,
+                64,
+                96,
+            ));
+            rows.push(BitmapEmboldenRow::new(
+                "realloc-negative-pitch",
+                FT_PIXEL_MODE_GRAY as u8,
+                true,
+                64,
+                96,
+            ));
+        }
+        other => return Err(format!("unsupported bitmap_embolden scenario {other}")),
+    }
+    Ok(rows)
+}
+
+fn bitmap_embolden_record(row: &BitmapEmboldenRow) -> Result<FT_Bitmap_C, String> {
+    let width = 5;
+    let rows = 3;
+    let pitch = bitmap_embolden_pitch(row.pixel_mode, width)?;
+    Ok(FT_Bitmap_C {
+        rows,
+        width,
+        pitch: if row.negative_pitch { -pitch } else { pitch },
+        buffer: if row.null_buffer {
+            ptr::null_mut()
+        } else {
+            ptr::with_exposed_provenance_mut(0x1)
+        },
+        num_grays: match i32::from(row.pixel_mode) {
+            FT_PIXEL_MODE_GRAY2 => 4,
+            FT_PIXEL_MODE_GRAY4 => 16,
+            _ => 256,
+        },
+        pixel_mode: row.pixel_mode,
+        palette_mode: 0,
+        palette: ptr::null_mut(),
+    })
+}
+
+fn bitmap_embolden_pitch(pixel_mode: u8, width: u32) -> Result<i32, String> {
+    let pitch = match i32::from(pixel_mode) {
+        FT_PIXEL_MODE_MONO => ((width + 7) >> 3) + 1,
+        FT_PIXEL_MODE_GRAY2 => ((width * 2 + 7) >> 3) + 1,
+        FT_PIXEL_MODE_GRAY4 => ((width * 4 + 7) >> 3) + 1,
+        FT_PIXEL_MODE_BGRA => width * 4,
+        _ => width + 2,
+    };
+    i32::try_from(pitch).map_err(|err| err.to_string())
+}
+
+fn bitmap_embolden_bytes(row: &BitmapEmboldenRow) -> Option<Vec<u8>> {
+    if row.null_buffer || row.null_bitmap {
+        return None;
+    }
+    let bitmap = bitmap_embolden_record(row).ok()?;
+    let len = usize::try_from(bitmap.pitch.unsigned_abs())
+        .ok()?
+        .checked_mul(usize::try_from(bitmap.rows).ok()?)?;
+    Some(
+        (0..len)
+            .map(|index| {
+                ((index * 37
+                    + usize::from(row.pixel_mode) * 11
+                    + usize::from(row.negative_pitch) * 5)
+                    & 0xFF) as u8
+            })
+            .collect(),
+    )
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BitmapEmboldenRow {
+    label: &'static str,
+    pixel_mode: u8,
+    negative_pitch: bool,
+    x_strength: i64,
+    y_strength: i64,
+    null_library: bool,
+    null_bitmap: bool,
+    null_buffer: bool,
+}
+
+impl BitmapEmboldenRow {
+    fn new(
+        label: &'static str,
+        pixel_mode: u8,
+        negative_pitch: bool,
+        x_strength: i64,
+        y_strength: i64,
+    ) -> Self {
+        Self {
+            label,
+            pixel_mode,
+            negative_pitch,
+            x_strength,
+            y_strength,
+            null_library: false,
+            null_bitmap: false,
+            null_buffer: false,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct BitmapEmboldenResult {
+    err: FT_Error,
+    bitmap: Option<FT_Bitmap_C>,
+    bytes: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, Copy)]
