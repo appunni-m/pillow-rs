@@ -312,7 +312,10 @@ pub(crate) fn render_loaded_outline(
     mode: RenderMode,
     scratch: &mut crate::grays::RasterScratch,
 ) -> Result<RenderedBitmap, FontError> {
-    if outline.is_empty() {
+    // C `ft_smooth_render` presets normal-mode empty outlines, then exits on
+    // zero rows/pitch (`ftsmooth.c:595-603`); keep non-normal modes on their
+    // established empty-slot path because they expose different bitmap shapes.
+    if outline.is_empty() && mode != RenderMode::Normal {
         return render_empty_loaded_outline(mode);
     }
 
