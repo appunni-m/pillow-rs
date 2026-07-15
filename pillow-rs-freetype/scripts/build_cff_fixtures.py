@@ -54,6 +54,9 @@ CUBIC_GLYPH_ORDER = [
     "type2_positive_overflow",
     "type2_negative_overflow",
     "type2_shortint_hmoveto",
+    "type2_no_endchar_eof",
+    "rlineto_secondary_malformed",
+    "rrcurveto_secondary_malformed",
 ]
 NAMES = {
     "familyName": "Hybrid OTTO Coverage",
@@ -171,6 +174,9 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
         "type2_positive_overflow": (420, 0),
         "type2_negative_overflow": (420, 0),
         "type2_shortint_hmoveto": (420, 0),
+        "type2_no_endchar_eof": (420, 0),
+        "rlineto_secondary_malformed": (420, 0),
+        "rrcurveto_secondary_malformed": (420, 0),
     }
     builder = FontBuilder(UNITS_PER_EM, isTTF=False)
     builder.setupGlyphOrder(CUBIC_GLYPH_ORDER)
@@ -206,6 +212,9 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
             0x5C: "type2_positive_overflow",
             0x5D: "type2_negative_overflow",
             0x5E: "type2_shortint_hmoveto",
+            0x5F: "type2_no_endchar_eof",
+            0x60: "rlineto_secondary_malformed",
+            0x61: "rrcurveto_secondary_malformed",
         }
     )
     builder.setupHorizontalMetrics(metrics)
@@ -492,6 +501,30 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
                 program=None,
                 private=None,
                 globalSubrs=[],
+            ),
+            "type2_no_endchar_eof": T2CharString(
+                bytecode=bytes([139, 22]),
+                program=None,
+                private=None,
+                globalSubrs=[],
+            ),
+            "rlineto_secondary_malformed": t2_program_charstring(
+                [
+                    0,
+                    "hmoveto",
+                    10,
+                    "rlineto",
+                    "endchar",
+                ]
+            ),
+            "rrcurveto_secondary_malformed": t2_program_charstring(
+                [
+                    0,
+                    "hmoveto",
+                    10,
+                    "rrcurveto",
+                    "endchar",
+                ]
             ),
         },
         {},
