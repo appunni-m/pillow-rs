@@ -5,6 +5,7 @@
 //! for the subset needed by the FreeType-compatible renderer (head, maxp, hhea,
 //! hmtx, kern, cmap, name, loca, glyf, OS/2).
 
+pub mod cff;
 pub mod cmap;
 pub mod fvar;
 pub mod gasp;

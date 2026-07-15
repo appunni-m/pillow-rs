@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 
+use crate::tt::cff::CffTable;
 use crate::tt::cmap::CmapTable;
 use crate::tt::fvar::FvarTable;
 use crate::tt::gasp::GaspTable;
@@ -47,6 +48,7 @@ pub struct FontData {
     pub hdmx: Option<HdmxTable>,
     pub kern: Option<KernTable>,
     pub sbit: Option<SbitTable>,
+    pub cff: Option<CffTable>,
     pub loca_data: Vec<u8>,
     pub glyf_data: Vec<u8>,
     pub size_pt: Cell<f32>,
@@ -91,6 +93,13 @@ impl FontData {
             if let Some(outline) = cache.get(&glyph_index) {
                 return Ok(Rc::clone(outline));
             }
+        }
+        if let Some(cff) = &self.cff {
+            let outline = Rc::new(cff.load_glyph(glyph_index)?);
+            self.glyph_cache
+                .borrow_mut()
+                .insert(glyph_index, Rc::clone(&outline));
+            return Ok(outline);
         }
         let outline = Rc::new(crate::tt::glyf::load_glyph(
             &self.glyf_data,

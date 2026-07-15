@@ -68,6 +68,8 @@ pub struct GlyphOutline {
     pub components: Vec<CompositeComponent>,
     /// FreeType `FT_Outline.flags` bits carried by the glyph loader.
     pub outline_flags: u32,
+    /// True for Type2/CFF outlines whose off-curve points can be cubic.
+    pub has_cubic_tags: bool,
 }
 
 /// A 2×2 fixed-point transform for a composite component (16.16).
@@ -318,6 +320,7 @@ fn load_glyph_inner(
             // C: TT_Load_Glyph keeps OVERLAP_COMPOUND only from the first
             // subglyph flags (`ttgload.c:1917-1920`).
             outline_flags,
+            has_cubic_tags: false,
         })
     }
 }
@@ -437,6 +440,7 @@ fn load_glyph_scaled_inner(
         instructions: composite.instructions,
         components: composite.components,
         outline_flags,
+        has_cubic_tags: false,
     }
 }
 
@@ -606,6 +610,7 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
         // tag in `FT_Outline.flags`, then masks public point tags back to the
         // curve bit (`ttgload.c:459-461, 530-532`).
         outline_flags,
+        has_cubic_tags: false,
     })
 }
 

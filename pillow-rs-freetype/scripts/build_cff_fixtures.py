@@ -27,9 +27,14 @@ NAMES = {
 }
 
 
-def t2_charstring(rectangle: bool = False):
+def t2_charstring(rectangle: bool = False, cubic: bool = False):
     pen = T2CharStringPen(600, None)
-    if rectangle:
+    if cubic:
+        pen.moveTo((128, 0))
+        pen.curveTo((240, 900), (720, 900), (832, 0))
+        pen.moveTo((128, 0))
+        pen.curveTo((300, 1120), (660, 1120), (832, 0))
+    elif rectangle:
         pen.moveTo((80, 0))
         pen.lineTo((520, 0))
         pen.lineTo((520, 700))
@@ -71,6 +76,42 @@ def build_cff(path: Path) -> None:
             "Weight": NAMES["styleName"],
         },
         {".notdef": t2_charstring(), "A": t2_charstring(rectangle=True)},
+        {},
+    )
+    builder.setupMaxp()
+    builder.save(path)
+
+
+def build_cubic_cff(path: Path) -> None:
+    names = {
+        "familyName": "Pure CFF Cubic Coverage",
+        "styleName": "Regular",
+        "uniqueFontIdentifier": "Pure CFF Cubic Coverage Regular",
+        "fullName": "Pure CFF Cubic Coverage Regular",
+        "psName": "PureCFFCubicCoverage-Regular",
+    }
+    metrics = {".notdef": (900, 0), "A": (900, 128)}
+    builder = FontBuilder(UNITS_PER_EM, isTTF=False)
+    builder.setupGlyphOrder(GLYPH_ORDER)
+    builder.setupCharacterMap({0x41: "A"})
+    builder.setupHorizontalMetrics(metrics)
+    builder.setupHorizontalHeader(ascent=1200, descent=-200)
+    builder.setupNameTable(names)
+    builder.setupOS2(
+        sTypoAscender=1200,
+        sTypoDescender=-200,
+        usWinAscent=1200,
+        usWinDescent=200,
+    )
+    builder.setupPost()
+    builder.setupCFF(
+        names["psName"],
+        {
+            "FullName": names["fullName"],
+            "FamilyName": names["familyName"],
+            "Weight": names["styleName"],
+        },
+        {".notdef": t2_charstring(), "A": t2_charstring(cubic=True)},
         {},
     )
     builder.setupMaxp()
@@ -122,8 +163,17 @@ def write_hybrid_otto_face_info() -> None:
         cff_font.save(out, reorderTables=True)
 
 
+def write_pure_cff_cubic() -> None:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = OUT_DIR / "pure-cff-cubic.otf"
+    if out.exists() or out.is_symlink():
+        out.unlink()
+    build_cubic_cff(out)
+
+
 def main() -> None:
     write_hybrid_otto_face_info()
+    write_pure_cff_cubic()
 
 
 if __name__ == "__main__":
