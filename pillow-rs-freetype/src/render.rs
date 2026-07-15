@@ -572,20 +572,25 @@ fn render_sdf(
     top: i32,
     spread: i32,
 ) -> Result<RenderedBitmap, FontError> {
-    let width = outline.cbox_x_max - outline.cbox_x_min + spread * 2;
-    let rows = outline.cbox_y_max - outline.cbox_y_min + spread * 2;
-    if width <= 0 || rows <= 0 {
+    let base_width = outline.cbox_x_max - outline.cbox_x_min;
+    let base_rows = outline.cbox_y_max - outline.cbox_y_min;
+    // FreeType's SDF renderer first presets a normal bitmap via
+    // `ft_glyphslot_preset_bitmap`, then exits before padding if that base
+    // bitmap has zero rows or pitch (`ftobjs.c:374-539`, `ftsdfrend.c:295-305`).
+    if base_width <= 0 || base_rows <= 0 {
         return Ok(RenderedBitmap {
             width: 0,
             rows: 0,
             pitch: 0,
             pixel_mode: PixelMode::Gray,
             num_grays: 255,
-            left: left - spread,
-            top: top + spread,
+            left: 0,
+            top: 0,
             buffer: Vec::new(),
         });
     }
+    let width = base_width + spread * 2;
+    let rows = base_rows + spread * 2;
 
     // C: `ft_sdf_render` pads the normal preset bitmap by the renderer spread,
     // then translates the outline by `-bitmap_left, rows - bitmap_top`
