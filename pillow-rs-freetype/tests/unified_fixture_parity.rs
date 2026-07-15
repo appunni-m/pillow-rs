@@ -19830,6 +19830,7 @@ fn font_error_to_ft(error: FontError) -> FT_Error {
         FontError::UnsupportedCmapFormat(_) => FT_Err_Invalid_CharMap_Format,
         FontError::RasterOverflow => FT_Err_Raster_Overflow,
         FontError::InvalidOutline(_) => FT_Err_Invalid_Outline,
+        FontError::ExecutionTooLong => FT_Err_Execution_Too_Long as FT_Error,
         FontError::CannotRenderGlyph(_) => FT_Err_Cannot_Render_Glyph,
         FontError::UnsupportedLoadFlags(_) => FT_Err_Unimplemented_Feature,
         FontError::InvalidArgument(_) => FT_Err_Invalid_Argument,

@@ -24,6 +24,10 @@ pub enum FontError {
     #[error("Invalid glyph outline: {0}")]
     InvalidOutline(String),
 
+    /// TrueType bytecode exceeded FreeType's runnable instruction limit.
+    #[error("TrueType bytecode execution too long")]
+    ExecutionTooLong,
+
     /// The loaded glyph slot format cannot be rendered.
     #[error("Cannot render glyph: {0}")]
     CannotRenderGlyph(String),
@@ -71,6 +75,12 @@ mod tests {
     fn invalid_outline_displays_message() {
         let err = FontError::InvalidOutline("bad contour".into());
         assert_eq!(err.to_string(), "Invalid glyph outline: bad contour");
+    }
+
+    #[test]
+    fn execution_too_long_has_static_message() {
+        let err = FontError::ExecutionTooLong;
+        assert_eq!(err.to_string(), "TrueType bytecode execution too long");
     }
 
     #[test]

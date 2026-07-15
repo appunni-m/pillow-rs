@@ -87,6 +87,14 @@ def write_fpgm_call_errors() -> None:
     save_font("hinter-fpgm-call-errors.ttf", font)
 
 
+def write_execution_too_long_loop() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    # C `TT_RunIns` stops this negative JMPR loop with Execution_Too_Long.
+    # The bytecode lands back at the PUSHW so the operand stack stays bounded.
+    font["glyf"]["base"].program = program_from_bytes(bytes.fromhex("b8 ff fd 1c"))
+    save_font("hinter-execution-too-long-loop.ttf", font)
+
+
 def write_fpgm_fdef_index_overflow() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     # FDEF 256 is beyond the fixed TT_DefRecord array range.  FreeType rejects
@@ -145,6 +153,7 @@ def main() -> None:
     write_prep_redefine_defs()
     write_fpgm_loopcall()
     write_fpgm_call_errors()
+    write_execution_too_long_loop()
     write_fpgm_fdef_index_overflow()
     write_idef_recursive_depth()
     write_fpgm_nested_fdef()
