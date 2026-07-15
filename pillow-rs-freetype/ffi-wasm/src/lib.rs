@@ -158,6 +158,38 @@ pub extern "C" fn fontdone_wasm_bitmap_copy(
     err
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_bitmap_embolden(
+    library_handle: usize,
+    bitmap: *mut FontdoneWasmBitmap,
+    x_strength: i64,
+    y_strength: i64,
+) -> i32 {
+    if library_handle == 0 {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as i32;
+    }
+    let Some(bitmap_ref) = (unsafe { bitmap.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut bitmap_view = wasm_bitmap_to_rust(bitmap_ref);
+    if let Some(bytes) = wasm_bitmap_bytes(bitmap_ref) {
+        rust_ffi::FT_Bitmap_Set_Owned_Buffer(Some(&mut bitmap_view), bytes);
+    }
+
+    let err = rust_ffi::FT_Bitmap_Embolden(
+        Some(&library),
+        Some(&mut bitmap_view),
+        x_strength,
+        y_strength,
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        copy_rust_bitmap_record_to_wasm(bitmap_ref, &bitmap_view);
+    }
+    err
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmGlyphSlot {

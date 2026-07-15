@@ -115,6 +115,7 @@ typedef struct FT_Bitmap_ {
 void FT_Bitmap_Init(FT_Bitmap* abitmap);
 void FT_Bitmap_New(FT_Bitmap* abitmap);
 FT_Error FT_Bitmap_Copy(FT_Library library, const FT_Bitmap* source, FT_Bitmap* target);
+FT_Error FT_Bitmap_Embolden(FT_Library library, FT_Bitmap* bitmap, FT_Pos xStrength, FT_Pos yStrength);
 
 typedef struct FT_SfntName_ {
   FT_UShort platform_id;

@@ -239,6 +239,160 @@ static int emit_bitmap_copy(const char* scenario) {
     return 0;
 }
 
+static int bitmap_embolden_pitch(unsigned char pixel_mode, unsigned int width) {
+    switch (pixel_mode) {
+    case FT_PIXEL_MODE_MONO:
+      return (int)((width + 7) >> 3) + 1;
+    case FT_PIXEL_MODE_GRAY2:
+      return (int)((width * 2 + 7) >> 3) + 1;
+    case FT_PIXEL_MODE_GRAY4:
+      return (int)((width * 4 + 7) >> 3) + 1;
+    case FT_PIXEL_MODE_BGRA:
+      return (int)(width * 4);
+    default:
+      return (int)width + 2;
+    }
+}
+
+static int bitmap_embolden_alloc(FT_Bitmap* bitmap, unsigned char pixel_mode, int negative_pitch) {
+    unsigned int width = 5;
+    unsigned int rows = 3;
+    int pitch = bitmap_embolden_pitch(pixel_mode, width);
+    size_t len = (size_t)pitch * rows;
+    unsigned char* bytes = (unsigned char*)malloc(len ? len : 1);
+    if (!bytes) {
+      return 1;
+    }
+    for (size_t i = 0; i < len; i++) {
+      bytes[i] = (unsigned char)((i * 37 + pixel_mode * 11 + (negative_pitch ? 5 : 0)) & 0xFF);
+    }
+    bitmap->rows = rows;
+    bitmap->width = width;
+    bitmap->pitch = negative_pitch ? -pitch : pitch;
+    bitmap->buffer = bytes;
+    bitmap->num_grays = pixel_mode == FT_PIXEL_MODE_GRAY2 ? 4 :
+                        pixel_mode == FT_PIXEL_MODE_GRAY4 ? 16 : 256;
+    bitmap->pixel_mode = pixel_mode;
+    bitmap->palette_mode = 0;
+    bitmap->palette = NULL;
+    return 0;
+}
+
+static void print_bitmap_embolden_row(
+    const char* label,
+    FT_Library library_arg,
+    FT_Library cleanup_library,
+    unsigned char pixel_mode,
+    int negative_pitch,
+    FT_Pos xstrength,
+    FT_Pos ystrength,
+    int null_bitmap,
+    int null_buffer)
+{
+    FT_Bitmap bitmap;
+    FT_Bitmap* bitmap_arg = &bitmap;
+    FT_Bitmap_Init(&bitmap);
+    if (!null_bitmap) {
+        if (bitmap_embolden_alloc(&bitmap, pixel_mode, negative_pitch)) {
+            printf("{\"label\":\"%s\",\"error\":%d,\"bitmap\":null,\"buffer_hex\":\"\",\"buffer_len\":0,\"buffer_identity_class\":\"null\"}", label, FT_Err_Out_Of_Memory);
+            return;
+        }
+        if (null_buffer) {
+            free(bitmap.buffer);
+            bitmap.buffer = NULL;
+        }
+    } else {
+        bitmap_arg = NULL;
+    }
+
+    FT_Error err = FT_Bitmap_Embolden(library_arg, bitmap_arg, xstrength, ystrength);
+    size_t len = bitmap_arg && bitmap.buffer ? bitmap_len(&bitmap) : 0;
+    printf("{\"label\":\"%s\",\"pixel_mode\":%u,\"negative_pitch\":", label, pixel_mode);
+    print_json_bool(negative_pitch);
+    printf(",\"x_strength\":%ld,\"y_strength\":%ld,\"error\":%d,\"bitmap\":",
+           (long)xstrength, (long)ystrength, err);
+    if (bitmap_arg) {
+        print_bitmap_fields(&bitmap);
+    } else {
+        printf("null");
+    }
+    printf(",\"buffer_hex\":\"");
+    if (bitmap_arg && bitmap.buffer && len > 0) {
+        print_hex_bytes(bitmap.buffer, (long)len);
+    }
+    printf("\",\"buffer_len\":%zu,\"buffer_identity_class\":\"%s\"}",
+           len, bitmap_arg && bitmap.buffer ? "owned" : "null");
+
+    if (bitmap_arg && bitmap.buffer) {
+        if (cleanup_library) {
+            FT_Bitmap_Done(cleanup_library, &bitmap);
+        } else {
+            free(bitmap.buffer);
+        }
+    }
+}
+
+static int emit_bitmap_embolden(const char* scenario) {
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf("}\n");
+        return 0;
+    }
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    int first = 1;
+#define EMIT_ROW(label, lib, mode, neg, xs, ys, null_bitmap, null_buffer) \
+    do { \
+        if (!first) printf(","); \
+        first = 0; \
+        print_bitmap_embolden_row(label, lib, library, mode, neg, xs, ys, null_bitmap, null_buffer); \
+    } while (0)
+
+    if (streq(scenario, "success_gray_and_packed_modes")) {
+        unsigned char modes[] = { FT_PIXEL_MODE_MONO, FT_PIXEL_MODE_GRAY2, FT_PIXEL_MODE_GRAY4, FT_PIXEL_MODE_GRAY, FT_PIXEL_MODE_LCD, FT_PIXEL_MODE_LCD_V, FT_PIXEL_MODE_BGRA };
+        for (size_t i = 0; i < sizeof(modes) / sizeof(modes[0]); i++) {
+            EMIT_ROW("mode", library, modes[i], 0, 64, 96, 0, 0);
+        }
+    } else if (streq(scenario, "success_strength_rounding_and_zero")) {
+        FT_Pos strengths[][2] = { {0, 0}, {32, 32}, {64, 96}, {512, 64} };
+        for (size_t i = 0; i < sizeof(strengths) / sizeof(strengths[0]); i++) {
+            EMIT_ROW("strength", library, FT_PIXEL_MODE_GRAY, 0, strengths[i][0], strengths[i][1], 0, 0);
+        }
+    } else if (streq(scenario, "success_gray2_gray4_convert_to_gray")) {
+        unsigned char modes[] = { FT_PIXEL_MODE_GRAY2, FT_PIXEL_MODE_GRAY4 };
+        for (size_t i = 0; i < sizeof(modes) / sizeof(modes[0]); i++) {
+            EMIT_ROW("packed-positive", library, modes[i], 0, 64, 96, 0, 0);
+            EMIT_ROW("packed-negative", library, modes[i], 1, 64, 96, 0, 0);
+        }
+    } else if (streq(scenario, "error_mono_strength_limit")) {
+        EMIT_ROW("mono-clamps-xstrength", library, FT_PIXEL_MODE_MONO, 0, 1024, 64, 0, 0);
+        EMIT_ROW("mono-clamps-xstrength-negative-pitch", library, FT_PIXEL_MODE_MONO, 1, 1024, 64, 0, 0);
+    } else if (streq(scenario, "error_invalid_arguments_or_modes")) {
+        EMIT_ROW("null-library", NULL, FT_PIXEL_MODE_GRAY, 0, 64, 64, 0, 0);
+        EMIT_ROW("null-bitmap", library, FT_PIXEL_MODE_GRAY, 0, 64, 64, 1, 0);
+        EMIT_ROW("null-buffer", library, FT_PIXEL_MODE_GRAY, 0, 64, 64, 0, 1);
+        EMIT_ROW("unsupported-mode", library, 99, 0, 64, 64, 0, 0);
+        EMIT_ROW("negative-strength", library, FT_PIXEL_MODE_GRAY, 0, -64, 0, 0, 0);
+    } else if (streq(scenario, "ownership_reallocates_bitmap_buffer")) {
+        EMIT_ROW("realloc-positive-pitch", library, FT_PIXEL_MODE_GRAY, 0, 64, 96, 0, 0);
+        EMIT_ROW("realloc-negative-pitch", library, FT_PIXEL_MODE_GRAY, 1, 64, 96, 0, 0);
+    } else {
+        fprintf(stderr, "unsupported bitmap embolden scenario: %s\n", scenario);
+        FT_Done_FreeType(library);
+        return 2;
+    }
+#undef EMIT_ROW
+
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_bitmap_init_new(const char* op, const char* null_arg, const char* alias_arg) {
     int use_null = atoi(null_arg) != 0;
     int compare_alias = atoi(alias_arg) != 0;
@@ -9013,6 +9167,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--bitmap-copy")) {
         return emit_bitmap_copy(argv[2]);
+    }
+    if (argc == 3 && streq(argv[1], "--bitmap-embolden")) {
+        return emit_bitmap_embolden(argv[2]);
     }
     if (argc == 4 && streq(argv[1], "--trigon")) {
         return emit_trigon(argv[2], argv[3]);

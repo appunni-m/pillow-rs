@@ -184,6 +184,34 @@ pub extern "C" fn FT_Bitmap_Copy(
     err
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Bitmap_Embolden(
+    library: FT_Library,
+    bitmap: *mut FT_Bitmap,
+    xStrength: FT_Pos,
+    yStrength: FT_Pos,
+) -> FT_Error {
+    let Some(bitmap_ref) = (unsafe { bitmap.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+
+    let mut bitmap_view = bitmap_to_rust(bitmap_ref);
+    if let Some(bytes) = bitmap_bytes(bitmap_ref) {
+        rust_ffi::FT_Bitmap_Set_Owned_Buffer(Some(&mut bitmap_view), bytes);
+    }
+
+    let err = rust_ffi::FT_Bitmap_Embolden(
+        library_ref(library),
+        Some(&mut bitmap_view),
+        xStrength,
+        yStrength,
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        copy_rust_bitmap_record_to_c(bitmap_ref, &bitmap_view);
+    }
+    err
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct FT_SfntName {
