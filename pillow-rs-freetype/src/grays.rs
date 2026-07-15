@@ -256,10 +256,26 @@ fn rasterize_with_clip_box(
     dy: i32,
 ) -> Result<RasterResult, FontError> {
     if width == 0 || height == 0 {
+        let mut target = Vec::new();
+        rasterize_shifted_in_box_to(
+            outline,
+            dx,
+            dy,
+            width,
+            height,
+            &mut target,
+            width,
+            1,
+            0,
+            cbox_x_min,
+            cbox_x_max,
+            cbox_y_min,
+            cbox_y_max,
+        )?;
         return Ok(RasterResult {
             width: 0,
             height: 0,
-            pixels: Vec::new(),
+            pixels: target,
         });
     }
     let mut target = vec![0u8; width * height];
