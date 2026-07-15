@@ -27,6 +27,9 @@ CUBIC_GLYPH_ORDER = [
     "vertical_lines",
     "relative_lines",
     "vh_curve",
+    "hmoveto_default_width",
+    "vmoveto_default_width",
+    "rmoveto_default_width",
 ]
 NAMES = {
     "familyName": "Hybrid OTTO Coverage",
@@ -120,6 +123,9 @@ def build_cubic_cff(path: Path) -> None:
         "vertical_lines": (420, 0),
         "relative_lines": (420, 0),
         "vh_curve": (420, 0),
+        "hmoveto_default_width": (420, 0),
+        "vmoveto_default_width": (420, 0),
+        "rmoveto_default_width": (420, 0),
     }
     builder = FontBuilder(UNITS_PER_EM, isTTF=False)
     builder.setupGlyphOrder(CUBIC_GLYPH_ORDER)
@@ -131,6 +137,9 @@ def build_cubic_cff(path: Path) -> None:
             0x44: "vertical_lines",
             0x45: "relative_lines",
             0x46: "vh_curve",
+            0x47: "hmoveto_default_width",
+            0x48: "vmoveto_default_width",
+            0x49: "rmoveto_default_width",
         }
     )
     builder.setupHorizontalMetrics(metrics)
@@ -196,6 +205,49 @@ def build_cubic_cff(path: Path) -> None:
                     70,
                     80,
                     "vhcurveto",
+                    "endchar",
+                ]
+            ),
+            "hmoveto_default_width": t2_program_charstring(
+                [
+                    0,
+                    "hmoveto",
+                    100,
+                    100,
+                    100,
+                    -100,
+                    -100,
+                    -100,
+                    "rlineto",
+                    "endchar",
+                ]
+            ),
+            "vmoveto_default_width": t2_program_charstring(
+                [
+                    100,
+                    "vmoveto",
+                    100,
+                    0,
+                    0,
+                    100,
+                    -100,
+                    0,
+                    "rlineto",
+                    "endchar",
+                ]
+            ),
+            "rmoveto_default_width": t2_program_charstring(
+                [
+                    0,
+                    60,
+                    "rmoveto",
+                    100,
+                    0,
+                    0,
+                    100,
+                    -100,
+                    0,
+                    "rlineto",
                     "endchar",
                 ]
             ),
