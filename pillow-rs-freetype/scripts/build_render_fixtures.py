@@ -25,6 +25,9 @@ GLYPH_ORDER = [
     "overlap_heavy_flag",
     "overlap_wide_overflow_flag",
     "sdf_zero_length_segment",
+    "sdf_centerline_segment",
+    "mono_left_edge_dropout",
+    "mono_bottom_edge_dropout",
 ]
 
 
@@ -183,6 +186,43 @@ def sdf_zero_length_segment_glyph():
     return pen.glyph()
 
 
+def sdf_centerline_segment_glyph():
+    pen = TTGlyphPen(None)
+
+    # At 16 ppem this first edge lies on a pixel-center scanline after the
+    # SDF renderer applies its spread translation.
+    pen.moveTo((32, 32))
+    pen.lineTo((160, 32))
+    pen.lineTo((32, 160))
+    pen.closePath()
+
+    return pen.glyph()
+
+
+def mono_left_edge_dropout_glyph():
+    pen = TTGlyphPen(None)
+
+    pen.moveTo((0, 0))
+    pen.lineTo((16, 0))
+    pen.lineTo((16, 192))
+    pen.lineTo((0, 192))
+    pen.closePath()
+
+    return pen.glyph()
+
+
+def mono_bottom_edge_dropout_glyph():
+    pen = TTGlyphPen(None)
+
+    pen.moveTo((0, 0))
+    pen.lineTo((192, 0))
+    pen.lineTo((192, 16))
+    pen.lineTo((0, 16))
+    pen.closePath()
+
+    return pen.glyph()
+
+
 def build_render_coverage() -> None:
     glyphs = {
         ".notdef": empty_glyph(),
@@ -196,6 +236,9 @@ def build_render_coverage() -> None:
         "overlap_heavy_flag": overlap_heavy_flag_glyph(),
         "overlap_wide_overflow_flag": overlap_wide_overflow_flag_glyph(),
         "sdf_zero_length_segment": sdf_zero_length_segment_glyph(),
+        "sdf_centerline_segment": sdf_centerline_segment_glyph(),
+        "mono_left_edge_dropout": mono_left_edge_dropout_glyph(),
+        "mono_bottom_edge_dropout": mono_bottom_edge_dropout_glyph(),
     }
     metrics = {
         ".notdef": (256, 0),
@@ -209,6 +252,9 @@ def build_render_coverage() -> None:
         "overlap_heavy_flag": (384, 0),
         "overlap_wide_overflow_flag": (9216, 0),
         "sdf_zero_length_segment": (256, 0),
+        "sdf_centerline_segment": (256, 0),
+        "mono_left_edge_dropout": (256, 0),
+        "mono_bottom_edge_dropout": (256, 0),
     }
 
     builder = FontBuilder(UNITS_PER_EM, isTTF=True)
@@ -225,6 +271,9 @@ def build_render_coverage() -> None:
             0xE107: "overlap_heavy_flag",
             0xE108: "overlap_wide_overflow_flag",
             0xE109: "sdf_zero_length_segment",
+            0xE10A: "sdf_centerline_segment",
+            0xE10B: "mono_left_edge_dropout",
+            0xE10C: "mono_bottom_edge_dropout",
         }
     )
     builder.setupGlyf(glyphs)
