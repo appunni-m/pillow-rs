@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from array import array
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -10,7 +11,8 @@ from fontTools.fontBuilder import FontBuilder
 from fontTools.misc.psCharStrings import T2CharString
 from fontTools.pens.t2CharStringPen import T2CharStringPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
-from fontTools.ttLib import TTFont
+from fontTools.ttLib import TTFont, newTable
+from fontTools.ttLib.tables.ttProgram import Program
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -383,9 +385,40 @@ def write_pure_cff_cubic() -> None:
     build_cubic_cff(out)
 
 
+def empty_program_table(tag: str):
+    table = newTable(tag)
+    table.program = Program()
+    table.program.fromBytecode([])
+    return table
+
+
+def write_pure_cff_empty_tt_programs() -> None:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = OUT_DIR / "pure-cff-empty-tt-programs.otf"
+    with TemporaryDirectory() as tmp:
+        cff_path = Path(tmp) / "pure-cff-cubic.otf"
+        build_cubic_cff(cff_path)
+        font = TTFont(cff_path, recalcTimestamp=False)
+        # This deliberately odd OTTO face keeps CFF outlines while carrying
+        # empty TrueType program tables.  It exercises the scaler's public CFF
+        # metrics route without giving the TrueType VM any executable work.
+        font["fpgm"] = empty_program_table("fpgm")
+        font["prep"] = empty_program_table("prep")
+        cvt = newTable("cvt ")
+        cvt.values = array("h")
+        font["cvt "] = cvt
+        font["head"].created = FIXED_HEAD_TIME
+        font["head"].modified = FIXED_HEAD_TIME
+        font.recalcTimestamp = False
+        if out.exists() or out.is_symlink():
+            out.unlink()
+        font.save(out, reorderTables=True)
+
+
 def main() -> None:
     write_hybrid_otto_face_info()
     write_pure_cff_cubic()
+    write_pure_cff_empty_tt_programs()
 
 
 if __name__ == "__main__":
