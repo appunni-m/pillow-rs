@@ -3601,6 +3601,15 @@ static int emit_outline_render(int argc, char** argv) {
         points[3].y = 24 * 64;
         bitmap_width = 16;
         bitmap_rows = 16;
+    } else if (strstr(case_id, "@right-edge-clip-outside-target")) {
+        points[0].x = 32 * 64;
+        points[0].y = 0;
+        points[1].x = 40 * 64;
+        points[1].y = 0;
+        points[2].x = 40 * 64;
+        points[2].y = 1 * 64;
+        points[3].x = 32 * 64;
+        points[3].y = 1 * 64;
     } else if (strstr(case_id, "@cubic-closed-loop")) {
         points[0].x = 8 * 64;
         points[0].y = 16 * 64;
@@ -3920,7 +3929,7 @@ static int emit_outline_render(int argc, char** argv) {
         outline.flags = FT_OUTLINE_EVEN_ODD_FILL;
     }
 
-    unsigned char buffer[32 * 32];
+    unsigned char buffer[32 * 32 + 256];
     memset(buffer, 0, sizeof(buffer));
     FT_Bitmap bitmap;
     memset(&bitmap, 0, sizeof(bitmap));
@@ -3936,6 +3945,13 @@ static int emit_outline_render(int argc, char** argv) {
     params.target = &bitmap;
     params.flags = FT_RASTER_FLAG_AA;
     params.source = (void*)0x1;
+    if (strstr(case_id, "@right-edge-clip-outside-target")) {
+        params.flags |= FT_RASTER_FLAG_CLIP;
+        params.clip_box.xMin = 32;
+        params.clip_box.yMin = 0;
+        params.clip_box.xMax = 40;
+        params.clip_box.yMax = 1;
+    }
 
     err = FT_Outline_Render(library, &outline, &params);
     printf("{");

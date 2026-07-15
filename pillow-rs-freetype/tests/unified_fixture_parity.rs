@@ -16719,8 +16719,35 @@ fn outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> 
     let (width, height) = outline_render_target_box(&case.inputs.params)?;
     let no_contours = outline.points.is_empty() || outline.n_contours == 0;
     let explicit_target_box = case.inputs.params.get("target_box").is_some();
+    let clip_box = outline_render_clip_box(&case.inputs.params)?;
     let raster = if explicit_target_box {
-        fontdone::grays::rasterize_in_box(outline, width, height)
+        if let Some((x_min, x_max, y_min, y_max)) = clip_box {
+            let mut target = vec![0u8; width * height];
+            match fontdone::grays::rasterize_shifted_in_box_to(
+                &outline,
+                0,
+                0,
+                width,
+                height,
+                &mut target,
+                width,
+                1,
+                0,
+                x_min,
+                x_max,
+                y_min,
+                y_max,
+            ) {
+                Ok(()) => Ok(fontdone::grays::RasterResult {
+                    width,
+                    height,
+                    pixels: target,
+                }),
+                Err(err) => Err(err),
+            }
+        } else {
+            fontdone::grays::rasterize_in_box(outline, width, height)
+        }
     } else {
         fontdone::grays::rasterize(outline)
     };
@@ -16746,6 +16773,9 @@ fn outline_render_outline(case: &InputCase) -> Result<fontdone::outline::Outline
         "outlines/render/even-odd-double-wind.json" => Ok(outline_render_even_odd_double_wind()),
         "outlines/render/even-odd-quad-wind.json" => Ok(outline_render_even_odd_quad_wind()),
         "outlines/render/clipped-crossing-lines.json" => Ok(outline_render_clipped_crossing()),
+        "outlines/render/right-edge-clip-outside-target.json" => {
+            Ok(outline_render_right_edge_clip_outside_target())
+        }
         "outlines/render/cubic-closed-loop.json" => Ok(outline_render_cubic_loop()),
         "outlines/render/empty-outline.json" => Ok(outline_render_empty()),
         "outlines/render/zero-contours-nonempty-points.json" => {
@@ -16873,6 +16903,28 @@ fn outline_render_target_box(params: &Value) -> Result<(usize, usize), String> {
         usize::try_from(width).map_err(|err| err.to_string())?,
         usize::try_from(height).map_err(|err| err.to_string())?,
     ))
+}
+
+fn outline_render_clip_box(params: &Value) -> Result<Option<(i32, i32, i32, i32)>, String> {
+    let Some(clip_box) = params
+        .get("raster_params")
+        .and_then(|raster_params| raster_params.get("clip_box"))
+    else {
+        return Ok(None);
+    };
+    let field = |name: &str| -> Result<i32, String> {
+        let value = clip_box
+            .get(name)
+            .and_then(Value::as_i64)
+            .ok_or_else(|| format!("clip_box.{name} must be an integer"))?;
+        i32::try_from(value).map_err(|err| err.to_string())
+    };
+    Ok(Some((
+        field("xMin")?,
+        field("xMax")?,
+        field("yMin")?,
+        field("yMax")?,
+    )))
 }
 
 fn outline_render_square() -> fontdone::outline::Outline {
@@ -17078,6 +17130,10 @@ fn outline_render_clipped_crossing() -> fontdone::outline::Outline {
         cbox_x_max: 16,
         cbox_y_max: 16,
     }
+}
+
+fn outline_render_right_edge_clip_outside_target() -> fontdone::outline::Outline {
+    outline_render_rect(32, 0, 40, 1)
 }
 
 fn outline_render_conic_below_clip() -> fontdone::outline::Outline {
