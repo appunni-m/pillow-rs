@@ -1299,9 +1299,29 @@ fn autohint_vertical_metrics(
     );
     let vvector_y = ft_mul_fix(top_fu - raw_y_max, y_scale);
 
+    let (bearing_x, bearing_y) = if data.cff.is_some() {
+        if data.vmtx.is_some() {
+            (
+                ft_pix_floor(ft_pix_floor(hinted_x_min) + vvector_x),
+                ft_pix_floor(ft_pix_ceil(hinted_y_max) + vvector_y),
+            )
+        } else {
+            // CFF `cff_slot_load` leaves made-up vertical bearings at zero for
+            // horizontal loads when no `vmtx` table exists; it only synthesizes
+            // full vertical bearings under `FT_LOAD_VERTICAL_LAYOUT`
+            // (`src/cff/cffgload.c:646-742`).
+            (0, 0)
+        }
+    } else {
+        (
+            ft_pix_floor(ft_pix_floor(hinted_x_min) + vvector_x),
+            ft_pix_floor(ft_pix_ceil(hinted_y_max) + vvector_y),
+        )
+    };
+
     AutohintVerticalMetrics {
-        bearing_x: ft_pix_floor(ft_pix_floor(hinted_x_min) + vvector_x),
-        bearing_y: ft_pix_floor(ft_pix_ceil(hinted_y_max) + vvector_y),
+        bearing_x,
+        bearing_y,
         advance: ft_pix_round(ft_mul_fix(advance_fu, y_scale)),
     }
 }
