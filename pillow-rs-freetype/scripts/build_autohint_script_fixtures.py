@@ -456,6 +456,19 @@ def serif_m_symmetry_glyph():
     )
 
 
+def latin_wide_segment_filter_glyph():
+    return mixed_contour_glyph(
+        [
+            [
+                (100, 0, True),
+                (140, 600, True),
+                (260, 600, True),
+                (220, 0, True),
+            ],
+        ]
+    )
+
+
 def nonreciprocal_chain_glyph():
     # U+51A1: two major-direction segments share one opposite segment so CJK
     # link cleanup sees a non-reciprocal chain and assigns a serif fallback.
@@ -857,6 +870,73 @@ def build_latin_small_ignore() -> None:
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     font.save(OUT_DIR / "latin-small-ignore.ttf")
+
+
+def build_latin_remaining_topology() -> None:
+    glyph_order = [
+        ".notdef",
+        "space",
+        "latin_capital_blue",
+        "latin_wide_segment_filter",
+    ]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -120, 520, 720),
+        "space": empty_glyph(),
+        "latin_capital_blue": rectangle_glyph(100, 0, 500, 520),
+        "latin_wide_segment_filter": latin_wide_segment_filter_glyph(),
+    }
+    metrics = {
+        ".notdef": (600, 80),
+        "space": (300, 0),
+        "latin_capital_blue": (620, 100),
+        "latin_wide_segment_filter": (620, 100),
+    }
+    cmap = {
+        0x20: "space",
+        0x0043: "latin_capital_blue",
+        0x0045: "latin_capital_blue",
+        0x0048: "latin_capital_blue",
+        0x004C: "latin_capital_blue",
+        0x004F: "latin_capital_blue",
+        0x0051: "latin_capital_blue",
+        0x0053: "latin_capital_blue",
+        0x0054: "latin_capital_blue",
+        0x0055: "latin_capital_blue",
+        0x005A: "latin_capital_blue",
+        0x0243: "latin_wide_segment_filter",
+    }
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint Latin Remaining Topology",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint Latin Remaining Topology Regular",
+            "fullName": "Autohint Latin Remaining Topology Regular",
+            "psName": "AutohintLatinRemainingTopology-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "latin-remaining-topology.ttf")
 
 
 def build_latin_width_clusters() -> None:
@@ -1673,6 +1753,7 @@ def main() -> None:
     build_script_coverage()
     build_cjk_empty_standard()
     build_latin_small_ignore()
+    build_latin_remaining_topology()
     build_latin_width_clusters()
     build_cjk_blue_edge_cases()
     build_latin_blue_edge_cases()
