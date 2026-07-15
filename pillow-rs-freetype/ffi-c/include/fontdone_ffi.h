@@ -124,6 +124,7 @@ void FT_Bitmap_New(FT_Bitmap* abitmap);
 FT_Error FT_Bitmap_Copy(FT_Library library, const FT_Bitmap* source, FT_Bitmap* target);
 FT_Error FT_Bitmap_Embolden(FT_Library library, FT_Bitmap* bitmap, FT_Pos xStrength, FT_Pos yStrength);
 FT_Error FT_Bitmap_Blend(FT_Library library, const FT_Bitmap* source, FT_Vector source_offset, FT_Bitmap* target, FT_Vector* atarget_offset, FT_Color color);
+FT_Error FT_GlyphSlot_Own_Bitmap(FT_GlyphSlot slot);
 
 typedef struct FT_SfntName_ {
   FT_UShort platform_id;

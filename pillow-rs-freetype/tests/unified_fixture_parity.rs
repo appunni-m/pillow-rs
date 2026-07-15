@@ -8267,6 +8267,28 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--bitmap-blend".to_string(),
             string_param(params, "scenario")?.to_string(),
         ]),
+        "ftbitmap.glyphslot_own_bitmap" => {
+            let scenario = string_param(params, "scenario")?;
+            if scenario == "error_copy_allocation_failure" {
+                return Err(
+                    "FT_GlyphSlot_Own_Bitmap allocation failure requires allocator fault injection"
+                        .to_string(),
+                );
+            }
+            Ok(vec![
+                "--glyphslot-own-bitmap".to_string(),
+                scenario.to_string(),
+                "file".to_string(),
+                fixture_dir()
+                    .join("input/fonts/DejaVuSans.ttf")
+                    .display()
+                    .to_string(),
+                face_index_param(params)?.to_string(),
+                "20".to_string(),
+                glyph_index_param(params)?.to_string(),
+                load_flags_param(params)?.to_string(),
+            ])
+        }
         "fterrors.error_string" => Ok(vec![
             "--error-string".to_string(),
             error_string_codes_arg(params)?,
@@ -9626,6 +9648,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::Rust),
         "ftbitmap.bitmap_embolden" => bitmap_embolden_output(case, BitmapEmboldenBackend::Rust),
         "ftbitmap.bitmap_blend" => bitmap_blend_output(case, BitmapBlendBackend::Rust),
+        "ftbitmap.glyphslot_own_bitmap" => glyphslot_own_bitmap_rust(case),
         operation if operation.starts_with("freetype.face_macro") => {
             let face = rust_new_face_without_size(case)?;
             rust_face_macro(&face, case)
@@ -10080,6 +10103,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::CAbi),
         "ftbitmap.bitmap_embolden" => bitmap_embolden_output(case, BitmapEmboldenBackend::CAbi),
         "ftbitmap.bitmap_blend" => bitmap_blend_output(case, BitmapBlendBackend::CAbi),
+        "ftbitmap.glyphslot_own_bitmap" => glyphslot_own_bitmap_c_abi(case),
         operation if operation.starts_with("freetype.face_macro") => {
             let (library, face) = c_new_face_without_size(case)?;
             let output = c_face_macro(face, case);
@@ -10671,6 +10695,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::Wasm),
         "ftbitmap.bitmap_embolden" => bitmap_embolden_output(case, BitmapEmboldenBackend::Wasm),
         "ftbitmap.bitmap_blend" => bitmap_blend_output(case, BitmapBlendBackend::Wasm),
+        "ftbitmap.glyphslot_own_bitmap" => glyphslot_own_bitmap_wasm(case),
         operation if operation.starts_with("freetype.face_macro") => {
             let handle = wasm_new_face_without_size(case)?;
             let output = wasm_face_macro(handle, case);
@@ -23448,6 +23473,459 @@ fn bitmap_copy_target_bytes(
             FT_Bitmap_Owned_Buffer_Bytes(Some(&setup.target))
         }
     }
+}
+
+fn glyphslot_own_bitmap_rust(case: &InputCase) -> Result<RunOutput, String> {
+    let scenario = string_param(&case.inputs.params, "scenario")?;
+    if scenario == "error_copy_allocation_failure" {
+        return Err(
+            "FT_GlyphSlot_Own_Bitmap allocation failure requires allocator fault injection"
+                .to_string(),
+        );
+    }
+    if scenario == "success_non_bitmap_or_null_slot_noop" {
+        let mut slot = rust_glyphslot_own_load(case, false)?;
+        let err = FT_GlyphSlot_Own_Bitmap(Some(&mut slot));
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+        return Ok(ok(glyphslot_own_non_bitmap_json(
+            slot_json(&slot),
+            slot.owns_bitmap,
+        )));
+    }
+
+    let mut slot = rust_glyphslot_own_load(case, true)?;
+    match scenario {
+        "success_borrowed_bitmap_copied_and_flagged" => slot.owns_bitmap = false,
+        "success_already_owned_noop" => slot.owns_bitmap = true,
+        other => return Err(format!("unsupported glyphslot_own_bitmap scenario {other}")),
+    }
+    let err = FT_GlyphSlot_Own_Bitmap(Some(&mut slot));
+    if err == FT_Err_Ok {
+        Ok(ok(glyphslot_own_bitmap_json(
+            err,
+            slot_json(&slot),
+            slot.owns_bitmap,
+            glyphslot_own_identity_for_scenario(scenario),
+        )))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn glyphslot_own_bitmap_c_abi(case: &InputCase) -> Result<RunOutput, String> {
+    let scenario = string_param(&case.inputs.params, "scenario")?;
+    if scenario == "error_copy_allocation_failure" {
+        return Err(
+            "FT_GlyphSlot_Own_Bitmap allocation failure requires allocator fault injection"
+                .to_string(),
+        );
+    }
+    if scenario == "success_non_bitmap_or_null_slot_noop" {
+        let (library, face) = c_glyphslot_own_load(case, false)?;
+        let err = c_abi::abi_glyphslot_own_bitmap_from_face(face);
+        let slot = c_glyphslot_own_slot_json(face)?;
+        c_done_face(face);
+        c_done_library(library);
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+        return Ok(ok(glyphslot_own_non_bitmap_json(slot, false)));
+    }
+
+    let (library, face) = c_glyphslot_own_load(case, true)?;
+    let owns_before = match scenario {
+        "success_borrowed_bitmap_copied_and_flagged" => false,
+        "success_already_owned_noop" => true,
+        other => {
+            c_done_face(face);
+            c_done_library(library);
+            return Err(format!("unsupported glyphslot_own_bitmap scenario {other}"));
+        }
+    };
+    let set_err = c_abi::abi_glyphslot_set_own_bitmap_from_face(face, owns_before);
+    let err = if set_err == FT_Err_Ok {
+        c_abi::abi_glyphslot_own_bitmap_from_face(face)
+    } else {
+        set_err
+    };
+    let slot = c_glyphslot_own_slot_json(face)?;
+    let owns_after = c_glyphslot_own_flag(face)?;
+    c_done_face(face);
+    c_done_library(library);
+    if err == FT_Err_Ok {
+        Ok(ok(glyphslot_own_bitmap_json(
+            err,
+            slot,
+            owns_after,
+            glyphslot_own_identity_for_scenario(scenario),
+        )))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn glyphslot_own_bitmap_wasm(case: &InputCase) -> Result<RunOutput, String> {
+    let scenario = string_param(&case.inputs.params, "scenario")?;
+    if scenario == "error_copy_allocation_failure" {
+        return Err(
+            "FT_GlyphSlot_Own_Bitmap allocation failure requires allocator fault injection"
+                .to_string(),
+        );
+    }
+    if scenario == "success_non_bitmap_or_null_slot_noop" {
+        let handle = wasm_glyphslot_own_load(case, false)?;
+        let err = wasm_abi::fontdone_wasm_glyphslot_own_bitmap(handle);
+        let slot = wasm_glyphslot_own_slot_json(handle)?;
+        wasm_done_face(handle);
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+        return Ok(ok(glyphslot_own_non_bitmap_json(slot, false)));
+    }
+
+    let handle = wasm_glyphslot_own_load(case, true)?;
+    let owns_before = match scenario {
+        "success_borrowed_bitmap_copied_and_flagged" => false,
+        "success_already_owned_noop" => true,
+        other => {
+            wasm_done_face(handle);
+            return Err(format!("unsupported glyphslot_own_bitmap scenario {other}"));
+        }
+    };
+    let set_err = wasm_abi::abi_glyphslot_set_own_bitmap(handle, owns_before);
+    let err = if set_err == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_glyphslot_own_bitmap(handle)
+    } else {
+        set_err
+    };
+    let slot = wasm_glyphslot_own_slot_json(handle)?;
+    let owns_after = wasm_glyphslot_own_flag(handle)?;
+    wasm_done_face(handle);
+    if err == FT_Err_Ok {
+        Ok(ok(glyphslot_own_bitmap_json(
+            err,
+            slot,
+            owns_after,
+            glyphslot_own_identity_for_scenario(scenario),
+        )))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn rust_glyphslot_own_load(case: &InputCase, render: bool) -> Result<FT_GlyphSlot, String> {
+    let bytes = glyphslot_own_font_bytes()?;
+    let library = FT_Init_FreeType();
+    let mut face = FT_New_Memory_Face(
+        &library,
+        bytes.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    )
+    .map_err(|err| format!("FT_New_Memory_Face returned {err}"))?;
+    let err = FT_Set_Pixel_Sizes(&mut face, 0, 20);
+    if err != FT_Err_Ok {
+        return Err(format!("FT_Set_Pixel_Sizes returned {err}"));
+    }
+    FT_Load_Glyph(
+        &face,
+        glyph_index_param(&case.inputs.params)?,
+        glyphslot_own_load_flags(case, render)?,
+    )
+    .map_err(|err| format!("FT_Load_Glyph returned {err}"))
+}
+
+fn c_glyphslot_own_load(
+    case: &InputCase,
+    render: bool,
+) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
+    let bytes = glyphslot_own_font_bytes()?;
+    let (library, face) =
+        c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let err = c_abi::FT_Set_Pixel_Sizes(face, 0, 20);
+    if err != FT_Err_Ok {
+        c_done_face(face);
+        c_done_library(library);
+        return Err(format!("FT_Set_Pixel_Sizes returned {err}"));
+    }
+    let err = c_abi::FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        glyphslot_own_load_flags(case, render)?,
+    );
+    if err != FT_Err_Ok {
+        c_done_face(face);
+        c_done_library(library);
+        return Err(format!("FT_Load_Glyph returned {err}"));
+    }
+    Ok((library, face))
+}
+
+fn wasm_glyphslot_own_load(case: &InputCase, render: bool) -> Result<usize, String> {
+    let bytes = glyphslot_own_font_bytes()?;
+    let status = wasm_abi::fontdone_wasm_open_face(
+        bytes.as_ptr(),
+        bytes.len(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    );
+    if status.error != FT_Err_Ok {
+        return Err(format!("fontdone_wasm_open_face returned {}", status.error));
+    }
+    let err = wasm_abi::fontdone_wasm_set_pixel_sizes(status.handle, 0, 20);
+    if err != FT_Err_Ok {
+        wasm_done_face(status.handle);
+        return Err(format!("fontdone_wasm_set_pixel_sizes returned {err}"));
+    }
+    let err = wasm_abi::fontdone_wasm_load_glyph(
+        status.handle,
+        glyph_index_param(&case.inputs.params)?,
+        glyphslot_own_load_flags(case, render)?,
+    );
+    if err != FT_Err_Ok {
+        wasm_done_face(status.handle);
+        return Err(format!("fontdone_wasm_load_glyph returned {err}"));
+    }
+    Ok(status.handle)
+}
+
+fn glyphslot_own_font_bytes() -> Result<Arc<[u8]>, String> {
+    cached_file_bytes("input/fonts/DejaVuSans.ttf")
+}
+
+fn glyphslot_own_load_flags(case: &InputCase, render: bool) -> Result<i32, String> {
+    let flags = load_flags_param(&case.inputs.params)?;
+    if render {
+        Ok(flags | FT_LOAD_RENDER)
+    } else {
+        Ok(flags & !FT_LOAD_RENDER)
+    }
+}
+
+fn c_glyphslot_own_slot_json(face: c_abi::FT_Face) -> Result<Value, String> {
+    let slot = c_abi::abi_slot_snapshot(face)
+        .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+    Ok(glyphslot_own_snapshot_json(
+        slot.glyph_index,
+        slot.format,
+        slot.advance.x,
+        slot.advance.y,
+        &slot.metrics,
+        slot.bitmap.as_ref().map(|bitmap| {
+            (
+                bitmap.width,
+                bitmap.rows,
+                bitmap.pitch,
+                bitmap.pixel_mode,
+                bitmap.num_grays,
+                bitmap.left,
+                bitmap.top,
+                hex_bytes(&bitmap.buffer),
+            )
+        }),
+    ))
+}
+
+fn wasm_glyphslot_own_slot_json(handle: usize) -> Result<Value, String> {
+    let slot = wasm_abi::abi_slot_snapshot(handle)
+        .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+    Ok(glyphslot_own_snapshot_json(
+        slot.glyph_index,
+        slot.format,
+        slot.advance.x,
+        slot.advance.y,
+        &slot.metrics,
+        slot.bitmap.as_ref().map(|bitmap| {
+            (
+                bitmap.width,
+                bitmap.rows,
+                bitmap.pitch,
+                bitmap.pixel_mode,
+                bitmap.num_grays,
+                bitmap.left,
+                bitmap.top,
+                hex_bytes(&bitmap.buffer),
+            )
+        }),
+    ))
+}
+
+trait GlyphslotOwnMetrics {
+    fn width(&self) -> i64;
+    fn height(&self) -> i64;
+    fn hori_bearing_x(&self) -> i64;
+    fn hori_bearing_y(&self) -> i64;
+    fn hori_advance(&self) -> i64;
+    fn vert_bearing_x(&self) -> i64;
+    fn vert_bearing_y(&self) -> i64;
+    fn vert_advance(&self) -> i64;
+}
+
+impl GlyphslotOwnMetrics for c_abi::FT_Glyph_Metrics {
+    fn width(&self) -> i64 {
+        self.width
+    }
+
+    fn height(&self) -> i64 {
+        self.height
+    }
+
+    fn hori_bearing_x(&self) -> i64 {
+        self.horiBearingX
+    }
+
+    fn hori_bearing_y(&self) -> i64 {
+        self.horiBearingY
+    }
+
+    fn hori_advance(&self) -> i64 {
+        self.horiAdvance
+    }
+
+    fn vert_bearing_x(&self) -> i64 {
+        self.vertBearingX
+    }
+
+    fn vert_bearing_y(&self) -> i64 {
+        self.vertBearingY
+    }
+
+    fn vert_advance(&self) -> i64 {
+        self.vertAdvance
+    }
+}
+
+impl GlyphslotOwnMetrics for wasm_abi::FontdoneWasmGlyphMetrics {
+    fn width(&self) -> i64 {
+        self.width
+    }
+
+    fn height(&self) -> i64 {
+        self.height
+    }
+
+    fn hori_bearing_x(&self) -> i64 {
+        self.horiBearingX
+    }
+
+    fn hori_bearing_y(&self) -> i64 {
+        self.horiBearingY
+    }
+
+    fn hori_advance(&self) -> i64 {
+        self.horiAdvance
+    }
+
+    fn vert_bearing_x(&self) -> i64 {
+        self.vertBearingX
+    }
+
+    fn vert_bearing_y(&self) -> i64 {
+        self.vertBearingY
+    }
+
+    fn vert_advance(&self) -> i64 {
+        self.vertAdvance
+    }
+}
+
+fn glyphslot_own_snapshot_json(
+    glyph_index: u32,
+    format: i32,
+    advance_x: i64,
+    advance_y: i64,
+    metrics: &impl GlyphslotOwnMetrics,
+    bitmap: Option<(u32, u32, i32, i32, u16, i32, i32, String)>,
+) -> Value {
+    json!({
+        "glyph_index": glyph_index,
+        "format": format,
+        "advance": {"x": advance_x, "y": advance_y},
+        "metrics": {
+            "width": metrics.width(),
+            "height": metrics.height(),
+            "horiBearingX": metrics.hori_bearing_x(),
+            "horiBearingY": metrics.hori_bearing_y(),
+            "horiAdvance": metrics.hori_advance(),
+            "vertBearingX": metrics.vert_bearing_x(),
+            "vertBearingY": metrics.vert_bearing_y(),
+            "vertAdvance": metrics.vert_advance()
+        },
+        "bitmap": bitmap.map(|(width, rows, pitch, pixel_mode, num_grays, left, top, buffer_hex)| {
+            json!({
+                "width": width,
+                "rows": rows,
+                "pitch": pitch,
+                "pixel_mode": pixel_mode,
+                "num_grays": num_grays,
+                "left": left,
+                "top": top,
+                "buffer_hex": buffer_hex
+            })
+        })
+    })
+}
+
+fn c_glyphslot_own_flag(face: c_abi::FT_Face) -> Result<bool, String> {
+    let slot = c_abi::abi_slot_snapshot(face)
+        .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+    Ok(slot
+        .bitmap
+        .as_ref()
+        .is_some_and(|bitmap| bitmap.owns_bitmap))
+}
+
+fn wasm_glyphslot_own_flag(handle: usize) -> Result<bool, String> {
+    let slot = wasm_abi::abi_slot_snapshot(handle)
+        .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+    Ok(slot
+        .bitmap
+        .as_ref()
+        .is_some_and(|bitmap| bitmap.owns_bitmap))
+}
+
+fn glyphslot_own_identity_for_scenario(scenario: &str) -> &'static str {
+    match scenario {
+        "success_borrowed_bitmap_copied_and_flagged" => "owned_copy",
+        "success_already_owned_noop" => "already_owned",
+        _ => "unchanged",
+    }
+}
+
+fn glyphslot_own_bitmap_json(
+    err: FT_Error,
+    slot: Value,
+    owns_bitmap: bool,
+    identity: &str,
+) -> Value {
+    json!({
+        "error": err,
+        "slot": slot,
+        "own_bitmap_flag": owns_bitmap,
+        "buffer_identity_class": identity
+    })
+}
+
+fn glyphslot_own_non_bitmap_json(slot: Value, owns_bitmap: bool) -> Value {
+    json!({
+        "error": FT_Err_Ok,
+        "variants": [
+            {
+                "variant": "outline_format",
+                "slot": slot,
+                "own_bitmap_flag": owns_bitmap,
+                "buffer_identity_class": "unchanged"
+            },
+            {
+                "variant": "null_slot",
+                "slot": Value::Null,
+                "own_bitmap_flag": false,
+                "buffer_identity_class": "null_slot"
+            }
+        ]
+    })
 }
 
 #[derive(Clone, Copy)]

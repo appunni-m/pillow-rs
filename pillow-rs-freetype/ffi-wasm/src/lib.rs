@@ -458,6 +458,7 @@ pub struct AbiBitmapSnapshot {
     pub pixel_mode: i32,
     pub left: i32,
     pub top: i32,
+    pub owns_bitmap: bool,
     pub buffer: Vec<u8>,
 }
 
@@ -487,6 +488,7 @@ pub fn abi_slot_snapshot(handle: usize) -> Option<AbiSlotSnapshot> {
             pixel_mode: slot.bitmap.pixel_mode,
             left: slot.bitmap_left,
             top: slot.bitmap_top,
+            owns_bitmap: rust_slot.owns_bitmap,
             buffer: buffer.to_vec(),
         })
     };
@@ -501,6 +503,18 @@ pub fn abi_slot_snapshot(handle: usize) -> Option<AbiSlotSnapshot> {
         outline: rust_slot.outline.clone(),
         bitmap,
     })
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_glyphslot_set_own_bitmap(handle: usize, owns_bitmap: bool) -> FT_Error {
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(slot) = face.slot.as_mut() else {
+        return rust_ffi::FT_Err_Invalid_Glyph_Index;
+    };
+    slot.owns_bitmap = owns_bitmap;
+    rust_ffi::FT_Err_Ok
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -2016,6 +2030,20 @@ pub extern "C" fn fontdone_wasm_glyphslot_oblique(handle: usize) -> FT_Error {
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_glyphslot_embolden(handle: usize) -> FT_Error {
     fontdone_wasm_glyphslot_adjust_weight(handle, 0x0AAA, 0x0AAA)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_glyphslot_own_bitmap(handle: usize) -> FT_Error {
+    if handle == 0 {
+        return rust_ffi::FT_Err_Ok;
+    }
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(slot) = face.slot.as_mut() else {
+        return rust_ffi::FT_Err_Ok;
+    };
+    rust_ffi::FT_GlyphSlot_Own_Bitmap(Some(slot))
 }
 
 #[unsafe(no_mangle)]
