@@ -802,6 +802,12 @@ def outline_get_bitmap_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.operation == "ftoutln.outline_get_bitmap"
     ):
         return "FT_Outline_Get_Bitmap validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.subject == "ftimage.FT_PIXEL_MODE_NONE"
+        and row.case == "invalid_render_target_errors"
+        and row.operation == "ftoutln.outline_get_bitmap"
+    ):
+        return "FT_PIXEL_MODE_NONE invalid FT_Outline_Get_Bitmap target validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     return None
 
 
