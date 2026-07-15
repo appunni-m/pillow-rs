@@ -428,9 +428,8 @@
           "reason": "FreeType heap glyph objects and conversion helpers are C object-lifecycle APIs; this crate exposes Rust outline/bitmap values directly."
         },
         "FT_GlyphSlot_Own_Bitmap": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType heap glyph objects and conversion helpers are C object-lifecycle APIs; this crate exposes Rust outline/bitmap values directly."
+          "rust": "ffi::FT_GlyphSlot_Own_Bitmap",
+          "status": "complete"
         }
       }
     },

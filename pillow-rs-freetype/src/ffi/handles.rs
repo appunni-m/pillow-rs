@@ -1158,6 +1158,7 @@ pub struct FT_GlyphSlot {
     pub bitmap: Option<FT_Bitmap>,
     pub bitmap_left: FT_Int,
     pub bitmap_top: FT_Int,
+    pub owns_bitmap: bool,
     pub outline_cbox: FT_BBox,
     pub outline_bbox: FT_BBox,
     pub outline: Option<FT_OutlineSnapshot>,
@@ -1343,6 +1344,20 @@ pub fn FT_GlyphSlot_AdjustWeight(
 
 pub fn FT_GlyphSlot_Embolden(slot: Option<&mut FT_GlyphSlot>) {
     FT_GlyphSlot_AdjustWeight(slot, 0x0AAA, 0x0AAA);
+}
+
+pub fn FT_GlyphSlot_Own_Bitmap(slot: Option<&mut FT_GlyphSlot>) -> FT_Error {
+    let Some(slot) = slot else {
+        return FT_Err_Ok;
+    };
+    if slot.format == FT_GLYPH_FORMAT_BITMAP && !slot.owns_bitmap {
+        // FreeType `src/base/ftbitmap.c:1084-1102` deep-copies bitmap slots
+        // whose internal flags lack `FT_GLYPH_OWN_BITMAP`, then sets the flag.
+        // The safe Rust slot already stores bitmap bytes in owned Vec storage;
+        // this records the public ownership transition for C/WASM slot facades.
+        slot.owns_bitmap = true;
+    }
+    FT_Err_Ok
 }
 
 pub fn FT_GlyphSlot_Oblique(slot: Option<&mut FT_GlyphSlot>) {
@@ -3147,6 +3162,7 @@ fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags)
     let bitmap = slot.bitmap.clone().map(Into::into);
     let bitmap_left = slot.bitmap_left;
     let bitmap_top = slot.bitmap_top;
+    let owns_bitmap = format == FT_GLYPH_FORMAT_BITMAP && bitmap.is_some();
     // FreeType's `FT_LOAD_NO_RECURSE` composite path (`ttgload.c`) computes
     // metrics from the composite glyph header bbox, but leaves `slot->outline`
     // empty because the slot format is `FT_GLYPH_FORMAT_COMPOSITE`.
@@ -3169,6 +3185,7 @@ fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags)
         bitmap,
         bitmap_left,
         bitmap_top,
+        owns_bitmap,
         outline_cbox,
         outline_bbox,
         outline,
@@ -3186,6 +3203,9 @@ fn refresh_slot_public_fields(slot: &mut FT_GlyphSlot) {
     slot.bitmap = slot.core_slot.bitmap.clone().map(Into::into);
     slot.bitmap_left = slot.core_slot.bitmap_left;
     slot.bitmap_top = slot.core_slot.bitmap_top;
+    if slot.format != FT_GLYPH_FORMAT_BITMAP || slot.bitmap.is_none() {
+        slot.owns_bitmap = false;
+    }
     slot.outline_cbox = bbox_to_ffi(slot.core_slot.outline_cbox);
     slot.outline_bbox = bbox_to_ffi(slot.core_slot.outline_bbox);
     slot.outline = slot.core_slot.slot_outline().map(outline_to_ffi_snapshot);

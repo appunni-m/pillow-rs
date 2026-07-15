@@ -349,6 +349,7 @@ pub struct FT_GlyphSlotRec {
     pub bitmap: FT_Bitmap,
     pub bitmap_left: FT_Int,
     pub bitmap_top: FT_Int,
+    owns_bitmap: bool,
     buffer: Vec<u8>,
     rust_slot: rust_ffi::FT_GlyphSlot,
     source_face: FT_Face,
@@ -514,6 +515,7 @@ pub struct AbiBitmapSnapshot {
     pub pixel_mode: FT_Pixel_Mode,
     pub left: FT_Int,
     pub top: FT_Int,
+    pub owns_bitmap: bool,
     pub buffer: Vec<u8>,
 }
 
@@ -661,6 +663,7 @@ pub fn abi_slot_snapshot(face: FT_Face) -> Option<AbiSlotSnapshot> {
             pixel_mode: slot.bitmap.pixel_mode,
             left: slot.bitmap_left,
             top: slot.bitmap_top,
+            owns_bitmap: slot.owns_bitmap,
             buffer,
         })
     };
@@ -727,6 +730,28 @@ pub fn abi_glyphslot_embolden_from_face(face: FT_Face) -> FT_Error {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
     FT_GlyphSlot_Embolden(slot.as_ptr());
+    rust_ffi::FT_Err_Ok
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_glyphslot_own_bitmap_from_face(face: FT_Face) -> FT_Error {
+    let Some(slot) = abi_glyph_slot(face) else {
+        return rust_ffi::FT_Err_Ok;
+    };
+    FT_GlyphSlot_Own_Bitmap(slot.as_ptr())
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_glyphslot_set_own_bitmap_from_face(face: FT_Face, owns_bitmap: bool) -> FT_Error {
+    let Some(mut slot) = abi_glyph_slot(face) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
+    unsafe {
+        let slot = slot.as_mut();
+        slot.owns_bitmap = owns_bitmap;
+        slot.rust_slot.owns_bitmap = owns_bitmap;
+    }
     rust_ffi::FT_Err_Ok
 }
 
@@ -2135,6 +2160,26 @@ pub extern "C" fn FT_GlyphSlot_Embolden(slot: FT_GlyphSlot) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_GlyphSlot_Own_Bitmap(slot: FT_GlyphSlot) -> FT_Error {
+    let Some(slot_ptr) = non_null_mut(slot) else {
+        return rust_ffi::FT_Err_Ok;
+    };
+    // SAFETY: `slot_ptr` is checked non-null and points to a live slot allocated by this crate.
+    unsafe {
+        let slot_ref = &mut *slot_ptr.as_ptr();
+        let err = rust_ffi::FT_GlyphSlot_Own_Bitmap(Some(&mut slot_ref.rust_slot));
+        if err != rust_ffi::FT_Err_Ok {
+            return err;
+        }
+        let source_face = slot_ref.source_face;
+        let load_flags = slot_ref.load_flags;
+        let rust_slot = slot_ref.rust_slot.clone();
+        *slot_ref = rust_slot_to_abi(rust_slot, source_face, load_flags);
+    }
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_GlyphSlot_AdjustWeight(
     slot: FT_GlyphSlot,
     xdelta: FT_Fixed,
@@ -2265,6 +2310,7 @@ fn rust_slot_to_abi(
         bitmap,
         bitmap_left: slot.bitmap_left,
         bitmap_top: slot.bitmap_top,
+        owns_bitmap: slot.owns_bitmap,
         buffer,
         rust_slot,
         source_face,

@@ -43,6 +43,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_bitmap_copy",
     "fontdone_wasm_bitmap_init",
     "fontdone_wasm_bitmap_new",
+    "fontdone_wasm_glyphslot_own_bitmap",
     "fontdone_wasm_face_check_truetype_patents",
     "fontdone_wasm_face_set_unpatented_hinting",
     "fontdone_wasm_outline_get_cbox",
@@ -239,6 +240,7 @@ REAL_PARITY_OPERATIONS = {
     "ftbitmap.bitmap_blend",
     "ftbitmap.bitmap_copy",
     "ftbitmap.bitmap_embolden",
+    "ftbitmap.glyphslot_own_bitmap",
     "ftbitmap.bitmap_init",
     "ftbitmap.bitmap_new",
     "ftcache.sbit_cache_lookup",
@@ -723,6 +725,15 @@ def has_null_lifecycle_handle(row: ConcreteInput) -> bool:
 
 
 def pending_core_reason(row: ConcreteInput) -> str | None:
+    if (
+        row.operation == "ftbitmap.glyphslot_own_bitmap"
+        and row.case == "error_copy_allocation_failure"
+    ):
+        return (
+            "FT_GlyphSlot_Own_Bitmap allocation-failure parity needs maintained "
+            "allocator fault injection for the pinned C oracle, Rust FFI, C ABI, "
+            "and WASM ABI"
+        )
     if (
         row.case_id
         == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"

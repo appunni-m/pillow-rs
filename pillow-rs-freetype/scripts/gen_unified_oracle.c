@@ -28,6 +28,7 @@
 #include <freetype/ftsynth.h>
 #include <freetype/ftotval.h>
 #include <freetype/fttrigon.h>
+#include <freetype/internal/ftobjs.h>
 #include <freetype/t1tables.h>
 #include <freetype/tttables.h>
 
@@ -40,6 +41,7 @@ static int streq(const char* a, const char* b) {
 }
 
 static void print_json_bool(int value);
+static void print_slot_body(FT_GlyphSlot slot, FT_UInt glyph_index);
 
 #include "generated_constants.inc"
 
@@ -584,6 +586,140 @@ static int emit_bitmap_blend(const char* scenario) {
     }
     printf("]}}\n");
     FT_Done_FreeType(library);
+    return 0;
+}
+
+static void print_glyphslot_own_bitmap_output(FT_Error err,
+                                              FT_GlyphSlot slot,
+                                              const unsigned char* before_buffer,
+                                              const char* no_slot_identity) {
+    printf("{");
+    print_status(err);
+    if (err || !slot) {
+        printf(",\"output\":{\"error\":%d,\"slot\":null,\"own_bitmap_flag\":false,\"buffer_identity_class\":\"%s\"}}\n",
+               err,
+               no_slot_identity);
+        return;
+    }
+
+    const char* identity = "unchanged";
+    if (slot->bitmap.buffer && before_buffer && slot->bitmap.buffer != before_buffer) {
+        identity = "owned_copy";
+    } else if (slot->internal && (slot->internal->flags & FT_GLYPH_OWN_BITMAP)) {
+        identity = "already_owned";
+    }
+
+    printf(",\"output\":{\"error\":%d,\"slot\":{", err);
+    print_slot_body(slot, slot->glyph_index);
+    printf("},\"own_bitmap_flag\":");
+    print_json_bool(slot->internal && (slot->internal->flags & FT_GLYPH_OWN_BITMAP));
+    printf(",\"buffer_identity_class\":\"%s\"}}\n", identity);
+}
+
+static int emit_glyphslot_own_bitmap(int argc, char** argv) {
+    if (argc != 9) {
+        fprintf(stderr, "--glyphslot-own-bitmap requires SCENARIO SOURCE_KIND SOURCE FACE_INDEX PX GID FLAGS\n");
+        return 2;
+    }
+    const char* scenario = argv[2];
+    const char* source_kind = argv[3];
+    const char* source_value = argv[4];
+    FT_Long face_index = atol(argv[5]);
+    FT_UInt px = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_Int32 load_flags = (FT_Int32)strtol(argv[8], NULL, 10);
+
+    if (streq(scenario, "error_copy_allocation_failure")) {
+        fprintf(stderr, "glyphslot-own-bitmap allocation failure requires allocator fault injection\n");
+        return 2;
+    }
+
+    FT_Error null_err = FT_GlyphSlot_Own_Bitmap(NULL);
+    if (streq(scenario, "success_non_bitmap_or_null_slot_noop") && null_err) {
+        printf("{");
+        print_status(null_err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Face face = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (!err) {
+        err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    }
+    if (!err) {
+        err = FT_Set_Pixel_Sizes(face, 0, px);
+    }
+    if (!err) {
+        FT_Int32 effective_flags = load_flags;
+        if (streq(scenario, "success_non_bitmap_or_null_slot_noop")) {
+            effective_flags &= ~FT_LOAD_RENDER;
+        } else {
+            effective_flags |= FT_LOAD_RENDER;
+        }
+        err = FT_Load_Glyph(face, glyph_index, effective_flags);
+    }
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        if (face) {
+            FT_Done_Face(face);
+        }
+        if (library) {
+            FT_Done_FreeType(library);
+        }
+        free(data);
+        return 0;
+    }
+
+    unsigned char* before_buffer = face->glyph->bitmap.buffer;
+    if (streq(scenario, "success_borrowed_bitmap_copied_and_flagged")) {
+        face->glyph->internal->flags &= ~FT_GLYPH_OWN_BITMAP;
+        err = FT_GlyphSlot_Own_Bitmap(face->glyph);
+        print_glyphslot_own_bitmap_output(err, face->glyph, before_buffer, "null_slot");
+    } else if (streq(scenario, "success_already_owned_noop")) {
+        face->glyph->internal->flags |= FT_GLYPH_OWN_BITMAP;
+        err = FT_GlyphSlot_Own_Bitmap(face->glyph);
+        print_glyphslot_own_bitmap_output(err, face->glyph, before_buffer, "null_slot");
+    } else if (streq(scenario, "success_non_bitmap_or_null_slot_noop")) {
+        err = FT_GlyphSlot_Own_Bitmap(face->glyph);
+        printf("{");
+        print_status(err);
+        printf(",\"output\":{\"error\":%d,\"variants\":[{\"variant\":\"outline_format\",\"slot\":{", err);
+        print_slot_body(face->glyph, face->glyph->glyph_index);
+        printf("},\"own_bitmap_flag\":");
+        print_json_bool(face->glyph->internal && (face->glyph->internal->flags & FT_GLYPH_OWN_BITMAP));
+        printf(",\"buffer_identity_class\":\"unchanged\"},{\"variant\":\"null_slot\",\"slot\":null,\"own_bitmap_flag\":false,\"buffer_identity_class\":\"null_slot\"}]}}\n");
+    } else {
+        fprintf(stderr, "unsupported glyphslot own bitmap scenario: %s\n", scenario);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 2;
+    }
+
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
     return 0;
 }
 
@@ -9367,6 +9503,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--bitmap-blend")) {
         return emit_bitmap_blend(argv[2]);
+    }
+    if (argc == 9 && streq(argv[1], "--glyphslot-own-bitmap")) {
+        return emit_glyphslot_own_bitmap(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--trigon")) {
         return emit_trigon(argv[2], argv[3]);
