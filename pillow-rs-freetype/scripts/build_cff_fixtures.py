@@ -27,6 +27,8 @@ CUBIC_GLYPH_ORDER = [
     "vertical_lines",
     "relative_lines",
     "vh_curve",
+    "hv_curve_no_last_delta",
+    "vh_curve_no_last_delta",
     "hmoveto_default_width",
     "vmoveto_default_width",
     "rmoveto_default_width",
@@ -123,6 +125,8 @@ def build_cubic_cff(path: Path) -> None:
         "vertical_lines": (420, 0),
         "relative_lines": (420, 0),
         "vh_curve": (420, 0),
+        "hv_curve_no_last_delta": (420, 0),
+        "vh_curve_no_last_delta": (420, 0),
         "hmoveto_default_width": (420, 0),
         "vmoveto_default_width": (420, 0),
         "rmoveto_default_width": (420, 0),
@@ -137,9 +141,11 @@ def build_cubic_cff(path: Path) -> None:
             0x44: "vertical_lines",
             0x45: "relative_lines",
             0x46: "vh_curve",
-            0x47: "hmoveto_default_width",
-            0x48: "vmoveto_default_width",
-            0x49: "rmoveto_default_width",
+            0x47: "hv_curve_no_last_delta",
+            0x48: "vh_curve_no_last_delta",
+            0x49: "hmoveto_default_width",
+            0x4A: "vmoveto_default_width",
+            0x4B: "rmoveto_default_width",
         }
     )
     builder.setupHorizontalMetrics(metrics)
@@ -204,6 +210,32 @@ def build_cubic_cff(path: Path) -> None:
                     60,
                     70,
                     80,
+                    "vhcurveto",
+                    "endchar",
+                ]
+            ),
+            "hv_curve_no_last_delta": t2_program_charstring(
+                [
+                    600,
+                    100,
+                    "vmoveto",
+                    100,
+                    50,
+                    60,
+                    70,
+                    "hvcurveto",
+                    "endchar",
+                ]
+            ),
+            "vh_curve_no_last_delta": t2_program_charstring(
+                [
+                    600,
+                    100,
+                    "vmoveto",
+                    100,
+                    50,
+                    60,
+                    70,
                     "vhcurveto",
                     "endchar",
                 ]
