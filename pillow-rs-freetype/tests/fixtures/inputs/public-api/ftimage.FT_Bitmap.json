@@ -313,6 +313,24 @@
             ]
           },
           {
+            "id": "m5-cff-cubic-sdf",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": { "x": 0, "y": 20 },
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_NO_HINTING"],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": ["render:cff-cubic-sdf"]
+          },
+          {
             "id": "m6-render-conic-normal",
             "assets": {
               "font": {

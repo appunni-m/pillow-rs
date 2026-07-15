@@ -2310,7 +2310,12 @@ fn flatten_outline(outline: &Outline) -> Result<Vec<Segment>, FontError> {
         contour: 0,
         order: 0,
     };
-    flattener.decompose(&outline.points, &outline.contours, outline.n_contours)?;
+    flattener.decompose(
+        &outline.points,
+        &outline.tags,
+        &outline.contours,
+        outline.n_contours,
+    )?;
     Ok(flattener.segments)
 }
 
@@ -2376,14 +2381,14 @@ impl SdfFlattener {
     fn cubic_to(&mut self, c1x: i32, c1y: i32, c2x: i32, c2y: i32, x: i32, y: i32) {
         let x0 = self.current_x;
         let y0 = self.current_y;
-        self.flatten_cubic(
+        self.flatten_sdf_cubic(
             [
                 Point { x: x0, y: y0 },
                 Point { x: c1x, y: c1y },
                 Point { x: c2x, y: c2y },
                 Point { x, y },
             ],
-            0,
+            32,
         );
     }
 
@@ -2406,33 +2411,30 @@ impl SdfFlattener {
         self.flatten_sdf_conic([center, right_mid, points[2]], max_splits / 2);
     }
 
-    fn flatten_cubic(&mut self, points: [Point; 4], depth: u8) {
-        let y_min = points[0].y.min(points[3].y);
-        let y_max = points[0].y.max(points[3].y);
-        let monotonic = points[1].y >= y_min
-            && points[1].y <= y_max
-            && points[2].y >= y_min
-            && points[2].y <= y_max;
-        let dx = points[3].x - points[0].x;
-        let dy = points[3].y - points[0].y;
-        if depth >= 32 || (monotonic && dx.abs() <= 32 && dy.abs() <= 32) {
-            self.line_to(points[3].x, points[3].y);
+    fn flatten_sdf_cubic(&mut self, points: [Point; 4], max_splits: u32) {
+        let flat_enough = (2 * points[0].x - 3 * points[1].x + points[3].x).abs()
+            < FT_PIXEL_ONE / 4
+            && (2 * points[0].y - 3 * points[1].y + points[3].y).abs() < FT_PIXEL_ONE / 4
+            && (points[0].x - 3 * points[2].x + 2 * points[3].x).abs() < FT_PIXEL_ONE / 4
+            && (points[0].y - 3 * points[2].y + 2 * points[3].y).abs() < FT_PIXEL_ONE / 4;
+
+        // C `split_sdf_cubic` always performs one `split_cubic` before
+        // appending two line segments (`src/sdf/ftsdf.c:1147-1215`).
+        let split = split_sdf_cubic(points);
+        if flat_enough || max_splits <= 2 {
+            self.line_to(split[3].x, split[3].y);
+            self.line_to(split[6].x, split[6].y);
             return;
         }
 
-        let p01 = midpoint(points[0], points[1]);
-        let p12 = midpoint(points[1], points[2]);
-        let p23 = midpoint(points[2], points[3]);
-        let p012 = midpoint(p01, p12);
-        let p123 = midpoint(p12, p23);
-        let center = midpoint(p012, p123);
-        self.flatten_cubic([points[0], p01, p012, center], depth + 1);
-        self.flatten_cubic([center, p123, p23, points[3]], depth + 1);
+        self.flatten_sdf_cubic([split[0], split[1], split[2], split[3]], max_splits / 2);
+        self.flatten_sdf_cubic([split[3], split[4], split[5], split[6]], max_splits / 2);
     }
 
     fn decompose(
         &mut self,
         pts: &[crate::outline::OutlinePoint],
+        tags: &[u8],
         contours: &[i16],
         n_contours: i32,
     ) -> Result<(), FontError> {
@@ -2453,14 +2455,14 @@ impl SdfFlattener {
             let v_last = pts[limit];
             let mut limit_eff = limit;
 
-            let first_tag = curve_tag(pts[first].on_curve);
+            let first_tag = curve_tag_at(pts, tags, first);
             if first_tag == CURVE_TAG_CUBIC {
                 return Err(FontError::InvalidOutline(
                     "outline: contour starts with cubic".into(),
                 ));
             }
             if first_tag == CURVE_TAG_CONIC {
-                if curve_tag(pts[limit].on_curve) == CURVE_TAG_ON {
+                if curve_tag_at(pts, tags, limit) == CURVE_TAG_ON {
                     v_start = v_last;
                     limit_eff = limit.checked_sub(1).ok_or_else(|| {
                         FontError::InvalidOutline("outline: conic start underflow".into())
@@ -2482,7 +2484,7 @@ impl SdfFlattener {
             } else {
                 i32_from_usize(first)
             };
-            self.walk_contour(pts, start, i32_from_usize(limit_eff), v_start)?;
+            self.walk_contour(pts, tags, start, i32_from_usize(limit_eff), v_start)?;
             let contour_len = self.segments.len() - contour_start;
             for segment in &mut self.segments[contour_start..] {
                 segment.contour_len = contour_len;
@@ -2494,6 +2496,7 @@ impl SdfFlattener {
     fn walk_contour(
         &mut self,
         pts: &[crate::outline::OutlinePoint],
+        tags: &[u8],
         mut cursor: i32,
         limit: i32,
         v_start: crate::outline::OutlinePoint,
@@ -2501,7 +2504,7 @@ impl SdfFlattener {
         while cursor < limit {
             cursor += 1;
             let idx = usize_from_i32(cursor);
-            match curve_tag(pts[idx].on_curve) {
+            match curve_tag_at(pts, tags, idx) {
                 CURVE_TAG_ON => {
                     let point = pts[idx];
                     self.line_to(point.x, point.y);
@@ -2512,7 +2515,7 @@ impl SdfFlattener {
                         if cursor < limit {
                             cursor += 1;
                             let next = pts[usize_from_i32(cursor)];
-                            let tag = curve_tag(next.on_curve);
+                            let tag = curve_tag_at(pts, tags, usize_from_i32(cursor));
                             if tag == CURVE_TAG_ON {
                                 self.conic_to(control.x, control.y, next.x, next.y);
                                 break;
@@ -2534,7 +2537,7 @@ impl SdfFlattener {
                 }
                 CURVE_TAG_CUBIC => {
                     if cursor + 2 > limit
-                        || curve_tag(pts[usize_from_i32(cursor + 1)].on_curve) != CURVE_TAG_CUBIC
+                        || curve_tag_at(pts, tags, usize_from_i32(cursor + 1)) != CURVE_TAG_CUBIC
                     {
                         return Err(FontError::InvalidOutline(
                             "outline: bad cubic tag sequence".into(),
@@ -2575,6 +2578,11 @@ fn curve_tag(on_curve: bool) -> u8 {
     }
 }
 
+fn curve_tag_at(pts: &[crate::outline::OutlinePoint], tags: &[u8], index: usize) -> u8 {
+    tags.get(index)
+        .map_or_else(|| curve_tag(pts[index].on_curve), |tag| tag & 3)
+}
+
 #[derive(Debug, Clone, Copy)]
 struct Point {
     x: i32,
@@ -2593,6 +2601,52 @@ fn midpoint_trunc(a: Point, b: Point) -> Point {
         x: (a.x + b.x) / 2,
         y: (a.y + b.y) / 2,
     }
+}
+
+fn split_sdf_cubic(points: [Point; 4]) -> [Point; 7] {
+    let mut out = [Point { x: 0, y: 0 }; 7];
+    out[0] = points[0];
+    out[1] = points[1];
+    out[2] = points[2];
+    out[3] = points[3];
+    split_sdf_cubic_axis(
+        points[0].x,
+        points[1].x,
+        points[2].x,
+        points[3].x,
+        |index, value| out[index].x = value,
+    );
+    split_sdf_cubic_axis(
+        points[0].y,
+        points[1].y,
+        points[2].y,
+        points[3].y,
+        |index, value| out[index].y = value,
+    );
+    out
+}
+
+fn split_sdf_cubic_axis(
+    mut p0: i32,
+    mut p1: i32,
+    p2: i32,
+    p3: i32,
+    mut set: impl FnMut(usize, i32),
+) {
+    set(0, p0);
+    set(6, p3);
+    let mut a = p0 + p1;
+    let b = p1 + p2;
+    let mut c = p2 + p3;
+    set(5, c / 2);
+    c += b;
+    set(4, c / 4);
+    p1 = a / 2;
+    set(1, p1);
+    a += b;
+    set(2, a / 4);
+    p0 = (a + c) / 8;
+    set(3, p0);
 }
 
 #[derive(Debug, Clone, Copy)]

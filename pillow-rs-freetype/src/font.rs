@@ -177,6 +177,7 @@ fn type1_font_data(data: &[u8], size_pt: f32, metadata: &Type1Metadata) -> Arc<F
         hdmx: None,
         kern: None,
         sbit: None,
+        cff: None,
         loca_data: Vec::new(),
         glyf_data: Vec::new(),
         size_pt: std::cell::Cell::new(size_pt),
@@ -703,15 +704,21 @@ impl Font {
             .find(data, tag(b"kern"))
             .and_then(|d| tt::kern::parse_kern(d).ok());
         let sbit = tt::sbit::parse_sbit(&dir, data);
+        let cff = dir
+            .find(data, tag(b"CFF "))
+            .map(tt::cff::parse_cff)
+            .transpose()?;
 
-        let loca_data = dir
-            .find(data, tag(b"loca"))
-            .ok_or_else(|| FontError::InvalidFont("missing 'loca' table".into()))?
-            .to_vec();
-        let glyf_data = dir
-            .find(data, tag(b"glyf"))
-            .ok_or_else(|| FontError::InvalidFont("missing 'glyf' table".into()))?
-            .to_vec();
+        let loca_data = match dir.find(data, tag(b"loca")) {
+            Some(bytes) => bytes.to_vec(),
+            None if cff.is_some() => Vec::new(),
+            None => return Err(FontError::InvalidFont("missing 'loca' table".into())),
+        };
+        let glyf_data = match dir.find(data, tag(b"glyf")) {
+            Some(bytes) => bytes.to_vec(),
+            None if cff.is_some() => Vec::new(),
+            None => return Err(FontError::InvalidFont("missing 'glyf' table".into())),
+        };
 
         // Bytecode tables are optional. When present they are used by the
         // native TrueType path to match FreeType's default load behavior.
@@ -752,6 +759,7 @@ impl Font {
             hdmx,
             kern,
             sbit,
+            cff,
             loca_data,
             glyf_data,
             size_pt: std::cell::Cell::new(size_pt),
@@ -2438,6 +2446,14 @@ impl Font {
             metrics.vert_bearing_y = ft_mul_fix(vertical.tsb as i32, self.size_metrics.y_scale);
             metrics.vert_advance =
                 ft_mul_fix(vertical.advance_height as i32, self.size_metrics.y_scale);
+        } else if self.data.cff.is_some() {
+            // CFF keeps made-up vertical metrics mostly inert for horizontal
+            // loads without `vmtx`; `cff_slot_load` only synthesizes bearings
+            // on `FT_LOAD_VERTICAL_LAYOUT` (`src/cff/cffgload.c:646-742`).
+            metrics.vert_advance = ft_mul_fix(
+                vertical_advance_font_units(&self.data),
+                self.size_metrics.y_scale,
+            );
         } else {
             let height_fu = if self.size_metrics.y_scale == 0 {
                 0
@@ -2449,7 +2465,11 @@ impl Font {
             metrics.vert_bearing_y = ft_mul_fix(top_fu, self.size_metrics.y_scale);
             metrics.vert_advance = ft_mul_fix(advance_fu, self.size_metrics.y_scale);
         }
-        if autohint_vertical.is_none() {
+        if autohint_vertical.is_none()
+            && (self.data.cff.is_none()
+                || self.data.vmtx.is_some()
+                || matches!(grid_fit_metrics, MetricsGridFit::Vertical))
+        {
             metrics.vert_bearing_x = metrics.hori_bearing_x - vertical_bearing_x_advance_width / 2;
         }
 

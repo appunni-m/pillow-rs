@@ -725,15 +725,19 @@ fn scale_glyph_impl_with_context(
     let lsb = scale.scale_x(h_metric.lsb as i32);
 
     let outline_raw: std::rc::Rc<crate::tt::glyf::GlyphOutline> = if round_component_offsets {
-        std::rc::Rc::new(load_glyph_with_scaled_component_offsets(
-            &data.glyf_data,
-            &data.loca_data,
-            data.head.index_to_loc_format,
-            glyph_index,
-            &data.hmtx,
-            scale.x_scale,
-            scale.y_scale,
-        )?)
+        if data.cff.is_some() {
+            data.load_glyph_outline(glyph_index)?
+        } else {
+            std::rc::Rc::new(load_glyph_with_scaled_component_offsets(
+                &data.glyf_data,
+                &data.loca_data,
+                data.head.index_to_loc_format,
+                glyph_index,
+                &data.hmtx,
+                scale.x_scale,
+                scale.y_scale,
+            )?)
+        }
     } else {
         data.load_glyph_outline(glyph_index)?
     };
@@ -965,7 +969,7 @@ fn scale_glyph_impl_with_context(
                     y,
                     on_curve: p.on_curve,
                 });
-                tags.push(if p.on_curve { 0x01 } else { 0x00 });
+                tags.push(raw_public_curve_tag(&outline_raw, p));
             }
             composite_point_tags = Some(tags);
             scaled
@@ -978,7 +982,7 @@ fn scale_glyph_impl_with_context(
         outline_raw
             .points
             .iter()
-            .map(|point| if point.on_curve { 0x01 } else { 0x00 })
+            .map(|point| raw_public_curve_tag(&outline_raw, point))
             .collect::<Vec<_>>()
     });
     let mut final_hint_context = None;
@@ -1258,6 +1262,16 @@ fn should_use_default_autohint(data: &FontData) -> bool {
     let prep_len = data.prep.as_ref().map_or(0, Vec::len);
 
     !has_font_program && prep_len <= 7 && !data.loca_data.is_empty()
+}
+
+fn raw_public_curve_tag(outline: &GlyphOutline, point: &crate::tt::glyf::OutlinePoint) -> u8 {
+    if outline.has_cubic_tags {
+        point.tag & 3
+    } else if point.on_curve {
+        0x01
+    } else {
+        0x00
+    }
 }
 
 fn autohint_vertical_metrics(

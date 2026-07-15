@@ -71,6 +71,7 @@ fn trace_one_glyph() {
         instructions: raw.instructions.clone(),
         components: Vec::new(),
         outline_flags: raw.outline_flags,
+        has_cubic_tags: raw.has_cubic_tags,
     };
 
     let metrics = font.face_globals.get_metrics(gid);
