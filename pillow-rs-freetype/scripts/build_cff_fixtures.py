@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from fontTools.fontBuilder import FontBuilder
+from fontTools.misc.psCharStrings import T2CharString
 from fontTools.pens.t2CharStringPen import T2CharStringPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont
@@ -18,7 +19,15 @@ UNITS_PER_EM = 1000
 FIXED_HEAD_TIME = 0
 GLYPH_ORDER = [".notdef", "A"]
 METRICS = {".notdef": (600, 0), "A": (600, 40)}
-CUBIC_GLYPH_ORDER = [".notdef", "A", "cubic_c2_x_flatness", "cubic_c2_y_flatness"]
+CUBIC_GLYPH_ORDER = [
+    ".notdef",
+    "A",
+    "cubic_c2_x_flatness",
+    "cubic_c2_y_flatness",
+    "vertical_lines",
+    "relative_lines",
+    "vh_curve",
+]
 NAMES = {
     "familyName": "Hybrid OTTO Coverage",
     "styleName": "Regular",
@@ -50,6 +59,10 @@ def t2_charstring(rectangle: bool = False, cubic: str | None = None):
         pen.lineTo((80, 700))
         pen.closePath()
     return pen.getCharString()
+
+
+def t2_program_charstring(program: list[object]) -> T2CharString:
+    return T2CharString(program=program, private=None, globalSubrs=[])
 
 
 def glyf_glyph(rectangle: bool = False):
@@ -104,6 +117,9 @@ def build_cubic_cff(path: Path) -> None:
         "A": (900, 128),
         "cubic_c2_x_flatness": (420, 0),
         "cubic_c2_y_flatness": (420, 0),
+        "vertical_lines": (420, 0),
+        "relative_lines": (420, 0),
+        "vh_curve": (420, 0),
     }
     builder = FontBuilder(UNITS_PER_EM, isTTF=False)
     builder.setupGlyphOrder(CUBIC_GLYPH_ORDER)
@@ -112,6 +128,9 @@ def build_cubic_cff(path: Path) -> None:
             0x41: "A",
             0x42: "cubic_c2_x_flatness",
             0x43: "cubic_c2_y_flatness",
+            0x44: "vertical_lines",
+            0x45: "relative_lines",
+            0x46: "vh_curve",
         }
     )
     builder.setupHorizontalMetrics(metrics)
@@ -136,6 +155,50 @@ def build_cubic_cff(path: Path) -> None:
             "A": t2_charstring(cubic="arched"),
             "cubic_c2_x_flatness": t2_charstring(cubic="c2_x"),
             "cubic_c2_y_flatness": t2_charstring(cubic="c2_y"),
+            "vertical_lines": t2_program_charstring(
+                [
+                    600,
+                    100,
+                    "vmoveto",
+                    200,
+                    "vlineto",
+                    100,
+                    "hlineto",
+                    -200,
+                    "vlineto",
+                    "endchar",
+                ]
+            ),
+            "relative_lines": t2_program_charstring(
+                [
+                    600,
+                    0,
+                    60,
+                    "rmoveto",
+                    100,
+                    0,
+                    0,
+                    100,
+                    -100,
+                    0,
+                    "rlineto",
+                    "endchar",
+                ]
+            ),
+            "vh_curve": t2_program_charstring(
+                [
+                    600,
+                    100,
+                    "vmoveto",
+                    100,
+                    50,
+                    60,
+                    70,
+                    80,
+                    "vhcurveto",
+                    "endchar",
+                ]
+            ),
         },
         {},
     )
