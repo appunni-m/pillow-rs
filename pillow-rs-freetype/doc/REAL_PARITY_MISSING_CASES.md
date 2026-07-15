@@ -1,6 +1,6 @@
 # Real-Parity Missing Cases
 
-Baseline: `8823db07`
+Baseline: `eec393e4`
 
 Source artifacts:
 
@@ -32,19 +32,19 @@ It excludes `compile-contract`, `real-parity`, `real-null-validation`,
 
 | Category | Rows |
 |---|---:|
-| real-parity | 3581 |
+| real-parity | 3831 |
 | compile-contract | 2229 |
-| generic-fallback | 880 |
-| generic-error-fallback | 139 |
-| real-null-validation | 8 |
-| null-error-fallback | 7 |
+| generic-fallback | 817 |
+| generic-error-fallback | 129 |
+| real-null-validation | 9 |
+| null-error-fallback | 6 |
 | explicit-unsupported | 6 |
-| pending-core | 5 |
+| pending-core | 6 |
 | raw-slot-null-validation | 4 |
 | void-fallback | 2 |
 | wrapper-null-validation | 1 |
 
-Missing real-parity rows: 1039.
+Missing real-parity rows: 966.
 
 ## Missing Rows By Subject Group
 
@@ -52,22 +52,21 @@ Missing real-parity rows: 1039.
 |---|---:|---:|---:|---:|---|
 | `ftcolor` | 130 | 119 | 11 | 0 | `ftcolor.get_paint_graph`, `ftcolor.traverse_paint_graph`, `ftcolor.get_paint`, `ftcolor.palette_data_get` |
 | `ftcache` | 112 | 110 | 2 | 0 | `ftcache.image_cache_lookup_scaler`, `ftcache.cmap_cache_lookup`, `ftcache.manager_lookup_size`, `ftcache.sbit_cache_lookup_scaler` |
-| `ftstroke` | 86 | 72 | 14 | 0 | `ftstroke.export_border`, `ftstroke.parse_outline`, `ftstroke.glyph_stroke`, `ftstroke.glyph_stroke_border` |
+| `ftstroke` | 86 | 72 | 14 | 0 | `ftstroke.export_border`, `ftstroke.open_path_geometry`, `ftstroke.join_geometry`, `ftstroke.parse_outline` |
 | `ftmm` | 84 | 67 | 14 | 3 | `ftmm.get_mm_var`, `ftmm.get_multi_master`, `ftmm.get_var_blend_coordinates`, `ftmm.get_var_design_coordinates` |
 | `fterrdef` | 54 | 39 | 15 | 0 | `FT_Open_Face`, `FT_Outline_Render`, `FT_Add_Module`, `FT_New_Face` |
-| `ftimage` | 49 | 36 | 13 | 0 | `ftoutln.outline_decompose`, `ftimage.outline_decompose`, `ftoutln.outline_get_bitmap`, `renderer.raster_render` |
-| `ftmodapi` | 47 | 29 | 16 | 0 | `ftmodapi.add_module`, `ftmodapi.inspect_module_flags`, `ftmodapi.set_debug_hook`, `ftmodapi.property_get` |
-| `freetype` | 44 | 28 | 4 | 1 | `freetype.attach_file`, `freetype.attach_stream`, `freetype.face_properties`, `freetype.get_track_kerning` |
+| `ftmodapi` | 47 | 29 | 18 | 0 | `ftmodapi.inspect_module_flags`, `ftmodapi.add_module`, `ftmodapi.set_debug_hook`, `ftmodapi.property_get` |
+| `freetype` | 43 | 28 | 14 | 1 | `freetype.face_properties`, `freetype.attach_file`, `freetype.attach_stream`, `freetype.active_size_handle` |
 | `ftgxval` | 41 | 35 | 6 | 0 | `FT_TrueTypeGX_Validate`, `ftgxval.truetype_gx_validate`, `ftgxval.classic_kern_validate`, `ftgxval.classic_kern_free` |
-| `ftoutln` | 39 | 30 | 9 | 0 | `ftoutln.outline_decompose`, `ftoutln.outline_check`, `ftoutln.outline_copy`, `ftoutln.outline_done` |
-| `ftbitmap` | 38 | 38 | 0 | 0 | `ftbitmap.bitmap_blend`, `ftbitmap.bitmap_convert`, `ftbitmap.bitmap_copy`, `ftbitmap.bitmap_embolden` |
+| `ftoutln` | 32 | 26 | 6 | 0 | `ftoutln.outline_reverse`, `ftoutln.outline_transform`, `ftoutln.outline_translate`, `ftoutln.outline_get_orientation` |
 | `ftwinfnt` | 31 | 28 | 3 | 0 | `winfnt.get_header`, `ftwinfnt.get_winfnt_header`, `ftwinfnt.get_winfnt_header_abi`, `ftwinfnt.winfnt_header_type_import` |
 | `t1tables` | 31 | 31 | 0 | 0 | `t1tables.get_ps_font_private_mm_blend`, `t1tables.get_ps_font_value`, `t1tables.mm_blend_dictionary`, `t1tables.get_ps_font_value_encoding` |
 | `ftlist` | 29 | 27 | 2 | 0 | `ftlist.list_finalize`, `ftlist.list_find`, `ftlist.list_iterate`, `ftlist.list_remove` |
+| `ftimage` | 26 | 20 | 6 | 0 | `ftoutln.outline_get_bitmap`, `renderer.raster_render`, `freetype.load_svg_glyph`, `ftimage.custom_renderer_lifecycle` |
 | `ftdriver` | 25 | 23 | 2 | 0 | `ftdriver.property_set_get`, `ftdriver.glyph_to_script_map`, `ftdriver.hinting_engine_property`, `ftdriver.interpreter_version_property` |
 | `ftglyph` | 24 | 20 | 4 | 0 | `ftglyph.done_glyph`, `ftglyph.glyph_transform`, `ftglyph.new_glyph`, `ftglyph.type_runtime` |
 | `ftotval` | 17 | 15 | 2 | 0 | `ftotval.open_type_validate`, `ftotval.open_type_validate_then_free` |
-| `ftparams` | 16 | 14 | 0 | 0 | `freetype.open_face_with_params`, `freetype.face_properties_then_render`, `freetype.open_face_incremental`, `freetype.face_properties` |
+| `ftparams` | 16 | 14 | 2 | 0 | `freetype.open_face_with_params`, `freetype.face_properties_then_render`, `freetype.open_face_incremental`, `freetype.face_properties` |
 | `ftcid` | 15 | 14 | 1 | 0 | `ftcid.get_cid_from_glyph_index`, `ftcid.get_cid_is_internally_cid_keyed`, `ftcid.get_cid_registry_ordering_supplement` |
 | `ftincrem` | 15 | 14 | 1 | 0 | `ftincrem.load_incremental_glyph`, `ftincrem.callback_handle_identity`, `ftincrem.client_lifetime_model`, `ftincrem.validate_callback_table` |
 | `ftlogging` | 14 | 14 | 0 | 0 | `ftlogging.set_log_handler`, `ftlogging.trace_set_level`, `ftlogging.trace_set_default_level`, `ftlogging.set_default_log_handler_abi` |
@@ -79,10 +78,10 @@ Missing real-parity rows: 1039.
 | `ftgzip` | 9 | 2 | 7 | 0 | `ftgzip.gzip_uncompress`, `ftgzip.stream_open_gzip` |
 | `ftbzip2` | 6 | 4 | 2 | 0 | `ftbzip2.stream_open_bzip2`, `ftbzip2.stream_read`, `ftbzip2.stream_close` |
 | `otsvg` | 6 | 6 | 0 | 0 | `otsvg.svg_document_type_import`, `otsvg.svg_document_type_abi`, `otsvg.svg_renderer_callback_capture`, `otsvg.svg_document_rec_abi` |
-| `ftfntfmt` | 5 | 5 | 0 | 0 | `ftfntfmt.get_font_format`, `ftfntfmt.get_x11_font_format` |
 | `ftlzw` | 5 | 2 | 3 | 0 | `ftlzw.stream_open_lzw`, `ftlzw.stream_open_lzw_abi` |
 | `ftsystem` | 4 | 4 | 0 | 0 | `ftsystem.open_face_with_external_stream`, `ftsystem.new_library_with_custom_memory`, `ftsystem.memory_stream_probe` |
 | `tttables` | 3 | 2 | 0 | 1 | `face.load_then_get_sfnt_table.maxp`, `face.new`, `sfnt.get_sfnt_table.record` |
+| `ftbitmap` | 1 | 0 | 0 | 1 | `ftbitmap.glyphslot_own_bitmap` |
 | `fttypes` | 1 | 1 | 0 | 0 | `winfnt.get_header` |
 
 ## Top Operation Buckets
@@ -96,7 +95,7 @@ repo-visible buckets for handoff and subagent selection.
 |---:|---|---|---|---|---|
 | 24 | `generic-fallback` | `ftcache` | `ftcache.image_cache_lookup_scaler` | `ftcache.FTC_ImageCache_LookupScaler / planned_cache_subsystem_not_out_of_scope` | no explicit maintained route classification |
 | 20 | `generic-fallback` | `ftcolor` | `ftcolor.get_paint_graph` | `ftcolor.FT_COLR_COMPOSITE_EXCLUSION / paint_composite_mode_runtime` | no explicit maintained route classification |
-| 19 | `generic-fallback` | `fttypes` | `winfnt.get_header` | `fttypes.FT_UShort / winfnt_header_field_contract` | no explicit maintained route classification |
+| 18 | `generic-fallback` | `ftwinfnt` | `winfnt.get_header` | `ftwinfnt.FT_WinFNT_ID_CP1250 / charset_roundtrip_from_header` | no explicit maintained route classification |
 | 18 | `generic-fallback` | `ftcache` | `ftcache.cmap_cache_lookup` | `ftcache.FTC_CMapCache_Lookup / planned_cache_subsystem_not_out_of_scope` | no explicit maintained route classification |
 | 16 | `generic-fallback` | `ftgxval` | `FT_TrueTypeGX_Validate` | `ftgxval.FT_VALIDATE_GX / validates_all_requested_tables` | no explicit maintained route classification |
 | 14 | `generic-fallback` | `ftotval` | `ftotval.open_type_validate` | `ftotval.FT_OpenType_Validate / selected_tables_success` | no explicit maintained route classification |
@@ -116,10 +115,10 @@ repo-visible buckets for handoff and subagent selection.
 | 7 | `generic-fallback` | `ftimage` | `ftoutln.outline_get_bitmap` | `ftimage.FT_Bitmap / empty_bitmap_is_valid` | no explicit maintained route classification |
 | 7 | `generic-fallback` | `ftstroke` | `ftstroke.export_border` | `ftstroke.FT_STROKER_BORDER_LEFT / left_border_export_geometry` | no explicit maintained route classification |
 | 6 | `explicit-unsupported` | `freetype` | `freetype.face_properties` | `freetype.FT_Face_Properties / success_supported_face_properties` | explicit Rust stub returns Unimplemented_Feature |
-| 6 | `generic-fallback` | `ftbitmap` | `ftbitmap.bitmap_blend` | `ftbitmap.FT_Bitmap_Blend / success_empty_target_allocates_bgra` | no explicit maintained route classification |
-| 6 | `generic-fallback` | `ftbitmap` | `ftbitmap.bitmap_convert` | `ftbitmap.FT_Bitmap_Convert / success_supported_depths_to_gray` | no explicit maintained route classification |
-| 6 | `generic-fallback` | `ftbitmap` | `ftbitmap.bitmap_copy` | `ftbitmap.FT_Bitmap_Copy / success_deep_copy_all_public_fields` | no explicit maintained route classification |
-| 6 | `generic-fallback` | `ftbitmap` | `ftbitmap.bitmap_embolden` | `ftbitmap.FT_Bitmap_Embolden / success_gray_and_packed_modes` | no explicit maintained route classification |
+| 6 | `generic-fallback` | `ftmodapi` | `ftmodapi.inspect_module_flags` | `ftmodapi.FT_MODULE_DRIVER_HAS_HINTER / present_on_native_hinter_drivers` | no explicit maintained route classification |
+| 6 | `generic-fallback` | `ftrender` | `ftrender.set_renderer_then_render` | `ftrender.FT_Set_Renderer / render_output_changes_with_current_renderer` | no explicit maintained route classification |
+| 6 | `generic-fallback` | `t1tables` | `t1tables.get_ps_font_value` | `t1tables.FT_Get_PS_Font_Value / signature_and_behavior_matrix` | no explicit maintained route classification |
+| 5 | `generic-fallback` | `ftimage` | `ftoutln.outline_get_bitmap` | `ftimage.FT_Bitmap / empty_bitmap_is_valid` | no explicit maintained route classification |
 | 6 | `generic-fallback` | `ftcache` | `ftcache.image_cache_lookup` | `ftcache.FTC_ImageCache_Lookup / planned_cache_subsystem_not_out_of_scope` | no explicit maintained route classification |
 | 6 | `generic-fallback` | `ftcache` | `ftcache.manager_lookup_face` | `ftcache.FTC_Manager_LookupFace / planned_cache_subsystem_not_out_of_scope` | no explicit maintained route classification |
 | 6 | `generic-fallback` | `ftcache` | `ftcache.manager_new` | `ftcache.FTC_Manager_New / planned_cache_subsystem_not_out_of_scope` | no explicit maintained route classification |
@@ -157,14 +156,20 @@ repo-visible buckets for handoff and subagent selection.
 
 ## Coverage Bulk Context
 
-`target/coverage/unified-condition-missing-lines.txt` was absent in this
-worktree after generating the route audit. No condition-coverage bulk context
-was used for this table.
+Current condition-coverage bulk context from
+`target/coverage/unified-condition-summary.json`:
 
-If that file is later present, use it as secondary prioritization only: route
-audit category and route shape decide whether a row is real parity, while
-condition coverage helps pick the first implementation branch inside a chosen
-bucket.
+| File | Lines | Branches | Functions |
+|---|---:|---:|---:|
+| `src/tt/sbit.rs` | 514 / 638 | 60 / 60 | 34 / 87 |
+| `src/grays.rs` | 727 / 740 | 177 / 178 | 32 / 33 |
+| `src/autohint/latin.rs` | 2607 / 2844 | 1076 / 1286 | 70 / 73 |
+| `src/render.rs` | 2098 / 2597 | 378 / 434 | 142 / 183 |
+| `src/scaler.rs` | 1153 / 1295 | 194 / 212 | 52 / 65 |
+
+Use condition coverage as secondary prioritization only: route audit category
+and route shape decide whether a row is real parity, while condition coverage
+helps pick the first implementation branch inside a chosen bucket.
 
 ## Candidate Conversion Buckets
 
@@ -181,7 +186,7 @@ units, not as a single monolithic implementation task.
 | Error-path asset routing | 54 | `fterrdef.*` error rows across face load, render, module, stream paths | `tests/unified_fixture_parity.rs`, public-api input rows, runner/oracle routing, then relevant core modules | Replace no-asset expected-error placeholders with concrete C oracle inputs and Rust route execution. |
 | Outline/image/raster callbacks | 88 | `ftimage.*`, `ftoutln.*`, `ftrender.*` decompose/render/raster routes | `src/outline.rs`, `src/render.rs`, `src/grays.rs`, `src/ffi/*`, C/WASM wrappers | Callback-compatible outline decomposition, bitmap extraction, renderer mode state, and exact error propagation. |
 | Module/property APIs | 72 | `ftmodapi.*`, `ftdriver.*`, `ftparams.*`, `freetype.face_properties*` | `src/api.rs`, `src/font.rs`, `src/autohint/*`, `src/tt/hinter/*`, `src/ffi/*`, C/WASM wrappers | Decide exact supported-vs-unsupported module surface, then route properties through real core state. |
-| Bitmap and glyph object APIs | 62 | `ftbitmap.*`, `ftglyph.*`, bitmap glyph/object lifecycle | `src/render.rs`, `src/font.rs`, `src/outline.rs`, `src/ffi/*`, C/WASM wrappers | Public bitmap ownership/copy/convert/embolden/blend semantics and glyph object handles. |
+| Glyph object APIs | 25 | `ftglyph.*` plus the allocator-fault `ftbitmap.glyphslot_own_bitmap` pending row | `src/render.rs`, `src/font.rs`, `src/outline.rs`, `src/ffi/*`, C/WASM wrappers | Glyph object handles, bitmap glyph ownership, transform/copy/done semantics, and maintained allocator fault injection for the remaining bitmap pending row. |
 | GX/OpenType validation | 58 | `ftgxval.*`, `ftotval.*` validate/free rows | `src/tables.rs`, new validator modules if added, `src/ffi/*`, C/WASM wrappers | Validation buffer ownership and exact selected-table success/error behavior. |
 | Legacy format/stream families | 100 | `t1tables.*`, `ftwinfnt.*`, `ftbdf.*`, `ftpfr.*`, `ftcid.*`, compressed stream rows | new format/stream modules if added, `src/font.rs`, `src/tables.rs`, `src/ffi/*`, C/WASM wrappers | Decide supported pure-Rust parsers vs exact unsupported/error policy, then add real oracle inputs. |
 
@@ -203,8 +208,9 @@ units, not as a single monolithic implementation task.
    concrete C/Rust route checks without changing expected outputs.
 6. Outline/image/raster callbacks: own `ftimage.*`, `ftoutln.*`, and
    `ftrender.*` routes that require callback or renderer state.
-7. Bitmap/glyph object lifecycle: own `ftbitmap.*` and `ftglyph.*` rows,
-   including ownership, copy, transform, and bitmap conversion semantics.
+7. Glyph object lifecycle: own `ftglyph.*` rows and the remaining
+   `ftbitmap.glyphslot_own_bitmap` allocator-fault pending row. The public
+   bitmap copy/convert/done/embolden/blend routes are already real parity.
 8. Module/property behavior: own `ftmodapi.*`, `ftdriver.*`, `ftparams.*`, and
    `freetype.face_properties*`; first classify exact unsupported behavior vs
    real stateful support.
