@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 171 | 128 | 43 | 139 | 900 KiB |
+| Active fixtures | 175 | 132 | 43 | 143 | 908 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 8 | 8 | 0 | 8 | 194 KiB |
 
@@ -139,6 +139,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `0b66ccbde246` | 0.01 | 1 | `fonts/control/ttc-offset-overflow.ttc` | 12-byte TTC declaring one absent face offset |
 | `1cca599d017f` | 0.02 | 1 | `fonts/control/ttc-face-offset-out-of-range.ttc` | complete one-face TTC header whose selected face offset is outside the stream |
 | `debb925b92a2` | 0.01 | 1 | `fonts/control/otto-empty.otf` | 12-byte zero-table OTTO header; owns the OpenType sfVersion predicate outcome before required-table rejection |
+| `ec2ef4a98e39`, `b4804a9f0857`, `59d08a1729b`, `cd6f3aada6e` | 1.9 each | 1 each | `fonts/cff/malformed-*.otf` | compact OpenType-CFF controls with malformed CFF short header, invalid INDEX offSize, out-of-order INDEX offsets, and escaped Top DICT op overflow; owns public `FT_New_Memory_Face` CFF face-open rejection branches |
 | `bf004c57a16e` | 1.7 | 1 | `fonts/charmap/format6-range.ttf` | format-6-only trimmed range with mapped and zero glyph entries; owns direct lookup, gap, exhaustion, and wrapping iteration |
 | `f059f367c976` | 4.2 | 1 | `fonts/cmap/cmap-format-language-matrix.ttf` | source-backed compact cmap matrix with format 4 language `0x0409`, format 6 language 17, format 12 language `0x12345678`, and format 14 `FE00` empty-selector plus `FE0F`/`E0101` default and non-default variation-selector metadata |
 | `251fcf468057` | 2.1 | 1 | `fonts/charmap/cmap-parser-matrix.ttf` | one valid format 6 plus unsupported, out-of-range, and independently malformed format 4/6/12 records |

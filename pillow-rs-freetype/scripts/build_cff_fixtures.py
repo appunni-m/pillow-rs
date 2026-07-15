@@ -506,6 +506,8 @@ def build_cubic_cff(path: Path) -> None:
         # preserve the explicit compact fixture bbox.
         TopDict.recalcFontBBox = lambda self: None
         builder.font.recalcBBoxes = False
+        builder.font["head"].created = FIXED_HEAD_TIME
+        builder.font["head"].modified = FIXED_HEAD_TIME
         builder.font["CFF "].cff.topDictIndex[0].FontBBox = [0, 0, 900, 1200]
         builder.save(path)
     finally:
@@ -595,10 +597,88 @@ def write_pure_cff_empty_tt_programs() -> None:
         font.save(out, reorderTables=True)
 
 
+def sfnt_checksum(data: bytes) -> int:
+    padded = data + b"\0" * ((4 - len(data) % 4) % 4)
+    return sum(int.from_bytes(padded[i : i + 4], "big") for i in range(0, len(padded), 4)) & 0xFFFFFFFF
+
+
+def replace_sfnt_table(source: Path, dest: Path, tag: bytes, payload: bytes) -> None:
+    data = bytearray(source.read_bytes())
+    num_tables = int.from_bytes(data[4:6], "big")
+    for index in range(num_tables):
+        record = 12 + index * 16
+        if bytes(data[record : record + 4]) != tag:
+            continue
+        offset = int.from_bytes(data[record + 8 : record + 12], "big")
+        old_length = int.from_bytes(data[record + 12 : record + 16], "big")
+        if len(payload) > old_length:
+            raise ValueError(f"{tag!r} replacement is larger than source table")
+        data[offset : offset + len(payload)] = payload
+        data[offset + len(payload) : offset + old_length] = b"\0" * (old_length - len(payload))
+        data[record + 4 : record + 8] = sfnt_checksum(payload).to_bytes(4, "big")
+        data[record + 12 : record + 16] = len(payload).to_bytes(4, "big")
+        if dest.exists() or dest.is_symlink():
+            dest.unlink()
+        dest.write_bytes(data)
+        return
+    raise ValueError(f"missing table {tag!r} in {source}")
+
+
+def cff_index(objects: list[bytes]) -> bytes:
+    if not objects:
+        return b"\0\0"
+    offsets = [1]
+    cursor = 1
+    for item in objects:
+        cursor += len(item)
+        offsets.append(cursor)
+    return (
+        len(objects).to_bytes(2, "big")
+        + b"\x01"
+        + bytes(offsets)
+        + b"".join(objects)
+    )
+
+
+def malformed_cff_payload(kind: str) -> bytes:
+    header = b"\x01\x00\x04\x04"
+    match kind:
+        case "short_header":
+            return b"\x01\x00\x04"
+        case "invalid_name_index_offsize":
+            return header + b"\x00\x01\x00"
+        case "name_index_offsets_out_of_order":
+            return header + b"\x00\x01\x01\x02\x01"
+        case "escaped_top_dict_op_overflow":
+            return header + cff_index([]) + cff_index([b"\x0C"]) + cff_index([]) + cff_index([])
+        case _:
+            raise ValueError(f"unknown malformed CFF fixture kind {kind}")
+
+
+def write_malformed_cff_faces() -> None:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory() as tmp:
+        base = Path(tmp) / "base.otf"
+        build_cubic_cff(base)
+        for kind in [
+            "short_header",
+            "invalid_name_index_offsize",
+            "name_index_offsets_out_of_order",
+            "escaped_top_dict_op_overflow",
+        ]:
+            replace_sfnt_table(
+                base,
+                OUT_DIR / f"malformed-{kind.replace('_', '-')}.otf",
+                b"CFF ",
+                malformed_cff_payload(kind),
+            )
+
+
 def main() -> None:
     write_hybrid_otto_face_info()
     write_pure_cff_cubic()
     write_pure_cff_empty_tt_programs()
+    write_malformed_cff_faces()
 
 
 if __name__ == "__main__":
