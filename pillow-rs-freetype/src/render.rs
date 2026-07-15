@@ -1123,7 +1123,12 @@ impl MonoOutlineProfileBuilder {
     }
 
     fn build(mut self, outline: &Outline) -> Result<Vec<MonoProfile>, FontError> {
-        self.decompose(&outline.points, &outline.contours, outline.n_contours)?;
+        self.decompose(
+            &outline.points,
+            &outline.tags,
+            &outline.contours,
+            outline.n_contours,
+        )?;
         Ok(self.profiles)
     }
 
@@ -1159,6 +1164,19 @@ impl MonoOutlineProfileBuilder {
 
     fn conic_to_scaled(&mut self, control: Point, point: Point, contour: usize) {
         self.conic_to(control.x, control.y, point.x, point.y, contour);
+    }
+
+    fn cubic_to_point(
+        &mut self,
+        control1: crate::outline::OutlinePoint,
+        control2: crate::outline::OutlinePoint,
+        point: crate::outline::OutlinePoint,
+        contour: usize,
+    ) {
+        let control1 = self.transform(control1);
+        let control2 = self.transform(control2);
+        let point = self.transform(point);
+        self.cubic_to(control1, control2, point, contour);
     }
 
     fn transform(&self, point: crate::outline::OutlinePoint) -> Point {
@@ -1257,6 +1275,62 @@ impl MonoOutlineProfileBuilder {
 
             self.last_x = x3;
             self.last_y = y3;
+        }
+    }
+
+    fn cubic_to(&mut self, control1: Point, control2: Point, point: Point, contour: usize) {
+        let mut stack = vec![[
+            point,
+            control2,
+            control1,
+            Point {
+                x: self.last_x,
+                y: self.last_y,
+            },
+        ]];
+
+        while let Some(arc) = stack.pop() {
+            let y1 = arc[3].y;
+            let y2 = arc[2].y;
+            let y3 = arc[1].y;
+            let y4 = arc[0].y;
+            let x4 = arc[0].x;
+            let ymin1 = y1.min(y4);
+            let ymax1 = y1.max(y4);
+            let ymin2 = y2.min(y3);
+            let ymax2 = y2.max(y3);
+
+            if (ymin2 - self.precision.floor(ymin1)).min(self.precision.ceiling(ymax1) - ymax2) < 0
+            {
+                let (first, second) = split_cubic_arc(arc);
+                stack.push(second);
+                stack.push(first);
+                continue;
+            }
+
+            if y1 != y4 {
+                let state = if y1 < y4 {
+                    MonoState::Ascending
+                } else {
+                    MonoState::Descending
+                };
+                self.ensure_profile_state(state, contour);
+                let min_y = self.min_y;
+                let max_y = self.max_y;
+                let precision = self.precision;
+                if state == MonoState::Ascending {
+                    self.push_profile_xs_from(|xs| {
+                        bezier_up_3_into_precision(xs, arc, min_y, max_y, precision);
+                    });
+                } else {
+                    self.push_profile_xs_from(|xs| {
+                        bezier_down_3_into_precision(xs, arc, min_y, max_y, precision);
+                    });
+                }
+            }
+
+            self.last_x = x4;
+            self.last_y = y4;
         }
     }
 
@@ -1373,6 +1447,7 @@ impl MonoOutlineProfileBuilder {
     fn decompose(
         &mut self,
         pts: &[crate::outline::OutlinePoint],
+        tags: &[u8],
         contours: &[i16],
         n_contours: i32,
     ) -> Result<(), FontError> {
@@ -1397,14 +1472,14 @@ impl MonoOutlineProfileBuilder {
             let mut limit_eff = limit;
             let mut v_start_scaled = self.transform(v_start);
 
-            let first_tag = curve_tag(pts[first].on_curve);
+            let first_tag = curve_tag_at(pts, tags, first);
             if first_tag == CURVE_TAG_CUBIC {
                 return Err(FontError::InvalidOutline(
                     "outline: contour starts with cubic".into(),
                 ));
             }
             if first_tag == CURVE_TAG_CONIC {
-                if curve_tag(pts[limit].on_curve) == CURVE_TAG_ON {
+                if curve_tag_at(pts, tags, limit) == CURVE_TAG_ON {
                     v_start = v_last;
                     v_start_scaled = self.transform(v_start);
                     limit_eff = limit.checked_sub(1).ok_or_else(|| {
@@ -1428,6 +1503,7 @@ impl MonoOutlineProfileBuilder {
             };
             self.walk_contour(
                 pts,
+                tags,
                 start,
                 i32_from_usize(limit_eff),
                 v_start_scaled,
@@ -1454,6 +1530,7 @@ impl MonoOutlineProfileBuilder {
     fn walk_contour(
         &mut self,
         pts: &[crate::outline::OutlinePoint],
+        tags: &[u8],
         mut cursor: i32,
         limit: i32,
         v_start_scaled: Point,
@@ -1462,7 +1539,7 @@ impl MonoOutlineProfileBuilder {
         while cursor < limit {
             cursor += 1;
             let idx = usize_from_i32(cursor);
-            match curve_tag(pts[idx].on_curve) {
+            match curve_tag_at(pts, tags, idx) {
                 CURVE_TAG_ON => {
                     self.line_to_point(pts[idx], contour);
                 }
@@ -1472,7 +1549,7 @@ impl MonoOutlineProfileBuilder {
                         if cursor < limit {
                             cursor += 1;
                             let next = pts[usize_from_i32(cursor)];
-                            let tag = curve_tag(next.on_curve);
+                            let tag = curve_tag_at(pts, tags, usize_from_i32(cursor));
                             if tag == CURVE_TAG_ON {
                                 self.conic_to_point(control, next, contour);
                                 break;
@@ -1492,9 +1569,25 @@ impl MonoOutlineProfileBuilder {
                     }
                 }
                 CURVE_TAG_CUBIC => {
-                    return Err(FontError::InvalidOutline(
-                        "outline: cubic mono outline unsupported".into(),
-                    ));
+                    if cursor + 2 > limit
+                        || curve_tag_at(pts, tags, usize_from_i32(cursor + 1)) != CURVE_TAG_CUBIC
+                    {
+                        return Err(FontError::InvalidOutline(
+                            "outline: bad cubic tag sequence".into(),
+                        ));
+                    }
+                    let control1 = pts[idx];
+                    let control2 = pts[usize_from_i32(cursor + 1)];
+                    cursor += 2;
+                    if cursor <= limit {
+                        let point = pts[usize_from_i32(cursor)];
+                        self.cubic_to_point(control1, control2, point, contour);
+                    } else {
+                        let control1 = self.transform(control1);
+                        let control2 = self.transform(control2);
+                        self.cubic_to(control1, control2, v_start_scaled, contour);
+                        return Ok(());
+                    }
                 }
                 _ => unreachable!(),
             }
@@ -1812,7 +1905,7 @@ fn line_up_into_precision(
 ) {
     let min_y = range.min_y;
     let max_y = range.max_y;
-    if y2 < min_y || y1 > max_y {
+    if (i64::from(y2) - i64::from(min_y)).min(i64::from(max_y) - i64::from(y1)) < 0 {
         return;
     }
     let e2 = if y2 > max_y {
@@ -1920,14 +2013,88 @@ fn bezier_up_2_into(out: &mut Vec<i32>, arc: [Point; 3], min_y: i32, max_y: i32)
 
 fn bezier_up_2_into_precision(
     out: &mut Vec<i32>,
-    mut arc: [Point; 3],
+    arc: [Point; 3],
     min_y: i32,
     max_y: i32,
     precision: MonoPrecision,
 ) {
-    let y1 = arc[2].y;
+    bezier_up_into_precision(out, arc, split_conic_arc, min_y, max_y, precision);
+}
+
+fn bezier_down_2(mut arc: [Point; 3], min_y: i32, max_y: i32) -> Vec<i32> {
+    arc[0].y = -arc[0].y;
+    arc[1].y = -arc[1].y;
+    arc[2].y = -arc[2].y;
+    let mut out = Vec::new();
+    bezier_up_2_into(&mut out, arc, -max_y, -min_y);
+    out
+}
+
+fn bezier_down_2_into(out: &mut Vec<i32>, mut arc: [Point; 3], min_y: i32, max_y: i32) {
+    arc[0].y = -arc[0].y;
+    arc[1].y = -arc[1].y;
+    arc[2].y = -arc[2].y;
+    bezier_up_2_into(out, arc, -max_y, -min_y);
+}
+
+fn bezier_down_2_into_precision(
+    out: &mut Vec<i32>,
+    arc: [Point; 3],
+    min_y: i32,
+    max_y: i32,
+    precision: MonoPrecision,
+) {
+    bezier_down_into_precision(out, arc, split_conic_arc, min_y, max_y, precision);
+}
+
+fn bezier_up_3_into_precision(
+    out: &mut Vec<i32>,
+    arc: [Point; 4],
+    min_y: i32,
+    max_y: i32,
+    precision: MonoPrecision,
+) {
+    bezier_up_into_precision(out, arc, split_cubic_arc, min_y, max_y, precision);
+}
+
+fn bezier_down_3_into_precision(
+    out: &mut Vec<i32>,
+    arc: [Point; 4],
+    min_y: i32,
+    max_y: i32,
+    precision: MonoPrecision,
+) {
+    bezier_down_into_precision(out, arc, split_cubic_arc, min_y, max_y, precision);
+}
+
+fn bezier_down_into_precision<const N: usize>(
+    out: &mut Vec<i32>,
+    mut arc: [Point; N],
+    splitter: BezierSplitter<N>,
+    min_y: i32,
+    max_y: i32,
+    precision: MonoPrecision,
+) {
+    for point in &mut arc {
+        point.y = -point.y;
+    }
+    bezier_up_into_precision(out, arc, splitter, -max_y, -min_y, precision);
+}
+
+fn bezier_up_into_precision<const N: usize>(
+    out: &mut Vec<i32>,
+    mut arc: [Point; N],
+    splitter: BezierSplitter<N>,
+    min_y: i32,
+    max_y: i32,
+    precision: MonoPrecision,
+) {
+    // FreeType's black rasterizer uses the same `Bezier_Up` scanline
+    // accumulator for conics and cubics (`src/raster/ftraster.c:1062-1157`).
+    let degree = N - 1;
+    let y1 = arc[degree].y;
     let y2 = arc[0].y;
-    if y2 < min_y || y1 > max_y {
+    if (i64::from(y2) - i64::from(min_y)).min(i64::from(max_y) - i64::from(y1)) < 0 {
         return;
     }
 
@@ -1954,10 +2121,10 @@ fn bezier_up_2_into_precision(
         let end_y = arc[0].y;
         let end_x = arc[0].x;
         if end_y > e {
-            let dy = end_y - arc[2].y;
-            let dx = end_x - arc[2].x;
-            if dy > precision.step || dx.abs() > precision.step {
-                let (first, second) = split_conic_arc(arc);
+            let dy = end_y - arc[degree].y;
+            let dx = end_x - arc[degree].x;
+            if dy.max(dx.abs()) > precision.step {
+                let (first, second) = splitter(arc);
                 stack.push(second);
                 arc = first;
                 continue;
@@ -1976,35 +2143,6 @@ fn bezier_up_2_into_precision(
     }
 }
 
-fn bezier_down_2(mut arc: [Point; 3], min_y: i32, max_y: i32) -> Vec<i32> {
-    arc[0].y = -arc[0].y;
-    arc[1].y = -arc[1].y;
-    arc[2].y = -arc[2].y;
-    let mut out = Vec::new();
-    bezier_up_2_into(&mut out, arc, -max_y, -min_y);
-    out
-}
-
-fn bezier_down_2_into(out: &mut Vec<i32>, mut arc: [Point; 3], min_y: i32, max_y: i32) {
-    arc[0].y = -arc[0].y;
-    arc[1].y = -arc[1].y;
-    arc[2].y = -arc[2].y;
-    bezier_up_2_into(out, arc, -max_y, -min_y);
-}
-
-fn bezier_down_2_into_precision(
-    out: &mut Vec<i32>,
-    mut arc: [Point; 3],
-    min_y: i32,
-    max_y: i32,
-    precision: MonoPrecision,
-) {
-    arc[0].y = -arc[0].y;
-    arc[1].y = -arc[1].y;
-    arc[2].y = -arc[2].y;
-    bezier_up_2_into_precision(out, arc, -max_y, -min_y, precision);
-}
-
 fn split_conic_arc(arc: [Point; 3]) -> ([Point; 3], [Point; 3]) {
     let end = arc[0];
     let control = arc[1];
@@ -2016,6 +2154,71 @@ fn split_conic_arc(arc: [Point; 3]) -> ([Point; 3], [Point; 3]) {
         y: (end.y + control.y + control.y + start.y) >> 2,
     };
     ([center, start_control, start], [end, end_control, center])
+}
+
+fn split_cubic_arc(arc: [Point; 4]) -> ([Point; 4], [Point; 4]) {
+    let end = arc[0];
+    let control2 = arc[1];
+    let control1 = arc[2];
+    let start = arc[3];
+
+    // Port of `Split_Cubic` from `src/raster/ftraster.c:853-904`; the
+    // right shifts intentionally preserve C's fixed-point subdivision.
+    let split_axis = |end: i32, control2: i32, control1: i32, start: i32| {
+        let mut a = end + control2;
+        let b = control2 + control1;
+        let mut c = control1 + start;
+        let left_control1 = c >> 1;
+        c += b;
+        let left_control2 = c >> 2;
+        let right_control2 = a >> 1;
+        a += b;
+        let right_control1 = a >> 2;
+        let center = (a + c) >> 3;
+        (
+            left_control1,
+            left_control2,
+            center,
+            right_control1,
+            right_control2,
+        )
+    };
+
+    let (left_c1_x, left_c2_x, center_x, right_c1_x, right_c2_x) =
+        split_axis(end.x, control2.x, control1.x, start.x);
+    let (left_c1_y, left_c2_y, center_y, right_c1_y, right_c2_y) =
+        split_axis(end.y, control2.y, control1.y, start.y);
+
+    let center = Point {
+        x: center_x,
+        y: center_y,
+    };
+    (
+        [
+            center,
+            Point {
+                x: left_c2_x,
+                y: left_c2_y,
+            },
+            Point {
+                x: left_c1_x,
+                y: left_c1_y,
+            },
+            start,
+        ],
+        [
+            end,
+            Point {
+                x: right_c2_x,
+                y: right_c2_y,
+            },
+            Point {
+                x: right_c1_x,
+                y: right_c1_y,
+            },
+            center,
+        ],
+    )
 }
 
 fn insert_profile_sorted(list: &mut Vec<usize>, profile: usize, profiles: &[MonoProfile]) {
@@ -2596,6 +2799,8 @@ struct Point {
     x: i32,
     y: i32,
 }
+
+type BezierSplitter<const N: usize> = fn([Point; N]) -> ([Point; N], [Point; N]);
 
 fn midpoint(a: Point, b: Point) -> Point {
     Point {
