@@ -255,6 +255,8 @@ FT_Int FT_Get_Gasp(FT_Face face, FT_UInt ppem);
 FT_Error FT_Get_Glyph_Name(FT_Face face, FT_UInt glyph_index, void* buffer, FT_UInt buffer_max);
 FT_UInt FT_Get_Name_Index(FT_Face face, const char* glyph_name);
 const char* FT_Get_Postscript_Name(FT_Face face);
+const char* FT_Get_Font_Format(FT_Face face);
+const char* FT_Get_X11_Font_Format(FT_Face face);
 FT_Error FT_Set_Named_Instance(FT_Face face, FT_UInt instance_index);
 FT_UInt FT_Get_Sfnt_Name_Count(FT_Face face);
 FT_Error FT_Get_Sfnt_Name(FT_Face face, FT_UInt idx, FT_SfntName* aname);
