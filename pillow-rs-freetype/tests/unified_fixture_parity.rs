@@ -9196,13 +9196,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if case.expect_error { "error" } else { "bitmap" }.to_string(),
             case.case_id.clone(),
         ]),
-        "ftoutln.outline_get_bitmap" if case.subject == "ftoutln.FT_Outline_Get_Bitmap" => {
-            Ok(vec![
-                "--outline-get-bitmap".to_string(),
-                outline_get_bitmap_mode(case).to_string(),
-                case.case_id.clone(),
-            ])
-        }
+        "ftoutln.outline_get_bitmap" if outline_get_bitmap_runtime_supported(case) => Ok(vec![
+            "--outline-get-bitmap".to_string(),
+            outline_get_bitmap_mode(case).to_string(),
+            case.case_id.clone(),
+        ]),
         "ftadvanc.get_advance" => {
             let mut args = vec!["--get-advance".to_string()];
             push_font_source(case, &mut args)?;
@@ -9715,7 +9713,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             let face = open_face(case)?;
             rust_outline_operation(&face, case)
         }
-        "ftoutln.outline_get_bitmap" if case.subject == "ftoutln.FT_Outline_Get_Bitmap" => {
+        "ftoutln.outline_get_bitmap" if outline_get_bitmap_runtime_supported(case) => {
             rust_outline_get_bitmap(case)
         }
         "ftglyph.glyph_to_bitmap" => {
@@ -10301,7 +10299,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output
         }
-        "ftoutln.outline_get_bitmap" if case.subject == "ftoutln.FT_Outline_Get_Bitmap" => {
+        "ftoutln.outline_get_bitmap" if outline_get_bitmap_runtime_supported(case) => {
             c_outline_get_bitmap(case)
         }
         "ftglyph.glyph_to_bitmap" => {
@@ -10806,7 +10804,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_done_face(handle);
             output
         }
-        "ftoutln.outline_get_bitmap" if case.subject == "ftoutln.FT_Outline_Get_Bitmap" => {
+        "ftoutln.outline_get_bitmap" if outline_get_bitmap_runtime_supported(case) => {
             wasm_outline_get_bitmap(case)
         }
         "ftglyph.glyph_to_bitmap" => {
@@ -16781,11 +16779,20 @@ fn outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> 
     }
 }
 
+fn outline_get_bitmap_runtime_supported(case: &InputCase) -> bool {
+    case.subject == "ftoutln.FT_Outline_Get_Bitmap"
+        || (case.subject == "ftimage.FT_PIXEL_MODE_NONE"
+            && case.case == "invalid_render_target_errors")
+}
+
 fn outline_get_bitmap_mode(case: &InputCase) -> &'static str {
     match case.case.as_str() {
         "gray_lcd_modes_select_aa_flag" => "modes",
         "mono_target_uses_default_raster" => "mono",
         "null_bitmap_and_delegate_errors" => "errors",
+        "invalid_render_target_errors" if case.subject == "ftimage.FT_PIXEL_MODE_NONE" => {
+            "invalid-none"
+        }
         _ => "unsupported",
     }
 }
@@ -16843,6 +16850,18 @@ fn rust_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
                 },
                 output: json!({ "results": results }),
             })
+        }
+        "invalid-none" => {
+            let library = FT_Init_FreeType();
+            let outline = rust_outline_get_bitmap_square(false);
+            let target = rust_outline_get_bitmap_invalid_none_target();
+            let err = FT_Outline_Get_Bitmap(Some(&library), Some(&outline), Some(&target))
+                .err()
+                .unwrap_or(FT_Err_Ok);
+            Ok(outline_get_bitmap_invalid_target_output(
+                err,
+                outline_get_bitmap_invalid_target_json(&target),
+            ))
         }
         _ => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
     }
@@ -16916,6 +16935,21 @@ fn c_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
                 output: json!({ "results": errors.map(|err| json!({ "return": err })) }),
             })
         }
+        "invalid-none" => {
+            let mut library = ptr::null_mut();
+            let err = c_abi::FT_Init_FreeType(&mut library);
+            if err != 0 {
+                return Ok(error(err));
+            }
+            let mut outline = c_outline_get_bitmap_square(false);
+            let mut bitmap = c_outline_get_bitmap_invalid_none_target();
+            let err = c_abi::FT_Outline_Get_Bitmap(library, outline.as_ptr(), &mut bitmap);
+            c_done_library(library);
+            Ok(outline_get_bitmap_invalid_target_output(
+                err,
+                c_outline_get_bitmap_invalid_target_json(&bitmap),
+            ))
+        }
         _ => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
     }
 }
@@ -16971,6 +17005,15 @@ fn wasm_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
                 output: json!({ "results": errors.map(|err| json!({ "return": err })) }),
             })
         }
+        "invalid-none" => {
+            let mut outline = wasm_outline_get_bitmap_square(false);
+            let mut bitmap = wasm_outline_get_bitmap_invalid_none_target();
+            let err = wasm_abi::fontdone_wasm_outline_get_bitmap(1, outline.as_ptr(), &mut bitmap);
+            Ok(outline_get_bitmap_invalid_target_output(
+                err,
+                wasm_outline_get_bitmap_invalid_target_json(&bitmap),
+            ))
+        }
         _ => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
     }
 }
@@ -17012,6 +17055,19 @@ fn rust_outline_get_bitmap_target(pixel_mode: u8) -> FT_Bitmap_C {
     }
 }
 
+fn rust_outline_get_bitmap_invalid_none_target() -> FT_Bitmap_C {
+    FT_Bitmap_C {
+        rows: 8,
+        width: 8,
+        pitch: 0,
+        buffer: ptr::null_mut(),
+        num_grays: 0,
+        pixel_mode: FT_PIXEL_MODE_NONE as u8,
+        palette_mode: 0,
+        palette: ptr::null_mut(),
+    }
+}
+
 fn outline_get_bitmap_result_json(err: FT_Error, raster_flags: i64, bitmap: &FT_Bitmap) -> Value {
     json!({
         "return": err,
@@ -17024,6 +17080,34 @@ fn outline_get_bitmap_result_json(err: FT_Error, raster_flags: i64, bitmap: &FT_
             "num_grays": bitmap.num_grays,
             "buffer_hex": hex_bytes(&bitmap.buffer)
         }
+    })
+}
+
+fn outline_get_bitmap_invalid_target_output(err: FT_Error, bitmap: Value) -> RunOutput {
+    RunOutput {
+        status: Status {
+            kind: if err == FT_Err_Ok {
+                StatusKind::Ok
+            } else {
+                StatusKind::Error
+            },
+            error_code: i64::from(err),
+        },
+        output: json!({
+            "return": err,
+            "target_preserved": true,
+            "bitmap": bitmap
+        }),
+    }
+}
+
+fn outline_get_bitmap_invalid_target_json(bitmap: &FT_Bitmap_C) -> Value {
+    json!({
+        "rows": bitmap.rows,
+        "width": bitmap.width,
+        "pitch": bitmap.pitch,
+        "buffer_null": bitmap.buffer.is_null(),
+        "pixel_mode": bitmap.pixel_mode
     })
 }
 
@@ -17091,6 +17175,19 @@ fn c_outline_get_bitmap_target(pixel_mode: i32, buffer: &mut [u8]) -> c_abi::FT_
     }
 }
 
+fn c_outline_get_bitmap_invalid_none_target() -> c_abi::FT_Bitmap {
+    c_abi::FT_Bitmap {
+        rows: 8,
+        width: 8,
+        pitch: 0,
+        buffer: ptr::null_mut(),
+        num_grays: 0,
+        pixel_mode: FT_PIXEL_MODE_NONE,
+        palette_mode: 0,
+        palette: ptr::null_mut(),
+    }
+}
+
 fn c_outline_get_bitmap_result_json(
     err: FT_Error,
     raster_flags: i64,
@@ -17108,6 +17205,16 @@ fn c_outline_get_bitmap_result_json(
             "num_grays": bitmap.num_grays,
             "buffer_hex": hex_bytes(buffer)
         }
+    })
+}
+
+fn c_outline_get_bitmap_invalid_target_json(bitmap: &c_abi::FT_Bitmap) -> Value {
+    json!({
+        "rows": bitmap.rows,
+        "width": bitmap.width,
+        "pitch": bitmap.pitch,
+        "buffer_null": bitmap.buffer.is_null(),
+        "pixel_mode": bitmap.pixel_mode
     })
 }
 
@@ -17179,6 +17286,20 @@ fn wasm_outline_get_bitmap_target(
     }
 }
 
+fn wasm_outline_get_bitmap_invalid_none_target() -> wasm_abi::FontdoneWasmBitmap {
+    wasm_abi::FontdoneWasmBitmap {
+        rows: 8,
+        width: 8,
+        pitch: 0,
+        buffer: ptr::null(),
+        buffer_len: 0,
+        num_grays: 0,
+        pixel_mode: FT_PIXEL_MODE_NONE,
+        palette_mode: 0,
+        palette: ptr::null(),
+    }
+}
+
 fn wasm_outline_get_bitmap_result_json(
     err: FT_Error,
     raster_flags: i64,
@@ -17196,6 +17317,16 @@ fn wasm_outline_get_bitmap_result_json(
             "num_grays": bitmap.num_grays,
             "buffer_hex": hex_bytes(buffer)
         }
+    })
+}
+
+fn wasm_outline_get_bitmap_invalid_target_json(bitmap: &wasm_abi::FontdoneWasmBitmap) -> Value {
+    json!({
+        "rows": bitmap.rows,
+        "width": bitmap.width,
+        "pitch": bitmap.pitch,
+        "buffer_null": bitmap.buffer.is_null(),
+        "pixel_mode": bitmap.pixel_mode
     })
 }
 
@@ -20331,7 +20462,7 @@ fn comparison_schema(case: &InputCase) -> &str {
         | "ftglyph.matrix_multiply"
         | "ftglyph.matrix_invert" => return "math_rows",
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => return "outline_render",
-        "ftoutln.outline_get_bitmap" if case.subject == "ftoutln.FT_Outline_Get_Bitmap" => {
+        "ftoutln.outline_get_bitmap" if outline_get_bitmap_runtime_supported(case) => {
             return "outline_get_bitmap";
         }
         "constant"

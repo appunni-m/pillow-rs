@@ -3551,6 +3551,20 @@ static void print_outline_get_bitmap_success(const FT_Bitmap* bitmap, int raster
     print_outline_bitmap_object(bitmap);
 }
 
+static void print_outline_get_bitmap_invalid_target(FT_Error err, const FT_Bitmap* bitmap) {
+    printf("{");
+    print_status(err);
+    printf(",\"output\":{\"return\":%d,\"target_preserved\":", err);
+    print_json_bool(bitmap->rows == 8 && bitmap->width == 8 && bitmap->pitch == 0 &&
+                    bitmap->buffer == NULL && bitmap->pixel_mode == FT_PIXEL_MODE_NONE);
+    printf(",\"bitmap\":{\"rows\":%u,\"width\":%u,\"pitch\":%d,\"buffer_null\":",
+           bitmap->rows,
+           bitmap->width,
+           bitmap->pitch);
+    print_json_bool(bitmap->buffer == NULL);
+    printf(",\"pixel_mode\":%u}}}\n", bitmap->pixel_mode);
+}
+
 static int emit_outline_get_bitmap(int argc, char** argv) {
     (void)argc;
     const char* mode = argv[2];
@@ -3627,6 +3641,16 @@ static int emit_outline_get_bitmap(int argc, char** argv) {
             printf("{\"return\":%d}", errors[i]);
         }
         printf("]}}\n");
+    } else if (streq(mode, "invalid-none")) {
+        FT_Bitmap bitmap;
+        memset(&bitmap, 0, sizeof(bitmap));
+        bitmap.rows = 8;
+        bitmap.width = 8;
+        bitmap.pitch = 0;
+        bitmap.buffer = NULL;
+        bitmap.pixel_mode = FT_PIXEL_MODE_NONE;
+        err = FT_Outline_Get_Bitmap(library, &outline, &bitmap);
+        print_outline_get_bitmap_invalid_target(err, &bitmap);
     } else {
         printf("{");
         print_status(FT_Err_Invalid_Argument);

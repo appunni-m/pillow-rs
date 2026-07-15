@@ -383,6 +383,11 @@ pub fn FT_Outline_Get_Bitmap(
     };
     let width = usize::try_from(abitmap.width).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?;
     let rows = usize::try_from(abitmap.rows).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?;
+    // FreeType rejects FT_PIXEL_MODE_NONE targets before rendering
+    // (src/smooth/ftgrays.c:2010-2019, src/raster/ftraster.c:2696-2703).
+    if abitmap.pixel_mode == FT_PIXEL_MODE_NONE as u8 {
+        return Err(FT_Err_Invalid_Argument as FT_Error);
+    }
     let raster = crate::grays::rasterize_in_box(outline, width, rows).map_err(error_to_ft)?;
     let pitch_abs = usize::try_from(abitmap.pitch.unsigned_abs()).unwrap_or(width);
     let mut pixels = vec![0; pitch_abs.saturating_mul(rows)];
