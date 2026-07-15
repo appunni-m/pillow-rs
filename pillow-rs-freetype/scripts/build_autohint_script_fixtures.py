@@ -439,6 +439,15 @@ def top_and_bottom_accent_glyph():
     )
 
 
+def disjoint_top_accent_glyph():
+    return rectangles_glyph(
+        [
+            (80, 0, 300, 500),
+            (430, 548, 530, 588),
+        ]
+    )
+
+
 def serif_m_symmetry_glyph():
     """Three serifed stems with 12 horizontal-dimension edges."""
     return rectangles_glyph(
@@ -653,6 +662,7 @@ def build_script_coverage() -> None:
     glyph_order.append("latin_bottom_tall_accent")
     glyph_order.append("latin_tilde_top2_topflag")
     glyph_order.append("latin_top_bottom_accent")
+    glyph_order.append("latin_disjoint_top_accent")
     glyph_order.append("latin_serif_m_symmetry")
     glyph_order.append("latin_serif_overlap_break")
     glyph_order.append("latin_tilde_top2_centering")
@@ -726,6 +736,9 @@ def build_script_coverage() -> None:
     glyphs["latin_top_bottom_accent"] = top_and_bottom_accent_glyph()
     metrics["latin_top_bottom_accent"] = (700, 100)
     cmap[0x1EAD] = "latin_top_bottom_accent"
+    glyphs["latin_disjoint_top_accent"] = disjoint_top_accent_glyph()
+    metrics["latin_disjoint_top_accent"] = (700, 80)
+    cmap[0x1E02] = "latin_disjoint_top_accent"
     glyphs["latin_serif_m_symmetry"] = serif_m_symmetry_glyph()
     metrics["latin_serif_m_symmetry"] = (700, 70)
     cmap[0x01D7] = "latin_serif_m_symmetry"
