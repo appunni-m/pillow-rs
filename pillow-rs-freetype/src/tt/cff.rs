@@ -354,6 +354,7 @@ impl<'a> Type2Decoder<'a> {
     }
 
     fn line_to(&mut self, dx: i32, dy: i32) {
+        self.ensure_contour_start();
         self.x += dx;
         self.y += dy;
         self.points.push(OutlinePoint {
@@ -365,6 +366,7 @@ impl<'a> Type2Decoder<'a> {
     }
 
     fn curve_to(&mut self, dx1: i32, dy1: i32, dx2: i32, dy2: i32, dx3: i32, dy3: i32) {
+        self.ensure_contour_start();
         let c1x = self.x + dx1;
         let c1y = self.y + dy1;
         let c2x = c1x + dx2;
@@ -389,6 +391,20 @@ impl<'a> Type2Decoder<'a> {
             on_curve: true,
             tag: TYPE2_TAG_ON,
         });
+    }
+
+    fn ensure_contour_start(&mut self) {
+        if self.contour_start.is_none() {
+            // FreeType's Type2 decoder starts drawing from the current point
+            // if a path operator appears before an explicit moveto.
+            self.contour_start = Some(self.points.len());
+            self.points.push(OutlinePoint {
+                x: self.x,
+                y: self.y,
+                on_curve: true,
+                tag: TYPE2_TAG_ON,
+            });
+        }
     }
 
     fn hmoveto(&mut self) -> Result<(), FontError> {
@@ -484,10 +500,8 @@ impl<'a> Type2Decoder<'a> {
     }
 
     fn alternating_curve(&mut self, horizontal_first: bool) -> Result<(), FontError> {
-        if !self.width_seen && self.stack.len() % 4 == 1 {
-            self.stack.remove(0);
-            self.width_seen = true;
-        }
+        // FreeType treats five operands here as the optional final delta, not
+        // as an initial width (`src/psaux/t2decode.c`).
         if self.stack.len() < 4 {
             return Err(FontError::InvalidOutline(
                 "CFF: hvcurveto/vhcurveto argument count".into(),

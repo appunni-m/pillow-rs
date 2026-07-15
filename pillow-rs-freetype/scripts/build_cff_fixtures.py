@@ -33,6 +33,7 @@ CUBIC_GLYPH_ORDER = [
     "vmoveto_default_width",
     "rmoveto_default_width",
     "endchar_default_width",
+    "hvcurveto_initial_width",
 ]
 NAMES = {
     "familyName": "Hybrid OTTO Coverage",
@@ -132,6 +133,7 @@ def build_cubic_cff(path: Path) -> None:
         "vmoveto_default_width": (420, 0),
         "rmoveto_default_width": (420, 0),
         "endchar_default_width": (420, 0),
+        "hvcurveto_initial_width": (420, 0),
     }
     builder = FontBuilder(UNITS_PER_EM, isTTF=False)
     builder.setupGlyphOrder(CUBIC_GLYPH_ORDER)
@@ -149,6 +151,7 @@ def build_cubic_cff(path: Path) -> None:
             0x4A: "vmoveto_default_width",
             0x4B: "rmoveto_default_width",
             0x4C: "endchar_default_width",
+            0x4D: "hvcurveto_initial_width",
         }
     )
     builder.setupHorizontalMetrics(metrics)
@@ -288,6 +291,17 @@ def build_cubic_cff(path: Path) -> None:
             ),
             "endchar_default_width": t2_program_charstring(
                 [
+                    "endchar",
+                ]
+            ),
+            "hvcurveto_initial_width": t2_program_charstring(
+                [
+                    600,
+                    100,
+                    50,
+                    60,
+                    70,
+                    "hvcurveto",
                     "endchar",
                 ]
             ),
