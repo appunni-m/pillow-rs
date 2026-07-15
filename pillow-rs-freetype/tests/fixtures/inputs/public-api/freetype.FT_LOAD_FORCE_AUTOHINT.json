@@ -4738,6 +4738,26 @@
             "coverage": [
               "autohint/latin:branch-tilde-bottom-flat-loop-lcd-v"
             ]
+          },
+          {
+            "id": "branch-blue-delta-o-25",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-blue-delta.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 25,
+              "char_code": 79,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:branch-blue-delta2-upper-band"
+            ]
           }
         ]
       },
