@@ -9196,6 +9196,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if case.expect_error { "error" } else { "bitmap" }.to_string(),
             case.case_id.clone(),
         ]),
+        "ftoutln.outline_get_bitmap" if case.subject == "ftoutln.FT_Outline_Get_Bitmap" => {
+            Ok(vec![
+                "--outline-get-bitmap".to_string(),
+                outline_get_bitmap_mode(case).to_string(),
+                case.case_id.clone(),
+            ])
+        }
         "ftadvanc.get_advance" => {
             let mut args = vec!["--get-advance".to_string()];
             push_font_source(case, &mut args)?;
@@ -9707,6 +9714,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             }
             let face = open_face(case)?;
             rust_outline_operation(&face, case)
+        }
+        "ftoutln.outline_get_bitmap" if case.subject == "ftoutln.FT_Outline_Get_Bitmap" => {
+            rust_outline_get_bitmap(case)
         }
         "ftglyph.glyph_to_bitmap" => {
             let face = open_face(case)?;
@@ -10291,6 +10301,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output
         }
+        "ftoutln.outline_get_bitmap" if case.subject == "ftoutln.FT_Outline_Get_Bitmap" => {
+            c_outline_get_bitmap(case)
+        }
         "ftglyph.glyph_to_bitmap" => {
             let (library, face) = c_open_face(case)?;
             let output = c_glyph_to_bitmap(face, case);
@@ -10792,6 +10805,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             let output = wasm_outline_operation(handle, case);
             wasm_done_face(handle);
             output
+        }
+        "ftoutln.outline_get_bitmap" if case.subject == "ftoutln.FT_Outline_Get_Bitmap" => {
+            wasm_outline_get_bitmap(case)
         }
         "ftglyph.glyph_to_bitmap" => {
             let handle = wasm_open_face(case)?;
@@ -16765,6 +16781,424 @@ fn outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> 
     }
 }
 
+fn outline_get_bitmap_mode(case: &InputCase) -> &'static str {
+    match case.case.as_str() {
+        "gray_lcd_modes_select_aa_flag" => "modes",
+        "mono_target_uses_default_raster" => "mono",
+        "null_bitmap_and_delegate_errors" => "errors",
+        _ => "unsupported",
+    }
+}
+
+fn rust_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
+    match outline_get_bitmap_mode(case) {
+        "modes" => {
+            let library = FT_Init_FreeType();
+            let outline = rust_outline_get_bitmap_square(false);
+            let mut results = Vec::new();
+            for pixel_mode in [FT_PIXEL_MODE_GRAY, FT_PIXEL_MODE_LCD, FT_PIXEL_MODE_LCD_V] {
+                let target = rust_outline_get_bitmap_target(pixel_mode as u8);
+                let rendered = FT_Outline_Get_Bitmap(Some(&library), Some(&outline), Some(&target))
+                    .map_err(|err| format!("FT_Outline_Get_Bitmap failed: {err}"))?;
+                results.push(outline_get_bitmap_result_json(
+                    0,
+                    FT_RASTER_FLAG_AA,
+                    &rendered,
+                ));
+            }
+            Ok(ok(json!({ "results": results })))
+        }
+        "mono" => {
+            let library = FT_Init_FreeType();
+            let outline = rust_outline_get_bitmap_square(false);
+            let target = rust_outline_get_bitmap_target(FT_PIXEL_MODE_MONO as u8);
+            match FT_Outline_Get_Bitmap(Some(&library), Some(&outline), Some(&target)) {
+                Ok(rendered) => Ok(ok(outline_get_bitmap_result_json(0, 0, &rendered))),
+                Err(err) => Ok(error(err)),
+            }
+        }
+        "errors" => {
+            let library = FT_Init_FreeType();
+            let outline = rust_outline_get_bitmap_square(false);
+            let oversized = rust_outline_get_bitmap_square(true);
+            let target = rust_outline_get_bitmap_target(FT_PIXEL_MODE_GRAY as u8);
+            let errors = [
+                FT_Outline_Get_Bitmap(Some(&library), Some(&outline), None),
+                FT_Outline_Get_Bitmap(None, Some(&outline), Some(&target)),
+                FT_Outline_Get_Bitmap(Some(&library), None, Some(&target)),
+                FT_Outline_Get_Bitmap(Some(&library), Some(&oversized), Some(&target)),
+            ];
+            let results = errors
+                .into_iter()
+                .map(|result| json!({ "return": result.err().unwrap_or(0) }))
+                .collect::<Vec<_>>();
+            Ok(RunOutput {
+                status: Status {
+                    kind: StatusKind::Error,
+                    error_code: results
+                        .first()
+                        .and_then(|result| result.get("return"))
+                        .and_then(Value::as_i64)
+                        .unwrap_or(0),
+                },
+                output: json!({ "results": results }),
+            })
+        }
+        _ => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
+    }
+}
+
+fn c_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
+    match outline_get_bitmap_mode(case) {
+        "modes" => {
+            let mut library = ptr::null_mut();
+            let err = c_abi::FT_Init_FreeType(&mut library);
+            if err != 0 {
+                return Ok(error(err));
+            }
+            let mut outline = c_outline_get_bitmap_square(false);
+            let mut results = Vec::new();
+            for pixel_mode in [FT_PIXEL_MODE_GRAY, FT_PIXEL_MODE_LCD, FT_PIXEL_MODE_LCD_V] {
+                let mut buffer = vec![0u8; 16 * 16];
+                let mut bitmap = c_outline_get_bitmap_target(pixel_mode as i32, &mut buffer);
+                let err = c_abi::FT_Outline_Get_Bitmap(library, outline.as_ptr(), &mut bitmap);
+                results.push(c_outline_get_bitmap_result_json(
+                    err,
+                    FT_RASTER_FLAG_AA,
+                    &bitmap,
+                    &buffer,
+                ));
+            }
+            c_done_library(library);
+            Ok(ok(json!({ "results": results })))
+        }
+        "mono" => {
+            let mut library = ptr::null_mut();
+            let err = c_abi::FT_Init_FreeType(&mut library);
+            if err != 0 {
+                return Ok(error(err));
+            }
+            let mut outline = c_outline_get_bitmap_square(false);
+            let mut buffer = vec![0u8; 16 * 16];
+            let mut bitmap = c_outline_get_bitmap_target(FT_PIXEL_MODE_MONO as i32, &mut buffer);
+            let err = c_abi::FT_Outline_Get_Bitmap(library, outline.as_ptr(), &mut bitmap);
+            c_done_library(library);
+            if err == 0 {
+                Ok(ok(c_outline_get_bitmap_result_json(
+                    err, 0, &bitmap, &buffer,
+                )))
+            } else {
+                Ok(error(err))
+            }
+        }
+        "errors" => {
+            let mut library = ptr::null_mut();
+            let err = c_abi::FT_Init_FreeType(&mut library);
+            if err != 0 {
+                return Ok(error(err));
+            }
+            let mut outline = c_outline_get_bitmap_square(false);
+            let mut oversized = c_outline_get_bitmap_square(true);
+            let mut buffer = vec![0u8; 16 * 16];
+            let mut bitmap = c_outline_get_bitmap_target(FT_PIXEL_MODE_GRAY as i32, &mut buffer);
+            let errors = [
+                c_abi::FT_Outline_Get_Bitmap(library, outline.as_ptr(), ptr::null_mut()),
+                c_abi::FT_Outline_Get_Bitmap(ptr::null_mut(), outline.as_ptr(), &mut bitmap),
+                c_abi::FT_Outline_Get_Bitmap(library, ptr::null(), &mut bitmap),
+                c_abi::FT_Outline_Get_Bitmap(library, oversized.as_ptr(), &mut bitmap),
+            ];
+            c_done_library(library);
+            Ok(RunOutput {
+                status: Status {
+                    kind: StatusKind::Error,
+                    error_code: i64::from(errors[0]),
+                },
+                output: json!({ "results": errors.map(|err| json!({ "return": err })) }),
+            })
+        }
+        _ => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
+    }
+}
+
+fn wasm_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
+    match outline_get_bitmap_mode(case) {
+        "modes" => {
+            let mut outline = wasm_outline_get_bitmap_square(false);
+            let mut results = Vec::new();
+            for pixel_mode in [FT_PIXEL_MODE_GRAY, FT_PIXEL_MODE_LCD, FT_PIXEL_MODE_LCD_V] {
+                let mut buffer = vec![0u8; 16 * 16];
+                let mut bitmap = wasm_outline_get_bitmap_target(pixel_mode as i32, &mut buffer);
+                let err =
+                    wasm_abi::fontdone_wasm_outline_get_bitmap(1, outline.as_ptr(), &mut bitmap);
+                results.push(wasm_outline_get_bitmap_result_json(
+                    err,
+                    FT_RASTER_FLAG_AA,
+                    &bitmap,
+                    &buffer,
+                ));
+            }
+            Ok(ok(json!({ "results": results })))
+        }
+        "mono" => {
+            let mut outline = wasm_outline_get_bitmap_square(false);
+            let mut buffer = vec![0u8; 16 * 16];
+            let mut bitmap = wasm_outline_get_bitmap_target(FT_PIXEL_MODE_MONO as i32, &mut buffer);
+            let err = wasm_abi::fontdone_wasm_outline_get_bitmap(1, outline.as_ptr(), &mut bitmap);
+            if err == 0 {
+                Ok(ok(wasm_outline_get_bitmap_result_json(
+                    err, 0, &bitmap, &buffer,
+                )))
+            } else {
+                Ok(error(err))
+            }
+        }
+        "errors" => {
+            let mut outline = wasm_outline_get_bitmap_square(false);
+            let mut oversized = wasm_outline_get_bitmap_square(true);
+            let mut buffer = vec![0u8; 16 * 16];
+            let mut bitmap = wasm_outline_get_bitmap_target(FT_PIXEL_MODE_GRAY as i32, &mut buffer);
+            let errors = [
+                wasm_abi::fontdone_wasm_outline_get_bitmap(1, outline.as_ptr(), ptr::null_mut()),
+                wasm_abi::fontdone_wasm_outline_get_bitmap(0, outline.as_ptr(), &mut bitmap),
+                wasm_abi::fontdone_wasm_outline_get_bitmap(1, ptr::null(), &mut bitmap),
+                wasm_abi::fontdone_wasm_outline_get_bitmap(1, oversized.as_ptr(), &mut bitmap),
+            ];
+            Ok(RunOutput {
+                status: Status {
+                    kind: StatusKind::Error,
+                    error_code: i64::from(errors[0]),
+                },
+                output: json!({ "results": errors.map(|err| json!({ "return": err })) }),
+            })
+        }
+        _ => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
+    }
+}
+
+fn rust_outline_get_bitmap_square(oversized: bool) -> FT_OutlineSnapshot {
+    let lo = if oversized {
+        0x1000001_i64 * 64
+    } else {
+        8 * 64
+    };
+    let hi = if oversized {
+        0x1000011_i64 * 64
+    } else {
+        24 * 64
+    };
+    FT_OutlineSnapshot {
+        points: vec![
+            FT_Vector { x: lo, y: lo },
+            FT_Vector { x: hi, y: lo },
+            FT_Vector { x: hi, y: hi },
+            FT_Vector { x: lo, y: hi },
+        ],
+        tags: vec![1, 1, 1, 1],
+        contours: vec![3],
+        flags: 0,
+    }
+}
+
+fn rust_outline_get_bitmap_target(pixel_mode: u8) -> FT_Bitmap_C {
+    FT_Bitmap_C {
+        rows: 16,
+        width: 16,
+        pitch: 16,
+        buffer: ptr::null_mut(),
+        num_grays: 256,
+        pixel_mode,
+        palette_mode: 0,
+        palette: ptr::null_mut(),
+    }
+}
+
+fn outline_get_bitmap_result_json(err: FT_Error, raster_flags: i64, bitmap: &FT_Bitmap) -> Value {
+    json!({
+        "return": err,
+        "raster_flags": raster_flags,
+        "bitmap": {
+            "width": bitmap.width,
+            "rows": bitmap.rows,
+            "pitch": bitmap.pitch,
+            "pixel_mode": bitmap.pixel_mode,
+            "num_grays": bitmap.num_grays,
+            "buffer_hex": hex_bytes(&bitmap.buffer)
+        }
+    })
+}
+
+fn c_outline_get_bitmap_square(oversized: bool) -> COutlineStorage {
+    let lo = if oversized {
+        0x1000001_i64 * 64
+    } else {
+        8 * 64
+    };
+    let hi = if oversized {
+        0x1000011_i64 * 64
+    } else {
+        24 * 64
+    };
+    let mut storage = COutlineStorage {
+        points: [
+            c_abi::FT_Vector { x: lo, y: lo },
+            c_abi::FT_Vector { x: hi, y: lo },
+            c_abi::FT_Vector { x: hi, y: hi },
+            c_abi::FT_Vector { x: lo, y: hi },
+        ],
+        tags: [1, 1, 1, 1],
+        contours: [3],
+        outline: c_abi::FT_Outline::default(),
+    };
+    storage.refresh();
+    storage
+}
+
+struct COutlineStorage {
+    points: [c_abi::FT_Vector; 4],
+    tags: [u8; 4],
+    contours: [u16; 1],
+    outline: c_abi::FT_Outline,
+}
+
+impl COutlineStorage {
+    fn refresh(&mut self) {
+        self.outline = c_abi::FT_Outline {
+            n_contours: 1,
+            n_points: 4,
+            points: self.points.as_mut_ptr(),
+            tags: self.tags.as_mut_ptr(),
+            contours: self.contours.as_mut_ptr(),
+            flags: 0,
+        };
+    }
+
+    fn as_ptr(&mut self) -> *const c_abi::FT_Outline {
+        self.refresh();
+        &self.outline
+    }
+}
+
+fn c_outline_get_bitmap_target(pixel_mode: i32, buffer: &mut [u8]) -> c_abi::FT_Bitmap {
+    c_abi::FT_Bitmap {
+        rows: 16,
+        width: 16,
+        pitch: 16,
+        buffer: buffer.as_mut_ptr(),
+        num_grays: 256,
+        pixel_mode,
+        palette_mode: 0,
+        palette: ptr::null_mut(),
+    }
+}
+
+fn c_outline_get_bitmap_result_json(
+    err: FT_Error,
+    raster_flags: i64,
+    bitmap: &c_abi::FT_Bitmap,
+    buffer: &[u8],
+) -> Value {
+    json!({
+        "return": err,
+        "raster_flags": raster_flags,
+        "bitmap": {
+            "width": bitmap.width,
+            "rows": bitmap.rows,
+            "pitch": bitmap.pitch,
+            "pixel_mode": bitmap.pixel_mode,
+            "num_grays": bitmap.num_grays,
+            "buffer_hex": hex_bytes(buffer)
+        }
+    })
+}
+
+fn wasm_outline_get_bitmap_square(oversized: bool) -> WasmOutlineStorage {
+    let lo = if oversized {
+        0x1000001_i64 * 64
+    } else {
+        8 * 64
+    };
+    let hi = if oversized {
+        0x1000011_i64 * 64
+    } else {
+        24 * 64
+    };
+    let mut storage = WasmOutlineStorage {
+        points: [
+            wasm_abi::FontdoneWasmVector { x: lo, y: lo },
+            wasm_abi::FontdoneWasmVector { x: hi, y: lo },
+            wasm_abi::FontdoneWasmVector { x: hi, y: hi },
+            wasm_abi::FontdoneWasmVector { x: lo, y: hi },
+        ],
+        tags: [1, 1, 1, 1],
+        contours: [3],
+        outline: wasm_abi::FontdoneWasmOutline::default(),
+    };
+    storage.refresh();
+    storage
+}
+
+struct WasmOutlineStorage {
+    points: [wasm_abi::FontdoneWasmVector; 4],
+    tags: [u8; 4],
+    contours: [u16; 1],
+    outline: wasm_abi::FontdoneWasmOutline,
+}
+
+impl WasmOutlineStorage {
+    fn refresh(&mut self) {
+        self.outline = wasm_abi::FontdoneWasmOutline {
+            n_contours: 1,
+            n_points: 4,
+            points: self.points.as_mut_ptr(),
+            tags: self.tags.as_mut_ptr(),
+            contours: self.contours.as_mut_ptr(),
+            flags: 0,
+        };
+    }
+
+    fn as_ptr(&mut self) -> *const wasm_abi::FontdoneWasmOutline {
+        self.refresh();
+        &self.outline
+    }
+}
+
+fn wasm_outline_get_bitmap_target(
+    pixel_mode: i32,
+    buffer: &mut [u8],
+) -> wasm_abi::FontdoneWasmBitmap {
+    wasm_abi::FontdoneWasmBitmap {
+        rows: 16,
+        width: 16,
+        pitch: 16,
+        buffer: buffer.as_ptr(),
+        buffer_len: buffer.len(),
+        num_grays: 256,
+        pixel_mode,
+        palette_mode: 0,
+        palette: ptr::null(),
+    }
+}
+
+fn wasm_outline_get_bitmap_result_json(
+    err: FT_Error,
+    raster_flags: i64,
+    bitmap: &wasm_abi::FontdoneWasmBitmap,
+    buffer: &[u8],
+) -> Value {
+    json!({
+        "return": err,
+        "raster_flags": raster_flags,
+        "bitmap": {
+            "width": bitmap.width,
+            "rows": bitmap.rows,
+            "pitch": bitmap.pitch,
+            "pixel_mode": bitmap.pixel_mode,
+            "num_grays": bitmap.num_grays,
+            "buffer_hex": hex_bytes(buffer)
+        }
+    })
+}
+
 fn outline_render_outline(case: &InputCase) -> Result<fontdone::outline::Outline, String> {
     match outline_asset_id(case).unwrap_or("outlines/render/simple-filled-square.json") {
         "outlines/render/simple-filled-square.json" => Ok(outline_render_square()),
@@ -19796,6 +20230,7 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
             require_path(output, "/node/locked", label, case)
         }
         "outline_render" => validate_outline_render_output(output, label, case),
+        "outline_get_bitmap" => validate_outline_get_bitmap_output(output, label, case),
         "api_void" => require_path(output, "/void", label, case),
         "cache_lifecycle" => {
             require_path(output, "/void", label, case)?;
@@ -19895,6 +20330,9 @@ fn comparison_schema(case: &InputCase) -> &str {
         | "ftglyph.matrix_multiply"
         | "ftglyph.matrix_invert" => return "math_rows",
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => return "outline_render",
+        "ftoutln.outline_get_bitmap" if case.subject == "ftoutln.FT_Outline_Get_Bitmap" => {
+            return "outline_get_bitmap";
+        }
         "constant"
             if matches!(
                 case.schema.as_str(),
@@ -20012,6 +20450,25 @@ fn validate_outline_render_output(
     require_path(output, "/bitmap/pixel_mode", label, case)?;
     require_path(output, "/bitmap/num_grays", label, case)?;
     require_path(output, "/bitmap/buffer_hex", label, case)
+}
+
+fn validate_outline_get_bitmap_output(
+    output: &Value,
+    label: &str,
+    case: &InputCase,
+) -> Result<(), String> {
+    if output.get("results").is_some() {
+        require_path(output, "/results", label, case)
+    } else {
+        require_path(output, "/return", label, case)?;
+        require_path(output, "/raster_flags", label, case)?;
+        require_path(output, "/bitmap/width", label, case)?;
+        require_path(output, "/bitmap/rows", label, case)?;
+        require_path(output, "/bitmap/pitch", label, case)?;
+        require_path(output, "/bitmap/pixel_mode", label, case)?;
+        require_path(output, "/bitmap/num_grays", label, case)?;
+        require_path(output, "/bitmap/buffer_hex", label, case)
+    }
 }
 
 fn require_path(

@@ -595,6 +595,41 @@ pub extern "C" fn fontdone_wasm_outline_get_cbox(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_get_bitmap(
+    library_present: i32,
+    outline: *const FontdoneWasmOutline,
+    abitmap: *mut FontdoneWasmBitmap,
+) -> FT_Error {
+    let Some(target) = (unsafe { abitmap.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let library = if library_present != 0 {
+        Some(rust_ffi::FT_Init_FreeType())
+    } else {
+        None
+    };
+    let snapshot = outline_snapshot_from_wasm(outline);
+    let bitmap_view = rust_ffi::FT_Bitmap_C {
+        rows: target.rows,
+        width: target.width,
+        pitch: target.pitch,
+        buffer: target.buffer.cast_mut(),
+        num_grays: target.num_grays,
+        pixel_mode: u8::try_from(target.pixel_mode).unwrap_or(0),
+        palette_mode: target.palette_mode,
+        palette: target.palette.cast_mut(),
+    };
+    match rust_ffi::FT_Outline_Get_Bitmap(library.as_ref(), snapshot.as_ref(), Some(&bitmap_view))
+    {
+        Ok(rendered) => {
+            copy_rendered_bitmap_to_wasm(target, &rendered);
+            rust_ffi::FT_Err_Ok
+        }
+        Err(err) => err,
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_outline_get_orientation(
     outline: *const FontdoneWasmOutline,
 ) -> FT_Orientation {
@@ -2031,6 +2066,34 @@ fn outline_snapshot_from_wasm(
         contours,
         flags: outline.flags,
     })
+}
+
+fn copy_rendered_bitmap_to_wasm(
+    target: &mut FontdoneWasmBitmap,
+    rendered: &rust_ffi::FT_Bitmap,
+) {
+    let rows = usize::try_from(target.rows).unwrap_or(0);
+    let width = usize::try_from(target.width).unwrap_or(0);
+    let pitch_abs = usize::try_from(target.pitch.unsigned_abs()).unwrap_or(0);
+    if target.buffer.is_null() || rows == 0 || width == 0 || pitch_abs == 0 {
+        return;
+    }
+    let row_bytes = width.min(pitch_abs);
+    let target_len = pitch_abs.saturating_mul(rows).min(target.buffer_len);
+    // SAFETY: the WASM ABI caller provides writable linear memory for this
+    // bitmap buffer; `buffer_len` bounds the slice visible to this wrapper.
+    let target_buffer = unsafe { slice::from_raw_parts_mut(target.buffer.cast_mut(), target_len) };
+    for row in 0..rows {
+        let src = row.saturating_mul(width);
+        let dst = row.saturating_mul(pitch_abs);
+        let Some(src_row) = rendered.buffer.get(src..src.saturating_add(row_bytes)) else {
+            break;
+        };
+        let Some(dst_row) = target_buffer.get_mut(dst..dst.saturating_add(row_bytes)) else {
+            break;
+        };
+        dst_row.copy_from_slice(src_row);
+    }
 }
 
 fn face_ref(handle: usize) -> Option<&'static WasmFaceState> {
