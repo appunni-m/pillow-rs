@@ -430,6 +430,58 @@
             ]
           },
           {
+            "id": "pure-cff-rlineto-initial-width-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 15,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:rlineto-odd-operand-error"
+            ]
+          },
+          {
+            "id": "pure-cff-rrcurveto-initial-width-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 16,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/cff:rrcurveto-odd-operand-error"
+            ]
+          },
+          {
             "id": "dejavu-null-no-scale",
             "assets": {
               "font": {
