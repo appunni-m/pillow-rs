@@ -213,13 +213,8 @@ pub fn rasterize_shifted_in_box(
     width: usize,
     height: usize,
 ) -> Result<RasterResult, FontError> {
-    if outline.points.is_empty() || outline.n_contours == 0 {
-        return Ok(RasterResult {
-            width: 0,
-            height: 0,
-            pixels: Vec::new(),
-        });
-    }
+    // FreeType's FT_Outline_Render keeps the caller's target bitmap dimensions;
+    // empty outlines and zero-sized boxes are no-op renders inside the worker.
     rasterize_with_clip_box(
         outline,
         width,
