@@ -924,6 +924,26 @@
             ]
           },
           {
+            "id": "script-latin-disjoint-top-accent",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 7682,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:disjoint-top-accent-overlap-reject"
+            ]
+          },
+          {
             "id": "script-latin-tilde-top-flat-small",
             "assets": {
               "font": {
