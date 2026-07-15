@@ -495,6 +495,10 @@ def latin_vertical_cusp_glyph():
     )
 
 
+def latin_blue_delta_round_glyph():
+    return ring_glyph(90, 0, 510, 530, 190, 120, 410, 400)
+
+
 def nonreciprocal_chain_glyph():
     # U+51A1: two major-direction segments share one opposite segment so CJK
     # link cleanup sees a non-reciprocal chain and assigns a serif fallback.
@@ -1783,6 +1787,59 @@ def build_latin_malformed_standard() -> None:
     truncate_glyph_loca(path, "latin_o_malformed", 2)
 
 
+def build_latin_blue_delta() -> None:
+    glyph_order = [".notdef", "space", "latin_flat_cap", "latin_round_cap"]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -120, 520, 720),
+        "space": empty_glyph(),
+        "latin_flat_cap": rectangle_glyph(100, 0, 540, 500),
+        "latin_round_cap": latin_blue_delta_round_glyph(),
+    }
+    metrics = {
+        ".notdef": (600, 80),
+        "space": (300, 0),
+        "latin_flat_cap": (700, 100),
+        "latin_round_cap": (700, 90),
+    }
+    cmap = {0x20: "space"}
+    for codepoint in (0x54, 0x48, 0x45, 0x5A):
+        cmap[codepoint] = "latin_flat_cap"
+    for codepoint in (0x4F, 0x43, 0x51, 0x53):
+        cmap[codepoint] = "latin_round_cap"
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint Latin Blue Delta",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint Latin Blue Delta Regular",
+            "fullName": "Autohint Latin Blue Delta Regular",
+            "psName": "AutohintLatinBlueDelta-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "latin-blue-delta.ttf")
+
+
 def main() -> None:
     build_script_coverage()
     build_cjk_empty_standard()
@@ -1801,6 +1858,7 @@ def main() -> None:
     build_digit_notdef_cmap()
     build_latin_standard_fallbacks()
     build_latin_malformed_standard()
+    build_latin_blue_delta()
 
 
 if __name__ == "__main__":

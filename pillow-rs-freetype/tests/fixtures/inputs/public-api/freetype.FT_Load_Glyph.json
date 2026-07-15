@@ -1962,6 +1962,30 @@
             ]
           },
           {
+            "id": "latin-blue-delta-force-autohint",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/autohint/latin-blue-delta.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 3,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:blue-zone-delta2-mid-band"
+            ]
+          },
+          {
             "id": "sfnt-no-os2-force-autohint-vertical",
             "assets": {
               "font": {
