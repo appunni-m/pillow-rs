@@ -1012,6 +1012,11 @@ fn write_span(buf: &mut [u8], off: usize, s: i32, count: i32, step: usize) {
 
     let mut cursor = off;
     for _ in 0..usize_from_i32(count) {
+        // Public FT_Outline_Render/FT_Render_Glyph routes provide target buffers
+        // sized from rows, pitch, and pixel mode.  Exercising the `None` arm
+        // here would require a truncated caller buffer; C ftgrays.c would write
+        // through the raw FT_Bitmap pointer, so that is not a deterministic
+        // parity oracle and must not be represented by a green fixture row.
         if let Some(slot) = buf.get_mut(cursor) {
             *slot = s;
         }
