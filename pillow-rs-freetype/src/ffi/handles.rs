@@ -53,6 +53,130 @@ pub fn FT_Bitmap_New(abitmap: Option<&mut FT_Bitmap_C>) {
     FT_Bitmap_Init(abitmap);
 }
 
+type BitmapBufferRegistry = BTreeMap<usize, Box<[FT_Byte]>>;
+
+static BITMAP_BUFFER_REGISTRY: OnceLock<Mutex<BitmapBufferRegistry>> = OnceLock::new();
+
+fn bitmap_buffer_registry() -> &'static Mutex<BitmapBufferRegistry> {
+    BITMAP_BUFFER_REGISTRY.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+fn bitmap_buffer_len(bitmap: &FT_Bitmap_C) -> Option<usize> {
+    usize::try_from(bitmap.pitch.unsigned_abs())
+        .ok()?
+        .checked_mul(usize::try_from(bitmap.rows).ok()?)
+}
+
+pub fn FT_Bitmap_Set_Owned_Buffer(abitmap: Option<&mut FT_Bitmap_C>, bytes: Vec<FT_Byte>) {
+    let Some(bitmap) = abitmap else {
+        return;
+    };
+    if !bitmap.buffer.is_null() {
+        bitmap_buffer_registry()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&(bitmap.buffer as usize));
+    }
+    if bytes.is_empty() {
+        bitmap.buffer = ptr::null_mut();
+        return;
+    }
+    let mut buffer = bytes.into_boxed_slice();
+    bitmap.buffer = buffer.as_mut_ptr();
+    bitmap_buffer_registry()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(bitmap.buffer as usize, buffer);
+}
+
+pub fn FT_Bitmap_Owned_Buffer_Bytes(abitmap: Option<&FT_Bitmap_C>) -> Option<Vec<FT_Byte>> {
+    let bitmap = abitmap?;
+    if bitmap.buffer.is_null() {
+        return None;
+    }
+    let registry = bitmap_buffer_registry()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    registry
+        .get(&(bitmap.buffer as usize))
+        .map(|bytes| bytes.to_vec())
+}
+
+pub fn FT_Bitmap_Copy(
+    library: Option<&FT_Library>,
+    source: Option<&FT_Bitmap_C>,
+    target: Option<&mut FT_Bitmap_C>,
+) -> FT_Error {
+    if library.is_none() {
+        return FT_Err_Invalid_Library_Handle as FT_Error;
+    }
+    let (Some(source), Some(target)) = (source, target) else {
+        return FT_Err_Invalid_Argument;
+    };
+
+    if ptr::eq(source, target) {
+        return FT_Err_Ok;
+    }
+
+    let flip = (source.pitch < 0 && target.pitch > 0) || (source.pitch > 0 && target.pitch < 0);
+
+    // FreeType `src/base/ftbitmap.c:63-116` frees the target buffer before
+    // copying the public record, then reverses row order only when source and
+    // target pitch signs requested opposite bitmap flow.
+    {
+        let mut registry = bitmap_buffer_registry()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !target.buffer.is_null() {
+            registry.remove(&(target.buffer as usize));
+        }
+    }
+
+    *target = *source;
+    if flip {
+        target.pitch = target.pitch.wrapping_neg();
+    }
+
+    if source.buffer.is_null() {
+        return FT_Err_Ok;
+    }
+
+    let Some(len) = bitmap_buffer_len(source) else {
+        target.buffer = ptr::null_mut();
+        return FT_Err_Out_Of_Memory as FT_Error;
+    };
+    let source_bytes = {
+        let registry = bitmap_buffer_registry()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let Some(source_buffer) = registry.get(&(source.buffer as usize)) else {
+            target.buffer = ptr::null_mut();
+            return FT_Err_Invalid_Argument;
+        };
+        if source_buffer.len() < len {
+            target.buffer = ptr::null_mut();
+            return FT_Err_Invalid_Argument;
+        }
+        source_buffer[..len].to_vec()
+    };
+
+    if flip {
+        let pitch = usize::try_from(source.pitch.unsigned_abs()).unwrap_or(0);
+        let rows = usize::try_from(source.rows).unwrap_or(0);
+        let mut flipped = vec![0; len];
+        for row in 0..rows {
+            let src = row.saturating_mul(pitch);
+            let dst = (rows - 1 - row).saturating_mul(pitch);
+            flipped[dst..dst + pitch].copy_from_slice(&source_bytes[src..src + pitch]);
+        }
+        FT_Bitmap_Set_Owned_Buffer(Some(target), flipped);
+    } else {
+        FT_Bitmap_Set_Owned_Buffer(Some(target), source_bytes);
+    }
+
+    FT_Err_Ok
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FT_Library {
     inner: api::Library,

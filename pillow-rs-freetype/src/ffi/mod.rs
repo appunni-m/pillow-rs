@@ -16,8 +16,9 @@ pub use convert::{
     render_mode_to_core,
 };
 pub use handles::{
-    FT_Activate_Size, FT_Angle_Diff, FT_Atan2, FT_Bitmap_Init, FT_Bitmap_New, FT_CeilFix, FT_Cos,
-    FT_DivFix, FT_Done_Face, FT_Done_FreeType, FT_Done_Size, FT_Error_String, FT_Face,
+    FT_Activate_Size, FT_Angle_Diff, FT_Atan2, FT_Bitmap_Copy, FT_Bitmap_Init, FT_Bitmap_New,
+    FT_Bitmap_Owned_Buffer_Bytes, FT_Bitmap_Set_Owned_Buffer, FT_CeilFix, FT_Cos, FT_DivFix,
+    FT_Done_Face, FT_Done_FreeType, FT_Done_Size, FT_Error_String, FT_Face,
     FT_Face_CheckTrueTypePatents, FT_Face_GetCharVariantIndex, FT_Face_GetCharVariantIsDefault,
     FT_Face_GetCharsOfVariant, FT_Face_GetVariantSelectors, FT_Face_GetVariantsOfChar,
     FT_Face_SetUnpatentedHinting, FT_FloorFix, FT_Get_Advance, FT_Get_Advances, FT_Get_CMap_Format,

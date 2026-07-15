@@ -8153,6 +8153,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             i32::from(bool_param(params, "null_pointer_variant", false)?).to_string(),
             i32::from(bool_param(params, "compare_alias", false)?).to_string(),
         ]),
+        "ftbitmap.bitmap_copy" => Ok(vec![
+            "--bitmap-copy".to_string(),
+            string_param(params, "scenario")?.to_string(),
+        ]),
         "fterrors.error_string" => Ok(vec![
             "--error-string".to_string(),
             error_string_codes_arg(params)?,
@@ -9491,6 +9495,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftbitmap.bitmap_init" | "ftbitmap.bitmap_new" => {
             bitmap_init_new_output(case, BitmapInitBackend::Rust)
         }
+        "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::Rust),
         operation if operation.starts_with("freetype.face_macro") => {
             let face = rust_new_face_without_size(case)?;
             rust_face_macro(&face, case)
@@ -9925,6 +9930,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftbitmap.bitmap_init" | "ftbitmap.bitmap_new" => {
             bitmap_init_new_output(case, BitmapInitBackend::CAbi)
         }
+        "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::CAbi),
         operation if operation.starts_with("freetype.face_macro") => {
             let (library, face) = c_new_face_without_size(case)?;
             let output = c_face_macro(face, case);
@@ -10489,6 +10495,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftbitmap.bitmap_init" | "ftbitmap.bitmap_new" => {
             bitmap_init_new_output(case, BitmapInitBackend::Wasm)
         }
+        "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::Wasm),
         operation if operation.starts_with("freetype.face_macro") => {
             let handle = wasm_new_face_without_size(case)?;
             let output = wasm_face_macro(handle, case);
@@ -23012,6 +23019,240 @@ fn bitmap_record_json(bitmap: &FT_Bitmap_C) -> Value {
         "palette_mode": bitmap.palette_mode,
         "palette_is_null": bitmap.palette.is_null()
     })
+}
+
+#[derive(Clone, Copy)]
+enum BitmapCopyBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+struct BitmapCopySetup {
+    source: FT_Bitmap_C,
+    source_bytes: Option<Vec<u8>>,
+    target: FT_Bitmap_C,
+    target_bytes: Option<Vec<u8>>,
+    alias: bool,
+    null_library: bool,
+    null_source: bool,
+}
+
+fn bitmap_copy_output(case: &InputCase, backend: BitmapCopyBackend) -> Result<RunOutput, String> {
+    let scenario = string_param(&case.inputs.params, "scenario")?;
+    let mut setup = bitmap_copy_setup(scenario)?;
+    let err = match backend {
+        BitmapCopyBackend::Rust => bitmap_copy_rust(&mut setup),
+        BitmapCopyBackend::CAbi => bitmap_copy_c_abi(&mut setup),
+        BitmapCopyBackend::Wasm => bitmap_copy_wasm(&mut setup),
+    };
+    if err == FT_Err_Ok {
+        Ok(ok(bitmap_copy_json(
+            &setup.target,
+            bitmap_copy_target_bytes(&setup, backend),
+        )))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn bitmap_copy_rust(setup: &mut BitmapCopySetup) -> FT_Error {
+    if let Some(bytes) = setup.source_bytes.take() {
+        FT_Bitmap_Set_Owned_Buffer(Some(&mut setup.source), bytes);
+    }
+    if let Some(bytes) = setup.target_bytes.take() {
+        FT_Bitmap_Set_Owned_Buffer(Some(&mut setup.target), bytes);
+    }
+    if setup.alias {
+        setup.target = setup.source;
+        return FT_Err_Ok;
+    }
+    let library = FT_Init_FreeType();
+    let library = (!setup.null_library).then_some(&library);
+    let source = (!setup.null_source).then_some(&setup.source);
+    FT_Bitmap_Copy(library, source, Some(&mut setup.target))
+}
+
+fn bitmap_copy_c_abi(setup: &mut BitmapCopySetup) -> FT_Error {
+    let mut source_bytes = setup.source_bytes.take().unwrap_or_default();
+    let mut target_bytes = setup.target_bytes.take().unwrap_or_default();
+    let mut source = c_abi::FT_Bitmap {
+        rows: setup.source.rows,
+        width: setup.source.width,
+        pitch: setup.source.pitch,
+        buffer: if source_bytes.is_empty() {
+            ptr::null_mut()
+        } else {
+            source_bytes.as_mut_ptr()
+        },
+        num_grays: setup.source.num_grays,
+        pixel_mode: setup.source.pixel_mode.into(),
+        palette_mode: setup.source.palette_mode,
+        palette: setup.source.palette,
+    };
+    let mut target = c_abi::FT_Bitmap {
+        rows: setup.target.rows,
+        width: setup.target.width,
+        pitch: setup.target.pitch,
+        buffer: if target_bytes.is_empty() {
+            ptr::null_mut()
+        } else {
+            target_bytes.as_mut_ptr()
+        },
+        num_grays: setup.target.num_grays,
+        pixel_mode: setup.target.pixel_mode.into(),
+        palette_mode: setup.target.palette_mode,
+        palette: setup.target.palette,
+    };
+    let mut library = ptr::null_mut();
+    if !setup.null_library {
+        let err = c_abi::FT_Init_FreeType(&mut library);
+        if err != FT_Err_Ok {
+            return err;
+        }
+    }
+    let target_ptr = if setup.alias {
+        (&mut source) as *mut c_abi::FT_Bitmap
+    } else {
+        &mut target
+    };
+    let source_ptr = if setup.null_source {
+        ptr::null()
+    } else {
+        (&source) as *const c_abi::FT_Bitmap
+    };
+    let err = c_abi::FT_Bitmap_Copy(library, source_ptr, target_ptr);
+    if setup.alias {
+        target = source;
+    }
+    setup.target = bitmap_from_c_record(&target);
+    if setup.alias {
+        FT_Bitmap_Set_Owned_Buffer(Some(&mut setup.target), source_bytes);
+    }
+    if !library.is_null() {
+        c_done_library(library);
+    }
+    err
+}
+
+fn bitmap_copy_wasm(setup: &mut BitmapCopySetup) -> FT_Error {
+    let source_bytes = setup.source_bytes.take().unwrap_or_default();
+    let mut target_bytes = setup.target_bytes.take().unwrap_or_default();
+    let mut source = wasm_abi::FontdoneWasmBitmap {
+        rows: setup.source.rows,
+        width: setup.source.width,
+        pitch: setup.source.pitch,
+        buffer: if source_bytes.is_empty() {
+            ptr::null()
+        } else {
+            source_bytes.as_ptr()
+        },
+        buffer_len: source_bytes.len(),
+        num_grays: setup.source.num_grays,
+        pixel_mode: setup.source.pixel_mode.into(),
+        palette_mode: setup.source.palette_mode,
+        palette: setup.source.palette,
+    };
+    let mut target = wasm_abi::FontdoneWasmBitmap {
+        rows: setup.target.rows,
+        width: setup.target.width,
+        pitch: setup.target.pitch,
+        buffer: if target_bytes.is_empty() {
+            ptr::null()
+        } else {
+            target_bytes.as_mut_ptr()
+        },
+        buffer_len: target_bytes.len(),
+        num_grays: setup.target.num_grays,
+        pixel_mode: setup.target.pixel_mode.into(),
+        palette_mode: setup.target.palette_mode,
+        palette: setup.target.palette,
+    };
+    let target_ptr = if setup.alias {
+        (&mut source) as *mut wasm_abi::FontdoneWasmBitmap
+    } else {
+        &mut target
+    };
+    let source_ptr = if setup.null_source {
+        ptr::null()
+    } else {
+        (&source) as *const wasm_abi::FontdoneWasmBitmap
+    };
+    let err = wasm_abi::fontdone_wasm_bitmap_copy(
+        if setup.null_library { 0 } else { 1 },
+        source_ptr,
+        target_ptr,
+    );
+    if setup.alias {
+        target = source;
+    }
+    setup.target = bitmap_from_wasm_record(&target);
+    if setup.alias {
+        FT_Bitmap_Set_Owned_Buffer(Some(&mut setup.target), source_bytes);
+    }
+    err
+}
+
+fn bitmap_copy_setup(scenario: &str) -> Result<BitmapCopySetup, String> {
+    let mut setup = BitmapCopySetup {
+        source: bitmap_copy_source_record(4),
+        source_bytes: Some((0..12).map(|value| value * 17 + 3).collect()),
+        target: FT_Bitmap_C::default(),
+        target_bytes: None,
+        alias: false,
+        null_library: false,
+        null_source: false,
+    };
+    match scenario {
+        "success_deep_copy_all_public_fields" => {}
+        "success_source_equals_target_noop" => setup.alias = true,
+        "success_null_source_buffer" => {
+            setup.source.buffer = ptr::null_mut();
+            setup.source_bytes = None;
+        }
+        "success_flow_flip" => setup.target.pitch = -1,
+        "ownership_replaces_target_buffer" => {
+            setup.target = dirty_bitmap_record();
+            setup.target.pitch = 4;
+            setup.target_bytes = Some(vec![0xE5; 12]);
+        }
+        "error_null_library_or_bitmaps" => setup.null_source = true,
+        other => return Err(format!("unsupported bitmap_copy scenario {other}")),
+    }
+    Ok(setup)
+}
+
+fn bitmap_copy_source_record(pitch: i32) -> FT_Bitmap_C {
+    FT_Bitmap_C {
+        rows: 3,
+        width: 3,
+        pitch,
+        buffer: ptr::with_exposed_provenance_mut(0x1),
+        num_grays: 256,
+        pixel_mode: FT_PIXEL_MODE_GRAY as u8,
+        palette_mode: 0,
+        palette: ptr::null_mut(),
+    }
+}
+
+fn bitmap_copy_json(bitmap: &FT_Bitmap_C, bytes: Option<Vec<u8>>) -> Value {
+    json!({
+        "target": bitmap_record_json(bitmap),
+        "target_bytes_hash": bytes.as_deref().map(djb2_hash),
+        "target_buffer_len": bytes.as_ref().map_or(0, Vec::len),
+        "buffer_identity_class": if bitmap.buffer.is_null() { "null" } else { "owned_copy" }
+    })
+}
+
+fn bitmap_copy_target_bytes(
+    setup: &BitmapCopySetup,
+    backend: BitmapCopyBackend,
+) -> Option<Vec<u8>> {
+    match backend {
+        BitmapCopyBackend::Rust | BitmapCopyBackend::CAbi | BitmapCopyBackend::Wasm => {
+            FT_Bitmap_Owned_Buffer_Bytes(Some(&setup.target))
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

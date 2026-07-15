@@ -125,6 +125,39 @@ pub extern "C" fn fontdone_wasm_bitmap_new(abitmap: *mut FontdoneWasmBitmap) {
     fontdone_wasm_bitmap_init(abitmap);
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_bitmap_copy(
+    library_handle: usize,
+    source: *const FontdoneWasmBitmap,
+    target: *mut FontdoneWasmBitmap,
+) -> i32 {
+    if library_handle == 0 {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as i32;
+    }
+    let Some(source_ref) = (unsafe { source.as_ref() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(target_ref) = (unsafe { target.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    if source == target.cast_const() {
+        return rust_ffi::FT_Err_Ok;
+    }
+
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut source_view = wasm_bitmap_to_rust(source_ref);
+    let mut target_view = wasm_bitmap_to_rust(target_ref);
+    if let Some(bytes) = wasm_bitmap_bytes(source_ref) {
+        rust_ffi::FT_Bitmap_Set_Owned_Buffer(Some(&mut source_view), bytes);
+    }
+
+    let err = rust_ffi::FT_Bitmap_Copy(Some(&library), Some(&source_view), Some(&mut target_view));
+    if err == rust_ffi::FT_Err_Ok {
+        copy_rust_bitmap_record_to_wasm(target_ref, &target_view);
+    }
+    err
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmGlyphSlot {
@@ -2094,6 +2127,48 @@ fn copy_rendered_bitmap_to_wasm(
         };
         dst_row.copy_from_slice(src_row);
     }
+}
+
+fn wasm_bitmap_to_rust(bitmap: &FontdoneWasmBitmap) -> rust_ffi::FT_Bitmap_C {
+    rust_ffi::FT_Bitmap_C {
+        rows: bitmap.rows,
+        width: bitmap.width,
+        pitch: bitmap.pitch,
+        buffer: bitmap.buffer.cast_mut(),
+        num_grays: bitmap.num_grays,
+        pixel_mode: u8::try_from(bitmap.pixel_mode).unwrap_or(0),
+        palette_mode: bitmap.palette_mode,
+        palette: bitmap.palette.cast_mut(),
+    }
+}
+
+fn copy_rust_bitmap_record_to_wasm(
+    target: &mut FontdoneWasmBitmap,
+    source: &rust_ffi::FT_Bitmap_C,
+) {
+    target.rows = source.rows;
+    target.width = source.width;
+    target.pitch = source.pitch;
+    target.buffer = source.buffer;
+    target.buffer_len = usize::try_from(source.pitch.unsigned_abs())
+        .ok()
+        .and_then(|pitch| pitch.checked_mul(usize::try_from(source.rows).ok()?))
+        .unwrap_or(0);
+    target.num_grays = source.num_grays;
+    target.pixel_mode = source.pixel_mode.into();
+    target.palette_mode = source.palette_mode;
+    target.palette = source.palette;
+}
+
+fn wasm_bitmap_bytes(bitmap: &FontdoneWasmBitmap) -> Option<Vec<u8>> {
+    let len = usize::try_from(bitmap.pitch.unsigned_abs())
+        .ok()?
+        .checked_mul(usize::try_from(bitmap.rows).ok()?)?
+        .min(bitmap.buffer_len);
+    if bitmap.buffer.is_null() || len == 0 {
+        return None;
+    }
+    Some(unsafe { slice::from_raw_parts(bitmap.buffer, len) }.to_vec())
 }
 
 fn face_ref(handle: usize) -> Option<&'static WasmFaceState> {
