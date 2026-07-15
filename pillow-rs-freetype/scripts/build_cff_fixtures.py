@@ -18,6 +18,7 @@ UNITS_PER_EM = 1000
 FIXED_HEAD_TIME = 0
 GLYPH_ORDER = [".notdef", "A"]
 METRICS = {".notdef": (600, 0), "A": (600, 40)}
+CUBIC_GLYPH_ORDER = [".notdef", "A", "cubic_c2_x_flatness", "cubic_c2_y_flatness"]
 NAMES = {
     "familyName": "Hybrid OTTO Coverage",
     "styleName": "Regular",
@@ -27,13 +28,21 @@ NAMES = {
 }
 
 
-def t2_charstring(rectangle: bool = False, cubic: bool = False):
+def t2_charstring(rectangle: bool = False, cubic: str | None = None):
     pen = T2CharStringPen(600, None)
-    if cubic:
+    if cubic == "arched":
         pen.moveTo((128, 0))
         pen.curveTo((240, 900), (720, 900), (832, 0))
         pen.moveTo((128, 0))
         pen.curveTo((300, 1120), (660, 1120), (832, 0))
+    elif cubic == "c2_x":
+        # Exercises the third `split_sdf_cubic` flatness term via public SDF.
+        pen.moveTo((0, 0))
+        pen.curveTo((100, 33), (250, 66), (300, 100))
+    elif cubic == "c2_y":
+        # Exercises the fourth `split_sdf_cubic` flatness term via public SDF.
+        pen.moveTo((0, 0))
+        pen.curveTo((100, 0), (200, 80), (300, 0))
     elif rectangle:
         pen.moveTo((80, 0))
         pen.lineTo((520, 0))
@@ -90,10 +99,21 @@ def build_cubic_cff(path: Path) -> None:
         "fullName": "Pure CFF Cubic Coverage Regular",
         "psName": "PureCFFCubicCoverage-Regular",
     }
-    metrics = {".notdef": (900, 0), "A": (900, 128)}
+    metrics = {
+        ".notdef": (900, 0),
+        "A": (900, 128),
+        "cubic_c2_x_flatness": (420, 0),
+        "cubic_c2_y_flatness": (420, 0),
+    }
     builder = FontBuilder(UNITS_PER_EM, isTTF=False)
-    builder.setupGlyphOrder(GLYPH_ORDER)
-    builder.setupCharacterMap({0x41: "A"})
+    builder.setupGlyphOrder(CUBIC_GLYPH_ORDER)
+    builder.setupCharacterMap(
+        {
+            0x41: "A",
+            0x42: "cubic_c2_x_flatness",
+            0x43: "cubic_c2_y_flatness",
+        }
+    )
     builder.setupHorizontalMetrics(metrics)
     builder.setupHorizontalHeader(ascent=1200, descent=-200)
     builder.setupNameTable(names)
@@ -111,7 +131,12 @@ def build_cubic_cff(path: Path) -> None:
             "FamilyName": names["familyName"],
             "Weight": names["styleName"],
         },
-        {".notdef": t2_charstring(), "A": t2_charstring(cubic=True)},
+        {
+            ".notdef": t2_charstring(),
+            "A": t2_charstring(cubic="arched"),
+            "cubic_c2_x_flatness": t2_charstring(cubic="c2_x"),
+            "cubic_c2_y_flatness": t2_charstring(cubic="c2_y"),
+        },
         {},
     )
     builder.setupMaxp()
