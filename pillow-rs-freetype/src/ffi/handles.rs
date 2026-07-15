@@ -367,6 +367,56 @@ pub fn FT_Outline_Get_CBox(outline: Option<&FT_OutlineSnapshot>, acbox: Option<&
     };
 }
 
+pub fn FT_Outline_Get_Bitmap(
+    library: Option<&FT_Library>,
+    outline: Option<&FT_OutlineSnapshot>,
+    abitmap: Option<&FT_Bitmap_C>,
+) -> Result<FT_Bitmap, FT_Error> {
+    if library.is_none() {
+        return Err(FT_Err_Invalid_Library_Handle as FT_Error);
+    }
+    let Some(abitmap) = abitmap else {
+        return Err(FT_Err_Invalid_Argument as FT_Error);
+    };
+    let Some(outline) = outline.and_then(outline_snapshot_to_core) else {
+        return Err(FT_Err_Invalid_Outline as FT_Error);
+    };
+    let width = usize::try_from(abitmap.width).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?;
+    let rows = usize::try_from(abitmap.rows).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?;
+    let raster = crate::grays::rasterize_in_box(outline, width, rows).map_err(error_to_ft)?;
+    let pitch_abs = usize::try_from(abitmap.pitch.unsigned_abs()).unwrap_or(width);
+    let mut pixels = vec![0; pitch_abs.saturating_mul(rows)];
+    if abitmap.pixel_mode == FT_PIXEL_MODE_MONO as u8 {
+        // FreeType `FT_Outline_Get_Bitmap` leaves AA unset for MONO targets and
+        // writes packed 1bpp rows into the caller pitch.
+        for y in 0..rows {
+            for x in 0..width {
+                if raster.pixels.get(y * width + x).copied().unwrap_or(0) != 0 {
+                    let byte = y * pitch_abs + x / 8;
+                    if let Some(dst) = pixels.get_mut(byte) {
+                        *dst |= 0x80 >> (x & 7);
+                    }
+                }
+            }
+        }
+    } else if raster.pixels.len() == width.saturating_mul(rows) {
+        for y in 0..rows {
+            let src = y * width;
+            let dst = y * pitch_abs;
+            let row_bytes = width.min(pitch_abs);
+            pixels[dst..dst + row_bytes].copy_from_slice(&raster.pixels[src..src + row_bytes]);
+        }
+    }
+    Ok(FT_Bitmap {
+        rows: abitmap.rows,
+        width: abitmap.width,
+        pitch: abitmap.pitch,
+        buffer: pixels,
+        num_grays: abitmap.num_grays,
+        pixel_mode: abitmap.pixel_mode.into(),
+    })
+}
+
 pub fn FT_Outline_Get_Orientation(outline: Option<&FT_OutlineSnapshot>) -> FT_Orientation {
     let Some(outline) = outline else {
         return FT_ORIENTATION_TRUETYPE as FT_Orientation;

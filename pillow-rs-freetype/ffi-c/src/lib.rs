@@ -1151,6 +1151,42 @@ pub extern "C" fn FT_Outline_Get_CBox(outline: *const FT_Outline, acbox: *mut FT
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_Get_Bitmap(
+    library: FT_Library,
+    outline: *const FT_Outline,
+    abitmap: *mut FT_Bitmap,
+) -> FT_Error {
+    let Some(mut bitmap) = non_null_mut(abitmap) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let snapshot = outline_snapshot_from_c(outline);
+    let bitmap_view = {
+        // SAFETY: `bitmap` is non-null and points to caller-owned `FT_Bitmap` storage.
+        let bitmap = unsafe { bitmap.as_ref() };
+        rust_ffi::FT_Bitmap_C {
+            rows: bitmap.rows,
+            width: bitmap.width,
+            pitch: bitmap.pitch,
+            buffer: bitmap.buffer,
+            num_grays: bitmap.num_grays,
+            pixel_mode: u8::try_from(bitmap.pixel_mode).unwrap_or(0),
+            palette_mode: bitmap.palette_mode,
+            palette: bitmap.palette,
+        }
+    };
+    match rust_ffi::FT_Outline_Get_Bitmap(library_ref(library), snapshot.as_ref(), Some(&bitmap_view))
+    {
+        Ok(rendered) => {
+            // SAFETY: `bitmap` is non-null and still points to caller-owned storage.
+            let bitmap = unsafe { bitmap.as_mut() };
+            copy_rendered_bitmap_to_c(bitmap, &rendered);
+            rust_ffi::FT_Err_Ok
+        }
+        Err(err) => err,
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Outline_Get_Orientation(outline: *const FT_Outline) -> FT_Orientation {
     let Some(snapshot) = outline_snapshot_from_c(outline) else {
         return rust_ffi::FT_ORIENTATION_TRUETYPE as FT_Orientation;
@@ -2156,6 +2192,31 @@ fn outline_snapshot_from_c(outline: *const FT_Outline) -> Option<rust_ffi::FT_Ou
         contours,
         flags: outline.flags,
     })
+}
+
+fn copy_rendered_bitmap_to_c(target: &mut FT_Bitmap, rendered: &rust_ffi::FT_Bitmap) {
+    let rows = usize::try_from(target.rows).unwrap_or(0);
+    let width = usize::try_from(target.width).unwrap_or(0);
+    let pitch_abs = usize::try_from(target.pitch.unsigned_abs()).unwrap_or(0);
+    if target.buffer.is_null() || rows == 0 || width == 0 || pitch_abs == 0 {
+        return;
+    }
+    let row_bytes = width.min(pitch_abs);
+    let target_len = pitch_abs.saturating_mul(rows);
+    // SAFETY: the public C caller provides a writable bitmap buffer of at least
+    // `abs(pitch) * rows` bytes, matching FreeType's `FT_Bitmap` contract.
+    let target_buffer = unsafe { slice::from_raw_parts_mut(target.buffer, target_len) };
+    for row in 0..rows {
+        let src = row.saturating_mul(width);
+        let dst = row.saturating_mul(pitch_abs);
+        let Some(src_row) = rendered.buffer.get(src..src.saturating_add(row_bytes)) else {
+            break;
+        };
+        let Some(dst_row) = target_buffer.get_mut(dst..dst.saturating_add(row_bytes)) else {
+            break;
+        };
+        dst_row.copy_from_slice(src_row);
+    }
 }
 
 fn face_state(face: FT_Face) -> Option<&'static FaceState> {

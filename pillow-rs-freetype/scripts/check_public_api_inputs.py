@@ -44,6 +44,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_face_check_truetype_patents",
     "fontdone_wasm_face_set_unpatented_hinting",
     "fontdone_wasm_outline_get_cbox",
+    "fontdone_wasm_outline_get_bitmap",
     "fontdone_wasm_outline_get_orientation",
     "fontdone_wasm_get_truetype_engine_type",
     "fontdone_wasm_library_set_lcd_filter",
@@ -795,6 +796,15 @@ def otvalid_real_parity_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def outline_get_bitmap_real_parity_reason(row: ConcreteInput) -> str | None:
+    if (
+        row.subject == "ftoutln.FT_Outline_Get_Bitmap"
+        and row.operation == "ftoutln.outline_get_bitmap"
+    ):
+        return "FT_Outline_Get_Bitmap validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    return None
+
+
 def wrapper_null_validation_reason(row: ConcreteInput) -> str | None:
     if row.operation == "freetype.get_subglyph_info" and "null_output_indices" in row.params:
         return (
@@ -923,6 +933,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     otvalid_real_reason = otvalid_real_parity_reason(row)
     if otvalid_real_reason:
         return ("real-parity", otvalid_real_reason)
+    outline_get_bitmap_real_reason = outline_get_bitmap_real_parity_reason(row)
+    if outline_get_bitmap_real_reason:
+        return ("real-parity", outline_get_bitmap_real_reason)
     wrapper_null_reason = wrapper_null_validation_reason(row)
     if wrapper_null_reason:
         return ("wrapper-null-validation", wrapper_null_reason)

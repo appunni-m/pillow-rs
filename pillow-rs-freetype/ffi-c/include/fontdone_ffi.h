@@ -231,6 +231,7 @@ FT_Error FT_Activate_Size(FT_Size size);
 FT_Bool FT_Face_CheckTrueTypePatents(FT_Face face);
 FT_Bool FT_Face_SetUnpatentedHinting(FT_Face face, FT_Bool value);
 void FT_Outline_Get_CBox(const FT_Outline* outline, FT_BBox* acbox);
+FT_Error FT_Outline_Get_Bitmap(FT_Library library, const FT_Outline* outline, FT_Bitmap* abitmap);
 FT_Orientation FT_Outline_Get_Orientation(const FT_Outline* outline);
 FT_Error FT_Set_Char_Size(FT_Face face, FT_F26Dot6 char_width, FT_F26Dot6 char_height, FT_UInt horz_resolution, FT_UInt vert_resolution);
 FT_Error FT_Set_Pixel_Sizes(FT_Face face, FT_UInt pixel_width, FT_UInt pixel_height);
