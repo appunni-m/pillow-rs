@@ -8259,6 +8259,14 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--bitmap-copy".to_string(),
             string_param(params, "scenario")?.to_string(),
         ]),
+        "ftbitmap.bitmap_convert" => Ok(vec![
+            "--bitmap-convert".to_string(),
+            string_param(params, "scenario")?.to_string(),
+        ]),
+        "ftbitmap.bitmap_done" => Ok(vec![
+            "--bitmap-done".to_string(),
+            string_param(params, "scenario")?.to_string(),
+        ]),
         "ftbitmap.bitmap_embolden" => Ok(vec![
             "--bitmap-embolden".to_string(),
             string_param(params, "scenario")?.to_string(),
@@ -9646,6 +9654,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             bitmap_init_new_output(case, BitmapInitBackend::Rust)
         }
         "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::Rust),
+        "ftbitmap.bitmap_convert" => bitmap_convert_output(case, BitmapConvertBackend::Rust),
+        "ftbitmap.bitmap_done" => bitmap_done_output(case, BitmapDoneBackend::Rust),
         "ftbitmap.bitmap_embolden" => bitmap_embolden_output(case, BitmapEmboldenBackend::Rust),
         "ftbitmap.bitmap_blend" => bitmap_blend_output(case, BitmapBlendBackend::Rust),
         "ftbitmap.glyphslot_own_bitmap" => glyphslot_own_bitmap_rust(case),
@@ -10101,6 +10111,8 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             bitmap_init_new_output(case, BitmapInitBackend::CAbi)
         }
         "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::CAbi),
+        "ftbitmap.bitmap_convert" => bitmap_convert_output(case, BitmapConvertBackend::CAbi),
+        "ftbitmap.bitmap_done" => bitmap_done_output(case, BitmapDoneBackend::CAbi),
         "ftbitmap.bitmap_embolden" => bitmap_embolden_output(case, BitmapEmboldenBackend::CAbi),
         "ftbitmap.bitmap_blend" => bitmap_blend_output(case, BitmapBlendBackend::CAbi),
         "ftbitmap.glyphslot_own_bitmap" => glyphslot_own_bitmap_c_abi(case),
@@ -10693,6 +10705,8 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             bitmap_init_new_output(case, BitmapInitBackend::Wasm)
         }
         "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::Wasm),
+        "ftbitmap.bitmap_convert" => bitmap_convert_output(case, BitmapConvertBackend::Wasm),
+        "ftbitmap.bitmap_done" => bitmap_done_output(case, BitmapDoneBackend::Wasm),
         "ftbitmap.bitmap_embolden" => bitmap_embolden_output(case, BitmapEmboldenBackend::Wasm),
         "ftbitmap.bitmap_blend" => bitmap_blend_output(case, BitmapBlendBackend::Wasm),
         "ftbitmap.glyphslot_own_bitmap" => glyphslot_own_bitmap_wasm(case),
@@ -23472,6 +23486,753 @@ fn bitmap_copy_target_bytes(
         BitmapCopyBackend::Rust | BitmapCopyBackend::CAbi | BitmapCopyBackend::Wasm => {
             FT_Bitmap_Owned_Buffer_Bytes(Some(&setup.target))
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum BitmapConvertBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+#[derive(Clone, Copy)]
+enum BitmapDoneBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn bitmap_convert_output(
+    case: &InputCase,
+    backend: BitmapConvertBackend,
+) -> Result<RunOutput, String> {
+    let scenario = string_param(&case.inputs.params, "scenario")?;
+    let runs = match scenario {
+        "success_supported_depths_to_gray" => {
+            let modes = [
+                ("mono", FT_PIXEL_MODE_MONO),
+                ("gray2", FT_PIXEL_MODE_GRAY2),
+                ("gray4", FT_PIXEL_MODE_GRAY4),
+                ("gray", FT_PIXEL_MODE_GRAY),
+                ("lcd", FT_PIXEL_MODE_LCD),
+                ("lcd_v", FT_PIXEL_MODE_LCD_V),
+                ("bgra", FT_PIXEL_MODE_BGRA),
+            ];
+            modes
+                .into_iter()
+                .map(|(label, mode)| bitmap_convert_run(label, mode, false, 0, 1, false, backend))
+                .collect::<Result<Vec<_>, _>>()?
+        }
+        "success_alignment_and_flow" => {
+            let mut runs = Vec::new();
+            for alignment in [0, 1, 2, 3, 4] {
+                runs.push(bitmap_convert_run(
+                    &format!("align_{alignment}"),
+                    FT_PIXEL_MODE_GRAY,
+                    false,
+                    0,
+                    alignment,
+                    false,
+                    backend,
+                )?);
+            }
+            runs.push(bitmap_convert_run(
+                "negative_source_flow",
+                FT_PIXEL_MODE_GRAY,
+                true,
+                0,
+                4,
+                false,
+                backend,
+            )?);
+            runs.push(bitmap_convert_run(
+                "negative_target_flow",
+                FT_PIXEL_MODE_GRAY,
+                false,
+                -1,
+                4,
+                false,
+                backend,
+            )?);
+            runs
+        }
+        "success_repeated_conversion_reallocates" => bitmap_convert_repeated_runs(backend)?,
+        "success_empty_or_null_source_buffer" => {
+            vec![bitmap_convert_empty_run(backend)?]
+        }
+        "error_invalid_arguments_or_alignment" => bitmap_convert_error_runs(backend)?,
+        "error_unsupported_pixel_mode" => bitmap_convert_unsupported_runs(backend)?,
+        other => return Err(format!("unsupported bitmap_convert scenario {other}")),
+    };
+    Ok(ok(json!({ "runs": runs })))
+}
+
+fn bitmap_done_output(case: &InputCase, backend: BitmapDoneBackend) -> Result<RunOutput, String> {
+    let scenario = string_param(&case.inputs.params, "scenario")?;
+    let runs = match scenario {
+        "success_frees_and_zeroes_bitmap" => {
+            vec![bitmap_done_allocated_run("allocated_bitmap", backend)?]
+        }
+        "success_empty_bitmap" => vec![bitmap_done_run(
+            "empty_bitmap",
+            FT_Bitmap_C::default(),
+            None,
+            false,
+            false,
+            backend,
+        )?],
+        "success_repeated_done_after_reinit" => bitmap_done_repeated_runs(backend)?,
+        "error_null_library_or_bitmap" => bitmap_done_error_runs(backend)?,
+        other => return Err(format!("unsupported bitmap_done scenario {other}")),
+    };
+    Ok(ok(json!({ "runs": runs })))
+}
+
+fn bitmap_convert_repeated_runs(backend: BitmapConvertBackend) -> Result<Vec<Value>, String> {
+    match backend {
+        BitmapConvertBackend::Rust => {
+            let library = FT_Init_FreeType();
+            let (mut source, source_bytes) =
+                bitmap_convert_source_record(FT_PIXEL_MODE_GRAY2, false);
+            FT_Bitmap_Set_Owned_Buffer(Some(&mut source), source_bytes);
+            let mut target = FT_Bitmap_C::default();
+            let err = FT_Bitmap_Convert(Some(&library), Some(&source), Some(&mut target), 1);
+            let first = bitmap_convert_run_json("first_gray2", err, Some(&target));
+            let (mut source, source_bytes) =
+                bitmap_convert_source_record(FT_PIXEL_MODE_GRAY4, false);
+            FT_Bitmap_Set_Owned_Buffer(Some(&mut source), source_bytes);
+            let err = FT_Bitmap_Convert(Some(&library), Some(&source), Some(&mut target), 1);
+            let second = bitmap_convert_run_json("second_gray4", err, Some(&target));
+            FT_Bitmap_Done(Some(&library), Some(&mut target));
+            Ok(vec![first, second])
+        }
+        BitmapConvertBackend::CAbi => {
+            let mut library = ptr::null_mut();
+            let init_err = c_abi::FT_Init_FreeType(&mut library);
+            if init_err != FT_Err_Ok {
+                return Ok(vec![bitmap_convert_run_json("first_gray2", init_err, None)]);
+            }
+            let (source, mut source_bytes) =
+                c_bitmap_convert_source_record(FT_PIXEL_MODE_GRAY2, false);
+            let mut source = source;
+            source.buffer = source_bytes.as_mut_ptr();
+            let mut target = c_abi::FT_Bitmap::default();
+            let err = c_abi::FT_Bitmap_Convert(library, &source, &mut target, 1);
+            let first_target = bitmap_from_c_record(&target);
+            let first = bitmap_convert_run_json("first_gray2", err, Some(&first_target));
+            let (source, mut source_bytes) =
+                c_bitmap_convert_source_record(FT_PIXEL_MODE_GRAY4, false);
+            let mut source = source;
+            source.buffer = source_bytes.as_mut_ptr();
+            let err = c_abi::FT_Bitmap_Convert(library, &source, &mut target, 1);
+            let second_target = bitmap_from_c_record(&target);
+            let second = bitmap_convert_run_json("second_gray4", err, Some(&second_target));
+            let _ = c_abi::FT_Bitmap_Done(library, &mut target);
+            c_done_library(library);
+            Ok(vec![first, second])
+        }
+        BitmapConvertBackend::Wasm => {
+            let (source, source_bytes) =
+                wasm_bitmap_convert_source_record(FT_PIXEL_MODE_GRAY2, false);
+            let mut source = source;
+            source.buffer = source_bytes.as_ptr();
+            source.buffer_len = source_bytes.len();
+            let mut target = wasm_abi::FontdoneWasmBitmap::default();
+            let err = wasm_abi::fontdone_wasm_bitmap_convert(1, &source, &mut target, 1);
+            let first_target = bitmap_from_wasm_record(&target);
+            let first = bitmap_convert_run_json("first_gray2", err, Some(&first_target));
+            let (source, source_bytes) =
+                wasm_bitmap_convert_source_record(FT_PIXEL_MODE_GRAY4, false);
+            let mut source = source;
+            source.buffer = source_bytes.as_ptr();
+            source.buffer_len = source_bytes.len();
+            let err = wasm_abi::fontdone_wasm_bitmap_convert(1, &source, &mut target, 1);
+            let second_target = bitmap_from_wasm_record(&target);
+            let second = bitmap_convert_run_json("second_gray4", err, Some(&second_target));
+            let _ = wasm_abi::fontdone_wasm_bitmap_done(1, &mut target);
+            Ok(vec![first, second])
+        }
+    }
+}
+
+fn bitmap_convert_empty_run(backend: BitmapConvertBackend) -> Result<Value, String> {
+    let source = FT_Bitmap_C {
+        pixel_mode: FT_PIXEL_MODE_GRAY as u8,
+        width: 5,
+        rows: 0,
+        pitch: 5,
+        ..Default::default()
+    };
+    bitmap_convert_run_with_records(
+        "empty_null_buffer",
+        Some((source, None)),
+        Some((FT_Bitmap_C::default(), None)),
+        4,
+        false,
+        backend,
+    )
+}
+
+fn bitmap_convert_error_runs(backend: BitmapConvertBackend) -> Result<Vec<Value>, String> {
+    let (source, source_bytes) = bitmap_convert_source_record(FT_PIXEL_MODE_GRAY, false);
+    Ok(vec![
+        bitmap_convert_run_with_records(
+            "null_library",
+            Some((source, Some(source_bytes.clone()))),
+            Some((dirty_bitmap_record(), Some(dirty_bitmap_bytes()))),
+            1,
+            true,
+            backend,
+        )?,
+        bitmap_convert_run_with_records(
+            "null_source",
+            None,
+            Some((dirty_bitmap_record(), Some(dirty_bitmap_bytes()))),
+            1,
+            false,
+            backend,
+        )?,
+        bitmap_convert_run_with_records(
+            "null_target",
+            Some((source, Some(source_bytes))),
+            None,
+            1,
+            false,
+            backend,
+        )?,
+    ])
+}
+
+fn bitmap_convert_unsupported_runs(backend: BitmapConvertBackend) -> Result<Vec<Value>, String> {
+    let (mut source, source_bytes) = bitmap_convert_source_record(FT_PIXEL_MODE_GRAY, false);
+    source.pixel_mode = FT_PIXEL_MODE_NONE as u8;
+    let first = bitmap_convert_run_with_records(
+        "pixel_mode_none",
+        Some((source, Some(source_bytes.clone()))),
+        Some((dirty_bitmap_record(), Some(dirty_bitmap_bytes()))),
+        1,
+        false,
+        backend,
+    )?;
+    source.pixel_mode = FT_PIXEL_MODE_MAX as u8;
+    let second = bitmap_convert_run_with_records(
+        "pixel_mode_max",
+        Some((source, Some(source_bytes))),
+        Some((dirty_bitmap_record(), Some(dirty_bitmap_bytes()))),
+        1,
+        false,
+        backend,
+    )?;
+    Ok(vec![first, second])
+}
+
+fn bitmap_convert_run(
+    label: &str,
+    pixel_mode: FT_Pixel_Mode,
+    negative_source_pitch: bool,
+    target_pitch: FT_Int,
+    alignment: FT_Int,
+    null_library: bool,
+    backend: BitmapConvertBackend,
+) -> Result<Value, String> {
+    let (source, source_bytes) = bitmap_convert_source_record(pixel_mode, negative_source_pitch);
+    let target = FT_Bitmap_C {
+        pitch: target_pitch,
+        ..Default::default()
+    };
+    bitmap_convert_run_with_records(
+        label,
+        Some((source, Some(source_bytes))),
+        Some((target, None)),
+        alignment,
+        null_library,
+        backend,
+    )
+}
+
+fn bitmap_convert_run_with_records(
+    label: &str,
+    source: Option<(FT_Bitmap_C, Option<Vec<u8>>)>,
+    target: Option<(FT_Bitmap_C, Option<Vec<u8>>)>,
+    alignment: FT_Int,
+    null_library: bool,
+    backend: BitmapConvertBackend,
+) -> Result<Value, String> {
+    let (err, target) = match backend {
+        BitmapConvertBackend::Rust => bitmap_convert_rust(source, target, alignment, null_library),
+        BitmapConvertBackend::CAbi => bitmap_convert_c_abi(source, target, alignment, null_library),
+        BitmapConvertBackend::Wasm => bitmap_convert_wasm(source, target, alignment, null_library),
+    }?;
+    Ok(bitmap_convert_run_json(label, err, target.as_ref()))
+}
+
+fn bitmap_convert_rust(
+    source: Option<(FT_Bitmap_C, Option<Vec<u8>>)>,
+    target: Option<(FT_Bitmap_C, Option<Vec<u8>>)>,
+    alignment: FT_Int,
+    null_library: bool,
+) -> Result<(FT_Error, Option<FT_Bitmap_C>), String> {
+    let library = FT_Init_FreeType();
+    let library = (!null_library).then_some(&library);
+    let source_record;
+    let source_ref = if let Some((mut record, bytes)) = source {
+        if let Some(bytes) = bytes {
+            FT_Bitmap_Set_Owned_Buffer(Some(&mut record), bytes);
+        }
+        source_record = record;
+        Some(&source_record)
+    } else {
+        None
+    };
+    let mut target_record;
+    let err = if let Some((mut record, bytes)) = target {
+        if let Some(bytes) = bytes {
+            FT_Bitmap_Set_Owned_Buffer(Some(&mut record), bytes);
+        }
+        target_record = record;
+        FT_Bitmap_Convert(library, source_ref, Some(&mut target_record), alignment)
+    } else {
+        return Ok((
+            FT_Bitmap_Convert(library, source_ref, None, alignment),
+            None,
+        ));
+    };
+    Ok((err, Some(target_record)))
+}
+
+fn bitmap_convert_c_abi(
+    source: Option<(FT_Bitmap_C, Option<Vec<u8>>)>,
+    target: Option<(FT_Bitmap_C, Option<Vec<u8>>)>,
+    alignment: FT_Int,
+    null_library: bool,
+) -> Result<(FT_Error, Option<FT_Bitmap_C>), String> {
+    let mut library = ptr::null_mut();
+    if !null_library {
+        let err = c_abi::FT_Init_FreeType(&mut library);
+        if err != FT_Err_Ok {
+            return Ok((err, None));
+        }
+    }
+    let source_storage = source.map(|(record, bytes)| {
+        let mut source_bytes = bytes.unwrap_or_default();
+        let mut record = c_bitmap_from_rust_record(&record);
+        record.buffer = if source_bytes.is_empty() {
+            ptr::null_mut()
+        } else {
+            source_bytes.as_mut_ptr()
+        };
+        (record, source_bytes)
+    });
+    let source_ptr = source_storage
+        .as_ref()
+        .map_or(ptr::null(), |(record, _)| record as *const c_abi::FT_Bitmap);
+
+    let mut target_storage = target.map(|(record, bytes)| {
+        let mut target_bytes = bytes.unwrap_or_default();
+        let mut c_record = c_bitmap_from_rust_record(&record);
+        c_record.buffer = if target_bytes.is_empty() {
+            record.buffer
+        } else {
+            target_bytes.as_mut_ptr()
+        };
+        (c_record, target_bytes)
+    });
+    let target_ptr = target_storage
+        .as_mut()
+        .map_or(ptr::null_mut(), |(record, _)| {
+            record as *mut c_abi::FT_Bitmap
+        });
+    let err = c_abi::FT_Bitmap_Convert(library, source_ptr, target_ptr, alignment);
+    let output = target_storage
+        .as_ref()
+        .map(|(record, _)| bitmap_from_c_record(record));
+    if !library.is_null() {
+        c_done_library(library);
+    }
+    Ok((err, output))
+}
+
+fn bitmap_convert_wasm(
+    source: Option<(FT_Bitmap_C, Option<Vec<u8>>)>,
+    target: Option<(FT_Bitmap_C, Option<Vec<u8>>)>,
+    alignment: FT_Int,
+    null_library: bool,
+) -> Result<(FT_Error, Option<FT_Bitmap_C>), String> {
+    let source_storage = source.map(|(record, bytes)| {
+        let source_bytes = bytes.unwrap_or_default();
+        let source_record = wasm_bitmap_from_rust_record(&record, &source_bytes);
+        (source_record, source_bytes)
+    });
+    let source_ptr = source_storage.as_ref().map_or(ptr::null(), |(record, _)| {
+        record as *const wasm_abi::FontdoneWasmBitmap
+    });
+
+    let mut target_storage = target.map(|(record, bytes)| {
+        let target_bytes = bytes.unwrap_or_default();
+        let mut wasm_record = wasm_bitmap_from_rust_record(&record, &target_bytes);
+        if target_bytes.is_empty() {
+            wasm_record.buffer = record.buffer;
+        }
+        (wasm_record, target_bytes)
+    });
+    let target_ptr = target_storage
+        .as_mut()
+        .map_or(ptr::null_mut(), |(record, _)| {
+            record as *mut wasm_abi::FontdoneWasmBitmap
+        });
+    let err = wasm_abi::fontdone_wasm_bitmap_convert(
+        if null_library { 0 } else { 1 },
+        source_ptr,
+        target_ptr,
+        alignment,
+    );
+    let output = target_storage
+        .as_ref()
+        .map(|(record, _)| bitmap_from_wasm_record(record));
+    Ok((err, output))
+}
+
+fn bitmap_done_allocated_run(label: &str, backend: BitmapDoneBackend) -> Result<Value, String> {
+    let (mut bitmap, bytes) = bitmap_convert_source_record(FT_PIXEL_MODE_GRAY, false);
+    bitmap.pixel_mode = FT_PIXEL_MODE_GRAY as u8;
+    bitmap_done_from_converted_source(label, bitmap, bytes, backend)
+}
+
+fn bitmap_done_from_converted_source(
+    label: &str,
+    source: FT_Bitmap_C,
+    source_bytes: Vec<u8>,
+    backend: BitmapDoneBackend,
+) -> Result<Value, String> {
+    match backend {
+        BitmapDoneBackend::Rust => {
+            let library = FT_Init_FreeType();
+            let mut source = source;
+            FT_Bitmap_Set_Owned_Buffer(Some(&mut source), source_bytes);
+            let mut bitmap = FT_Bitmap_C::default();
+            let convert_err =
+                FT_Bitmap_Convert(Some(&library), Some(&source), Some(&mut bitmap), 1);
+            if convert_err != FT_Err_Ok {
+                return Ok(bitmap_convert_run_json(label, convert_err, Some(&bitmap)));
+            }
+            let err = FT_Bitmap_Done(Some(&library), Some(&mut bitmap));
+            Ok(bitmap_convert_run_json(label, err, Some(&bitmap)))
+        }
+        BitmapDoneBackend::CAbi => {
+            let mut library = ptr::null_mut();
+            let init_err = c_abi::FT_Init_FreeType(&mut library);
+            if init_err != FT_Err_Ok {
+                return Ok(bitmap_convert_run_json(label, init_err, None));
+            }
+            let mut source_bytes = source_bytes;
+            let mut c_source = c_bitmap_from_rust_record(&source);
+            c_source.buffer = source_bytes.as_mut_ptr();
+            let mut bitmap = c_abi::FT_Bitmap::default();
+            let convert_err = c_abi::FT_Bitmap_Convert(library, &c_source, &mut bitmap, 1);
+            if convert_err != FT_Err_Ok {
+                let output = bitmap_from_c_record(&bitmap);
+                c_done_library(library);
+                return Ok(bitmap_convert_run_json(label, convert_err, Some(&output)));
+            }
+            let err = c_abi::FT_Bitmap_Done(library, &mut bitmap);
+            let output = bitmap_from_c_record(&bitmap);
+            c_done_library(library);
+            Ok(bitmap_convert_run_json(label, err, Some(&output)))
+        }
+        BitmapDoneBackend::Wasm => {
+            let mut wasm_source = wasm_bitmap_from_rust_record(&source, &source_bytes);
+            wasm_source.buffer = source_bytes.as_ptr();
+            wasm_source.buffer_len = source_bytes.len();
+            let mut bitmap = wasm_abi::FontdoneWasmBitmap::default();
+            let convert_err =
+                wasm_abi::fontdone_wasm_bitmap_convert(1, &wasm_source, &mut bitmap, 1);
+            if convert_err != FT_Err_Ok {
+                let output = bitmap_from_wasm_record(&bitmap);
+                return Ok(bitmap_convert_run_json(label, convert_err, Some(&output)));
+            }
+            let err = wasm_abi::fontdone_wasm_bitmap_done(1, &mut bitmap);
+            let output = bitmap_from_wasm_record(&bitmap);
+            Ok(bitmap_convert_run_json(label, err, Some(&output)))
+        }
+    }
+}
+
+fn bitmap_done_run(
+    label: &str,
+    bitmap: FT_Bitmap_C,
+    bytes: Option<Vec<u8>>,
+    null_library: bool,
+    null_bitmap: bool,
+    backend: BitmapDoneBackend,
+) -> Result<Value, String> {
+    let (err, bitmap) = match backend {
+        BitmapDoneBackend::Rust => {
+            let library = FT_Init_FreeType();
+            let library = (!null_library).then_some(&library);
+            let mut bitmap = bitmap;
+            if let Some(bytes) = bytes {
+                FT_Bitmap_Set_Owned_Buffer(Some(&mut bitmap), bytes);
+            }
+            if null_bitmap {
+                (FT_Bitmap_Done(library, None), None)
+            } else {
+                let err = FT_Bitmap_Done(library, Some(&mut bitmap));
+                (err, Some(bitmap))
+            }
+        }
+        BitmapDoneBackend::CAbi => {
+            let mut library = ptr::null_mut();
+            if !null_library {
+                let init_err = c_abi::FT_Init_FreeType(&mut library);
+                if init_err != FT_Err_Ok {
+                    return Ok(bitmap_convert_run_json(label, init_err, None));
+                }
+            }
+            let mut bytes = bytes.unwrap_or_default();
+            let mut c_bitmap = c_bitmap_from_rust_record(&bitmap);
+            c_bitmap.buffer = if bytes.is_empty() {
+                bitmap.buffer
+            } else {
+                bytes.as_mut_ptr()
+            };
+            let bitmap_ptr = if null_bitmap {
+                ptr::null_mut()
+            } else {
+                &mut c_bitmap
+            };
+            let err = c_abi::FT_Bitmap_Done(library, bitmap_ptr);
+            let output = (!null_bitmap).then(|| bitmap_from_c_record(&c_bitmap));
+            if !library.is_null() {
+                c_done_library(library);
+            }
+            (err, output)
+        }
+        BitmapDoneBackend::Wasm => {
+            let bytes = bytes.unwrap_or_default();
+            let mut wasm_bitmap = wasm_bitmap_from_rust_record(&bitmap, &bytes);
+            if bytes.is_empty() {
+                wasm_bitmap.buffer = bitmap.buffer;
+            }
+            let bitmap_ptr = if null_bitmap {
+                ptr::null_mut()
+            } else {
+                &mut wasm_bitmap
+            };
+            let err =
+                wasm_abi::fontdone_wasm_bitmap_done(if null_library { 0 } else { 1 }, bitmap_ptr);
+            let output = (!null_bitmap).then(|| bitmap_from_wasm_record(&wasm_bitmap));
+            (err, output)
+        }
+    };
+    Ok(bitmap_convert_run_json(label, err, bitmap.as_ref()))
+}
+
+fn bitmap_done_repeated_runs(backend: BitmapDoneBackend) -> Result<Vec<Value>, String> {
+    let (source, source_bytes) = bitmap_convert_source_record(FT_PIXEL_MODE_GRAY2, false);
+    let first = bitmap_done_from_converted_source("first_done", source, source_bytes, backend)?;
+    let (source, source_bytes) = bitmap_convert_source_record(FT_PIXEL_MODE_GRAY4, false);
+    let second = bitmap_done_from_converted_source("second_done", source, source_bytes, backend)?;
+    Ok(vec![first, second])
+}
+
+fn bitmap_done_error_runs(backend: BitmapDoneBackend) -> Result<Vec<Value>, String> {
+    let (source, source_bytes) = bitmap_convert_source_record(FT_PIXEL_MODE_GRAY, false);
+    let null_library = match backend {
+        BitmapDoneBackend::Rust => {
+            let library = FT_Init_FreeType();
+            let mut source = source;
+            FT_Bitmap_Set_Owned_Buffer(Some(&mut source), source_bytes.clone());
+            let mut bitmap = FT_Bitmap_C::default();
+            let _ = FT_Bitmap_Convert(Some(&library), Some(&source), Some(&mut bitmap), 1);
+            let err = FT_Bitmap_Done(None, Some(&mut bitmap));
+            let run = bitmap_convert_run_json("null_library", err, Some(&bitmap));
+            let _ = FT_Bitmap_Done(Some(&library), Some(&mut bitmap));
+            run
+        }
+        BitmapDoneBackend::CAbi => {
+            let mut library = ptr::null_mut();
+            let _ = c_abi::FT_Init_FreeType(&mut library);
+            let mut source_bytes = source_bytes.clone();
+            let mut c_source = c_bitmap_from_rust_record(&source);
+            c_source.buffer = source_bytes.as_mut_ptr();
+            let mut bitmap = c_abi::FT_Bitmap::default();
+            let _ = c_abi::FT_Bitmap_Convert(library, &c_source, &mut bitmap, 1);
+            let err = c_abi::FT_Bitmap_Done(ptr::null_mut(), &mut bitmap);
+            let output = bitmap_from_c_record(&bitmap);
+            let _ = c_abi::FT_Bitmap_Done(library, &mut bitmap);
+            c_done_library(library);
+            bitmap_convert_run_json("null_library", err, Some(&output))
+        }
+        BitmapDoneBackend::Wasm => {
+            let mut wasm_source = wasm_bitmap_from_rust_record(&source, &source_bytes);
+            wasm_source.buffer = source_bytes.as_ptr();
+            wasm_source.buffer_len = source_bytes.len();
+            let mut bitmap = wasm_abi::FontdoneWasmBitmap::default();
+            let _ = wasm_abi::fontdone_wasm_bitmap_convert(1, &wasm_source, &mut bitmap, 1);
+            let err = wasm_abi::fontdone_wasm_bitmap_done(0, &mut bitmap);
+            let output = bitmap_from_wasm_record(&bitmap);
+            let _ = wasm_abi::fontdone_wasm_bitmap_done(1, &mut bitmap);
+            bitmap_convert_run_json("null_library", err, Some(&output))
+        }
+    };
+    let null_bitmap = bitmap_done_run(
+        "null_bitmap",
+        FT_Bitmap_C::default(),
+        None,
+        false,
+        true,
+        backend,
+    )?;
+    Ok(vec![null_library, null_bitmap])
+}
+
+fn bitmap_convert_run_json(label: &str, err: FT_Error, target: Option<&FT_Bitmap_C>) -> Value {
+    json!({
+        "label": label,
+        "status": {
+            "kind": if err == FT_Err_Ok { "ok" } else { "error" },
+            "error_code": err
+        },
+        "target": target.map(bitmap_record_json),
+        "target_active_bytes_hash": if err == FT_Err_Ok {
+            target.and_then(bitmap_active_bytes).as_deref().map(djb2_hash)
+        } else {
+            None
+        },
+        "target_buffer_len": target.and_then(bitmap_buffer_len).unwrap_or(0)
+    })
+}
+
+fn bitmap_active_bytes(bitmap: &FT_Bitmap_C) -> Option<Vec<u8>> {
+    let bytes = FT_Bitmap_Owned_Buffer_Bytes(Some(bitmap))?;
+    let pitch = usize::try_from(bitmap.pitch.unsigned_abs()).ok()?;
+    let rows = usize::try_from(bitmap.rows).ok()?;
+    let width = usize::try_from(bitmap.width).ok()?;
+    let mut active = Vec::with_capacity(width.checked_mul(rows)?);
+    let start = if bitmap.pitch < 0 {
+        rows.saturating_sub(1).checked_mul(pitch)?
+    } else {
+        0
+    };
+    for row in 0..rows {
+        let offset = if bitmap.pitch < 0 {
+            start.checked_sub(row.checked_mul(pitch)?)?
+        } else {
+            start.checked_add(row.checked_mul(pitch)?)?
+        };
+        active.extend_from_slice(bytes.get(offset..offset.checked_add(width)?)?);
+    }
+    Some(active)
+}
+
+fn bitmap_buffer_len(bitmap: &FT_Bitmap_C) -> Option<usize> {
+    usize::try_from(bitmap.pitch.unsigned_abs())
+        .ok()?
+        .checked_mul(usize::try_from(bitmap.rows).ok()?)
+}
+
+fn dirty_bitmap_bytes() -> Vec<u8> {
+    vec![0xE5; 77]
+}
+
+fn bitmap_convert_source_record(
+    pixel_mode: FT_Pixel_Mode,
+    negative_pitch: bool,
+) -> (FT_Bitmap_C, Vec<u8>) {
+    let rows = 3;
+    let width = if pixel_mode == FT_PIXEL_MODE_BGRA {
+        4
+    } else {
+        9
+    };
+    let pitch_abs = match pixel_mode {
+        FT_PIXEL_MODE_MONO => 2,
+        FT_PIXEL_MODE_GRAY2 => 3,
+        FT_PIXEL_MODE_GRAY4 => 5,
+        FT_PIXEL_MODE_BGRA => 16,
+        _ => width,
+    };
+    let len = usize::try_from(pitch_abs * rows).unwrap_or(0);
+    let bytes = (0..len)
+        .map(|i| {
+            (i as u8)
+                .wrapping_mul(37)
+                .wrapping_add((pixel_mode as u8).wrapping_mul(11))
+                .wrapping_add(5)
+        })
+        .collect();
+    (
+        FT_Bitmap_C {
+            rows: rows as u32,
+            width: width as u32,
+            pitch: if negative_pitch {
+                -pitch_abs
+            } else {
+                pitch_abs
+            },
+            buffer: ptr::with_exposed_provenance_mut(0x1),
+            num_grays: match pixel_mode {
+                FT_PIXEL_MODE_MONO => 2,
+                FT_PIXEL_MODE_GRAY2 => 4,
+                FT_PIXEL_MODE_GRAY4 => 16,
+                _ => 256,
+            },
+            pixel_mode: pixel_mode as u8,
+            palette_mode: 0,
+            palette: ptr::null_mut(),
+        },
+        bytes,
+    )
+}
+
+fn c_bitmap_convert_source_record(
+    pixel_mode: FT_Pixel_Mode,
+    negative_pitch: bool,
+) -> (c_abi::FT_Bitmap, Vec<u8>) {
+    let (bitmap, bytes) = bitmap_convert_source_record(pixel_mode, negative_pitch);
+    (c_bitmap_from_rust_record(&bitmap), bytes)
+}
+
+fn wasm_bitmap_convert_source_record(
+    pixel_mode: FT_Pixel_Mode,
+    negative_pitch: bool,
+) -> (wasm_abi::FontdoneWasmBitmap, Vec<u8>) {
+    let (bitmap, bytes) = bitmap_convert_source_record(pixel_mode, negative_pitch);
+    (wasm_bitmap_from_rust_record(&bitmap, &bytes), bytes)
+}
+
+fn c_bitmap_from_rust_record(bitmap: &FT_Bitmap_C) -> c_abi::FT_Bitmap {
+    c_abi::FT_Bitmap {
+        rows: bitmap.rows,
+        width: bitmap.width,
+        pitch: bitmap.pitch,
+        buffer: bitmap.buffer,
+        num_grays: bitmap.num_grays,
+        pixel_mode: bitmap.pixel_mode.into(),
+        palette_mode: bitmap.palette_mode,
+        palette: bitmap.palette,
+    }
+}
+
+fn wasm_bitmap_from_rust_record(
+    bitmap: &FT_Bitmap_C,
+    bytes: &[u8],
+) -> wasm_abi::FontdoneWasmBitmap {
+    wasm_abi::FontdoneWasmBitmap {
+        rows: bitmap.rows,
+        width: bitmap.width,
+        pitch: bitmap.pitch,
+        buffer: if bytes.is_empty() {
+            bitmap.buffer
+        } else {
+            bytes.as_ptr()
+        },
+        buffer_len: bytes.len(),
+        num_grays: bitmap.num_grays,
+        pixel_mode: bitmap.pixel_mode.into(),
+        palette_mode: bitmap.palette_mode,
+        palette: bitmap.palette,
     }
 }
 

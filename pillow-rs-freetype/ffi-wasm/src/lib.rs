@@ -168,6 +168,69 @@ pub extern "C" fn fontdone_wasm_bitmap_copy(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_bitmap_convert(
+    library_handle: usize,
+    source: *const FontdoneWasmBitmap,
+    target: *mut FontdoneWasmBitmap,
+    alignment: i32,
+) -> i32 {
+    if library_handle == 0 {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as i32;
+    }
+    let Some(source_ref) = (unsafe { source.as_ref() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(target_ref) = (unsafe { target.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut source_view = wasm_bitmap_to_rust(source_ref);
+    let mut target_view = wasm_bitmap_to_rust(target_ref);
+    if let Some(bytes) = wasm_bitmap_bytes(source_ref) {
+        rust_ffi::FT_Bitmap_Set_Owned_Buffer(Some(&mut source_view), bytes);
+    }
+    if let Some(bytes) = wasm_bitmap_bytes(target_ref) {
+        rust_ffi::FT_Bitmap_Set_Owned_Buffer(Some(&mut target_view), bytes);
+    }
+
+    let err = rust_ffi::FT_Bitmap_Convert(
+        Some(&library),
+        Some(&source_view),
+        Some(&mut target_view),
+        alignment,
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        copy_rust_bitmap_record_to_wasm(target_ref, &target_view);
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_bitmap_done(
+    library_handle: usize,
+    bitmap: *mut FontdoneWasmBitmap,
+) -> i32 {
+    if library_handle == 0 {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as i32;
+    }
+    let Some(bitmap_ref) = (unsafe { bitmap.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut bitmap_view = wasm_bitmap_to_rust(bitmap_ref);
+    if let Some(bytes) = wasm_bitmap_bytes(bitmap_ref) {
+        rust_ffi::FT_Bitmap_Set_Owned_Buffer(Some(&mut bitmap_view), bytes);
+    }
+    let err = rust_ffi::FT_Bitmap_Done(Some(&library), Some(&mut bitmap_view));
+    if err == rust_ffi::FT_Err_Ok {
+        copy_rust_bitmap_record_to_wasm(bitmap_ref, &bitmap_view);
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_bitmap_embolden(
     library_handle: usize,
     bitmap: *mut FontdoneWasmBitmap,

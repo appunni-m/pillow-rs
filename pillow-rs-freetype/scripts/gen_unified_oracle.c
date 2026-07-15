@@ -156,6 +156,31 @@ static size_t bitmap_len(const FT_Bitmap* bitmap) {
     return (size_t)pitch * (size_t)bitmap->rows;
 }
 
+static unsigned long long djb2_hash_update(unsigned long long hash, const unsigned char* bytes, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        hash = ((hash << 5) + hash) + bytes[i];
+    }
+    return hash;
+}
+
+static void print_bitmap_active_hash_or_null(const FT_Bitmap* bitmap) {
+    if (!bitmap || !bitmap->buffer) {
+        printf("null");
+        return;
+    }
+    int pitch = bitmap->pitch < 0 ? -bitmap->pitch : bitmap->pitch;
+    const unsigned char* row = bitmap->buffer;
+    if (bitmap->pitch < 0) {
+        row += (size_t)pitch * (size_t)(bitmap->rows ? bitmap->rows - 1 : 0);
+    }
+    unsigned long long hash = 5381ULL;
+    for (FT_UInt y = 0; y < bitmap->rows; y++) {
+        hash = djb2_hash_update(hash, row, bitmap->width);
+        row += bitmap->pitch;
+    }
+    printf("\"%llx\"", hash);
+}
+
 static void bitmap_copy_source(FT_Bitmap* bitmap, unsigned char* bytes) {
     bitmap->rows = 3;
     bitmap->width = 3;
@@ -168,6 +193,233 @@ static void bitmap_copy_source(FT_Bitmap* bitmap, unsigned char* bytes) {
     for (int i = 0; i < 12; i++) {
         bytes[i] = (unsigned char)(i * 17 + 3);
     }
+}
+
+static void bitmap_convert_source(FT_Bitmap* bitmap, unsigned char* bytes, int pixel_mode, int negative_pitch) {
+    FT_UInt rows = 3;
+    FT_UInt width = pixel_mode == FT_PIXEL_MODE_BGRA ? 4 : 9;
+    int pitch;
+    switch (pixel_mode) {
+    case FT_PIXEL_MODE_MONO:
+        pitch = 2;
+        break;
+    case FT_PIXEL_MODE_GRAY2:
+        pitch = 3;
+        break;
+    case FT_PIXEL_MODE_GRAY4:
+        pitch = 5;
+        break;
+    case FT_PIXEL_MODE_BGRA:
+        pitch = 16;
+        break;
+    default:
+        pitch = (int)width;
+        break;
+    }
+    if (negative_pitch) {
+        pitch = -pitch;
+    }
+    bitmap->rows = rows;
+    bitmap->width = width;
+    bitmap->pitch = pitch;
+    bitmap->buffer = bytes;
+    bitmap->num_grays = pixel_mode == FT_PIXEL_MODE_MONO ? 2 :
+                        pixel_mode == FT_PIXEL_MODE_GRAY2 ? 4 :
+                        pixel_mode == FT_PIXEL_MODE_GRAY4 ? 16 : 256;
+    bitmap->pixel_mode = pixel_mode;
+    bitmap->palette_mode = 0;
+    bitmap->palette = NULL;
+    size_t len = (size_t)(pitch < 0 ? -pitch : pitch) * rows;
+    for (size_t i = 0; i < len; i++) {
+        bytes[i] = (unsigned char)(i * 37 + pixel_mode * 11 + 5);
+    }
+}
+
+static void print_bitmap_convert_run(const char* label, FT_Error err, const FT_Bitmap* target) {
+    printf("{\"label\":\"%s\",", label);
+    print_status(err);
+    printf(",\"target\":");
+    if (target) {
+        print_bitmap_fields(target);
+        printf(",\"target_active_bytes_hash\":");
+        if (err) {
+            printf("null");
+        } else {
+            print_bitmap_active_hash_or_null(target);
+        }
+        printf(",\"target_buffer_len\":%zu", target->buffer ? bitmap_len(target) : 0);
+    } else {
+        printf("null,\"target_active_bytes_hash\":null,\"target_buffer_len\":0");
+    }
+    printf("}");
+}
+
+static int emit_bitmap_convert(const char* scenario) {
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf("}\n");
+        return 0;
+    }
+
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"runs\":[");
+    int first = 1;
+#define RUN_SEP() do { if (!first) printf(","); first = 0; } while (0)
+#define RUN_CONVERT(label, src_ptr, tgt_ptr, align_value, lib_value) do { \
+        RUN_SEP(); \
+        FT_Error run_err = FT_Bitmap_Convert((lib_value), (src_ptr), (tgt_ptr), (align_value)); \
+        print_bitmap_convert_run((label), run_err, (tgt_ptr)); \
+    } while (0)
+
+    unsigned char bytes[256];
+    FT_Bitmap source;
+    FT_Bitmap target;
+    FT_Bitmap_Init(&target);
+
+    if (streq(scenario, "success_supported_depths_to_gray")) {
+        const int modes[] = {
+            FT_PIXEL_MODE_MONO, FT_PIXEL_MODE_GRAY2, FT_PIXEL_MODE_GRAY4,
+            FT_PIXEL_MODE_GRAY, FT_PIXEL_MODE_LCD, FT_PIXEL_MODE_LCD_V,
+            FT_PIXEL_MODE_BGRA
+        };
+        const char* labels[] = {"mono", "gray2", "gray4", "gray", "lcd", "lcd_v", "bgra"};
+        for (size_t i = 0; i < sizeof(modes) / sizeof(modes[0]); i++) {
+            bitmap_convert_source(&source, bytes, modes[i], 0);
+            FT_Bitmap_Init(&target);
+            RUN_CONVERT(labels[i], &source, &target, 1, library);
+            FT_Bitmap_Done(library, &target);
+        }
+    } else if (streq(scenario, "success_alignment_and_flow")) {
+        const int alignments[] = {0, 1, 2, 3, 4};
+        for (size_t i = 0; i < sizeof(alignments) / sizeof(alignments[0]); i++) {
+            char label[32];
+            snprintf(label, sizeof(label), "align_%d", alignments[i]);
+            bitmap_convert_source(&source, bytes, FT_PIXEL_MODE_GRAY, 0);
+            FT_Bitmap_Init(&target);
+            RUN_CONVERT(label, &source, &target, alignments[i], library);
+            FT_Bitmap_Done(library, &target);
+        }
+        bitmap_convert_source(&source, bytes, FT_PIXEL_MODE_GRAY, 1);
+        FT_Bitmap_Init(&target);
+        RUN_CONVERT("negative_source_flow", &source, &target, 4, library);
+        FT_Bitmap_Done(library, &target);
+        bitmap_convert_source(&source, bytes, FT_PIXEL_MODE_GRAY, 0);
+        FT_Bitmap_Init(&target);
+        target.pitch = -1;
+        RUN_CONVERT("negative_target_flow", &source, &target, 4, library);
+        FT_Bitmap_Done(library, &target);
+    } else if (streq(scenario, "success_repeated_conversion_reallocates")) {
+        bitmap_convert_source(&source, bytes, FT_PIXEL_MODE_GRAY2, 0);
+        FT_Bitmap_Init(&target);
+        RUN_CONVERT("first_gray2", &source, &target, 1, library);
+        bitmap_convert_source(&source, bytes, FT_PIXEL_MODE_GRAY4, 0);
+        RUN_CONVERT("second_gray4", &source, &target, 1, library);
+        FT_Bitmap_Done(library, &target);
+    } else if (streq(scenario, "success_empty_or_null_source_buffer")) {
+        FT_Bitmap_Init(&source);
+        source.pixel_mode = FT_PIXEL_MODE_GRAY;
+        source.width = 5;
+        source.rows = 0;
+        source.pitch = 5;
+        FT_Bitmap_Init(&target);
+        RUN_CONVERT("empty_null_buffer", &source, &target, 4, library);
+        FT_Bitmap_Done(library, &target);
+    } else if (streq(scenario, "error_invalid_arguments_or_alignment")) {
+        bitmap_convert_source(&source, bytes, FT_PIXEL_MODE_GRAY, 0);
+        dirty_bitmap(&target);
+        RUN_CONVERT("null_library", &source, &target, 1, NULL);
+        dirty_bitmap(&target);
+        RUN_CONVERT("null_source", NULL, &target, 1, library);
+        RUN_SEP();
+        err = FT_Bitmap_Convert(library, &source, NULL, 1);
+        print_bitmap_convert_run("null_target", err, NULL);
+    } else if (streq(scenario, "error_unsupported_pixel_mode")) {
+        bitmap_convert_source(&source, bytes, FT_PIXEL_MODE_GRAY, 0);
+        source.pixel_mode = FT_PIXEL_MODE_NONE;
+        dirty_bitmap(&target);
+        RUN_CONVERT("pixel_mode_none", &source, &target, 1, library);
+        source.pixel_mode = FT_PIXEL_MODE_MAX;
+        dirty_bitmap(&target);
+        RUN_CONVERT("pixel_mode_max", &source, &target, 1, library);
+    } else {
+        fprintf(stderr, "unsupported bitmap convert scenario: %s\n", scenario);
+        FT_Done_FreeType(library);
+        return 2;
+    }
+
+#undef RUN_CONVERT
+#undef RUN_SEP
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static int emit_bitmap_done(const char* scenario) {
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf("}\n");
+        return 0;
+    }
+
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"runs\":[");
+    int first = 1;
+#define DONE_SEP() do { if (!first) printf(","); first = 0; } while (0)
+#define RUN_DONE(label, bitmap_ptr, lib_value) do { \
+        DONE_SEP(); \
+        FT_Error run_err = FT_Bitmap_Done((lib_value), (bitmap_ptr)); \
+        print_bitmap_convert_run((label), run_err, (bitmap_ptr)); \
+    } while (0)
+
+    unsigned char bytes[256];
+    FT_Bitmap source;
+    FT_Bitmap bitmap;
+
+    if (streq(scenario, "success_frees_and_zeroes_bitmap")) {
+        bitmap_convert_source(&source, bytes, FT_PIXEL_MODE_GRAY, 0);
+        FT_Bitmap_Init(&bitmap);
+        FT_Bitmap_Convert(library, &source, &bitmap, 1);
+        RUN_DONE("allocated_bitmap", &bitmap, library);
+    } else if (streq(scenario, "success_empty_bitmap")) {
+        FT_Bitmap_Init(&bitmap);
+        RUN_DONE("empty_bitmap", &bitmap, library);
+    } else if (streq(scenario, "success_repeated_done_after_reinit")) {
+        bitmap_convert_source(&source, bytes, FT_PIXEL_MODE_GRAY2, 0);
+        FT_Bitmap_Init(&bitmap);
+        FT_Bitmap_Convert(library, &source, &bitmap, 1);
+        RUN_DONE("first_done", &bitmap, library);
+        FT_Bitmap_Init(&bitmap);
+        bitmap_convert_source(&source, bytes, FT_PIXEL_MODE_GRAY4, 0);
+        FT_Bitmap_Convert(library, &source, &bitmap, 1);
+        RUN_DONE("second_done", &bitmap, library);
+    } else if (streq(scenario, "error_null_library_or_bitmap")) {
+        bitmap_convert_source(&source, bytes, FT_PIXEL_MODE_GRAY, 0);
+        FT_Bitmap_Init(&bitmap);
+        FT_Bitmap_Convert(library, &source, &bitmap, 1);
+        RUN_DONE("null_library", &bitmap, NULL);
+        FT_Bitmap_Done(library, &bitmap);
+        DONE_SEP();
+        err = FT_Bitmap_Done(library, NULL);
+        print_bitmap_convert_run("null_bitmap", err, NULL);
+    } else {
+        fprintf(stderr, "unsupported bitmap done scenario: %s\n", scenario);
+        FT_Done_FreeType(library);
+        return 2;
+    }
+
+#undef RUN_DONE
+#undef DONE_SEP
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
 }
 
 static int emit_bitmap_copy(const char* scenario) {
@@ -9497,6 +9749,12 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--bitmap-copy")) {
         return emit_bitmap_copy(argv[2]);
+    }
+    if (argc == 3 && streq(argv[1], "--bitmap-convert")) {
+        return emit_bitmap_convert(argv[2]);
+    }
+    if (argc == 3 && streq(argv[1], "--bitmap-done")) {
+        return emit_bitmap_done(argv[2]);
     }
     if (argc == 3 && streq(argv[1], "--bitmap-embolden")) {
         return emit_bitmap_embolden(argv[2]);
