@@ -1418,6 +1418,56 @@
             ]
           },
           {
+            "id": "render-coverage-left-edge-dropout-mono",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "glyph_index": 12,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "render/mono:left-edge-dropout"
+            ]
+          },
+          {
+            "id": "render-coverage-bottom-edge-dropout-mono",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "glyph_index": 13,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "render/mono:bottom-edge-dropout"
+            ]
+          },
+          {
             "id": "render-coverage-zero-length-segment-sdf",
             "assets": {
               "font": {
@@ -1440,6 +1490,31 @@
             },
             "coverage": [
               "render/sdf:zero-length-segment"
+            ]
+          },
+          {
+            "id": "render-coverage-centerline-segment-sdf",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "glyph_index": 11,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": [
+              "render/sdf:centerline-segment"
             ]
           },
           {
