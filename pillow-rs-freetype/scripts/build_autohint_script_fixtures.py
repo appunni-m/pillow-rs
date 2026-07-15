@@ -456,6 +456,17 @@ def serif_m_symmetry_glyph():
     )
 
 
+def serif_overlap_break_glyph():
+    """Serifed stem with an intermediate vertical edge sharing the serif range."""
+    return rectangles_glyph(
+        [
+            (100, 0, 150, 500),
+            (70, 0, 180, 120),
+            (85, 30, 95, 90),
+        ]
+    )
+
+
 def latin_wide_segment_filter_glyph():
     return mixed_contour_glyph(
         [
@@ -624,6 +635,7 @@ def build_script_coverage() -> None:
     glyph_order.append("latin_tilde_top2_topflag")
     glyph_order.append("latin_top_bottom_accent")
     glyph_order.append("latin_serif_m_symmetry")
+    glyph_order.append("latin_serif_overlap_break")
     glyph_order.append("latin_tilde_top2_centering")
 
     glyphs = {
@@ -697,6 +709,9 @@ def build_script_coverage() -> None:
     glyphs["latin_serif_m_symmetry"] = serif_m_symmetry_glyph()
     metrics["latin_serif_m_symmetry"] = (700, 70)
     cmap[0x01D7] = "latin_serif_m_symmetry"
+    glyphs["latin_serif_overlap_break"] = serif_overlap_break_glyph()
+    metrics["latin_serif_overlap_break"] = (620, 70)
+    cmap[0x0244] = "latin_serif_overlap_break"
     glyphs["latin_tilde_top2_centering"] = top_tilde_centering_glyph()
     metrics["latin_tilde_top2_centering"] = (700, 100)
     cmap[0x1EB4] = "latin_tilde_top2_centering"

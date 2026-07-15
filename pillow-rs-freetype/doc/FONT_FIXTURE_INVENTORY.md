@@ -266,7 +266,7 @@ listed because they enter different hinting and scaling conditions.
 | `digit-notdef-cmap.ttf` | U+006F gid 2, with U+0030 cmap-covered as gid 0 | 20 | public force-autohint metrics setup scans an explicitly covered digit that resolves to glyph 0, exercising the face-global digit-width skip branch without selecting `.notdef` as the rendered glyph |
 | `latin-blue-edge-cases.ttf` | U+0041 gid 3, with Latin blue-string aliases U+0054 gid 4 empty, U+0048 gid 5 one-point, and U+0045 gid 6 flat loop | 20 | public force-autohint load keeps the selected Latin glyph valid while Latin blue-zone initialization skips empty/degenerate blue glyphs and completes previous/next extremum walks through exact Rust/C ABI/WASM parity |
 | `latin-malformed-standard.ttf` | U+0041 gid 2, with U+006F gid 3 truncated to a two-byte glyf record | 20 | public force-autohint load keeps the selected Latin glyph valid while standard-width initialization tries and ignores the malformed `o` standard glyph, matching pinned FreeType's metrics fallback behavior |
-| `script-coverage.ttf` | all generated `SCRIPT_PROBES` codepoints from `scripts/build_autohint_script_fixtures.py` plus Latin branch probes U+01D5, U+00F1, U+1E4D, U+00E3, U+00D1, U+1E1B, U+1E1A, U+1E75, U+1EAA, U+1EB4, U+1EAD, and U+01D7 | 20 | explicit `FT_LOAD_FORCE_AUTOHINT` script-selection rows for compact script glyphs plus Latin double-top, top/top2/bottom tilde, top-vs-second-top tilde, secondary top-tilde centering, top/bottom accent separation, and serif-m topology probes; this proves each selected script tag and the added Latin topology branches through real Rust/C ABI/WASM parity without an implicit script matrix |
+| `script-coverage.ttf` | all generated `SCRIPT_PROBES` codepoints from `scripts/build_autohint_script_fixtures.py` plus Latin branch probes U+01D5, U+00F1, U+1E4D, U+00E3, U+00D1, U+1E1B, U+1E1A, U+1E75, U+1EAA, U+1EB4, U+1EAD, U+01D7, and U+0244 | 20 | explicit `FT_LOAD_FORCE_AUTOHINT` script-selection rows for compact script glyphs plus Latin double-top, top/top2/bottom tilde, top-vs-second-top tilde, secondary top-tilde centering, top/bottom accent separation, serif-m symmetry, and serif intermediate-overlap topology probes; this proves each selected script tag and the added Latin topology branches through real Rust/C ABI/WASM parity without an implicit script matrix |
 | `hdmx_observable.ttf` | U+0041 gid 36 (`A`) | 20 | default, compute-metrics, mono hdmx, and mono suppression conditions |
 | `hhea-zero-typo-fallback.ttf` | face open and active size metrics only | 20 | hhea ascent/descent/lineGap are zero and OS/2 `USE_TYPO_METRICS` is clear, so public `FT_Size_Metrics` selects the OS/2 typo fallback branch |
 | `hhea-zero-win-fallback.ttf` | face open and active size metrics only | 20 | hhea and OS/2 typo metrics are zero, so public `FT_Size_Metrics` selects the OS/2 Windows ascent/descent fallback branch |
@@ -592,8 +592,9 @@ and selected-glyph obligations still come from explicit inputs.
     `scripts/build_autohint_script_fixtures.py` and rebuilt with
     `make font-fixture-autohint-scripts`. Current public inputs select all 59
     generated script glyphs plus Latin double-top, top/top2/bottom tilde,
-    top-vs-second-top tilde, top/bottom accent separation, and serif-m topology
-    probes, plus Latin blue-zone empty, degenerate, and flat-loop probes,
+    top-vs-second-top tilde, top/bottom accent separation, serif-m symmetry,
+    and serif intermediate-overlap topology probes, plus Latin blue-zone empty,
+    degenerate, and flat-loop probes,
     through explicit `FT_LOAD_FORCE_AUTOHINT` variants; this is a
     deliberate script/topology obligation set, not an implicit script matrix.
 
