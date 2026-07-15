@@ -196,17 +196,7 @@ pub fn rasterize_in_box(
     outline.cbox_y_min = 0;
     outline.cbox_x_max = i32_from_usize(width);
     outline.cbox_y_max = i32_from_usize(height);
-    rasterize_with_clip_box(
-        &outline,
-        width,
-        height,
-        0,
-        i32_from_usize(width),
-        0,
-        i32_from_usize(height),
-        0,
-        0,
-    )
+    rasterize_shifted_in_box(&outline, 0, 0, width, height)
 }
 
 /// Render an outline into an explicit pixel box after applying a 26.6
