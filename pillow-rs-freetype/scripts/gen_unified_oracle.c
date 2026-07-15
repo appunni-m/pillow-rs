@@ -11,6 +11,7 @@
 #include <freetype/ftbitmap.h>
 #include <freetype/ftcolor.h>
 #include <freetype/ftdriver.h>
+#include <freetype/ftfntfmt.h>
 #include <freetype/ftglyph.h>
 #include <freetype/ftgasp.h>
 #include <freetype/ftgxval.h>
@@ -2003,6 +2004,10 @@ static void print_postscript_name_result(const char* name) {
     printf("{\"null\":false,\"bytes\":\"");
     print_hex_bytes((const unsigned char*)name, (long)len);
     printf("\",\"length\":%zu}", len);
+}
+
+static void print_nullable_c_string_result(const char* value) {
+    print_postscript_name_result(value);
 }
 
 static void print_charmap_record(FT_CharMap charmap) {
@@ -7401,6 +7406,35 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
+    if (streq(command, "--get-font-format") || streq(command, "--get-x11-font-format")) {
+        const char* format = streq(command, "--get-font-format")
+            ? FT_Get_Font_Format(face)
+            : FT_Get_X11_Font_Format(face);
+        print_status(0);
+        printf(",\"output\":");
+        print_nullable_c_string_result(format);
+        printf("}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-x11-font-format-alias")) {
+        const char* font_format = FT_Get_Font_Format(face);
+        const char* x11_format = FT_Get_X11_Font_Format(face);
+        print_status(0);
+        printf(",\"output\":{\"font_format_return\":");
+        print_nullable_c_string_result(font_format);
+        printf(",\"x11_font_format_return\":");
+        print_nullable_c_string_result(x11_format);
+        printf(",\"alias_equal\":%s}}\n", font_format == x11_format ? "true" : "false");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
     if (streq(command, "--get-sfnt-name-count")) {
         print_status(0);
         printf(",\"output\":{\"return\":%u}}\n", FT_Get_Sfnt_Name_Count(face));
@@ -9204,6 +9238,25 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--get-postscript-name")) {
         return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 7 && (streq(argv[1], "--get-font-format") || streq(argv[1], "--get-x11-font-format") || streq(argv[1], "--get-x11-font-format-alias"))) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--get-font-format-null-face")) {
+        printf("{");
+        print_status(0);
+        printf(",\"output\":");
+        print_nullable_c_string_result(FT_Get_Font_Format(NULL));
+        printf("}\n");
+        return 0;
+    }
+    if (argc == 2 && streq(argv[1], "--get-x11-font-format-null-face")) {
+        printf("{");
+        print_status(0);
+        printf(",\"output\":");
+        print_nullable_c_string_result(FT_Get_X11_Font_Format(NULL));
+        printf("}\n");
+        return 0;
     }
     if (argc == 6 && streq(argv[1], "--get-postscript-name-variants")) {
         return emit_get_postscript_name_variants(argc, argv);

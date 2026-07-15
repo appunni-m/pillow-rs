@@ -2264,6 +2264,21 @@ impl BackendComparisonWorker {
                 let face = self.rust_face(case)?;
                 Ok(ok(postscript_name_json(FT_Get_Postscript_Name(face))))
             }
+            "ftfntfmt.get_font_format" => {
+                let face = self.rust_face(case).ok();
+                Ok(ok(nullable_c_string_json(FT_Get_Font_Format(face))))
+            }
+            "ftfntfmt.get_x11_font_format" => {
+                let face = self.rust_face(case).ok();
+                if face.is_some() {
+                    Ok(ok(font_format_alias_json(
+                        FT_Get_Font_Format(face),
+                        FT_Get_X11_Font_Format(face),
+                    )))
+                } else {
+                    Ok(ok(nullable_c_string_json(FT_Get_X11_Font_Format(None))))
+                }
+            }
             "freetype.get_kerning" => {
                 let face = self.rust_face(case)?;
                 rust_get_kerning_with_face(face, case)
@@ -2504,6 +2519,22 @@ impl BackendComparisonWorker {
                     face,
                 ))))
             }
+            "ftfntfmt.get_font_format" => {
+                let face = self.c_face(case).unwrap_or(std::ptr::null_mut());
+                Ok(ok(c_nullable_c_string_json(c_abi::FT_Get_Font_Format(
+                    face,
+                ))))
+            }
+            "ftfntfmt.get_x11_font_format" => {
+                let face = self.c_face(case).unwrap_or(std::ptr::null_mut());
+                if face.is_null() {
+                    Ok(ok(c_nullable_c_string_json(c_abi::FT_Get_X11_Font_Format(
+                        face,
+                    ))))
+                } else {
+                    Ok(ok(c_font_format_alias_json(face)))
+                }
+            }
             "freetype.get_kerning" => {
                 let face = self.c_face(case)?;
                 c_get_kerning_with_face(face, &case.inputs.params)
@@ -2739,6 +2770,18 @@ impl BackendComparisonWorker {
                 }
                 let handle = self.wasm_face(case)?;
                 Ok(ok(wasm_postscript_name_json(handle)))
+            }
+            "ftfntfmt.get_font_format" => {
+                let handle = self.wasm_face(case).unwrap_or(0);
+                Ok(ok(wasm_font_format_json(handle, false)))
+            }
+            "ftfntfmt.get_x11_font_format" => {
+                let handle = self.wasm_face(case).unwrap_or(0);
+                if handle == 0 {
+                    Ok(ok(wasm_font_format_json(handle, true)))
+                } else {
+                    Ok(ok(wasm_font_format_alias_json(handle)))
+                }
             }
             "freetype.get_kerning" => {
                 let handle = self.wasm_face(case)?;
@@ -4982,11 +5025,15 @@ fn wasm_sfnt_name_record_json(index: u32, name: &wasm_abi::FontdoneWasmSfntName)
 }
 
 fn postscript_name_json(name: Option<&str>) -> Value {
-    match name {
-        Some(name) => json!({
+    nullable_c_string_json(name)
+}
+
+fn nullable_c_string_json(value: Option<&str>) -> Value {
+    match value {
+        Some(value) => json!({
             "null": false,
-            "bytes": hex_bytes(name.as_bytes()),
-            "length": name.len()
+            "bytes": hex_bytes(value.as_bytes()),
+            "length": value.len()
         }),
         None => json!({
             "null": true,
@@ -4996,9 +5043,21 @@ fn postscript_name_json(name: Option<&str>) -> Value {
     }
 }
 
+fn font_format_alias_json(font_format: Option<&str>, x11_font_format: Option<&str>) -> Value {
+    json!({
+        "font_format_return": nullable_c_string_json(font_format),
+        "x11_font_format_return": nullable_c_string_json(x11_font_format),
+        "alias_equal": font_format == x11_font_format
+    })
+}
+
 fn c_postscript_name_json(name: *const std::ffi::c_char) -> Value {
+    c_nullable_c_string_json(name)
+}
+
+fn c_nullable_c_string_json(name: *const std::ffi::c_char) -> Value {
     if name.is_null() {
-        return postscript_name_json(None);
+        return nullable_c_string_json(None);
     }
     let bytes = c_abi::abi_c_string_bytes(name);
     json!({
@@ -5008,10 +5067,53 @@ fn c_postscript_name_json(name: *const std::ffi::c_char) -> Value {
     })
 }
 
+fn c_font_format_alias_json(face: c_abi::FT_Face) -> Value {
+    let font_format = c_abi::FT_Get_Font_Format(face);
+    let x11_font_format = c_abi::FT_Get_X11_Font_Format(face);
+    json!({
+        "font_format_return": c_nullable_c_string_json(font_format),
+        "x11_font_format_return": c_nullable_c_string_json(x11_font_format),
+        "alias_equal": font_format == x11_font_format
+    })
+}
+
 fn wasm_postscript_name_json(handle: usize) -> Value {
+    wasm_fontdone_string_json(|out| wasm_abi::fontdone_wasm_get_postscript_name(handle, out))
+}
+
+fn wasm_font_format_json(handle: usize, x11_alias: bool) -> Value {
+    if x11_alias {
+        wasm_fontdone_string_json(|out| wasm_abi::fontdone_wasm_get_x11_font_format(handle, out))
+    } else {
+        wasm_fontdone_string_json(|out| wasm_abi::fontdone_wasm_get_font_format(handle, out))
+    }
+}
+
+fn wasm_font_format_alias_json(handle: usize) -> Value {
+    let mut font_format = wasm_abi::FontdoneWasmString::default();
+    let mut x11_font_format = wasm_abi::FontdoneWasmString::default();
+    let font_ok = wasm_abi::fontdone_wasm_get_font_format(handle, &mut font_format) != 0;
+    let x11_ok = wasm_abi::fontdone_wasm_get_x11_font_format(handle, &mut x11_font_format) != 0;
+    json!({
+        "font_format_return": wasm_string_record_json(font_ok, font_format),
+        "x11_font_format_return": wasm_string_record_json(x11_ok, x11_font_format),
+        "alias_equal": font_ok == x11_ok
+            && font_format.string == x11_font_format.string
+            && font_format.string_len == x11_font_format.string_len
+    })
+}
+
+fn wasm_fontdone_string_json(
+    f: impl FnOnce(*mut wasm_abi::FontdoneWasmString) -> FT_Bool,
+) -> Value {
     let mut name = wasm_abi::FontdoneWasmString::default();
-    if wasm_abi::fontdone_wasm_get_postscript_name(handle, &mut name) == 0 {
-        return postscript_name_json(None);
+    let ok = f(&mut name) != 0;
+    wasm_string_record_json(ok, name)
+}
+
+fn wasm_string_record_json(ok: bool, name: wasm_abi::FontdoneWasmString) -> Value {
+    if !ok {
+        return nullable_c_string_json(None);
     }
     let bytes = c_abi::abi_byte_slice(name.string, name.string_len);
     json!({
@@ -8582,6 +8684,24 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             push_face_size(params, &mut args)?;
             Ok(args)
         }
+        "ftfntfmt.get_font_format" => {
+            if params.get("face").is_some_and(Value::is_null) {
+                return Ok(vec!["--get-font-format-null-face".to_string()]);
+            }
+            let mut args = vec!["--get-font-format".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            Ok(args)
+        }
+        "ftfntfmt.get_x11_font_format" => {
+            if params.get("face").is_some_and(Value::is_null) {
+                return Ok(vec!["--get-x11-font-format-null-face".to_string()]);
+            }
+            let mut args = vec!["--get-x11-font-format-alias".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            Ok(args)
+        }
         "ftmm.set_named_instance" => {
             if lifecycle_handle_param(params, "face") == Some("null") {
                 return Ok(vec![
@@ -9775,6 +9895,23 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             }
             Ok(ok(postscript_name_json(FT_Get_Postscript_Name(&face))))
         }
+        "ftfntfmt.get_font_format" => {
+            if case.inputs.params.get("face").is_some_and(Value::is_null) {
+                return Ok(ok(nullable_c_string_json(FT_Get_Font_Format(None))));
+            }
+            let face = open_face(case)?;
+            Ok(ok(nullable_c_string_json(FT_Get_Font_Format(Some(&face)))))
+        }
+        "ftfntfmt.get_x11_font_format" => {
+            if case.inputs.params.get("face").is_some_and(Value::is_null) {
+                return Ok(ok(nullable_c_string_json(FT_Get_X11_Font_Format(None))));
+            }
+            let face = open_face(case)?;
+            Ok(ok(font_format_alias_json(
+                FT_Get_Font_Format(Some(&face)),
+                FT_Get_X11_Font_Format(Some(&face)),
+            )))
+        }
         "ftmm.set_named_instance" => rust_set_named_instance(case),
         "freetype.get_glyph_name" => rust_get_glyph_name(case),
         "freetype.get_name_index" => rust_get_name_index(case),
@@ -10167,6 +10304,30 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_face(face);
             c_done_library(library);
             output.map(ok)
+        }
+        "ftfntfmt.get_font_format" => {
+            if case.inputs.params.get("face").is_some_and(Value::is_null) {
+                return Ok(ok(c_nullable_c_string_json(c_abi::FT_Get_Font_Format(
+                    std::ptr::null_mut(),
+                ))));
+            }
+            let (library, face) = c_open_face(case)?;
+            let output = c_nullable_c_string_json(c_abi::FT_Get_Font_Format(face));
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(output))
+        }
+        "ftfntfmt.get_x11_font_format" => {
+            if case.inputs.params.get("face").is_some_and(Value::is_null) {
+                return Ok(ok(c_nullable_c_string_json(c_abi::FT_Get_X11_Font_Format(
+                    std::ptr::null_mut(),
+                ))));
+            }
+            let (library, face) = c_open_face(case)?;
+            let output = c_font_format_alias_json(face);
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(output))
         }
         "ftmm.set_named_instance" => c_set_named_instance(case),
         "freetype.get_glyph_name" => c_get_glyph_name(case),
@@ -10689,6 +10850,24 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             };
             wasm_done_face(handle);
             output.map(ok)
+        }
+        "ftfntfmt.get_font_format" => {
+            if case.inputs.params.get("face").is_some_and(Value::is_null) {
+                return Ok(ok(wasm_font_format_json(0, false)));
+            }
+            let handle = wasm_open_face(case)?;
+            let output = wasm_font_format_json(handle, false);
+            wasm_done_face(handle);
+            Ok(ok(output))
+        }
+        "ftfntfmt.get_x11_font_format" => {
+            if case.inputs.params.get("face").is_some_and(Value::is_null) {
+                return Ok(ok(wasm_font_format_json(0, true)));
+            }
+            let handle = wasm_open_face(case)?;
+            let output = wasm_font_format_alias_json(handle);
+            wasm_done_face(handle);
+            Ok(ok(output))
         }
         "ftmm.set_named_instance" => wasm_set_named_instance(case),
         "freetype.get_glyph_name" => wasm_get_glyph_name(case),
@@ -20502,6 +20681,8 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "freetype.get_glyph_name"
             | "freetype.get_name_index"
             | "freetype.get_postscript_name"
+            | "ftfntfmt.get_font_format"
+            | "ftfntfmt.get_x11_font_format"
             | "fterrors.error_string"
             | "freetype.face_properties"
             | "freetype.get_subglyph_info"

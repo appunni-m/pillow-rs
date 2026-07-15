@@ -289,18 +289,21 @@ struct FaceState {
     charmaps: Box<[FT_CharMapRec]>,
     charmap_ptrs: Box<[FT_CharMap]>,
     postscript_name: Option<CString>,
+    font_format: Option<CString>,
     variant_list: Vec<FT_UInt32>,
 }
 
 impl FaceState {
     fn new(inner: rust_ffi::FT_Face) -> Self {
         let postscript_name = postscript_name_cstring(&inner);
+        let font_format = font_format_cstring(Some(&inner));
         Self {
             inner,
             size_records: Vec::new(),
             charmaps: Box::new([]),
             charmap_ptrs: Box::new([]),
             postscript_name,
+            font_format,
             variant_list: Vec::new(),
         }
     }
@@ -385,6 +388,13 @@ fn postscript_name_cstring(inner: &rust_ffi::FT_Face) -> Option<CString> {
     rust_ffi::FT_Get_Postscript_Name(inner).and_then(|name| {
         // FreeType exposes a borrowed NUL-terminated C string owned by the face.
         CString::new(name).ok()
+    })
+}
+
+fn font_format_cstring(inner: Option<&rust_ffi::FT_Face>) -> Option<CString> {
+    rust_ffi::FT_Get_Font_Format(inner).and_then(|format| {
+        // FreeType exposes the driver-owned FONT_FORMAT service string.
+        CString::new(format).ok()
     })
 }
 
@@ -1636,6 +1646,18 @@ pub extern "C" fn FT_Get_Postscript_Name(face: FT_Face) -> *const c_char {
     face_state(face)
         .and_then(|state| state.postscript_name.as_deref())
         .map_or(ptr::null(), CStr::as_ptr)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Font_Format(face: FT_Face) -> *const c_char {
+    face_state(face)
+        .and_then(|state| state.font_format.as_deref())
+        .map_or(ptr::null(), CStr::as_ptr)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_X11_Font_Format(face: FT_Face) -> *const c_char {
+    FT_Get_Font_Format(face)
 }
 
 #[unsafe(no_mangle)]

@@ -97,6 +97,8 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_glyph_name",
     "fontdone_wasm_get_name_index",
     "fontdone_wasm_get_postscript_name",
+    "fontdone_wasm_get_font_format",
+    "fontdone_wasm_get_x11_font_format",
     "fontdone_wasm_set_named_instance",
     "fontdone_wasm_get_sfnt_name_count",
     "fontdone_wasm_get_sfnt_name",
@@ -798,6 +800,13 @@ def otvalid_real_parity_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def font_format_real_parity_reason(row: ConcreteInput) -> str | None:
+    if row.operation in {"ftfntfmt.get_font_format", "ftfntfmt.get_x11_font_format"}:
+        if has_runtime_asset(row) or row.params.get("face") is None:
+            return "font-format service string/nullness validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    return None
+
+
 def outline_get_bitmap_real_parity_reason(row: ConcreteInput) -> str | None:
     if (
         row.subject == "ftoutln.FT_Outline_Get_Bitmap"
@@ -941,6 +950,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     otvalid_real_reason = otvalid_real_parity_reason(row)
     if otvalid_real_reason:
         return ("real-parity", otvalid_real_reason)
+    font_format_real_reason = font_format_real_parity_reason(row)
+    if font_format_real_reason:
+        return ("real-parity", font_format_real_reason)
     outline_get_bitmap_real_reason = outline_get_bitmap_real_parity_reason(row)
     if outline_get_bitmap_real_reason:
         return ("real-parity", outline_get_bitmap_real_reason)

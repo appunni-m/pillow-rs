@@ -1162,6 +1162,17 @@ pub fn FT_Get_Postscript_Name(face: &FT_Face) -> Option<&str> {
     face.postscript_name.as_deref()
 }
 
+pub fn FT_Get_Font_Format(face: Option<&FT_Face>) -> Option<&'static str> {
+    // FreeType `src/base/ftfntfmt.c:26-49` asks the face's FONT_FORMAT
+    // service and returns NULL for a null face.  The supported core drivers
+    // expose the same static strings through `Font::font_format`.
+    face.map(|face| face.inner.borrow().font().font_format())
+}
+
+pub fn FT_Get_X11_Font_Format(face: Option<&FT_Face>) -> Option<&'static str> {
+    FT_Get_Font_Format(face)
+}
+
 pub fn FT_Set_Named_Instance(face: Option<&mut FT_Face>, instance_index: FT_UInt) -> FT_Error {
     let Some(face) = face else {
         return FT_Err_Invalid_Face_Handle as FT_Error;
