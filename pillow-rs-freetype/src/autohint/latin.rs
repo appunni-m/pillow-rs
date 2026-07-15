@@ -3061,9 +3061,9 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
         let mut prev_min_coord = min_coord;
         let mut prev_max_coord = max_coord;
         let mut prev_min_flags = min_flags;
-        let mut _prev_max_flags = max_flags;
-        let mut _prev_min_on_coord = min_on_coord;
-        let mut _prev_max_on_coord = max_on_coord;
+        let mut prev_max_flags = max_flags;
+        let mut prev_min_on_coord = min_on_coord;
+        let mut prev_max_on_coord = max_on_coord;
 
         // If we're already on an edge at the start, walk backwards to its start (aflatin.c:1644).
         if points[point].flags & AF_FLAG_IGNORE == 0
@@ -3153,9 +3153,9 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                         prev_min_coord = min_coord;
                         prev_max_coord = max_coord;
                         prev_min_flags = min_flags;
-                        let _ = &mut _prev_max_flags;
-                        let _ = &mut _prev_min_on_coord;
-                        let _ = &mut _prev_max_on_coord;
+                        prev_max_flags = max_flags;
+                        prev_min_on_coord = min_on_coord;
+                        prev_max_on_coord = max_on_coord;
                     } else {
                         // Merge with previous segment (same start point). Port of aflatin.c:1741-1851.
                         // Compare in_dir at the join point (aflatin.c:1746).
@@ -3171,8 +3171,14 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                             // prev_segment->first stays correct (it's the earlier point).
                             min_pos = min_pos.min(prev_min_pos);
                             max_pos = max_pos.max(prev_max_pos);
+                            let prev_extends_min = prev_min_coord < min_coord;
+                            let prev_extends_max = prev_max_coord > max_coord;
                             min_coord = min_coord.min(prev_min_coord);
                             max_coord = max_coord.max(prev_max_coord);
+                            min_flags = [min_flags, prev_min_flags][usize::from(prev_extends_min)];
+                            max_flags = [max_flags, prev_max_flags][usize::from(prev_extends_max)];
+                            min_on_coord = min_on_coord.min(prev_min_on_coord);
+                            max_on_coord = max_on_coord.max(prev_max_on_coord);
                             let pos = i16_from_i32((min_pos + max_pos) >> 1);
                             let delta = i16_from_i32((max_pos - min_pos) >> 1);
                             let s = &mut axis.segments[prev];
@@ -3203,18 +3209,25 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                                 prev_max_pos = max_pos;
                             }
                             let pos = i16_from_i32((prev_min_pos + prev_max_pos) >> 1);
+                            let delta = i16_from_i32((prev_max_pos - prev_min_pos) >> 1);
                             let s = &mut axis.segments[prev];
                             s.last = point;
                             s.pos = pos;
+                            s.delta = delta;
                         } else {
                             // C: different directions, current is longer — replace prev (aflatin.c:1812-1843)
                             // *prev_segment = *segment copies ALL fields, including `first`.
-                            let pos = i16_from_i32(
-                                (min_pos.min(prev_min_pos) + max_pos.max(prev_max_pos)) >> 1,
-                            );
+                            // It also refreshes the prev_* merge buffers; U+0245
+                            // target-mono depends on this to keep the vertical cusp
+                            // horizontal segments unlinked like C.
+                            min_pos = min_pos.min(prev_min_pos);
+                            max_pos = max_pos.max(prev_max_pos);
+                            let pos = i16_from_i32((min_pos + max_pos) >> 1);
+                            let delta = i16_from_i32((max_pos - min_pos) >> 1);
                             let s = &mut axis.segments[prev];
                             s.last = point;
                             s.pos = pos;
+                            s.delta = delta;
                             s.min_coord = i16_from_i32(min_coord);
                             s.max_coord = i16_from_i32(max_coord);
                             s.dir = segment_dir;
@@ -3227,6 +3240,15 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                                 s.flags &= !AF_EDGE_ROUND;
                             }
                             s.height = i16_from_i32(max_coord - min_coord);
+
+                            prev_min_pos = min_pos;
+                            prev_max_pos = max_pos;
+                            prev_min_coord = min_coord;
+                            prev_max_coord = max_coord;
+                            prev_min_flags = min_flags;
+                            prev_max_flags = max_flags;
+                            prev_min_on_coord = min_on_coord;
+                            prev_max_on_coord = max_on_coord;
                         }
                     }
 
