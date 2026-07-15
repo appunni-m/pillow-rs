@@ -111,6 +111,15 @@ pub struct FontdoneWasmBitmap {
     pub palette: *const c_void,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmColor {
+    pub blue: FT_Byte,
+    pub green: FT_Byte,
+    pub red: FT_Byte,
+    pub alpha: FT_Byte,
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_bitmap_init(abitmap: *mut FontdoneWasmBitmap) {
     // Mirrors FreeType's null-tolerant `FT_Bitmap_Init` for the WASM ABI
@@ -186,6 +195,66 @@ pub extern "C" fn fontdone_wasm_bitmap_embolden(
     );
     if err == rust_ffi::FT_Err_Ok {
         copy_rust_bitmap_record_to_wasm(bitmap_ref, &bitmap_view);
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_bitmap_blend(
+    library_handle: usize,
+    source: *const FontdoneWasmBitmap,
+    source_offset: FontdoneWasmVector,
+    target: *mut FontdoneWasmBitmap,
+    atarget_offset: *mut FontdoneWasmVector,
+    color: FontdoneWasmColor,
+) -> i32 {
+    let library = if library_handle == 0 {
+        None
+    } else {
+        Some(rust_ffi::FT_Init_FreeType())
+    };
+    let Some(source_ref) = (unsafe { source.as_ref() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(target_ref) = (unsafe { target.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(atarget_offset_ref) = (unsafe { atarget_offset.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+
+    let mut source_view = wasm_bitmap_to_rust(source_ref);
+    let mut target_view = wasm_bitmap_to_rust(target_ref);
+    if let Some(bytes) = wasm_bitmap_bytes(source_ref) {
+        rust_ffi::FT_Bitmap_Set_Owned_Buffer(Some(&mut source_view), bytes);
+    }
+    if let Some(bytes) = wasm_bitmap_bytes(target_ref) {
+        rust_ffi::FT_Bitmap_Set_Owned_Buffer(Some(&mut target_view), bytes);
+    }
+    let mut rust_target_offset = rust_ffi::FT_Vector {
+        x: atarget_offset_ref.x,
+        y: atarget_offset_ref.y,
+    };
+    let err = rust_ffi::FT_Bitmap_Blend(
+        library.as_ref(),
+        Some(&source_view),
+        rust_ffi::FT_Vector {
+            x: source_offset.x,
+            y: source_offset.y,
+        },
+        Some(&mut target_view),
+        Some(&mut rust_target_offset),
+        rust_ffi::FT_Color {
+            blue: color.blue,
+            green: color.green,
+            red: color.red,
+            alpha: color.alpha,
+        },
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        copy_rust_bitmap_record_to_wasm(target_ref, &target_view);
+        atarget_offset_ref.x = rust_target_offset.x;
+        atarget_offset_ref.y = rust_target_offset.y;
     }
     err
 }

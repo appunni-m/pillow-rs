@@ -136,6 +136,15 @@ pub struct FT_Bitmap {
     pub palette: *mut c_void,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FT_Color {
+    pub blue: FT_Byte,
+    pub green: FT_Byte,
+    pub red: FT_Byte,
+    pub alpha: FT_Byte,
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Bitmap_Init(abitmap: *mut FT_Bitmap) {
     // FreeType accepts NULL here and otherwise overwrites the public record
@@ -208,6 +217,61 @@ pub extern "C" fn FT_Bitmap_Embolden(
     );
     if err == rust_ffi::FT_Err_Ok {
         copy_rust_bitmap_record_to_c(bitmap_ref, &bitmap_view);
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Bitmap_Blend(
+    library: FT_Library,
+    source: *const FT_Bitmap,
+    source_offset: FT_Vector,
+    target: *mut FT_Bitmap,
+    atarget_offset: *mut FT_Vector,
+    color: FT_Color,
+) -> FT_Error {
+    let Some(source_ref) = (unsafe { source.as_ref() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(target_ref) = (unsafe { target.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(atarget_offset_ref) = (unsafe { atarget_offset.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+
+    let mut source_view = bitmap_to_rust(source_ref);
+    let mut target_view = bitmap_to_rust(target_ref);
+    if let Some(bytes) = bitmap_bytes(source_ref) {
+        rust_ffi::FT_Bitmap_Set_Owned_Buffer(Some(&mut source_view), bytes);
+    }
+    if let Some(bytes) = bitmap_bytes(target_ref) {
+        rust_ffi::FT_Bitmap_Set_Owned_Buffer(Some(&mut target_view), bytes);
+    }
+    let mut rust_target_offset = rust_ffi::FT_Vector {
+        x: atarget_offset_ref.x,
+        y: atarget_offset_ref.y,
+    };
+    let err = rust_ffi::FT_Bitmap_Blend(
+        library_ref(library),
+        Some(&source_view),
+        rust_ffi::FT_Vector {
+            x: source_offset.x,
+            y: source_offset.y,
+        },
+        Some(&mut target_view),
+        Some(&mut rust_target_offset),
+        rust_ffi::FT_Color {
+            blue: color.blue,
+            green: color.green,
+            red: color.red,
+            alpha: color.alpha,
+        },
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        copy_rust_bitmap_record_to_c(target_ref, &target_view);
+        atarget_offset_ref.x = rust_target_offset.x;
+        atarget_offset_ref.y = rust_target_offset.y;
     }
     err
 }

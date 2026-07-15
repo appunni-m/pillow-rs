@@ -8263,6 +8263,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--bitmap-embolden".to_string(),
             string_param(params, "scenario")?.to_string(),
         ]),
+        "ftbitmap.bitmap_blend" => Ok(vec![
+            "--bitmap-blend".to_string(),
+            string_param(params, "scenario")?.to_string(),
+        ]),
         "fterrors.error_string" => Ok(vec![
             "--error-string".to_string(),
             error_string_codes_arg(params)?,
@@ -9621,6 +9625,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::Rust),
         "ftbitmap.bitmap_embolden" => bitmap_embolden_output(case, BitmapEmboldenBackend::Rust),
+        "ftbitmap.bitmap_blend" => bitmap_blend_output(case, BitmapBlendBackend::Rust),
         operation if operation.starts_with("freetype.face_macro") => {
             let face = rust_new_face_without_size(case)?;
             rust_face_macro(&face, case)
@@ -10074,6 +10079,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::CAbi),
         "ftbitmap.bitmap_embolden" => bitmap_embolden_output(case, BitmapEmboldenBackend::CAbi),
+        "ftbitmap.bitmap_blend" => bitmap_blend_output(case, BitmapBlendBackend::CAbi),
         operation if operation.starts_with("freetype.face_macro") => {
             let (library, face) = c_new_face_without_size(case)?;
             let output = c_face_macro(face, case);
@@ -10664,6 +10670,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftbitmap.bitmap_copy" => bitmap_copy_output(case, BitmapCopyBackend::Wasm),
         "ftbitmap.bitmap_embolden" => bitmap_embolden_output(case, BitmapEmboldenBackend::Wasm),
+        "ftbitmap.bitmap_blend" => bitmap_blend_output(case, BitmapBlendBackend::Wasm),
         operation if operation.starts_with("freetype.face_macro") => {
             let handle = wasm_new_face_without_size(case)?;
             let output = wasm_face_macro(handle, case);
@@ -23441,6 +23448,468 @@ fn bitmap_copy_target_bytes(
             FT_Bitmap_Owned_Buffer_Bytes(Some(&setup.target))
         }
     }
+}
+
+#[derive(Clone, Copy)]
+enum BitmapBlendBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+#[derive(Clone, Copy)]
+struct BitmapBlendColor {
+    blue: u8,
+    green: u8,
+    red: u8,
+    alpha: u8,
+}
+
+#[derive(Clone, Copy)]
+struct BitmapBlendSample {
+    mode: FT_Pixel_Mode,
+    negative_source: bool,
+    existing_target: bool,
+    source_offset: FT_Vector,
+    target_offset: FT_Vector,
+    color: BitmapBlendColor,
+}
+
+fn bitmap_blend_output(case: &InputCase, backend: BitmapBlendBackend) -> Result<RunOutput, String> {
+    let scenario = string_param(&case.inputs.params, "scenario")?;
+    if scenario == "error_invalid_arguments_or_target_mode" {
+        let mut sample = bitmap_blend_default_sample();
+        let (mut source, source_bytes) = bitmap_blend_source_record(FT_PIXEL_MODE_GRAY, false);
+        let (mut target, target_bytes) = bitmap_blend_source_record(FT_PIXEL_MODE_GRAY, false);
+        let err = bitmap_blend_call(
+            backend,
+            &mut source,
+            source_bytes,
+            sample.source_offset,
+            &mut target,
+            Some(target_bytes),
+            &mut sample.target_offset,
+            sample.color,
+            true,
+        );
+        return Ok(error(err));
+    }
+    if scenario == "error_overflow_or_flow_mismatch" {
+        let mut sample = bitmap_blend_default_sample();
+        sample.existing_target = true;
+        let (mut source, source_bytes) = bitmap_blend_source_record(FT_PIXEL_MODE_GRAY, false);
+        let mut target = FT_Bitmap_C::default();
+        let mut target_offset = sample.target_offset;
+        bitmap_blend_prepopulate(backend, &mut target, &mut target_offset)?;
+        target.pitch = -target.pitch;
+        let err = bitmap_blend_call(
+            backend,
+            &mut source,
+            source_bytes,
+            sample.source_offset,
+            &mut target,
+            None,
+            &mut target_offset,
+            sample.color,
+            true,
+        );
+        return Ok(error(err));
+    }
+
+    let samples = bitmap_blend_samples(scenario)?;
+    let mut runs = Vec::with_capacity(samples.len());
+    for sample in samples {
+        runs.push(run_output_json(bitmap_blend_run(backend, sample)?));
+    }
+    Ok(ok(json!({ "runs": runs })))
+}
+
+fn run_output_json(output: RunOutput) -> Value {
+    json!({
+        "status": {
+            "kind": match output.status.kind {
+                StatusKind::Ok => "ok",
+                StatusKind::Error => "error",
+            },
+            "error_code": output.status.error_code
+        },
+        "output": output.output
+    })
+}
+
+fn bitmap_blend_default_sample() -> BitmapBlendSample {
+    BitmapBlendSample {
+        mode: FT_PIXEL_MODE_GRAY,
+        negative_source: false,
+        existing_target: false,
+        source_offset: FT_Vector { x: 31, y: 95 },
+        target_offset: FT_Vector { x: -33, y: 130 },
+        color: BitmapBlendColor {
+            blue: 29,
+            green: 113,
+            red: 211,
+            alpha: 173,
+        },
+    }
+}
+
+fn bitmap_blend_samples(scenario: &str) -> Result<Vec<BitmapBlendSample>, String> {
+    let base = bitmap_blend_default_sample();
+    match scenario {
+        "success_empty_target_allocates_bgra" => Ok(vec![base]),
+        "success_existing_bgra_reallocates_or_preserves" => Ok(vec![BitmapBlendSample {
+            existing_target: true,
+            ..base
+        }]),
+        "success_integerizes_offsets" => Ok(vec![BitmapBlendSample {
+            mode: FT_PIXEL_MODE_GRAY4,
+            existing_target: true,
+            source_offset: FT_Vector { x: 127, y: -65 },
+            target_offset: FT_Vector { x: 95, y: 193 },
+            ..base
+        }]),
+        "success_source_pixel_modes_and_flow" => {
+            let modes = [
+                FT_PIXEL_MODE_MONO,
+                FT_PIXEL_MODE_GRAY2,
+                FT_PIXEL_MODE_GRAY4,
+                FT_PIXEL_MODE_GRAY,
+                FT_PIXEL_MODE_LCD,
+                FT_PIXEL_MODE_LCD_V,
+                FT_PIXEL_MODE_BGRA,
+            ];
+            let mut samples = Vec::with_capacity(14);
+            for negative_source in [false, true] {
+                for mode in modes {
+                    samples.push(BitmapBlendSample {
+                        mode,
+                        negative_source,
+                        ..base
+                    });
+                }
+            }
+            Ok(samples)
+        }
+        other => Err(format!("unsupported bitmap_blend scenario {other}")),
+    }
+}
+
+fn bitmap_blend_run(
+    backend: BitmapBlendBackend,
+    sample: BitmapBlendSample,
+) -> Result<RunOutput, String> {
+    let (mut source, source_bytes) =
+        bitmap_blend_source_record(sample.mode, sample.negative_source);
+    let mut target = FT_Bitmap_C::default();
+    let mut target_offset = sample.target_offset;
+    if sample.existing_target {
+        bitmap_blend_prepopulate(backend, &mut target, &mut target_offset)?;
+    }
+    let err = bitmap_blend_call(
+        backend,
+        &mut source,
+        source_bytes,
+        sample.source_offset,
+        &mut target,
+        None,
+        &mut target_offset,
+        sample.color,
+        true,
+    );
+    if err == FT_Err_Ok {
+        Ok(ok(bitmap_blend_json(&target, &target_offset)))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn bitmap_blend_call(
+    backend: BitmapBlendBackend,
+    source: &mut FT_Bitmap_C,
+    source_bytes: Vec<u8>,
+    source_offset: FT_Vector,
+    target: &mut FT_Bitmap_C,
+    target_bytes: Option<Vec<u8>>,
+    target_offset: &mut FT_Vector,
+    color: BitmapBlendColor,
+    library_present: bool,
+) -> FT_Error {
+    match backend {
+        BitmapBlendBackend::Rust => {
+            FT_Bitmap_Set_Owned_Buffer(Some(source), source_bytes);
+            if let Some(bytes) = target_bytes {
+                FT_Bitmap_Set_Owned_Buffer(Some(target), bytes);
+            }
+            let library = FT_Init_FreeType();
+            FT_Bitmap_Blend(
+                library_present.then_some(&library),
+                Some(source),
+                source_offset,
+                Some(target),
+                Some(target_offset),
+                FT_Color {
+                    blue: color.blue,
+                    green: color.green,
+                    red: color.red,
+                    alpha: color.alpha,
+                },
+            )
+        }
+        BitmapBlendBackend::CAbi => bitmap_blend_c_abi(
+            source,
+            source_bytes,
+            source_offset,
+            target,
+            target_bytes,
+            target_offset,
+            color,
+            library_present,
+        ),
+        BitmapBlendBackend::Wasm => bitmap_blend_wasm(
+            source,
+            source_bytes,
+            source_offset,
+            target,
+            target_bytes,
+            target_offset,
+            color,
+            library_present,
+        ),
+    }
+}
+
+fn bitmap_blend_c_abi(
+    source: &FT_Bitmap_C,
+    mut source_bytes: Vec<u8>,
+    source_offset: FT_Vector,
+    target: &mut FT_Bitmap_C,
+    mut target_bytes: Option<Vec<u8>>,
+    target_offset: &mut FT_Vector,
+    color: BitmapBlendColor,
+    library_present: bool,
+) -> FT_Error {
+    let source_c = c_abi::FT_Bitmap {
+        rows: source.rows,
+        width: source.width,
+        pitch: source.pitch,
+        buffer: source_bytes.as_mut_ptr(),
+        num_grays: source.num_grays,
+        pixel_mode: source.pixel_mode.into(),
+        palette_mode: source.palette_mode,
+        palette: source.palette,
+    };
+    let mut target_c = c_abi::FT_Bitmap {
+        rows: target.rows,
+        width: target.width,
+        pitch: target.pitch,
+        buffer: target.buffer,
+        num_grays: target.num_grays,
+        pixel_mode: target.pixel_mode.into(),
+        palette_mode: target.palette_mode,
+        palette: target.palette,
+    };
+    if let Some(bytes) = target_bytes.as_mut() {
+        target_c.buffer = bytes.as_mut_ptr();
+    }
+    let mut library = ptr::null_mut();
+    if library_present {
+        let err = c_abi::FT_Init_FreeType(&mut library);
+        if err != FT_Err_Ok {
+            return err;
+        }
+    }
+    let mut target_offset_c = c_abi::FT_Vector {
+        x: target_offset.x,
+        y: target_offset.y,
+    };
+    let err = c_abi::FT_Bitmap_Blend(
+        library,
+        &source_c,
+        c_abi::FT_Vector {
+            x: source_offset.x,
+            y: source_offset.y,
+        },
+        &mut target_c,
+        &mut target_offset_c,
+        c_abi::FT_Color {
+            blue: color.blue,
+            green: color.green,
+            red: color.red,
+            alpha: color.alpha,
+        },
+    );
+    *target = bitmap_from_c_record(&target_c);
+    target_offset.x = target_offset_c.x;
+    target_offset.y = target_offset_c.y;
+    if !library.is_null() {
+        c_done_library(library);
+    }
+    err
+}
+
+fn bitmap_blend_wasm(
+    source: &FT_Bitmap_C,
+    source_bytes: Vec<u8>,
+    source_offset: FT_Vector,
+    target: &mut FT_Bitmap_C,
+    mut target_bytes: Option<Vec<u8>>,
+    target_offset: &mut FT_Vector,
+    color: BitmapBlendColor,
+    library_present: bool,
+) -> FT_Error {
+    let source_wasm = wasm_abi::FontdoneWasmBitmap {
+        rows: source.rows,
+        width: source.width,
+        pitch: source.pitch,
+        buffer: source_bytes.as_ptr(),
+        buffer_len: source_bytes.len(),
+        num_grays: source.num_grays,
+        pixel_mode: source.pixel_mode.into(),
+        palette_mode: source.palette_mode,
+        palette: source.palette,
+    };
+    let mut target_wasm = wasm_abi::FontdoneWasmBitmap {
+        rows: target.rows,
+        width: target.width,
+        pitch: target.pitch,
+        buffer: target.buffer,
+        buffer_len: bitmap_buffer_len_for_test(target),
+        num_grays: target.num_grays,
+        pixel_mode: target.pixel_mode.into(),
+        palette_mode: target.palette_mode,
+        palette: target.palette,
+    };
+    if let Some(bytes) = target_bytes.as_mut() {
+        target_wasm.buffer = bytes.as_ptr();
+        target_wasm.buffer_len = bytes.len();
+    }
+    let mut target_offset_wasm = wasm_abi::FontdoneWasmVector {
+        x: target_offset.x,
+        y: target_offset.y,
+    };
+    let err = wasm_abi::fontdone_wasm_bitmap_blend(
+        usize::from(library_present),
+        &source_wasm,
+        wasm_abi::FontdoneWasmVector {
+            x: source_offset.x,
+            y: source_offset.y,
+        },
+        &mut target_wasm,
+        &mut target_offset_wasm,
+        wasm_abi::FontdoneWasmColor {
+            blue: color.blue,
+            green: color.green,
+            red: color.red,
+            alpha: color.alpha,
+        },
+    );
+    *target = bitmap_from_wasm_record(&target_wasm);
+    target_offset.x = target_offset_wasm.x;
+    target_offset.y = target_offset_wasm.y;
+    err
+}
+
+fn bitmap_blend_prepopulate(
+    backend: BitmapBlendBackend,
+    target: &mut FT_Bitmap_C,
+    target_offset: &mut FT_Vector,
+) -> Result<(), String> {
+    let (mut source, source_bytes) = bitmap_blend_source_record(FT_PIXEL_MODE_GRAY, false);
+    source.width = 2;
+    source.rows = 2;
+    source.pitch = 2;
+    *target_offset = FT_Vector { x: 64, y: 128 };
+    let err = bitmap_blend_call(
+        backend,
+        &mut source,
+        source_bytes,
+        FT_Vector { x: 64, y: 128 },
+        target,
+        None,
+        target_offset,
+        BitmapBlendColor {
+            blue: 31,
+            green: 47,
+            red: 79,
+            alpha: 191,
+        },
+        true,
+    );
+    if err == FT_Err_Ok {
+        Ok(())
+    } else {
+        Err(format!("bitmap_blend prepopulate failed with {err}"))
+    }
+}
+
+fn bitmap_blend_source_record(mode: FT_Pixel_Mode, negative: bool) -> (FT_Bitmap_C, Vec<u8>) {
+    let mut bytes = vec![0; 96];
+    let (rows, width, pitch, num_grays) = match mode {
+        FT_PIXEL_MODE_MONO => {
+            bytes[..3].copy_from_slice(&[0xA8, 0x50, 0xF8]);
+            (3, 5, 1, 256)
+        }
+        FT_PIXEL_MODE_GRAY2 => {
+            bytes[..6].copy_from_slice(&[0x1B, 0x40, 0xE4, 0x80, 0x6D, 0xC0]);
+            (3, 5, 2, 4)
+        }
+        FT_PIXEL_MODE_GRAY4 => {
+            bytes[..9].copy_from_slice(&[0x17, 0x3F, 0x50, 0x9B, 0xDF, 0x10, 0x24, 0x68, 0xA0]);
+            (3, 5, 3, 16)
+        }
+        FT_PIXEL_MODE_LCD | FT_PIXEL_MODE_LCD_V => {
+            for (index, byte) in bytes.iter_mut().take(12).enumerate() {
+                *byte = 13 + index as u8 * 19;
+            }
+            (2, 6, 6, 256)
+        }
+        FT_PIXEL_MODE_BGRA => {
+            bytes[..24].copy_from_slice(&[
+                10, 20, 30, 90, 20, 60, 80, 140, 0, 0, 0, 0, 40, 30, 20, 128, 90, 40, 10, 200, 8,
+                16, 32, 64,
+            ]);
+            (2, 3, 12, 256)
+        }
+        _ => {
+            for (index, byte) in bytes.iter_mut().take(15).enumerate() {
+                *byte = 17 + index as u8 * 11;
+            }
+            (3, 5, 5, 256)
+        }
+    };
+    (
+        FT_Bitmap_C {
+            rows,
+            width,
+            pitch: if negative { -pitch } else { pitch },
+            buffer: ptr::with_exposed_provenance_mut(0x1),
+            num_grays,
+            pixel_mode: mode as u8,
+            palette_mode: 0,
+            palette: ptr::null_mut(),
+        },
+        bytes,
+    )
+}
+
+fn bitmap_blend_json(bitmap: &FT_Bitmap_C, target_offset: &FT_Vector) -> Value {
+    let bytes = FT_Bitmap_Owned_Buffer_Bytes(Some(bitmap));
+    json!({
+        "target": bitmap_record_json(bitmap),
+        "target_bytes_hash": bytes.as_deref().map(djb2_hash),
+        "target_buffer_len": bytes.as_ref().map_or(0, Vec::len),
+        "target_offset": {
+            "x": target_offset.x,
+            "y": target_offset.y
+        }
+    })
+}
+
+fn bitmap_buffer_len_for_test(bitmap: &FT_Bitmap_C) -> usize {
+    usize::try_from(bitmap.pitch.unsigned_abs())
+        .ok()
+        .and_then(|pitch| pitch.checked_mul(usize::try_from(bitmap.rows).ok()?))
+        .unwrap_or(0)
 }
 
 #[derive(Debug, Clone, Copy)]
