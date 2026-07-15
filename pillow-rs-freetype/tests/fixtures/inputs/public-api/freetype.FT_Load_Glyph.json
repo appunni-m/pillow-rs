@@ -4613,6 +4613,27 @@
             ]
           },
           {
+            "id": "hinter-iup-same-orus-x",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 57,
+              "load_flags": [
+                "FT_LOAD_TARGET_MONO"
+              ]
+            },
+            "coverage": [
+              "tt/hinter:iup-same-original-x"
+            ]
+          },
+          {
             "id": "hinter-delta-control-matrix",
             "assets": {
               "font": {

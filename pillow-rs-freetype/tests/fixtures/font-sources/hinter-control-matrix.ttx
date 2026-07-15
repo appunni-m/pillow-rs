@@ -60,6 +60,7 @@
     <GlyphID id="54" name="emboldenSharpTurn"/>
     <GlyphID id="55" name="emboldenZeroAreaBowtie"/>
     <GlyphID id="56" name="renderSmartDropoutNeighbor"/>
+    <GlyphID id="57" name="iupSameOrusX"/>
   </GlyphOrder>
 
   <head>
@@ -106,7 +107,7 @@
   <maxp>
     <!-- Most of this table will be recalculated by the compiler -->
     <tableVersion value="0x10000"/>
-    <numGlyphs value="57"/>
+    <numGlyphs value="58"/>
     <maxPoints value="12"/>
     <maxContours value="3"/>
     <maxCompositePoints value="6"/>
@@ -232,6 +233,7 @@
     <mtx name="emboldenSharpTurn" width="700" lsb="0"/>
     <mtx name="emboldenZeroAreaBowtie" width="700" lsb="0"/>
     <mtx name="renderSmartDropoutNeighbor" width="700" lsb="205"/>
+    <mtx name="iupSameOrusX" width="700" lsb="0"/>
     <mtx name="withInstructions" width="700" lsb="0"/>
   </hmtx>
 
@@ -294,6 +296,7 @@
       <map code="0xe035" name="emboldenSharpTurn"/>
       <map code="0xe036" name="emboldenZeroAreaBowtie"/>
       <map code="0xe037" name="renderSmartDropoutNeighbor"/>
+      <map code="0xe038" name="iupSameOrusX"/>
     </cmap_format_4>
     <cmap_format_4 platformID="3" platEncID="1" language="0">
       <map code="0xe000" name="base"/><!-- ???? -->
@@ -352,6 +355,7 @@
       <map code="0xe035" name="emboldenSharpTurn"/>
       <map code="0xe036" name="emboldenZeroAreaBowtie"/>
       <map code="0xe037" name="renderSmartDropoutNeighbor"/>
+      <map code="0xe038" name="iupSameOrusX"/>
     </cmap_format_4>
   </cmap>
 
@@ -372,6 +376,7 @@
 
   <cvt>
     <cv index="0" value="0"/>
+    <cv index="1" value="64"/>
   </cvt>
 
   <loca>
@@ -1062,6 +1067,24 @@
           b0 01 10 b0 01 13 b0 00 14 b9 00 00 ff f6 44 b1 00 00 ec b0 01 14
           93
           2d
+        </bytecode>
+      </instructions>
+    </TTGlyph>
+
+    <TTGlyph name="iupSameOrusX" xMin="0" yMin="0" xMax="120" yMax="200">
+      <contour>
+        <pt x="0" y="0" on="1"/>
+        <pt x="120" y="50" on="1"/>
+        <pt x="0" y="100" on="1"/>
+        <pt x="80" y="150" on="1"/>
+        <pt x="0" y="200" on="1"/>
+      </contour>
+      <instructions>
+        <!-- Public FT_Load_Glyph route for IUP[x] equal original-x references:
+             point 0 stays at x=0, point 2 shares original x=0 but MIAP moves
+             it to CVT[1], so Ins_IUP reaches the o1 == o2 branch. -->
+        <bytecode>
+          b0 00 2e b1 02 01 3e 31
         </bytecode>
       </instructions>
     </TTGlyph>
