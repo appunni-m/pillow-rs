@@ -1611,6 +1611,33 @@
             ]
           },
           {
+            "id": "render-coverage-flat-vertical-segment-sdf",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "font_render_text": "\ue10e",
+              "assert_font_render_mode_agrees": true,
+              "glyph_index": 15,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": [
+              "render/sdf:flat-vertical-empty-width"
+            ]
+          },
+          {
             "id": "mono-geometry-gid-0",
             "assets": {
               "font": {

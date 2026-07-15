@@ -31,6 +31,7 @@ GLYPH_ORDER = [
     "mono_left_edge_dropout",
     "mono_bottom_edge_dropout",
     "sdf_flat_horizontal_segment",
+    "sdf_flat_vertical_segment",
 ]
 
 
@@ -215,6 +216,19 @@ def sdf_flat_horizontal_segment_glyph():
     return pen.glyph()
 
 
+def sdf_flat_vertical_segment_glyph():
+    pen = TTGlyphPen(None)
+
+    # Mirror the horizontal degenerate SDF case: the outline is non-empty, but
+    # the normal preset control box has zero width before SDF spread padding.
+    pen.moveTo((0, 0))
+    pen.lineTo((0, 192))
+    pen.lineTo((0, 96))
+    pen.closePath()
+
+    return pen.glyph()
+
+
 def mono_left_edge_dropout_glyph():
     pen = TTGlyphPen(None)
 
@@ -254,6 +268,7 @@ def build_render_coverage() -> None:
         "sdf_zero_length_segment": sdf_zero_length_segment_glyph(),
         "sdf_centerline_segment": sdf_centerline_segment_glyph(),
         "sdf_flat_horizontal_segment": sdf_flat_horizontal_segment_glyph(),
+        "sdf_flat_vertical_segment": sdf_flat_vertical_segment_glyph(),
         "mono_left_edge_dropout": mono_left_edge_dropout_glyph(),
         "mono_bottom_edge_dropout": mono_bottom_edge_dropout_glyph(),
     }
@@ -271,6 +286,7 @@ def build_render_coverage() -> None:
         "sdf_zero_length_segment": (256, 0),
         "sdf_centerline_segment": (256, 0),
         "sdf_flat_horizontal_segment": (256, 0),
+        "sdf_flat_vertical_segment": (256, 0),
         "mono_left_edge_dropout": (256, 0),
         "mono_bottom_edge_dropout": (256, 0),
     }
@@ -293,6 +309,7 @@ def build_render_coverage() -> None:
             0xE10B: "mono_left_edge_dropout",
             0xE10C: "mono_bottom_edge_dropout",
             0xE10D: "sdf_flat_horizontal_segment",
+            0xE10E: "sdf_flat_vertical_segment",
         }
     )
     builder.setupGlyf(glyphs)
