@@ -1136,6 +1136,30 @@
             ]
           },
           {
+            "id": "render-notdef-composite-default-no-bytecode",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-notdef-composite.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 0,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "scaler:notdef-composite-default-without-bytecode-context"
+            ]
+          },
+          {
             "id": "dejavu-space-force-autohint-empty",
             "assets": {
               "font": {

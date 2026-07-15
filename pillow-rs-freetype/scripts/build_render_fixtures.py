@@ -253,9 +253,9 @@ def mono_bottom_edge_dropout_glyph():
     return pen.glyph()
 
 
-def build_render_coverage() -> None:
+def build_render_coverage_font(name: str, notdef_glyph=None, ascender: int = 256) -> None:
     glyphs = {
-        ".notdef": empty_glyph(),
+        ".notdef": notdef_glyph or empty_glyph(),
         "horizontal_dropout_guard": horizontal_dropout_guard_glyph(),
         "vertical_dropout_guard": vertical_dropout_guard_glyph(),
         "conic_bbox_extrema": conic_bbox_extrema_glyph(),
@@ -314,7 +314,7 @@ def build_render_coverage() -> None:
     )
     builder.setupGlyf(glyphs)
     builder.setupHorizontalMetrics(metrics)
-    builder.setupHorizontalHeader(ascent=256, descent=0)
+    builder.setupHorizontalHeader(ascent=ascender, descent=0)
     builder.setupNameTable(
         {
             "familyName": "Render Coverage",
@@ -326,9 +326,9 @@ def build_render_coverage() -> None:
         }
     )
     builder.setupOS2(
-        sTypoAscender=256,
+        sTypoAscender=ascender,
         sTypoDescender=0,
-        usWinAscent=256,
+        usWinAscent=ascender,
         usWinDescent=0,
     )
     builder.setupPost()
@@ -340,7 +340,16 @@ def build_render_coverage() -> None:
     builder.font.recalcTimestamp = False
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    builder.save(OUT_DIR / "render-coverage.ttf")
+    builder.save(OUT_DIR / name)
+
+
+def build_render_coverage() -> None:
+    build_render_coverage_font("render-coverage.ttf")
+    build_render_coverage_font(
+        "render-notdef-composite.ttf",
+        notdef_glyph=overlap_compound_flag_glyph(),
+        ascender=513,
+    )
 
 
 def build_render_prep_only() -> None:
