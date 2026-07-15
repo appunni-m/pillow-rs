@@ -742,7 +742,7 @@ fn scale_glyph_impl_with_context(
         data.load_glyph_outline(glyph_index)?
     };
 
-    if !allow_bytecode && latin_metrics.is_none() {
+    if data.cff.is_none() && !allow_bytecode && latin_metrics.is_none() {
         // C: unhinted TrueType loads scale phantom points independently, then
         // compute `horiAdvance = pp2.x - pp1.x` in `compute_glyph_metrics`
         // (`src/truetype/ttgload.c`).  Scaling the raw advance as one value
@@ -901,7 +901,7 @@ fn scale_glyph_impl_with_context(
     // FreeType translates TrueType outlines back by the scaled left phantom
     // point after loading. Apply it after scaling so FT_MulFix rounding stays
     // separate from point-coordinate rounding.
-    let no_hinting_origin_shift_x = if !use_autohint && !allow_bytecode {
+    let no_hinting_origin_shift_x = if data.cff.is_none() && !use_autohint && !allow_bytecode {
         scale.scale_x(pp1x_fu)
     } else {
         0

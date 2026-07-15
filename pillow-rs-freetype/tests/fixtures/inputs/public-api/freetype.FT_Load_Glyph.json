@@ -406,6 +406,30 @@
             ]
           },
           {
+            "id": "pure-cff-fixed-hmoveto-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 14,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "tt/cff:type2-fixed-number-hmoveto"
+            ]
+          },
+          {
             "id": "dejavu-null-no-scale",
             "assets": {
               "font": {
