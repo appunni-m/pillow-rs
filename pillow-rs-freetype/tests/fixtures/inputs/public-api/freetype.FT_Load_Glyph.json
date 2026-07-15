@@ -358,6 +358,30 @@
             ]
           },
           {
+            "id": "pure-cff-endchar-default-width-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 12,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ]
+            },
+            "coverage": [
+              "tt/cff:endchar-default-width"
+            ]
+          },
+          {
             "id": "dejavu-null-no-scale",
             "assets": {
               "font": {
