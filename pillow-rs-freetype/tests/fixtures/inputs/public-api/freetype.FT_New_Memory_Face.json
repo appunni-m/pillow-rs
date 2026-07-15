@@ -1336,6 +1336,85 @@
         },
         "error": "c_oracle"
       }
+    },
+    {
+      "case_id": "freetype.FT_New_Memory_Face.error_malformed_cff_table",
+      "subject": "freetype.FT_New_Memory_Face",
+      "case": "error_bad_size_or_unknown_format",
+      "operation": "new_memory_face",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "variants": [
+          {
+            "id": "cff-short-header",
+            "assets": {
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-short-header.otf" },
+              "font": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-short-header.otf" }
+            },
+            "params": { "variants": [ { "face_index": 0 } ] },
+            "coverage": [ "tt/cff:face-open-short-header-error" ]
+          },
+          {
+            "id": "cff-invalid-name-index-offsize",
+            "assets": {
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-invalid-name-index-offsize.otf" },
+              "font": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-invalid-name-index-offsize.otf" }
+            },
+            "params": { "variants": [ { "face_index": 0 } ] },
+            "coverage": [ "tt/cff:index-offsize-error" ]
+          },
+          {
+            "id": "cff-name-index-offsets-out-of-order",
+            "assets": {
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-name-index-offsets-out-of-order.otf" },
+              "font": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-name-index-offsets-out-of-order.otf" }
+            },
+            "params": { "variants": [ { "face_index": 0 } ] },
+            "coverage": [ "tt/cff:index-offset-order-error" ]
+          },
+          {
+            "id": "cff-escaped-top-dict-op-overflow",
+            "assets": {
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-escaped-top-dict-op-overflow.otf" },
+              "font": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-escaped-top-dict-op-overflow.otf" }
+            },
+            "params": { "variants": [ { "face_index": 0 } ] },
+            "coverage": [ "tt/cff:top-dict-escaped-op-overflow-error" ]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:cff"
+      ],
+      "metadata": {
+        "source_behavior": "OpenType CFF faces with malformed CFF header, INDEX, or Top DICT data are rejected during FT_New_Memory_Face before a face is created."
+      },
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "face": "not_created"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "outputs[*].status",
+            "outputs[*].error",
+            "outputs[*].face_nullness"
+          ]
+        },
+        "error": "c_oracle",
+        "source_refs": [
+          "freetype/src/cff/cffload.c",
+          "freetype/src/cff/cffparse.c"
+        ],
+        "fixture_requirements": [
+          "Generated OpenType CFF fixtures with valid SFNT tables and deliberately malformed CFF table bytes."
+        ]
+      }
     }
   ]
 }
