@@ -29,10 +29,9 @@ const MAX_FUNCTIONS: usize = 256;
 /// Maximum instruction definitions (IDEF).
 const MAX_INSTRUCTION_DEFS: usize = 256;
 
-/// Conservative VM guard for malformed bytecode. FreeType limits backward
-/// jumps and LOOPCALLs separately with font-derived budgets; a flat 5000-op
-/// cap is too small for valid programs with tight JROT/JROF loops.
-const MAX_VM_STEPS: u32 = 100_000;
+/// C `TT_RunIns` uses `TT_CONFIG_OPTION_MAX_RUNNABLE_OPCODES` as the final
+/// malformed-bytecode guard before returning `FT_Err_Execution_Too_Long`.
+const MAX_VM_STEPS: u32 = 1_000_000;
 
 #[inline]
 fn delta_step(delta_shift: u32) -> i32 {
@@ -896,7 +895,7 @@ impl ExecContext {
         let mut step_count = 0u32;
         while self.ip < self.active_program_len() {
             if step_count > MAX_VM_STEPS {
-                return Err(FontError::InvalidOutline("VM: max steps".into()));
+                return Err(FontError::ExecutionTooLong);
             }
             step_count += 1;
             let opcode = self.fetch_byte_glyph()?;
