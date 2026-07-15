@@ -4696,6 +4696,48 @@
             "coverage": [
               "autohint/latin:branch-blue-next-walk-extralight"
             ]
+          },
+          {
+            "id": "branch-script-u01d5-target-mono-7",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 7,
+              "char_code": 469,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_MONO"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:branch-double-top-target-mono-small"
+            ]
+          },
+          {
+            "id": "branch-script-u1e74-target-lcd-v-13",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 13,
+              "char_code": 7796,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_LCD_V"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:branch-tilde-bottom-flat-loop-lcd-v"
+            ]
           }
         ]
       },
