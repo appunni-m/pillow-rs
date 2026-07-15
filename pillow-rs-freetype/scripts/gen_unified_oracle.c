@@ -136,6 +136,108 @@ static void print_bitmap_fields(const FT_Bitmap* bitmap) {
     printf("}");
 }
 
+static void print_byte_hash_or_null(const unsigned char* bytes, size_t len) {
+    if (!bytes) {
+        printf("null");
+        return;
+    }
+    unsigned long long hash = 5381ULL;
+    for (size_t i = 0; i < len; i++) {
+        hash = ((hash << 5) + hash) + bytes[i];
+    }
+    printf("\"%llx\"", hash);
+}
+
+static size_t bitmap_len(const FT_Bitmap* bitmap) {
+    int pitch = bitmap->pitch < 0 ? -bitmap->pitch : bitmap->pitch;
+    return (size_t)pitch * (size_t)bitmap->rows;
+}
+
+static void bitmap_copy_source(FT_Bitmap* bitmap, unsigned char* bytes) {
+    bitmap->rows = 3;
+    bitmap->width = 3;
+    bitmap->pitch = 4;
+    bitmap->buffer = bytes;
+    bitmap->num_grays = 256;
+    bitmap->pixel_mode = FT_PIXEL_MODE_GRAY;
+    bitmap->palette_mode = 0;
+    bitmap->palette = NULL;
+    for (int i = 0; i < 12; i++) {
+        bytes[i] = (unsigned char)(i * 17 + 3);
+    }
+}
+
+static int emit_bitmap_copy(const char* scenario) {
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf("}\n");
+        return 0;
+    }
+
+    unsigned char source_bytes[12];
+    unsigned char target_bytes[12];
+    FT_Bitmap source;
+    FT_Bitmap target;
+    bitmap_copy_source(&source, source_bytes);
+    FT_Bitmap_Init(&target);
+
+    const FT_Bitmap* source_arg = &source;
+    FT_Bitmap* target_arg = &target;
+    FT_Library library_arg = library;
+
+    if (streq(scenario, "success_source_equals_target_noop")) {
+        target_arg = &source;
+    } else if (streq(scenario, "success_null_source_buffer")) {
+        source.buffer = NULL;
+    } else if (streq(scenario, "success_flow_flip")) {
+        target.pitch = -1;
+    } else if (streq(scenario, "ownership_replaces_target_buffer")) {
+        memset(target_bytes, 0xE5, sizeof(target_bytes));
+        FT_Bitmap pre_source;
+        bitmap_copy_source(&pre_source, target_bytes);
+        err = FT_Bitmap_Copy(library, &pre_source, &target);
+        if (err) {
+            printf("{");
+            print_status(err);
+            printf("}\n");
+            FT_Done_FreeType(library);
+            return 0;
+        }
+    } else if (streq(scenario, "error_null_library_or_bitmaps")) {
+        source_arg = NULL;
+    } else if (!streq(scenario, "success_deep_copy_all_public_fields")) {
+        fprintf(stderr, "unsupported bitmap copy scenario: %s\n", scenario);
+        FT_Done_FreeType(library);
+        return 2;
+    }
+
+    err = FT_Bitmap_Copy(library_arg, source_arg, target_arg);
+    if (target_arg == &source) {
+        target = source;
+    }
+
+    printf("{");
+    print_status(err);
+    if (!err) {
+        size_t len = target.buffer ? bitmap_len(&target) : 0;
+        printf(",\"output\":{\"target\":");
+        print_bitmap_fields(&target);
+        printf(",\"target_bytes_hash\":");
+        print_byte_hash_or_null(target.buffer, len);
+        printf(",\"target_buffer_len\":%zu,\"buffer_identity_class\":\"%s\"}",
+               len, target.buffer ? "owned_copy" : "null");
+    }
+    printf("}\n");
+    if (target.buffer && target.buffer != source.buffer && target.buffer != target_bytes) {
+        FT_Bitmap_Done(library, &target);
+    }
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_bitmap_init_new(const char* op, const char* null_arg, const char* alias_arg) {
     int use_null = atoi(null_arg) != 0;
     int compare_alias = atoi(alias_arg) != 0;
@@ -8874,6 +8976,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--bitmap-init-new")) {
         return emit_bitmap_init_new(argv[2], argv[3], argv[4]);
+    }
+    if (argc == 3 && streq(argv[1], "--bitmap-copy")) {
+        return emit_bitmap_copy(argv[2]);
     }
     if (argc == 4 && streq(argv[1], "--trigon")) {
         return emit_trigon(argv[2], argv[3]);

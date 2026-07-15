@@ -150,6 +150,40 @@ pub extern "C" fn FT_Bitmap_New(abitmap: *mut FT_Bitmap) {
     FT_Bitmap_Init(abitmap);
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Bitmap_Copy(
+    library: FT_Library,
+    source: *const FT_Bitmap,
+    target: *mut FT_Bitmap,
+) -> FT_Error {
+    let Some(source_ref) = (unsafe { source.as_ref() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(target_ref) = (unsafe { target.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    if source == target.cast_const() {
+        return if library_ref(library).is_some() {
+            rust_ffi::FT_Err_Ok
+        } else {
+            rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error
+        };
+    }
+
+    let mut source_view = bitmap_to_rust(source_ref);
+    let mut target_view = bitmap_to_rust(target_ref);
+    if let Some(bytes) = bitmap_bytes(source_ref) {
+        rust_ffi::FT_Bitmap_Set_Owned_Buffer(Some(&mut source_view), bytes);
+    }
+
+    let err =
+        rust_ffi::FT_Bitmap_Copy(library_ref(library), Some(&source_view), Some(&mut target_view));
+    if err == rust_ffi::FT_Err_Ok {
+        copy_rust_bitmap_record_to_c(target_ref, &target_view);
+    }
+    err
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct FT_SfntName {
@@ -2217,6 +2251,40 @@ fn copy_rendered_bitmap_to_c(target: &mut FT_Bitmap, rendered: &rust_ffi::FT_Bit
         };
         dst_row.copy_from_slice(src_row);
     }
+}
+
+fn bitmap_to_rust(bitmap: &FT_Bitmap) -> rust_ffi::FT_Bitmap_C {
+    rust_ffi::FT_Bitmap_C {
+        rows: bitmap.rows,
+        width: bitmap.width,
+        pitch: bitmap.pitch,
+        buffer: bitmap.buffer,
+        num_grays: bitmap.num_grays,
+        pixel_mode: u8::try_from(bitmap.pixel_mode).unwrap_or(0),
+        palette_mode: bitmap.palette_mode,
+        palette: bitmap.palette,
+    }
+}
+
+fn copy_rust_bitmap_record_to_c(target: &mut FT_Bitmap, source: &rust_ffi::FT_Bitmap_C) {
+    target.rows = source.rows;
+    target.width = source.width;
+    target.pitch = source.pitch;
+    target.buffer = source.buffer;
+    target.num_grays = source.num_grays;
+    target.pixel_mode = source.pixel_mode.into();
+    target.palette_mode = source.palette_mode;
+    target.palette = source.palette;
+}
+
+fn bitmap_bytes(bitmap: &FT_Bitmap) -> Option<Vec<u8>> {
+    let len = usize::try_from(bitmap.pitch.unsigned_abs())
+        .ok()?
+        .checked_mul(usize::try_from(bitmap.rows).ok()?)?;
+    if bitmap.buffer.is_null() || len == 0 {
+        return None;
+    }
+    Some(unsafe { slice::from_raw_parts(bitmap.buffer, len) }.to_vec())
 }
 
 fn face_state(face: FT_Face) -> Option<&'static FaceState> {
