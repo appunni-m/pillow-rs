@@ -264,6 +264,26 @@
             ]
           },
           {
+            "id": "latin-ignore-small-top-unique-blue",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-small-ignore.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 392,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:unique-small-top-blue-ignore"
+            ]
+          },
+          {
             "id": "latin-adjust-bottom-cedilla",
             "assets": {
               "font": {
