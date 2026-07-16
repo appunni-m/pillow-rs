@@ -4993,10 +4993,15 @@ static int emit_outline_render(int argc, char** argv) {
 typedef enum OrientationOutlineKind_ {
     ORIENTATION_OUTLINE_NULL,
     ORIENTATION_OUTLINE_EMPTY,
+    ORIENTATION_OUTLINE_NONEMPTY_ZERO_CONTOURS,
     ORIENTATION_OUTLINE_POSITIVE,
     ORIENTATION_OUTLINE_NEGATIVE,
     ORIENTATION_OUTLINE_COLLAPSED,
+    ORIENTATION_OUTLINE_COLLAPSED_VERTICAL,
     ORIENTATION_OUTLINE_OVERSIZED,
+    ORIENTATION_OUTLINE_OVERSIZED_X_MIN,
+    ORIENTATION_OUTLINE_OVERSIZED_Y_MIN,
+    ORIENTATION_OUTLINE_OVERSIZED_Y_MAX,
     ORIENTATION_OUTLINE_ZERO_AREA,
 } OrientationOutlineKind;
 
@@ -5023,6 +5028,18 @@ static void build_orientation_outline(
         outline->n_points = 0;
         return;
     }
+    if (kind == ORIENTATION_OUTLINE_NONEMPTY_ZERO_CONTOURS) {
+        outline->n_contours = 0;
+        points[0].x = 0;
+        points[0].y = 0;
+        points[1].x = 0;
+        points[1].y = 64;
+        points[2].x = 64;
+        points[2].y = 64;
+        points[3].x = 64;
+        points[3].y = 0;
+        return;
+    }
     if (kind == ORIENTATION_OUTLINE_COLLAPSED) {
         outline->n_points = 2;
         contours[0] = 1;
@@ -5030,6 +5047,15 @@ static void build_orientation_outline(
         points[0].y = 0;
         points[1].x = 64;
         points[1].y = 0;
+        return;
+    }
+    if (kind == ORIENTATION_OUTLINE_COLLAPSED_VERTICAL) {
+        outline->n_points = 2;
+        contours[0] = 1;
+        points[0].x = 0;
+        points[0].y = 0;
+        points[1].x = 0;
+        points[1].y = 64;
         return;
     }
     if (kind == ORIENTATION_OUTLINE_OVERSIZED) {
@@ -5040,6 +5066,39 @@ static void build_orientation_outline(
         points[2].x = 0x1000000L + 64;
         points[2].y = 64;
         points[3].x = 0x1000000L + 64;
+        points[3].y = 0;
+        return;
+    }
+    if (kind == ORIENTATION_OUTLINE_OVERSIZED_X_MIN) {
+        points[0].x = -0x1000000L - 64;
+        points[0].y = 0;
+        points[1].x = -0x1000000L - 64;
+        points[1].y = 64;
+        points[2].x = 0;
+        points[2].y = 64;
+        points[3].x = 0;
+        points[3].y = 0;
+        return;
+    }
+    if (kind == ORIENTATION_OUTLINE_OVERSIZED_Y_MIN) {
+        points[0].x = 0;
+        points[0].y = -0x1000000L - 64;
+        points[1].x = 0;
+        points[1].y = 0;
+        points[2].x = 64;
+        points[2].y = 0;
+        points[3].x = 64;
+        points[3].y = -0x1000000L - 64;
+        return;
+    }
+    if (kind == ORIENTATION_OUTLINE_OVERSIZED_Y_MAX) {
+        points[0].x = 0;
+        points[0].y = 0;
+        points[1].x = 0;
+        points[1].y = 0x1000000L + 64;
+        points[2].x = 64;
+        points[2].y = 0x1000000L + 64;
+        points[3].x = 64;
         points[3].y = 0;
         return;
     }
@@ -5110,11 +5169,44 @@ static int emit_outline_get_orientation(int argc, char** argv) {
     if (strstr(case_id, "FT_Outline_Get_Orientation.null_empty_and_area_sign")) {
         print_orientation_observation("null", ORIENTATION_OUTLINE_NULL, &emitted);
         print_orientation_observation("empty", ORIENTATION_OUTLINE_EMPTY, &emitted);
+        print_orientation_observation(
+            "nonempty_zero_contours",
+            ORIENTATION_OUTLINE_NONEMPTY_ZERO_CONTOURS,
+            &emitted
+        );
         print_orientation_observation("positive", ORIENTATION_OUTLINE_POSITIVE, &emitted);
         print_orientation_observation("negative", ORIENTATION_OUTLINE_NEGATIVE, &emitted);
     } else if (strstr(case_id, "FT_Outline_Get_Orientation.collapsed_and_oversized_return_none")) {
-        print_orientation_observation("collapsed", ORIENTATION_OUTLINE_COLLAPSED, &emitted);
-        print_orientation_observation("oversized", ORIENTATION_OUTLINE_OVERSIZED, &emitted);
+        print_orientation_observation(
+            "collapsed_horizontal",
+            ORIENTATION_OUTLINE_COLLAPSED,
+            &emitted
+        );
+        print_orientation_observation(
+            "collapsed_vertical",
+            ORIENTATION_OUTLINE_COLLAPSED_VERTICAL,
+            &emitted
+        );
+        print_orientation_observation(
+            "oversized_x_min",
+            ORIENTATION_OUTLINE_OVERSIZED_X_MIN,
+            &emitted
+        );
+        print_orientation_observation(
+            "oversized_y_min",
+            ORIENTATION_OUTLINE_OVERSIZED_Y_MIN,
+            &emitted
+        );
+        print_orientation_observation(
+            "oversized_x_max",
+            ORIENTATION_OUTLINE_OVERSIZED,
+            &emitted
+        );
+        print_orientation_observation(
+            "oversized_y_max",
+            ORIENTATION_OUTLINE_OVERSIZED_Y_MAX,
+            &emitted
+        );
     } else if (strstr(case_id, "FT_ORIENTATION_TRUETYPE.null_and_empty_return_truetype")) {
         print_orientation_observation("null", ORIENTATION_OUTLINE_NULL, &emitted);
         print_orientation_observation("empty", ORIENTATION_OUTLINE_EMPTY, &emitted);
