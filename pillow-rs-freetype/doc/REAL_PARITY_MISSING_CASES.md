@@ -1,6 +1,6 @@
 # Real-Parity Missing Cases
 
-Baseline: `418297b0`
+Baseline: `7d7c1d23`
 
 Source artifacts:
 
@@ -32,7 +32,7 @@ It excludes `compile-contract`, `real-parity`, `real-null-validation`,
 
 | Category | Rows |
 |---|---:|
-| real-parity | 3837 |
+| real-parity | 3838 |
 | compile-contract | 2229 |
 | generic-fallback | 817 |
 | generic-error-fallback | 129 |
@@ -165,7 +165,7 @@ Current condition-coverage bulk context from
 | `src/tt/sbit.rs` | 514 / 638 | 60 / 60 | 34 / 87 |
 | `src/grays.rs` | 727 / 740 | 177 / 178 | 32 / 33 |
 | `src/autohint/latin.rs` | 2608 / 2844 | 1079 / 1286 | 70 / 73 |
-| `src/render.rs` | 2098 / 2597 | 378 / 434 | 142 / 183 |
+| `src/render.rs` | 2099 / 2597 | 379 / 434 | 142 / 183 |
 | `src/scaler.rs` | 1182 / 1305 | 200 / 218 | 53 / 65 |
 
 Use condition coverage as secondary prioritization only: route audit category
@@ -174,7 +174,7 @@ helps pick the first implementation branch inside a chosen bucket.
 
 ### Render Bucket Route Findings
 
-`src/render.rs` remains at 378 / 434 branches after the current
+`src/render.rs` is at 379 / 434 branches after the current
 `FT_Render_Glyph` route sweep.  The following exact public rows were tested in
 an isolated worktree and removed because they preserved exact parity but did
 not move the `src/render.rs` branch total:
