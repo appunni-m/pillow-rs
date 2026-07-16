@@ -62,6 +62,7 @@ CUBIC_GLYPH_ORDER = [
     "moveto_endchar_empty_contour",
     "repeated_moveto_empty_contours",
     "explicit_close_point",
+    "same_x_open_contour",
 ]
 NAMES = {
     "familyName": "Hybrid OTTO Coverage",
@@ -192,6 +193,7 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
         "moveto_endchar_empty_contour": (420, 0),
         "repeated_moveto_empty_contours": (420, 0),
         "explicit_close_point": (420, 0),
+        "same_x_open_contour": (420, 0),
     }
     builder = FontBuilder(UNITS_PER_EM, isTTF=False)
     builder.setupGlyphOrder(CUBIC_GLYPH_ORDER)
@@ -235,6 +237,7 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
             0x64: "moveto_endchar_empty_contour",
             0x65: "repeated_moveto_empty_contours",
             0x66: "explicit_close_point",
+            0x67: "same_x_open_contour",
         }
     )
     builder.setupHorizontalMetrics(metrics)
@@ -598,6 +601,17 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
                     0,
                     0,
                     -100,
+                    "rlineto",
+                    "endchar",
+                ]
+            ),
+            "same_x_open_contour": t2_program_charstring(
+                [
+                    0,
+                    0,
+                    "rmoveto",
+                    0,
+                    100,
                     "rlineto",
                     "endchar",
                 ]

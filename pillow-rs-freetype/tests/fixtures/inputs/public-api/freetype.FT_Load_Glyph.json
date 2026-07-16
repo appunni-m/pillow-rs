@@ -998,6 +998,31 @@
             ]
           },
           {
+            "id": "pure-cff-same-x-open-contour-no-hinting",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 39,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "assert_api_load_glyph_agrees": true
+            },
+            "coverage": [
+              "tt/cff:same-x-different-y-final-point-kept"
+            ]
+          },
+          {
             "id": "dejavu-null-no-scale",
             "assets": {
               "font": {

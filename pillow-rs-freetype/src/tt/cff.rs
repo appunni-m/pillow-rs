@@ -349,13 +349,12 @@ impl<'a> Type2Decoder<'a> {
             // contour start, then drops contours left with only one point.
             // In this decoder, both `contour_start` assignment sites
             // immediately push the start point, so `points.len() > start`.
+            // The supported drawing operators always append on-curve endpoints,
+            // so a final point with matching coordinates is removable.
             if self.points.len() > start + 1 {
                 let first = &self.points[start];
                 let last = self.points[self.points.len() - 1];
-                // Supported Type2 curve operators append their on-curve
-                // endpoint atomically, so an off-curve final point is only a
-                // defensive state for future operators or partial failures.
-                if last.on_curve && first.x == last.x && first.y == last.y {
+                if first.x == last.x && first.y == last.y {
                     self.points.pop();
                 }
             }
