@@ -1,6 +1,6 @@
 # Real-Parity Missing Cases
 
-Baseline: `05f4eb7c`
+Baseline: `d64946a1`
 
 Source artifacts:
 
@@ -32,7 +32,7 @@ It excludes `compile-contract`, `real-parity`, `real-null-validation`,
 
 | Category | Rows |
 |---|---:|
-| real-parity | 3834 |
+| real-parity | 3835 |
 | compile-contract | 2229 |
 | generic-fallback | 817 |
 | generic-error-fallback | 129 |
@@ -149,6 +149,7 @@ repo-visible buckets for handoff and subagent selection.
 | Subject | Operation | Case | Dependency blocking real route |
 |---|---|---|---|
 | `freetype.FT_Render_Glyph` | `render_glyph` | `error_unloaded_or_unsupported_slot_format.unrouted_slot_states` | Unloaded and unsupported synthetic glyph-slot states need explicit public runner support. |
+| `ftbitmap.FT_GlyphSlot_Own_Bitmap` | `glyphslot_own_bitmap` | allocation failure | Deterministic allocator fault injection must be maintained before this row can run as real parity. |
 | `ftmm.FT_Set_Named_Instance` | `ftmm.set_named_instance` | `success_adobe_mm_resets_default` | Adobe MM named-instance reset requires real Adobe MM support. |
 | `ftmm.FT_Set_Named_Instance` | `ftmm.set_named_instance` | `output_changes_to_named_instance` | Named-instance glyph-output parity requires `gvar`/`HVAR` support. |
 | `ftmm.FT_Var_Named_Style` | `ftmm.set_named_instance` | `selected_instance_matches_descriptor` | Named-style coordinate parity requires `FT_MM_Var` support. |
@@ -165,7 +166,7 @@ Current condition-coverage bulk context from
 | `src/grays.rs` | 727 / 740 | 177 / 178 | 32 / 33 |
 | `src/autohint/latin.rs` | 2607 / 2844 | 1078 / 1286 | 70 / 73 |
 | `src/render.rs` | 2098 / 2597 | 378 / 434 | 142 / 183 |
-| `src/scaler.rs` | 1153 / 1295 | 194 / 212 | 52 / 65 |
+| `src/scaler.rs` | 1173 / 1297 | 199 / 218 | 53 / 65 |
 
 Use condition coverage as secondary prioritization only: route audit category
 and route shape decide whether a row is real parity, while condition coverage
