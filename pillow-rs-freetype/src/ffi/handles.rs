@@ -1720,79 +1720,45 @@ pub fn FT_Activate_Size(size: FT_Size) -> FT_Error {
     FT_Err_Ok
 }
 
-const FT_TRIG_SCALE: FT_Fixed = 0xDBD9_5B16;
-const FT_TRIG_SAFE_MSB: i32 = 29;
-const FT_TRIG_MAX_ITERS: usize = 23;
-const FT_TRIG_ARCTAN_TABLE: [FT_Angle; FT_TRIG_MAX_ITERS - 1] = [
-    1_740_967, 919_879, 466_945, 234_379, 117_304, 58_666, 29_335, 14_668, 7_334, 3_667, 1_833,
-    917, 458, 229, 115, 57, 29, 14, 7, 4, 2, 1,
-];
-
 pub fn FT_Sin(angle: FT_Angle) -> FT_Fixed {
-    let mut vector = FT_Vector { x: 0, y: 0 };
-    FT_Vector_Unit(Some(&mut vector), angle);
-    vector.y
+    crate::fixed::ft_sin_long(angle) as FT_Fixed
 }
 
 pub fn FT_Cos(angle: FT_Angle) -> FT_Fixed {
-    let mut vector = FT_Vector { x: 0, y: 0 };
-    FT_Vector_Unit(Some(&mut vector), angle);
-    vector.x
+    crate::fixed::ft_cos_long(angle) as FT_Fixed
 }
 
 pub fn FT_Tan(angle: FT_Angle) -> FT_Fixed {
-    let mut vector = FT_Vector { x: 1 << 24, y: 0 };
-    ft_trig_pseudo_rotate(&mut vector, angle);
-    FT_DivFix(vector.y, vector.x)
+    crate::fixed::ft_tan_long(angle) as FT_Fixed
 }
 
 pub fn FT_Atan2(dx: FT_Fixed, dy: FT_Fixed) -> FT_Angle {
-    if dx == 0 && dy == 0 {
-        return 0;
-    }
-
-    let mut vector = FT_Vector { x: dx, y: dy };
-    ft_trig_prenorm(&mut vector);
-    ft_trig_pseudo_polarize(&mut vector);
-    vector.y
+    crate::fixed::ft_atan2_long(dx, dy) as FT_Angle
 }
 
 pub fn FT_Angle_Diff(angle1: FT_Angle, angle2: FT_Angle) -> FT_Angle {
-    let mut delta = angle2.wrapping_sub(angle1);
-    while delta <= FT_ANGLE_PI.wrapping_neg() {
-        delta = delta.wrapping_add(FT_ANGLE_2PI);
-    }
-    while delta > FT_ANGLE_PI {
-        delta = delta.wrapping_sub(FT_ANGLE_2PI);
-    }
-    delta
+    crate::fixed::ft_angle_diff_long(angle1, angle2) as FT_Angle
 }
 
 pub fn FT_Vector_Unit(vec: Option<&mut FT_Vector>, angle: FT_Angle) {
     let Some(vec) = vec else {
         return;
     };
-    vec.x = FT_TRIG_SCALE >> 8;
-    vec.y = 0;
-    ft_trig_pseudo_rotate(vec, angle);
-    vec.x = (vec.x + 0x80) >> 8;
-    vec.y = (vec.y + 0x80) >> 8;
+    (vec.x, vec.y) = crate::fixed::ft_vector_unit_long(angle);
 }
 
 pub fn FT_Vector_From_Polar(vec: Option<&mut FT_Vector>, length: FT_Fixed, angle: FT_Angle) {
     let Some(vec) = vec else {
         return;
     };
-    vec.x = length;
-    vec.y = 0;
-    FT_Vector_Rotate(Some(vec), angle);
+    (vec.x, vec.y) = crate::fixed::ft_vector_from_polar_long(length, angle);
 }
 
 pub fn FT_Vector_Length(vec: Option<&FT_Vector>) -> FT_Fixed {
     let Some(vec) = vec else {
         return 0;
     };
-    crate::fixed::ft_vector_length_long(vec.x, vec.y)
+    crate::fixed::ft_vector_length_long(vec.x, vec.y) as FT_Fixed
 }
 
 pub fn FT_Vector_Polarize(
@@ -1803,174 +1769,17 @@ pub fn FT_Vector_Polarize(
     let (Some(vec), Some(length), Some(angle)) = (vec, length, angle) else {
         return;
     };
-    let mut vector = *vec;
-    if vector.x == 0 && vector.y == 0 {
-        return;
+    if let Some((new_length, new_angle)) = crate::fixed::ft_vector_polarize_long(vec.x, vec.y) {
+        *length = new_length as FT_Fixed;
+        *angle = new_angle as FT_Angle;
     }
-
-    let shift = ft_trig_prenorm(&mut vector);
-    ft_trig_pseudo_polarize(&mut vector);
-    vector.x = ft_trig_downscale(vector.x);
-    *length = if shift >= 0 {
-        vector.x >> shift
-    } else {
-        (vector.x as u64).wrapping_shl((-shift) as u32) as FT_Fixed
-    };
-    *angle = vector.y;
 }
 
 pub fn FT_Vector_Rotate(vec: Option<&mut FT_Vector>, angle: FT_Angle) {
     let Some(vec) = vec else {
         return;
     };
-    if angle == 0 {
-        return;
-    }
-    let mut vector = *vec;
-    if vector.x == 0 && vector.y == 0 {
-        return;
-    }
-
-    let mut shift = ft_trig_prenorm(&mut vector);
-    ft_trig_pseudo_rotate(&mut vector, angle);
-    vector.x = ft_trig_downscale(vector.x);
-    vector.y = ft_trig_downscale(vector.y);
-
-    if shift > 0 {
-        let half = 1 << (shift - 1);
-        vec.x = (vector.x + half - i64::from(vector.x < 0)) >> shift;
-        vec.y = (vector.y + half - i64::from(vector.y < 0)) >> shift;
-    } else {
-        shift = -shift;
-        vec.x = (vector.x as u64).wrapping_shl(shift as u32) as FT_Pos;
-        vec.y = (vector.y as u64).wrapping_shl(shift as u32) as FT_Pos;
-    }
-}
-
-fn ft_trig_downscale(value: FT_Fixed) -> FT_Fixed {
-    let (value, sign) = move_long_sign(value, 1);
-    let value = ((value as u128 * FT_TRIG_SCALE as u128 + 0x4000_0000) >> 32) as FT_Fixed;
-    if sign < 0 { -value } else { value }
-}
-
-fn ft_trig_prenorm(vec: &mut FT_Vector) -> i32 {
-    let x = vec.x;
-    let y = vec.y;
-    let mut shift = ft_msb_u32((ft_abs(x) as u32) | (ft_abs(y) as u32));
-    if shift <= FT_TRIG_SAFE_MSB {
-        shift = FT_TRIG_SAFE_MSB - shift;
-        vec.x = (x as u64).wrapping_shl(shift as u32) as FT_Pos;
-        vec.y = (y as u64).wrapping_shl(shift as u32) as FT_Pos;
-    } else {
-        shift -= FT_TRIG_SAFE_MSB;
-        vec.x = x >> shift;
-        vec.y = y >> shift;
-        shift = -shift;
-    }
-    shift
-}
-
-fn ft_trig_pseudo_rotate(vec: &mut FT_Vector, mut theta: FT_Angle) {
-    let mut x = vec.x;
-    let mut y = vec.y;
-
-    while theta < -FT_ANGLE_PI4 {
-        let xtemp = y;
-        y = -x;
-        x = xtemp;
-        theta += FT_ANGLE_PI2;
-    }
-    while theta > FT_ANGLE_PI4 {
-        let xtemp = -y;
-        y = x;
-        x = xtemp;
-        theta -= FT_ANGLE_PI2;
-    }
-
-    let mut b = 1;
-    for (i, arctan) in (1..FT_TRIG_MAX_ITERS).zip(FT_TRIG_ARCTAN_TABLE) {
-        if theta < 0 {
-            let xtemp = x + ((y + b) >> i);
-            y -= (x + b) >> i;
-            x = xtemp;
-            theta += arctan;
-        } else {
-            let xtemp = x - ((y + b) >> i);
-            y += (x + b) >> i;
-            x = xtemp;
-            theta -= arctan;
-        }
-        b <<= 1;
-    }
-
-    vec.x = x;
-    vec.y = y;
-}
-
-fn ft_trig_pseudo_polarize(vec: &mut FT_Vector) {
-    let mut x = vec.x;
-    let mut y = vec.y;
-    let mut theta;
-
-    if y > x {
-        if y > -x {
-            theta = FT_ANGLE_PI2;
-            let xtemp = y;
-            y = -x;
-            x = xtemp;
-        } else {
-            theta = if y > 0 { FT_ANGLE_PI } else { -FT_ANGLE_PI };
-            x = -x;
-            y = -y;
-        }
-    } else if y < -x {
-        theta = -FT_ANGLE_PI2;
-        let xtemp = -y;
-        y = x;
-        x = xtemp;
-    } else {
-        theta = 0;
-    }
-
-    let mut b = 1;
-    for (i, arctan) in (1..FT_TRIG_MAX_ITERS).zip(FT_TRIG_ARCTAN_TABLE) {
-        if y > 0 {
-            let xtemp = x + ((y + b) >> i);
-            y -= (x + b) >> i;
-            x = xtemp;
-            theta += arctan;
-        } else {
-            let xtemp = x - ((y + b) >> i);
-            y += (x + b) >> i;
-            x = xtemp;
-            theta -= arctan;
-        }
-        b <<= 1;
-    }
-
-    theta = if theta >= 0 {
-        ft_pad_round(theta, 16)
-    } else {
-        -ft_pad_round(-theta, 16)
-    };
-    vec.x = x;
-    vec.y = theta;
-}
-
-fn ft_msb_u32(value: u32) -> i32 {
-    if value == 0 {
-        -1
-    } else {
-        31 - value.leading_zeros() as i32
-    }
-}
-
-fn ft_abs(value: FT_Long) -> FT_Long {
-    if value < 0 { -value } else { value }
-}
-
-fn ft_pad_round(value: FT_Long, n: FT_Long) -> FT_Long {
-    (value + n / 2) & !(n - 1)
+    (vec.x, vec.y) = crate::fixed::ft_vector_rotate_long(vec.x, vec.y, angle);
 }
 
 pub fn FT_Library_SetLcdFilter(

@@ -186,7 +186,15 @@ fn ft_msb(value: u32) -> i32 {
 
 const FT_TRIG_SCALE: u64 = 0xDBD9_5B16;
 const FT_TRIG_SAFE_MSB: i32 = 29;
-const FT_TRIG_MAX_ITERS: i32 = 23;
+const FT_TRIG_MAX_ITERS: usize = 23;
+const FT_ANGLE_PI4: i64 = 2_949_120;
+const FT_ANGLE_PI2: i64 = 5_898_240;
+const FT_ANGLE_PI: i64 = 11_796_480;
+const FT_ANGLE_2PI: i64 = 23_592_960;
+const FT_TRIG_ARCTAN_TABLE: [i64; FT_TRIG_MAX_ITERS - 1] = [
+    1_740_967, 919_879, 466_945, 234_379, 117_304, 58_666, 29_335, 14_668, 7_334, 3_667, 1_833,
+    917, 458, 229, 115, 57, 29, 14, 7, 4, 2, 1,
+];
 
 #[inline]
 fn ft_abs_long(value: i64) -> i64 {
@@ -219,34 +227,188 @@ fn ft_trig_prenorm_long(x: &mut i64, y: &mut i64) -> i32 {
 }
 
 #[inline]
-fn ft_trig_pseudo_polarize_length_long(x: &mut i64, y: &mut i64) {
+fn ft_trig_pseudo_rotate_long(x: &mut i64, y: &mut i64, mut theta: i64) {
+    while theta < -FT_ANGLE_PI4 {
+        let old_x = *x;
+        *x = *y;
+        *y = ft_neg_long(old_x);
+        theta += FT_ANGLE_PI2;
+    }
+    while theta > FT_ANGLE_PI4 {
+        let old_x = *x;
+        *x = ft_neg_long(*y);
+        *y = old_x;
+        theta -= FT_ANGLE_PI2;
+    }
+
+    let mut bias = 1i64;
+    for (i, arctan) in (1..FT_TRIG_MAX_ITERS).zip(FT_TRIG_ARCTAN_TABLE) {
+        let old_x = *x;
+        if theta < 0 {
+            *x += (*y + bias) >> i;
+            *y -= (old_x + bias) >> i;
+            theta += arctan;
+        } else {
+            *x -= (*y + bias) >> i;
+            *y += (old_x + bias) >> i;
+            theta -= arctan;
+        }
+        bias <<= 1;
+    }
+}
+
+#[inline]
+fn ft_trig_pseudo_polarize_long(x: &mut i64, y: &mut i64) {
+    let mut theta;
     if *y > *x {
         if *y > ft_neg_long(*x) {
+            theta = FT_ANGLE_PI2;
             let old_x = *x;
             *x = *y;
             *y = ft_neg_long(old_x);
         } else {
+            theta = if *y > 0 { FT_ANGLE_PI } else { -FT_ANGLE_PI };
             *x = ft_neg_long(*x);
             *y = ft_neg_long(*y);
         }
     } else if *y < ft_neg_long(*x) {
+        theta = -FT_ANGLE_PI2;
         let old_x = *x;
         *x = ft_neg_long(*y);
         *y = old_x;
+    } else {
+        theta = 0;
     }
 
     let mut bias = 1i64;
-    for i in 1..FT_TRIG_MAX_ITERS {
+    for (i, arctan) in (1..FT_TRIG_MAX_ITERS).zip(FT_TRIG_ARCTAN_TABLE) {
         let old_x = *x;
         if *y > 0 {
             *x += (*y + bias) >> i;
             *y -= (old_x + bias) >> i;
+            theta += arctan;
         } else {
             *x -= (*y + bias) >> i;
             *y += (old_x + bias) >> i;
+            theta -= arctan;
         }
         bias <<= 1;
     }
+
+    theta = if theta >= 0 {
+        ft_pad_round_long(theta, 16)
+    } else {
+        ft_neg_long(ft_pad_round_long(ft_neg_long(theta), 16))
+    };
+    *y = theta;
+}
+
+#[inline]
+fn ft_pad_round_long(value: i64, alignment: i64) -> i64 {
+    (value + alignment / 2) & !(alignment - 1)
+}
+
+#[inline]
+fn ft_trig_restore_u32_left(value: i64, shift: i32) -> i64 {
+    // C length and polarize restore through `FT_UInt32`, even when `FT_Pos`
+    // is a 64-bit native long (`src/base/fttrigon.c:447, 480`).
+    i64::from((value as u32).wrapping_shl(shift as u32))
+}
+
+/// FreeType `FT_Sin` over the public native-long angle domain.
+pub(crate) fn ft_sin_long(angle: i64) -> i64 {
+    ft_vector_unit_long(angle).1
+}
+
+/// FreeType `FT_Cos` over the public native-long angle domain.
+pub(crate) fn ft_cos_long(angle: i64) -> i64 {
+    ft_vector_unit_long(angle).0
+}
+
+/// FreeType `FT_Tan` over the public native-long angle domain.
+pub(crate) fn ft_tan_long(angle: i64) -> i64 {
+    let (mut x, mut y) = (1i64 << 24, 0);
+    ft_trig_pseudo_rotate_long(&mut x, &mut y, angle);
+    ft_div_fix_long(y, x)
+}
+
+/// FreeType `FT_Atan2` over the public native-long fixed-point domain.
+pub(crate) fn ft_atan2_long(dx: i64, dy: i64) -> i64 {
+    if dx == 0 && dy == 0 {
+        return 0;
+    }
+
+    let (mut x, mut y) = (dx, dy);
+    ft_trig_prenorm_long(&mut x, &mut y);
+    ft_trig_pseudo_polarize_long(&mut x, &mut y);
+    y
+}
+
+/// FreeType `FT_Angle_Diff` normalized to `(-PI, PI]`.
+pub(crate) fn ft_angle_diff_long(angle1: i64, angle2: i64) -> i64 {
+    let mut delta = angle2.wrapping_sub(angle1);
+    while delta <= FT_ANGLE_PI.wrapping_neg() {
+        delta = delta.wrapping_add(FT_ANGLE_2PI);
+    }
+    while delta > FT_ANGLE_PI {
+        delta = delta.wrapping_sub(FT_ANGLE_2PI);
+    }
+    delta
+}
+
+/// FreeType `FT_Vector_Unit` over the public native-long angle domain.
+pub(crate) fn ft_vector_unit_long(angle: i64) -> (i64, i64) {
+    let (mut x, mut y) = (FT_TRIG_SCALE as i64 >> 8, 0);
+    ft_trig_pseudo_rotate_long(&mut x, &mut y, angle);
+    ((x + 0x80) >> 8, (y + 0x80) >> 8)
+}
+
+/// FreeType `FT_Vector_Rotate` over the public native-long vector domain.
+pub(crate) fn ft_vector_rotate_long(mut x: i64, mut y: i64, angle: i64) -> (i64, i64) {
+    if angle == 0 || (x == 0 && y == 0) {
+        return (x, y);
+    }
+
+    let mut shift = ft_trig_prenorm_long(&mut x, &mut y);
+    ft_trig_pseudo_rotate_long(&mut x, &mut y, angle);
+    x = ft_trig_downscale_long(x);
+    y = ft_trig_downscale_long(y);
+
+    if shift > 0 {
+        let half = 1i64 << (shift - 1);
+        (
+            (x + half - i64::from(x < 0)) >> shift,
+            (y + half - i64::from(y < 0)) >> shift,
+        )
+    } else {
+        shift = -shift;
+        (
+            (x as u64).wrapping_shl(shift as u32) as i64,
+            (y as u64).wrapping_shl(shift as u32) as i64,
+        )
+    }
+}
+
+/// FreeType `FT_Vector_From_Polar` over the public native-long vector domain.
+pub(crate) fn ft_vector_from_polar_long(length: i64, angle: i64) -> (i64, i64) {
+    ft_vector_rotate_long(length, 0, angle)
+}
+
+/// FreeType `FT_Vector_Polarize`; zero vectors leave caller outputs unchanged.
+pub(crate) fn ft_vector_polarize_long(mut x: i64, mut y: i64) -> Option<(i64, i64)> {
+    if x == 0 && y == 0 {
+        return None;
+    }
+
+    let shift = ft_trig_prenorm_long(&mut x, &mut y);
+    ft_trig_pseudo_polarize_long(&mut x, &mut y);
+    x = ft_trig_downscale_long(x);
+    let length = if shift >= 0 {
+        x >> shift
+    } else {
+        ft_trig_restore_u32_left(x, -shift)
+    };
+    Some((length, y))
 }
 
 /// FreeType `FT_Vector_Length` over the public `FT_Long` domain.
@@ -262,13 +424,13 @@ pub(crate) fn ft_vector_length_long(mut x: i64, mut y: i64) -> i64 {
     }
 
     let shift = ft_trig_prenorm_long(&mut x, &mut y);
-    ft_trig_pseudo_polarize_length_long(&mut x, &mut y);
+    ft_trig_pseudo_polarize_long(&mut x, &mut y);
     x = ft_trig_downscale_long(x);
 
     if shift > 0 {
         (x + (1i64 << (shift - 1))) >> shift
     } else {
-        (x as u64).wrapping_shl((-shift) as u32) as i64
+        ft_trig_restore_u32_left(x, -shift)
     }
 }
 
@@ -304,7 +466,9 @@ pub fn ft_vector_norm_len(vx: i32, vy: i32) -> ((i32, i32), u32) {
         return ((0, if y > 0 { sy * 0x10000 } else { 0 }), y);
     }
     if y == 0 {
-        return (((if x > 0 { sx * 0x10000 } else { 0 }), 0), x);
+        // `x == 0` returned above and `x` is an unsigned magnitude, so C's
+        // nested `if ( x > 0 )` is guaranteed here (`src/base/ftcalc.c:811`).
+        return ((sx * 0x10000, 0), x);
     }
 
     let mut length = if x > y { x + (y >> 1) } else { y + (x >> 1) };
