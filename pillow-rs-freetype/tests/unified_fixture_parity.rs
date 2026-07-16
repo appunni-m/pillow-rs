@@ -65,6 +65,11 @@ impl log::Log for RasterizerTraceCoverageLogger {
 fn enable_rasterizer_trace_coverage() {
     static LOGGER: RasterizerTraceCoverageLogger = RasterizerTraceCoverageLogger;
     static INSTALLED: OnceLock<()> = OnceLock::new();
+
+    if std::env::var_os("FONTDONE_ENABLE_SILENT_TRACE_LOGGER").is_none() {
+        return;
+    }
+
     INSTALLED.get_or_init(|| {
         if log::set_logger(&LOGGER).is_ok() {
             log::set_max_level(log::LevelFilter::Trace);
