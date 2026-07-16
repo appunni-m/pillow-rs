@@ -54,12 +54,10 @@ pub fn parse_gasp(data: &[u8]) -> Result<GaspTable, FontError> {
         )));
     }
     let num_ranges = usize::from(read_u16(data, 2));
-    let ranges_len = num_ranges
-        .checked_mul(4)
-        .ok_or_else(|| FontError::InvalidFont("gasp range count overflow".into()))?;
-    let ranges_end = 4usize
-        .checked_add(ranges_len)
-        .ok_or_else(|| FontError::InvalidFont("gasp range length overflow".into()))?;
+    // C `tt_face_load_gasp` enters `num_ranges * 4L` bytes directly.  The
+    // source value is a u16, so the complete header and range array are
+    // bounded to 262,144 bytes on the supported native and wasm32 targets.
+    let ranges_end = 4 + num_ranges * 4;
     let range_bytes = data
         .get(4..ranges_end)
         .ok_or_else(|| FontError::InvalidFont("gasp ranges truncated".into()))?;
