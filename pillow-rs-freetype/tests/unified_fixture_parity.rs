@@ -7057,6 +7057,18 @@ fn runtime_face_cache_key(case: &InputCase) -> Result<String, String> {
     let mut hasher = Sha256::new();
     hasher.update(bytes.as_ref());
     let font_key = format!("sha256:{}:face:{face_index}", hex_bytes(&hasher.finalize()));
+    if let Some(row) = preload_size_request_row(&case.inputs.params)? {
+        return Ok(format!(
+            "{font_key}:request:{}:{}:{}:{}:{}:{}:{}",
+            if row.face_is_null { 1 } else { 0 },
+            if row.request_is_null { 1 } else { 0 },
+            row.type_,
+            row.width,
+            row.height,
+            row.hori_resolution,
+            row.vert_resolution
+        ));
+    }
     if let Some(row) = preload_char_size_row(&case.inputs.params)? {
         return Ok(format!(
             "{font_key}:char:{}:{}:{}:{}",
@@ -13735,7 +13747,10 @@ fn c_open_face_with_size_or_char_size(
     pixel_size: (u32, u32),
 ) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
     let (library, face) = c_new_face_without_size(case)?;
-    let err = if let Some(row) = preload_char_size_row(&case.inputs.params)? {
+    let err = if let Some(row) = preload_size_request_row(&case.inputs.params)? {
+        let request = c_size_request_rec(row);
+        c_abi::FT_Request_Size(face, &request)
+    } else if let Some(row) = preload_char_size_row(&case.inputs.params)? {
         c_abi::FT_Set_Char_Size(
             face,
             row.char_width,
@@ -14275,7 +14290,10 @@ fn wasm_open_face_with_size_or_char_size(
     if status.error != FT_Err_Ok {
         return Err(format!("fontdone_wasm_open_face returned {}", status.error));
     }
-    let err = if let Some(row) = preload_char_size_row(&case.inputs.params)? {
+    let err = if let Some(row) = preload_size_request_row(&case.inputs.params)? {
+        let request = wasm_size_request_rec(row);
+        wasm_abi::fontdone_wasm_request_size(status.handle, &request)
+    } else if let Some(row) = preload_char_size_row(&case.inputs.params)? {
         wasm_abi::fontdone_wasm_set_char_size(
             status.handle,
             row.char_width,
@@ -14999,7 +15017,10 @@ fn open_face_with_size_or_char_size(
         20.0,
     )
     .map_err(|err| format!("FT_New_Memory_Face returned {err}"))?;
-    let err = if let Some(row) = preload_char_size_row(&case.inputs.params)? {
+    let err = if let Some(row) = preload_size_request_row(&case.inputs.params)? {
+        let request = rust_size_request_rec(row);
+        FT_Request_Size(Some(&mut face), Some(&request))
+    } else if let Some(row) = preload_char_size_row(&case.inputs.params)? {
         FT_Set_Char_Size(
             &mut face,
             row.char_width,
@@ -21302,6 +21323,13 @@ fn size_request_rows(params: &Value) -> Result<Vec<SizeRequestRow>, String> {
             .collect::<Result<Vec<_>, _>>();
     }
     Err("missing size request or requests".to_string())
+}
+
+fn preload_size_request_row(params: &Value) -> Result<Option<SizeRequestRow>, String> {
+    params
+        .get("preload_request_size")
+        .map(size_request_row)
+        .transpose()
 }
 
 fn size_request_row(value: &Value) -> Result<SizeRequestRow, String> {
