@@ -59,15 +59,15 @@ impl ScaleMetrics {
             ppem: data.size_tt_ppem.get(),
             point_size: data.size_tt_point_size.get(),
         };
-        if active.x_scale == square.x_scale
-            && active.y_scale == square.y_scale
-            && active.tt_scale == square.tt_scale
-            && active.ppem == square.ppem
-            && active.point_size == square.point_size
+        if active.x_scale != square.x_scale
+            || active.y_scale != square.y_scale
+            || active.tt_scale != square.tt_scale
+            || active.ppem != square.ppem
+            || active.point_size != square.point_size
         {
-            square
-        } else {
             active
+        } else {
+            square
         }
     }
 

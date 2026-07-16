@@ -995,6 +995,37 @@
             ]
           },
           {
+            "id": "dejavu-a-default-preload-request-scales",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "preload_request_size": {
+                "type": "FT_SIZE_REQUEST_TYPE_SCALES",
+                "width": 40960,
+                "height": 40960,
+                "horiResolution": 0,
+                "vertResolution": 0
+              },
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "scaler:active-scale-request-point-size"
+            ]
+          },
+          {
             "id": "dejavu-a-default-nonsquare-pixels",
             "assets": {
               "font": {
