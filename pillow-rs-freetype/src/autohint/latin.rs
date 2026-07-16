@@ -2789,11 +2789,13 @@ pub fn apply_hints(
         } else {
             &vert_widths_26_6
         };
+        // FreeType 2.14.3 dispatches these corresponding grid-fit steps to
+        // `af_cjk_hint_edges` (afcjk.c:2301-2310) or `af_latin_hint_edges`
+        // (aflatin.c:5050-5059). Keep our shared dispatcher on that boundary.
+        hint_edges(&mut hints, dim, widths, ppem);
         if use_cjk_edges {
-            super::cjk::hint_edges(&mut hints, dim, widths);
             super::cjk::align_edge_points(&mut hints, dim);
         } else {
-            hint_edges(&mut hints, dim, widths, ppem);
             align_edge_points(&mut hints, dim);
         }
         align_strong_points(&mut hints, dim);
