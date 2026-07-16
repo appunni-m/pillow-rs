@@ -91,6 +91,23 @@
             ]
           },
           {
+            "id": "apple-postscript-all-invalid-returns-null",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-apple-postscript-all-invalid.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "lifetime_probe": "before_done_face"
+            },
+            "coverage": [
+              "tt/name:apple-postscript-all-invalid-null"
+            ]
+          },
+          {
             "id": "odd-windows-postscript-falls-back-to-apple",
             "assets": {
               "font": {
@@ -328,6 +345,42 @@
               "tt/name:variation-subfamily-windows-unsupported-encoding-skipped",
               "tt/name:variation-prefix-apple-unsupported-encoding-skipped",
               "tt/name:variation-subfamily-nonenglish-windows-defers-to-apple"
+            ]
+          },
+          {
+            "id": "encoded-odd-windows-subfamily-instance",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-subfamily-conversion.ttf"
+              }
+            },
+            "params": {
+              "face_index": 65536
+            },
+            "coverage": [
+              "tt/name:variation-subfamily-english-windows-replaces-nonenglish",
+              "tt/name:variation-subfamily-english-windows-beats-apple",
+              "tt/name:variation-subfamily-odd-utf16-tail-truncated",
+              "tt/name:variation-subfamily-windows-stops-at-nul"
+            ]
+          },
+          {
+            "id": "encoded-apple-nul-subfamily-instance",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-subfamily-conversion.ttf"
+              }
+            },
+            "params": {
+              "face_index": 131072
+            },
+            "coverage": [
+              "tt/name:variation-subfamily-apple-nonascii-mapped",
+              "tt/name:variation-subfamily-apple-stops-at-nul"
             ]
           },
           {
