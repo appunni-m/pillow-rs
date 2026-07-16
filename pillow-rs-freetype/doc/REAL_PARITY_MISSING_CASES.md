@@ -171,6 +171,27 @@ Use condition coverage as secondary prioritization only: route audit category
 and route shape decide whether a row is real parity, while condition coverage
 helps pick the first implementation branch inside a chosen bucket.
 
+### Render Bucket Route Findings
+
+`src/render.rs` remains at 378 / 434 branches after the current
+`FT_Render_Glyph` route sweep.  The following exact public rows were tested in
+an isolated worktree and removed because they preserved exact parity but did
+not move the `src/render.rs` branch total:
+
+- `render-coverage-subpixel-conic-mono`
+- `render-coverage-empty-notdef-normal`
+- `render-coverage-top-edge-dropout-mono`
+
+Current render branch blockers should be treated as dependencies, not as
+green-row opportunities:
+
+| Render miss bucket | Public route status | Dependency / reason |
+|---|---|---|
+| `OUTLINE_SINGLE_PASS` mono branch in `render_mono` | Existing `ftimage.FT_OUTLINE_SINGLE_PASS` rows route through `FT_Outline_Render` and the gray rasterizer, not `render.rs`. | FreeType `ttgload.c` clears `FT_OUTLINE_SINGLE_PASS` during glyph loading, and TrueType scan-control maps only dropout/include flags. A real `FT_Render_Glyph` route needs a public glyph-slot path that can carry this flag into mono rendering. |
+| Mono intersection fallback helpers (`rasterize_mono_intersections`, `segment_intersection`, `apply_horizontal_center_edges`) | No current public route can enter them. | These helpers are currently definition-only in `src/render.rs`; coverage requires restoring a C-equivalent caller path, not adding more fixture rows. |
+| SDF negative saturation in `map_fixed_to_sdf` | Large/reverse/edge SDF probes and the current SDF fixture rows do not move it. | `rasterize_sdf_outline` clamps distance to `fixed_spread` before mapping, so a valid negative normalized distance reaches `udist == 128`, not `> 128`. |
+| `winding_contains` SDF helper | No current public route can enter it. | The helper is definition-only under the current SDF implementation path; treat as a missing/unused algorithm path unless a C-equivalent caller is restored. |
+
 ## Candidate Conversion Buckets
 
 These are the highest-value route families to convert from placeholder success
