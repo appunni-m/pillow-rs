@@ -84,7 +84,7 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
             offset: u16::from_be_bytes([data[off + 10], data[off + 11]]),
         });
     }
-    let raw_records = records
+    let raw_records: Vec<SfntNameRecord> = records
         .iter()
         .filter_map(|record| raw_record(data, string_offset, record))
         .collect();
@@ -94,16 +94,16 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
         Vec::new()
     };
 
-    // Prefer typographic family/subfamily (nameID 16/17) over legacy (1/2).
-    // FreeType 2.14.3 uses typographic names when available via face->family_name
-    // which checks nameID 16 first, falling back to nameID 1.
-    let family = find_name_string(data, string_offset, &records, NAME_ID_TYPO_FAMILY)
-        .or_else(|| find_name_string(data, string_offset, &records, NAME_ID_FAMILY))
+    // `tt_face_load_name` drops empty and out-of-range records before
+    // `tt_face_get_name` selects public face names.  Select from the validated
+    // copies for the same ordering and failure behavior.
+    let family = name_string_from_records(&raw_records, NAME_ID_TYPO_FAMILY)
+        .or_else(|| name_string_from_records(&raw_records, NAME_ID_FAMILY))
         .unwrap_or_else(|| "Unknown".into());
-    let subfamily = find_name_string(data, string_offset, &records, NAME_ID_TYPO_SUBFAMILY)
-        .or_else(|| find_name_string(data, string_offset, &records, NAME_ID_SUBFAMILY))
+    let subfamily = name_string_from_records(&raw_records, NAME_ID_TYPO_SUBFAMILY)
+        .or_else(|| name_string_from_records(&raw_records, NAME_ID_SUBFAMILY))
         .unwrap_or_else(|| "Regular".into());
-    let postscript_name = find_postscript_name(data, string_offset, &records);
+    let postscript_name = find_postscript_name(&raw_records);
 
     Ok(NameTable {
         format,
@@ -166,13 +166,12 @@ fn parse_lang_tags(
     Ok(lang_tags)
 }
 
-/// Search for a name string by name_id, preferring platform 3/encoding 1.
-fn find_name_string(
-    data: &[u8],
-    string_base: usize,
-    records: &[NameRecord],
-    name_id: u16,
-) -> Option<String> {
+/// Return the preferred FreeType face-name string for a raw name ID.
+pub fn name_string(table: &NameTable, name_id: u16) -> Option<String> {
+    name_string_from_records(&table.records, name_id)
+}
+
+fn name_string_from_records(records: &[SfntNameRecord], name_id: u16) -> Option<String> {
     let mut found_apple_roman = None;
     let mut found_apple_english = None;
     let mut found_win = None;
@@ -180,54 +179,6 @@ fn find_name_string(
     let mut win_is_english = false;
 
     for (index, record) in records.iter().enumerate() {
-        if record.name_id != name_id || record.length == 0 {
-            continue;
-        }
-        match record.platform_id {
-            0 | 2 => found_unicode = Some(index),
-            1 if record.language_id == 0 => found_apple_english = Some(index),
-            1 if record.encoding_id == 0 => found_apple_roman = Some(index),
-            3 if matches!(record.encoding_id, 0 | 1 | 10)
-                && (found_win.is_none() || (record.language_id & 0x03ff) == 0x0009) =>
-            {
-                win_is_english = (record.language_id & 0x03ff) == 0x0009;
-                found_win = Some(index);
-            }
-            _ => {}
-        }
-    }
-
-    let found_apple = found_apple_english.or(found_apple_roman);
-    // Mirrors FreeType `tt_face_get_name`: prefer Windows Unicode names unless
-    // the only Windows candidate is non-English and an Apple name is present.
-    if let Some(index) = found_win
-        && (found_apple.is_none() || win_is_english)
-        && let Ok(name) = decode_utf16be(data, string_base, &records[index])
-    {
-        return Some(name);
-    }
-    if let Some(index) = found_apple
-        && let Ok(name) = decode_mac_roman(data, string_base, &records[index])
-    {
-        return Some(name);
-    }
-    if let Some(index) = found_unicode
-        && let Ok(name) = decode_utf16be(data, string_base, &records[index])
-    {
-        return Some(name);
-    }
-    None
-}
-
-/// Return the preferred Unicode name string for a raw name ID.
-pub fn name_string(table: &NameTable, name_id: u16) -> Option<String> {
-    let mut found_apple_roman = None;
-    let mut found_apple_english = None;
-    let mut found_win = None;
-    let mut found_unicode = None;
-    let mut win_is_english = false;
-
-    for (index, record) in table.records.iter().enumerate() {
         if record.name_id != name_id || record.string.is_empty() {
             continue;
         }
@@ -248,19 +199,14 @@ pub fn name_string(table: &NameTable, name_id: u16) -> Option<String> {
     let found_apple = found_apple_english.or(found_apple_roman);
     if let Some(index) = found_win
         && (found_apple.is_none() || win_is_english)
-        && let Ok(name) = decode_utf16be_bytes(&table.records[index].string)
     {
-        return Some(name);
+        return Some(decode_utf16be_bytes(&records[index].string));
     }
-    if let Some(index) = found_apple
-        && let Ok(name) = decode_mac_roman_bytes(&table.records[index].string)
-    {
-        return Some(name);
+    if let Some(index) = found_apple {
+        return Some(decode_mac_roman_bytes(&records[index].string));
     }
-    if let Some(index) = found_unicode
-        && let Ok(name) = decode_utf16be_bytes(&table.records[index].string)
-    {
-        return Some(name);
+    if let Some(index) = found_unicode {
+        return Some(decode_utf16be_bytes(&records[index].string));
     }
     None
 }
@@ -335,11 +281,13 @@ fn postscript_prefix_apple_string(bytes: &[u8]) -> Option<String> {
     (!result.is_empty()).then_some(result)
 }
 
-fn find_postscript_name(data: &[u8], string_base: usize, records: &[NameRecord]) -> Option<String> {
+fn find_postscript_name(records: &[SfntNameRecord]) -> Option<String> {
     let mut win = None;
     let mut apple = None;
     for (index, record) in records.iter().enumerate() {
-        if record.name_id != NAME_ID_POSTSCRIPT || record.length == 0 {
+        // `parse_name` only passes records accepted by `raw_record`, which
+        // already drops zero-length strings like `tt_face_load_name`.
+        if record.name_id != NAME_ID_POSTSCRIPT {
             continue;
         }
         if record.platform_id == 3
@@ -356,23 +304,20 @@ fn find_postscript_name(data: &[u8], string_base: usize, records: &[NameRecord])
         }
     }
     if let Some(index) = win
-        && let Some(name) = decode_win_postscript(data, string_base, &records[index])
+        && let Some(name) = decode_win_postscript(&records[index].string)
     {
         return Some(name);
     }
     if let Some(index) = apple
-        && let Some(name) = decode_apple_postscript(data, string_base, &records[index])
+        && let Some(name) = decode_apple_postscript(&records[index].string)
     {
         return Some(name);
     }
     None
 }
 
-fn decode_win_postscript(data: &[u8], base: usize, r: &NameRecord) -> Option<String> {
-    let start = base + r.offset as usize;
-    let end = start + r.length as usize;
-    let bytes = data.get(start..end)?;
-    if !r.length.is_multiple_of(2) {
+fn decode_win_postscript(bytes: &[u8]) -> Option<String> {
+    if !bytes.len().is_multiple_of(2) {
         return None;
     }
     let mut result = String::new();
@@ -384,10 +329,7 @@ fn decode_win_postscript(data: &[u8], base: usize, r: &NameRecord) -> Option<Str
     (!result.is_empty()).then_some(result)
 }
 
-fn decode_apple_postscript(data: &[u8], base: usize, r: &NameRecord) -> Option<String> {
-    let start = base + r.offset as usize;
-    let end = start + r.length as usize;
-    let bytes = data.get(start..end)?;
+fn decode_apple_postscript(bytes: &[u8]) -> Option<String> {
     let mut result = String::new();
     for &byte in bytes {
         if is_postscript_name_byte(byte) {
@@ -405,39 +347,38 @@ fn is_postscript_name_byte(byte: u8) -> bool {
     byte < 0x80 && (SFNT_PS_MAP[usize::from(byte >> 3)] & (1 << (byte & 0x07))) != 0
 }
 
-fn decode_utf16be(data: &[u8], base: usize, r: &NameRecord) -> Result<String, FontError> {
-    let start = base + r.offset as usize;
-    let end = start + r.length as usize;
-    let bytes = data
-        .get(start..end)
-        .ok_or_else(|| FontError::InvalidFont("name: string offset out of range".into()))?;
-    decode_utf16be_bytes(bytes)
-}
-
-fn decode_utf16be_bytes(bytes: &[u8]) -> Result<String, FontError> {
-    if !bytes.len().is_multiple_of(2) {
-        return Err(FontError::InvalidFont(
-            "name: UTF-16BE string has odd length".into(),
-        ));
+fn decode_utf16be_bytes(bytes: &[u8]) -> String {
+    // FreeType `tt_name_ascii_from_utf16` in `sfobjs.c` deliberately exposes
+    // face names as ASCII: it ignores an odd trailing byte, stops at NUL, and
+    // replaces code units outside 32..=127 with `?`.
+    let mut result = String::with_capacity(bytes.len() / 2);
+    for pair in bytes.chunks_exact(2) {
+        let code = u16::from_be_bytes([pair[0], pair[1]]);
+        if code == 0 {
+            break;
+        }
+        if (32..=127).contains(&code) {
+            result.push(char::from(code as u8));
+        } else {
+            result.push('?');
+        }
     }
-    let chars: Vec<u16> = bytes
-        .chunks_exact(2)
-        .map(|c| u16::from_be_bytes([c[0], c[1]]))
-        .collect();
-    String::from_utf16(&chars)
-        .map_err(|e| FontError::InvalidFont(format!("name: invalid UTF-16: {e}")))
+    result
 }
 
-fn decode_mac_roman(data: &[u8], base: usize, r: &NameRecord) -> Result<String, FontError> {
-    let start = base + r.offset as usize;
-    let end = start + r.length as usize;
-    let bytes = data.get(start..end).ok_or_else(|| {
-        FontError::InvalidFont("name: Mac Roman string offset out of range".into())
-    })?;
-    decode_mac_roman_bytes(bytes)
-}
-
-fn decode_mac_roman_bytes(bytes: &[u8]) -> Result<String, FontError> {
-    // Mac Roman 0x00–0x7F is ASCII; higher bytes would need a table (rare in test fonts).
-    Ok(bytes.iter().map(|&b| b as char).collect())
+fn decode_mac_roman_bytes(bytes: &[u8]) -> String {
+    // FreeType `tt_name_ascii_from_other` applies the same public face-name
+    // policy to Apple Roman and symbol strings.
+    let mut result = String::with_capacity(bytes.len());
+    for &byte in bytes {
+        if byte == 0 {
+            break;
+        }
+        if (32..=127).contains(&byte) {
+            result.push(char::from(byte));
+        } else {
+            result.push('?');
+        }
+    }
+    result
 }

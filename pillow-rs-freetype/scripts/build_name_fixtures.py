@@ -97,6 +97,21 @@ def write_apple_postscript_oob() -> None:
     )
 
 
+def write_apple_postscript_all_invalid() -> None:
+    records = [
+        NameRecordSpec(3, 1, 0x0409, 1, utf16be("AppleInvalid")),
+        NameRecordSpec(3, 1, 0x0409, 2, utf16be("Regular")),
+        # `get_apple_string` rejects both bytes under `sfnt_is_postscript`,
+        # leaving no public PostScript name.
+        NameRecordSpec(1, 0, 0, 6, b"\x80 "),
+    ]
+    write_name_payload(
+        BASE_STATIC,
+        NAME_OUT_DIR / "name-apple-postscript-all-invalid.ttf",
+        build_name_table(records),
+    )
+
+
 def write_odd_windows_postscript_with_apple_fallback() -> None:
     records = [
         NameRecordSpec(3, 1, 0x0409, 1, utf16be("OddWin")),
@@ -351,6 +366,28 @@ def write_variable_windows_subfamily_fallback() -> None:
     )
 
 
+def write_variable_subfamily_conversion() -> None:
+    records = variable_base_without_instance_names()
+    records.extend(
+        [
+            NameRecordSpec(3, 1, 0x0409, 25, utf16be("WinVar")),
+            # `tt_face_get_name` replaces this earlier non-English candidate
+            # with the later English one.  Its odd tail is ignored by
+            # `tt_name_ascii_from_utf16`, yielding `Thin`.
+            NameRecordSpec(3, 1, 0x0411, 259, utf16be("WrongWin")),
+            NameRecordSpec(3, 1, 0x0409, 259, utf16be("Thin\0Ignored") + b"X"),
+            NameRecordSpec(1, 0, 0, 259, b"WrongApple"),
+            # `tt_name_ascii_from_other` maps 0x80 to `?`, then stops at NUL.
+            NameRecordSpec(1, 0, 0, 260, b"Li\x80ght\0Ignored"),
+        ]
+    )
+    write_name_payload(
+        BASE_VARIABLE,
+        VARIABLE_OUT_DIR / "variable-name-subfamily-conversion.ttf",
+        build_name_table(records),
+    )
+
+
 def write_variable_missing_subfamily() -> None:
     records = variable_base_without_instance_names()
     records.extend(
@@ -548,6 +585,7 @@ def main() -> None:
     write_win_family_oob_apple_fallback()
     write_apple_postscript()
     write_apple_postscript_oob()
+    write_apple_postscript_all_invalid()
     write_odd_windows_postscript_with_apple_fallback()
     write_non_ascii_postscript_with_apple_fallback()
     write_postscript_branch_matrix()
@@ -560,6 +598,7 @@ def main() -> None:
     write_variable_prefix_branch_matrix()
     write_variable_apple_english_subfamily()
     write_variable_windows_subfamily_fallback()
+    write_variable_subfamily_conversion()
     write_variable_missing_subfamily()
 
 
