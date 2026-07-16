@@ -2518,9 +2518,8 @@ fn map_fixed_to_sdf(distance: i32, max_value: i32) -> u8 {
     if normalized > 0 && udist > 127 {
         udist = 127;
     }
-    if normalized < 0 && udist > 128 {
-        udist = 128;
-    }
+    // The SDF caller clamps distance to the renderer spread before mapping, so
+    // the negative side can reach exactly 128 but cannot exceed it.
     if normalized < 0 {
         128u8.saturating_sub(udist as u8)
     } else {
