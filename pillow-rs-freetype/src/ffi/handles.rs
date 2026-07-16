@@ -2223,7 +2223,10 @@ pub fn FT_New_Memory_Face(
     library
         .inner
         .new_memory_face(data, face_index, size_pt)
-        .map(|inner| face_to_ffi(inner, probe_only))
+        .map(|mut inner| {
+            inner.reset_size_to_undefined();
+            face_to_ffi(inner, probe_only)
+        })
         .map_err(error_to_ft)
 }
 

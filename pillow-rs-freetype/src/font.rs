@@ -1115,6 +1115,33 @@ impl Font {
         sync_active_size_metrics(&self.data, self.size_metrics);
     }
 
+    pub(crate) fn reset_size_to_undefined(&mut self) {
+        // C `FT_New_Memory_Face` creates an active size whose public metrics
+        // remain zero until the first size request (`base/ftobjs.c`). The
+        // high-level Rust constructor accepts a convenience point size, so
+        // the FreeType FFI constructor resets that state after parsing.
+        self.size_pt = 0.0;
+        self.size_metrics = SizeMetrics {
+            x_ppem: 0,
+            y_ppem: 0,
+            x_scale: 0,
+            y_scale: 0,
+            ascender: 0,
+            descender: 0,
+            height: 0,
+            max_advance: 0,
+            x_dpi: 0,
+            y_dpi: 0,
+            char_width: 0,
+            char_height: 0,
+        };
+        self.data.size_pt.set(0.0);
+        sync_active_size_metrics(&self.data, self.size_metrics);
+        self.face_globals =
+            crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
+        self.bytecode_context = BytecodeContextCache::default();
+    }
+
     pub(crate) fn clone_with_load_mode(&self, load_mode: LoadMode) -> Self {
         let mut font = self.clone();
         font.load_mode = load_mode;
