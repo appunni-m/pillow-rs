@@ -84,25 +84,16 @@ pub fn load_flags_to_core(flags: FT_Int32) -> Result<api::LoadFlags, FT_Error> {
     }
 
     let mut core = api::LoadFlags::DEFAULT;
-    // FreeType resolves this dependency in `FT_Load_Glyph` before driver load:
-    // `FT_LOAD_NO_RECURSE` first implies `FT_LOAD_NO_SCALE`; no-scale then
-    // implies no hinting/no bitmap and clears `FT_LOAD_RENDER`
-    // (`src/base/ftobjs.c`).
-    if flags & (FT_LOAD_NO_SCALE | FT_LOAD_NO_RECURSE) != 0 {
+    if flags & FT_LOAD_NO_SCALE != 0 {
         core |= api::LoadFlags::NO_SCALE;
     }
     if flags & FT_LOAD_NO_RECURSE != 0 {
         core |= api::LoadFlags::NO_RECURSE;
     }
-    // FreeType resolves this dependency in `FT_Load_Glyph` before driver load:
-    // `FT_LOAD_BITMAP_METRICS_ONLY` clears `FT_LOAD_RENDER`.
-    if flags & FT_LOAD_RENDER != 0
-        && flags & (FT_LOAD_NO_SCALE | FT_LOAD_NO_RECURSE) == 0
-        && flags & FT_LOAD_BITMAP_METRICS_ONLY == 0
-    {
+    if flags & FT_LOAD_RENDER != 0 {
         core |= api::LoadFlags::RENDER;
     }
-    if flags & FT_LOAD_NO_HINTING != 0 || flags & (FT_LOAD_NO_SCALE | FT_LOAD_NO_RECURSE) != 0 {
+    if flags & FT_LOAD_NO_HINTING != 0 {
         core |= api::LoadFlags::NO_HINTING;
     }
     if flags & FT_LOAD_FORCE_AUTOHINT != 0 {
@@ -128,6 +119,9 @@ pub fn load_flags_to_core(flags: FT_Int32) -> Result<api::LoadFlags, FT_Error> {
     }
     if flags & FT_LOAD_COMPUTE_METRICS != 0 {
         core |= api::LoadFlags::COMPUTE_METRICS;
+    }
+    if flags & FT_LOAD_BITMAP_METRICS_ONLY != 0 {
+        core |= api::LoadFlags::BITMAP_METRICS_ONLY;
     }
     core |= match FT_LOAD_TARGET_MODE(flags) {
         FT_RENDER_MODE_NORMAL => api::LoadFlags::DEFAULT,
