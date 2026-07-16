@@ -166,6 +166,107 @@
             ]
           },
           {
+            "id": "pure-cff-render-preload-request-zero-y-ppem",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "preload_request_size": {
+                "type": "FT_SIZE_REQUEST_TYPE_SCALES",
+                "width": 65536,
+                "height": 1,
+                "horiResolution": 0,
+                "vertResolution": 0
+              },
+              "glyph_index": 4,
+              "load_flags": [
+                "FT_LOAD_RENDER"
+              ]
+            },
+            "coverage": [
+              "load-flags:zero-y-ppem-forces-no-scale-and-clears-render"
+            ]
+          },
+          {
+            "id": "pure-cff-notdef-no-scale",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 0,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "coverage": [
+              "font:cff-no-scale-empty-outline-metrics"
+            ]
+          },
+          {
+            "id": "pure-cff-no-scale-vertical-synthesized",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 4,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE",
+                "FT_LOAD_VERTICAL_LAYOUT"
+              ]
+            },
+            "coverage": [
+              "font:cff-no-scale-synthesized-vertical-metrics"
+            ]
+          },
+          {
+            "id": "pure-cff-vmtx-no-scale-vertical",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic-vmtx.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 4,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE",
+                "FT_LOAD_VERTICAL_LAYOUT"
+              ]
+            },
+            "coverage": [
+              "font:cff-no-scale-vmtx-vertical-metrics"
+            ]
+          },
+          {
             "id": "pure-cff-vertical-lines-no-hinting",
             "assets": {
               "font": {

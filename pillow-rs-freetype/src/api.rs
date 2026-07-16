@@ -538,7 +538,7 @@ impl Face {
         let mut loaded = if flags.contains(LoadFlags::NO_RECURSE) {
             font.glyph_slot_load_no_recurse(glyph_index)?
         } else if flags.contains(LoadFlags::NO_SCALE) {
-            font.glyph_slot_load_no_scale(glyph_index)?
+            font.glyph_slot_load_no_scale_with_layout(glyph_index, vertical_layout)?
         } else if flags.contains(LoadFlags::NO_HINTING) {
             font.glyph_slot_load_no_hinting(glyph_index)?
         } else if flags.contains(LoadFlags::TARGET_LIGHT) && !flags.contains(LoadFlags::NO_AUTOHINT)
@@ -890,12 +890,10 @@ impl GlyphSlot {
             return;
         }
 
-        self.apply_synthetic_weight_metrics(xstrength, ystrength);
         self.bitmap_top = self.bitmap_top.wrapping_add(y_pixels);
-        if let Some(ref mut bitmap) = self.bitmap {
-            bitmap.left = self.bitmap_left;
-            bitmap.top = self.bitmap_top;
-        }
+        bitmap.left = self.bitmap_left;
+        bitmap.top = self.bitmap_top;
+        self.apply_synthetic_weight_metrics(xstrength, ystrength);
     }
 
     fn apply_synthetic_weight_metrics(&mut self, xstrength: i32, ystrength: i32) {
@@ -961,9 +959,8 @@ fn embolden_rendered_bitmap(bitmap: &mut RenderedBitmap, x_pixels: i32, y_pixels
     else {
         return false;
     };
-    if x_pixels == 0 && y_pixels == 0 {
-        return true;
-    }
+    // `adjust_bitmap_weight` applies FreeType's mandatory one-pixel
+    // horizontal minimum before calling this private helper.
     match bitmap.pixel_mode {
         PixelMode::Gray => embolden_8bit_positive_pitch_bitmap(bitmap, x_pixels, y_pixels),
         PixelMode::Mono => embolden_mono_positive_pitch_bitmap(bitmap, x_pixels.min(8), y_pixels),
@@ -1063,9 +1060,8 @@ fn embolden_8bit_positive_pitch_bitmap(
         }
     }
 
-    let (Ok(x_pixels), Ok(y_pixels)) = (u32::try_from(x_pixels), u32::try_from(y_pixels)) else {
-        return false;
-    };
+    // Both values originated as nonnegative `i32`, so they fit `u32`.
+    let (x_pixels, y_pixels) = (x_pixels as u32, y_pixels as u32);
     let (Some(width), Some(rows)) = (
         bitmap.width.checked_add(x_pixels),
         bitmap.rows.checked_add(y_pixels),
@@ -1201,9 +1197,8 @@ fn embolden_mono_positive_pitch_bitmap(
         }
     }
 
-    let (Ok(x_pixels), Ok(y_pixels)) = (u32::try_from(x_pixels), u32::try_from(y_pixels)) else {
-        return false;
-    };
+    // Both values originated as nonnegative `i32`, so they fit `u32`.
+    let (x_pixels, y_pixels) = (x_pixels as u32, y_pixels as u32);
     let (Some(width), Some(rows)) = (
         bitmap.width.checked_add(x_pixels),
         bitmap.rows.checked_add(y_pixels),

@@ -14,6 +14,7 @@ pub struct OutlinePoint {
 
 pub(crate) const OUTLINE_HIGH_PRECISION: u32 = 0x100;
 pub(crate) const OUTLINE_SINGLE_PASS: u32 = 0x200;
+pub(crate) const OUTLINE_REVERSE_FILL: u32 = 0x4;
 pub(crate) const OUTLINE_IGNORE_DROPOUTS: u32 = 0x8;
 pub(crate) const OUTLINE_SMART_DROPOUTS: u32 = 0x10;
 pub(crate) const OUTLINE_INCLUDE_STUBS: u32 = 0x20;
