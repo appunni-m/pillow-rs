@@ -1168,10 +1168,10 @@ fn scale_glyph_impl_with_context(
 
     // FT_GLYPH_BBOX_PIXELS: floor the min, ceil the max (FT_PIX_FLOOR/CEIL on 26.6),
     // then convert to integer pixels.
-    let px_x_min = (ft_pix_floor(x_min)) >> 6;
-    let px_y_min = (ft_pix_floor(y_min)) >> 6;
-    let px_x_max = (ft_pix_ceil(x_max)) >> 6;
-    let px_y_max = (ft_pix_ceil(y_max)) >> 6;
+    let px_x_min = pixel_floor(x_min);
+    let px_y_min = pixel_floor(y_min);
+    let px_x_max = pixel_ceil(x_max);
+    let px_y_max = pixel_ceil(y_max);
     let autohint_vertical = if use_autohint {
         Some(autohint_vertical_metrics(
             data,
