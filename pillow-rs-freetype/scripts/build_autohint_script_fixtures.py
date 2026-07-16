@@ -1974,6 +1974,69 @@ def build_latin_blue_delta() -> None:
     font.save(OUT_DIR / "latin-blue-delta.ttf")
 
 
+def build_latin_blue_overlap() -> None:
+    glyph_order = [
+        ".notdef",
+        "space",
+        "latin_cap_flat",
+        "latin_cap_round_high",
+        "latin_small_high",
+    ]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -120, 520, 720),
+        "space": empty_glyph(),
+        "latin_cap_flat": rectangle_glyph(100, 0, 540, 500),
+        "latin_cap_round_high": ring_glyph(90, 0, 550, 700, 190, 120, 450, 560),
+        "latin_small_high": rectangle_glyph(110, 0, 520, 650),
+    }
+    metrics = {
+        ".notdef": (600, 80),
+        "space": (300, 0),
+        "latin_cap_flat": (700, 100),
+        "latin_cap_round_high": (700, 90),
+        "latin_small_high": (620, 110),
+    }
+    cmap = {0x20: "space"}
+    for codepoint in (0x54, 0x48, 0x45, 0x5A, 0x4C):
+        cmap[codepoint] = "latin_cap_flat"
+    for codepoint in (0x4F, 0x43, 0x51, 0x53):
+        cmap[codepoint] = "latin_cap_round_high"
+    for codepoint in (0x78, 0x7A, 0x6E, 0x72, 0x6F, 0x65, 0x73, 0x63):
+        cmap[codepoint] = "latin_small_high"
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint Latin Blue Overlap",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint Latin Blue Overlap Regular",
+            "fullName": "Autohint Latin Blue Overlap Regular",
+            "psName": "AutohintLatinBlueOverlap-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "latin-blue-overlap.ttf")
+
+
 def main() -> None:
     build_script_coverage()
     build_cjk_empty_standard()
@@ -1995,6 +2058,7 @@ def main() -> None:
     build_latin_standard_fallbacks()
     build_latin_malformed_standard()
     build_latin_blue_delta()
+    build_latin_blue_overlap()
 
 
 if __name__ == "__main__":
