@@ -708,9 +708,6 @@ struct Segment {
     y0: i32,
     x1: i32,
     y1: i32,
-    contour: usize,
-    order: usize,
-    contour_len: usize,
 }
 
 fn rasterize_mono_center(
@@ -726,56 +723,6 @@ fn rasterize_mono_center(
         rasterize_mono_horizontal_profiles(outline, &mut buffer, width, height, pitch, precision)?;
     }
     Ok(buffer)
-}
-
-fn rasterize_mono_intersections(
-    segments: &[Segment],
-    width: usize,
-    height: usize,
-    pitch: usize,
-) -> Vec<u8> {
-    let mut buffer = vec![0u8; pitch * height];
-    for y in 0..height {
-        let scan_y = (y as i32) * 64 + 32;
-        let mut left = Vec::new();
-        let mut right = Vec::new();
-        for segment in segments {
-            if let Some(intersection) = segment_intersection(*segment, scan_y) {
-                if intersection.flow_up {
-                    left.push(intersection);
-                } else {
-                    right.push(intersection);
-                }
-            }
-        }
-        left.sort_by_key(|intersection| intersection.x);
-        right.sort_by_key(|intersection| intersection.x);
-
-        let row = height - 1 - y;
-        let dst_row = row * pitch;
-        for (left, right) in left.iter().zip(&right) {
-            let mut x1 = left.x;
-            let mut x2 = right.x;
-            if x1 > x2 {
-                std::mem::swap(&mut x1, &mut x2);
-            }
-            let e1 = pixel_ceiling(x1);
-            let e2 = pixel_floor(x2);
-            if e1 <= e2 {
-                fill_mono_span(&mut buffer[dst_row..dst_row + pitch], width, e1, e2);
-            } else {
-                set_mono_dropout(
-                    &mut buffer[dst_row..dst_row + pitch],
-                    width,
-                    left,
-                    right,
-                    x1,
-                    x2,
-                );
-            }
-        }
-    }
-    buffer
 }
 
 fn dropout_control_from_outline_flags(flags: u32) -> u8 {
@@ -816,20 +763,6 @@ enum MonoState {
     Unknown,
     Ascending,
     Descending,
-}
-
-struct MonoProfileBuilder<'a> {
-    segments: &'a [Segment],
-    profiles: Vec<MonoProfile>,
-    current: Option<usize>,
-    contour_first: Option<usize>,
-    contour_profiles: Vec<usize>,
-    state: MonoState,
-    last_x: i32,
-    last_y: i32,
-    min_y: i32,
-    max_y: i32,
-    precision: MonoPrecision,
 }
 
 fn rasterize_mono_profiles(
@@ -888,196 +821,6 @@ fn rasterize_mono_horizontal_profiles(
 
     draw_mono_horizontal_profile_sweep(profiles, buffer, width, height, pitch, precision);
     Ok(())
-}
-
-impl<'a> MonoProfileBuilder<'a> {
-    fn new(segments: &'a [Segment], min_y: i32, max_y: i32) -> Self {
-        Self {
-            segments,
-            profiles: Vec::new(),
-            current: None,
-            contour_first: None,
-            contour_profiles: Vec::new(),
-            state: MonoState::Unknown,
-            last_x: 0,
-            last_y: 0,
-            min_y,
-            max_y,
-            precision: MonoPrecision::low(),
-        }
-    }
-
-    fn build(mut self) -> Vec<MonoProfile> {
-        let mut cursor = 0;
-        while cursor < self.segments.len() {
-            let contour = self.segments[cursor].contour;
-            self.state = MonoState::Unknown;
-            self.current = None;
-            self.contour_first = None;
-            self.contour_profiles.clear();
-
-            self.last_x = scaled_mono_coord(self.segments[cursor].x0);
-            self.last_y = scaled_mono_coord(self.segments[cursor].y0);
-            while cursor < self.segments.len() && self.segments[cursor].contour == contour {
-                let segment = self.segments[cursor];
-                self.line_to(
-                    scaled_mono_coord(segment.x1),
-                    scaled_mono_coord(segment.y1),
-                    contour,
-                );
-                cursor += 1;
-            }
-
-            if self.contour_first.is_some() {
-                if self.last_y & 63 == 0 && self.last_y >= self.min_y && self.last_y <= self.max_y {
-                    if let (Some(first), Some(current)) = (self.contour_first, self.current) {
-                        if same_profile_flow(&self.profiles[first], &self.profiles[current]) {
-                            self.profiles[current].xs.pop();
-                        }
-                    }
-                }
-                self.end_profile();
-                self.link_contour_profiles();
-            }
-        }
-        self.profiles
-    }
-
-    fn line_to(&mut self, x: i32, y: i32, contour: usize) {
-        if y == self.last_y {
-            self.last_x = x;
-            self.last_y = y;
-            return;
-        }
-
-        let state = if self.last_y < y {
-            MonoState::Ascending
-        } else {
-            MonoState::Descending
-        };
-        if self.state != state {
-            if self.state != MonoState::Unknown {
-                self.end_profile();
-            }
-            self.new_profile(state, contour);
-        }
-
-        let last_x = self.last_x;
-        let last_y = self.last_y;
-        let min_y = self.min_y;
-        let max_y = self.max_y;
-        let precision = self.precision;
-        let range = MonoLineRange::new(min_y, max_y);
-        if state == MonoState::Ascending {
-            self.push_profile_xs_from(|xs| {
-                line_up_into_precision(xs, last_x, last_y, x, y, range, precision);
-            });
-        } else {
-            self.push_profile_xs_from(|xs| {
-                line_down_into_precision(xs, last_x, last_y, x, y, range, precision);
-            });
-        }
-
-        self.last_x = x;
-        self.last_y = y;
-    }
-
-    fn new_profile(&mut self, state: MonoState, contour: usize) {
-        let mut flags = MONO_DROPOUT_CONTROL;
-        let e = match state {
-            MonoState::Ascending => {
-                flags |= MONO_FLOW_UP;
-                if self.precision.is_bottom_overshoot(self.last_y) {
-                    flags |= MONO_OVERSHOOT_BOTTOM;
-                }
-                self.precision.ceiling(self.last_y)
-            }
-            MonoState::Descending => {
-                if self.precision.is_top_overshoot(self.last_y) {
-                    flags |= MONO_OVERSHOOT_TOP;
-                }
-                self.precision.floor(self.last_y)
-            }
-            MonoState::Unknown => unreachable!(),
-        }
-        .clamp(self.min_y, self.max_y);
-
-        let mut xs = Vec::new();
-        if self.last_y == e {
-            xs.push(self.last_x);
-        }
-        let index = self.profiles.len();
-        self.profiles.push(MonoProfile {
-            xs,
-            start: self.precision.trunc(e),
-            offset: 0,
-            height: 0,
-            flags,
-            x: self.last_x,
-            link: None,
-            next: self.contour_first,
-            contour,
-        });
-        if self.contour_first.is_none() {
-            self.contour_first = Some(index);
-        }
-        self.current = Some(index);
-        self.state = state;
-        self.contour_profiles.push(index);
-    }
-
-    fn end_profile(&mut self) {
-        let Some(index) = self.current else {
-            return;
-        };
-        let height = self.profiles[index].xs.len();
-        if height == 0 {
-            return;
-        }
-
-        if self.profiles[index].flags & MONO_FLOW_UP != 0 {
-            if self.precision.is_top_overshoot(self.last_y) {
-                self.profiles[index].flags |= MONO_OVERSHOOT_TOP;
-            }
-            self.profiles[index].offset = 0;
-            self.profiles[index].x = self.profiles[index].xs[0];
-        } else {
-            if self.precision.is_bottom_overshoot(self.last_y) {
-                self.profiles[index].flags |= MONO_OVERSHOOT_BOTTOM;
-            }
-            let top = self.profiles[index].start + 1;
-            self.profiles[index].start = top - i32_from_usize(height);
-            self.profiles[index].offset = height - 1;
-            self.profiles[index].x = self.profiles[index].xs[height - 1];
-        }
-        self.profiles[index].height = height;
-    }
-
-    fn link_contour_profiles(&mut self) {
-        self.contour_profiles
-            .retain(|&profile| self.profiles[profile].height > 0);
-        let len = self.contour_profiles.len();
-        if len == 0 {
-            return;
-        }
-        for idx in 0..len {
-            let profile = self.contour_profiles[idx];
-            let next = self.contour_profiles[(idx + 1) % len];
-            self.profiles[profile].next = Some(next);
-        }
-    }
-
-    fn push_profile_xs(&mut self, xs: Vec<i32>) {
-        if let Some(index) = self.current {
-            self.profiles[index].xs.extend(xs);
-        }
-    }
-
-    fn push_profile_xs_from(&mut self, append: impl FnOnce(&mut Vec<i32>)) {
-        if let Some(index) = self.current {
-            append(&mut self.profiles[index].xs);
-        }
-    }
 }
 
 struct MonoOutlineProfileBuilder {
@@ -1876,24 +1619,6 @@ fn mono_pixel_offset(
     Some((row * pitch, usize_from_i32(x)))
 }
 
-fn line_up(x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) -> Vec<i32> {
-    let mut out = Vec::new();
-    line_up_into(&mut out, x1, y1, x2, y2, min_y, max_y);
-    out
-}
-
-fn line_up_into(out: &mut Vec<i32>, x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) {
-    line_up_into_precision(
-        out,
-        x1,
-        y1,
-        x2,
-        y2,
-        MonoLineRange::new(min_y, max_y),
-        MonoPrecision::low(),
-    );
-}
-
 fn line_up_into_precision(
     out: &mut Vec<i32>,
     x1: i32,
@@ -1963,24 +1688,6 @@ fn line_up_into_precision(
     }
 }
 
-fn line_down(x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) -> Vec<i32> {
-    let mut out = Vec::new();
-    line_down_into(&mut out, x1, y1, x2, y2, min_y, max_y);
-    out
-}
-
-fn line_down_into(out: &mut Vec<i32>, x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) {
-    line_down_into_precision(
-        out,
-        x1,
-        y1,
-        x2,
-        y2,
-        MonoLineRange::new(min_y, max_y),
-        MonoPrecision::low(),
-    );
-}
-
 fn line_down_into_precision(
     out: &mut Vec<i32>,
     x1: i32,
@@ -2001,16 +1708,6 @@ fn line_down_into_precision(
     );
 }
 
-fn bezier_up_2(arc: [Point; 3], min_y: i32, max_y: i32) -> Vec<i32> {
-    let mut out = Vec::new();
-    bezier_up_2_into(&mut out, arc, min_y, max_y);
-    out
-}
-
-fn bezier_up_2_into(out: &mut Vec<i32>, arc: [Point; 3], min_y: i32, max_y: i32) {
-    bezier_up_2_into_precision(out, arc, min_y, max_y, MonoPrecision::low());
-}
-
 fn bezier_up_2_into_precision(
     out: &mut Vec<i32>,
     arc: [Point; 3],
@@ -2019,22 +1716,6 @@ fn bezier_up_2_into_precision(
     precision: MonoPrecision,
 ) {
     bezier_up_into_precision(out, arc, split_conic_arc, min_y, max_y, precision);
-}
-
-fn bezier_down_2(mut arc: [Point; 3], min_y: i32, max_y: i32) -> Vec<i32> {
-    arc[0].y = -arc[0].y;
-    arc[1].y = -arc[1].y;
-    arc[2].y = -arc[2].y;
-    let mut out = Vec::new();
-    bezier_up_2_into(&mut out, arc, -max_y, -min_y);
-    out
-}
-
-fn bezier_down_2_into(out: &mut Vec<i32>, mut arc: [Point; 3], min_y: i32, max_y: i32) {
-    arc[0].y = -arc[0].y;
-    arc[1].y = -arc[1].y;
-    arc[2].y = -arc[2].y;
-    bezier_up_2_into(out, arc, -max_y, -min_y);
 }
 
 fn bezier_down_2_into_precision(
@@ -2337,81 +2018,8 @@ fn same_profile_flow(left: &MonoProfile, right: &MonoProfile) -> bool {
     (left.flags & MONO_FLOW_UP) == (right.flags & MONO_FLOW_UP)
 }
 
-fn scaled_mono_coord(value: i32) -> i32 {
-    value - 32
-}
-
-fn mono_floor_fixed(value: i32) -> i32 {
-    value & !63
-}
-
-fn mono_ceiling_fixed(value: i32) -> i32 {
-    (value + 63) & !63
-}
-
-fn x1_to_pixel_ceil(value: i32) -> i32 {
-    mono_ceiling_fixed(value) >> 6
-}
-
-fn x2_to_pixel_floor(value: i32) -> i32 {
-    mono_floor_fixed(value) >> 6
-}
-
-fn is_bottom_overshoot(value: i32) -> bool {
-    mono_ceiling_fixed(value) - value >= 32
-}
-
-fn is_top_overshoot(value: i32) -> bool {
-    value - mono_floor_fixed(value) >= 32
-}
-
 fn mul_div_trunc(a: i32, b: i32, c: i32) -> i32 {
     ((a as i64 * b as i64) / c as i64) as i32
-}
-
-#[derive(Debug, Clone, Copy)]
-struct Intersection {
-    x: i32,
-    flow_up: bool,
-    contour: usize,
-    order: usize,
-    contour_len: usize,
-}
-
-fn segment_intersection(segment: Segment, scan_y: i32) -> Option<Intersection> {
-    let flow_up;
-    if segment.y0 < segment.y1 {
-        if scan_y < segment.y0 || scan_y >= segment.y1 {
-            return None;
-        }
-        flow_up = true;
-    } else if segment.y1 < segment.y0 {
-        if scan_y <= segment.y1 || scan_y > segment.y0 {
-            return None;
-        }
-        flow_up = false;
-    } else {
-        return None;
-    }
-
-    let dx = segment.x1 - segment.x0;
-    let dy = segment.y1 - segment.y0;
-    let x = segment.x0 - 32 + ((scan_y - segment.y0) as i64 * dx as i64 / dy as i64) as i32;
-    Some(Intersection {
-        x,
-        flow_up,
-        contour: segment.contour,
-        order: segment.order,
-        contour_len: segment.contour_len,
-    })
-}
-
-fn pixel_ceiling(x: i32) -> i32 {
-    (x + 63) >> 6
-}
-
-fn pixel_floor(x: i32) -> i32 {
-    x >> 6
 }
 
 fn fill_mono_span(row: &mut [u8], width: usize, mut x1: i32, mut x2: i32) {
@@ -2447,79 +2055,11 @@ fn mono_span_mask(start_bit: usize, end_bit: usize) -> u8 {
     (0xFFu8 >> start_bit) & (0xFFu8 << (7 - end_bit))
 }
 
-fn set_mono_dropout(
-    row: &mut [u8],
-    width: usize,
-    left: &Intersection,
-    right: &Intersection,
-    x1: i32,
-    x2: i32,
-) {
-    if width == 0 {
-        return;
-    }
-    if left.contour == right.contour && x2 - x1 < 32 && adjacent_in_contour(left, right) {
-        return;
-    }
-
-    let mut primary = pixel_floor(x2);
-    let secondary = pixel_ceiling(x1);
-    if primary < 0 || primary >= i32_from_usize(width) {
-        primary = secondary;
-    } else if secondary >= 0 && secondary < i32_from_usize(width) {
-        let secondary = usize_from_i32(secondary);
-        if row[secondary / 8] & (0x80 >> (secondary & 7)) != 0 {
-            return;
-        }
-    }
-
-    if primary >= 0 && primary < i32_from_usize(width) {
-        let x = usize_from_i32(primary);
-        row[x / 8] |= 0x80 >> (x & 7);
-    }
-}
-
-fn adjacent_in_contour(left: &Intersection, right: &Intersection) -> bool {
-    if left.order.abs_diff(right.order) == 1 {
-        return true;
-    }
-    left.contour_len > 1
-        && left.order.min(right.order) == 0
-        && left.order.max(right.order) == left.contour_len - 1
-}
-
-fn apply_horizontal_center_edges(
-    segments: &[Segment],
-    buffer: &mut [u8],
-    width: usize,
-    height: usize,
-    pitch: usize,
-) {
-    for segment in segments {
-        if segment.y0 != segment.y1 || (segment.y0 & 63) != 32 {
-            continue;
-        }
-
-        let y = (segment.y0 - 32) >> 6;
-        if y < 0 || y >= i32_from_usize(height) {
-            continue;
-        }
-
-        let row = height - 1 - usize_from_i32(y);
-        let row = &mut buffer[row * pitch..(row + 1) * pitch];
-        let x1 = pixel_ceiling(segment.x0.min(segment.x1) - 32);
-        let x2 = pixel_floor(segment.x0.max(segment.x1) - 32);
-        fill_mono_span(row, width, x1, x2);
-    }
-}
-
 fn flatten_outline(outline: &Outline) -> Result<Vec<Segment>, FontError> {
     let mut flattener = SdfFlattener {
         segments: Vec::new(),
         current_x: 0,
         current_y: 0,
-        contour: 0,
-        order: 0,
     };
     flattener.decompose(
         &outline.points,
@@ -2534,8 +2074,6 @@ struct SdfFlattener {
     segments: Vec<Segment>,
     current_x: i32,
     current_y: i32,
-    contour: usize,
-    order: usize,
 }
 
 impl SdfFlattener {
@@ -2552,11 +2090,7 @@ impl SdfFlattener {
             y0: self.current_y,
             x1: x,
             y1: y,
-            contour: self.contour,
-            order: self.order,
-            contour_len: 0,
         });
-        self.order += 1;
         self.current_x = x;
         self.current_y = y;
     }
@@ -2650,10 +2184,7 @@ impl SdfFlattener {
         n_contours: i32,
     ) -> Result<(), FontError> {
         let mut last: i64 = -1;
-        for (contour, &contour_end) in contours.iter().take(usize_from_i32(n_contours)).enumerate()
-        {
-            self.contour = contour;
-            self.order = 0;
+        for &contour_end in contours.iter().take(usize_from_i32(n_contours)) {
             let first = usize_from_i64(last + 1);
             last = contour_end as i64;
             if last < first as i64 {
@@ -2685,7 +2216,6 @@ impl SdfFlattener {
             }
 
             self.move_to(v_start.x, v_start.y);
-            let contour_start = self.segments.len();
             let start = if first_tag == CURVE_TAG_CONIC {
                 if first == 0 {
                     -1
@@ -2696,10 +2226,6 @@ impl SdfFlattener {
                 i32_from_usize(first)
             };
             self.walk_contour(pts, tags, start, i32_from_usize(limit_eff), v_start)?;
-            let contour_len = self.segments.len() - contour_start;
-            for segment in &mut self.segments[contour_start..] {
-                segment.contour_len = contour_len;
-            }
         }
         Ok(())
     }
@@ -3043,25 +2569,6 @@ fn outline_orientation_fill_left(outline: &Outline) -> bool {
         first = last + 1;
     }
     area > 0
-}
-
-fn winding_contains(segments: &[Segment], x: i32, y: i32) -> bool {
-    let mut winding = 0;
-    for segment in segments {
-        if segment.y0 <= y {
-            if segment.y1 > y && is_left(*segment, x, y) > 0 {
-                winding += 1;
-            }
-        } else if segment.y1 <= y && is_left(*segment, x, y) < 0 {
-            winding -= 1;
-        }
-    }
-    winding != 0
-}
-
-fn is_left(segment: Segment, x: i32, y: i32) -> i64 {
-    (segment.x1 - segment.x0) as i64 * (y - segment.y0) as i64
-        - (x - segment.x0) as i64 * (segment.y1 - segment.y0) as i64
 }
 
 fn render_lcd(outline: Outline, left: i32, top: i32) -> Result<RenderedBitmap, FontError> {
