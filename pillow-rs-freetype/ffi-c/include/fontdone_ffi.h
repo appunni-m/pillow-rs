@@ -246,6 +246,8 @@ FT_Bool FT_Face_SetUnpatentedHinting(FT_Face face, FT_Bool value);
 void FT_Outline_Get_CBox(const FT_Outline* outline, FT_BBox* acbox);
 FT_Error FT_Outline_Get_Bitmap(FT_Library library, const FT_Outline* outline, FT_Bitmap* abitmap);
 FT_Orientation FT_Outline_Get_Orientation(const FT_Outline* outline);
+void FT_Outline_Reverse(FT_Outline* outline);
+void FT_Outline_Transform(const FT_Outline* outline, const FT_Matrix* matrix);
 FT_Error FT_Set_Char_Size(FT_Face face, FT_F26Dot6 char_width, FT_F26Dot6 char_height, FT_UInt horz_resolution, FT_UInt vert_resolution);
 FT_Error FT_Set_Pixel_Sizes(FT_Face face, FT_UInt pixel_width, FT_UInt pixel_height);
 FT_Error FT_Request_Size(FT_Face face, FT_Size_Request req);

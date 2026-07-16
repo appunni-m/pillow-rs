@@ -1414,6 +1414,38 @@ pub extern "C" fn FT_Outline_Get_Orientation(outline: *const FT_Outline) -> FT_O
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_Reverse(outline: *mut FT_Outline) {
+    let Some(mut snapshot) = outline_snapshot_from_c(outline) else {
+        return;
+    };
+    rust_ffi::FT_Outline_Reverse(Some(&mut snapshot));
+    copy_outline_snapshot_to_c(outline, &snapshot, true);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_Transform(
+    outline: *const FT_Outline,
+    matrix: *const FT_Matrix,
+) {
+    let (Some(mut snapshot), Some(matrix)) =
+        (outline_snapshot_from_c(outline), non_null(matrix))
+    else {
+        return;
+    };
+    // SAFETY: `matrix` is non-null and points to a caller-owned `FT_Matrix`
+    // that remains readable for this call.
+    let matrix = unsafe { matrix.as_ref() };
+    let matrix = rust_ffi::FT_Matrix {
+        xx: matrix.xx,
+        xy: matrix.xy,
+        yx: matrix.yx,
+        yy: matrix.yy,
+    };
+    rust_ffi::FT_Outline_Transform(Some(&mut snapshot), Some(&matrix));
+    copy_outline_snapshot_to_c(outline.cast_mut(), &snapshot, false);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Set_Char_Size(
     face: FT_Face,
     char_width: FT_F26Dot6,
@@ -2444,6 +2476,38 @@ fn outline_snapshot_from_c(outline: *const FT_Outline) -> Option<rust_ffi::FT_Ou
         contours,
         flags: outline.flags,
     })
+}
+
+fn copy_outline_snapshot_to_c(
+    outline: *mut FT_Outline,
+    snapshot: &rust_ffi::FT_OutlineSnapshot,
+    copy_tags_and_flags: bool,
+) {
+    let Some(mut outline) = non_null_mut(outline) else {
+        return;
+    };
+    // SAFETY: `outline` is non-null and still refers to the caller-owned
+    // descriptor used to create `snapshot`.
+    let outline = unsafe { outline.as_mut() };
+    if !outline.points.is_null() {
+        // SAFETY: the public descriptor promises `n_points` writable vectors.
+        let points = unsafe { slice::from_raw_parts_mut(outline.points, usize::from(outline.n_points)) };
+        for (target, source) in points.iter_mut().zip(&snapshot.points) {
+            target.x = source.x;
+            target.y = source.y;
+        }
+    }
+    if copy_tags_and_flags {
+        if !outline.tags.is_null() {
+            // SAFETY: the public descriptor promises `n_points` writable tag bytes.
+            let tags =
+                unsafe { slice::from_raw_parts_mut(outline.tags, usize::from(outline.n_points)) };
+            for (target, source) in tags.iter_mut().zip(&snapshot.tags) {
+                *target = *source;
+            }
+        }
+        outline.flags = snapshot.flags;
+    }
 }
 
 fn copy_rendered_bitmap_to_c(target: &mut FT_Bitmap, rendered: &rust_ffi::FT_Bitmap) {

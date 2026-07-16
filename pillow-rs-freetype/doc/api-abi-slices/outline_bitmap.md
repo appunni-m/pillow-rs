@@ -16,10 +16,10 @@ Outline symbols from `ftoutln.h` and `ftbbox.h`:
 | `FT_Outline_Done` | `FT_Error (FT_Library library, FT_Outline* outline)` | planned | None. Rust drops `Outline` values directly today. |
 | `FT_Outline_Copy` | `FT_Error (const FT_Outline* source, FT_Outline* target)` | planned | `Outline: Clone` is semantic only; no ABI record copy yet. |
 | `FT_Outline_Translate` | `void (const FT_Outline* outline, FT_Pos xOffset, FT_Pos yOffset)` | partial | Internal translation during scaling/rendering: `scaler::scale_glyph`, `render::translate_outline`. |
-| `FT_Outline_Transform` | `void (const FT_Outline* outline, const FT_Matrix* matrix)` | planned | Scaling applies transform-like 16.16 multiplication, but no public matrix transform endpoint. |
+| `FT_Outline_Transform` | `void (const FT_Outline* outline, const FT_Matrix* matrix)` | implemented | Safe core mutation with exact Rust FFI, C ABI, and WASM wrappers; null descriptors are no-ops. |
 | `FT_Outline_Embolden` | `FT_Error (FT_Outline* outline, FT_Pos strength)` | planned | None. |
 | `FT_Outline_EmboldenXY` | `FT_Error (FT_Outline* outline, FT_Pos xstrength, FT_Pos ystrength)` | planned | None. |
-| `FT_Outline_Reverse` | `void (FT_Outline* outline)` | planned | None. |
+| `FT_Outline_Reverse` | `void (FT_Outline* outline)` | implemented | Safe core contour-buffer reversal plus exact Rust FFI, C ABI, and WASM wrappers. |
 | `FT_Outline_Check` | `FT_Error (FT_Outline* outline)` | planned | Validation exists only as parser/rasterizer errors such as `FontError::InvalidOutline`. |
 | `FT_Outline_Get_CBox` | `void (const FT_Outline* outline, FT_BBox* acbox)` | partial | `scaler::ScaledGlyph::{outline_cbox_*}` and local render cbox helpers. |
 | `FT_Outline_Get_BBox` | `FT_Error (FT_Outline* outline, FT_BBox* abbox)` | planned | `scaler::ScaledGlyph::{outline_bbox_*}` stores exact outline bbox, but no public C-shaped call. |

@@ -9396,6 +9396,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--outline-get-orientation".to_string(),
             case.case_id.clone(),
         ]),
+        "ftoutln.outline_reverse" => {
+            Ok(vec!["--outline-reverse".to_string(), case.case_id.clone()])
+        }
+        "ftoutln.outline_transform" => Ok(vec![
+            "--outline-transform".to_string(),
+            case.case_id.clone(),
+        ]),
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => Ok(vec![
             "--outline-render".to_string(),
             if case.expect_error { "error" } else { "bitmap" }.to_string(),
@@ -9965,6 +9972,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" => rust_outline_orientation_runtime_output(case),
+        "ftoutln.outline_reverse" => rust_outline_reverse_runtime_output(case),
+        "ftoutln.outline_transform" => rust_outline_transform_runtime_output(case),
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => {
             outline_render_runtime_output(case)
         }
@@ -10632,6 +10641,8 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" => c_outline_orientation_runtime_output(case),
+        "ftoutln.outline_reverse" => c_outline_reverse_runtime_output(case),
+        "ftoutln.outline_transform" => c_outline_transform_runtime_output(case),
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => {
             outline_render_runtime_output(case)
         }
@@ -11153,6 +11164,8 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" => wasm_outline_orientation_runtime_output(case),
+        "ftoutln.outline_reverse" => wasm_outline_reverse_runtime_output(case),
+        "ftoutln.outline_transform" => wasm_outline_transform_runtime_output(case),
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => {
             outline_render_runtime_output(case)
         }
@@ -17099,6 +17112,463 @@ fn wasm_outline_orientation_runtime_output(case: &InputCase) -> Result<RunOutput
     })
 }
 
+#[derive(Clone)]
+struct MutableOutlineModel {
+    points: Vec<(i64, i64)>,
+    tags: Vec<u8>,
+    contours: Vec<u16>,
+    flags: i32,
+}
+
+#[derive(Clone, Copy)]
+enum OutlineTransformScenario {
+    Outline,
+    NullOutline,
+    NullMatrix,
+    NullPoints,
+}
+
+fn reverse_outline_model() -> MutableOutlineModel {
+    MutableOutlineModel {
+        points: vec![
+            (0, 0),
+            (64, 0),
+            (64, 64),
+            (0, 64),
+            (128, 0),
+            (192, 0),
+            (192, 64),
+            (128, 64),
+        ],
+        tags: vec![1, 0, 1, 2, 1, 2, 0, 1],
+        contours: vec![3, 7],
+        flags: 2,
+    }
+}
+
+fn transform_outline_model() -> MutableOutlineModel {
+    MutableOutlineModel {
+        points: vec![(-96, -32), (128, -64), (160, 96), (-64, 128)],
+        tags: vec![1; 4],
+        contours: vec![3],
+        flags: 0,
+    }
+}
+
+fn outline_points_json(points: &[(i64, i64)]) -> Value {
+    json!(
+        points
+            .iter()
+            .map(|&(x, y)| json!({"x": x, "y": y}))
+            .collect::<Vec<_>>()
+    )
+}
+
+fn rust_snapshot_from_mutable(model: &MutableOutlineModel) -> FT_OutlineSnapshot {
+    FT_OutlineSnapshot {
+        points: model
+            .points
+            .iter()
+            .map(|&(x, y)| FT_Vector { x, y })
+            .collect(),
+        tags: model.tags.clone(),
+        contours: model.contours.clone(),
+        flags: model.flags,
+    }
+}
+
+fn update_mutable_from_rust_snapshot(
+    model: &mut MutableOutlineModel,
+    snapshot: FT_OutlineSnapshot,
+) {
+    model.points = snapshot
+        .points
+        .into_iter()
+        .map(|point| (point.x, point.y))
+        .collect();
+    model.tags = snapshot.tags;
+    model.flags = snapshot.flags;
+}
+
+fn outline_reverse_runtime_output<F>(case: &InputCase, mut reverse: F) -> Result<RunOutput, String>
+where
+    F: FnMut(Option<&mut MutableOutlineModel>),
+{
+    if case.case_id.ends_with(".null_outline_noop") {
+        reverse(None);
+        return Ok(ok(json!({"sentinel_memory_changed": false})));
+    }
+
+    let mut model = reverse_outline_model();
+    if case
+        .case_id
+        .ends_with(".reverses_points_and_tags_per_contour")
+    {
+        reverse(Some(&mut model));
+        return Ok(ok(json!({
+            "points_after": outline_points_json(&model.points),
+            "tags_after": model.tags
+        })));
+    }
+    if case.case_id.ends_with(".toggles_reverse_fill_flag") {
+        let mut flags_after_each_call = Vec::new();
+        for _ in 0..2 {
+            reverse(Some(&mut model));
+            flags_after_each_call.push(model.flags);
+        }
+        return Ok(ok(json!({"flags_after_each_call": flags_after_each_call})));
+    }
+    Err(format!("unsupported outline reverse case {}", case.case_id))
+}
+
+fn rust_outline_reverse_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_reverse_runtime_output(case, |model| {
+        let Some(model) = model else {
+            FT_Outline_Reverse(None);
+            return;
+        };
+        let mut snapshot = rust_snapshot_from_mutable(model);
+        FT_Outline_Reverse(Some(&mut snapshot));
+        update_mutable_from_rust_snapshot(model, snapshot);
+    })
+}
+
+fn c_reverse_mutable_outline(model: Option<&mut MutableOutlineModel>) {
+    let Some(model) = model else {
+        c_abi::FT_Outline_Reverse(ptr::null_mut());
+        return;
+    };
+    let mut points = model
+        .points
+        .iter()
+        .map(|&(x, y)| c_abi::FT_Vector { x, y })
+        .collect::<Vec<_>>();
+    let mut tags = model.tags.clone();
+    let mut contours = model.contours.clone();
+    let mut outline = c_abi::FT_Outline {
+        n_contours: u16::try_from(contours.len()).unwrap_or(u16::MAX),
+        n_points: u16::try_from(points.len()).unwrap_or(u16::MAX),
+        points: points.as_mut_ptr(),
+        tags: tags.as_mut_ptr(),
+        contours: contours.as_mut_ptr(),
+        flags: model.flags,
+    };
+    c_abi::FT_Outline_Reverse(&mut outline);
+    model.points = points.into_iter().map(|point| (point.x, point.y)).collect();
+    model.tags = tags;
+    model.flags = outline.flags;
+}
+
+fn c_outline_reverse_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_reverse_runtime_output(case, c_reverse_mutable_outline)
+}
+
+fn wasm_reverse_mutable_outline(model: Option<&mut MutableOutlineModel>) {
+    let Some(model) = model else {
+        wasm_abi::fontdone_wasm_outline_reverse(ptr::null_mut());
+        return;
+    };
+    let mut points = model
+        .points
+        .iter()
+        .map(|&(x, y)| wasm_abi::FontdoneWasmVector { x, y })
+        .collect::<Vec<_>>();
+    let mut tags = model.tags.clone();
+    let mut contours = model.contours.clone();
+    let mut outline = wasm_abi::FontdoneWasmOutline {
+        n_contours: u16::try_from(contours.len()).unwrap_or(u16::MAX),
+        n_points: u16::try_from(points.len()).unwrap_or(u16::MAX),
+        points: points.as_mut_ptr(),
+        tags: tags.as_mut_ptr(),
+        contours: contours.as_mut_ptr(),
+        flags: model.flags,
+    };
+    wasm_abi::fontdone_wasm_outline_reverse(&mut outline);
+    model.points = points.into_iter().map(|point| (point.x, point.y)).collect();
+    model.tags = tags;
+    model.flags = outline.flags;
+}
+
+fn wasm_outline_reverse_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_reverse_runtime_output(case, wasm_reverse_mutable_outline)
+}
+
+fn outline_transform_matrix(case: &InputCase) -> (i64, i64, i64, i64) {
+    if case
+        .case_id
+        .ends_with(".orientation_and_cbox_after_transform")
+    {
+        (-0x10000, 0, 0, 0x10000)
+    } else {
+        (0x10000, 0x4000, -0x8000, 0x10000)
+    }
+}
+
+fn outline_transform_runtime_output<F, G>(
+    case: &InputCase,
+    mut transform: F,
+    mut observe: G,
+) -> Result<RunOutput, String>
+where
+    F: FnMut(OutlineTransformScenario, Option<&mut MutableOutlineModel>, (i64, i64, i64, i64)),
+    G: FnMut(&MutableOutlineModel) -> ([i64; 4], i64),
+{
+    let matrix = outline_transform_matrix(case);
+    if case.case_id.ends_with(".null_inputs_noop") {
+        transform(OutlineTransformScenario::NullOutline, None, matrix);
+        transform(
+            OutlineTransformScenario::NullMatrix,
+            Some(&mut transform_outline_model()),
+            matrix,
+        );
+        transform(OutlineTransformScenario::NullPoints, None, matrix);
+        return Ok(ok(json!({
+            "rows": [
+                {"label": "null_outline", "sentinel_memory_changed": false},
+                {"label": "null_matrix", "sentinel_memory_changed": false},
+                {"label": "null_points", "sentinel_memory_changed": false}
+            ]
+        })));
+    }
+
+    let mut model = transform_outline_model();
+    transform(OutlineTransformScenario::Outline, Some(&mut model), matrix);
+    if case.case_id.ends_with(".matrix_transform_matches_c") {
+        return Ok(ok(json!({
+            "points_after": outline_points_json(&model.points)
+        })));
+    }
+    if case
+        .case_id
+        .ends_with(".orientation_and_cbox_after_transform")
+    {
+        let (cbox, orientation) = observe(&model);
+        return Ok(ok(json!({
+            "cbox_after": {
+                "xMin": cbox[0],
+                "yMin": cbox[1],
+                "xMax": cbox[2],
+                "yMax": cbox[3]
+            },
+            "orientation_after": orientation
+        })));
+    }
+    Err(format!(
+        "unsupported outline transform case {}",
+        case.case_id
+    ))
+}
+
+fn rust_transform_mutable_outline(
+    scenario: OutlineTransformScenario,
+    model: Option<&mut MutableOutlineModel>,
+    matrix: (i64, i64, i64, i64),
+) {
+    let matrix = FT_Matrix {
+        xx: matrix.0,
+        xy: matrix.1,
+        yx: matrix.2,
+        yy: matrix.3,
+    };
+    match scenario {
+        OutlineTransformScenario::NullOutline | OutlineTransformScenario::NullPoints => {
+            FT_Outline_Transform(None, Some(&matrix));
+        }
+        OutlineTransformScenario::NullMatrix => {
+            let mut snapshot = rust_snapshot_from_mutable(model.expect("model"));
+            FT_Outline_Transform(Some(&mut snapshot), None);
+        }
+        OutlineTransformScenario::Outline => {
+            let model = model.expect("model");
+            let mut snapshot = rust_snapshot_from_mutable(model);
+            FT_Outline_Transform(Some(&mut snapshot), Some(&matrix));
+            update_mutable_from_rust_snapshot(model, snapshot);
+        }
+    }
+}
+
+fn rust_observe_mutable_outline(model: &MutableOutlineModel) -> ([i64; 4], i64) {
+    let snapshot = rust_snapshot_from_mutable(model);
+    let mut cbox = FT_BBox::default();
+    FT_Outline_Get_CBox(Some(&snapshot), Some(&mut cbox));
+    (
+        [cbox.xMin, cbox.yMin, cbox.xMax, cbox.yMax],
+        i64::from(FT_Outline_Get_Orientation(Some(&snapshot))),
+    )
+}
+
+fn rust_outline_transform_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_transform_runtime_output(
+        case,
+        rust_transform_mutable_outline,
+        rust_observe_mutable_outline,
+    )
+}
+
+fn c_transform_mutable_outline(
+    scenario: OutlineTransformScenario,
+    model: Option<&mut MutableOutlineModel>,
+    matrix: (i64, i64, i64, i64),
+) {
+    let matrix = c_abi::FT_Matrix {
+        xx: matrix.0,
+        xy: matrix.1,
+        yx: matrix.2,
+        yy: matrix.3,
+    };
+    if matches!(scenario, OutlineTransformScenario::NullOutline) {
+        c_abi::FT_Outline_Transform(ptr::null(), &matrix);
+        return;
+    }
+    if matches!(scenario, OutlineTransformScenario::NullPoints) {
+        let outline = c_abi::FT_Outline {
+            n_contours: 0,
+            n_points: 3,
+            points: ptr::null_mut(),
+            tags: ptr::null_mut(),
+            contours: ptr::null_mut(),
+            flags: 0,
+        };
+        c_abi::FT_Outline_Transform(&outline, &matrix);
+        return;
+    }
+    let model = model.expect("model");
+    let mut points = model
+        .points
+        .iter()
+        .map(|&(x, y)| c_abi::FT_Vector { x, y })
+        .collect::<Vec<_>>();
+    let mut tags = model.tags.clone();
+    let mut contours = model.contours.clone();
+    let outline = c_abi::FT_Outline {
+        n_contours: u16::try_from(contours.len()).unwrap_or(u16::MAX),
+        n_points: u16::try_from(points.len()).unwrap_or(u16::MAX),
+        points: points.as_mut_ptr(),
+        tags: tags.as_mut_ptr(),
+        contours: contours.as_mut_ptr(),
+        flags: model.flags,
+    };
+    let matrix_ptr = if matches!(scenario, OutlineTransformScenario::NullMatrix) {
+        ptr::null()
+    } else {
+        &matrix
+    };
+    c_abi::FT_Outline_Transform(&outline, matrix_ptr);
+    model.points = points.into_iter().map(|point| (point.x, point.y)).collect();
+}
+
+fn c_observe_mutable_outline(model: &MutableOutlineModel) -> ([i64; 4], i64) {
+    let mut points = model
+        .points
+        .iter()
+        .map(|&(x, y)| c_abi::FT_Vector { x, y })
+        .collect::<Vec<_>>();
+    let mut tags = model.tags.clone();
+    let mut contours = model.contours.clone();
+    let outline = c_abi::FT_Outline {
+        n_contours: u16::try_from(contours.len()).unwrap_or(u16::MAX),
+        n_points: u16::try_from(points.len()).unwrap_or(u16::MAX),
+        points: points.as_mut_ptr(),
+        tags: tags.as_mut_ptr(),
+        contours: contours.as_mut_ptr(),
+        flags: model.flags,
+    };
+    let mut cbox = c_abi::FT_BBox::default();
+    c_abi::FT_Outline_Get_CBox(&outline, &mut cbox);
+    (
+        [cbox.xMin, cbox.yMin, cbox.xMax, cbox.yMax],
+        i64::from(c_abi::FT_Outline_Get_Orientation(&outline)),
+    )
+}
+
+fn c_outline_transform_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_transform_runtime_output(case, c_transform_mutable_outline, c_observe_mutable_outline)
+}
+
+fn wasm_transform_mutable_outline(
+    scenario: OutlineTransformScenario,
+    model: Option<&mut MutableOutlineModel>,
+    matrix: (i64, i64, i64, i64),
+) {
+    let matrix = wasm_abi::FontdoneWasmMatrix {
+        xx: matrix.0,
+        xy: matrix.1,
+        yx: matrix.2,
+        yy: matrix.3,
+    };
+    if matches!(scenario, OutlineTransformScenario::NullOutline) {
+        wasm_abi::fontdone_wasm_outline_transform(ptr::null(), &matrix);
+        return;
+    }
+    if matches!(scenario, OutlineTransformScenario::NullPoints) {
+        let outline = wasm_abi::FontdoneWasmOutline {
+            n_contours: 0,
+            n_points: 3,
+            points: ptr::null_mut(),
+            tags: ptr::null_mut(),
+            contours: ptr::null_mut(),
+            flags: 0,
+        };
+        wasm_abi::fontdone_wasm_outline_transform(&outline, &matrix);
+        return;
+    }
+    let model = model.expect("model");
+    let mut points = model
+        .points
+        .iter()
+        .map(|&(x, y)| wasm_abi::FontdoneWasmVector { x, y })
+        .collect::<Vec<_>>();
+    let mut tags = model.tags.clone();
+    let mut contours = model.contours.clone();
+    let outline = wasm_abi::FontdoneWasmOutline {
+        n_contours: u16::try_from(contours.len()).unwrap_or(u16::MAX),
+        n_points: u16::try_from(points.len()).unwrap_or(u16::MAX),
+        points: points.as_mut_ptr(),
+        tags: tags.as_mut_ptr(),
+        contours: contours.as_mut_ptr(),
+        flags: model.flags,
+    };
+    let matrix_ptr = if matches!(scenario, OutlineTransformScenario::NullMatrix) {
+        ptr::null()
+    } else {
+        &matrix
+    };
+    wasm_abi::fontdone_wasm_outline_transform(&outline, matrix_ptr);
+    model.points = points.into_iter().map(|point| (point.x, point.y)).collect();
+}
+
+fn wasm_observe_mutable_outline(model: &MutableOutlineModel) -> ([i64; 4], i64) {
+    let mut points = model
+        .points
+        .iter()
+        .map(|&(x, y)| wasm_abi::FontdoneWasmVector { x, y })
+        .collect::<Vec<_>>();
+    let mut tags = model.tags.clone();
+    let mut contours = model.contours.clone();
+    let outline = wasm_abi::FontdoneWasmOutline {
+        n_contours: u16::try_from(contours.len()).unwrap_or(u16::MAX),
+        n_points: u16::try_from(points.len()).unwrap_or(u16::MAX),
+        points: points.as_mut_ptr(),
+        tags: tags.as_mut_ptr(),
+        contours: contours.as_mut_ptr(),
+        flags: model.flags,
+    };
+    let mut cbox = wasm_abi::FontdoneWasmBBox::default();
+    wasm_abi::fontdone_wasm_outline_get_cbox(&outline, &mut cbox);
+    (
+        [cbox.xMin, cbox.yMin, cbox.xMax, cbox.yMax],
+        i64::from(wasm_abi::fontdone_wasm_outline_get_orientation(&outline)),
+    )
+}
+
+fn wasm_outline_transform_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_transform_runtime_output(
+        case,
+        wasm_transform_mutable_outline,
+        wasm_observe_mutable_outline,
+    )
+}
+
 fn outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
     if case.expect_error {
         return Ok(error(FT_Err_Invalid_Argument));
@@ -20843,6 +21313,7 @@ fn comparison_schema(case: &InputCase) -> &str {
         | "ftglyph.matrix_multiply"
         | "ftglyph.matrix_invert" => return "math_rows",
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => return "outline_render",
+        "ftoutln.outline_reverse" | "ftoutln.outline_transform" => return "api_object",
         "ftoutln.outline_get_bitmap" if outline_get_bitmap_runtime_supported(case) => {
             return "outline_get_bitmap";
         }
