@@ -870,7 +870,7 @@ impl GlyphSlot {
     }
 
     /// Apply FreeType's synthetic bitmap-slot emboldening and slot metric side effects.
-    pub(crate) fn adjust_bitmap_weight(&mut self, mut xstrength: i32, mut ystrength: i32) {
+    pub(crate) fn adjust_bitmap_weight(&mut self, mut xstrength: i64, mut ystrength: i64) {
         let Some(ref mut bitmap) = self.bitmap else {
             return;
         };
@@ -886,14 +886,27 @@ impl GlyphSlot {
 
         let x_pixels = xstrength >> 6;
         let y_pixels = ystrength >> 6;
+        // C `FT_GlyphSlot_AdjustWeight` checks vertical `FT_Int` range before
+        // ownership, then `FT_Bitmap_Embolden` rejects either positive pixel
+        // count above `FT_INT_MAX` and all negative strengths
+        // (`src/base/ftsynth.c:137-160`, `src/base/ftbitmap.c:302-317`).
+        if y_pixels < i64::from(i32::MIN)
+            || x_pixels > i64::from(i32::MAX)
+            || y_pixels > i64::from(i32::MAX)
+            || x_pixels < 0
+            || y_pixels < 0
+        {
+            return;
+        }
+        let (x_pixels, y_pixels) = (x_pixels as usize, y_pixels as usize);
         if !embolden_rendered_bitmap(bitmap, x_pixels, y_pixels) {
             return;
         }
 
-        self.bitmap_top = self.bitmap_top.wrapping_add(y_pixels);
+        self.bitmap_top = self.bitmap_top.wrapping_add(y_pixels as i32);
         bitmap.left = self.bitmap_left;
         bitmap.top = self.bitmap_top;
-        self.apply_synthetic_weight_metrics(xstrength, ystrength);
+        self.apply_synthetic_weight_metrics(xstrength as i32, ystrength as i32);
     }
 
     fn apply_synthetic_weight_metrics(&mut self, xstrength: i32, ystrength: i32) {
@@ -951,16 +964,10 @@ fn sbit_pixel_mode_to_render(mode: SbitPixelMode) -> PixelMode {
     }
 }
 
-fn embolden_rendered_bitmap(bitmap: &mut RenderedBitmap, x_pixels: i32, y_pixels: i32) -> bool {
-    if x_pixels < 0 || y_pixels < 0 {
-        return false;
-    }
-    let (Ok(x_pixels), Ok(y_pixels)) = (usize::try_from(x_pixels), usize::try_from(y_pixels))
-    else {
-        return false;
-    };
+fn embolden_rendered_bitmap(bitmap: &mut RenderedBitmap, x_pixels: usize, y_pixels: usize) -> bool {
     // `adjust_bitmap_weight` applies FreeType's mandatory one-pixel
-    // horizontal minimum before calling this private helper.
+    // horizontal minimum and validates nonnegative `FT_Int` pixel counts
+    // before calling this private helper.
     match bitmap.pixel_mode {
         PixelMode::Gray => embolden_8bit_positive_pitch_bitmap(bitmap, x_pixels, y_pixels),
         PixelMode::Mono => embolden_mono_positive_pitch_bitmap(bitmap, x_pixels.min(8), y_pixels),

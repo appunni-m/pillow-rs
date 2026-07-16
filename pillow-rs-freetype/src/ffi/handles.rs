@@ -1577,10 +1577,11 @@ pub fn FT_GlyphSlot_AdjustWeight(
     }
 
     let size = slot.source_face.size_metrics();
-    let xstrength = ((FT_Long::from(size.x_ppem) * x_delta) / 1024) as i32;
-    let ystrength = ((FT_Long::from(size.y_ppem) * y_delta) / 1024) as i32;
+    let xstrength = (FT_Long::from(size.x_ppem) * x_delta) / 1024;
+    let ystrength = (FT_Long::from(size.y_ppem) * y_delta) / 1024;
     if slot.format == FT_GLYPH_FORMAT_OUTLINE {
-        slot.core_slot.adjust_outline_weight(xstrength, ystrength);
+        slot.core_slot
+            .adjust_outline_weight(xstrength as i32, ystrength as i32);
     } else {
         slot.core_slot.adjust_bitmap_weight(xstrength, ystrength);
     }

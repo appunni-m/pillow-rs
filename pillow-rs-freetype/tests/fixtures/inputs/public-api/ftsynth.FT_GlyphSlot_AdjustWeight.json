@@ -871,12 +871,25 @@
                 {
                   "xdelta_16_16": 2048,
                   "ydelta_16_16": -2048
+                },
+                {
+                  "xdelta_16_16": 7036874417767,
+                  "ydelta_16_16": 0
+                },
+                {
+                  "xdelta_16_16": 0,
+                  "ydelta_16_16": 7036874417767
+                },
+                {
+                  "xdelta_16_16": 0,
+                  "ydelta_16_16": -7036874421044
                 }
               ],
               "capture_before_after": true
             },
             "coverage": [
-              "ftsynth:bitmap-adjust-weight-gray8-format1"
+              "ftsynth:bitmap-adjust-weight-gray8-format1",
+              "ftsynth:bitmap-adjust-weight-strength-overflow-noop"
             ]
           },
           {
