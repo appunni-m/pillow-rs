@@ -7644,7 +7644,22 @@ static int emit_face_or_slot(int argc, char** argv) {
         face_index < 0 &&
         (streq(command, "--get-advance") || streq(command, "--get-advances"));
     if (!err && !preserve_probe_face) {
-        if (strncmp(size_arg, "char:", 5) == 0) {
+        if (strncmp(size_arg, "request:", 8) == 0) {
+            SizeRequestRow row;
+            const char* request_src = size_arg + 8;
+            char* request_arg = (char*)malloc(strlen(request_src) + 1);
+            if (request_arg) {
+                memcpy(request_arg, request_src, strlen(request_src) + 1);
+            }
+            if (request_arg && parse_size_request_row(request_arg, &row)) {
+                err = FT_Request_Size(
+                    row.face_is_null ? NULL : face,
+                    row.request_is_null ? NULL : &row.req);
+            } else {
+                err = FT_Err_Invalid_Argument;
+            }
+            free(request_arg);
+        } else if (strncmp(size_arg, "char:", 5) == 0) {
             FT_F26Dot6 char_width = 0;
             FT_F26Dot6 char_height = 0;
             FT_UInt horz_resolution = 0;

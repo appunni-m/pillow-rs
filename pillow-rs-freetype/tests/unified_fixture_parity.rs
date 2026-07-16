@@ -9524,6 +9524,20 @@ fn push_asset_source(asset: &Asset, args: &mut Vec<String>) -> Result<(), String
 
 fn push_face_size(params: &Value, args: &mut Vec<String>) -> Result<(), String> {
     args.push(face_index_param(params)?.to_string());
+    if let Some(row) = preload_size_request_row(params)? {
+        args.push(format!(
+            "request:{}:{}:{}:{}:{}:{}:{}",
+            if row.face_is_null { 1 } else { 0 },
+            if row.request_is_null { 1 } else { 0 },
+            row.type_,
+            row.width,
+            row.height,
+            row.hori_resolution,
+            row.vert_resolution
+        ));
+        args.push("0".to_string());
+        return Ok(());
+    }
     if let Some(row) = preload_char_size_row(params)? {
         args.push(format!(
             "char:{}:{}:{}:{}",
