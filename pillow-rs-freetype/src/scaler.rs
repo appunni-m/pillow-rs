@@ -774,12 +774,9 @@ fn scale_glyph_impl_with_context(
 
     // Scale all points to 26.6.  X uses the base scale; Y uses the adjusted
     // vertical scale (x-height optimization) from latin_metrics if available.
-    let y_adj = hint_metrics
-        .and_then(|m| {
-            let s = m.axis[1].scale;
-            if s != 0 { Some(s) } else { None }
-        })
-        .unwrap_or(scale.y_scale);
+    // Autohint metrics are scaled from the active public size before glyph
+    // loading; valid FreeType size setup never supplies a zero vertical scale.
+    let y_adj = hint_metrics.map_or(scale.y_scale, |m| m.axis[1].scale);
     let use_autohint = hint_metrics.is_some();
 
     if outline_raw.num_contours == 0 || outline_raw.points.is_empty() {
@@ -1823,12 +1820,8 @@ fn autohint_glyph(
 
     // Run the auto-hinter.  `apply_hints` modifies `outline.points` in-place.
     // Use the adjusted vertical scale if the autohinter computed one.
-    let y_adj = metrics
-        .and_then(|m| {
-            let s = m.axis[1].scale;
-            if s != 0 { Some(s) } else { None }
-        })
-        .unwrap_or(scale.y_scale);
+    // Matches the active autohint metrics scale chosen before glyph loading.
+    let y_adj = metrics.map_or(scale.y_scale, |m| m.axis[1].scale);
     let output = crate::autohint::apply_hints(
         &mut outline,
         raw_outline,
