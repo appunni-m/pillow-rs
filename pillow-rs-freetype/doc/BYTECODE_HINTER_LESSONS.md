@@ -107,7 +107,7 @@ TT_Hint_Glyph(loader)
 ├── TT_Set_CodeRange(exec, tt_coderange_glyph, glyph_ins, ins_len)
 ├── exec->pts = loader->zone  ← zone with real glyph points + phantoms
 ├── TT_Run_Context(exec, size)  ← executes glyph program
-└── Saves phantom points back to loader->pp1..pp4
+└── Saves phantom points back only when v40 compatibility is disabled
 ```
 
 ### 1.3 The Critical `TT_Load_Context` Function
@@ -309,20 +309,23 @@ correct.
    TT_Run_Context()
 ```
 
-**Our (hinter/mod.rs:87-120):**
+**Our (`tt/hinter/mod.rs::hint_glyph`):**
 ```
 1. Build GlyphZone with scaled 26.6 coords
-2. Add phantom points (pp1-pp4) at zero
+2. Add loader-seeded phantom points (pp1-pp4)
 3. Copy cur → org
 4. Create ExecContext with fpgm/cvt/prep
-5. Run fpgm
+5. Round pp1/pp2 on X and pp3/pp4 on Y
 6. Run glyph program via run_program()
+7. Use current phantoms only when v40 compatibility is disabled
 ```
 
-**Difference:** We don't round phantom points before hinting. C rounds them.
-This matters because MIRP/MDRP reference phantom points (indices n_points-4
-through n_points-1) for side bearing/advance width calculations. Our
-unrounded phantoms can cause a 1px difference in the leftmost x coordinate.
+**Parity rule:** Phantom points are always rounded before glyph bytecode,
+including while v40 backward compatibility is active. Compatibility controls
+whether post-program phantoms replace the loader phantoms, not whether the
+interpreter sees rounded phantoms. A glyph-range `INSTCTRL` selector-3 waiver
+can disable compatibility for one glyph; in that case C saves the current
+phantoms and the final outline translation uses the saved pp1.
 
 ### 2.5 IUP Interpolation
 

@@ -2222,10 +2222,11 @@ impl ExecContext {
                     }
                 }
                 // ── INSTCTRL (0x8E) — Set Instruction Control ────
-                // C: Ins_INSTCTRL. Pops selector,value. Sets instruct_control.
+                // C `Ins_INSTCTRL` reads the selector from `args[1]` and the
+                // value from `args[0]` (`ttinterp.c:4678-4734`).
                 0x8E => {
-                    let value = self.pop()?;
                     let selector = self.pop()?;
+                    let value = self.pop()?;
                     if !(1..=3).contains(&selector) {
                         continue;
                     }
