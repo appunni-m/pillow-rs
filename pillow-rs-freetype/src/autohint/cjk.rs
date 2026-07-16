@@ -549,38 +549,6 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
     }
 }
 
-/// Apply the CJK-specific roundness rule from `af_cjk_hints_compute_segments`.
-///
-/// C first reuses the Latin segment scanner, then marks a segment as round
-/// only if it doesn't contain two successive on-curve points. This differs
-/// from Latin's flat-threshold heuristic and feeds directly into stem
-/// alignment thresholds.
-pub fn cjk_mark_round_segments(hints: &mut GlyphHints, dim: Dimension) {
-    let axis = &mut hints.axis[dim as usize];
-    for seg in &mut axis.segments {
-        seg.flags &= !AF_EDGE_ROUND;
-
-        let mut pt = seg.first;
-        let last = seg.last;
-        let mut f0 = hints.points[pt].flags & AF_FLAG_CONTROL;
-        loop {
-            if pt == last {
-                break;
-            }
-            pt = hints.points[pt].next;
-            let f1 = hints.points[pt].flags & AF_FLAG_CONTROL;
-            if f0 == 0 && f1 == 0 {
-                break;
-            }
-            if pt == last {
-                seg.flags |= AF_EDGE_ROUND;
-                break;
-            }
-            f0 = f1;
-        }
-    }
-}
-
 /// Link CJK segments into stems and serifs.
 ///
 /// This is the CJK-specific counterpart to Latin `link_segments_inner`, ported

@@ -2717,11 +2717,12 @@ pub fn apply_hints(
             let (wc, widths) = extract_widths(&hints, Dimension::Horz);
             horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
             if use_cjk_edges {
-                // FreeType 2.14.3's `af_cjk_hints_compute_segments` snapshots
-                // the segment limit before `af_latin_hints_compute_segments`.
-                // `af_glyph_hints_reload` has just reset that count to zero,
-                // so the CJK roundness cleanup is skipped and the Latin segment
-                // roundness flags are preserved for CJK/Hani parity.
+                // FreeType 2.14.3's `af_glyph_hints_reload` resets segment
+                // counts before every apply call (afhints.c:887-893), then
+                // `af_cjk_hints_compute_segments` snapshots that zero limit
+                // before running the Latin scanner (afcjk.c:794-807). Its CJK
+                // roundness loop is empty in the public apply route, so keep
+                // the Latin segment round flags for CJK/Hani parity.
                 super::cjk::cjk_link_segments(&mut hints, Dimension::Horz);
             } else {
                 link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
@@ -2751,7 +2752,7 @@ pub fn apply_hints(
         vert_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
         if use_cjk_edges {
             // Keep Latin segment roundness flags for CJK; see the horizontal
-            // phase comment above for the FreeType 2.14.3 control-flow detail.
+            // phase comment above for the FreeType 2.14.3 no-op wrapper detail.
             super::cjk::cjk_link_segments(&mut hints, Dimension::Vert);
         } else {
             link_segments_inner(&mut hints, Dimension::Vert, wc, &widths);
