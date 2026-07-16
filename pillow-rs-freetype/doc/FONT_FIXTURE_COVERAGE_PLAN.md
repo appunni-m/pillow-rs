@@ -2207,13 +2207,6 @@ vertical-scale fallbacks and one redundant composite tag fallback; those were
 verified by `make -C pillow-rs-freetype real-parity-verify` with exact runtime
 parity unchanged.
 
-Resolved after this map: the `can_execute_native_bytecode` second-operand
-branch at `scaler.rs:904` is covered by the public
-`render-fpgm-no-cvt-default` route.  The compact generated font carries an
-empty `fpgm` table but no `cvt`, so default TrueType loading proves the
-FreeType fallback where native bytecode cannot execute even though `fpgm`
-exists.
-
 ### Rejected Candidate Audit - 2026-07-13
 
 These candidates were exact-parity probes but deliberately not kept because
