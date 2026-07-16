@@ -401,11 +401,11 @@ impl GlyphHints {
 
     /// Copy hinted coordinates back into an Outline.
     pub fn save_to_outline(&self, outline: &mut Outline) {
-        for (i, pt) in self.points.iter().enumerate() {
-            if let Some(op) = outline.points.get_mut(i) {
-                op.x = pt.x;
-                op.y = pt.y;
-            }
+        // C's `af_glyph_hints_save` advances the hint and outline point arrays
+        // in lockstep; `reload` creates one AFPoint per outline point.
+        for (op, pt) in outline.points.iter_mut().zip(&self.points) {
+            op.x = pt.x;
+            op.y = pt.y;
         }
     }
 }
