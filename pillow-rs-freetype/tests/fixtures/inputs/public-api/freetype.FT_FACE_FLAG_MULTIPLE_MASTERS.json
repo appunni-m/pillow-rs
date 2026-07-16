@@ -102,6 +102,23 @@
             ]
           },
           {
+            "id": "unsupported-fvar-minor-version-control",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/fvar-minor-version-1.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS"
+            },
+            "coverage": [
+              "tt/fvar:unsupported-minor-version"
+            ]
+          },
+          {
             "id": "short-fvar-axis-record-control",
             "assets": {
               "font": {
@@ -116,6 +133,23 @@
             },
             "coverage": [
               "tt/fvar:axis-record-too-short"
+            ]
+          },
+          {
+            "id": "long-fvar-axis-record-control",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/fvar-axis-size-long.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS"
+            },
+            "coverage": [
+              "tt/fvar:axis-record-must-be-exactly-20-bytes"
             ]
           },
           {
@@ -150,6 +184,57 @@
             },
             "coverage": [
               "tt/fvar:instance-record-too-short"
+            ]
+          },
+          {
+            "id": "long-fvar-instance-record-control",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/fvar-instance-size-long.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS"
+            },
+            "coverage": [
+              "tt/fvar:instance-record-must-match-axis-layout"
+            ]
+          },
+          {
+            "id": "fvar-axis-count-limit-control",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/fvar-axis-count-too-large.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS"
+            },
+            "coverage": [
+              "tt/fvar:axis-count-exceeds-sfnt-init-limit"
+            ]
+          },
+          {
+            "id": "fvar-instance-count-limit-control",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/variable/fvar-instance-count-too-large.ttf"
+              }
+            },
+            "params": {
+              "open": "FT_New_Memory_Face",
+              "face_index": 0,
+              "flag": "FT_FACE_FLAG_MULTIPLE_MASTERS"
+            },
+            "coverage": [
+              "tt/fvar:instance-count-exceeds-name-id-limit"
             ]
           },
           {
