@@ -1498,7 +1498,7 @@ fn scale_composite_components(
         }
         let off_x = ft_pix_floor(sub.outline_cbox_x_min);
         let off_y = ft_pix_floor(sub.outline_cbox_y_min);
-        let sub_tags = outline_tags_or_curve_tags(&sub.outline);
+        let sub_tags = sub.outline.tags.clone();
         let mut transformed = Vec::with_capacity(sub.outline.points.len());
         for (index, point) in sub.outline.points.iter().enumerate() {
             // Recursive component loading happens before the final top-level
@@ -1573,17 +1573,6 @@ struct CompositeScaleResult {
     use_my_metrics_advance: Option<i32>,
     use_my_metrics_vertical_advance: Option<i32>,
     use_my_metrics_phantoms: Option<(i32, i32)>,
-}
-
-fn outline_tags_or_curve_tags(outline: &Outline) -> Vec<u8> {
-    if !outline.tags.is_empty() {
-        return outline.tags.clone();
-    }
-    outline
-        .points
-        .iter()
-        .map(|point| if point.on_curve { 0x01 } else { 0x00 })
-        .collect()
 }
 
 #[derive(Debug, Clone, Copy)]
