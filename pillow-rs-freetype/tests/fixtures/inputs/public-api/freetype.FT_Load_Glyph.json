@@ -5235,6 +5235,27 @@
             ]
           },
           {
+            "id": "hinter-instruction-control-phantom-rounding",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 19,
+              "glyph_index": 29,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "tt/hinter:phantom-round-before-glyph-instctrl-waiver"
+            ]
+          },
+          {
             "id": "hinter-stack-state-matrix",
             "assets": {
               "font": {

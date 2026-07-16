@@ -204,7 +204,7 @@
     <mtx name="idefCall" width="700" lsb="0"/>
     <mtx name="untouchPoint" width="700" lsb="0"/>
     <mtx name="superRoundMatrix" width="700" lsb="0"/>
-    <mtx name="instructionControl" width="700" lsb="0"/>
+    <mtx name="instructionControl" width="700" lsb="100"/>
     <mtx name="stackStateMatrix" width="700" lsb="0"/>
     <mtx name="pointCoordinateMatrix" width="700" lsb="0"/>
     <mtx name="pointMoveMatrix" width="700" lsb="0"/>
@@ -367,8 +367,10 @@
   </fpgm>
 
   <prep>
+    <!-- INSTCTRL operands are value then selector.  Clearing selector 1 is a
+         valid no-op that proves the CVT-range control path. -->
     <bytecode>
-      b1 01 00 8e
+      b1 00 01 8e
       b0 01 16 b0 00 36
       30 31
     </bytecode>
@@ -651,9 +653,18 @@
       </contour>
       <instructions>
         <!-- Invalid selector/value pairs are ignored; selector 3 is the only
-             glyph-range INSTCTRL state accepted by FreeType. -->
+             glyph-range INSTCTRL state accepted by FreeType.  The final
+             value-4/selector-3 waiver disables v40 compatibility, then copies
+             the current pp2 coordinate into every real point.  The nonzero
+             left phantom and non-grid advance make public metrics observe
+             pre-bytecode phantom rounding, saveback, and final pp1
+             translation. -->
         <bytecode>
-          b1 00 00 8e b1 01 02 8e b1 03 04 8e b1 03 00 8e
+          b1 00 00 8e b1 01 02 8e b1 04 03 8e b1 00 03 8e
+          b1 04 03 8e 01
+          b0 00 b0 04 46 48
+          b0 01 b0 04 46 48
+          b0 02 b0 04 46 48
         </bytecode>
       </instructions>
     </TTGlyph>

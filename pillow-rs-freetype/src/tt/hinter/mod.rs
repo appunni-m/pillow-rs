@@ -293,21 +293,18 @@ pub fn hint_glyph(
     }
     ctx.pedantic_hinting = scale.pedantic_hinting;
 
-    if !scale.metrics_legacy_phantoms || ctx.backward_compatibility == 0 {
-        // C `TT_Hint_Glyph` rounds phantom points before bytecode execution
-        // (ttgload.c:812-815).  In v40 backward-compatibility mode it returns
-        // before saving those phantoms (ttgload.c:845-857), so the legacy
-        // metrics branch preserves unrounded phantoms only while that mode is
-        // active.  Mono target loads disable backward compatibility.
-        let pp1_idx = n_points;
-        let pp2_idx = n_points + 1;
-        let pp3_idx = n_points + 2;
-        let pp4_idx = n_points + 3;
-        zone.cur_x[pp1_idx] = crate::scaler::ft_pix_round(zone.cur_x[pp1_idx]);
-        zone.cur_x[pp2_idx] = crate::scaler::ft_pix_round(zone.cur_x[pp2_idx]);
-        zone.cur_y[pp3_idx] = crate::scaler::ft_pix_round(zone.cur_y[pp3_idx]);
-        zone.cur_y[pp4_idx] = crate::scaler::ft_pix_round(zone.cur_y[pp4_idx]);
-    }
+    // C `TT_Hint_Glyph` rounds all phantoms before bytecode execution,
+    // regardless of v40 backward compatibility (`ttgload.c:812-815`).
+    // Compatibility only controls whether the post-program phantoms are
+    // copied back to the loader (`ttgload.c:845-857`).
+    let pp1_idx = n_points;
+    let pp2_idx = n_points + 1;
+    let pp3_idx = n_points + 2;
+    let pp4_idx = n_points + 3;
+    zone.cur_x[pp1_idx] = crate::scaler::ft_pix_round(zone.cur_x[pp1_idx]);
+    zone.cur_x[pp2_idx] = crate::scaler::ft_pix_round(zone.cur_x[pp2_idx]);
+    zone.cur_y[pp3_idx] = crate::scaler::ft_pix_round(zone.cur_y[pp3_idx]);
+    zone.cur_y[pp4_idx] = crate::scaler::ft_pix_round(zone.cur_y[pp4_idx]);
 
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {
@@ -327,13 +324,18 @@ pub fn hint_glyph(
         ctx.backward_compatibility == 0 || (scale.is_composite && glyph_ins.is_empty());
     for (i, pt) in scaled.iter_mut().enumerate().take(n_points) {
         pt.x = if scale.metrics_legacy_phantoms {
-            // C `TT_Load_Glyph` translates simple outlines by `-loader.pp1.x`
-            // before `compute_glyph_metrics` calls `FT_Outline_Get_CBox`
-            // (ttgload.c:2578-2583, 1963-1964). Composite glyph metrics use
-            // the loader's cached bbox instead (ttgload.c:1965-1966), so the
-            // legacy metrics branch must not apply the simple-glyph origin
-            // shift to composite coordinates.
-            let origin_shift = if scale.is_composite { 0 } else { pp1_x };
+            // C `TT_Hint_Glyph` saves the current pp1 when glyph bytecode
+            // disables v40 compatibility, and `TT_Load_Glyph` translates
+            // simple outlines by that saved `-loader.pp1.x` before computing
+            // metrics (ttgload.c:845-857, 2578-2583). Composite metrics use
+            // the loader's cached bbox instead (ttgload.c:1965-1966).
+            let origin_shift = if scale.is_composite {
+                0
+            } else if use_current_phantoms {
+                zone.cur_x[n_points]
+            } else {
+                pp1_x
+            };
             zone.cur_x[i] - origin_shift
         } else {
             let pp1 = if use_current_phantoms {
