@@ -2300,12 +2300,13 @@ impl Font {
         cvt: &[i32],
         fpgm: &[u8],
     ) -> Result<tt::hinter::exec::ExecContext, FontError> {
+        let active_scale = scaler::ScaleMetrics::from_font_data(&self.data);
         let scale = tt::hinter::HintScale {
-            x_scale: self.size_metrics.x_scale,
-            y_scale: self.size_metrics.y_scale,
-            tt_scale: self.size_metrics.tt_scale(),
-            ppem: self.size_metrics.tt_ppem(),
-            point_size: self.size_metrics.tt_point_size(),
+            x_scale: active_scale.x_scale,
+            y_scale: active_scale.y_scale,
+            tt_scale: active_scale.tt_scale,
+            ppem: active_scale.ppem,
+            point_size: active_scale.point_size,
             storage_size: self.data.maxp.max_storage as usize,
             max_function_defs: self.data.maxp.max_function_defs as usize,
             max_instruction_defs: self.data.maxp.max_instruction_defs as usize,
@@ -2983,10 +2984,31 @@ impl SizeMetrics {
     }
 }
 
+fn true_type_hint_scales(data: &FontData, metrics: SizeMetrics) -> (i32, i32) {
+    if data.cff.is_none() && data.head.flags & 8 != 0 {
+        // C `tt_size_reset` recomputes hinted TrueType scales from rounded
+        // integer ppems for the driver when `head.Flags & 8` is set
+        // (`ttobjs.c:1254-1262`). Public `FT_Size_Metrics` still exposes the
+        // base request metrics; only the internal scaler state uses this.
+        let units_per_em = i32::from(data.head.units_per_em);
+        (
+            ft_div_fix(i32::from(metrics.x_ppem) << 6, units_per_em),
+            ft_div_fix(i32::from(metrics.y_ppem) << 6, units_per_em),
+        )
+    } else {
+        (metrics.x_scale, metrics.y_scale)
+    }
+}
+
 fn sync_active_size_metrics(data: &FontData, metrics: SizeMetrics) {
-    data.size_x_scale.set(metrics.x_scale);
-    data.size_y_scale.set(metrics.y_scale);
-    data.size_tt_scale.set(metrics.tt_scale());
+    let (x_scale, y_scale) = true_type_hint_scales(data, metrics);
+    data.size_x_scale.set(x_scale);
+    data.size_y_scale.set(y_scale);
+    data.size_tt_scale.set(if metrics.x_ppem >= metrics.y_ppem {
+        x_scale
+    } else {
+        y_scale
+    });
     data.size_tt_ppem.set(metrics.tt_ppem());
     data.size_tt_point_size.set(metrics.tt_point_size());
 }
