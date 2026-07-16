@@ -130,18 +130,6 @@ pub enum RenderMode {
     Sdf,
 }
 
-impl RenderMode {
-    pub fn fixture_name(self) -> &'static str {
-        match self {
-            RenderMode::Normal => "normal",
-            RenderMode::Mono => "mono",
-            RenderMode::Lcd => "lcd",
-            RenderMode::LcdV => "lcd_v",
-            RenderMode::Sdf => "sdf",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PixelMode {
     Gray,
@@ -162,18 +150,6 @@ impl PixelMode {
             // FreeType leaves `FT_Bitmap::num_grays` at 256 for rendered
             // monochrome slots even though the buffer is 1-bit packed.
             PixelMode::Mono => 256,
-        }
-    }
-
-    pub fn fixture_name(self) -> &'static str {
-        match self {
-            PixelMode::Gray => "gray",
-            PixelMode::Mono => "mono",
-            PixelMode::Gray2 => "gray2",
-            PixelMode::Gray4 => "gray4",
-            PixelMode::Lcd => "lcd",
-            PixelMode::LcdV => "lcd_v",
-            PixelMode::Bgra => "bgra",
         }
     }
 }

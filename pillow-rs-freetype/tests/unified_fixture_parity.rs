@@ -37,8 +37,8 @@ use std::time::{Duration, Instant};
 use fontdone::autohint::coverage as autohint_coverage;
 use fontdone::ffi::*;
 use fontdone::{
-    CharmapInfo, Face as ApiFace, Font, FontError, GlyphSlot as ApiGlyphSlot, LoadMode, RenderMode,
-    RenderedBitmap,
+    CharmapInfo, Face as ApiFace, Font, FontError, GlyphSlot as ApiGlyphSlot, LoadMode, PixelMode,
+    RenderMode, RenderedBitmap,
 };
 use fontdone_ffi_c as c_abi;
 use fontdone_ffi_wasm as wasm_abi;
@@ -13121,10 +13121,10 @@ fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result
         .get("assert_render_mode_fixture_name")
         .and_then(Value::as_str)
     {
-        let actual = render_mode.fixture_name();
+        let actual = render_mode_fixture_name(render_mode);
         if actual != expected {
             return Err(format!(
-                "{} RenderMode::fixture_name disagrees: mode={actual} expected={expected}",
+                "{} render mode fixture name disagrees: mode={actual} expected={expected}",
                 case.case_id
             ));
         }
@@ -13219,10 +13219,10 @@ fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result
         .get("assert_pixel_mode_fixture_name")
         .and_then(Value::as_str)
     {
-        let actual = char_bitmap.pixel_mode.fixture_name();
+        let actual = pixel_mode_fixture_name(char_bitmap.pixel_mode);
         if actual != expected {
             return Err(format!(
-                "{} PixelMode::fixture_name disagrees: pixel={actual} expected={expected}",
+                "{} pixel mode fixture name disagrees: pixel={actual} expected={expected}",
                 case.case_id
             ));
         }
@@ -13262,6 +13262,28 @@ fn assert_font_render_mode_agrees(case: &InputCase, slot_json: &Value) -> Result
         ));
     }
     Ok(())
+}
+
+fn render_mode_fixture_name(mode: RenderMode) -> &'static str {
+    match mode {
+        RenderMode::Normal => "normal",
+        RenderMode::Mono => "mono",
+        RenderMode::Lcd => "lcd",
+        RenderMode::LcdV => "lcd_v",
+        RenderMode::Sdf => "sdf",
+    }
+}
+
+fn pixel_mode_fixture_name(mode: PixelMode) -> &'static str {
+    match mode {
+        PixelMode::Gray => "gray",
+        PixelMode::Mono => "mono",
+        PixelMode::Gray2 => "gray2",
+        PixelMode::Gray4 => "gray4",
+        PixelMode::Lcd => "lcd",
+        PixelMode::LcdV => "lcd_v",
+        PixelMode::Bgra => "bgra",
+    }
 }
 
 fn font_load_mode_from_params(params: &Value) -> Result<LoadMode, String> {
