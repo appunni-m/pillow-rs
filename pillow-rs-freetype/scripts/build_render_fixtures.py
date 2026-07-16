@@ -32,6 +32,7 @@ GLYPH_ORDER = [
     "mono_bottom_edge_dropout",
     "sdf_flat_horizontal_segment",
     "sdf_flat_vertical_segment",
+    "sdf_large_interior",
 ]
 
 
@@ -229,6 +230,21 @@ def sdf_flat_vertical_segment_glyph():
     return pen.glyph()
 
 
+def sdf_large_interior_glyph():
+    pen = TTGlyphPen(None)
+
+    # Large enough at 16 ppem for the SDF renderer to emit pixels whose
+    # interior signed distance exceeds the renderer spread, reaching
+    # FreeType's negative-distance saturation path.
+    pen.moveTo((0, 0))
+    pen.lineTo((1024, 0))
+    pen.lineTo((1024, 1024))
+    pen.lineTo((0, 1024))
+    pen.closePath()
+
+    return pen.glyph()
+
+
 def mono_left_edge_dropout_glyph():
     pen = TTGlyphPen(None)
 
@@ -269,6 +285,7 @@ def build_render_coverage_font(name: str, notdef_glyph=None, ascender: int = 256
         "sdf_centerline_segment": sdf_centerline_segment_glyph(),
         "sdf_flat_horizontal_segment": sdf_flat_horizontal_segment_glyph(),
         "sdf_flat_vertical_segment": sdf_flat_vertical_segment_glyph(),
+        "sdf_large_interior": sdf_large_interior_glyph(),
         "mono_left_edge_dropout": mono_left_edge_dropout_glyph(),
         "mono_bottom_edge_dropout": mono_bottom_edge_dropout_glyph(),
     }
@@ -287,6 +304,7 @@ def build_render_coverage_font(name: str, notdef_glyph=None, ascender: int = 256
         "sdf_centerline_segment": (256, 0),
         "sdf_flat_horizontal_segment": (256, 0),
         "sdf_flat_vertical_segment": (256, 0),
+        "sdf_large_interior": (1024, 0),
         "mono_left_edge_dropout": (256, 0),
         "mono_bottom_edge_dropout": (256, 0),
     }
@@ -310,6 +328,7 @@ def build_render_coverage_font(name: str, notdef_glyph=None, ascender: int = 256
             0xE10C: "mono_bottom_edge_dropout",
             0xE10D: "sdf_flat_horizontal_segment",
             0xE10E: "sdf_flat_vertical_segment",
+            0xE10F: "sdf_large_interior",
         }
     )
     builder.setupGlyf(glyphs)
