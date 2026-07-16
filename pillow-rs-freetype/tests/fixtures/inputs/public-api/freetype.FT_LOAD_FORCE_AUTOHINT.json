@@ -4879,6 +4879,27 @@
             "coverage": [
               "autohint/latin:nonbase-combining-mark"
             ]
+          },
+          {
+            "id": "branch-dejavu-u0021-target-mono-15",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/native/dejavu-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 15,
+              "char_code": 33,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_MONO"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:branch-stem-width-standard-mono-exclamation"
+            ]
           }
         ]
       },
