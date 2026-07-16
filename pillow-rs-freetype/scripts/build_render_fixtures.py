@@ -364,9 +364,22 @@ def build_render_prep_only() -> None:
     font.save(OUT_DIR / "render-prep-only.ttf", reorderTables=True)
 
 
+def build_render_fpgm_no_cvt() -> None:
+    font = TTFont(OUT_DIR / "render-coverage.ttf", recalcTimestamp=False)
+    fpgm = newTable("fpgm")
+    program = Program()
+    program.fromBytecode(b"")
+    fpgm.program = program
+    font["fpgm"] = fpgm
+    if "cvt " in font:
+        del font["cvt "]
+    font.save(OUT_DIR / "render-fpgm-no-cvt.ttf", reorderTables=True)
+
+
 def main() -> None:
     build_render_coverage()
     build_render_prep_only()
+    build_render_fpgm_no_cvt()
 
 
 if __name__ == "__main__":
