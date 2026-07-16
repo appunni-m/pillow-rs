@@ -1731,19 +1731,19 @@ pub fn to_pixel(x: i32) -> i32 {
 /// Round 26.6 to nearest pixel (FT_PIX_ROUND → int).
 #[inline]
 pub fn pixel_round(x: i32) -> i32 {
-    ft_pix_round(x) >> 6
+    to_pixel(ft_pix_round(x))
 }
 
 /// Floor 26.6 to integer pixel.
 #[inline]
 pub fn pixel_floor(x: i32) -> i32 {
-    ft_pix_floor(x) >> 6
+    to_pixel(ft_pix_floor(x))
 }
 
 /// Ceil 26.6 to integer pixel.
 #[inline]
 pub fn pixel_ceil(x: i32) -> i32 {
-    ft_pix_ceil(x) >> 6
+    to_pixel(ft_pix_ceil(x))
 }
 
 // ── Auto-hinting bridge ───────────────────────────────────────────────────
@@ -1828,7 +1828,3 @@ struct HintTarget {
     is_italic: bool,
     mono: bool,
 }
-
-// Suppress unused-import warning for GlyphOutline (kept for clarity).
-#[allow(dead_code)]
-fn _t(_: GlyphOutline) {}
