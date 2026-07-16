@@ -290,6 +290,11 @@ impl Face {
         self.render_fonts.clear();
     }
 
+    pub(crate) fn reset_size_to_undefined(&mut self) {
+        self.font.reset_size_to_undefined();
+        self.render_fonts.clear();
+    }
+
     /// Set the active character size, equivalent to `FT_Set_Char_Size`.
     pub fn set_char_size(&mut self, char_width: i32, char_height: i32, x_dpi: u32, y_dpi: u32) {
         self.font

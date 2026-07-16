@@ -7085,6 +7085,9 @@ fn runtime_face_cache_key(case: &InputCase) -> Result<String, String> {
     let mut hasher = Sha256::new();
     hasher.update(bytes.as_ref());
     let font_key = format!("sha256:{}:face:{face_index}", hex_bytes(&hasher.finalize()));
+    if preserve_initial_size(&case.inputs.params)? {
+        return Ok(format!("{font_key}:initial-size"));
+    }
     if let Some(row) = preload_size_request_row(&case.inputs.params)? {
         return Ok(format!(
             "{font_key}:request:{}:{}:{}:{}:{}:{}:{}",
@@ -9552,6 +9555,11 @@ fn push_asset_source(asset: &Asset, args: &mut Vec<String>) -> Result<(), String
 
 fn push_face_size(params: &Value, args: &mut Vec<String>) -> Result<(), String> {
     args.push(face_index_param(params)?.to_string());
+    if preserve_initial_size(params)? {
+        args.push("none".to_string());
+        args.push("0".to_string());
+        return Ok(());
+    }
     if let Some(row) = preload_size_request_row(params)? {
         args.push(format!(
             "request:{}:{}:{}:{}:{}:{}:{}",
@@ -13811,6 +13819,9 @@ fn c_open_face_with_size_or_char_size(
     pixel_size: (u32, u32),
 ) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
     let (library, face) = c_new_face_without_size(case)?;
+    if preserve_initial_size(&case.inputs.params)? {
+        return Ok((library, face));
+    }
     let err = if let Some(row) = preload_size_request_row(&case.inputs.params)? {
         let request = c_size_request_rec(row);
         c_abi::FT_Request_Size(face, &request)
@@ -14353,6 +14364,9 @@ fn wasm_open_face_with_size_or_char_size(
     );
     if status.error != FT_Err_Ok {
         return Err(format!("fontdone_wasm_open_face returned {}", status.error));
+    }
+    if preserve_initial_size(&case.inputs.params)? {
+        return Ok(status.handle);
     }
     let err = if let Some(row) = preload_size_request_row(&case.inputs.params)? {
         let request = wasm_size_request_rec(row);
@@ -15081,6 +15095,9 @@ fn open_face_with_size_or_char_size(
         20.0,
     )
     .map_err(|err| format!("FT_New_Memory_Face returned {err}"))?;
+    if preserve_initial_size(&case.inputs.params)? {
+        return Ok(face);
+    }
     let err = if let Some(row) = preload_size_request_row(&case.inputs.params)? {
         let request = rust_size_request_rec(row);
         FT_Request_Size(Some(&mut face), Some(&request))
@@ -22510,6 +22527,10 @@ fn face_index_param(value: &Value) -> Result<i64, String> {
     value
         .get("face_index")
         .map_or(Ok(0), |raw| i64_value(raw, "face_index"))
+}
+
+fn preserve_initial_size(value: &Value) -> Result<bool, String> {
+    bool_param(value, "preserve_initial_size", false)
 }
 
 fn is_face_probe(case: &InputCase) -> Result<bool, String> {

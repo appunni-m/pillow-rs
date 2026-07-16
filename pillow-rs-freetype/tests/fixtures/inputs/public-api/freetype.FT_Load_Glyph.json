@@ -1126,6 +1126,27 @@
             ]
           },
           {
+            "id": "dejavu-a-render-fresh-face-undefined-size",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "preserve_initial_size": true,
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_RENDER"
+              ]
+            },
+            "coverage": [
+              "load-flags:undefined-size-forces-no-scale-and-clears-render"
+            ]
+          },
+          {
             "id": "dejavu-a-default-nonsquare-pixels",
             "assets": {
               "font": {
