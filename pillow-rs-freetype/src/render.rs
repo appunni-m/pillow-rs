@@ -948,22 +948,33 @@ impl MonoOutlineProfileBuilder {
         } else {
             MonoState::Descending
         };
-        self.ensure_profile_state(state, contour);
-
         let last_x = self.last_x;
         let last_y = self.last_y;
         let min_y = self.min_y;
         let max_y = self.max_y;
         let precision = self.precision;
         let range = MonoLineRange::new(min_y, max_y);
+        let profile = self.ensure_profile_state(state, contour);
         if state == MonoState::Ascending {
-            self.push_profile_xs_from(|xs| {
-                line_up_into_precision(xs, last_x, last_y, x, y, range, precision);
-            });
+            line_up_into_precision(
+                &mut self.profiles[profile].xs,
+                last_x,
+                last_y,
+                x,
+                y,
+                range,
+                precision,
+            );
         } else {
-            self.push_profile_xs_from(|xs| {
-                line_down_into_precision(xs, last_x, last_y, x, y, range, precision);
-            });
+            line_down_into_precision(
+                &mut self.profiles[profile].xs,
+                last_x,
+                last_y,
+                x,
+                y,
+                range,
+                precision,
+            );
         }
 
         self.last_x = x;
@@ -1001,18 +1012,26 @@ impl MonoOutlineProfileBuilder {
                 } else {
                     MonoState::Descending
                 };
-                self.ensure_profile_state(state, contour);
                 let min_y = self.min_y;
                 let max_y = self.max_y;
                 let precision = self.precision;
+                let profile = self.ensure_profile_state(state, contour);
                 if state == MonoState::Ascending {
-                    self.push_profile_xs_from(|xs| {
-                        bezier_up_2_into_precision(xs, arc, min_y, max_y, precision);
-                    });
+                    bezier_up_2_into_precision(
+                        &mut self.profiles[profile].xs,
+                        arc,
+                        min_y,
+                        max_y,
+                        precision,
+                    );
                 } else {
-                    self.push_profile_xs_from(|xs| {
-                        bezier_down_2_into_precision(xs, arc, min_y, max_y, precision);
-                    });
+                    bezier_down_2_into_precision(
+                        &mut self.profiles[profile].xs,
+                        arc,
+                        min_y,
+                        max_y,
+                        precision,
+                    );
                 }
             }
 
@@ -1057,18 +1076,26 @@ impl MonoOutlineProfileBuilder {
                 } else {
                     MonoState::Descending
                 };
-                self.ensure_profile_state(state, contour);
                 let min_y = self.min_y;
                 let max_y = self.max_y;
                 let precision = self.precision;
+                let profile = self.ensure_profile_state(state, contour);
                 if state == MonoState::Ascending {
-                    self.push_profile_xs_from(|xs| {
-                        bezier_up_3_into_precision(xs, arc, min_y, max_y, precision);
-                    });
+                    bezier_up_3_into_precision(
+                        &mut self.profiles[profile].xs,
+                        arc,
+                        min_y,
+                        max_y,
+                        precision,
+                    );
                 } else {
-                    self.push_profile_xs_from(|xs| {
-                        bezier_down_3_into_precision(xs, arc, min_y, max_y, precision);
-                    });
+                    bezier_down_3_into_precision(
+                        &mut self.profiles[profile].xs,
+                        arc,
+                        min_y,
+                        max_y,
+                        precision,
+                    );
                 }
             }
 
@@ -1077,16 +1104,20 @@ impl MonoOutlineProfileBuilder {
         }
     }
 
-    fn ensure_profile_state(&mut self, state: MonoState, contour: usize) {
+    fn ensure_profile_state(&mut self, state: MonoState, contour: usize) -> usize {
         if self.state != state {
             if self.state != MonoState::Unknown {
                 self.end_profile();
             }
-            self.new_profile(state, contour);
+            return self.new_profile(state, contour);
         }
+        let Some(current) = self.current else {
+            unreachable!("mono profile state must be active before appending");
+        };
+        current
     }
 
-    fn new_profile(&mut self, state: MonoState, contour: usize) {
+    fn new_profile(&mut self, state: MonoState, contour: usize) -> usize {
         let mut flags = self
             .contour_dropouts
             .get(contour)
@@ -1132,6 +1163,7 @@ impl MonoOutlineProfileBuilder {
         self.current = Some(index);
         self.state = state;
         self.contour_profiles.push(index);
+        index
     }
 
     fn end_profile(&mut self) {
@@ -1172,18 +1204,6 @@ impl MonoOutlineProfileBuilder {
             let profile = self.contour_profiles[idx];
             let next = self.contour_profiles[(idx + 1) % len];
             self.profiles[profile].next = Some(next);
-        }
-    }
-
-    fn push_profile_xs(&mut self, xs: Vec<i32>) {
-        if let Some(index) = self.current {
-            self.profiles[index].xs.extend(xs);
-        }
-    }
-
-    fn push_profile_xs_from(&mut self, append: impl FnOnce(&mut Vec<i32>)) {
-        if let Some(index) = self.current {
-            append(&mut self.profiles[index].xs);
         }
     }
 
