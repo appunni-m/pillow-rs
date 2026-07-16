@@ -61,6 +61,12 @@
             "coverage": ["grays:cubic-tagged-outline"]
           },
           {
+            "id": "cubic-default-tag3",
+            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-default-tag3.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
+            "coverage": ["grays:cubic-default-tag3"]
+          },
+          {
             "id": "zero-width-target",
             "assets": {"outline": {"kind": "ref", "id": "outlines/render/simple-filled-square.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-0x32.json", "asset_kind": "bitmap_model"}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid", "target_box": {"width": 0, "height": 32}},

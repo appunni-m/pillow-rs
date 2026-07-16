@@ -50,6 +50,28 @@ use sha2::{Digest, Sha256};
 mod generated_constant_lookup;
 use generated_constant_lookup::generated_rust_constant;
 
+struct RasterizerTraceCoverageLogger;
+
+impl log::Log for RasterizerTraceCoverageLogger {
+    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+        metadata.target() == "autohint::rasterizer" && metadata.level() <= log::Level::Trace
+    }
+
+    fn log(&self, _record: &log::Record<'_>) {}
+
+    fn flush(&self) {}
+}
+
+fn enable_rasterizer_trace_coverage() {
+    static LOGGER: RasterizerTraceCoverageLogger = RasterizerTraceCoverageLogger;
+    static INSTALLED: OnceLock<()> = OnceLock::new();
+    INSTALLED.get_or_init(|| {
+        if log::set_logger(&LOGGER).is_ok() {
+            log::set_max_level(log::LevelFilter::Trace);
+        }
+    });
+}
+
 #[derive(Debug)]
 struct Manifest {
     subjects: BTreeMap<String, BTreeSet<String>>,
@@ -298,6 +320,7 @@ fn duration_ns(duration: Duration) -> u128 {
 
 #[test]
 fn unified_fixture_parity() {
+    enable_rasterizer_trace_coverage();
     let _profile = ProfileStage::new("unified_fixture_parity.total");
     assert_oracle_cache_key_tracks_asset_identity();
     let input_cases = {
@@ -17638,6 +17661,7 @@ fn outline_render_outline(case: &InputCase) -> Result<fontdone::outline::Outline
             Ok(outline_render_right_edge_clip_outside_target())
         }
         "outlines/render/cubic-closed-loop.json" => Ok(outline_render_cubic_loop()),
+        "outlines/render/cubic-default-tag3.json" => Ok(outline_render_cubic_default_tag3()),
         "outlines/render/empty-outline.json" => Ok(outline_render_empty()),
         "outlines/render/zero-contours-nonempty-points.json" => {
             Ok(outline_render_zero_contours_nonempty_points())
@@ -18078,6 +18102,12 @@ fn outline_render_cubic_loop() -> fontdone::outline::Outline {
         cbox_x_max: 32,
         cbox_y_max: 32,
     }
+}
+
+fn outline_render_cubic_default_tag3() -> fontdone::outline::Outline {
+    let mut outline = outline_render_cubic_loop();
+    outline.tags[1] = 3;
+    outline
 }
 
 fn outline_render_cubic_above_clip() -> fontdone::outline::Outline {

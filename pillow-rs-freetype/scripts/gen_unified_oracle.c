@@ -4633,6 +4633,17 @@ static int emit_outline_render(int argc, char** argv) {
         points[3].y = 16 * 64;
         tags[1] = FT_CURVE_TAG_CUBIC;
         tags[2] = FT_CURVE_TAG_CUBIC;
+    } else if (strstr(case_id, "@cubic-default-tag3")) {
+        points[0].x = 8 * 64;
+        points[0].y = 16 * 64;
+        points[1].x = 8 * 64;
+        points[1].y = 28 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 28 * 64;
+        points[3].x = 24 * 64;
+        points[3].y = 16 * 64;
+        tags[1] = 3;
+        tags[2] = FT_CURVE_TAG_CUBIC;
     } else if (strstr(case_id, "@line-above-clip")) {
         points[0].x = 8 * 64;
         points[0].y = 40 * 64;

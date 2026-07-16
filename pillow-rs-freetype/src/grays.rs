@@ -836,9 +836,10 @@ impl<'a> Worker<'a> {
                         return Ok(());
                     }
                 }
-                CURVE_TAG_CUBIC => {
-                    // FreeType ftgrays.c:1623-1661 accepts exactly two trailing
-                    // cubic controls and closes the curve to v_start.
+                CURVE_TAG_CUBIC | 3 => {
+                    // FreeType ftgrays.c:1618-1661 sends any non-ON/non-CONIC
+                    // masked tag through the cubic default arm, then validates
+                    // that the following control tag is exactly CUBIC.
                     if cursor + 1 > limit
                         || curve_tag_at(pts, tags, usize_from_i32(cursor + 1)) != CURVE_TAG_CUBIC
                     {
