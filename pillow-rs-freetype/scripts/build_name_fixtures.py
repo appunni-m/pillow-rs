@@ -111,6 +111,24 @@ def write_odd_windows_postscript_with_apple_fallback() -> None:
     )
 
 
+def write_non_ascii_postscript_with_apple_fallback() -> None:
+    records = [
+        NameRecordSpec(3, 1, 0x0409, 1, utf16be("NonAsciiPS")),
+        NameRecordSpec(3, 1, 0x0409, 2, utf16be("Regular")),
+        # sfdriver.c:get_win_string accepts only ASCII code units whose
+        # UTF-16BE high byte is zero.  This leaves the Windows result empty.
+        NameRecordSpec(3, 1, 0x0409, 6, b"\x01A"),
+        # get_apple_string rejects bytes outside ASCII but retains the valid
+        # suffix, so the public service returns this Apple fallback.
+        NameRecordSpec(1, 0, 0, 6, b"\x80ApplePS"),
+    ]
+    write_name_payload(
+        BASE_STATIC,
+        NAME_OUT_DIR / "name-nonascii-postscript-apple.ttf",
+        build_name_table(records),
+    )
+
+
 def write_postscript_branch_matrix() -> None:
     records = [
         NameRecordSpec(3, 1, 0x0409, 16, b""),
@@ -531,6 +549,7 @@ def main() -> None:
     write_apple_postscript()
     write_apple_postscript_oob()
     write_odd_windows_postscript_with_apple_fallback()
+    write_non_ascii_postscript_with_apple_fallback()
     write_postscript_branch_matrix()
     write_format1_langtag()
     write_format1_langtag_malformed_controls()
