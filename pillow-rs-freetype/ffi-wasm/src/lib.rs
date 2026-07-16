@@ -851,6 +851,35 @@ pub extern "C" fn fontdone_wasm_outline_get_orientation(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_reverse(outline: *mut FontdoneWasmOutline) {
+    let Some(mut snapshot) = outline_snapshot_from_wasm(outline) else {
+        return;
+    };
+    rust_ffi::FT_Outline_Reverse(Some(&mut snapshot));
+    copy_outline_snapshot_to_wasm(outline, &snapshot, true);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_transform(
+    outline: *const FontdoneWasmOutline,
+    matrix: *const FontdoneWasmMatrix,
+) {
+    let (Some(mut snapshot), Some(matrix)) =
+        (outline_snapshot_from_wasm(outline), unsafe { matrix.as_ref() })
+    else {
+        return;
+    };
+    let matrix = rust_ffi::FT_Matrix {
+        xx: matrix.xx,
+        xy: matrix.xy,
+        yx: matrix.yx,
+        yy: matrix.yy,
+    };
+    rust_ffi::FT_Outline_Transform(Some(&mut snapshot), Some(&matrix));
+    copy_outline_snapshot_to_wasm(outline.cast_mut(), &snapshot, false);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_library_set_lcd_filter(filter: FT_LcdFilter) -> FT_Error {
     rust_ffi::FT_Library_SetLcdFilter(None, filter)
 }
@@ -2318,6 +2347,39 @@ fn outline_snapshot_from_wasm(
         contours,
         flags: outline.flags,
     })
+}
+
+fn copy_outline_snapshot_to_wasm(
+    outline: *mut FontdoneWasmOutline,
+    snapshot: &rust_ffi::FT_OutlineSnapshot,
+    copy_tags_and_flags: bool,
+) {
+    // SAFETY: callers pass the same writable descriptor used to construct
+    // `snapshot`; null is handled as a no-op.
+    let Some(outline) = (unsafe { outline.as_mut() }) else {
+        return;
+    };
+    if !outline.points.is_null() {
+        // SAFETY: the WASM descriptor promises `n_points` writable vectors.
+        let points = unsafe {
+            slice::from_raw_parts_mut(outline.points, usize::from(outline.n_points))
+        };
+        for (target, source) in points.iter_mut().zip(&snapshot.points) {
+            target.x = source.x;
+            target.y = source.y;
+        }
+    }
+    if copy_tags_and_flags {
+        if !outline.tags.is_null() {
+            // SAFETY: the WASM descriptor promises `n_points` writable tag bytes.
+            let tags =
+                unsafe { slice::from_raw_parts_mut(outline.tags, usize::from(outline.n_points)) };
+            for (target, source) in tags.iter_mut().zip(&snapshot.tags) {
+                *target = *source;
+            }
+        }
+        outline.flags = snapshot.flags;
+    }
 }
 
 fn copy_rendered_bitmap_to_wasm(

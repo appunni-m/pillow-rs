@@ -1244,11 +1244,52 @@ fn transform_outline_points(
     let ft_mul = crate::fixed::ft_mul_fix;
     for pt in points {
         let (px, py) = (
-            ft_mul(pt.x, xx) + ft_mul(pt.y, xy) + dx,
-            ft_mul(pt.x, yx) + ft_mul(pt.y, yy) + dy,
+            ft_mul(pt.x, xx)
+                .wrapping_add(ft_mul(pt.y, xy))
+                .wrapping_add(dx),
+            ft_mul(pt.x, yx)
+                .wrapping_add(ft_mul(pt.y, yy))
+                .wrapping_add(dy),
         );
         pt.x = px;
         pt.y = py;
+    }
+}
+
+pub(crate) fn reverse_outline_buffers<T>(
+    points: &mut [T],
+    tags: &mut [u8],
+    contours: &[u16],
+    flags: &mut i32,
+) {
+    // C reference: `FT_Outline_Reverse` in `src/base/ftoutln.c:545-600`.
+    // The FFI record boundary validates contour ranges before entering this
+    // loop; invalid C buffers have no defined FreeType result.
+    let mut first = 1usize;
+    for &last in contours {
+        let end = usize::from(last) + 1;
+        points[first..end].reverse();
+        tags[first..end].reverse();
+        first = end + 1;
+    }
+    *flags ^= 4; // FT_OUTLINE_REVERSE_FILL
+}
+
+pub(crate) fn transform_outline_coordinates(
+    points: &mut [(i64, i64)],
+    xx: i64,
+    xy: i64,
+    yx: i64,
+    yy: i64,
+) {
+    // C reference: `FT_Outline_Transform` and `FT_Vector_Transform` in
+    // `src/base/ftoutln.c:695-734`.
+    for point in points {
+        let (x, y) = *point;
+        point.0 =
+            crate::fixed::ft_mul_fix_long(x, xx).wrapping_add(crate::fixed::ft_mul_fix_long(y, xy));
+        point.1 =
+            crate::fixed::ft_mul_fix_long(x, yx).wrapping_add(crate::fixed::ft_mul_fix_long(y, yy));
     }
 }
 

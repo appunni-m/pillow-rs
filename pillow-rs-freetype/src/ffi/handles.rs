@@ -1539,6 +1539,55 @@ pub fn FT_Outline_Get_Orientation(outline: Option<&FT_OutlineSnapshot>) -> FT_Or
     api::outline_get_orientation(Some(&outline)) as FT_Orientation
 }
 
+pub fn FT_Outline_Reverse(outline: Option<&mut FT_OutlineSnapshot>) {
+    let Some(outline) = outline else {
+        return;
+    };
+    if !outline_reverse_buffers_are_valid(outline) {
+        return;
+    }
+    api::reverse_outline_buffers(
+        &mut outline.points,
+        &mut outline.tags,
+        &outline.contours,
+        &mut outline.flags,
+    );
+}
+
+fn outline_reverse_buffers_are_valid(outline: &FT_OutlineSnapshot) -> bool {
+    let mut first = 1usize;
+    for &last in &outline.contours {
+        let end = usize::from(last) + 1;
+        if first > end || end > outline.points.len() || end > outline.tags.len() {
+            return false;
+        }
+        first = end + 1;
+    }
+    true
+}
+
+pub fn FT_Outline_Transform(outline: Option<&mut FT_OutlineSnapshot>, matrix: Option<&FT_Matrix>) {
+    let (Some(outline), Some(matrix)) = (outline, matrix) else {
+        return;
+    };
+    let mut coordinates = outline
+        .points
+        .iter()
+        .map(|point| (point.x, point.y))
+        .collect::<Vec<_>>();
+    api::transform_outline_coordinates(
+        &mut coordinates,
+        matrix.xx,
+        matrix.xy,
+        matrix.yx,
+        matrix.yy,
+    );
+    for (point, (x, y)) in outline.points.iter_mut().zip(coordinates) {
+        point.x = x as FT_Pos;
+        point.y = y as FT_Pos;
+    }
+}
+
 pub fn FT_OpenType_Free(_face: Option<&FT_Face>, _table: FT_Bytes) {}
 
 pub fn FT_OpenType_Validate(

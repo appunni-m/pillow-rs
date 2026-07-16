@@ -5228,6 +5228,172 @@ static int emit_outline_get_orientation(int argc, char** argv) {
     return 0;
 }
 
+static void build_reverse_outline(
+    FT_Outline* outline,
+    FT_Vector* points,
+    unsigned char* tags,
+    unsigned short* contours
+) {
+    const FT_Vector source_points[8] = {
+        {0, 0}, {64, 0}, {64, 64}, {0, 64},
+        {128, 0}, {192, 0}, {192, 64}, {128, 64},
+    };
+    const unsigned char source_tags[8] = {1, 0, 1, 2, 1, 2, 0, 1};
+    memcpy(points, source_points, sizeof(source_points));
+    memcpy(tags, source_tags, sizeof(source_tags));
+    contours[0] = 3;
+    contours[1] = 7;
+    outline->n_contours = 2;
+    outline->n_points = 8;
+    outline->points = points;
+    outline->tags = tags;
+    outline->contours = contours;
+    outline->flags = 2;
+}
+
+static void build_transform_outline(
+    FT_Outline* outline,
+    FT_Vector* points,
+    unsigned char* tags,
+    unsigned short* contours
+) {
+    const FT_Vector source_points[4] = {
+        {-96, -32}, {128, -64}, {160, 96}, {-64, 128},
+    };
+    memcpy(points, source_points, sizeof(source_points));
+    memset(tags, FT_CURVE_TAG_ON, 4);
+    contours[0] = 3;
+    outline->n_contours = 1;
+    outline->n_points = 4;
+    outline->points = points;
+    outline->tags = tags;
+    outline->contours = contours;
+    outline->flags = 0;
+}
+
+static void print_mutated_points(const FT_Vector* points, unsigned int count) {
+    printf("[");
+    for (unsigned int index = 0; index < count; index++) {
+        if (index) {
+            printf(",");
+        }
+        printf("{\"x\":%ld,\"y\":%ld}", points[index].x, points[index].y);
+    }
+    printf("]");
+}
+
+static int emit_outline_reverse(int argc, char** argv) {
+    if (argc != 3) {
+        return 1;
+    }
+    const char* case_id = argv[2];
+    print_ok_output_prefix();
+    if (strstr(case_id, ".null_outline_noop")) {
+        FT_Outline_Reverse(NULL);
+        printf("{\"sentinel_memory_changed\":false}}\n");
+        return 0;
+    }
+
+    FT_Outline outline;
+    FT_Vector points[8];
+    unsigned char tags[8];
+    unsigned short contours[2];
+    build_reverse_outline(&outline, points, tags, contours);
+    if (strstr(case_id, ".reverses_points_and_tags_per_contour")) {
+        FT_Outline_Reverse(&outline);
+        printf("{\"points_after\":");
+        print_mutated_points(points, 8);
+        printf(",\"tags_after\":[");
+        for (int index = 0; index < 8; index++) {
+            if (index) {
+                printf(",");
+            }
+            printf("%u", tags[index]);
+        }
+        printf("]}}\n");
+        return 0;
+    }
+    if (strstr(case_id, ".toggles_reverse_fill_flag")) {
+        FT_Outline_Reverse(&outline);
+        int first = outline.flags;
+        FT_Outline_Reverse(&outline);
+        printf("{\"flags_after_each_call\":[%d,%d]}}\n", first, outline.flags);
+        return 0;
+    }
+    fprintf(stderr, "unsupported outline reverse case: %s\n", case_id);
+    return 2;
+}
+
+static int emit_outline_transform(int argc, char** argv) {
+    if (argc != 3) {
+        return 1;
+    }
+    const char* case_id = argv[2];
+    print_ok_output_prefix();
+    if (strstr(case_id, ".null_inputs_noop")) {
+        FT_Matrix identity = {0x10000L, 0, 0, 0x10000L};
+        FT_Outline outline;
+        FT_Vector points[4];
+        unsigned char tags[4];
+        unsigned short contours[1];
+        build_transform_outline(&outline, points, tags, contours);
+        FT_Outline_Transform(NULL, &identity);
+        FT_Outline_Transform(&outline, NULL);
+        FT_Outline no_points = {0, 3, NULL, NULL, NULL, 0};
+        FT_Outline_Transform(&no_points, &identity);
+        printf(
+            "{\"rows\":["
+            "{\"label\":\"null_outline\",\"sentinel_memory_changed\":false},"
+            "{\"label\":\"null_matrix\",\"sentinel_memory_changed\":false},"
+            "{\"label\":\"null_points\",\"sentinel_memory_changed\":false}"
+            "]}}\n"
+        );
+        return 0;
+    }
+
+    FT_Outline outline;
+    FT_Vector points[4];
+    unsigned char tags[4];
+    unsigned short contours[1];
+    build_transform_outline(&outline, points, tags, contours);
+    FT_Matrix matrix;
+    if (strstr(case_id, ".orientation_and_cbox_after_transform")) {
+        matrix.xx = -0x10000L;
+        matrix.xy = 0;
+        matrix.yx = 0;
+        matrix.yy = 0x10000L;
+    } else {
+        matrix.xx = 0x10000L;
+        matrix.xy = 0x4000L;
+        matrix.yx = -0x8000L;
+        matrix.yy = 0x10000L;
+    }
+    FT_Outline_Transform(&outline, &matrix);
+    if (strstr(case_id, ".matrix_transform_matches_c")) {
+        printf("{\"points_after\":");
+        print_mutated_points(points, 4);
+        printf("}}\n");
+        return 0;
+    }
+    if (strstr(case_id, ".orientation_and_cbox_after_transform")) {
+        FT_BBox cbox;
+        FT_Outline_Get_CBox(&outline, &cbox);
+        FT_Orientation orientation = FT_Outline_Get_Orientation(&outline);
+        printf(
+            "{\"cbox_after\":{\"xMin\":%ld,\"yMin\":%ld,\"xMax\":%ld,\"yMax\":%ld},"
+            "\"orientation_after\":%d}}\n",
+            cbox.xMin,
+            cbox.yMin,
+            cbox.xMax,
+            cbox.yMax,
+            orientation
+        );
+        return 0;
+    }
+    fprintf(stderr, "unsupported outline transform case: %s\n", case_id);
+    return 2;
+}
+
 static int face_macro_value(FT_Face face, const char* macro_name, int* out) {
     if (streq(macro_name, "FT_HAS_COLOR")) {
         *out = FT_HAS_COLOR(face);
@@ -9938,6 +10104,12 @@ static int dispatch(int argc, char** argv) {
     if (argc == 3 && streq(argv[1], "--outline-get-orientation")) {
         return emit_outline_get_orientation(argc, argv);
     }
+    if (argc == 3 && streq(argv[1], "--outline-reverse")) {
+        return emit_outline_reverse(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--outline-transform")) {
+        return emit_outline_transform(argc, argv);
+    }
     if (argc == 7 && (streq(argv[1], "--new-memory-face") || streq(argv[1], "--set-pixel-sizes") || streq(argv[1], "--size-metrics"))) {
         return emit_face_or_slot(argc, argv);
     }
@@ -10236,7 +10408,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 9 && streq(argv[1], "--sbit-cache-lookup")) {
         return emit_face_or_slot(argc, argv);
     }
-    fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | ... | --outline-render MODE CASE_ID | --outline-get-bitmap MODE CASE_ID | --outline-get-orientation CASE_ID | ...\n");
+    fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | ... | --outline-render MODE CASE_ID | --outline-get-bitmap MODE CASE_ID | --outline-get-orientation CASE_ID | --outline-reverse CASE_ID | --outline-transform CASE_ID | ...\n");
     fprintf(stderr, "       --get-sfnt-name-variant FACE_KIND OUTPUT_KIND INDEXES [SRC_KIND SRC FACE_INDEX PX PY]\n");
     return 2;
 }
