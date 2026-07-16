@@ -51,23 +51,12 @@ impl ScaleMetrics {
         // C stores x/y scale on the active FT_Size_Metrics; non-square
         // FT_Set_Pixel_Sizes must not rebuild horizontal scale from y ppem
         // (`ftobjs.c` size request path, `ttobjs.c:tt_size_reset`).
-        let square = Self::new(data.size_pt.get(), data.head.units_per_em);
-        let active = ScaleMetrics {
+        ScaleMetrics {
             x_scale: data.size_x_scale.get(),
             y_scale: data.size_y_scale.get(),
             tt_scale: data.size_tt_scale.get(),
             ppem: data.size_tt_ppem.get(),
             point_size: data.size_tt_point_size.get(),
-        };
-        if active.x_scale != square.x_scale
-            || active.y_scale != square.y_scale
-            || active.tt_scale != square.tt_scale
-            || active.ppem != square.ppem
-            || active.point_size != square.point_size
-        {
-            active
-        } else {
-            square
         }
     }
 
