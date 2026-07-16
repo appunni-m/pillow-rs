@@ -166,7 +166,7 @@ Current condition-coverage bulk context from
 | `src/grays.rs` | 727 / 740 | 177 / 178 | 32 / 33 |
 | `src/autohint/latin.rs` | 2608 / 2844 | 1079 / 1286 | 70 / 73 |
 | `src/render.rs` | 2099 / 2597 | 379 / 434 | 142 / 183 |
-| `src/scaler.rs` | 1162 / 1284 | 198 / 210 | 52 / 63 |
+| `src/scaler.rs` | 1135 / 1276 | 190 / 200 | 49 / 63 |
 
 Use condition coverage as secondary prioritization only: route audit category
 and route shape decide whether a row is real parity, while condition coverage

@@ -2183,19 +2183,18 @@ SBIT fixtures:
 
 ### Scaler Residual Map - 2026-07-16
 
-Current `src/scaler.rs` misses after `92f4c41c` are not all fixture
-candidates.  The verified branch baseline is `198 / 210` with runtime parity
+Current `src/scaler.rs` misses after the active-scale cleanup are not all fixture
+candidates.  The verified branch baseline is `190 / 200` with runtime parity
 `7,045 / 7,045` and route audit `real-parity=3,840`.
 
 | Lines | Disposition | Reason |
 |---|---|---|
-| 64-65 | Active-size invariant tails | Public size setup stores `tt_scale`, `ppem`, and `point_size` from the same active `SizeMetrics` that produced x/y scale. Existing request-size rows cover the public active-vs-square decision; the remaining operands would require x/y scales equal to the square fallback while internal TrueType scale or ppem still differs. Do not add sampled request rows unless they prove this state through C output and move the condition counter. |
-| 745 | No-hinting plus autohint metrics | The false side of `latin_metrics.is_none()` inside the unhinted TrueType phantom branch would require `allow_bytecode=false` and autohint metrics at the same time. Public `FT_LOAD_NO_HINTING` dispatch supplies no autohint metrics, while public force-autohint/target modes keep `allow_bytecode=true` in the metrics route. |
-| 782, 1594, 1785 | Empty-outline split states | Public glyph loading produces empty outlines with both `num_contours == 0` and no points, and `scale_glyph_impl` returns before exact-bbox decomposition or autohint mutation helpers. The missing sides require non-empty points with zero contours or empty contour vectors after point loading, which valid C FreeType glyph loading does not pass to these helpers. |
-| 857, 859 | Nonexistent autohint style combinations | Public target-light reaches the `no_horizontal_hinting && !stem_adjust && !horz_snap && !vert_snap` style. Public LCD reaches `no_horizontal_hinting && !stem_adjust && horz_snap && !vert_snap`. No public load target currently supplies `no_horizontal_hinting` with `stem_adjust=true` or `vert_snap=true`. |
-| 1445 | Public-construction unreachable owned context | Recursive native composite scaling receives a prepared bytecode context from `Font::native_bytecode_context_for_mode` whenever `fpgm` and `cvt` exist; without those tables, the inner prepare branch cannot execute. |
-| 1632 | Parser-validated before scaler | Public glyf loading validates contour bounds before `decompose_bbox` consumes the outline tree. The remaining guards require contour endpoints that point before the current contour start or beyond the point array. |
-| 1738-1758 | Private pixel helpers | Public scaler/render code uses the `ft_pix_*` helpers directly; these conversion wrappers need a real caller, not synthetic coverage rows. |
+| 734 | No-hinting plus autohint metrics | The false side of `latin_metrics.is_none()` inside the unhinted TrueType phantom branch would require `allow_bytecode=false` and autohint metrics at the same time. Public `FT_LOAD_NO_HINTING` dispatch supplies no autohint metrics, while public force-autohint/target modes keep `allow_bytecode=true` in the metrics route. |
+| 771, 1583, 1774 | Empty-outline split states | Public glyph loading produces empty outlines with both `num_contours == 0` and no points, and `scale_glyph_impl` returns before exact-bbox decomposition or autohint mutation helpers. The missing sides require non-empty points with zero contours or empty contour vectors after point loading, which valid C FreeType glyph loading does not pass to these helpers. |
+| 846, 848 | Nonexistent autohint style combinations | Public target-light reaches the `no_horizontal_hinting && !stem_adjust && !horz_snap && !vert_snap` style. Public LCD reaches `no_horizontal_hinting && !stem_adjust && horz_snap && !vert_snap`. No public load target currently supplies `no_horizontal_hinting` with `stem_adjust=true` or `vert_snap=true`. |
+| 1434 | Public-construction unreachable owned context | Recursive native composite scaling receives a prepared bytecode context from `Font::native_bytecode_context_for_mode` whenever `fpgm` and `cvt` exist; without those tables, the inner prepare branch cannot execute. |
+| 1621 | Parser-validated before scaler | Public glyf loading validates contour bounds before `decompose_bbox` consumes the outline tree. The remaining guards require contour endpoints that point before the current contour start or beyond the point array. |
+| 1727-1747 | Private pixel helpers | Public scaler/render code uses the `ft_pix_*` helpers directly; these conversion wrappers need a real caller, not synthetic coverage rows. |
 
 Resolved after this map: the `can_execute_native_bytecode` second-operand
 branch at `scaler.rs:904` is covered by the public
@@ -2203,9 +2202,9 @@ branch at `scaler.rs:904` is covered by the public
 empty `fpgm` table but no `cvt`, so default TrueType loading proves the
 FreeType fallback where native bytecode cannot execute even though `fpgm`
 exists.  The later scaler cleanup also removed two impossible zero autohint
-vertical-scale fallbacks and one redundant composite tag fallback; those were
-verified by `make -C pillow-rs-freetype real-parity-verify` with exact runtime
-parity unchanged.
+vertical-scale fallbacks, one redundant composite tag fallback, and the
+active-vs-square scale comparison whose two return values were identical when
+the condition was false; all were verified with exact runtime parity unchanged.
 
 ### Rejected Candidate Audit - 2026-07-13
 
