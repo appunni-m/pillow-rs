@@ -3019,13 +3019,12 @@ fn true_type_hint_scales(data: &FontData, metrics: SizeMetrics) -> (i32, i32) {
     if data.cff.is_none() && data.head.flags & 8 != 0 {
         // C `tt_size_reset` recomputes hinted TrueType scales from rounded
         // integer ppems for the driver when `head.Flags & 8` is set
-        // (`ttobjs.c:1254-1262`). Public `FT_Size_Metrics` still exposes the
-        // base request metrics; only the internal scaler state uses this.
-        let units_per_em = i32::from(data.head.units_per_em);
-        (
-            ft_div_fix(i32::from(metrics.x_ppem) << 6, units_per_em),
-            ft_div_fix(i32::from(metrics.y_ppem) << 6, units_per_em),
-        )
+        // (`ttobjs.c:1255-1262`). `ScaleMetrics::new` owns that exact
+        // integer-ppem `FT_DivFix` construction; build each axis independently
+        // so non-square public size requests retain distinct hinted scales.
+        let x = scaler::ScaleMetrics::new(f32::from(metrics.x_ppem), data.head.units_per_em);
+        let y = scaler::ScaleMetrics::new(f32::from(metrics.y_ppem), data.head.units_per_em);
+        (x.x_scale, y.y_scale)
     } else {
         (metrics.x_scale, metrics.y_scale)
     }
