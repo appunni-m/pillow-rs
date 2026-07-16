@@ -10,9 +10,9 @@
       "operation": "ftoutln.get_orientation",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {"empty": {"kind": "ref", "id": "outlines/basic/empty.json", "asset_kind": "outline_model"}, "positive": {"kind": "ref", "id": "outlines/orientation/positive-area-square.json", "asset_kind": "outline_model"}, "negative": {"kind": "ref", "id": "outlines/orientation/negative-area-square.json", "asset_kind": "outline_model"}}, "params": {"scenarios": [{"outline_pointer": null}, {"outline_ref": "empty"}, {"outline_ref": "positive"}, {"outline_ref": "negative"}]}},
+      "inputs": {"assets": {"empty": {"kind": "ref", "id": "outlines/basic/empty.json", "asset_kind": "outline_model"}, "positive": {"kind": "ref", "id": "outlines/orientation/positive-area-square.json", "asset_kind": "outline_model"}, "negative": {"kind": "ref", "id": "outlines/orientation/negative-area-square.json", "asset_kind": "outline_model"}}, "params": {"scenarios": [{"outline_pointer": null}, {"outline_ref": "empty"}, {"outline_shape": "nonempty_zero_contours"}, {"outline_ref": "positive"}, {"outline_ref": "negative"}]}},
       "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "operation:geometry"],
-      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Get_Orientation", "kind": "function", "c_signature": "FT_Orientation FT_Outline_Get_Orientation(FT_Outline* outline)"}, "source_behavior": "Null and empty return TRUETYPE; positive area returns POSTSCRIPT; negative area returns TRUETYPE."},
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Get_Orientation", "kind": "function", "c_signature": "FT_Orientation FT_Outline_Get_Orientation(FT_Outline* outline)"}, "source_behavior": "Null and zero-point outlines return TRUETYPE; nonempty zero-contour outlines have zero accumulated area and return NONE; positive area returns POSTSCRIPT; negative area returns TRUETYPE."},
       "expectation": {"status": "ok", "output_shape": {"results": [{"return": "FT_Orientation", "area_sign": "string"}]}, "compare": {"mode": "exact", "paths": ["results[*].return", "results[*].area_sign"]}, "source_refs": ["freetype/include/freetype/ftoutln.h:550-572", "freetype/src/base/ftoutln.c:1050-1116"], "fixture_requirements": ["Positive- and negative-area outlines under FreeType's shifted area accumulation."]}
     },
     {
@@ -22,9 +22,9 @@
       "operation": "ftoutln.get_orientation",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {"collapsed": {"kind": "ref", "id": "outlines/orientation/collapsed-line.json", "asset_kind": "outline_model"}, "oversized": {"kind": "ref", "id": "outlines/orientation/cbox-beyond-0x1000000.json", "asset_kind": "outline_model"}}, "params": {"scenarios": ["collapsed", "oversized"]}},
+      "inputs": {"assets": {"collapsed": {"kind": "ref", "id": "outlines/orientation/collapsed-line.json", "asset_kind": "outline_model"}, "oversized": {"kind": "ref", "id": "outlines/orientation/cbox-beyond-0x1000000.json", "asset_kind": "outline_model"}}, "params": {"scenarios": ["collapsed_horizontal", "collapsed_vertical", "oversized_x_min", "oversized_y_min", "oversized_x_max", "oversized_y_max"]}},
       "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "behavior:none-orientation"],
-      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Get_Orientation", "kind": "function", "c_signature": "FT_Orientation FT_Outline_Get_Orientation(FT_Outline* outline)"}, "source_behavior": "Collapsed cbox dimensions and cbox values outside +/-0x1000000 return FT_ORIENTATION_NONE."},
+      "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Get_Orientation", "kind": "function", "c_signature": "FT_Orientation FT_Outline_Get_Orientation(FT_Outline* outline)"}, "source_behavior": "Either collapsed cbox dimension and each cbox side outside +/-0x1000000 return FT_ORIENTATION_NONE."},
       "expectation": {"status": "ok", "output_shape": {"results": [{"return": "FT_Orientation", "cbox": "FT_BBox"}]}, "compare": {"mode": "exact", "paths": ["results[*].return", "results[*].cbox"]}, "source_refs": ["freetype/src/base/ftoutln.c:1069-1080"], "fixture_requirements": ["Collapsed outline and oversized outline assets."]}
     },
     {

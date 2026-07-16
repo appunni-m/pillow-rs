@@ -1492,7 +1492,10 @@ fn next_contour_index(index: usize, first: usize, last: usize) -> usize {
 
 fn outline_orientation(outline: &crate::outline::Outline) -> OutlineOrientation {
     // C reference: `FT_Outline_Get_Orientation` in `src/base/ftoutln.c:1055-1117`.
-    if outline.points.is_empty() || outline.n_contours <= 0 {
+    // FreeType special-cases only a null outline or `n_points <= 0`.
+    // Nonempty points with zero contours continue through cbox validation and
+    // produce zero accumulated area, hence `FT_ORIENTATION_NONE`.
+    if outline.points.is_empty() {
         return OutlineOrientation::TrueType;
     }
 

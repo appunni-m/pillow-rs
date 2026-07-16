@@ -16901,10 +16901,15 @@ fn load_glyph_num_glyphs_invalid_argument_case(case: &InputCase) -> bool {
 enum OrientationOutlineKind {
     Null,
     Empty,
+    NonemptyZeroContours,
     Positive,
     Negative,
     Collapsed,
+    CollapsedVertical,
     Oversized,
+    OversizedXMin,
+    OversizedYMin,
+    OversizedYMax,
     ZeroArea,
 }
 
@@ -16921,14 +16926,25 @@ fn outline_orientation_cases(
         return Ok(vec![
             ("null", OrientationOutlineKind::Null),
             ("empty", OrientationOutlineKind::Empty),
+            (
+                "nonempty_zero_contours",
+                OrientationOutlineKind::NonemptyZeroContours,
+            ),
             ("positive", OrientationOutlineKind::Positive),
             ("negative", OrientationOutlineKind::Negative),
         ]);
     }
     if case_id.contains("FT_Outline_Get_Orientation.collapsed_and_oversized_return_none") {
         return Ok(vec![
-            ("collapsed", OrientationOutlineKind::Collapsed),
-            ("oversized", OrientationOutlineKind::Oversized),
+            ("collapsed_horizontal", OrientationOutlineKind::Collapsed),
+            (
+                "collapsed_vertical",
+                OrientationOutlineKind::CollapsedVertical,
+            ),
+            ("oversized_x_min", OrientationOutlineKind::OversizedXMin),
+            ("oversized_y_min", OrientationOutlineKind::OversizedYMin),
+            ("oversized_x_max", OrientationOutlineKind::Oversized),
+            ("oversized_y_max", OrientationOutlineKind::OversizedYMax),
         ]);
     }
     if case_id.contains("FT_ORIENTATION_TRUETYPE.null_and_empty_return_truetype") {
@@ -16961,20 +16977,37 @@ fn orientation_outline_model(kind: OrientationOutlineKind) -> Option<Orientation
     let points = match kind {
         OrientationOutlineKind::Null => return None,
         OrientationOutlineKind::Empty => Vec::new(),
+        OrientationOutlineKind::NonemptyZeroContours => {
+            vec![(0, 0), (0, 64), (64, 64), (64, 0)]
+        }
         OrientationOutlineKind::Positive => vec![(0, 0), (0, 64), (64, 64), (64, 0)],
         OrientationOutlineKind::Negative => vec![(0, 0), (64, 0), (64, 64), (0, 64)],
         OrientationOutlineKind::Collapsed => vec![(0, 0), (64, 0)],
+        OrientationOutlineKind::CollapsedVertical => vec![(0, 0), (0, 64)],
         OrientationOutlineKind::Oversized => {
             let max = 0x1000000i64 + 64;
             vec![(0, 0), (0, 64), (max, 64), (max, 0)]
         }
+        OrientationOutlineKind::OversizedXMin => {
+            let min = -0x1000000i64 - 64;
+            vec![(min, 0), (min, 64), (0, 64), (0, 0)]
+        }
+        OrientationOutlineKind::OversizedYMin => {
+            let min = -0x1000000i64 - 64;
+            vec![(0, min), (0, 0), (64, 0), (64, min)]
+        }
+        OrientationOutlineKind::OversizedYMax => {
+            let max = 0x1000000i64 + 64;
+            vec![(0, 0), (0, max), (64, max), (64, 0)]
+        }
         OrientationOutlineKind::ZeroArea => vec![(0, 0), (64, 64), (0, 64), (64, 0)],
     };
-    let contours = if points.is_empty() {
-        Vec::new()
-    } else {
-        vec![u16::try_from(points.len() - 1).unwrap_or(u16::MAX)]
-    };
+    let contours =
+        if points.is_empty() || matches!(kind, OrientationOutlineKind::NonemptyZeroContours) {
+            Vec::new()
+        } else {
+            vec![u16::try_from(points.len() - 1).unwrap_or(u16::MAX)]
+        };
     let tags = vec![1; points.len()];
     Some(OrientationOutlineModel {
         points,
