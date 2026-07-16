@@ -1298,9 +1298,11 @@ fn autohint_vertical_metrics(
     hinted_x_min: i32,
     hinted_y_max: i32,
 ) -> AutohintVerticalMetrics {
+    let mut raw_x_min = raw_outline.points[0].x;
     let mut raw_y_min = raw_outline.points[0].y;
     let mut raw_y_max = raw_outline.points[0].y;
     for point in &raw_outline.points {
+        raw_x_min = raw_x_min.min(point.x);
         raw_y_min = raw_y_min.min(point.y);
         raw_y_max = raw_y_max.max(point.y);
     }
@@ -1321,11 +1323,17 @@ fn autohint_vertical_metrics(
                 ft_pix_floor(ft_pix_ceil(hinted_y_max) + vvector_y),
             )
         } else {
-            // CFF `cff_slot_load` leaves made-up vertical bearings at zero for
-            // horizontal loads when no `vmtx` table exists; it only synthesizes
-            // full vertical bearings under `FT_LOAD_VERTICAL_LAYOUT`
-            // (`src/cff/cffgload.c:646-742`).
-            (0, 0)
+            // CFF without `vmtx` leaves vertical bearings at zero in
+            // `cff_slot_load`; `af_loader_load_glyph` then builds `vvector`
+            // as zero minus the pre-hint horizontal cbox
+            // (`src/cff/cffgload.c:646-742`, `src/autofit/afloader.c:506-537`).
+            let x_scale = ScaleMetrics::from_font_data(data).x_scale;
+            let cff_vvector_x = -ft_mul_fix(raw_x_min, x_scale);
+            let cff_vvector_y = -ft_mul_fix(raw_y_max, y_scale);
+            (
+                ft_pix_floor(ft_pix_floor(hinted_x_min) + cff_vvector_x),
+                ft_pix_floor(ft_pix_ceil(hinted_y_max) + cff_vvector_y),
+            )
         }
     } else {
         (
