@@ -78,16 +78,14 @@ pub const FT_GLYPH_FORMAT_PLOTTER: FT_Glyph_Format = 0x706c_6f74;
 pub const FT_GLYPH_FORMAT_SVG: FT_Glyph_Format = 0x5356_4720;
 
 pub(super) const LOAD_TARGET_MASK: FT_Int32 = 15 << 16;
-// FreeType's `FT_Load_Glyph` dependency resolution in `src/base/ftobjs.c`
-// treats these as ignored for our current supported outline path, or as
-// behavior already modeled by conversion before the core load.
-pub(super) const LOAD_FLAGS_ACCEPTED_WITHOUT_CORE_BITS: FT_Int32 = FT_LOAD_NO_BITMAP
-    | FT_LOAD_CROP_BITMAP
+// These accepted public load flags either have no currently observable core
+// behavior or are handled by the wrapper boundary that owns the corresponding
+// public surface.
+pub(super) const LOAD_FLAGS_ACCEPTED_WITHOUT_CORE_BITS: FT_Int32 = FT_LOAD_CROP_BITMAP
     | FT_LOAD_ADVANCE_ONLY
     | FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH
     | FT_LOAD_IGNORE_TRANSFORM
-    | FT_LOAD_LINEAR_DESIGN
-    | FT_LOAD_BITMAP_METRICS_ONLY;
+    | FT_LOAD_LINEAR_DESIGN;
 
 pub(super) const SUPPORTED_LOAD_FLAGS: FT_Int32 = FT_LOAD_RENDER
     | FT_LOAD_NO_SCALE
@@ -98,9 +96,11 @@ pub(super) const SUPPORTED_LOAD_FLAGS: FT_Int32 = FT_LOAD_RENDER
     | FT_LOAD_PEDANTIC
     | FT_LOAD_MONOCHROME
     | FT_LOAD_SBITS_ONLY
+    | FT_LOAD_NO_BITMAP
     | FT_LOAD_NO_AUTOHINT
     | FT_LOAD_COLOR
     | FT_LOAD_COMPUTE_METRICS
+    | FT_LOAD_BITMAP_METRICS_ONLY
     | FT_LOAD_NO_SVG
     | LOAD_FLAGS_ACCEPTED_WITHOUT_CORE_BITS
     | LOAD_TARGET_MASK;

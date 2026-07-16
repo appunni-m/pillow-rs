@@ -80,6 +80,8 @@ impl LoadFlags {
     pub const NO_BITMAP: Self = Self(1 << 14);
     /// Return TrueType glyph-program errors instead of silently ignoring them.
     pub const PEDANTIC: Self = Self(1 << 15);
+    /// Load embedded bitmap metrics without rendering bitmap bytes.
+    pub const BITMAP_METRICS_ONLY: Self = Self(1 << 16);
 
     /// Return true if all bits in `other` are set.
     pub fn contains(self, other: Self) -> bool {
@@ -467,14 +469,34 @@ impl Face {
         Self::load_glyph_from_font(&self.font, glyph_index, flags, transform)
     }
 
+    fn normalize_load_flags(font: &Font, mut flags: LoadFlags) -> LoadFlags {
+        let metrics = font.size_metrics();
+        // FreeType resolves these dependencies in `FT_Load_Glyph` before driver
+        // load (`src/base/ftobjs.c:932-952`).  Keep this in core so Rust, C ABI,
+        // and WASM public entry points all exercise the same policy.
+        if metrics.x_ppem == 0 || metrics.y_ppem == 0 {
+            flags |= LoadFlags::NO_SCALE;
+        }
+        if flags.contains(LoadFlags::NO_RECURSE) {
+            flags |= LoadFlags::NO_SCALE;
+        }
+        if flags.contains(LoadFlags::NO_SCALE) {
+            flags |= LoadFlags::NO_HINTING | LoadFlags::NO_BITMAP;
+            flags = flags.without(LoadFlags::RENDER);
+        }
+        if flags.contains(LoadFlags::BITMAP_METRICS_ONLY) {
+            flags = flags.without(LoadFlags::RENDER);
+        }
+        flags
+    }
+
     fn load_glyph_from_font(
         font: &Font,
         glyph_index: u16,
-        flags: LoadFlags,
+        mut flags: LoadFlags,
         transform: Option<(i32, i32, i32, i32, i32, i32)>,
     ) -> Result<GlyphSlot, FontError> {
-        // FreeType makes `FT_LOAD_NO_RECURSE` imply
-        // `FT_LOAD_IGNORE_TRANSFORM` before driver load (ftobjs.c:939-941).
+        flags = Self::normalize_load_flags(font, flags);
         let transform = if flags.contains(LoadFlags::NO_RECURSE) {
             None
         } else {
@@ -484,9 +506,8 @@ impl Face {
         let native_hint_mode = flags.native_hint_mode();
         let pedantic_hinting = flags.contains(LoadFlags::PEDANTIC);
         let sbits_only = flags.contains(LoadFlags::SBITS_ONLY);
-        let sbit_allowed = !flags.contains(LoadFlags::NO_SCALE)
-            && !flags.contains(LoadFlags::NO_RECURSE)
-            && !flags.contains(LoadFlags::NO_BITMAP);
+        let sbit_allowed =
+            !flags.contains(LoadFlags::NO_SCALE) && !flags.contains(LoadFlags::NO_BITMAP);
         if sbits_only && !sbit_allowed {
             return Err(FontError::InvalidArgument(
                 "embedded bitmap strike not selected".into(),
