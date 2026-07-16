@@ -1718,6 +1718,21 @@ impl Font {
     }
 
     pub(crate) fn glyph_slot_load_no_scale(&self, glyph: u16) -> Result<GlyphSlotLoad, FontError> {
+        self.glyph_slot_load_no_scale_with_layout(glyph, false)
+    }
+
+    pub(crate) fn glyph_slot_load_no_scale_with_layout(
+        &self,
+        glyph: u16,
+        vertical_layout: bool,
+    ) -> Result<GlyphSlotLoad, FontError> {
+        if self.data.cff.is_some() {
+            return self.glyph_slot_load_cff_no_scale(glyph, vertical_layout);
+        }
+        self.glyph_slot_load_truetype_no_scale(glyph)
+    }
+
+    fn glyph_slot_load_truetype_no_scale(&self, glyph: u16) -> Result<GlyphSlotLoad, FontError> {
         let outline = tt::glyf::load_glyph(
             &self.data.glyf_data,
             &self.data.loca_data,
@@ -1805,6 +1820,63 @@ impl Font {
             outline_cbox,
             outline_bbox: outline_cbox,
             subglyphs,
+            slot_outline: Some(slot_outline),
+            render_outline: Some(render_outline),
+        })
+    }
+
+    fn glyph_slot_load_cff_no_scale(
+        &self,
+        glyph: u16,
+        vertical_layout: bool,
+    ) -> Result<GlyphSlotLoad, FontError> {
+        // C `cff_slot_load` keeps Type2 coordinates and metrics in design
+        // units for `FT_LOAD_NO_SCALE`; it uses identity glyph scales rather
+        // than the active size metrics (`src/cff/cffgload.c:411-428`).
+        let mut outline = self.data.load_glyph_outline(glyph)?.as_ref().clone();
+        outline.outline_flags |= crate::outline::OUTLINE_REVERSE_FILL;
+        if self.size_metrics.y_ppem < 24 {
+            outline.outline_flags |= crate::outline::OUTLINE_HIGH_PRECISION;
+        }
+
+        let outline_cbox = BBox {
+            x_min: outline.xmin,
+            y_min: outline.ymin,
+            x_max: outline.xmax,
+            y_max: outline.ymax,
+        };
+        let h_metric = self.data.hmtx.get(glyph);
+        let mut metrics = GlyphSlotMetrics {
+            width: outline_cbox.x_max - outline_cbox.x_min,
+            height: outline_cbox.y_max - outline_cbox.y_min,
+            hori_bearing_x: outline_cbox.x_min,
+            hori_bearing_y: outline_cbox.y_max,
+            hori_advance: i32::from(h_metric.advance_width),
+            vert_bearing_x: 0,
+            vert_bearing_y: 0,
+            vert_advance: 0,
+        };
+
+        if let Some(vmtx) = &self.data.vmtx {
+            let vertical = vmtx.get(glyph);
+            metrics.vert_bearing_x = metrics.hori_bearing_x - metrics.hori_advance / 2;
+            metrics.vert_bearing_y = i32::from(vertical.tsb);
+            metrics.vert_advance = i32::from(vertical.advance_height);
+        } else {
+            metrics.vert_advance = vertical_advance_font_units(&self.data);
+            if vertical_layout {
+                synthesize_vertical_metrics(&mut metrics);
+            }
+        }
+
+        let slot_outline = no_scale_slot_outline(&outline, 0, outline_cbox);
+        let render_outline = no_scale_render_outline(&outline, 0, outline_cbox);
+        Ok(GlyphSlotLoad {
+            metrics,
+            format: GlyphSlotLoadFormat::Outline,
+            outline_cbox,
+            outline_bbox: outline_cbox,
+            subglyphs: Vec::new(),
             slot_outline: Some(slot_outline),
             render_outline: Some(render_outline),
         })
@@ -2665,7 +2737,7 @@ fn no_scale_slot_outline(outline: &tt::glyf::GlyphOutline, pp1x: i32, cbox: BBox
                 on_curve: point.on_curve,
             })
             .collect(),
-        tags: Vec::new(),
+        tags: no_scale_outline_tags(outline),
         contour_dropouts: Vec::new(),
         flags: outline.outline_flags,
         cbox_x_min: cbox.x_min,
@@ -2708,9 +2780,9 @@ fn no_scale_render_outline(
                 .map(|&e| e as i16)
                 .collect(),
             points,
-            tags: Vec::new(),
+            tags: no_scale_outline_tags(outline),
             contour_dropouts: Vec::new(),
-            flags: 0,
+            flags: outline.outline_flags,
             cbox_x_min: 0,
             cbox_y_min: 0,
             cbox_x_max: px_x_max - px_x_min,
@@ -2720,6 +2792,35 @@ fn no_scale_render_outline(
         bottom: px_y_min,
         top: px_y_max,
     }
+}
+
+fn no_scale_outline_tags(outline: &tt::glyf::GlyphOutline) -> Vec<u8> {
+    if outline.has_cubic_tags {
+        outline.points.iter().map(|point| point.tag & 3).collect()
+    } else {
+        Vec::new()
+    }
+}
+
+fn synthesize_vertical_metrics(metrics: &mut GlyphSlotMetrics) {
+    // C `ft_synthesize_vertical_metrics` compensates for a bbox that does not
+    // straddle the baseline before centering it in the vertical advance
+    // (`src/base/ftobjs.c:3145-3166`).
+    let mut height = metrics.height;
+    if metrics.hori_bearing_y < 0 {
+        if height < metrics.hori_bearing_y {
+            height = metrics.hori_bearing_y;
+        }
+    } else if metrics.hori_bearing_y > 0 {
+        height -= metrics.hori_bearing_y;
+    }
+    let mut advance = metrics.vert_advance;
+    if advance == 0 {
+        advance = height * 12 / 10;
+    }
+    metrics.vert_bearing_x = metrics.hori_bearing_x - metrics.hori_advance / 2;
+    metrics.vert_bearing_y = (advance - height) / 2;
+    metrics.vert_advance = advance;
 }
 
 fn layout_bounds_from_glyphs(glyphs: &[PositionedGlyph]) -> (i32, i32, i32, i32) {
