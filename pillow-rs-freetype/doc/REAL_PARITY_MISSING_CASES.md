@@ -1,6 +1,6 @@
 # Real-Parity Missing Cases
 
-Baseline: `9d68e790`
+Baseline: `05f4eb7c`
 
 Source artifacts:
 
@@ -32,7 +32,7 @@ It excludes `compile-contract`, `real-parity`, `real-null-validation`,
 
 | Category | Rows |
 |---|---:|
-| real-parity | 3832 |
+| real-parity | 3834 |
 | compile-contract | 2229 |
 | generic-fallback | 817 |
 | generic-error-fallback | 129 |
@@ -163,7 +163,7 @@ Current condition-coverage bulk context from
 |---|---:|---:|---:|
 | `src/tt/sbit.rs` | 514 / 638 | 60 / 60 | 34 / 87 |
 | `src/grays.rs` | 727 / 740 | 177 / 178 | 32 / 33 |
-| `src/autohint/latin.rs` | 2607 / 2844 | 1077 / 1286 | 70 / 73 |
+| `src/autohint/latin.rs` | 2607 / 2844 | 1078 / 1286 | 70 / 73 |
 | `src/render.rs` | 2098 / 2597 | 378 / 434 | 142 / 183 |
 | `src/scaler.rs` | 1153 / 1295 | 194 / 212 | 52 / 65 |
 
