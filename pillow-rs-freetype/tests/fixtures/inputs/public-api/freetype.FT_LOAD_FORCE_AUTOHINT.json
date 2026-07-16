@@ -4861,6 +4861,26 @@
             ]
           },
           {
+            "id": "branch-blue-overlap-o-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-blue-overlap.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 79,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:branch-blue-overlap-correction"
+            ]
+          },
+          {
             "id": "branch-script-u0303-nonbase-20",
             "assets": {
               "font": {
