@@ -141,6 +141,7 @@ test-unified-coverage: unified-oracle api-abi-check
 .PHONY: test-unified-condition-coverage
 test-unified-condition-coverage: unified-oracle api-abi-check
 	mkdir -p $(dir $(CONDITION_COVERAGE_OUTPUT))
+	FONTDONE_ENABLE_SILENT_TRACE_LOGGER=1 \
 	RUSTFLAGS="-Zcoverage-options=condition" $(CARGO) +nightly llvm-cov \
 		--test unified_fixture_parity --locked --json \
 		--ignore-filename-regex '$(CORE_COVERAGE_IGNORE_REGEX)' \
