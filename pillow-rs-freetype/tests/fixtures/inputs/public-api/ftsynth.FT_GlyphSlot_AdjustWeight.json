@@ -867,6 +867,10 @@
                 {
                   "xdelta_16_16": -2048,
                   "ydelta_16_16": 2048
+                },
+                {
+                  "xdelta_16_16": 2048,
+                  "ydelta_16_16": -2048
                 }
               ],
               "capture_before_after": true
