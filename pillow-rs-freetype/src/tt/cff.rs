@@ -344,7 +344,25 @@ impl<'a> Type2Decoder<'a> {
 
     fn close_contour(&mut self) -> Result<(), FontError> {
         if let Some(start) = self.contour_start.take() {
-            if self.points.len() > start {
+            // FreeType's CFF builder (`src/psaux/psobjs.c:1999-2047`)
+            // removes explicit final on-curve points that duplicate the
+            // contour start, then drops contours left with only one point.
+            // In this decoder, both `contour_start` assignment sites
+            // immediately push the start point, so `points.len() > start`.
+            if self.points.len() > start + 1 {
+                let first = &self.points[start];
+                let last = self.points[self.points.len() - 1];
+                // Supported Type2 curve operators append their on-curve
+                // endpoint atomically, so an off-curve final point is only a
+                // defensive state for future operators or partial failures.
+                if last.on_curve && first.x == last.x && first.y == last.y {
+                    self.points.pop();
+                }
+            }
+
+            if self.points.len() == start + 1 {
+                self.points.pop();
+            } else {
                 let end = u16::try_from(self.points.len() - 1)
                     .map_err(|_| FontError::InvalidOutline("CFF: too many points".into()))?;
                 self.end_pts.push(end);

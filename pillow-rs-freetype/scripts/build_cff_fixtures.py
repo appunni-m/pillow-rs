@@ -59,6 +59,9 @@ CUBIC_GLYPH_ORDER = [
     "rrcurveto_secondary_malformed",
     "tiny_cubic_y_span",
     "flat_cubic_y_span",
+    "moveto_endchar_empty_contour",
+    "repeated_moveto_empty_contours",
+    "explicit_close_point",
 ]
 NAMES = {
     "familyName": "Hybrid OTTO Coverage",
@@ -186,6 +189,9 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
         "rrcurveto_secondary_malformed": (420, 0),
         "tiny_cubic_y_span": (420, 0),
         "flat_cubic_y_span": (420, 0),
+        "moveto_endchar_empty_contour": (420, 0),
+        "repeated_moveto_empty_contours": (420, 0),
+        "explicit_close_point": (420, 0),
     }
     builder = FontBuilder(UNITS_PER_EM, isTTF=False)
     builder.setupGlyphOrder(CUBIC_GLYPH_ORDER)
@@ -226,6 +232,9 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
             0x61: "rrcurveto_secondary_malformed",
             0x62: "tiny_cubic_y_span",
             0x63: "flat_cubic_y_span",
+            0x64: "moveto_endchar_empty_contour",
+            0x65: "repeated_moveto_empty_contours",
+            0x66: "explicit_close_point",
         }
     )
     builder.setupHorizontalMetrics(metrics)
@@ -556,6 +565,39 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
                     0,
                     0,
                     -120,
+                    "rlineto",
+                    "endchar",
+                ]
+            ),
+            "moveto_endchar_empty_contour": t2_program_charstring(
+                [
+                    0,
+                    "hmoveto",
+                    "endchar",
+                ]
+            ),
+            "repeated_moveto_empty_contours": t2_program_charstring(
+                [
+                    0,
+                    "hmoveto",
+                    100,
+                    "hmoveto",
+                    "endchar",
+                ]
+            ),
+            "explicit_close_point": t2_program_charstring(
+                [
+                    0,
+                    0,
+                    "rmoveto",
+                    100,
+                    0,
+                    0,
+                    100,
+                    -100,
+                    0,
+                    0,
+                    -100,
                     "rlineto",
                     "endchar",
                 ]
