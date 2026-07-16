@@ -338,7 +338,7 @@ pub fn rasterize_shifted_in_box_to_with_scratch(
     cbox_y_max: i32,
     scratch: &mut RasterScratch,
 ) -> Result<(), FontError> {
-    if outline.points.is_empty() || outline.n_contours == 0 || width == 0 || height == 0 {
+    if outline.is_empty() || width == 0 || height == 0 {
         return Ok(());
     }
     let mut worker = Worker::new(
