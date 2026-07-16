@@ -4881,6 +4881,27 @@
             ]
           },
           {
+            "id": "branch-script-u1e74-target-mono-19",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 19,
+              "char_code": 7796,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_MONO"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:branch-bottom-tilde-centering-nongrid-mono"
+            ]
+          },
+          {
             "id": "branch-dejavu-u0021-target-mono-15",
             "assets": {
               "font": {
