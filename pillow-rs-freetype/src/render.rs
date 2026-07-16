@@ -286,22 +286,6 @@ impl Font {
             RenderMode::Sdf => render_scaled_sdf(scaled),
         }
     }
-
-    pub(crate) fn render_loaded_char_mode_for_index(
-        &self,
-        glyph: u16,
-        mode: RenderMode,
-    ) -> Result<RenderedBitmap, FontError> {
-        let scaled = self.scale_glyph_for_load_mode(glyph)?;
-        render_loaded_outline(
-            scaled.outline,
-            scaled.bbox_x_min,
-            scaled.bbox_y_min,
-            scaled.bbox_y_max,
-            mode,
-            &mut self.raster_scratch.borrow_mut(),
-        )
-    }
 }
 
 pub(crate) fn render_loaded_outline(
