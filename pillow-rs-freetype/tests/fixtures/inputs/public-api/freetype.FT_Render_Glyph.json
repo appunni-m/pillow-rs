@@ -1243,6 +1243,31 @@
             ]
           },
           {
+            "id": "pure-cff-flat-cubic-y-span-mono",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 24
+              },
+              "glyph_index": 35,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "render/mono:cff-flat-cubic-y-span"
+            ]
+          },
+          {
             "id": "hinter-render-conic-chain-normal",
             "assets": {
               "font": {
