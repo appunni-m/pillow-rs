@@ -107,6 +107,84 @@
             "coverage": [
               "render_glyph:space-empty-outline-safe-render-agreement"
             ]
+          },
+          {
+            "id": "render-coverage-sdf-zero-length-segment",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf",
+                "requirements": "Compact TrueType outline fixture whose glyph 10 keeps a zero-length line segment in a non-empty contour."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "glyph_index": 10,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": [
+              "render_glyph:sdf-zero-length-segment"
+            ]
+          },
+          {
+            "id": "render-coverage-sdf-flat-horizontal",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf",
+                "requirements": "Compact TrueType outline fixture whose glyph 14 is non-empty but has a vertically collapsed control box."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "glyph_index": 14,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": [
+              "render_glyph:sdf-flat-horizontal"
+            ]
+          },
+          {
+            "id": "render-coverage-sdf-flat-vertical",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-coverage.ttf",
+                "requirements": "Compact TrueType outline fixture whose glyph 15 is non-empty but has a horizontally collapsed control box."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "glyph_index": 15,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": [
+              "render_glyph:sdf-flat-vertical"
+            ]
           }
         ]
       },
