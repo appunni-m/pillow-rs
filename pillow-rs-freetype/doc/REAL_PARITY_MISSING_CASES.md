@@ -165,7 +165,7 @@ Current condition-coverage bulk context from
 | `src/tt/sbit.rs` | 514 / 638 | 60 / 60 | 34 / 87 |
 | `src/grays.rs` | 727 / 740 | 177 / 178 | 32 / 33 |
 | `src/autohint/latin.rs` | 2608 / 2844 | 1079 / 1286 | 70 / 73 |
-| `src/render.rs` | 2099 / 2597 | 379 / 434 | 142 / 183 |
+| `src/render.rs` | 2086 / 2200 | 379 / 434 | 142 / 148 |
 | `src/scaler.rs` | 1135 / 1276 | 190 / 200 | 49 / 63 |
 
 Use condition coverage as secondary prioritization only: route audit category
@@ -189,13 +189,12 @@ green-row opportunities:
 | Render miss bucket | Public route status | Dependency / reason |
 |---|---|---|
 | `OUTLINE_SINGLE_PASS` mono branch in `render_mono` | Existing `ftimage.FT_OUTLINE_SINGLE_PASS` rows route through `FT_Outline_Render` and the gray rasterizer, not `render.rs`. | FreeType `ttgload.c` clears `FT_OUTLINE_SINGLE_PASS` during glyph loading, and TrueType scan-control maps only dropout/include flags. A real `FT_Render_Glyph` route needs a public glyph-slot path that can carry this flag into mono rendering. |
-| Mono intersection fallback helpers (`rasterize_mono_intersections`, `segment_intersection`, `apply_horizontal_center_edges`) | No current public route can enter them. | These helpers are currently definition-only in `src/render.rs`; coverage requires restoring a C-equivalent caller path, not adding more fixture rows. |
-| `MonoProfileBuilder` legacy helper family | No current public route can enter it. | `render_mono` calls `MonoOutlineProfileBuilder`; the older `MonoProfileBuilder` and low-level `line_*`/`bezier_*` family have no public caller in the current implementation. Treat this as private/no-route unless a C-equivalent caller is restored or the duplicate path is independently removed with semantic proof. |
+| Removed obsolete mono helper family | No public route entered the old `MonoProfileBuilder`, intersection rasterizer, horizontal center-edge pass, or low-precision line/bezier wrappers. | These private helpers were duplicate/no-call code beside the active `MonoOutlineProfileBuilder` path and were removed after exact runtime parity stayed `7045 / 7045`. Do not re-add helper-only rows for them. |
 | `MonoOutlineProfileBuilder` residuals | Public `FT_Render_Glyph` mono routes reach this family, but many residual subconditions are exact topology dependencies. | Existing `hinter-control-matrix.ttf` and `render-coverage.ttf` rows cover scan types, folded dropout, zero-height sweep, and horizontal/vertical alternate-set dropout. Add only a compact glyph proven by focused condition deltas; several prior mono topologies passed parity without moving coverage and are listed in `FONT_FIXTURE_COVERAGE_PLAN.md`. |
 | Empty loaded outline second operands (`render_normal`, SDF/LCD cbox helpers) | DejaVu space and empty-outline candidates cover only the already-hit `points.is_empty()` side. | The remaining operands require a public loaded outline with non-empty points and `n_contours == 0` or empty contour vectors. Valid C FreeType glyph loading does not produce that state; malformed synthetic outlines need a separate C-oracle public route. |
 | Invalid contour/cubic outline errors | Public font loading rejects or normalizes malformed contours before render helpers. | Branches in `MonoOutlineProfileBuilder::decompose` and SDF orientation require invalid contour ordering, first-point cubic, broken conic/cubic tag sequences, or out-of-range contour ends after a slot is already loaded. Keep as pending/unsupported unless runner support can pass a real public malformed `FT_Outline` to the C oracle. |
 | SDF negative saturation in `map_fixed_to_sdf` | Large/reverse/edge SDF probes and the current SDF fixture rows do not move it. | `rasterize_sdf_outline` clamps distance to `fixed_spread` before mapping, so a valid negative normalized distance reaches `udist == 128`, not `> 128`. |
-| `winding_contains` SDF helper | No current public route can enter it. | The helper is definition-only under the current SDF implementation path; treat as a missing/unused algorithm path unless a C-equivalent caller is restored. |
+| Removed `winding_contains` SDF helper | No current public route entered it. | The current SDF implementation uses edge distances plus outline orientation; the private winding helper had no caller and was removed with the obsolete render cleanup. |
 
 ## Candidate Conversion Buckets
 
