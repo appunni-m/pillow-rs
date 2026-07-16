@@ -1166,6 +1166,30 @@
             ]
           },
           {
+            "id": "render-prep-only-default-vertical-dropout",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/render-prep-only.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 16
+              },
+              "glyph_index": 2,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "scaler:prep-only-default-vertical-dropout"
+            ]
+          },
+          {
             "id": "render-prep-only-default-empty-outline",
             "assets": {
               "font": {
