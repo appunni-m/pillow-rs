@@ -1,6 +1,6 @@
 # Real-Parity Missing Cases
 
-Baseline: `b64f9359`
+Baseline: `418297b0`
 
 Source artifacts:
 
@@ -32,7 +32,7 @@ It excludes `compile-contract`, `real-parity`, `real-null-validation`,
 
 | Category | Rows |
 |---|---:|
-| real-parity | 3836 |
+| real-parity | 3837 |
 | compile-contract | 2229 |
 | generic-fallback | 817 |
 | generic-error-fallback | 129 |
@@ -166,7 +166,7 @@ Current condition-coverage bulk context from
 | `src/grays.rs` | 727 / 740 | 177 / 178 | 32 / 33 |
 | `src/autohint/latin.rs` | 2608 / 2844 | 1079 / 1286 | 70 / 73 |
 | `src/render.rs` | 2098 / 2597 | 378 / 434 | 142 / 183 |
-| `src/scaler.rs` | 1173 / 1297 | 199 / 218 | 53 / 65 |
+| `src/scaler.rs` | 1182 / 1305 | 200 / 218 | 53 / 65 |
 
 Use condition coverage as secondary prioritization only: route audit category
 and route shape decide whether a row is real parity, while condition coverage
