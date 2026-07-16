@@ -165,7 +165,7 @@ Current condition-coverage bulk context from
 | `src/tt/sbit.rs` | 514 / 638 | 60 / 60 | 34 / 87 |
 | `src/grays.rs` | 727 / 740 | 177 / 178 | 32 / 33 |
 | `src/autohint/latin.rs` | 2608 / 2844 | 1079 / 1286 | 70 / 73 |
-| `src/render.rs` | 2086 / 2200 | 379 / 434 | 142 / 148 |
+| `src/render.rs` | 2112 / 2222 | 379 / 434 | 135 / 140 |
 | `src/scaler.rs` | 1135 / 1276 | 190 / 200 | 49 / 63 |
 
 Use condition coverage as secondary prioritization only: route audit category
