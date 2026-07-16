@@ -1,6 +1,6 @@
 # Real-Parity Missing Cases
 
-Baseline: `c2248909` plus native-oracle request-size preload routing
+Baseline: `37d7dde4`
 
 Source artifacts:
 
@@ -32,7 +32,7 @@ It excludes `compile-contract`, `real-parity`, `real-null-validation`,
 
 | Category | Rows |
 |---|---:|
-| real-parity | 3839 |
+| real-parity | 3840 |
 | compile-contract | 2229 |
 | generic-fallback | 817 |
 | generic-error-fallback | 129 |
@@ -166,7 +166,7 @@ Current condition-coverage bulk context from
 | `src/grays.rs` | 727 / 740 | 177 / 178 | 32 / 33 |
 | `src/autohint/latin.rs` | 2608 / 2844 | 1079 / 1286 | 70 / 73 |
 | `src/render.rs` | 2099 / 2597 | 379 / 434 | 142 / 183 |
-| `src/scaler.rs` | 1182 / 1305 | 201 / 218 | 53 / 65 |
+| `src/scaler.rs` | 1182 / 1305 | 202 / 218 | 53 / 65 |
 
 Use condition coverage as secondary prioritization only: route audit category
 and route shape decide whether a row is real parity, while condition coverage
