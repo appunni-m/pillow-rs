@@ -194,6 +194,81 @@
           "freetype/src/truetype/ttgload.c"
         ]
       }
+    },
+    {
+      "case_id": "freetype.FT_LOAD_DEFAULT.load_glyph_mixed_dpi_native_hinting_slot",
+      "subject": "freetype.FT_LOAD_DEFAULT",
+      "case": "load_glyph_default_slot",
+      "operation": "load_glyph",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "preload_char_size": {
+            "char_width": 1280,
+            "char_height": 1280,
+            "horz_resolution": 72,
+            "vert_resolution": 96
+          },
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "symbol_under_test": "FT_LOAD_DEFAULT",
+          "call_sequence": [
+            "FT_New_Memory_Face",
+            "FT_Set_Char_Size",
+            "FT_Load_Glyph"
+          ],
+          "glyph_index": 36,
+          "glyph_name": "A"
+        }
+      },
+      "classifiers": [
+        "kind:flag",
+        "header:freetype",
+        "operation:load",
+        "coverage:runtime-observable",
+        "coverage:scaler-mixed-dpi"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "error": "FT_Error",
+          "glyph_slot": {
+            "format": "FT_Glyph_Format",
+            "metrics": "FT_Glyph_Metrics",
+            "advance": "FT_Vector",
+            "linearHoriAdvance": "FT_Fixed",
+            "linearVertAdvance": "FT_Fixed",
+            "bitmap": "FT_Bitmap summary and bytes when rendered",
+            "outline": "point/contour/tag vectors when exposed"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "glyph_slot.glyph_index",
+            "glyph_slot.format",
+            "glyph_slot.metrics",
+            "glyph_slot.advance",
+            "glyph_slot.outline.cbox"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "sources_checked": [
+          "freetype/include/freetype/freetype.h",
+          "freetype/src/base/ftobjs.c",
+          "freetype/src/truetype/ttgload.c"
+        ]
+      }
     }
   ]
 }
