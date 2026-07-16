@@ -109,6 +109,24 @@
             ]
           },
           {
+            "id": "nonascii-windows-postscript-falls-back-to-filtered-apple",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/names/name-nonascii-postscript-apple.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "lifetime_probe": "before_done_face"
+            },
+            "coverage": [
+              "tt/name:windows-postscript-nonzero-high-byte-rejected",
+              "tt/name:apple-postscript-nonascii-byte-rejected"
+            ]
+          },
+          {
             "id": "postscript-branch-matrix",
             "assets": {
               "font": {
