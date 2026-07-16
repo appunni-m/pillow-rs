@@ -27,13 +27,13 @@ pub struct FvarInstance {
 }
 
 pub fn parse_fvar(data: &[u8]) -> Result<FvarTable, FontError> {
-    if data.len() < 16 {
+    if data.len() < 20 {
         return Err(FontError::InvalidFont(
-            "fvar table too short (need 16 bytes)".into(),
+            "fvar table too short (need 20 bytes)".into(),
         ));
     }
-    let major = u16::from_be_bytes([data[0], data[1]]);
-    if major != 1 {
+    let version = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+    if version != 0x0001_0000 {
         return Err(FontError::InvalidFont("unsupported fvar version".into()));
     }
     let axes_offset = u16::from_be_bytes([data[4], data[5]]) as usize;
@@ -43,30 +43,30 @@ pub fn parse_fvar(data: &[u8]) -> Result<FvarTable, FontError> {
     let instance_size = u16::from_be_bytes([data[14], data[15]]) as usize;
     let axis_count_usize = usize::from(axis_count);
     let instance_count_usize = usize::from(instance_count);
-    let instances_offset = axes_offset
-        .checked_add(
-            axis_count_usize
-                .checked_mul(axis_size)
-                .ok_or_else(|| FontError::InvalidFont("fvar axes array offset overflow".into()))?,
-        )
-        .ok_or_else(|| FontError::InvalidFont("fvar axes array offset overflow".into()))?;
-    let instances_end = instances_offset
-        .checked_add(
-            instance_count_usize
-                .checked_mul(instance_size)
-                .ok_or_else(|| {
-                    FontError::InvalidFont("fvar instance array offset overflow".into())
-                })?,
-        )
-        .ok_or_else(|| FontError::InvalidFont("fvar instance array offset overflow".into()))?;
+
+    // `sfnt_init_face` validates these limits before exposing GX variation
+    // support.  They also bound every offset below to 32-bit arithmetic, as
+    // relied on by `TT_Get_MM_Var` in `ttgxvar.c`.
+    if axis_count == 0 || axis_count > 0x3FFE {
+        return Err(FontError::InvalidFont("invalid fvar axis count".into()));
+    }
+    if axis_size != 20 {
+        return Err(FontError::InvalidFont("invalid fvar axis size".into()));
+    }
+    let min_instance_size = 4 + axis_count_usize * 4;
+    if instance_size != min_instance_size && instance_size != min_instance_size + 2 {
+        return Err(FontError::InvalidFont("invalid fvar instance size".into()));
+    }
+    if instance_count > 0x7EFF {
+        return Err(FontError::InvalidFont("invalid fvar instance count".into()));
+    }
+
+    let instances_offset = axes_offset + axis_count_usize * axis_size;
+    let instances_end = instances_offset + instance_count_usize * instance_size;
     if instances_end > data.len() {
         return Err(FontError::InvalidFont(
             "fvar instance array too short".into(),
         ));
-    }
-
-    if axis_count != 0 && axis_size < 20 {
-        return Err(FontError::InvalidFont("fvar axis size too short".into()));
     }
 
     let mut axes = Vec::with_capacity(axis_count_usize);
@@ -84,12 +84,6 @@ pub fn parse_fvar(data: &[u8]) -> Result<FvarTable, FontError> {
     }
 
     let mut instances = Vec::with_capacity(instance_count_usize);
-    let min_instance_size = 4 + axis_count_usize * 4;
-    if instance_size < min_instance_size {
-        return Err(FontError::InvalidFont(
-            "fvar instance size too short".into(),
-        ));
-    }
     for index in 0..instance_count_usize {
         let off = instances_offset + index * instance_size;
         let subfamily_name_id = u16::from_be_bytes([data[off], data[off + 1]]);

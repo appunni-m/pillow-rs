@@ -18,9 +18,15 @@ def write_short_header() -> None:
 
 
 def write_unsupported_version() -> None:
-    payload = bytearray(base_fvar_payload()[:16])
+    payload = bytearray(base_fvar_payload()[:20])
     payload[0:2] = (2).to_bytes(2, "big")
     write_fvar_payload("fvar-version-2.ttf", bytes(payload))
+
+
+def write_unsupported_minor_version() -> None:
+    payload = bytearray(base_fvar_payload())
+    payload[2:4] = (1).to_bytes(2, "big")
+    write_fvar_payload("fvar-minor-version-1.ttf", bytes(payload))
 
 
 def write_axis_size_short() -> None:
@@ -34,6 +40,14 @@ def write_axis_size_short() -> None:
     instances_offset = axes_offset + axis_count * short_axis_size
     table_len = instances_offset + instance_count * instance_size
     write_fvar_payload("fvar-axis-size-short.ttf", bytes(payload[:table_len]))
+
+
+def write_axis_size_long() -> None:
+    payload = bytearray(base_fvar_payload())
+    long_axis_size = 21
+    payload[10:12] = long_axis_size.to_bytes(2, "big")
+    resize_for_declared_arrays(payload)
+    write_fvar_payload("fvar-axis-size-long.ttf", bytes(payload))
 
 
 def write_instance_array_short() -> None:
@@ -59,6 +73,30 @@ def write_instance_size_short() -> None:
     write_fvar_payload("fvar-instance-size-short.ttf", bytes(payload[:table_len]))
 
 
+def write_instance_size_long() -> None:
+    payload = bytearray(base_fvar_payload())
+    axis_count = int.from_bytes(payload[8:10], "big")
+    long_instance_size = 4 + axis_count * 4 + 4
+    payload[14:16] = long_instance_size.to_bytes(2, "big")
+    resize_for_declared_arrays(payload)
+    write_fvar_payload("fvar-instance-size-long.ttf", bytes(payload))
+
+
+def write_axis_count_limit() -> None:
+    payload = bytearray(base_fvar_payload()[:20])
+    payload[8:10] = (0x3FFF).to_bytes(2, "big")
+    payload[10:12] = (20).to_bytes(2, "big")
+    payload[12:14] = (0).to_bytes(2, "big")
+    payload[14:16] = (4).to_bytes(2, "big")
+    write_fvar_payload("fvar-axis-count-too-large.ttf", bytes(payload))
+
+
+def write_instance_count_limit() -> None:
+    payload = bytearray(base_fvar_payload()[:20])
+    payload[12:14] = (0x7F00).to_bytes(2, "big")
+    write_fvar_payload("fvar-instance-count-too-large.ttf", bytes(payload))
+
+
 def write_instance_postscript_name() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     for instance in font["fvar"].instances:
@@ -67,11 +105,26 @@ def write_instance_postscript_name() -> None:
 
 
 def write_zero_axis() -> None:
-    payload = bytearray(base_fvar_payload()[:16])
+    payload = bytearray(base_fvar_payload()[:20])
     payload[8:10] = (0).to_bytes(2, "big")
     payload[12:14] = (0).to_bytes(2, "big")
     payload[14:16] = (4).to_bytes(2, "big")
     write_fvar_payload("fvar-zero-axis.ttf", bytes(payload))
+
+
+def resize_for_declared_arrays(payload: bytearray) -> None:
+    axes_offset = int.from_bytes(payload[4:6], "big")
+    axis_count = int.from_bytes(payload[8:10], "big")
+    axis_size = int.from_bytes(payload[10:12], "big")
+    instance_count = int.from_bytes(payload[12:14], "big")
+    instance_size = int.from_bytes(payload[14:16], "big")
+    table_len = (
+        axes_offset + axis_count * axis_size + instance_count * instance_size
+    )
+    if len(payload) < table_len:
+        payload.extend(b"\0" * (table_len - len(payload)))
+    else:
+        del payload[table_len:]
 
 
 def save_font(path: Path, font: TTFont) -> None:
@@ -178,9 +231,14 @@ def checksum(table_data: bytes | bytearray) -> int:
 def main() -> None:
     write_short_header()
     write_unsupported_version()
+    write_unsupported_minor_version()
     write_axis_size_short()
+    write_axis_size_long()
     write_instance_array_short()
     write_instance_size_short()
+    write_instance_size_long()
+    write_axis_count_limit()
+    write_instance_count_limit()
     write_instance_postscript_name()
     write_zero_axis()
 
