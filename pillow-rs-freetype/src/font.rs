@@ -2158,13 +2158,21 @@ impl Font {
                 Ok(scaled)
             }
         } else {
-            let metrics_cache = self.face_globals.get_metrics(glyph);
-            scaler::scale_glyph_for_metrics_with_autohint(
-                &self.data,
-                glyph,
-                metrics_cache.as_deref(),
-                self.is_italic,
-            )
+            // C `FT_Load_Glyph` only falls back to the auto-hinter for SFNT
+            // TrueType faces with no font program and a tiny `prep` program
+            // (`src/base/ftobjs.c:966-989`).  Longer prep-only programs still
+            // route through the TrueType driver.
+            if scaler::should_use_default_autohint(&self.data) {
+                let metrics_cache = self.face_globals.get_metrics(glyph);
+                scaler::scale_glyph_for_metrics_with_autohint(
+                    &self.data,
+                    glyph,
+                    metrics_cache.as_deref(),
+                    self.is_italic,
+                )
+            } else {
+                scaler::scale_glyph_for_metrics(&self.data, glyph, self.is_italic)
+            }
         }
     }
 

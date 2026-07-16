@@ -901,11 +901,17 @@ fn scale_glyph_impl_with_context(
     // FreeType translates TrueType outlines back by the scaled left phantom
     // point after loading. Apply it after scaling so FT_MulFix rounding stays
     // separate from point-coordinate rounding.
-    let no_hinting_origin_shift_x = if data.cff.is_none() && !use_autohint && !allow_bytecode {
-        scale.scale_x(pp1x_fu)
-    } else {
-        0
-    };
+    let can_execute_native_bytecode = data.fpgm.is_some() && data.cvt.is_some();
+    let no_hinting_origin_shift_x =
+        if data.cff.is_none() && !use_autohint && (!allow_bytecode || !can_execute_native_bytecode)
+        {
+            // C `TT_Load_Glyph` translates every loaded TrueType outline by
+            // `-loader.pp1.x` after scaling, even when the font has no fpgm/cvt
+            // tables and no glyph bytecode runs (`src/truetype/ttgload.c:2578-2583`).
+            scale.scale_x(pp1x_fu)
+        } else {
+            0
+        };
     let mut composite_use_my_metrics_advance = None;
     let mut composite_use_my_metrics_vertical_advance = None;
     let mut composite_use_my_metrics_phantoms = None;
@@ -1266,7 +1272,7 @@ fn scale_glyph_impl_with_context(
     ))
 }
 
-fn should_use_default_autohint(data: &FontData) -> bool {
+pub(crate) fn should_use_default_autohint(data: &FontData) -> bool {
     let has_font_program = data.fpgm.as_ref().is_some_and(|fpgm| !fpgm.is_empty());
     let prep_len = data.prep.as_ref().map_or(0, Vec::len);
 
