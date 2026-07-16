@@ -2037,14 +2037,28 @@ impl Font {
         match self.load_mode {
             LoadMode::Default => {
                 let bytecode_context = self.native_bytecode_context_for_mode(native_hint_mode)?;
-                scaler::scale_glyph_native_default_with_bytecode_context_and_mode(
-                    &self.data,
-                    glyph,
-                    None,
-                    self.is_italic,
-                    native_hint_mode,
-                    bytecode_context,
-                )
+                if native_hint_mode == NativeHintMode::Normal {
+                    if bytecode_context.is_none() {
+                        scaler::scale_glyph_native_default(&self.data, glyph, None, self.is_italic)
+                    } else {
+                        scaler::scale_glyph_native_default_with_bytecode_context(
+                            &self.data,
+                            glyph,
+                            None,
+                            self.is_italic,
+                            bytecode_context,
+                        )
+                    }
+                } else {
+                    scaler::scale_glyph_native_default_with_bytecode_context_and_mode(
+                        &self.data,
+                        glyph,
+                        None,
+                        self.is_italic,
+                        native_hint_mode,
+                        bytecode_context,
+                    )
+                }
             }
             LoadMode::ForceAutoHint => {
                 let metrics_cache = self.autohint_metrics_for_glyph(glyph);
@@ -2253,13 +2267,22 @@ impl Font {
                 fpgm,
                 &mut owned_context,
             )?;
-            scaler::scale_glyph_for_metrics_with_bytecode_context_and_mode(
-                &self.data,
-                glyph,
-                self.is_italic,
-                native_hint_mode,
-                bytecode_context,
-            )
+            if native_hint_mode == NativeHintMode::Normal {
+                scaler::scale_glyph_for_metrics_with_bytecode_context(
+                    &self.data,
+                    glyph,
+                    self.is_italic,
+                    bytecode_context,
+                )
+            } else {
+                scaler::scale_glyph_for_metrics_with_bytecode_context_and_mode(
+                    &self.data,
+                    glyph,
+                    self.is_italic,
+                    native_hint_mode,
+                    bytecode_context,
+                )
+            }
         } else {
             scaler::scale_glyph_no_hinting(&self.data, glyph, self.is_italic)
         }
