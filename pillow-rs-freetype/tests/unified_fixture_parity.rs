@@ -17818,7 +17818,7 @@ fn c_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String
     let clip_box = outline_render_ffi_clip_box(&case.inputs.params)?;
     let mut params = c_abi::FT_Raster_Params {
         target: &target,
-        source: 1usize as *const c_void,
+        source: std::ptr::dangling::<c_void>(),
         flags: outline_render_flags(&case.inputs.params)?,
         clip_box: c_abi::FT_BBox {
             xMin: clip_box.xMin,
@@ -17862,7 +17862,7 @@ fn wasm_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, Str
     let clip_box = outline_render_ffi_clip_box(&case.inputs.params)?;
     let mut params = wasm_abi::FontdoneWasmRasterParams {
         target: &mut target,
-        source: 1usize as *const c_void,
+        source: std::ptr::dangling::<c_void>(),
         flags: outline_render_flags(&case.inputs.params)?,
         clip_box: wasm_abi::FontdoneWasmBBox {
             xMin: clip_box.xMin,
