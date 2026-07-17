@@ -4,7 +4,7 @@
 //! Reference: `src/base/ftoutln.c` (`FT_Outline_Transform` via `FT_MulFix`),
 //! `src/base/ftglyph.c` (`FT_Glyph_Get_CBox` with `FT_GLYPH_BBOX_PIXELS`).
 
-use crate::casts::i32_from_f32;
+use crate::casts::{i16_from_i32, i32_from_f32};
 
 use crate::error::FontError;
 use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
@@ -1360,6 +1360,15 @@ fn vertical_top_and_advance_font_units(
         let vertical = vmtx.get(glyph_index);
         (vertical.tsb as i32, vertical.advance_height as i32)
     } else {
+        // TrueType `compute_glyph_metrics` narrows the unscaled bbox height
+        // through `FT_Short` before synthesizing vertical metrics when vmtx
+        // is absent (`ttgload.c:2017-2035`). A valid full-range glyf bbox has
+        // height 65535, which the pinned two's-complement target makes -1.
+        let height_fu = if data.cff.is_none() {
+            i32::from(i16_from_i32(height_fu))
+        } else {
+            height_fu
+        };
         let advance_fu = vertical_advance_font_units(data);
         ((advance_fu - height_fu) / 2, advance_fu)
     }

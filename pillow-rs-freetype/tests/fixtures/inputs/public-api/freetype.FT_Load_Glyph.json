@@ -2800,6 +2800,30 @@
             ]
           },
           {
+            "id": "latin-extreme-coordinate-force-autohint",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 82,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "casts:i16-c-compatible-narrowing"
+            ]
+          },
+          {
             "id": "latin-blue-delta-force-autohint",
             "assets": {
               "font": {
