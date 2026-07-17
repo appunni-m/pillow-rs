@@ -2441,25 +2441,14 @@ impl Font {
         fpgm: &[u8],
     ) -> Result<tt::hinter::exec::ExecContext, FontError> {
         let active_scale = scaler::ScaleMetrics::from_font_data(&self.data);
-        let scale = tt::hinter::HintScale {
-            x_scale: active_scale.x_scale,
-            y_scale: active_scale.y_scale,
-            tt_scale: active_scale.tt_scale,
-            ppem: active_scale.ppem,
-            point_size: active_scale.point_size,
-            storage_size: self.data.maxp.max_storage as usize,
-            max_function_defs: self.data.maxp.max_function_defs as usize,
-            max_instruction_defs: self.data.maxp.max_instruction_defs as usize,
-            twilight_points: self.data.maxp.max_twilight_points as usize,
-            is_composite: false,
-            reset_vectors_at_glyph_entry: false,
-            metrics_legacy_phantoms: false,
+        scaler::prepare_native_bytecode_context(
+            &self.data,
+            active_scale,
+            mode,
             pedantic_hinting,
-            native_hint_mode: mode,
-            phantom_x_override: None,
-        };
-        let prep = self.data.prep.as_deref().unwrap_or(&[]);
-        tt::hinter::prepare_context(cvt, fpgm, prep, &scale)
+            cvt,
+            fpgm,
+        )
     }
 
     fn layout_glyphs(&self, text: &str) -> Result<Vec<PositionedGlyph>, FontError> {
