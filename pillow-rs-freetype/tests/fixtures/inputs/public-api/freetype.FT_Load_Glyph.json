@@ -6822,6 +6822,62 @@
       }
     },
     {
+      "case_id": "freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags.render_overlap_raster_overflow",
+      "subject": "freetype.FT_Load_Glyph",
+      "case": "error_out_of_range_null_face_or_invalid_flags",
+      "operation": "load_glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/glyf/render-coverage.ttf",
+            "requirements": "Gid 9 carries FT_OUTLINE_OVERLAP on a 9000 px wide outline at 1024 ppem, crossing ftsmooth.c's overlap width limit while keeping rows small."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_index": 9,
+          "load_flags": [
+            "FT_LOAD_NO_HINTING",
+            "FT_LOAD_RENDER"
+          ],
+          "size": 1024,
+          "assert_api_load_glyph_agrees": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-load",
+        "area:raster",
+        "coverage:real-error-trigger"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Raster_Overflow",
+        "output_shape": {
+          "return": "FT_Error",
+          "slot_mutation": "load_succeeds_then_render_error_propagates"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "compare_error_output": true,
+          "paths": [
+            "status",
+            "error",
+            "slot_snapshot"
+          ]
+        },
+        "sources_checked": [
+          "freetype/src/base/ftobjs.c:1159-1178",
+          "freetype/src/smooth/ftsmooth.c:511-515,621-637"
+        ]
+      }
+    },
+    {
       "case_id": "freetype.FT_Load_Glyph.error_null_face_or_invalid_flags.null_face",
       "subject": "freetype.FT_Load_Glyph",
       "case": "error_out_of_range_null_face_or_invalid_flags",
