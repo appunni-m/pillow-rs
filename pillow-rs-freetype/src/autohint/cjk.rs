@@ -808,18 +808,17 @@ fn compute_stem_width(
             } else {
                 dist = 64;
             }
-        } else if other_flags & AF_LATIN_HINTS_MONO != 0 {
+        } else {
+            // `af_cjk_compute_stem_width` has an anti-aliased horizontal
+            // strong-hinting arm, but `af_cjk_hints_init` cannot expose it:
+            // LCD clears STEM_ADJUST, MONO also sets MONO, and the remaining
+            // public targets do not set HORZ_SNAP (afcjk.c:1399-1417).
+            debug_assert_ne!(other_flags & AF_LATIN_HINTS_MONO, 0);
             if dist < 64 {
                 dist = 64;
             } else {
                 dist = (dist + 32) & !63;
             }
-        } else if dist < 48 {
-            dist = (dist + 64) >> 1;
-        } else if dist < 128 {
-            dist = (dist + 22) & !63;
-        } else {
-            dist = (dist + 32) & !63;
         }
     }
 
