@@ -31,7 +31,7 @@
 
 pub mod exec;
 pub mod gs;
-pub mod iup;
+pub(crate) mod iup;
 pub mod tables;
 pub mod zone;
 

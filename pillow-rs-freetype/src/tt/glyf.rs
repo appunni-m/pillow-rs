@@ -484,11 +484,18 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
     }
     let end_off = 10usize;
     let mut end_pts = Vec::with_capacity(nc);
+    let mut last_end = None;
     for i in 0..nc {
-        end_pts.push(u16::from_be_bytes([
-            data[end_off + i * 2],
-            data[end_off + i * 2 + 1],
-        ]));
+        let end = u16::from_be_bytes([data[end_off + i * 2], data[end_off + i * 2 + 1]]);
+        // C `TT_Load_Simple_Glyph` rejects duplicate or decreasing contour
+        // endpoints before allocating point/tag arrays (`ttgload.c:371-381`).
+        if last_end.is_some_and(|last| end <= last) {
+            return Err(FontError::InvalidOutline(
+                "glyf: contour endpoints are not strictly increasing".into(),
+            ));
+        }
+        end_pts.push(end);
+        last_end = Some(end);
     }
     // C `TT_Load_Simple_Glyph` starts `last` at -1, so a valid zero-contour
     // record has zero points while still being allowed to carry instructions.
