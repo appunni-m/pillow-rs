@@ -584,6 +584,31 @@
             ]
           },
           {
+            "id": "latin-out-of-range-cmap-coverage",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/out-of-range-cmap-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 79,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:out-of-range-script-gid",
+              "autohint/globals:out-of-range-digit-gid",
+              "autohint/globals:out-of-range-nonbase-gid",
+              "autohint/globals:glyph-zero-nonbase-gid",
+              "autohint/globals:shared-later-script-nonbase-gid",
+              "autohint/globals:standard-char-fallback-after-out-of-range-gid"
+            ]
+          },
+          {
             "id": "latin-shared-greek",
             "assets": {
               "font": {
@@ -5161,6 +5186,35 @@
             },
             "coverage": [
               "autohint/latin:glyph-index-blue-overlap-correction"
+            ]
+          },
+          {
+            "id": "force-autohint-invalid-glyph-index",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/out-of-range-cmap-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ],
+              "symbol_under_test": "FT_LOAD_FORCE_AUTOHINT",
+              "call_sequence": [
+                "FT_New_Memory_Face",
+                "FT_Set_Pixel_Sizes",
+                "FT_Load_Glyph"
+              ],
+              "glyph_index": 3,
+              "glyph_name": "first out-of-range glyph index",
+              "assert_api_load_glyph_agrees": true
+            },
+            "expect_error": true,
+            "coverage": [
+              "autohint/globals:public-force-autohint-invalid-glyph-index"
             ]
           }
         ]

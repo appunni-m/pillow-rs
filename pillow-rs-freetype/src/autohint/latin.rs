@@ -1223,8 +1223,7 @@ fn extract_widths(hints: &GlyphHints, dim: Dimension) -> (usize, [AfWidth; AF_LA
 
 // ── Blue zone strings — dynamically selected from afblue.dat ───────────────
 
-use super::blue_strings::{BlueStringEntry, SCRIPT_GREK};
-use super::globals::detect_script;
+use super::blue_strings::BlueStringEntry;
 
 // Macros for checking blue property bits.
 macro_rules! is_top_blue {
@@ -1246,17 +1245,6 @@ macro_rules! is_x_height {
     ($p:expr) => {
         ($p & AF_BLUE_PROP_LATIN_X_HEIGHT) != 0
     };
-}
-
-/// Initialize blue zones using the script detected from the font cmap.
-pub fn metrics_init_blues(metrics: &mut AfLatinMetrics, font_data: &crate::tables::FontData) {
-    let script_strings = detect_script(&font_data.cmap);
-    metrics_init_blues_impl(metrics, font_data, script_strings);
-}
-
-/// Initialize blue zones using the Greek blue-string entries.
-pub fn metrics_init_blues_greek(metrics: &mut AfLatinMetrics, font_data: &crate::tables::FontData) {
-    metrics_init_blues_impl(metrics, font_data, SCRIPT_GREK);
 }
 
 /// Core blue zone initialization, parameterized by script entries.
