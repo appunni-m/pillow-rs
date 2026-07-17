@@ -47,7 +47,9 @@ impl CffTable {
         let charstring = self
             .charstrings
             .get(usize::from(glyph_index))
-            .ok_or_else(|| FontError::InvalidOutline("CFF: glyph index out of range".into()))?;
+            // FreeType 2.14.3's `cff_slot_load` returns Invalid_Argument for a
+            // CharStrings index outside `num_glyphs` (`cffgload.c`).
+            .ok_or_else(|| FontError::InvalidArgument("CFF: glyph index out of range".into()))?;
         Type2Decoder::new(charstring).decode()
     }
 }
