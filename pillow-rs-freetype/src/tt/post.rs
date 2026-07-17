@@ -43,6 +43,9 @@ pub fn parse_post(data: &[u8]) -> Option<PostTable> {
 impl PostTable {
     /// Resolve a glyph's PostScript name using FreeType's `ttpost.c` rules.
     pub fn glyph_name(&self, glyph_index: usize, num_glyphs: u16) -> Option<&str> {
+        // `tt_face_get_ps_name` repeats this service-level guard.  Public
+        // `FT_Get_Glyph_Name` rejects the index first, while
+        // `FT_Get_Name_Index` only scans valid glyph IDs.
         if glyph_index >= usize::from(num_glyphs) {
             return None;
         }
