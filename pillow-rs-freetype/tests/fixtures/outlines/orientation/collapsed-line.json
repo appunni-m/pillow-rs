@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "kind": "outline_model_set",
+  "models": {
+    "horizontal": {
+      "points": [{"x": 0, "y": 0}, {"x": 64, "y": 0}],
+      "tags": [1, 1],
+      "contours": [1],
+      "flags": 0
+    },
+    "vertical": {
+      "points": [{"x": 0, "y": 0}, {"x": 0, "y": 64}],
+      "tags": [1, 1],
+      "contours": [1],
+      "flags": 0
+    }
+  }
+}

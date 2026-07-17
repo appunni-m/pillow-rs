@@ -17299,7 +17299,6 @@ enum OutlineTransformScenario {
     Outline,
     NullOutline,
     NullMatrix,
-    NullPoints,
 }
 
 fn reverse_outline_model() -> MutableOutlineModel {
@@ -17336,6 +17335,15 @@ fn outline_points_json(points: &[(i64, i64)]) -> Value {
             .map(|&(x, y)| json!({"x": x, "y": y}))
             .collect::<Vec<_>>()
     )
+}
+
+fn mutable_outline_json(model: &MutableOutlineModel) -> Value {
+    json!({
+        "points": outline_points_json(&model.points),
+        "tags": model.tags,
+        "contours": model.contours,
+        "flags": model.flags
+    })
 }
 
 fn rust_snapshot_from_mutable(model: &MutableOutlineModel) -> FT_OutlineSnapshot {
@@ -17381,16 +17389,23 @@ where
         reverse(Some(&mut model));
         return Ok(ok(json!({
             "points_after": outline_points_json(&model.points),
-            "tags_after": model.tags
+            "tags_after": model.tags,
+            "contours_after": model.contours,
+            "flags_after": model.flags
         })));
     }
     if case.case_id.ends_with(".toggles_reverse_fill_flag") {
         let mut flags_after_each_call = Vec::new();
+        let mut outlines_after_each_call = Vec::new();
         for _ in 0..2 {
             reverse(Some(&mut model));
             flags_after_each_call.push(model.flags);
+            outlines_after_each_call.push(mutable_outline_json(&model));
         }
-        return Ok(ok(json!({"flags_after_each_call": flags_after_each_call})));
+        return Ok(ok(json!({
+            "flags_after_each_call": flags_after_each_call,
+            "outlines_after_each_call": outlines_after_each_call
+        })));
     }
     Err(format!("unsupported outline reverse case {}", case.case_id))
 }
@@ -17489,18 +17504,21 @@ where
 {
     let matrix = outline_transform_matrix(case);
     if case.case_id.ends_with(".null_inputs_noop") {
+        let mut model = transform_outline_model();
         transform(OutlineTransformScenario::NullOutline, None, matrix);
         transform(
             OutlineTransformScenario::NullMatrix,
-            Some(&mut transform_outline_model()),
+            Some(&mut model),
             matrix,
         );
-        transform(OutlineTransformScenario::NullPoints, None, matrix);
         return Ok(ok(json!({
             "rows": [
                 {"label": "null_outline", "sentinel_memory_changed": false},
-                {"label": "null_matrix", "sentinel_memory_changed": false},
-                {"label": "null_points", "sentinel_memory_changed": false}
+                {
+                    "label": "null_matrix",
+                    "sentinel_memory_changed": false,
+                    "outline_after": mutable_outline_json(&model)
+                }
             ]
         })));
     }
@@ -17509,7 +17527,10 @@ where
     transform(OutlineTransformScenario::Outline, Some(&mut model), matrix);
     if case.case_id.ends_with(".matrix_transform_matches_c") {
         return Ok(ok(json!({
-            "points_after": outline_points_json(&model.points)
+            "points_after": outline_points_json(&model.points),
+            "tags_after": model.tags,
+            "contours_after": model.contours,
+            "flags_after": model.flags
         })));
     }
     if case
@@ -17524,7 +17545,8 @@ where
                 "xMax": cbox[2],
                 "yMax": cbox[3]
             },
-            "orientation_after": orientation
+            "orientation_after": orientation,
+            "outline_after": mutable_outline_json(&model)
         })));
     }
     Err(format!(
@@ -17545,7 +17567,7 @@ fn rust_transform_mutable_outline(
         yy: matrix.3,
     };
     match scenario {
-        OutlineTransformScenario::NullOutline | OutlineTransformScenario::NullPoints => {
+        OutlineTransformScenario::NullOutline => {
             FT_Outline_Transform(None, Some(&matrix));
         }
         OutlineTransformScenario::NullMatrix => {
@@ -17592,18 +17614,6 @@ fn c_transform_mutable_outline(
     };
     if matches!(scenario, OutlineTransformScenario::NullOutline) {
         c_abi::FT_Outline_Transform(ptr::null(), &matrix);
-        return;
-    }
-    if matches!(scenario, OutlineTransformScenario::NullPoints) {
-        let outline = c_abi::FT_Outline {
-            n_contours: 0,
-            n_points: 3,
-            points: ptr::null_mut(),
-            tags: ptr::null_mut(),
-            contours: ptr::null_mut(),
-            flags: 0,
-        };
-        c_abi::FT_Outline_Transform(&outline, &matrix);
         return;
     }
     let model = model.expect("model");
@@ -17672,18 +17682,6 @@ fn wasm_transform_mutable_outline(
     };
     if matches!(scenario, OutlineTransformScenario::NullOutline) {
         wasm_abi::fontdone_wasm_outline_transform(ptr::null(), &matrix);
-        return;
-    }
-    if matches!(scenario, OutlineTransformScenario::NullPoints) {
-        let outline = wasm_abi::FontdoneWasmOutline {
-            n_contours: 0,
-            n_points: 3,
-            points: ptr::null_mut(),
-            tags: ptr::null_mut(),
-            contours: ptr::null_mut(),
-            flags: 0,
-        };
-        wasm_abi::fontdone_wasm_outline_transform(&outline, &matrix);
         return;
     }
     let model = model.expect("model");

@@ -5320,6 +5320,26 @@ static void print_mutated_points(const FT_Vector* points, unsigned int count) {
     printf("]");
 }
 
+static void print_outline_snapshot(const FT_Outline* outline) {
+    printf("{\"points\":");
+    print_mutated_points(outline->points, (unsigned int)outline->n_points);
+    printf(",\"tags\":[");
+    for (int index = 0; index < outline->n_points; index++) {
+        if (index) {
+            printf(",");
+        }
+        printf("%u", (unsigned int)(unsigned char)outline->tags[index]);
+    }
+    printf("],\"contours\":[");
+    for (int index = 0; index < outline->n_contours; index++) {
+        if (index) {
+            printf(",");
+        }
+        printf("%d", outline->contours[index]);
+    }
+    printf("],\"flags\":%d}", outline->flags);
+}
+
 static int emit_outline_reverse(int argc, char** argv) {
     if (argc != 3) {
         return 1;
@@ -5348,14 +5368,30 @@ static int emit_outline_reverse(int argc, char** argv) {
             }
             printf("%u", tags[index]);
         }
-        printf("]}}\n");
+        printf("],\"contours_after\":[%d,%d],\"flags_after\":%d}}\n",
+               contours[0], contours[1], outline.flags);
         return 0;
     }
     if (strstr(case_id, ".toggles_reverse_fill_flag")) {
         FT_Outline_Reverse(&outline);
         int first = outline.flags;
+        printf("{\"flags_after_each_call\":[%d,", first);
+        FT_Vector first_points[8];
+        unsigned char first_tags[8];
+        unsigned short first_contours[2];
+        memcpy(first_points, points, sizeof(first_points));
+        memcpy(first_tags, tags, sizeof(first_tags));
+        memcpy(first_contours, contours, sizeof(first_contours));
+        FT_Outline first_outline = outline;
+        first_outline.points = first_points;
+        first_outline.tags = first_tags;
+        first_outline.contours = first_contours;
         FT_Outline_Reverse(&outline);
-        printf("{\"flags_after_each_call\":[%d,%d]}}\n", first, outline.flags);
+        printf("%d],\"outlines_after_each_call\":[", outline.flags);
+        print_outline_snapshot(&first_outline);
+        printf(",");
+        print_outline_snapshot(&outline);
+        printf("]}}\n");
         return 0;
     }
     fprintf(stderr, "unsupported outline reverse case: %s\n", case_id);
@@ -5377,15 +5413,12 @@ static int emit_outline_transform(int argc, char** argv) {
         build_transform_outline(&outline, points, tags, contours);
         FT_Outline_Transform(NULL, &identity);
         FT_Outline_Transform(&outline, NULL);
-        FT_Outline no_points = {0, 3, NULL, NULL, NULL, 0};
-        FT_Outline_Transform(&no_points, &identity);
-        printf(
-            "{\"rows\":["
-            "{\"label\":\"null_outline\",\"sentinel_memory_changed\":false},"
-            "{\"label\":\"null_matrix\",\"sentinel_memory_changed\":false},"
-            "{\"label\":\"null_points\",\"sentinel_memory_changed\":false}"
-            "]}}\n"
-        );
+        printf("{\"rows\":["
+               "{\"label\":\"null_outline\",\"sentinel_memory_changed\":false},"
+               "{\"label\":\"null_matrix\",\"sentinel_memory_changed\":false,"
+               "\"outline_after\":");
+        print_outline_snapshot(&outline);
+        printf("}]}}\n");
         return 0;
     }
 
@@ -5410,7 +5443,11 @@ static int emit_outline_transform(int argc, char** argv) {
     if (strstr(case_id, ".matrix_transform_matches_c")) {
         printf("{\"points_after\":");
         print_mutated_points(points, 4);
-        printf("}}\n");
+        printf(",\"tags_after\":[%u,%u,%u,%u],\"contours_after\":[%d],"
+               "\"flags_after\":%d}}\n",
+               (unsigned int)tags[0], (unsigned int)tags[1],
+               (unsigned int)tags[2], (unsigned int)tags[3],
+               contours[0], outline.flags);
         return 0;
     }
     if (strstr(case_id, ".orientation_and_cbox_after_transform")) {
@@ -5419,13 +5456,15 @@ static int emit_outline_transform(int argc, char** argv) {
         FT_Orientation orientation = FT_Outline_Get_Orientation(&outline);
         printf(
             "{\"cbox_after\":{\"xMin\":%ld,\"yMin\":%ld,\"xMax\":%ld,\"yMax\":%ld},"
-            "\"orientation_after\":%d}}\n",
+            "\"orientation_after\":%d,\"outline_after\":",
             cbox.xMin,
             cbox.yMin,
             cbox.xMax,
             cbox.yMax,
             orientation
         );
+        print_outline_snapshot(&outline);
+        printf("}}\n");
         return 0;
     }
     fprintf(stderr, "unsupported outline transform case: %s\n", case_id);

@@ -13,7 +13,7 @@
       "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/reverse/two-contours-mixed-tags.json", "asset_kind": "outline_model"}}, "params": {"snapshot_before_after": true}},
       "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "operation:outline-mutation"],
       "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Reverse", "kind": "function", "c_signature": "void FT_Outline_Reverse(FT_Outline* outline)"}, "source_behavior": "For each contour the first point is preserved and points/tags from first+1 through last are reversed."},
-      "expectation": {"status": "ok", "output_shape": {"return": "void", "points_before": ["FT_Vector"], "points_after": ["FT_Vector"], "tags_before": ["FT_Byte"], "tags_after": ["FT_Byte"]}, "compare": {"mode": "exact", "paths": ["points_after", "tags_after"]}, "source_refs": ["freetype/include/freetype/ftoutln.h:402-420", "freetype/src/base/ftoutln.c:545-603"], "fixture_requirements": ["At least two contours with distinct point and tag order after the first point."]}
+      "expectation": {"status": "ok", "output_shape": {"return": "void", "points_before": ["FT_Vector"], "points_after": ["FT_Vector"], "tags_before": ["FT_Byte"], "tags_after": ["FT_Byte"], "contours_after": ["FT_Short"], "flags_after": "FT_Int"}, "compare": {"mode": "exact", "paths": ["points_after", "tags_after", "contours_after", "flags_after"]}, "source_refs": ["freetype/include/freetype/ftoutln.h:402-420", "freetype/src/base/ftoutln.c:545-600"], "fixture_requirements": ["At least two contours with distinct point and tag order after the first point."]}
     },
     {
       "case_id": "ftoutln.FT_Outline_Reverse.toggles_reverse_fill_flag",
@@ -22,10 +22,10 @@
       "operation": "ftoutln.outline_reverse",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/reverse/flag-toggle.json", "asset_kind": "outline_model"}}, "params": {"call_count": 2, "flag": "FT_OUTLINE_REVERSE_FILL"}},
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/reverse/two-contours-mixed-tags.json", "asset_kind": "outline_model"}}, "params": {"call_count": 2, "flag": "FT_OUTLINE_REVERSE_FILL"}},
       "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "behavior:flags"],
       "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Reverse", "kind": "function", "c_signature": "void FT_Outline_Reverse(FT_Outline* outline)"}, "source_behavior": "Every call XORs FT_OUTLINE_REVERSE_FILL in outline->flags."},
-      "expectation": {"status": "ok", "output_shape": {"return": "void", "flags_after_each_call": ["FT_Int"]}, "compare": {"mode": "exact", "paths": ["flags_after_each_call"]}, "source_refs": ["freetype/include/freetype/ftoutln.h:410-416", "freetype/src/base/ftoutln.c:601-603"], "fixture_requirements": ["Outline with known initial flags so two toggles are observable."]}
+      "expectation": {"status": "ok", "output_shape": {"return": "void", "flags_after_each_call": ["FT_Int"], "outlines_after_each_call": [{"points": ["FT_Vector"], "tags": ["FT_Byte"], "contours": ["FT_Short"], "flags": "FT_Int"}]}, "compare": {"mode": "exact", "paths": ["flags_after_each_call", "outlines_after_each_call"]}, "source_refs": ["freetype/include/freetype/ftoutln.h:410-416", "freetype/src/base/ftoutln.c:545-600"], "fixture_requirements": ["Outline with known initial flags so two toggles are observable."]}
     },
     {
       "case_id": "ftoutln.FT_Outline_Reverse.null_outline_noop",

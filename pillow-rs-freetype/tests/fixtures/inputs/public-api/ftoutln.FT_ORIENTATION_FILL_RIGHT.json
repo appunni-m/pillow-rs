@@ -22,7 +22,7 @@
       "operation": "ftoutln.get_orientation",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/orientation/clockwise-triangle.json", "asset_kind": "outline_model"}}, "params": {"call": "FT_Outline_Get_Orientation", "compare_symbol": "FT_ORIENTATION_TRUETYPE"}},
+      "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/orientation/negative-area-square.json", "asset_kind": "outline_model"}}, "params": {"call": "FT_Outline_Get_Orientation", "compare_symbol": "FT_ORIENTATION_TRUETYPE"}},
       "classifiers": ["kind:enum_variant", "header:ftoutln", "surface:public-c-api", "behavior:alias"],
       "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_ORIENTATION_FILL_RIGHT", "kind": "enum_variant", "enum": "FT_Orientation"}, "source_behavior": "The public header defines FILL_RIGHT as the TRUETYPE orientation alias."},
       "expectation": {"status": "ok", "output_shape": {"return": "FT_Orientation", "alias_value": "integer", "orientation_value": "integer"}, "compare": {"mode": "exact", "paths": ["alias_value", "orientation_value"]}, "source_refs": ["freetype/include/freetype/ftoutln.h:513-542", "freetype/src/base/ftoutln.c:1050-1116"], "fixture_requirements": ["Clockwise non-degenerate outline whose signed polygon integral returns FT_ORIENTATION_TRUETYPE."]}
