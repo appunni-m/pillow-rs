@@ -197,13 +197,11 @@ pub(super) fn error_to_ft(error: FontError) -> FT_Error {
             FT_Err_Invalid_Argument
         }
         FontError::InvalidFont(_) => FT_Err_Invalid_File_Format,
-        FontError::UnsupportedCmapFormat(_) => FT_Err_Invalid_CharMap_Format,
         FontError::RasterOverflow => FT_Err_Raster_Overflow,
         FontError::InvalidOutline(_) => FT_Err_Invalid_Outline,
         FontError::ExecutionTooLong => FT_Err_Execution_Too_Long as FT_Error,
         FontError::InvalidReference => FT_Err_Invalid_Reference as FT_Error,
         FontError::CannotRenderGlyph(_) => FT_Err_Cannot_Render_Glyph,
-        FontError::UnsupportedLoadFlags(_) => FT_Err_Unimplemented_Feature,
         FontError::InvalidArgument(_) => FT_Err_Invalid_Argument,
         FontError::MissingBitmap => FT_Err_Missing_Bitmap as FT_Error,
         FontError::InvalidComposite => FT_Err_Invalid_Composite as FT_Error,
