@@ -233,6 +233,11 @@ test-filter-guard: unified-oracle api-abi-check
 		exit 1; \
 	fi
 
+.PHONY: test-error-comparison-guard
+test-error-comparison-guard:
+	$(CARGO) test --test unified_fixture_parity --locked \
+		unified_fixture_parity_exact_error_guard_rejects_non_error_results -- --nocapture
+
 .PHONY: test-list
 test-list: unified-oracle api-abi-check
 	FONTDONE_UNIFIED_SELECTION_ONLY=1 \
@@ -252,10 +257,10 @@ api-abi-audit: oracle-fetch
 .PHONY: api-abi-check
 api-abi-check: api-abi-audit
 	$(PYTHON) scripts/check_public_api_inputs.py --audit-json target/api-abi-audit/api_abi_audit.json
+	$(PYTHON) scripts/check_public_api_inputs.py --audit-json target/api-abi-audit/api_abi_audit.json --route-audit
 
 .PHONY: route-audit
-route-audit: api-abi-audit
-	$(PYTHON) scripts/check_public_api_inputs.py --audit-json target/api-abi-audit/api_abi_audit.json --route-audit
+route-audit: api-abi-check
 
 .PHONY: font-fixture-hinter
 font-fixture-hinter:

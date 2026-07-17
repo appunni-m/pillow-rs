@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "tests" / "manifest.yaml"
+FIXTURE_DIR = ROOT / "tests" / "fixtures"
 INPUT_DIR = ROOT / "tests" / "fixtures" / "inputs" / "public-api"
 DEFAULT_AUDIT_JSON = ROOT / "target" / "api-abi-audit" / "api_abi_audit.json"
 DEFAULT_ROUTE_AUDIT_JSON = ROOT / "target" / "api-abi-audit" / "route_audit.json"
@@ -275,8 +276,8 @@ EXPLICIT_UNSUPPORTED_OPERATIONS = {
     "freetype.face_properties",
 }
 
-RUNTIME_PENDING_OPERATIONS = {
-    "ftmm.set_named_instance",
+AUDIT_ONLY_PENDING_CORE_CASES = {
+    "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation",
 }
 
 PLACEHOLDER_STYLE_CATEGORIES = {
@@ -666,6 +667,8 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
                 for variant in variants:
                     if not isinstance(variant, dict):
                         continue
+                    variant_expectation = object_dict(variant.get("expectation", {}))
+                    variant_compare = object_dict(variant_expectation.get("compare", {}))
                     rows.append(
                         ConcreteInput(
                             subject=subject_id,
@@ -674,8 +677,18 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
                             operation=str(case.get("operation", "")),
                             variant_id=str(variant.get("id", "")) or None,
                             expect_error=bool(variant.get("expect_error", case.get("expect_error", False))),
-                            compare_error_output=bool(compare.get("compare_error_output", False)),
-                            allow_oracle_errors=bool(compare.get("allow_oracle_errors", False)),
+                            compare_error_output=bool(
+                                variant_compare.get(
+                                    "compare_error_output",
+                                    compare.get("compare_error_output", False),
+                                )
+                            ),
+                            allow_oracle_errors=bool(
+                                variant_compare.get(
+                                    "allow_oracle_errors",
+                                    compare.get("allow_oracle_errors", False),
+                                )
+                            ),
                             expectation_status=expectation_status,
                             assets=object_dict(variant.get("assets", {})),
                             params=object_dict(variant.get("params", {})),
@@ -716,6 +729,46 @@ def operation_is_real_parity(operation: str) -> bool:
 
 def has_runtime_asset(row: ConcreteInput) -> bool:
     return any(key in row.assets for key in ("font", "fixture", "foreign_font"))
+
+
+def unresolved_asset_reason(value: object, label: str) -> str | None:
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            reason = unresolved_asset_reason(item, f"{label}[{index}]")
+            if reason:
+                return reason
+        return None
+    if not isinstance(value, dict):
+        return None
+    if value.get("status") == "required_future_asset":
+        return f"{label} is marked required_future_asset"
+    for key, item in value.items():
+        if key not in {"id", "path"}:
+            reason = unresolved_asset_reason(item, f"{label}.{key}")
+            if reason:
+                return reason
+    if value.get("kind") not in {"ref", "file"}:
+        return None
+    reference = value.get("id") or value.get("path")
+    if not isinstance(reference, str) or "/" not in reference:
+        return None
+    if not (FIXTURE_DIR / reference).is_file():
+        return f"{label} references missing fixture {reference}"
+    return None
+
+
+def pending_route_reason(row: ConcreteInput) -> str | None:
+    if row.operation == "ftmodapi.get_truetype_engine_type" and row.params.get(
+        "library"
+    ) == "new_from_FT_New_Library_without_default_modules":
+        return "runner lacks an FT_New_Library lifecycle without default modules"
+    if not operation_is_real_parity(row.operation):
+        return None
+    for name, asset in sorted(row.assets.items()):
+        reason = unresolved_asset_reason(asset, name)
+        if reason:
+            return reason
+    return None
 
 
 def lifecycle_handle(row: ConcreteInput, name: str) -> str | None:
@@ -976,6 +1029,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
         return ("explicit-unsupported", "explicit Rust stub returns Unimplemented_Feature")
     if operation_is_compile_contract(row.operation):
         return ("compile-contract", "header, layout, macro, or scalar contract")
+    route_pending = pending_route_reason(row)
+    if route_pending:
+        return ("pending-route", route_pending)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",
@@ -1056,6 +1112,7 @@ def build_route_audit(items: dict[str, ManifestSubject]) -> dict[str, object]:
     operation_counts: dict[str, dict[str, int]] = {}
     examples: dict[tuple[str, str], str] = {}
     pending_core_rows: list[str] = []
+    pending_route_rows: list[str] = []
     runtime_pending_rows: list[str] = []
     placeholder_style_rows: list[str] = []
     supplementary_counts: dict[str, int] = {}
@@ -1067,8 +1124,11 @@ def build_route_audit(items: dict[str, ManifestSubject]) -> dict[str, object]:
         examples.setdefault((row["operation"], row["category"]), row["runtime_id"])
         if row["category"] == "pending-core":
             pending_core_rows.append(row["runtime_id"])
-            if row["operation"] in RUNTIME_PENDING_OPERATIONS:
+            if row["runtime_id"] not in AUDIT_ONLY_PENDING_CORE_CASES:
                 runtime_pending_rows.append(row["runtime_id"])
+        if row["category"] == "pending-route":
+            pending_route_rows.append(row["runtime_id"])
+            runtime_pending_rows.append(row["runtime_id"])
         if row["category"] in PLACEHOLDER_STYLE_CATEGORIES:
             placeholder_style_rows.append(row["runtime_id"])
         flags = row["supplementary_safe_api_flags"]
@@ -1083,10 +1143,13 @@ def build_route_audit(items: dict[str, ManifestSubject]) -> dict[str, object]:
         "category_counts": dict(sorted(category_counts.items())),
         "goal_ledger": {
             "runtime_pending": len(runtime_pending_rows),
+            "route_pending": len(pending_route_rows),
             "route_core_pending": len(pending_core_rows),
+            "route_or_core_pending": len(pending_route_rows) + len(pending_core_rows),
             "green_placeholder_style_rows": len(placeholder_style_rows),
         },
         "runtime_pending_rows": sorted(runtime_pending_rows),
+        "route_pending_rows": sorted(pending_route_rows),
         "route_core_pending_rows": sorted(pending_core_rows),
         "placeholder_style_category_counts": {
             category: category_counts.get(category, 0)
@@ -1147,13 +1210,22 @@ def write_route_audit(report: dict[str, object], json_path: Path, md_path: Path)
             "| Ledger | Cases |",
             "|---|---:|",
             f"| runtime pending | {goal_ledger['runtime_pending']} |",
+            f"| route pending | {goal_ledger['route_pending']} |",
             f"| full route/core pending | {goal_ledger['route_core_pending']} |",
+            f"| route or core pending | {goal_ledger['route_or_core_pending']} |",
             f"| green placeholder-style rows | {goal_ledger['green_placeholder_style_rows']} |",
             "",
-            "Runtime pending is the subset of `pending-core` rows that the unified runtime parity suite reports as pending. "
-            "The full route/core pending ledger also includes audit-visible rows that are not current runnable runtime parity cases.",
+            "Runtime pending combines `pending-route` rows with the subset of `pending-core` rows that the unified runtime parity suite reports as pending. "
+            "The route-or-core ledger also includes audit-visible core rows that are not current runnable runtime parity cases.",
         ]
     )
+
+    route_pending_rows = report["route_pending_rows"]
+    assert isinstance(route_pending_rows, list)
+    if route_pending_rows:
+        lines.extend(["", "### Route-Pending Rows", ""])
+        for runtime_id in route_pending_rows:
+            lines.append(f"- `{runtime_id}`")
 
     pending_rows = report["route_core_pending_rows"]
     assert isinstance(pending_rows, list)
@@ -1223,6 +1295,7 @@ def write_route_audit(report: dict[str, object], json_path: Path, md_path: Path)
         "shape-incomplete-fallback",
         "void-fallback",
         "explicit-unsupported",
+        "pending-route",
         "pending-core",
     }
     for operation, counts in operation_counts.items():

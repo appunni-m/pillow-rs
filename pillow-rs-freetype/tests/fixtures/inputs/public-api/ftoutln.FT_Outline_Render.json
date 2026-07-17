@@ -250,30 +250,40 @@
             "id": "invalid-contour-order",
             "assets": {"outline": {"kind": "ref", "id": "outlines/render/invalid-contour-order.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
+            "expect_error": true,
+            "expectation": {"compare": {"compare_error_output": true}},
             "coverage": ["grays:invalid-contour-order"]
           },
           {
             "id": "invalid-starts-cubic",
             "assets": {"outline": {"kind": "ref", "id": "outlines/render/invalid-starts-cubic.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
+            "expect_error": true,
+            "expectation": {"compare": {"compare_error_output": true}},
             "coverage": ["grays:invalid-starts-cubic"]
           },
           {
             "id": "invalid-conic-bad-tag",
             "assets": {"outline": {"kind": "ref", "id": "outlines/render/invalid-conic-bad-tag.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
+            "expect_error": true,
+            "expectation": {"compare": {"compare_error_output": true}},
             "coverage": ["grays:invalid-conic-bad-tag"]
           },
           {
             "id": "invalid-cubic-single-control",
             "assets": {"outline": {"kind": "ref", "id": "outlines/render/invalid-cubic-single-control.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
+            "expect_error": true,
+            "expectation": {"compare": {"compare_error_output": true}},
             "coverage": ["grays:invalid-cubic-single-control"]
           },
           {
             "id": "invalid-cubic-second-not-cubic",
             "assets": {"outline": {"kind": "ref", "id": "outlines/render/invalid-cubic-second-not-cubic.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
+            "expect_error": true,
+            "expectation": {"compare": {"compare_error_output": true}},
             "coverage": ["grays:invalid-cubic-second-not-cubic"]
           }
         ]

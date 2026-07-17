@@ -78,7 +78,9 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/bitmap/bitmap-only.pcf"
+            "id": "fonts/bitmap/bitmap-only.pcf",
+            "status": "required_future_asset",
+            "requires": "C-openable bitmap-only PCF/BDF/FNT face"
           }
         },
         "params": {

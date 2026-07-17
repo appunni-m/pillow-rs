@@ -145,8 +145,7 @@
               "glyph_index": 130,
               "load_flags": [
                 "FT_LOAD_NO_RECURSE"
-              ],
-              "render_mode": "FT_RENDER_MODE_NORMAL"
+              ]
             },
             "coverage": [
               "slot:composite-subglyphs"
@@ -230,7 +229,6 @@
         },
         "compare": {
           "mode": "exact",
-          "allow_oracle_errors": true,
           "paths": [
             "glyph_index",
             "metrics",

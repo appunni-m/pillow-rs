@@ -114,6 +114,31 @@ struct InputCase {
     #[serde(default)]
     expectation: CaseExpectation,
     inputs: Inputs,
+    #[serde(skip)]
+    route_evidence: RouteEvidence,
+    #[serde(skip)]
+    route_pending_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+enum RouteEvidence {
+    RealParity,
+    RealNullValidation,
+    PendingRoute,
+    #[default]
+    Other,
+}
+
+#[derive(Debug, Deserialize)]
+struct RouteAudit {
+    rows: Vec<RouteAuditRow>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RouteAuditRow {
+    runtime_id: String,
+    category: String,
+    reason: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -152,7 +177,23 @@ struct InputVariant {
     #[serde(default)]
     expect_error: Option<bool>,
     #[serde(default)]
+    expectation: VariantExpectation,
+    #[serde(default)]
     coverage: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+struct VariantExpectation {
+    #[serde(default)]
+    compare: VariantCompareExpectation,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+struct VariantCompareExpectation {
+    #[serde(default)]
+    allow_oracle_errors: Option<bool>,
+    #[serde(default)]
+    compare_error_output: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -636,6 +677,16 @@ fn unrouted_slot_state_runtime_reason(case: &InputCase) -> Option<&'static str> 
 }
 
 fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness {
+    if case.route_evidence == RouteEvidence::PendingRoute {
+        return RuntimeReadiness::Pending {
+            reason: format!(
+                "{operation}:{}",
+                case.route_pending_reason
+                    .as_deref()
+                    .unwrap_or("public route is not executable")
+            ),
+        };
+    }
     if let Some(reason) = unrouted_slot_state_runtime_reason(case) {
         return RuntimeReadiness::Pending {
             reason: format!("{operation}:{reason}"),
@@ -7551,7 +7602,61 @@ fn load_all_case_files() -> Vec<InputCase> {
         }
     }
     assert_unique_runtime_case_ids(&cases);
+    apply_route_evidence(&mut cases);
     cases
+}
+
+fn apply_route_evidence(cases: &mut [InputCase]) {
+    let path = manifest_dir()
+        .join("target")
+        .join("api-abi-audit")
+        .join("route_audit.json");
+    let text = fs::read_to_string(&path).unwrap_or_else(|err| {
+        panic!(
+            "read {}: {err}; run the maintained Makefile parity target so api-abi-check generates the route audit",
+            path.display()
+        )
+    });
+    let audit: RouteAudit =
+        serde_json::from_str(&text).unwrap_or_else(|err| panic!("parse {}: {err}", path.display()));
+    let mut categories = BTreeMap::new();
+    for row in audit.rows {
+        assert!(
+            categories
+                .insert(row.runtime_id.clone(), (row.category, row.reason))
+                .is_none(),
+            "{} has duplicate runtime route {}",
+            path.display(),
+            row.runtime_id
+        );
+    }
+
+    for case in cases {
+        let (category, reason) = categories.remove(&case.case_id).unwrap_or_else(|| {
+            panic!(
+                "{} has no route evidence for concrete case {}",
+                path.display(),
+                case.case_id
+            )
+        });
+        case.route_evidence = match category.as_str() {
+            "real-parity" => RouteEvidence::RealParity,
+            "real-null-validation" => RouteEvidence::RealNullValidation,
+            "pending-route" => RouteEvidence::PendingRoute,
+            _ => RouteEvidence::Other,
+        };
+        case.route_pending_reason = if case.route_evidence == RouteEvidence::PendingRoute {
+            Some(reason)
+        } else {
+            None
+        };
+    }
+    assert!(
+        categories.is_empty(),
+        "{} contains {} route rows absent from the runtime fixture set",
+        path.display(),
+        categories.len()
+    );
 }
 
 fn assert_no_implicit_inputs(path: &Path, raw: &Value) {
@@ -7644,6 +7749,12 @@ fn append_concrete_input_cases(path: &Path, case: InputCase, cases: &mut Vec<Inp
         let mut concrete = case.clone();
         concrete.case_id = format!("{}@{}", case.case_id, variant.id);
         concrete.expect_error = variant.expect_error.unwrap_or(case.expect_error);
+        if let Some(value) = variant.expectation.compare.allow_oracle_errors {
+            concrete.expectation.compare.allow_oracle_errors = value;
+        }
+        if let Some(value) = variant.expectation.compare.compare_error_output {
+            concrete.expectation.compare.compare_error_output = value;
+        }
         concrete.inputs = Inputs {
             assets: variant.assets.clone(),
             params: variant.params.clone(),
@@ -20987,23 +21098,30 @@ fn wasm_size_metrics_json(metrics: &wasm_abi::FontdoneWasmSizeMetrics) -> Value 
 }
 
 fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Result<(), String> {
-    // When the case expects an error and the actual (Rust) backend returns an error,
-    // accept it as passing — the Rust hinter may catch errors that C silently handles.
-    if case.expect_error
-        && actual.status.kind == StatusKind::Error
-        && (!case.expectation.compare.compare_error_output
-            || oracle.status.kind != StatusKind::Error)
-    {
-        return Ok(());
-    }
-    // When the case expects an error but both oracle and backends return Ok,
-    // it means the synthetic fixture does not trigger the expected error in either
-    // implementation. This is a fixture issue, not a Rust parity failure.
-    if case.expect_error
-        && oracle.status.kind == StatusKind::Ok
-        && actual.status.kind == StatusKind::Ok
-    {
-        return Ok(());
+    if case.expect_error {
+        if case.expectation.compare.compare_error_output {
+            if oracle.status.kind != StatusKind::Error {
+                return Err(format!(
+                    "{} requires an exact C error, but the oracle returned ok (backend={:?})",
+                    case.case_id, actual.status
+                ));
+            }
+            if actual.status.kind != StatusKind::Error {
+                return Err(format!(
+                    "{} requires an exact backend error, but the backend returned ok",
+                    case.case_id
+                ));
+            }
+        } else {
+            // Non-exact expected-error rows are fallback evidence only. Preserve
+            // their permissive legacy behavior while the route ledger keeps them
+            // out of real parity.
+            if actual.status.kind == StatusKind::Error
+                || (oracle.status.kind == StatusKind::Ok && actual.status.kind == StatusKind::Ok)
+            {
+                return Ok(());
+            }
+        }
     }
     if oracle.status.kind == StatusKind::Ok
         && case.expect_error
@@ -21014,16 +21132,10 @@ fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Res
             case.case_id
         ));
     }
-    // When BOTH oracle and backend return an error, both sides agree the
-    // operation is in an error state. Only flag the oracle error as
-    // unexpected when the backend succeeds but the oracle fails.
-    let both_error =
-        oracle.status.kind == StatusKind::Error && actual.status.kind == StatusKind::Error;
     if oracle.status.kind == StatusKind::Error
         && !case.expect_error
-        && !case.expectation.compare.allow_oracle_errors
+        && case.requires_success_oracle()
         && !case.expectation.is_build_dependent()
-        && !both_error
     {
         return Err(format!(
             "{} oracle returned unexpected error {}",
@@ -21040,9 +21152,9 @@ fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Res
                 case.case_id, oracle.status, actual.status
             ));
         }
-        // When both return errors, accept any error code match.
-        // Different error codes (e.g. 6 vs 7) for unimplemented features
-        // are expected divergence, not true parity failures.
+        // Non-exact rows accept any pair of error codes. Different codes
+        // (for example 6 vs 7 for unimplemented features) remain explicitly
+        // classified as fallback evidence by the route audit.
         if !(oracle.status.kind == StatusKind::Error && actual.status.kind == StatusKind::Error) {
             return Err(format!(
                 "{} status mismatch: oracle={:?} actual={:?}",
@@ -21077,6 +21189,66 @@ fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Res
             "{} schema={} field={} expected={} actual={}",
             case.case_id, case.schema, path.path, path.expected, path.actual
         ))
+    }
+}
+
+#[test]
+fn unified_fixture_parity_exact_error_guard_rejects_non_error_results() {
+    let mut case = InputCase {
+        case_id: "exact-error-guard".to_string(),
+        subject: "test".to_string(),
+        case: "exact_error_guard".to_string(),
+        covers_manifest_cases: Vec::new(),
+        operation: "test".to_string(),
+        schema: "api_result".to_string(),
+        expect_error: true,
+        expectation: CaseExpectation {
+            status: Some("error".to_string()),
+            compare: CompareExpectation {
+                allow_oracle_errors: false,
+                compare_error_output: true,
+            },
+        },
+        inputs: Inputs {
+            assets: BTreeMap::new(),
+            params: Value::Null,
+            variants: Vec::new(),
+        },
+        route_evidence: RouteEvidence::RealParity,
+        route_pending_reason: None,
+    };
+
+    let oracle_ok = ok(Value::Null);
+    let backend_error = error(1);
+    let err = compare_case(&case, &oracle_ok, &backend_error).unwrap_err();
+    assert!(err.contains("requires an exact C error"));
+
+    let backend_ok = ok(Value::Null);
+    let err = compare_case(&case, &oracle_ok, &backend_ok).unwrap_err();
+    assert!(err.contains("requires an exact C error"));
+
+    let oracle_error = error(1);
+    let err = compare_case(&case, &oracle_error, &backend_ok).unwrap_err();
+    assert!(err.contains("requires an exact backend error"));
+    compare_case(&case, &oracle_error, &backend_error).unwrap();
+
+    case.expectation.compare.compare_error_output = false;
+    compare_case(&case, &oracle_ok, &backend_error).unwrap();
+    compare_case(&case, &oracle_ok, &backend_ok).unwrap();
+
+    case.expect_error = false;
+    let err = compare_case(&case, &oracle_error, &backend_error).unwrap_err();
+    assert!(err.contains("oracle returned unexpected error"));
+    case.route_evidence = RouteEvidence::Other;
+    compare_case(&case, &oracle_error, &backend_error).unwrap();
+}
+
+impl InputCase {
+    fn requires_success_oracle(&self) -> bool {
+        matches!(
+            self.route_evidence,
+            RouteEvidence::RealParity | RouteEvidence::RealNullValidation
+        )
     }
 }
 

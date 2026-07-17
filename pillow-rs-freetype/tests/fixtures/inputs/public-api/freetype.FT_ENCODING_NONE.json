@@ -62,7 +62,9 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/no-encoding/bdf-or-pcf-encoding-none.bdf"
+            "id": "fonts/no-encoding/bdf-or-pcf-encoding-none.bdf",
+            "status": "required_future_asset",
+            "requires": "C-openable BDF/PCF face whose charmap reports FT_ENCODING_NONE"
           }
         },
         "params": {

@@ -1930,6 +1930,12 @@
                 "FT_LOAD_SBITS_ONLY"
               ]
             },
+            "expect_error": true,
+            "expectation": {
+              "compare": {
+                "compare_error_output": true
+              }
+            },
             "coverage": [
               "sbit:unsupported-bit-depth-public-load"
             ]
@@ -1954,6 +1960,12 @@
               "load_flags": [
                 "FT_LOAD_SBITS_ONLY"
               ]
+            },
+            "expect_error": true,
+            "expectation": {
+              "compare": {
+                "compare_error_output": true
+              }
             },
             "coverage": [
               "sbit:unsupported-image-format-public-load"
@@ -2432,38 +2444,50 @@
                 "FT_LOAD_SBITS_ONLY"
               ]
             },
-          "coverage": [
-            "sbit:compound-negative-offset-public-error"
-          ]
-        },
-        {
-          "id": "sbit-composite-negative-y-offset-format8",
-          "assets": {
-            "font": {
-              "kind": "ref",
-              "role": "font",
-              "id": "fixtures/assets/fonts/sbit_composite_negative_y_offset_format8.ttf",
-              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT compound image-format-8 glyph 2 referencing glyph 1's simple 8-bit gray embedded bitmap at negative y offset."
-            }
-          },
-          "params": {
-            "face_index": 0,
-            "pixel_size": {
-              "x": 0,
-              "y": 20
+            "expect_error": true,
+            "expectation": {
+              "compare": {
+                "compare_error_output": true
+              }
             },
-            "glyph_index": 2,
-            "load_flags": [
-              "FT_LOAD_SBITS_ONLY"
+            "coverage": [
+              "sbit:compound-negative-offset-public-error"
             ]
           },
-          "coverage": [
-            "sbit:compound-negative-y-offset-public-error"
-          ]
-        },
-        {
-          "id": "sbit-composite-out-of-bounds-format8",
-          "assets": {
+          {
+            "id": "sbit-composite-negative-y-offset-format8",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fixtures/assets/fonts/sbit_composite_negative_y_offset_format8.ttf",
+                "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT compound image-format-8 glyph 2 referencing glyph 1's simple 8-bit gray embedded bitmap at negative y offset."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 2,
+              "load_flags": [
+                "FT_LOAD_SBITS_ONLY"
+              ]
+            },
+            "expect_error": true,
+            "expectation": {
+              "compare": {
+                "compare_error_output": true
+              }
+            },
+            "coverage": [
+              "sbit:compound-negative-y-offset-public-error"
+            ]
+          },
+          {
+            "id": "sbit-composite-out-of-bounds-format8",
+            "assets": {
               "font": {
                 "kind": "ref",
                 "role": "font",
@@ -2482,35 +2506,47 @@
                 "FT_LOAD_SBITS_ONLY"
               ]
             },
-          "coverage": [
-            "sbit:compound-out-of-bounds-public-error"
-          ]
-        },
-        {
-          "id": "sbit-composite-out-of-bounds-y-format8",
-          "assets": {
-            "font": {
-              "kind": "ref",
-              "role": "font",
-              "id": "fixtures/assets/fonts/sbit_composite_out_of_bounds_y_format8.ttf",
-              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT compound image-format-8 glyph 2 referencing glyph 1's simple 8-bit gray embedded bitmap outside the root bitmap height."
-            }
-          },
-          "params": {
-            "face_index": 0,
-            "pixel_size": {
-              "x": 0,
-              "y": 20
+            "expect_error": true,
+            "expectation": {
+              "compare": {
+                "compare_error_output": true
+              }
             },
-            "glyph_index": 2,
-            "load_flags": [
-              "FT_LOAD_SBITS_ONLY"
+            "coverage": [
+              "sbit:compound-out-of-bounds-public-error"
             ]
           },
-          "coverage": [
-            "sbit:compound-out-of-bounds-y-public-error"
-          ]
-        },
+          {
+            "id": "sbit-composite-out-of-bounds-y-format8",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fixtures/assets/fonts/sbit_composite_out_of_bounds_y_format8.ttf",
+                "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT compound image-format-8 glyph 2 referencing glyph 1's simple 8-bit gray embedded bitmap outside the root bitmap height."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 2,
+              "load_flags": [
+                "FT_LOAD_SBITS_ONLY"
+              ]
+            },
+            "expect_error": true,
+            "expectation": {
+              "compare": {
+                "compare_error_output": true
+              }
+            },
+            "coverage": [
+              "sbit:compound-out-of-bounds-y-public-error"
+            ]
+          },
         {
           "id": "sbit-gray-format1-default-render",
             "assets": {
@@ -6839,14 +6875,14 @@
               "font": {
                 "kind": "ref",
                 "role": "font",
-                "id": "fonts/glyf/hinter-control-matrix.ttf"
+                "id": "fonts/glyf/hinter-glyph-code-overflow.ttf"
               }
             },
             "params": {
               "face_index": 0,
               "size": 20,
               "glyph_index": 36,
-              "load_flags": ["FT_LOAD_DEFAULT"]
+              "load_flags": ["FT_LOAD_DEFAULT", "FT_LOAD_PEDANTIC"]
             },
             "expect_error": true,
             "coverage": [
@@ -6855,12 +6891,50 @@
             ]
           },
           {
+            "id": "hinter-nonpedantic-truncated-npushb",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-glyph-code-overflow.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 36,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "coverage": ["tt/hinter:nonpedantic-truncated-npushb-suppressed"]
+          },
+          {
             "id": "hinter-error-truncated-pushw",
             "assets": {
               "font": {
                 "kind": "ref",
                 "role": "font",
-                "id": "fonts/glyf/hinter-control-matrix.ttf"
+                "id": "fonts/glyf/hinter-glyph-code-overflow.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 37,
+              "load_flags": ["FT_LOAD_DEFAULT", "FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/hinter:error-truncated-pushw",
+              "tt/hinter:code-overflow-glyph-pushw"
+            ]
+          },
+          {
+            "id": "hinter-nonpedantic-truncated-pushw",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-glyph-code-overflow.ttf"
               }
             },
             "params": {
@@ -6869,11 +6943,7 @@
               "glyph_index": 37,
               "load_flags": ["FT_LOAD_DEFAULT"]
             },
-            "expect_error": true,
-            "coverage": [
-              "tt/hinter:error-truncated-pushw",
-              "tt/hinter:code-overflow-glyph-pushw"
-            ]
+            "coverage": ["tt/hinter:nonpedantic-truncated-pushw-suppressed"]
           },
           {
             "id": "hinter-exec-fdef-truncated-npushb",
@@ -6935,7 +7005,25 @@
               "font": {
                 "kind": "ref",
                 "role": "font",
-                "id": "fonts/glyf/hinter-unterminated-control-flow.ttf"
+                "id": "fonts/glyf/hinter-glyph-code-overflow.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_DEFAULT", "FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:code-overflow-unterminated-if"]
+          },
+          {
+            "id": "hinter-nonpedantic-unterminated-if",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-glyph-code-overflow.ttf"
               }
             },
             "params": {
@@ -6944,8 +7032,7 @@
               "glyph_index": 1,
               "load_flags": ["FT_LOAD_DEFAULT"]
             },
-            "expect_error": true,
-            "coverage": ["tt/hinter:code-overflow-unterminated-if"]
+            "coverage": ["tt/hinter:nonpedantic-unterminated-if-suppressed"]
           },
           {
             "id": "hinter-exec-unterminated-else",
@@ -6953,7 +7040,25 @@
               "font": {
                 "kind": "ref",
                 "role": "font",
-                "id": "fonts/glyf/hinter-unterminated-control-flow.ttf"
+                "id": "fonts/glyf/hinter-glyph-code-overflow.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 2,
+              "load_flags": ["FT_LOAD_DEFAULT", "FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:code-overflow-unterminated-else"]
+          },
+          {
+            "id": "hinter-nonpedantic-unterminated-else",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-glyph-code-overflow.ttf"
               }
             },
             "params": {
@@ -6962,8 +7067,7 @@
               "glyph_index": 2,
               "load_flags": ["FT_LOAD_DEFAULT"]
             },
-            "expect_error": true,
-            "coverage": ["tt/hinter:code-overflow-unterminated-else"]
+            "coverage": ["tt/hinter:nonpedantic-unterminated-else-suppressed"]
           },
           {
             "id": "hinter-exec-direct-fpgm-instctrl",
