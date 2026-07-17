@@ -178,7 +178,7 @@
           "fixture": {
             "kind": "ref",
             "role": "font_or_public_input",
-            "id": "fixtures/assets/fonts/DejaVuSans.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "requirements": "Valid outline glyph rendered in normal mode to prove Raster_Corrupted is reserved for corrupted SDF/BSDF state."
           }
         },

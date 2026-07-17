@@ -793,6 +793,12 @@ impl GlyphSlot {
 
     pub(crate) fn render(mut self, mode: RenderMode) -> Result<Self, FontError> {
         if self.format == GlyphFormat::Bitmap {
+            if mode == RenderMode::Sdf {
+                let Some(bitmap) = self.bitmap.take() else {
+                    return Ok(self);
+                };
+                self.set_rendered_bitmap(crate::render::render_bitmap_sdf(bitmap)?);
+            }
             return Ok(self);
         }
         if self.format == GlyphFormat::Composite {

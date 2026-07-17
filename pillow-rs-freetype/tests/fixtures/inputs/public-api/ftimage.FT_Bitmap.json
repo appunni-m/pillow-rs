@@ -93,19 +93,8 @@
               "font": {
                 "kind": "file",
                 "role": "font",
-                "path": "input/fonts/LiberationSerif-Regular.ttf"
-              },
-              "outline_font": {
-                "kind": "ref",
-                "id": "input/fonts/LiberationSerif-Regular.ttf"
-              },
-              "bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/bitmap/embedded-strikes.ttf"
-              },
-              "color_font": {
-                "kind": "ref",
-                "id": "fonts/color/bgra-color-glyph.ttf"
+                "path": "fixtures/assets/fonts/sbit_gray_format1.ttf",
+                "requirements": "Generated scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray strike for glyph 1."
               }
             },
             "params": {
@@ -114,7 +103,7 @@
                 "x": 0,
                 "y": 20
               },
-              "glyph_index": 36,
+              "glyph_index": 1,
               "load_flags": [
                 "FT_LOAD_DEFAULT"
               ],
@@ -138,19 +127,8 @@
               "font": {
                 "kind": "file",
                 "role": "font",
-                "path": "input/fonts/LiberationSerif-Regular.ttf"
-              },
-              "outline_font": {
-                "kind": "ref",
-                "id": "input/fonts/LiberationSerif-Regular.ttf"
-              },
-              "bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/bitmap/embedded-strikes.ttf"
-              },
-              "color_font": {
-                "kind": "ref",
-                "id": "fonts/color/bgra-color-glyph.ttf"
+                "path": "fixtures/assets/fonts/sbit_gray_format1.ttf",
+                "requirements": "Generated scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray strike for glyph 1."
               }
             },
             "params": {
@@ -159,7 +137,7 @@
                 "x": 0,
                 "y": 20
               },
-              "glyph_index": 36,
+              "glyph_index": 1,
               "load_flags": [
                 "FT_LOAD_DEFAULT"
               ],
@@ -183,19 +161,8 @@
               "font": {
                 "kind": "file",
                 "role": "font",
-                "path": "input/fonts/LiberationSerif-Regular.ttf"
-              },
-              "outline_font": {
-                "kind": "ref",
-                "id": "input/fonts/LiberationSerif-Regular.ttf"
-              },
-              "bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/bitmap/embedded-strikes.ttf"
-              },
-              "color_font": {
-                "kind": "ref",
-                "id": "fonts/color/bgra-color-glyph.ttf"
+                "path": "fixtures/assets/fonts/sbit_gray_format1.ttf",
+                "requirements": "Generated scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray strike for glyph 1."
               }
             },
             "params": {
@@ -204,7 +171,7 @@
                 "x": 0,
                 "y": 20
               },
-              "glyph_index": 36,
+              "glyph_index": 1,
               "load_flags": [
                 "FT_LOAD_DEFAULT"
               ],
@@ -228,19 +195,8 @@
               "font": {
                 "kind": "file",
                 "role": "font",
-                "path": "input/fonts/LiberationSerif-Regular.ttf"
-              },
-              "outline_font": {
-                "kind": "ref",
-                "id": "input/fonts/LiberationSerif-Regular.ttf"
-              },
-              "bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/bitmap/embedded-strikes.ttf"
-              },
-              "color_font": {
-                "kind": "ref",
-                "id": "fonts/color/bgra-color-glyph.ttf"
+                "path": "fixtures/assets/fonts/sbit_gray_format1.ttf",
+                "requirements": "Generated scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray strike for glyph 1."
               }
             },
             "params": {
@@ -249,7 +205,7 @@
                 "x": 0,
                 "y": 20
               },
-              "glyph_index": 36,
+              "glyph_index": 1,
               "load_flags": [
                 "FT_LOAD_DEFAULT"
               ],
@@ -273,19 +229,8 @@
               "font": {
                 "kind": "file",
                 "role": "font",
-                "path": "input/fonts/LiberationSerif-Regular.ttf"
-              },
-              "outline_font": {
-                "kind": "ref",
-                "id": "input/fonts/LiberationSerif-Regular.ttf"
-              },
-              "bitmap_font": {
-                "kind": "ref",
-                "id": "fonts/bitmap/embedded-strikes.ttf"
-              },
-              "color_font": {
-                "kind": "ref",
-                "id": "fonts/color/bgra-color-glyph.ttf"
+                "path": "fixtures/assets/fonts/sbit_gray_format1.ttf",
+                "requirements": "Generated scalable SFNT with one 20 ppem EBLC/EBDT format-1 8-bit gray strike for glyph 1."
               }
             },
             "params": {
@@ -294,7 +239,7 @@
                 "x": 0,
                 "y": 20
               },
-              "glyph_index": 36,
+              "glyph_index": 1,
               "load_flags": [
                 "FT_LOAD_DEFAULT"
               ],
