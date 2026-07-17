@@ -4941,6 +4941,26 @@
             "coverage": [
               "autohint/latin:branch-stem-width-standard-mono-exclamation"
             ]
+          },
+          {
+            "id": "latin-low-upem-zero-near-limit",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-low-upem.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 65,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/loader:zero-near-limit-duplicate-point"
+            ]
           }
         ]
       },
