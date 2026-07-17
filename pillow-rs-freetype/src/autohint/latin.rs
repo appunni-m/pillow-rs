@@ -4943,7 +4943,12 @@ fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
                             first_touched,
                         );
                     }
-                    if first_touched > c_start {
+                    // `af_glyph_hints_align_weak_points` compares against the
+                    // global point-array base, not this contour's first point.
+                    // For later contours this can intentionally call
+                    // `af_iup_interp` with an empty range; its p1 > p2 guard
+                    // then matches the C pointer-range check.
+                    if first_touched > 0 {
                         iup_interp(
                             &mut hints.points,
                             c_start,
