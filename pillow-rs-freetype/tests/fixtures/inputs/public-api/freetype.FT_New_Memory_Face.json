@@ -725,6 +725,28 @@
               "tt:collection-face-offset-array",
               "tt:collection-second-face-selection"
             ]
+          },
+          {
+            "id": "long-min-normalizes-face-zero",
+            "assets": {
+              "font_bytes": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              },
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": -9223372036854775808,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "ffi:face-index-long-min-low-31-bit-normalization"
+            ]
           }
         ]
       },
@@ -982,16 +1004,18 @@
                 },
                 {
                   "face_index": 9999
-                },
-                {
-                  "face_index": -9223372036854775808
                 }
-              ]
+              ],
+              "memory_source": "whole_file"
             },
             "coverage": [
-              "new-memory-face:bad-size-and-face-index",
-              "ffi:face-index-long-min-checked-negation"
-            ]
+              "new-memory-face:bad-size-and-positive-face-index"
+            ],
+            "expectation": {
+              "compare": {
+                "compare_error_output": true
+              }
+            }
           },
           {
             "id": "type1-positive-face-index-out-of-range",

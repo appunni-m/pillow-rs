@@ -3400,6 +3400,16 @@ fn use_fast_horizontal_advance(flags: api::LoadFlags) -> bool {
 }
 
 fn c_face_index_to_core(face_index: FT_Long) -> Result<(usize, bool), FT_Error> {
+    // `ft_open_face_internal` first keeps only the lower 31 bits together
+    // with the sign.  In particular, negating `LONG_MIN` on FreeType's
+    // two's-complement targets and applying the mask normalizes it to zero,
+    // so it opens face 0 instead of remaining a negative probe (ftobjs.c).
+    let magnitude = face_index.unsigned_abs() & 0x7FFF_FFFF;
+    let face_index = if face_index > 0 {
+        magnitude as FT_Long
+    } else {
+        -(magnitude as FT_Long)
+    };
     if face_index >= 0 {
         // FreeType encodes named instance selection in bits 16..30 of
         // `face_index`; the low 16 bits remain the selected face number
@@ -3411,10 +3421,7 @@ fn c_face_index_to_core(face_index: FT_Long) -> Result<(usize, bool), FT_Error> 
     }
     // FreeType treats negative face indexes as probes: `-(N+1)` opens face N
     // without allocating glyph-slot or size objects.
-    let selected = face_index
-        .checked_neg()
-        .and_then(|value| value.checked_sub(1))
-        .ok_or(FT_Err_Invalid_Argument)?;
+    let selected = -face_index - 1;
     let face_index = usize::try_from(selected).map_err(|_| FT_Err_Invalid_Argument)?;
     Ok((face_index, true))
 }

@@ -15072,11 +15072,11 @@ fn rust_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> 
     let rows = memory_face_rows(&case.inputs.params)?;
     memory_face_outputs(rows, |row| {
         let Some(bytes) = memory_face_row_bytes(data.as_ref(), row)? else {
-            return Ok((FT_Err_Invalid_Argument, false));
+            return Ok((FT_Err_Invalid_Argument, true));
         };
         match FT_New_Memory_Face(&library, bytes, row.face_index, 20.0) {
-            Ok(_face) => Ok((FT_Err_Ok, true)),
-            Err(err) => Ok((err, false)),
+            Ok(_face) => Ok((FT_Err_Ok, false)),
+            Err(err) => Ok((err, true)),
         }
     })
 }
@@ -15099,12 +15099,11 @@ fn c_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
             row.face_index,
             &mut face,
         );
+        let face_is_null = face.is_null();
         if err == FT_Err_Ok {
             c_done_face(face);
-            Ok((FT_Err_Ok, true))
-        } else {
-            Ok((err, false))
         }
+        Ok((err, face_is_null))
     });
     c_done_library(library);
     output
@@ -15141,16 +15140,13 @@ fn wasm_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> 
     memory_face_outputs(rows, |row| {
         let file_size = memory_face_file_size(bytes.len(), row)?;
         let Ok(file_size) = usize::try_from(file_size) else {
-            return Ok((FT_Err_Invalid_Argument, false));
+            return Ok((FT_Err_Invalid_Argument, true));
         };
         let status =
             wasm_abi::fontdone_wasm_open_face(bytes.as_ptr(), file_size, row.face_index, 20.0);
-        if status.error == FT_Err_Ok {
-            wasm_done_face(status.handle);
-            Ok((FT_Err_Ok, true))
-        } else {
-            Ok((status.error, false))
-        }
+        let face_is_null = status.handle == 0;
+        wasm_done_face(status.handle);
+        Ok((status.error, face_is_null))
     })
 }
 
@@ -15161,7 +15157,7 @@ fn memory_face_outputs(
     let mut first_error = FT_Err_Ok;
     let mut outputs = Vec::with_capacity(rows.len());
     for row in rows {
-        let (status, opened) = call(row)?;
+        let (status, face_is_null) = call(row)?;
         if first_error == FT_Err_Ok && status != FT_Err_Ok {
             first_error = status;
         }
@@ -15169,7 +15165,9 @@ fn memory_face_outputs(
             "face_index": row.face_index,
             "file_size": row.file_size,
             "status": status,
-            "opened": opened
+            "error": status,
+            "opened": !face_is_null,
+            "face_nullness": if face_is_null { "null" } else { "non_null" }
         }));
     }
     let output = json!({ "outputs": outputs });
