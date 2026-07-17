@@ -347,6 +347,7 @@ class ConcreteInput:
     variant_id: str | None
     expect_error: bool
     compare_error_output: bool
+    allow_oracle_errors: bool
     expectation_status: str
     assets: dict[str, object]
     params: dict[str, object]
@@ -674,6 +675,7 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
                             variant_id=str(variant.get("id", "")) or None,
                             expect_error=bool(variant.get("expect_error", case.get("expect_error", False))),
                             compare_error_output=bool(compare.get("compare_error_output", False)),
+                            allow_oracle_errors=bool(compare.get("allow_oracle_errors", False)),
                             expectation_status=expectation_status,
                             assets=object_dict(variant.get("assets", {})),
                             params=object_dict(variant.get("params", {})),
@@ -689,6 +691,7 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
                         variant_id=None,
                         expect_error=bool(case.get("expect_error", False)),
                         compare_error_output=bool(compare.get("compare_error_output", False)),
+                        allow_oracle_errors=bool(compare.get("allow_oracle_errors", False)),
                         expectation_status=expectation_status,
                         assets=object_dict(inputs.get("assets", {})),
                         params=object_dict(inputs.get("params", {})),
@@ -978,6 +981,11 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
             "generic-error-fallback",
             "expected error is accepted without exact C status/output comparison",
         )
+    if row.allow_oracle_errors:
+        return (
+            "generic-fallback",
+            "oracle errors are explicitly accepted instead of requiring the declared route",
+        )
     size_null_reason = size_null_validation_reason(row)
     if size_null_reason:
         return ("real-null-validation", size_null_reason)
@@ -1038,6 +1046,7 @@ def build_route_audit(items: dict[str, ManifestSubject]) -> dict[str, object]:
                 "reason": reason,
                 "expect_error": row.expect_error,
                 "compare_error_output": row.compare_error_output,
+                "allow_oracle_errors": row.allow_oracle_errors,
                 "expectation_status": row.expectation_status,
                 "supplementary_safe_api_flags": supplementary_flags,
             }
