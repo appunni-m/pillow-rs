@@ -2212,6 +2212,7 @@ impl BackendComparisonWorker {
                     | "freetype.get_kerning"
                     | "freetype.get_subglyph_info"
                     | "ftotval.open_type_validate"
+                    | "ftmm.get_default_named_instance"
                     | "ftmm.set_named_instance"
                     | "ftsizes.new_size"
                     | "ftsizes.done_size"
@@ -5392,6 +5393,134 @@ fn set_named_instance_index_param(params: &Value) -> Result<FT_UInt, String> {
     let value = u64_param(params, "instance_index")?;
     FT_UInt::try_from(value)
         .map_err(|err| format!("instance_index {value} does not fit FT_UInt: {err}"))
+}
+
+fn default_named_instance_sentinel(params: &Value) -> Result<FT_UInt, String> {
+    let value = u64_param(params, "instance_index_initial")?;
+    FT_UInt::try_from(value)
+        .map_err(|err| format!("instance_index_initial {value} does not fit FT_UInt: {err}"))
+}
+
+fn default_named_instance_row(
+    variant: &str,
+    status: FT_Error,
+    before: FT_UInt,
+    after: FT_UInt,
+) -> Value {
+    json!({
+        "variant": variant,
+        "status": status,
+        "instance_index_before": before,
+        "instance_index_after": after,
+    })
+}
+
+fn default_named_instance_output(status: FT_Error, output: Value) -> RunOutput {
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn rust_get_default_named_instance(case: &InputCase) -> Result<RunOutput, String> {
+    let before = default_named_instance_sentinel(&case.inputs.params)?;
+    if case.case == "invalid_face_error" {
+        let mut null_after = before;
+        let null_status = FT_Get_Default_Named_Instance(None, Some(&mut null_after));
+        let face = rust_new_face_without_size(case)?;
+        let mut non_variable_after = before;
+        let non_variable_status =
+            FT_Get_Default_Named_Instance(Some(&face), Some(&mut non_variable_after));
+        return Ok(default_named_instance_output(
+            null_status,
+            json!({"rows": [
+                default_named_instance_row("null", null_status, before, null_after),
+                default_named_instance_row(
+                    "non_variable",
+                    non_variable_status,
+                    before,
+                    non_variable_after,
+                ),
+            ]}),
+        ));
+    }
+    let face = rust_new_face_without_size(case)?;
+    let mut after = before;
+    let status = FT_Get_Default_Named_Instance(Some(&face), Some(&mut after));
+    Ok(default_named_instance_output(
+        status,
+        default_named_instance_row("variable", status, before, after),
+    ))
+}
+
+fn c_get_default_named_instance(case: &InputCase) -> Result<RunOutput, String> {
+    let before = default_named_instance_sentinel(&case.inputs.params)?;
+    if case.case == "invalid_face_error" {
+        let mut null_after = before;
+        let null_status =
+            c_abi::FT_Get_Default_Named_Instance(std::ptr::null_mut(), &mut null_after);
+        let (library, face) = c_new_face_without_size(case)?;
+        let mut non_variable_after = before;
+        let non_variable_status =
+            c_abi::FT_Get_Default_Named_Instance(face, &mut non_variable_after);
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(default_named_instance_output(
+            null_status,
+            json!({"rows": [
+                default_named_instance_row("null", null_status, before, null_after),
+                default_named_instance_row(
+                    "non_variable",
+                    non_variable_status,
+                    before,
+                    non_variable_after,
+                ),
+            ]}),
+        ));
+    }
+    let (library, face) = c_new_face_without_size(case)?;
+    let mut after = before;
+    let status = c_abi::FT_Get_Default_Named_Instance(face, &mut after);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(default_named_instance_output(
+        status,
+        default_named_instance_row("variable", status, before, after),
+    ))
+}
+
+fn wasm_get_default_named_instance(case: &InputCase) -> Result<RunOutput, String> {
+    let before = default_named_instance_sentinel(&case.inputs.params)?;
+    if case.case == "invalid_face_error" {
+        let mut null_after = before;
+        let null_status = wasm_abi::fontdone_wasm_get_default_named_instance(0, &mut null_after);
+        let handle = wasm_new_face_without_size(case)?;
+        let mut non_variable_after = before;
+        let non_variable_status =
+            wasm_abi::fontdone_wasm_get_default_named_instance(handle, &mut non_variable_after);
+        wasm_done_face(handle);
+        return Ok(default_named_instance_output(
+            null_status,
+            json!({"rows": [
+                default_named_instance_row("null", null_status, before, null_after),
+                default_named_instance_row(
+                    "non_variable",
+                    non_variable_status,
+                    before,
+                    non_variable_after,
+                ),
+            ]}),
+        ));
+    }
+    let handle = wasm_new_face_without_size(case)?;
+    let mut after = before;
+    let status = wasm_abi::fontdone_wasm_get_default_named_instance(handle, &mut after);
+    wasm_done_face(handle);
+    Ok(default_named_instance_output(
+        status,
+        default_named_instance_row("variable", status, before, after),
+    ))
 }
 
 fn prior_named_instance_index_param(params: &Value) -> Result<Option<FT_UInt>, String> {
@@ -8947,6 +9076,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             push_face_size(params, &mut args)?;
             Ok(args)
         }
+        "ftmm.get_default_named_instance" => {
+            let mut args = vec![if case.case == "invalid_face_error" {
+                "--get-default-named-instance-invalid".to_string()
+            } else {
+                "--get-default-named-instance".to_string()
+            }];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(default_named_instance_sentinel(params)?.to_string());
+            Ok(args)
+        }
         "ftmm.set_named_instance" => {
             if lifecycle_handle_param(params, "face") == Some("null") {
                 return Ok(vec![
@@ -9835,6 +9975,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "freetype.get_kerning"
                 | "freetype.get_subglyph_info"
                 | "ftotval.open_type_validate"
+                | "ftmm.get_default_named_instance"
                 | "ftmm.set_named_instance"
                 | "ftsizes.new_size"
                 | "ftsizes.done_size"
@@ -10209,6 +10350,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 FT_Get_X11_Font_Format(Some(&face)),
             )))
         }
+        "ftmm.get_default_named_instance" => rust_get_default_named_instance(case),
         "ftmm.set_named_instance" => rust_set_named_instance(case),
         "freetype.get_glyph_name" => rust_get_glyph_name(case),
         "freetype.get_name_index" => rust_get_name_index(case),
@@ -10631,6 +10773,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             Ok(ok(output))
         }
+        "ftmm.get_default_named_instance" => c_get_default_named_instance(case),
         "ftmm.set_named_instance" => c_set_named_instance(case),
         "freetype.get_glyph_name" => c_get_glyph_name(case),
         "freetype.get_name_index" => c_get_name_index(case),
@@ -11175,6 +11318,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_done_face(handle);
             Ok(ok(output))
         }
+        "ftmm.get_default_named_instance" => wasm_get_default_named_instance(case),
         "ftmm.set_named_instance" => wasm_set_named_instance(case),
         "freetype.get_glyph_name" => wasm_get_glyph_name(case),
         "freetype.get_name_index" => wasm_get_name_index(case),
@@ -22070,6 +22214,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "ftlcdfil.set_lcd_filter"
             | "ftlcdfil.set_lcd_filter_weights"
             | "ftlcdfil.set_lcd_geometry"
+            | "ftmm.get_default_named_instance"
             | "ftmm.set_named_instance" => "api_object",
             "ftmodapi.get_truetype_engine_type" => "truetype_engine_type",
             "load_char" | "load_glyph" | "render_glyph" => "glyph_slot",

@@ -1966,6 +1966,19 @@ pub extern "C" fn FT_Set_Named_Instance(face: FT_Face, instance_index: FT_UInt) 
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Default_Named_Instance(
+    face: FT_Face,
+    instance_index: *mut FT_UInt,
+) -> FT_Error {
+    // SAFETY: the caller provides writable storage for the scalar output or null.
+    let instance_index = unsafe { instance_index.as_mut() };
+    rust_ffi::FT_Get_Default_Named_Instance(
+        face_state(face).map(|state| &state.inner),
+        instance_index,
+    )
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_Sfnt_Name_Count(face: FT_Face) -> FT_UInt {
     rust_ffi::FT_Get_Sfnt_Name_Count(face_state(face).map(|state| &state.inner))
 }
