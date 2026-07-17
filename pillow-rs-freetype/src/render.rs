@@ -574,6 +574,40 @@ fn render_sdf(
     })
 }
 
+pub(crate) fn render_bitmap_sdf(bitmap: RenderedBitmap) -> Result<RenderedBitmap, FontError> {
+    if bitmap.rows == 0 || bitmap.pitch == 0 {
+        return Ok(bitmap);
+    }
+
+    let source_width = usize::try_from(bitmap.width)
+        .map_err(|_| FontError::InvalidArgument("bitmap width does not fit usize".into()))?;
+    let source_rows = usize::try_from(bitmap.rows)
+        .map_err(|_| FontError::InvalidArgument("bitmap rows do not fit usize".into()))?;
+    let spread = usize_from_i32(SDF_SPREAD);
+    let width = source_width
+        .checked_add(spread * 2)
+        .ok_or_else(|| FontError::InvalidArgument("bitmap SDF width overflow".into()))?;
+    let rows = source_rows
+        .checked_add(spread * 2)
+        .ok_or_else(|| FontError::InvalidArgument("bitmap SDF rows overflow".into()))?;
+
+    // FreeType selects `ft_bsdf_render` only for bitmap + SDF.  Other render
+    // modes deliberately leave an embedded strike unchanged; SDF pads it by
+    // the renderer spread and runs the 8SED conversion (`ftsdfrend.c`,
+    // `ftbsdf.c`).
+    let buffer = rasterize_bitmap_sdf(&bitmap, width, rows)?;
+    Ok(RenderedBitmap {
+        width: u32_from_usize(width),
+        rows: u32_from_usize(rows),
+        pitch: i32_from_usize(width),
+        pixel_mode: PixelMode::Gray,
+        num_grays: 255,
+        left: bitmap.left - SDF_SPREAD,
+        top: bitmap.top + SDF_SPREAD,
+        buffer,
+    })
+}
+
 fn render_mono(
     mut outline: Outline,
     bbox_x_min: i32,
@@ -2524,6 +2558,296 @@ fn map_fixed_to_sdf(distance: i32, max_value: i32) -> u8 {
         128u8.saturating_sub(udist as u8)
     } else {
         (udist as u8).saturating_add(128)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct BitmapSdfDistance {
+    distance: i32,
+    proximity_x: i32,
+    proximity_y: i32,
+    alpha: u8,
+}
+
+fn rasterize_bitmap_sdf(
+    source: &RenderedBitmap,
+    width: usize,
+    rows: usize,
+) -> Result<Vec<u8>, FontError> {
+    let source_width = usize::try_from(source.width)
+        .map_err(|_| FontError::InvalidArgument("bitmap width does not fit usize".into()))?;
+    let source_rows = usize::try_from(source.rows)
+        .map_err(|_| FontError::InvalidArgument("bitmap rows do not fit usize".into()))?;
+    let mut distances = vec![BitmapSdfDistance::default(); width * rows];
+    let x_offset = (width - source_width) / 2;
+    let y_offset = (rows - source_rows) / 2;
+
+    match source.pixel_mode {
+        PixelMode::Gray => {
+            let source_len = source_width.checked_mul(source_rows).ok_or_else(|| {
+                FontError::InvalidArgument("bitmap source dimensions overflow".into())
+            })?;
+            let source_buffer = source.buffer.get(..source_len).ok_or_else(|| {
+                FontError::InvalidArgument("bitmap source buffer is truncated".into())
+            })?;
+            for source_y in 0..source_rows {
+                for source_x in 0..source_width {
+                    let target_index = (source_y + y_offset) * width + source_x + x_offset;
+                    distances[target_index].alpha =
+                        source_buffer[source_y * source_width + source_x];
+                }
+            }
+        }
+        PixelMode::Mono => {
+            let pitch = usize::try_from(source.pitch).map_err(|_| {
+                FontError::InvalidArgument("monochrome bitmap pitch must be positive".into())
+            })?;
+            let source_len = pitch.checked_mul(source_rows).ok_or_else(|| {
+                FontError::InvalidArgument("bitmap source dimensions overflow".into())
+            })?;
+            let source_buffer = source.buffer.get(..source_len).ok_or_else(|| {
+                FontError::InvalidArgument("bitmap source buffer is truncated".into())
+            })?;
+            for source_y in 0..source_rows {
+                for source_x in 0..source_width {
+                    let source_byte = source_buffer[source_y * pitch + source_x / 8];
+                    let target_index = (source_y + y_offset) * width + source_x + x_offset;
+                    distances[target_index].alpha = if source_byte & (0x80 >> (source_x & 7)) != 0 {
+                        255
+                    } else {
+                        0
+                    };
+                }
+            }
+        }
+        PixelMode::Gray2
+        | PixelMode::Gray4
+        | PixelMode::Lcd
+        | PixelMode::LcdV
+        | PixelMode::Bgra => {
+            return Err(FontError::CannotRenderGlyph(
+                "bitmap SDF requires an 8-bit gray or monochrome source".into(),
+            ));
+        }
+    }
+
+    approximate_bitmap_sdf_edges(&mut distances, width, rows);
+    bitmap_sdf_first_pass(&mut distances, width, rows);
+    bitmap_sdf_second_pass(&mut distances, width, rows);
+
+    let fixed_spread = SDF_SPREAD * FT_INT_16D16_ONE;
+    Ok(distances
+        .into_iter()
+        .map(|distance| {
+            let distance_value = if distance.distance < 0 || distance.distance > fixed_spread {
+                fixed_spread
+            } else {
+                distance.distance
+            };
+            let sign = if distance.alpha < 127 { -1 } else { 1 };
+            map_fixed_to_sdf(distance_value * sign, fixed_spread)
+        })
+        .collect())
+}
+
+fn approximate_bitmap_sdf_edges(distances: &mut [BitmapSdfDistance], width: usize, rows: usize) {
+    for y in 0..rows {
+        for x in 0..width {
+            let index = y * width + x;
+            if bitmap_sdf_is_edge(distances, index, x, y, width, rows) {
+                let (proximity_x, proximity_y) =
+                    bitmap_sdf_edge_distance(distances, index, x, y, width, rows);
+                distances[index].proximity_x = proximity_x;
+                distances[index].proximity_y = proximity_y;
+                distances[index].distance = ft_vector_length(proximity_x, proximity_y);
+            } else {
+                distances[index].distance = 400 * FT_INT_16D16_ONE;
+                distances[index].proximity_x = 200 * FT_INT_16D16_ONE;
+                distances[index].proximity_y = 200 * FT_INT_16D16_ONE;
+            }
+        }
+    }
+}
+
+fn bitmap_sdf_is_edge(
+    distances: &[BitmapSdfDistance],
+    index: usize,
+    x: usize,
+    y: usize,
+    width: usize,
+    rows: usize,
+) -> bool {
+    let alpha = distances[index].alpha;
+    if alpha == 0 {
+        return false;
+    }
+    if alpha < 255 {
+        return true;
+    }
+
+    let mut neighbors = 0;
+    for y_offset in -1..=1 {
+        for x_offset in -1..=1 {
+            if x_offset == 0 && y_offset == 0 {
+                continue;
+            }
+            let neighbor_x = i32_from_usize(x) + x_offset;
+            let neighbor_y = i32_from_usize(y) + y_offset;
+            if neighbor_x < 0
+                || neighbor_y < 0
+                || neighbor_x >= i32_from_usize(width)
+                || neighbor_y >= i32_from_usize(rows)
+            {
+                continue;
+            }
+            neighbors += 1;
+            let neighbor_index = usize_from_i32(neighbor_y) * width + usize_from_i32(neighbor_x);
+            if distances[neighbor_index].alpha == 0 {
+                return true;
+            }
+        }
+    }
+    neighbors != 8
+}
+
+fn bitmap_sdf_edge_distance(
+    distances: &[BitmapSdfDistance],
+    index: usize,
+    x: usize,
+    y: usize,
+    width: usize,
+    rows: usize,
+) -> (i32, i32) {
+    if x == 0 || x + 1 >= width || y == 0 || y + 1 >= rows {
+        return (0, 0);
+    }
+
+    let alpha = |offset: isize| i32::from(distances[index.wrapping_add_signed(offset)].alpha) * 256;
+    let top_left = alpha(-(width as isize) - 1);
+    let top = alpha(-(width as isize));
+    let top_right = alpha(-(width as isize) + 1);
+    let left = alpha(-1);
+    let current_alpha = alpha(0);
+    let right = alpha(1);
+    let bottom_left = alpha(width as isize - 1);
+    let bottom = alpha(width as isize);
+    let bottom_right = alpha(width as isize + 1);
+
+    let gradient_x = -top_left - ft_mul_fix(left, 92_681) - bottom_left
+        + top_right
+        + ft_mul_fix(right, 92_681)
+        + bottom_right;
+    let gradient_y = -top_left - ft_mul_fix(top, 92_681) - top_right
+        + bottom_left
+        + ft_mul_fix(bottom, 92_681)
+        + bottom_right;
+    let ((gradient_x, gradient_y), _) = ft_vector_norm_len(gradient_x, gradient_y);
+
+    let distance = if gradient_x == 0 || gradient_y == 0 {
+        FT_INT_16D16_ONE / 2 - current_alpha
+    } else {
+        let mut gx = gradient_x.abs();
+        let mut gy = gradient_y.abs();
+        if gx < gy {
+            std::mem::swap(&mut gx, &mut gy);
+        }
+        let a1 = ft_div_fix(gy, gx) / 2;
+        if current_alpha < a1 {
+            (gx + gy) / 2 - bitmap_sdf_sqrt_fixed(2 * ft_mul_fix(gx, ft_mul_fix(gy, current_alpha)))
+        } else if current_alpha < FT_INT_16D16_ONE - a1 {
+            ft_mul_fix(FT_INT_16D16_ONE / 2 - current_alpha, gx)
+        } else {
+            -(gx + gy) / 2
+                + bitmap_sdf_sqrt_fixed(
+                    2 * ft_mul_fix(gx, ft_mul_fix(gy, FT_INT_16D16_ONE - current_alpha)),
+                )
+        }
+    };
+
+    (
+        ft_mul_fix(gradient_x, distance),
+        ft_mul_fix(gradient_y, distance),
+    )
+}
+
+fn bitmap_sdf_sqrt_fixed(value: i32) -> i32 {
+    let value = value as u32;
+    if value == 0 {
+        return 0;
+    }
+
+    // `FT_SqrtFixed` uses a rounded-up Babylonian step on 64-bit builds
+    // (`src/base/ftcalc.c:880-932`); host floating point changes SDF bytes.
+    let radicand = (u64::from(value) << 16) - 1;
+    let msb = 31 - value.leading_zeros();
+    let mut root = 1u32 << ((17 + msb) >> 1);
+    loop {
+        let previous = root;
+        root = previous
+            .wrapping_add((radicand / u64::from(previous)) as u32)
+            .wrapping_add(1)
+            >> 1;
+        if root == previous {
+            return root as i32;
+        }
+    }
+}
+
+fn bitmap_sdf_compare_neighbor(
+    distances: &mut [BitmapSdfDistance],
+    current_index: usize,
+    x_offset: i32,
+    y_offset: i32,
+    width: usize,
+) {
+    if distances[current_index].distance <= FT_INT_16D16_ONE / 2 {
+        return;
+    }
+    let neighbor_index =
+        usize_from_i32(i32_from_usize(current_index) + y_offset * i32_from_usize(width) + x_offset);
+    let neighbor = distances[neighbor_index];
+    let approximate_distance = neighbor.distance - FT_INT_16D16_ONE;
+    if approximate_distance >= distances[current_index].distance {
+        return;
+    }
+
+    let proximity_x = neighbor.proximity_x + x_offset * FT_INT_16D16_ONE;
+    let proximity_y = neighbor.proximity_y + y_offset * FT_INT_16D16_ONE;
+    let exact_distance = ft_vector_length(proximity_x, proximity_y);
+    if exact_distance < distances[current_index].distance {
+        distances[current_index].distance = exact_distance;
+        distances[current_index].proximity_x = proximity_x;
+        distances[current_index].proximity_y = proximity_y;
+    }
+}
+
+fn bitmap_sdf_first_pass(distances: &mut [BitmapSdfDistance], width: usize, rows: usize) {
+    for y in 1..rows {
+        for x in 1..width - 1 {
+            let index = y * width + x;
+            bitmap_sdf_compare_neighbor(distances, index, -1, -1, width);
+            bitmap_sdf_compare_neighbor(distances, index, 0, -1, width);
+            bitmap_sdf_compare_neighbor(distances, index, 1, -1, width);
+            bitmap_sdf_compare_neighbor(distances, index, -1, 0, width);
+        }
+        for x in (0..=width - 2).rev() {
+            bitmap_sdf_compare_neighbor(distances, y * width + x, 1, 0, width);
+        }
+    }
+}
+
+fn bitmap_sdf_second_pass(distances: &mut [BitmapSdfDistance], width: usize, rows: usize) {
+    for y in (0..=rows - 2).rev() {
+        for x in 1..width - 1 {
+            let index = y * width + x;
+            bitmap_sdf_compare_neighbor(distances, index, -1, 1, width);
+            bitmap_sdf_compare_neighbor(distances, index, 0, 1, width);
+            bitmap_sdf_compare_neighbor(distances, index, 1, 1, width);
+            bitmap_sdf_compare_neighbor(distances, index, -1, 0, width);
+        }
+        for x in (0..=width - 2).rev() {
+            bitmap_sdf_compare_neighbor(distances, y * width + x, 1, 0, width);
+        }
     }
 }
 
