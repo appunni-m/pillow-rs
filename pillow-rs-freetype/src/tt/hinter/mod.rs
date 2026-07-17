@@ -58,6 +58,8 @@ pub struct HintScale {
     pub y_scale: i32,
     pub tt_scale: i32,
     pub ppem: i32,
+    pub x_ratio: i32,
+    pub y_ratio: i32,
     pub point_size: i32,
     pub storage_size: usize,
     pub max_function_defs: usize,

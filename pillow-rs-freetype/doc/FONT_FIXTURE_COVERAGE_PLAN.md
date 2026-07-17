@@ -203,7 +203,21 @@ point-coordinate and point-move matrix glyphs then cover the remaining
 non-square `MD[0]` and `IP` interpreter branches, while repeating `IUP[y]`
 and `IUP[x]` inside the existing point-move matrix covers FreeType's
 backward-compatibility early-return path after both axes have already
-interpolated. The compact `script-coverage.ttf` public input set now selects
+interpolated. A maintained non-square native TrueType proof now records the
+remaining interpreter dependency: pinned FreeType 2.14.3
+`ttobjs.c:tt_size_reset` chooses the max-axis scale/ppem and stores x/y ratios,
+then `ttinterp.c:Current_Ppem_Stretched`, `Read_CVT_Stretched`,
+`Write_CVT_Stretched`, and `Move_CVT_Stretched` apply the ratio selected by
+the current projection vector. The generated `hinter-control-matrix.ttf`
+glyph `stretchedMppemX` conditionally uses `MPPEM` and `SHPIX` at 20x32 ppem
+under `FT_LOAD_TARGET_MONO | FT_LOAD_RENDER`; MONO disables the v40
+backward-compatibility suppression that otherwise masks SHPIX like DELTAP.
+Before the Rust stretched callbacks, the exact public bitmap first diverged as
+`ffe0` per row in C versus `ffc0` in Rust. The maintained exact route is
+`freetype.FT_Load_Glyph.matrix_load@hinter-stretched-mppem-shpix-mono-x`.
+Equal ppem, including the shared undefined-size 0/0 state that C rejects before
+ratio setup, is explicitly identity `(0x10000, 0x10000)` so Rust never feeds
+0/0 to `FT_DivFix`. The compact `script-coverage.ttf` public input set now selects
 all 59 generated script glyphs through explicit `FT_LOAD_FORCE_AUTOHINT`
 variants, proving the script coverage table paths without implicit discovery
 or Cartesian expansion. Two compact hhea-zero metric controls now select the
