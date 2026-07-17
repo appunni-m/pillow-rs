@@ -106,6 +106,31 @@ def write_fpgm_loopcall() -> None:
     save_font("hinter-fpgm-loopcall.ttf", font)
 
 
+def write_fpgm_loopcall_redefinition() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    # The first LOOPCALL iteration jumps into PUSHB payload bytes that redefine
+    # FDEF 1.  FreeType's call record points at that mutable definition record,
+    # so the second iteration runs the new WCVTP body and writes CVT 0 to 1px.
+    # The outer FDEF scanner treats the embedded definition as push data and
+    # therefore accepts this deliberately broken but public-reachable program.
+    font["fpgm"].program = program_from_bytes(
+        bytes.fromhex("b0 01 2c b0 02 1c b7 b0 01 2c b1 00 40 44 2d 2d")
+    )
+    font["prep"].program = program_from_bytes(bytes.fromhex("b1 02 01 2a"))
+    # MIAP point 0 to CVT 0 so the redefined second iteration changes geometry.
+    font["glyf"]["base"].program = program_from_bytes(bytes.fromhex("b1 00 00 3e"))
+    save_font("hinter-fpgm-loopcall-redefinition.ttf", font)
+
+
+def write_called_fpgm_instctrl() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    # A prep-initiated CALL switches curRange to fpgm, but C's Ins_INSTCTRL
+    # validates iniRange and therefore accepts selector 1 under pedantic mode.
+    font["fpgm"].program = program_from_bytes(bytes.fromhex("b0 01 2c b1 00 01 8e 2d"))
+    font["prep"].program = program_from_bytes(bytes.fromhex("b0 01 2b"))
+    save_font("hinter-called-fpgm-instctrl.ttf", font)
+
+
 def write_fpgm_call_errors() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     # This single font keeps CALL/LOOPCALL error coverage compact.  Its fpgm
@@ -142,6 +167,32 @@ def write_idef_recursive_depth() -> None:
     font["fpgm"].program = program_from_bytes(bytes.fromhex("b0 8f 89 8f 2d"))
     font["glyf"]["base"].program = program_from_bytes(bytes.fromhex("8f"))
     save_font("hinter-idef-recursive-depth.ttf", font)
+
+
+def write_storage_cvt_reference_errors() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    # maxp declares two storage and two CVT entries.  C's RS/WS/RCVT/WCVTP
+    # handlers ignore index 9 in normal mode and return Invalid_Reference when
+    # the same public glyph load enables FT_LOAD_PEDANTIC.
+    font["glyf"][".notdef"].program = program_from_bytes(bytes.fromhex("b1 09 01 42"))
+    font["glyf"]["base"].program = program_from_bytes(bytes.fromhex("b0 09 43"))
+    font["glyf"]["mark"].program = program_from_bytes(bytes.fromhex("b1 09 20 44"))
+    font["glyf"]["scanType0"].program = program_from_bytes(bytes.fromhex("b0 09 45"))
+    # INSTCTRL selector 1 is valid only in prep.  A glyph-range use is ignored
+    # normally and reports Invalid_Reference under FT_LOAD_PEDANTIC.
+    font["glyf"]["scanType2"].program = program_from_bytes(bytes.fromhex("b1 01 01 8e"))
+    font["glyf"]["idefCall"].program = program_from_bytes(bytes.fromhex("b1 09 20 70"))
+    # Invalid selector 4 and invalid value 1 for selector 2 are both ignored
+    # normally and report Invalid_Reference under FT_LOAD_PEDANTIC.
+    font["glyf"]["untouchPoint"].program = program_from_bytes(bytes.fromhex("b1 00 04 8e"))
+    font["glyf"]["superRoundMatrix"].program = program_from_bytes(bytes.fromhex("b1 01 02 8e"))
+    # At 20 ppem, delta base 9 makes 0xB8 applicable.  CVT index 9 isolates
+    # DELTAC's normal no-op / pedantic Invalid_Reference split.
+    font["glyf"]["stackStateMatrix"].program = program_from_bytes(bytes.fromhex("b2 b8 09 01 73"))
+    # Keep the pedantic SHP proof independent from the branch-edge program's
+    # earlier invalid-reference probes.
+    font["glyf"]["instructionControl"].program = program_from_bytes(bytes.fromhex("b0 09 32"))
+    save_font("hinter-storage-cvt-reference-errors.ttf", font)
 
 
 def write_fpgm_nested_fdef() -> None:
@@ -186,10 +237,13 @@ def main() -> None:
     write_prep_idef()
     write_prep_redefine_defs()
     write_fpgm_loopcall()
+    write_fpgm_loopcall_redefinition()
+    write_called_fpgm_instctrl()
     write_fpgm_call_errors()
     write_execution_too_long_loop()
     write_fpgm_fdef_index_overflow()
     write_idef_recursive_depth()
+    write_storage_cvt_reference_errors()
     write_fpgm_nested_fdef()
     write_fpgm_idef_opcode_overflow()
     write_fpgm_nested_idef()

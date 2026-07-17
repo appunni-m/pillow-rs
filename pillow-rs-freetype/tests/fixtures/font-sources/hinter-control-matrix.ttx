@@ -1032,10 +1032,24 @@
              dispatch, invalid contour shift, invalid coordinate reads, empty
              twilight-zone SHZ, non-output stack calls, clamped delta counts,
              twilight-zone moves, interpolation, positive/negative
-             single-width MDRP cut-in, unknown-opcode IDEF dispatch, and
-             ENDF with an empty call stack. -->
+             single-width MDRP cut-in, all ISECT reference operands, zone
+             short-circuit ordering, negative DELTA counts, auto-flip off,
+             unknown-opcode IDEF dispatch, and ENDF with an empty call stack. -->
         <bytecode>
           01
+          4e b1 00 00 e0 4d
+          b0 00 13 b0 00 14 b1 00 00 e0 b0 01 13 b0 01 14
+          00 b0 00 2e b1 00 00 38 01
+          b0 00 13 b1 00 00 38 b0 01 13
+          b0 00 14 b1 00 00 38 b0 01 14
+          b0 00 15 b1 00 00 38 b0 01 15
+          b0 00 14 b0 00 39 b0 01 14
+          b0 00 15 b0 00 39 b0 01 15
+          b4 00 00 00 00 09 0f
+          b4 00 09 00 00 00 0f
+          b4 00 00 09 00 00 0f
+          b4 09 00 00 00 00 0f
+          b8 ff ff 5d b8 ff ff 73
           b1 00 00 08
           b1 00 00 0a
           b1 00 00 0b
@@ -1080,6 +1094,7 @@
           b0 01 10 b0 01 13 b0 00 14 b9 00 00 ff f6 44 b1 00 00 ec b0 01 14
           b0 01 14 b0 00 12 b0 00 16 b0 09 32 b0 01 16
           b0 01 13 b0 09 29
+          30 31 b1 00 00 38
           93
           2d
         </bytecode>

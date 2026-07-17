@@ -4888,6 +4888,57 @@
             ]
           },
           {
+            "id": "hinter-fpgm-loopcall-redefinition",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-fpgm-loopcall-redefinition.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_NO_AUTOHINT"]
+            },
+            "coverage": ["tt/hinter:fpgm-loopcall-mutable-definition"]
+          },
+          {
+            "id": "hinter-called-fpgm-instctrl-prep",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-called-fpgm-instctrl.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_NO_AUTOHINT"]
+            },
+            "coverage": ["tt/hinter:called-fpgm-instctrl-prep"]
+          },
+          {
+            "id": "hinter-called-fpgm-instctrl-prep-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-called-fpgm-instctrl.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_PEDANTIC"]
+            },
+            "coverage": ["tt/hinter:called-fpgm-instctrl-prep-pedantic"]
+          },
+          {
             "id": "hinter-fpgm-call-negative-reference",
             "assets": {
               "font": {
@@ -5040,6 +5091,321 @@
             "coverage": [
               "tt/hinter:idef-recursive-depth"
             ]
+          },
+          {
+            "id": "hinter-storage-write-invalid-reference-nonpedantic-noop",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 0,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "coverage": ["tt/hinter:storage-write-invalid-reference-nonpedantic-noop"]
+          },
+          {
+            "id": "hinter-storage-read-invalid-reference-nonpedantic-zero",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "coverage": ["tt/hinter:storage-read-invalid-reference-nonpedantic-zero"]
+          },
+          {
+            "id": "hinter-cvt-write-invalid-reference-nonpedantic-noop",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 2,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "coverage": ["tt/hinter:cvt-write-invalid-reference-nonpedantic-noop"]
+          },
+          {
+            "id": "hinter-cvt-read-invalid-reference-nonpedantic-zero",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 24,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "coverage": ["tt/hinter:cvt-read-invalid-reference-nonpedantic-zero"]
+          },
+          {
+            "id": "hinter-storage-write-invalid-reference-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 0,
+              "load_flags": ["FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-storage-write-invalid-reference-pedantic"]
+          },
+          {
+            "id": "hinter-storage-read-invalid-reference-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-storage-read-invalid-reference-pedantic"]
+          },
+          {
+            "id": "hinter-cvt-write-invalid-reference-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 2,
+              "load_flags": ["FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-cvt-write-invalid-reference-pedantic"]
+          },
+          {
+            "id": "hinter-cvt-read-invalid-reference-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 24,
+              "load_flags": ["FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-cvt-read-invalid-reference-pedantic"]
+          },
+          {
+            "id": "hinter-instctrl-glyph-selector-invalid-reference-nonpedantic-noop",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 25,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "coverage": ["tt/hinter:instctrl-glyph-selector-invalid-reference-nonpedantic-noop"]
+          },
+          {
+            "id": "hinter-instctrl-glyph-selector-invalid-reference-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 25,
+              "load_flags": ["FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-instctrl-glyph-selector-invalid-reference-pedantic"]
+          },
+          {
+            "id": "hinter-cvt-font-unit-write-invalid-reference-nonpedantic-noop",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 26,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "coverage": ["tt/hinter:cvt-font-unit-write-invalid-reference-nonpedantic-noop"]
+          },
+          {
+            "id": "hinter-cvt-font-unit-write-invalid-reference-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 26,
+              "load_flags": ["FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-cvt-font-unit-write-invalid-reference-pedantic"]
+          },
+          {
+            "id": "hinter-instctrl-invalid-selector-nonpedantic-noop",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 27,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "coverage": ["tt/hinter:instctrl-invalid-selector-nonpedantic-noop"]
+          },
+          {
+            "id": "hinter-instctrl-invalid-selector-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 27,
+              "load_flags": ["FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-instctrl-invalid-selector-pedantic"]
+          },
+          {
+            "id": "hinter-instctrl-invalid-value-nonpedantic-noop",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 28,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "coverage": ["tt/hinter:instctrl-invalid-value-nonpedantic-noop"]
+          },
+          {
+            "id": "hinter-instctrl-invalid-value-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 28,
+              "load_flags": ["FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-instctrl-invalid-value-pedantic"]
+          },
+          {
+            "id": "hinter-deltac-invalid-reference-nonpedantic-noop",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 30,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "coverage": ["tt/hinter:deltac-invalid-reference-nonpedantic-noop"]
+          },
+          {
+            "id": "hinter-deltac-invalid-reference-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 30,
+              "load_flags": ["FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-deltac-invalid-reference-pedantic"]
           },
           {
             "id": "hinter-fpgm-nested-fdef",
@@ -5628,7 +5994,7 @@
             ]
           },
           {
-            "id": "hinter-invalid-shp-pedantic",
+            "id": "hinter-branch-edge-getinfo-lcd",
             "assets": {
               "font": {
                 "kind": "ref",
@@ -5640,6 +6006,40 @@
               "face_index": 0,
               "size": 20,
               "glyph_index": 51,
+              "load_flags": ["FT_LOAD_TARGET_LCD"]
+            },
+            "coverage": ["tt/hinter:getinfo-cleartype-lcd"]
+          },
+          {
+            "id": "hinter-branch-edge-getinfo-lcd-v",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 51,
+              "load_flags": ["FT_LOAD_TARGET_LCD_V"]
+            },
+            "coverage": ["tt/hinter:getinfo-cleartype-lcd-v"]
+          },
+          {
+            "id": "hinter-invalid-shp-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-storage-cvt-reference-errors.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 29,
               "load_flags": ["FT_LOAD_PEDANTIC"]
             },
             "expect_error": true,
