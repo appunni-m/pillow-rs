@@ -20,8 +20,9 @@
 
 /// Infallible: i64 → i32.
 ///
-/// Conversions are mechanical — replacing `as i32` on i64 with `i32_from_i64(expr)`. 26.6 pixel coordinates bounded by glyph size (~5000 FU × 64 ≈ 320,000),
-/// fitting in i32 with 3 orders of magnitude headroom.
+/// Conversions are mechanical — replacing `as i32` on i64 with
+/// `i32_from_i64(expr)`. Raster inputs are already i32 26.6 coordinates;
+/// widening them for subpixel arithmetic and shifting back cannot exceed i32.
 #[inline(always)]
 pub(crate) fn i32_from_i64(x: i64) -> i32 {
     debug_assert!(x >= i32::MIN as i64 && x <= i32::MAX as i64);
@@ -31,11 +32,14 @@ pub(crate) fn i32_from_i64(x: i64) -> i32 {
     }
 }
 
-/// Infallible: i32 → i16. Font-unit coords stored as i16 (C's FT_Short).
-/// Maximum coordinate for any supported font is ~5000 FU < i16::MAX (32767).
+/// C-compatible i32 → i16 narrowing for fields stored as `FT_Short`.
+///
+/// FreeType's autohinter explicitly casts segment positions and extrema to
+/// `FT_Short`, then narrows derived heights again (`aflatin.c:1717-1729`).
+/// A valid full signed-16-bit outline can therefore produce an intermediate
+/// span of 65,535. Rust's `as i16` matches the pinned two's-complement target.
 #[inline(always)]
 pub(crate) fn i16_from_i32(x: i32) -> i16 {
-    debug_assert!(x >= i16::MIN as i32 && x <= i16::MAX as i32);
     #[allow(clippy::cast_possible_truncation)]
     {
         x as i16
@@ -72,7 +76,10 @@ pub(crate) fn u64_from_i64(x: i64) -> u64 {
     }
 }
 
-/// Infallible: i64 → usize. Values from division results or shifted coords.
+/// Infallible: i64 → usize for validated contour endpoints.
+///
+/// Callers start at zero and reject an endpoint before converting it; the
+/// source endpoint is i16, so every accepted value fits supported usize.
 #[inline(always)]
 #[allow(clippy::cast_sign_loss)]
 pub(crate) fn usize_from_i64(x: i64) -> usize {

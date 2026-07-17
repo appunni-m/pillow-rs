@@ -249,6 +249,26 @@ def rectangles_glyph(rects: list[tuple[int, int, int, int]]):
     return pen.glyph()
 
 
+def extreme_rectangle_glyph():
+    """Full signed-16-bit bounds with individually encodable glyf deltas."""
+    pen = TTGlyphPen(None)
+    pen.moveTo((-32768, -32768))
+    pen.lineTo((-32768, -1))
+    pen.lineTo((-32768, 32766))
+    pen.lineTo((-32768, 32767))
+    pen.lineTo((-1, 32767))
+    pen.lineTo((32766, 32767))
+    pen.lineTo((32767, 32767))
+    pen.lineTo((32767, 0))
+    pen.lineTo((32767, -32767))
+    pen.lineTo((32767, -32768))
+    pen.lineTo((0, -32768))
+    pen.lineTo((-32767, -32768))
+    pen.lineTo((-32768, -32768))
+    pen.closePath()
+    return pen.glyph()
+
+
 def stacked_contour_glyph():
     """Three vertically separated contours for the double-top adjustment path."""
     return rectangles_glyph(
@@ -668,6 +688,7 @@ def build_script_coverage() -> None:
     glyph_order.append("latin_tilde_top2_centering")
     glyph_order.append("latin_vertical_cusp")
     glyph_order.append("latin_nonbase_tilde")
+    glyph_order.append("latin_extreme_coordinate")
 
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
@@ -755,6 +776,9 @@ def build_script_coverage() -> None:
     glyphs["latin_nonbase_tilde"] = top_tilde_glyph()
     metrics["latin_nonbase_tilde"] = (0, 0)
     cmap[0x0303] = "latin_nonbase_tilde"
+    glyphs["latin_extreme_coordinate"] = extreme_rectangle_glyph()
+    metrics["latin_extreme_coordinate"] = (1000, -32768)
+    cmap[0x0246] = "latin_extreme_coordinate"
 
     font = FontBuilder(UNITS_PER_EM, isTTF=True)
     font.setupGlyphOrder(glyph_order)
