@@ -6092,6 +6092,11 @@
               "load_flags": ["FT_LOAD_PEDANTIC"]
             },
             "expect_error": true,
+            "expectation": {
+              "compare": {
+                "compare_error_output": true
+              }
+            },
             "coverage": ["tt/hinter:error-invalid-shp-reference-pedantic"]
           },
           {
@@ -6110,6 +6115,11 @@
               "load_flags": ["FT_LOAD_PEDANTIC"]
             },
             "expect_error": true,
+            "expectation": {
+              "compare": {
+                "compare_error_output": true
+              }
+            },
             "coverage": ["tt/hinter:error-invalid-utp-reference-pedantic"]
           },
           {

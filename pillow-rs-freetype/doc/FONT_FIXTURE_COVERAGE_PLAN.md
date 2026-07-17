@@ -2858,6 +2858,75 @@ Extra Rust helpers in this file are not FreeType C exports:
 | `FT_Bitmap_Owned_Buffer_Bytes` | embolden/convert/blend core paths and parity result extraction | Same bridge-module move as above.  Deleting it now would force raw-pointer reads or duplicate ownership logic into thin wrappers. |
 | Private registry/parser/handle helpers | `handles.rs` public implementations only | Keep private.  They model storage and validation that C implements with raw pointers or private static functions; they are not manifest endpoints and should not receive standalone green rows. |
 
+## `scaler.rs` Residual Public-Route Audit (2026-07-17)
+
+Coverage MCP baseline snapshot `5f19ac79-cde6-42dd-8a72-4d6d5d815a45`
+reports `src/scaler.rs` at 1,242 / 1,296 lines, 195 / 206 branches,
+59 / 63 functions, and 1,346 / 1,386 regions.  Every zero-hit line,
+partial branch, and uncovered function was read against its Rust callers and
+the pinned FreeType 2.14.3 `ttgload.c`, `ttobjs.c`, `ttdriver.c`, and
+autohinter paths before selecting public routes.
+
+The retained public coverage route is
+`freetype.FT_Glyph_Metrics.metrics_reference_cases.hinter-large-default-pathological-metrics`.
+It loads glyph 49 from the source-backed `hinter-control-matrix.ttf` at 40
+ppem with `FT_LOAD_DEFAULT` and exactly compares C oracle, Rust FFI, C ABI,
+and WASM ABI metrics.  This reaches
+`scale_glyph_for_metrics_with_autohint_preserve_advance`; no synthetic
+outline, impossible scaler state, or fallback expectation is involved.
+
+The coherent exact-error group is
+`hinter-invalid-shp-pedantic` and `hinter-invalid-utp-pedantic`.  Both existing
+public `FT_Load_Glyph` rows now opt into exact error-output comparison.  Every
+lane returns `FT_Err_Invalid_Reference`; glyph-slot output is not committed on
+the failing first load, and all four lane outputs remain the same null error
+output.  This moves the `load_glyph` route ledger from 114 generic-error
+fallbacks and 429 real-parity rows to 112 and 431 respectively.  Pinned
+`TT_Hint_Glyph` (`ttgload.c:828-837`) suppresses `TT_Run_Context` failures in
+non-pedantic mode and returns an error only in pedantic mode.  Rust
+`tt::hinter::hint_glyph` already owns that same policy, so the scaler's second
+non-pedantic suppression arm was unreachable under its loader contract and is
+removed; the remaining error propagation is documented at the call site.
+
+A broader `FT_LOAD_PEDANTIC.pedantic_error_behavior` probe was rejected.  Its
+first C/Rust divergence occurs while preparing bytecode state, before the
+intended glyph-program/scaler route: C reports `Invalid_Reference` (134) from
+the prep program, while Rust reports `Invalid_Outline` (20).  The probe was
+removed instead of bulk-enabling exact comparison or remapping an error in the
+harness.
+
+Definitive Coverage MCP run `127182bb-de1c-4c68-949f-311bd737c495` passes
+7,024 / 7,024 runtime comparisons and ingests snapshot
+`12b0d97c-d3e4-4f42-9a47-18aaf3d630d6`.  `src/scaler.rs` moves to 1,260 /
+1,292 lines, 194 / 204 branches, 60 / 63 functions, and 1,354 / 1,383
+regions.  The uncovered totals fall from 54 to 32 lines, 11 to 10 branch
+outcomes, four to three functions, and 40 to 29 regions.  The remaining
+zero-hit source records are `784-785`, `896-897`, `912`, `929-931`, `935`,
+`937-939`, `1567-1568`, `1570-1571`, `1616`, `1654`, and `1807`; the partial
+branch records are `763`, `800`, `875`, `877`, `922`, `1615`, `1653`, and
+`1806`.
+
+The complete residual classification is:
+
+| Baseline Rust lines / branches | Classification | Exact dependency |
+|---|---|---|
+| `396-423` | Resolved by exact public route | The pathological native-metrics row reaches the complete autohint-preserve-advance function through public glyph metrics. |
+| `784-785` | Constructor invariant | Both `FontData` constructors install `self_arc` before any public scaler call; the fallback closure requires an incompletely constructed private object. |
+| `896-897` | Debug logging only | This is the disabled side of `log_enabled!`, not observable FreeType behavior. |
+| `912` | Loader-preempted | Public `load_glyph_outline` validates the composite tree first; the no-hint scaled helper cannot independently fail for a validated tree. |
+| `922,929-939` | Prepared-context ownership | All public native-hinter callers prepare and pass the active size bytecode context.  The owned-context fallback requires bypassing the public loader contract. |
+| `1143-1146` | Resolved by pinned C contract | `hint_glyph` already suppresses non-pedantic interpreter errors exactly where C does.  Its `Err` result is pedantic-only and must propagate. |
+| `1569-1573` | Parser-preempted composite attachment | `tt::glyf` rejects invalid component point indices before scaler attachment; pinned `TT_Process_Composite_Component` returns `Invalid_Composite` at the equivalent boundary. |
+| `1617-1623` | Validated outline invariant | The caller returns for empty outlines, and the parser proves contour endpoints and point storage consistent before bbox decomposition. |
+| `1655-1656` | Parser-validated contour bounds | Public glyph parsing rejects contour endpoints outside the point array before the scaler consumes them. |
+| `1808-1809` | Caller-preempted autohint outline | The autohint caller returns before constructing a zero-contour outline. |
+| partial branches at `763,800,875,877` | Retained | The remaining boolean outcomes require either an inconsistent zero-contour/point split or target-mode combinations not yet proven by an exact public C route.  No field override or synthetic internal state is accepted. |
+
+No defensive malformed-outline or composite guard is removed by this audit.
+The remaining paths require a real public loader state or a separate
+source-backed first-divergence proof; passing rows that do not move one of
+these records are not retained.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
