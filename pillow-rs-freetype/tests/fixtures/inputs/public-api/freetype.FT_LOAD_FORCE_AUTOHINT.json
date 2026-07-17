@@ -2607,6 +2607,7 @@
             },
             "coverage": [
               "autohint/cjk:blue-empty-glyph-skip",
+              "autohint/cjk:blue-two-point-glyph-skip",
               "autohint/cjk:blue-degenerate-contour-skip",
               "autohint/cjk:blue-flat-only-zone",
               "autohint/cjk:blue-ref-shoot-order-repair"
@@ -2756,6 +2757,27 @@
             ]
           },
           {
+            "id": "cjk-quantized-width-boundary-target-mono-160",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-quantized-widths.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 160,
+              "char_code": 20182,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_MONO"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:quantized-width-boundary-retention"
+            ]
+          },
+          {
             "id": "cjk-wide-stem-snap-target-mono-20",
             "assets": {
               "font": {
@@ -2795,6 +2817,27 @@
             },
             "coverage": [
               "autohint/cjk:round-round-light-stem-threshold"
+            ]
+          },
+          {
+            "id": "cjk-mixed-round-straight-edge-light-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-round-stem-light.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 20899,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_LIGHT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:mixed-round-straight-grouped-edge"
             ]
           },
           {

@@ -543,6 +543,32 @@ def nonreciprocal_chain_glyph():
     return pen.glyph()
 
 
+def mixed_round_straight_edge_glyph():
+    pen = TTGlyphPen(None)
+    for bottom, right, top in ((20, 390, 180), (260, 410, 420)):
+        pen.moveTo((100, bottom))
+        pen.lineTo((100, top))
+        pen.lineTo((right, top))
+        pen.lineTo((right, bottom))
+        pen.closePath()
+
+    mid_x = 270
+    mid_y = 260
+    pen.moveTo((mid_x, 0))
+    pen.qCurveTo((500, 0), (500, mid_y))
+    pen.qCurveTo((500, 520), (mid_x, 520))
+    pen.qCurveTo((40, 520), (40, mid_y))
+    pen.qCurveTo((40, 0), (mid_x, 0))
+    pen.closePath()
+    pen.moveTo((250, 100))
+    pen.qCurveTo((100, 100), (100, mid_y))
+    pen.qCurveTo((100, 420), (250, 420))
+    pen.qCurveTo((400, 420), (400, mid_y))
+    pen.qCurveTo((400, 100), (250, 100))
+    pen.closePath()
+    return pen.glyph()
+
+
 def ring_glyph(
     left: int,
     bottom: int,
@@ -1160,6 +1186,7 @@ def build_cjk_blue_edge_cases() -> None:
         "space",
         "hani_standard",
         "blue_empty",
+        "blue_two_points",
         "blue_degenerate",
         "top_flat",
         "bottom_fill",
@@ -1170,6 +1197,7 @@ def build_cjk_blue_edge_cases() -> None:
         "space": empty_glyph(),
         "hani_standard": rectangle_glyph(100, 0, 620, 560),
         "blue_empty": empty_glyph(),
+        "blue_two_points": one_point_contour_glyph([(210, 40), (330, 180)]),
         "blue_degenerate": one_point_contour_glyph([(160, 40), (260, 120), (360, 200)]),
         "top_flat": rectangle_glyph(110, 20, 580, 220),
         "bottom_fill": rectangle_glyph(120, 0, 560, 360),
@@ -1180,6 +1208,7 @@ def build_cjk_blue_edge_cases() -> None:
         "space": (300, 0),
         "hani_standard": (700, 100),
         "blue_empty": (700, 0),
+        "blue_two_points": (700, 210),
         "blue_degenerate": (700, 160),
         "top_flat": (700, 110),
         "bottom_fill": (700, 120),
@@ -1189,6 +1218,7 @@ def build_cjk_blue_edge_cases() -> None:
         0x20: "space",
         0x4E2A: "bottom_fill",
         0x4E3B: "bottom_flat",
+        0x4EBA: "blue_two_points",
         0x4ED6: "blue_empty",
         0x4EEC: "blue_degenerate",
         0x519B: "top_flat",
@@ -1530,6 +1560,67 @@ def build_cjk_multi_width_snap() -> None:
     font.save(OUT_DIR / "cjk-multi-width-snap.ttf")
 
 
+def build_cjk_quantized_widths() -> None:
+    glyph_order = [".notdef", "space", "hani_standard", "hani_probe"]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -120, 520, 720),
+        "space": empty_glyph(),
+        # Keep the input order non-monotonic so the public route covers both
+        # FreeType's insertion sort and its unusual cluster-boundary handling.
+        "hani_standard": rectangles_glyph(
+            [
+                (40, 0, 70, 560),
+                (120, 0, 128, 560),
+                (180, 0, 199, 560),
+            ]
+        ),
+        "hani_probe": rectangle_glyph(80, 0, 90, 560),
+    }
+    metrics = {
+        ".notdef": (600, 80),
+        "space": (300, 0),
+        "hani_standard": (700, 40),
+        "hani_probe": (700, 80),
+    }
+    cmap = {
+        0x20: "space",
+        0x4ED6: "hani_probe",
+        0x7530: "hani_standard",
+    }
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint CJK Quantized Widths",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint CJK Quantized Widths Regular",
+            "fullName": "Autohint CJK Quantized Widths Regular",
+            "psName": "AutohintCJKQuantizedWidths-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "cjk-quantized-widths.ttf")
+
+
 def build_cjk_many_widths() -> None:
     glyph_order = [".notdef", "space", "hani_many_widths"]
     rects: list[tuple[int, int, int, int]] = []
@@ -1640,22 +1731,31 @@ def build_cjk_wide_stem_snap() -> None:
 
 
 def build_cjk_round_stem_light() -> None:
-    glyph_order = [".notdef", "space", "hani_standard", "hani_round_ring"]
+    glyph_order = [
+        ".notdef",
+        "space",
+        "hani_standard",
+        "hani_round_ring",
+        "hani_mixed_round_straight",
+    ]
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
         "space": empty_glyph(),
         "hani_standard": rectangle_glyph(100, 0, 200, 560),
         "hani_round_ring": ring_glyph(80, 20, 520, 460, 180, 120, 420, 360),
+        "hani_mixed_round_straight": mixed_round_straight_edge_glyph(),
     }
     metrics = {
         ".notdef": (600, 80),
         "space": (300, 0),
         "hani_standard": (700, 100),
         "hani_round_ring": (700, 80),
+        "hani_mixed_round_straight": (700, 40),
     }
     cmap = {
         0x20: "space",
         0x51A2: "hani_round_ring",
+        0x51A3: "hani_mixed_round_straight",
         0x7530: "hani_standard",
     }
 
@@ -2231,6 +2331,7 @@ def main() -> None:
     build_cjk_tiny_stem()
     build_cjk_snap_below_standard()
     build_cjk_multi_width_snap()
+    build_cjk_quantized_widths()
     build_cjk_many_widths()
     build_cjk_wide_stem_snap()
     build_cjk_round_stem_light()

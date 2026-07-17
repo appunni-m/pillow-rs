@@ -102,42 +102,10 @@ pub fn cjk_metrics_init_widths(
             }
         }
 
-        // afcjk.c:246-248 — sort and quantize (same function as Latin)
-        if num_widths > 1 {
-            // Insertion sort by .org (afcjk.c calls af_sort_and_quantize_widths)
-            for i in 1..num_widths {
-                let val = widths[i];
-                let mut j = i;
-                while j > 0 && val.org < widths[j - 1].org {
-                    widths[j] = widths[j - 1];
-                    j -= 1;
-                }
-                widths[j] = val;
-            }
-            // afcjk.c:247 — cluster within threshold = upem/100 (heuristic)
-            let threshold = upem / 100;
-            let mut out: usize = 0;
-            let mut cur_org = widths[0].org;
-            let mut cur_sum = widths[0].org;
-            let mut cur_count: i32 = 1;
-            for i in 1..num_widths {
-                if (widths[i].org - cur_org).abs() <= threshold {
-                    cur_sum += widths[i].org;
-                    cur_count += 1;
-                } else {
-                    widths[out].org = cur_sum / cur_count;
-                    out += 1;
-                    cur_org = widths[i].org;
-                    cur_sum = widths[i].org;
-                    cur_count = 1;
-                }
-            }
-            if cur_count > 0 {
-                widths[out].org = cur_sum / cur_count;
-                out += 1;
-            }
-            num_widths = out;
-        }
+        // afcjk.c:224-225 uses the same `af_sort_and_quantize_widths` helper
+        // as Latin, including its boundary retention and absolute end-index
+        // divisor (afhints.c:59-130).
+        super::latin::sort_and_quantize_widths(&mut num_widths, &mut widths, upem / 100);
 
         // afcjk.c:252-269 — set standard_width and edge_distance_threshold
         let m_axis = &mut metrics.axis[dim];
