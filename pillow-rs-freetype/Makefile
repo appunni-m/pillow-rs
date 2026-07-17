@@ -117,6 +117,7 @@ test-parity: test-unified-fixtures test-ffi
 
 .PHONY: real-parity-verify
 real-parity-verify: test-unified-condition-coverage route-audit test-ffi test-ffi-compat lint
+	$(MAKE) normalize-unified-condition-coverage
 
 .PHONY: scaler-parity-focused
 scaler-parity-focused:
