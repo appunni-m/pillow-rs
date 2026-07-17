@@ -79,6 +79,18 @@
             "coverage": ["grays:zero-height-target"]
           },
           {
+            "id": "line-partial-below-clip-positive-pitch",
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/line-partial-below-clip.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 36, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
+            "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
+            "coverage": ["grays:positive-pitch-allocation-order"]
+          },
+          {
+            "id": "line-partial-below-clip-negative-pitch",
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/line-partial-below-clip.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": -36, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
+            "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
+            "coverage": ["grays:negative-pitch-allocation-order"]
+          },
+          {
             "id": "empty-outline",
             "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/empty-outline.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},

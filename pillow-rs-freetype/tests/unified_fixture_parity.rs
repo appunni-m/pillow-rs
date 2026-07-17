@@ -17711,6 +17711,7 @@ fn outline_render_direct_fallback_runtime_output(case: &InputCase) -> Result<Run
     }
     let outline = outline_render_outline(case)?;
     let (width, height) = outline_render_target_box(case)?;
+    let pitch = outline_render_target_pitch(case, width)?;
     let no_contours = outline.points.is_empty() || outline.n_contours == 0;
     let explicit_target_box = case.inputs.params.get("target_box").is_some();
     let clip_box = outline_render_clip_box(&case.inputs.params)?;
@@ -17753,7 +17754,7 @@ fn outline_render_direct_fallback_runtime_output(case: &InputCase) -> Result<Run
                 raster.pixels
             };
             Ok(ok(outline_render_bitmap_payload(
-                width, height, &buffer, true,
+                width, height, pitch, &buffer, true,
             )))
         }
         Err(fontdone::FontError::InvalidOutline(_)) => Ok(error(FT_Err_Invalid_Outline)),
@@ -17765,13 +17766,26 @@ fn rust_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, Str
     let library = FT_Init_FreeType();
     let outline = outline_render_snapshot(&outline_render_outline(case)?);
     let (width, rows) = outline_render_target_box(case)?;
+    let pitch = outline_render_target_pitch(case, width)?;
+    let buffer_len = usize::try_from(pitch.unsigned_abs())
+        .map_err(|err| err.to_string())?
+        .checked_mul(rows)
+        .ok_or_else(|| "outline target buffer length overflow".to_string())?;
+    let mut buffer = vec![
+        if case.expectation.compare.compare_error_output {
+            0xA5
+        } else {
+            0
+        };
+        buffer_len
+    ];
     let flags = outline_render_flags(&case.inputs.params)?;
     let clip_box = outline_render_ffi_clip_box(&case.inputs.params)?;
     let target = FT_Bitmap_C {
         rows: u32::try_from(rows).map_err(|err| err.to_string())?,
         width: u32::try_from(width).map_err(|err| err.to_string())?,
-        pitch: i32::try_from(width).map_err(|err| err.to_string())?,
-        buffer: ptr::null_mut(),
+        pitch,
+        buffer: buffer.as_mut_ptr(),
         num_grays: 256,
         pixel_mode: FT_PIXEL_MODE_GRAY as u8,
         palette_mode: 0,
@@ -17787,9 +17801,14 @@ fn rust_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, Str
         Ok(rendered) => Ok(ok(outline_render_bitmap_payload(
             width,
             rows,
+            pitch,
             &rendered.buffer,
             true,
         ))),
+        Err(err) if case.expectation.compare.compare_error_output => Ok(error_with_output(
+            err,
+            outline_render_bitmap_payload(width, rows, pitch, &buffer, true),
+        )),
         Err(err) => Ok(error(err)),
     }
 }
@@ -17804,11 +17823,23 @@ fn c_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String
     let mut outline = CRenderOutlineStorage::new(&outline_model);
     let outline_ptr = outline.as_ptr();
     let (width, rows) = outline_render_target_box(case)?;
-    let mut buffer = vec![0; width.saturating_mul(rows)];
+    let pitch = outline_render_target_pitch(case, width)?;
+    let buffer_len = usize::try_from(pitch.unsigned_abs())
+        .map_err(|err| err.to_string())?
+        .checked_mul(rows)
+        .ok_or_else(|| "outline target buffer length overflow".to_string())?;
+    let mut buffer = vec![
+        if case.expectation.compare.compare_error_output {
+            0xA5
+        } else {
+            0
+        };
+        buffer_len
+    ];
     let target = c_abi::FT_Bitmap {
         rows: u32::try_from(rows).map_err(|err| err.to_string())?,
         width: u32::try_from(width).map_err(|err| err.to_string())?,
-        pitch: i32::try_from(width).map_err(|err| err.to_string())?,
+        pitch,
         buffer: buffer.as_mut_ptr(),
         num_grays: 256,
         pixel_mode: FT_PIXEL_MODE_GRAY,
@@ -17834,9 +17865,21 @@ fn c_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String
         Ok(ok(outline_render_bitmap_payload(
             width,
             rows,
+            pitch,
             &buffer,
             params.source == outline_ptr.cast(),
         )))
+    } else if case.expectation.compare.compare_error_output {
+        Ok(error_with_output(
+            err,
+            outline_render_bitmap_payload(
+                width,
+                rows,
+                pitch,
+                &buffer,
+                params.source == outline_ptr.cast(),
+            ),
+        ))
     } else {
         Ok(error(err))
     }
@@ -17847,11 +17890,23 @@ fn wasm_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, Str
     let mut outline = WasmRenderOutlineStorage::new(&outline_model);
     let outline_ptr = outline.as_ptr();
     let (width, rows) = outline_render_target_box(case)?;
-    let mut buffer = vec![0; width.saturating_mul(rows)];
+    let pitch = outline_render_target_pitch(case, width)?;
+    let buffer_len = usize::try_from(pitch.unsigned_abs())
+        .map_err(|err| err.to_string())?
+        .checked_mul(rows)
+        .ok_or_else(|| "outline target buffer length overflow".to_string())?;
+    let mut buffer = vec![
+        if case.expectation.compare.compare_error_output {
+            0xA5
+        } else {
+            0
+        };
+        buffer_len
+    ];
     let mut target = wasm_abi::FontdoneWasmBitmap {
         rows: u32::try_from(rows).map_err(|err| err.to_string())?,
         width: u32::try_from(width).map_err(|err| err.to_string())?,
-        pitch: i32::try_from(width).map_err(|err| err.to_string())?,
+        pitch,
         buffer: buffer.as_mut_ptr(),
         buffer_len: buffer.len(),
         num_grays: 256,
@@ -17877,9 +17932,21 @@ fn wasm_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, Str
         Ok(ok(outline_render_bitmap_payload(
             width,
             rows,
+            pitch,
             &buffer,
             params.source == outline_ptr.cast(),
         )))
+    } else if case.expectation.compare.compare_error_output {
+        Ok(error_with_output(
+            err,
+            outline_render_bitmap_payload(
+                width,
+                rows,
+                pitch,
+                &buffer,
+                params.source == outline_ptr.cast(),
+            ),
+        ))
     } else {
         Ok(error(err))
     }
@@ -18746,6 +18813,19 @@ fn outline_render_target_box(case: &InputCase) -> Result<(usize, usize), String>
     ))
 }
 
+fn outline_render_target_pitch(case: &InputCase, width: usize) -> Result<i32, String> {
+    if let Some(Asset::Other(bitmap)) = case.inputs.assets.get("bitmap") {
+        if bitmap.get("kind").and_then(Value::as_str) == Some("bitmap_target") {
+            let pitch = bitmap
+                .get("pitch")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| "bitmap_target.pitch must be an integer".to_string())?;
+            return i32::try_from(pitch).map_err(|err| err.to_string());
+        }
+    }
+    i32::try_from(width).map_err(|err| err.to_string())
+}
+
 fn outline_render_clip_box(params: &Value) -> Result<Option<(i32, i32, i32, i32)>, String> {
     let Some(clip_box) = params
         .get("raster_params")
@@ -19307,6 +19387,7 @@ fn outline_render_cubic_with_points(
 fn outline_render_bitmap_payload(
     width: usize,
     height: usize,
+    pitch: i32,
     buffer: &[u8],
     params_source_is_outline: bool,
 ) -> Value {
@@ -19315,7 +19396,7 @@ fn outline_render_bitmap_payload(
         "bitmap": {
             "width": width,
             "rows": height,
-            "pitch": width,
+            "pitch": pitch,
             "pixel_mode": FT_PIXEL_MODE_GRAY,
             "num_grays": 256,
             "buffer_hex": hex_bytes(buffer)

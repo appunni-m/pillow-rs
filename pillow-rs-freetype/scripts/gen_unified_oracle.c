@@ -4975,12 +4975,18 @@ static int emit_outline_render(int argc, char** argv) {
     }
 
     unsigned char buffer[32 * 32 + 256];
-    memset(buffer, 0, sizeof(buffer));
+    int compare_error_output = strstr(case_id, "@invalid-") != NULL;
+    memset(buffer, compare_error_output ? 0xA5 : 0, sizeof(buffer));
     FT_Bitmap bitmap;
     memset(&bitmap, 0, sizeof(bitmap));
     bitmap.rows = bitmap_rows;
     bitmap.width = bitmap_width;
     bitmap.pitch = (int)bitmap_width;
+    if (strstr(case_id, "@line-partial-below-clip-positive-pitch")) {
+        bitmap.pitch = 36;
+    } else if (strstr(case_id, "@line-partial-below-clip-negative-pitch")) {
+        bitmap.pitch = -36;
+    }
     bitmap.buffer = buffer;
     bitmap.num_grays = 256;
     bitmap.pixel_mode = FT_PIXEL_MODE_GRAY;
@@ -5002,7 +5008,13 @@ static int emit_outline_render(int argc, char** argv) {
     printf("{");
     print_status(err);
     if (err) {
-        printf(",\"output\":null}\n");
+        if (compare_error_output) {
+            printf(",");
+            print_outline_render_bitmap_payload(&bitmap);
+            printf("}\n");
+        } else {
+            printf(",\"output\":null}\n");
+        }
     } else {
         printf(",");
         print_outline_render_bitmap_payload(&bitmap);

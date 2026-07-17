@@ -877,6 +877,20 @@ pub extern "C" fn fontdone_wasm_outline_render(
         xMax: params.clip_box.xMax,
         yMax: params.clip_box.yMax,
     };
+    if library.is_some()
+        && snapshot.as_ref().is_some_and(|outline_snapshot| {
+            let mut cbox = rust_ffi::FT_BBox::default();
+            rust_ffi::FT_Outline_Get_CBox(Some(outline_snapshot), Some(&mut cbox));
+            cbox.xMin >= -0x1000000
+                && cbox.yMin >= -0x1000000
+                && cbox.xMax <= 0x1000000
+                && cbox.yMax <= 0x1000000
+        })
+    {
+        // FreeType 2.14.3 ftoutln.c:625-648 sets `source` before the
+        // renderer call, including calls that return a renderer error.
+        params.source = outline.cast();
+    }
     match rust_ffi::FT_Outline_Render(
         library.as_ref(),
         snapshot.as_ref(),
@@ -885,7 +899,6 @@ pub extern "C" fn fontdone_wasm_outline_render(
         clip_box,
     ) {
         Ok(rendered) => {
-            params.source = outline.cast();
             if let Some(target) = target {
                 if target.width != 0 && target.rows != 0 && target.buffer.is_null() {
                     return rust_ffi::FT_Err_Invalid_Argument;
@@ -2450,6 +2463,7 @@ fn copy_rendered_bitmap_to_wasm(
     let rows = usize::try_from(target.rows).unwrap_or(0);
     let width = usize::try_from(target.width).unwrap_or(0);
     let pitch_abs = usize::try_from(target.pitch.unsigned_abs()).unwrap_or(0);
+    let rendered_pitch_abs = usize::try_from(rendered.pitch.unsigned_abs()).unwrap_or(0);
     if target.buffer.is_null() || rows == 0 || width == 0 || pitch_abs == 0 {
         return;
     }
@@ -2459,7 +2473,7 @@ fn copy_rendered_bitmap_to_wasm(
     // bitmap buffer; `buffer_len` bounds the slice visible to this wrapper.
     let target_buffer = unsafe { slice::from_raw_parts_mut(target.buffer.cast_mut(), target_len) };
     for row in 0..rows {
-        let src = row.saturating_mul(width);
+        let src = row.saturating_mul(rendered_pitch_abs);
         let dst = row.saturating_mul(pitch_abs);
         let Some(src_row) = rendered.buffer.get(src..src.saturating_add(row_bytes)) else {
             break;

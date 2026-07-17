@@ -752,9 +752,13 @@ impl<'a> Worker<'a> {
             if first_tag == CURVE_TAG_CONIC {
                 if curve_tag_at(pts, tags, limit) == CURVE_TAG_ON {
                     v_start = v_last;
-                    limit_eff = limit.checked_sub(1).ok_or_else(|| {
-                        FontError::InvalidOutline("outline: conic start underflow".into())
-                    })?;
+                    // FreeType 2.14.3 ftgrays.c:1487-1494 decrements `limit`
+                    // only when the first tag is CONIC and the last tag is ON.
+                    // If `limit` were zero those tags would describe the same
+                    // point, so the mutually exclusive tag test proves this
+                    // subtraction cannot underflow for safe Rust inputs or the
+                    // public FT_Outline contract.
+                    limit_eff = limit - 1;
                 } else {
                     v_start.x = (v_start.x + v_last.x) / 2;
                     v_start.y = (v_start.y + v_last.y) / 2;
@@ -1005,9 +1009,10 @@ fn write_span(buf: &mut [u8], off: usize, s: i32, count: i32, step: usize) {
     if step == 1 {
         let start = off.min(buf.len());
         let end = start.saturating_add(usize_from_i32(count)).min(buf.len());
-        if start < end {
-            buf[start..end].fill(s);
-        }
+        // FreeType 2.14.3 ftgrays.c:417-432 makes FT_GRAY_SET with a
+        // zero-length range a no-op.  `end` cannot precede `start`: both the
+        // saturating addition and the final clamp preserve that ordering.
+        buf[start..end].fill(s);
         return;
     }
 

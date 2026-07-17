@@ -1505,9 +1505,10 @@ pub fn FT_Outline_Get_Bitmap(
         // FreeType `FT_Outline_Get_Bitmap` leaves AA unset for MONO targets and
         // writes packed 1bpp rows into the caller pitch.
         for y in 0..rows {
+            let dst_y = if abitmap.pitch < 0 { rows - 1 - y } else { y };
             for x in 0..width {
                 if raster.pixels.get(y * width + x).copied().unwrap_or(0) != 0 {
-                    let byte = y * pitch_abs + x / 8;
+                    let byte = dst_y * pitch_abs + x / 8;
                     if let Some(dst) = pixels.get_mut(byte) {
                         *dst |= 0x80 >> (x & 7);
                     }
@@ -1517,7 +1518,11 @@ pub fn FT_Outline_Get_Bitmap(
     } else if raster.pixels.len() == width.saturating_mul(rows) {
         for y in 0..rows {
             let src = y * width;
-            let dst = y * pitch_abs;
+            // FT_Bitmap.pitch is the offset for moving down one visual row.
+            // A negative pitch therefore stores top-down raster row `y` at
+            // the reversed allocation row (ftimage.h; ftgrays.c:2021-2027).
+            let dst_y = if abitmap.pitch < 0 { rows - 1 - y } else { y };
+            let dst = dst_y * pitch_abs;
             let row_bytes = width.min(pitch_abs);
             pixels[dst..dst + row_bytes].copy_from_slice(&raster.pixels[src..src + row_bytes]);
         }
@@ -1593,7 +1598,7 @@ pub fn FT_Outline_Render(
     let rows = usize::try_from(target.rows).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?;
     let pitch_abs = usize::try_from(target.pitch.unsigned_abs()).unwrap_or(width);
     let mut pixels = vec![0; pitch_abs.saturating_mul(rows)];
-    if empty_outline || width == 0 || rows == 0 {
+    if empty_outline {
         return Ok(FT_Bitmap {
             rows: target.rows,
             width: target.width,
@@ -1611,7 +1616,8 @@ pub fn FT_Outline_Render(
     if raster.pixels.len() == width.saturating_mul(rows) {
         for y in 0..rows {
             let src = y * width;
-            let dst = y * pitch_abs;
+            let dst_y = if target.pitch < 0 { rows - 1 - y } else { y };
+            let dst = dst_y * pitch_abs;
             let row_bytes = width.min(pitch_abs);
             pixels[dst..dst + row_bytes].copy_from_slice(&raster.pixels[src..src + row_bytes]);
         }
