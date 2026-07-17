@@ -2942,6 +2942,88 @@
             ]
           },
           {
+            "id": "cjk-branch-round-stem-light-lower-offset-16",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-round-stem-light.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 16,
+              "char_code": 20898,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_LIGHT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:light-lower-offset-threshold"
+            ]
+          },
+          {
+            "id": "cjk-branch-round-stem-light-upper-offset-18",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-round-stem-light.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 18,
+              "char_code": 20898,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_LIGHT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:light-upper-offset-threshold"
+            ]
+          },
+          {
+            "id": "cjk-branch-minor-same-position-edge-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-remaining-branches.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 20912,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:same-position-minor-edge-order"
+            ]
+          },
+          {
+            "id": "cjk-branch-grouped-shorter-link-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-remaining-branches.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 20913,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:grouped-edge-shorter-link"
+            ]
+          },
+          {
             "id": "cjk-shared-latin",
             "assets": {
               "font": {

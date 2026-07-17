@@ -543,6 +543,38 @@ def nonreciprocal_chain_glyph():
     return pen.glyph()
 
 
+def cjk_same_position_minor_edge_glyph():
+    """Clockwise major and counter-clockwise minor edges at the same x."""
+    pen = TTGlyphPen(None)
+
+    # The larger clockwise contour fixes the glyph's TrueType orientation, so
+    # its left edge is the horizontal axis' major-direction segment.
+    pen.moveTo((40, 20))
+    pen.lineTo((40, 220))
+    pen.lineTo((320, 220))
+    pen.lineTo((320, 20))
+    pen.closePath()
+
+    # Reverse the smaller contour.  Its closing left edge is minor-direction
+    # and shares x=40 with the major edge above.
+    pen.moveTo((40, 300))
+    pen.lineTo((80, 300))
+    pen.lineTo((80, 400))
+    pen.lineTo((40, 400))
+    pen.closePath()
+    return pen.glyph()
+
+
+def cjk_grouped_shorter_link_glyph():
+    """Two grouped left segments whose second stem has the shorter link."""
+    return rectangles_glyph(
+        [
+            (40, 20, 310, 220),
+            (40, 280, 300, 480),
+        ]
+    )
+
+
 def mixed_round_straight_edge_glyph():
     pen = TTGlyphPen(None)
     for bottom, right, top in ((20, 390, 180), (260, 410, 420)):
@@ -1934,6 +1966,68 @@ def build_cjk_duplicate_edge() -> None:
     font.save(OUT_DIR / "cjk-duplicate-edge.ttf")
 
 
+def build_cjk_remaining_branches() -> None:
+    glyph_order = [
+        ".notdef",
+        "space",
+        "hani_standard",
+        "hani_minor_same_position",
+        "hani_grouped_shorter_link",
+    ]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -120, 520, 720),
+        "space": empty_glyph(),
+        "hani_standard": rectangle_glyph(100, 0, 200, 560),
+        "hani_minor_same_position": cjk_same_position_minor_edge_glyph(),
+        "hani_grouped_shorter_link": cjk_grouped_shorter_link_glyph(),
+    }
+    metrics = {
+        ".notdef": (700, 80),
+        "space": (300, 0),
+        "hani_standard": (700, 100),
+        "hani_minor_same_position": (700, 40),
+        "hani_grouped_shorter_link": (700, 40),
+    }
+    cmap = {
+        0x20: "space",
+        0x51B0: "hani_minor_same_position",
+        0x51B1: "hani_grouped_shorter_link",
+        0x7530: "hani_standard",
+    }
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint CJK Remaining Branches",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint CJK Remaining Branches Regular",
+            "fullName": "Autohint CJK Remaining Branches Regular",
+            "psName": "AutohintCJKRemainingBranches-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "cjk-remaining-branches.ttf")
+
+
 def build_digit_notdef_cmap() -> None:
     glyph_order = [".notdef", "space", "latin_o"]
     glyphs = {
@@ -2393,6 +2487,7 @@ def main() -> None:
     build_cjk_wide_stem_snap()
     build_cjk_round_stem_light()
     build_cjk_duplicate_edge()
+    build_cjk_remaining_branches()
     build_digit_notdef_cmap()
     build_out_of_range_cmap_coverage()
     build_latin_standard_fallbacks()
