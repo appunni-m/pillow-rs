@@ -2908,9 +2908,11 @@ pub fn FT_Load_Glyph(
     }
     let glyph_index = u16::try_from(glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
     let flags = load_flags_to_core(load_flags)?;
-    if glyph_index >= face.inner.borrow().info().num_glyphs {
+    let inner = face.inner.borrow();
+    if glyph_index >= inner.info().num_glyphs && !inner.uses_explicit_autohinter(flags) {
         return Err(FT_Err_Invalid_Glyph_Index);
     }
+    drop(inner);
     let transform = if load_flags & FT_LOAD_IGNORE_TRANSFORM != 0 {
         None
     } else if face.transform_matrix.xx != 1 << 16

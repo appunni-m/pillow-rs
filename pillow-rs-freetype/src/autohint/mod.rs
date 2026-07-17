@@ -40,9 +40,7 @@ pub mod types;
 pub use globals::FaceGlobals;
 pub use globals_data::{STYLE_FALLBACK, STYLE_TABLE, STYLE_UNASSIGNED, StyleClass, UniRange};
 pub use latin::apply_hints;
-pub use latin::{
-    metrics_init_blues, metrics_init_blues_greek, metrics_init_blues_impl, metrics_init_widths,
-};
+pub use latin::{metrics_init_blues_impl, metrics_init_widths};
 pub use script::detect_script;
 pub use types::{
     AF_LATIN_MAX_WIDTHS, AFEdge, AFPoint, AFSegment, AfLatinAxisMetrics, AfLatinBlue,

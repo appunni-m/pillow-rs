@@ -495,6 +495,13 @@ impl Face {
         flags
     }
 
+    pub(crate) fn uses_explicit_autohinter(&self, flags: LoadFlags) -> bool {
+        let flags = Self::normalize_load_flags(&self.font, flags);
+        !flags.contains(LoadFlags::NO_AUTOHINT)
+            && (flags.contains(LoadFlags::TARGET_LIGHT)
+                || flags.contains(LoadFlags::FORCE_AUTOHINT))
+    }
+
     fn load_glyph_from_font(
         font: &Font,
         glyph_index: u16,

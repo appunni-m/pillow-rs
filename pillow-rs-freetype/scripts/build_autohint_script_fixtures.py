@@ -9,6 +9,7 @@ from pathlib import Path
 from fontTools.fontBuilder import FontBuilder
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont
+from fontTools.ttLib.tables.DefaultTable import DefaultTable
 from fontTools.ttLib.tables._g_l_y_f import Glyph, GlyphCoordinates
 from fontTools.ttLib.tables.ttProgram import Program
 
@@ -1830,6 +1831,76 @@ def build_digit_notdef_cmap() -> None:
     font.save(OUT_DIR / "digit-notdef-cmap.ttf")
 
 
+def build_out_of_range_cmap_coverage() -> None:
+    glyph_order = [".notdef", "space", "latin_O"]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -120, 520, 720),
+        "space": empty_glyph(),
+        "latin_O": ring_glyph(90, 0, 510, 680, 190, 120, 410, 560),
+    }
+    metrics = {
+        ".notdef": (600, 80),
+        "space": (300, 0),
+        "latin_O": (620, 90),
+    }
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap({0x20: "space", 0x4F: "latin_O"})
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint Out Of Range Cmap",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint Out Of Range Cmap Regular",
+            "fullName": "Autohint Out Of Range Cmap Regular",
+            "psName": "AutohintOutOfRangeCmap-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    # Keep U+004F valid so the public load succeeds. U+0304 maps explicitly to
+    # glyph zero, and U+0D00 shares its glyph with Latin so the later Malayalam
+    # non-base scan must skip it. The other format-12 mappings intentionally
+    # exceed maxp.numGlyphs=3: pinned FreeType returns those cmap GIDs, then
+    # afglobal.c skips them while assigning script, digit, and non-base coverage.
+    mappings = [
+        (0x0020, 1),
+        (0x0030, 254),
+        (0x004F, 2),
+        (0x006F, 255),
+        (0x0303, 253),
+        (0x0304, 0),
+        (0x0D00, 2),
+    ]
+    groups = b"".join(
+        struct.pack(">III", codepoint, codepoint, glyph_id)
+        for codepoint, glyph_id in mappings
+    )
+    subtable = struct.pack(">HHIII", 12, 0, 16 + len(groups), 0, len(mappings)) + groups
+    cmap_data = struct.pack(">HHHHI", 0, 1, 3, 10, 12) + subtable
+    cmap = DefaultTable("cmap")
+    cmap.data = cmap_data
+    font.font["cmap"] = cmap
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "out-of-range-cmap-coverage.ttf")
+
+
 def build_latin_standard_fallbacks() -> None:
     fallback_cases = [
         (
@@ -2165,6 +2236,7 @@ def main() -> None:
     build_cjk_round_stem_light()
     build_cjk_duplicate_edge()
     build_digit_notdef_cmap()
+    build_out_of_range_cmap_coverage()
     build_latin_standard_fallbacks()
     build_latin_malformed_standard()
     build_latin_blue_delta()

@@ -2296,10 +2296,30 @@ ledger. Treat this as the next owner list, not as deletion evidence:
 | Disposition | Zero-count functions or families | Route decision |
 |---|---|---|
 | Implement before fixture parity | `ffi::handles::FT_New_Face` | This is a public stub; fixtures must not fake success until core behavior exists and C/WASM ABI wrappers remain thin |
-| Public helper not owned by current FreeType manifest route | `autohint::globals::detect_script`, `globals_data::blue_chars_for_script`, `latin::metrics_init_blues`, `latin::metrics_init_blues_greek`, `Direction::{as_i8,is_horizontal,is_vertical}`, `GlyphHints::num_contours`, `ExecContext::{fetch_byte,fetch_word}` | Keep visible; either route through an existing public manifest subject with real C parity or decide separately whether these helpers belong in public Rust surface |
+| Public helper not owned by current FreeType manifest route | `globals_data::blue_chars_for_script`, `Direction::{as_i8,is_horizontal,is_vertical}`, `GlyphHints::num_contours`, `ExecContext::{fetch_byte,fetch_word}` | Keep visible; either route through an existing public manifest subject with real C parity or decide separately whether these helpers belong in public Rust surface |
 | Private/no-route implementation helpers | `Font::{layout_glyphs,layout_bounds,slot_metrics_from_scaled,native_bytecode_context}`, `layout_bounds_from_glyphs`, `grays::{rasterize,rasterize_shifted_in_box,ft_div_mod,Worker::render_scanline}`, `render::unpack_mono_row` | Do not add synthetic tests. A real public operation must need them, or they need independent semantic cleanup after proving they are duplicate/obsolete |
 | Covered body with closure artifact | `Font::load_sfnt_table` closures, `Font::truetype_face_with_load_mode` closures, `SizeMetrics::from_char_size` closure, and `api::GlyphSlot::new` closure | Do not add fixture rows for closure symbols alone. Add rows only if a public error branch or output difference is missing |
 | Fixture/font reachable candidates | `cjk::cjk_mark_round_segments`, parts of `SdfFlattener`, `MonoOutlineProfileBuilder`, `scaler` metric/composite helpers, and `tt::hinter::exec::run_program` closure | Add compact glyph/topology/program rows only after identifying the exact branch and proving the row moves coverage with exact parity. `latin::find_second_lowest_contour` remains preserved code, but pinned FreeType 2.14.3 defines `AF_ADJUST_DOWN2` / `AF_ADJUST_TILDE_BOTTOM2` without any adjustment-database entries, so it is not currently reachable through a real public `char_code` fixture row |
+
+2026-07-17 autohint helper cleanup: `globals::detect_script` duplicated the
+maintained implementation in `script.rs`, while `latin::metrics_init_blues` and
+`latin::metrics_init_blues_greek` had no callers and did not correspond to
+public FreeType entry points.  The face-global route already selects a
+`STYLE_TABLE` entry and calls `metrics_init_blues_impl`, matching
+`af_face_globals_get_metrics`; the duplicate detector and wrapper exports were
+retired without changing that implementation path.
+
+2026-07-17 explicit-autohinter index ordering: pinned `FT_Load_Glyph` dispatches
+explicit FORCE_AUTOHINT and target-light loads to `af_loader_load_glyph` before
+the font driver validates the glyph index.  `af_face_globals_get_metrics`
+therefore returns `FT_Err_Invalid_Argument` for an out-of-range index, not the
+driver's `FT_Err_Invalid_Glyph_Index`.  Rust core now owns that ordering; thin
+C and WASM wrappers defer explicit-autohinter validation to the shared core.
+The combined bucket moved `autohint/globals.rs` from 215 / 225 lines, 67 / 80
+branches, and 13 / 14 functions to 206 / 206 lines, 66 / 66 branches, and
+13 / 13 functions. Runtime parity moved from 7,100 / 7,100 to 7,102 / 7,102,
+real-parity routes moved from 3,901 to 3,903, and the four explicit pending
+rows were unchanged.
 
 ### FTSynth Null-Slot Checkpoint - 2026-07-13
 

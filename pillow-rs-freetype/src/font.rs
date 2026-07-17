@@ -1667,7 +1667,7 @@ impl Font {
         vertical_layout: bool,
         native_hint_mode: NativeHintMode,
     ) -> Result<GlyphSlotLoad, FontError> {
-        let metrics_cache = self.autohint_metrics_for_glyph(glyph);
+        let metrics_cache = self.autohint_metrics_for_glyph_checked(glyph)?;
         let scaled = scaler::scale_glyph_for_metrics_with_autohint_and_mode(
             &self.data,
             glyph,
@@ -1690,7 +1690,7 @@ impl Font {
         &self,
         glyph: u16,
     ) -> Result<GlyphSlotLoad, FontError> {
-        let metrics_cache = self.autohint_metrics_for_glyph(glyph);
+        let metrics_cache = self.autohint_metrics_for_glyph_checked(glyph)?;
         let scaled = scaler::scale_glyph_for_metrics_light(
             &self.data,
             glyph,
@@ -2049,6 +2049,22 @@ impl Font {
 }
 
 impl Font {
+    fn autohint_metrics_for_glyph_checked(
+        &self,
+        glyph: u16,
+    ) -> Result<Option<Rc<crate::autohint::AfLatinMetrics>>, FontError> {
+        let metrics = self.autohint_metrics_for_glyph(glyph);
+        if glyph >= self.data.maxp.num_glyphs {
+            // C `af_loader_load_glyph` asks `af_face_globals_get_metrics`
+            // before its recursive driver load; the globals guard therefore
+            // returns Invalid_Argument for explicit autohint loads.
+            return Err(FontError::InvalidArgument(
+                "autohinter glyph index out of range".into(),
+            ));
+        }
+        Ok(metrics)
+    }
+
     fn autohint_metrics_for_glyph(
         &self,
         glyph: u16,

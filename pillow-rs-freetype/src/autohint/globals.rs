@@ -23,7 +23,6 @@
 //!
 //! Full 52-script support via generated data from afranges.c + afstyles.h.
 
-use super::blue_strings::{BlueStringEntry, SCRIPT_LATN, SCRIPT_TABLE};
 use super::cjk::{cjk_metrics_init_blues, cjk_metrics_init_widths, cjk_metrics_scale};
 use super::globals_data::{STYLE_FALLBACK, STYLE_TABLE, STYLE_UNASSIGNED};
 use super::latin::{metrics_init_blues_impl, metrics_init_widths};
@@ -107,12 +106,9 @@ impl FaceGlobals {
             return None;
         }
 
-        let mut si = coverage.glyph_styles[gi];
-        if si == STYLE_UNASSIGNED || si >= STYLE_TABLE.len() {
-            si = STYLE_FALLBACK;
-        }
-
-        self.get_metrics_for_style(si)
+        // `build_coverage` replaces every unassigned entry with the fallback,
+        // and all other entries originate from `STYLE_TABLE::enumerate`.
+        self.get_metrics_for_style(coverage.glyph_styles[gi])
     }
 
     /// Return the configured fallback style metrics for render-only paths that
@@ -121,11 +117,8 @@ impl FaceGlobals {
         self.get_metrics_for_style(STYLE_FALLBACK)
     }
 
-    fn get_metrics_for_style(&self, mut si: usize) -> Option<Rc<AfLatinMetrics>> {
+    fn get_metrics_for_style(&self, si: usize) -> Option<Rc<AfLatinMetrics>> {
         self.ensure_coverage();
-        if si == STYLE_UNASSIGNED || si >= STYLE_TABLE.len() {
-            si = STYLE_FALLBACK;
-        }
 
         let mut cache = self.metrics_cache.borrow_mut();
 
@@ -282,17 +275,12 @@ fn build_coverage(font_data: &FontData, glyph_count: u16) -> FaceCoverage {
     // that should NOT get blue zone alignment (afglobal.c).
     for (si, style) in STYLE_TABLE.iter().enumerate() {
         for range in style.non_base_ranges {
-            let mut cp = range.first;
-            while cp <= range.last {
+            for cp in range.first..=range.last {
                 if let Some(gi) = font_data.cmap.char_index(cp) {
                     let gi = gi as usize;
                     if gi != 0 && gi < ng && glyph_styles[gi] == si {
                         non_base[gi] = true;
                     }
-                }
-                cp += 1;
-                if cp > range.last {
-                    break;
                 }
             }
         }
@@ -371,16 +359,6 @@ fn compute_style_coverage(cmap: &CmapTable, num_glyphs: u16, glyph_styles: &mut 
             *g = STYLE_FALLBACK;
         }
     }
-}
-
-/// Quick script detection for fonts that don't need full `FaceGlobals`.
-pub fn detect_script(cmap: &CmapTable) -> &'static [BlueStringEntry] {
-    for (_tag, ch, entries) in SCRIPT_TABLE {
-        if cmap.char_index(*ch as u32).unwrap_or(0) != 0 {
-            return entries;
-        }
-    }
-    SCRIPT_LATN
 }
 
 /// Per-script hinting direction: TOP_TO_BOTTOM for Indic/Mongolian/Gothic.
