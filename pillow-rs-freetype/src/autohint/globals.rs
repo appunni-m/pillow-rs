@@ -11,8 +11,8 @@
 //!
 //! Parity-sensitive details:
 //!
-//! - Standard-character fallback follows FreeType's `"o O 0"` chain so
-//!   non-Latin fonts without lowercase Latin still have a measurement glyph.
+//! - Standard-character fallback follows each script's complete FreeType
+//!   candidate chain so fonts missing the first candidate can still measure.
 //! - Coverage scanning includes every generated non-base range from
 //!   `STYLE_TABLE`.
 //! - Hebrew blue-zone initialization accounts for outlines changed by
@@ -24,7 +24,9 @@
 //! Full 52-script support via generated data from afranges.c + afstyles.h.
 
 use super::cjk::{cjk_metrics_init_blues, cjk_metrics_init_widths, cjk_metrics_scale};
-use super::globals_data::{STYLE_FALLBACK, STYLE_TABLE, STYLE_UNASSIGNED};
+use super::globals_data::{
+    STYLE_FALLBACK, STYLE_TABLE, STYLE_UNASSIGNED, standard_chars_for_script,
+};
 use super::latin::{metrics_init_blues_impl, metrics_init_widths};
 use super::types::AfLatinMetrics;
 use crate::tables::FontData;
@@ -153,43 +155,14 @@ impl FaceGlobals {
             // Set hinting direction from script tag
             m.top_to_bottom_hinting = top_to_bottom_hinting(style.script_tag);
 
-            // Stem widths from the script's standard character
-            // C's `script_class->standard_charstring` is a space-separated
-            // list.  C iterates: first character that maps to a valid glyph
-            // wins (af_latin_metrics_init_widths, aflatin.c:95-131).
-            // Without HarfBuzz, shaper is a no-op — C just tries chars in
-            // order. Our `standard_char_for_script` only returns the first
-            // char. Track multiple fallback chars to match C.
-            //
-            // All scripts use the same Latin 'o'-based approach because
-            // Indic scripts' standard characters (e.g., Bengali U+09E6)
-            // have fundamentally different shapes that produce incorrect
-            // stem widths when run through segment-based detection.
-            let std_chars: &[char] = match style.script_tag {
-                // C Latin: "o O 0" (afscript.h:216-220)
-                "latn" => &['o', 'O', '0'],
-                // C Latin subscript: "ₒ ₀" = U+2092 U+2080 (afscript.h)
-                "latb" => &['\u{2092}', '\u{2080}'],
-                // C Latin superscript: "ᵒ ᴼ ⁰" = U+1D52 U+1D3C U+2070
-                "latp" => &['\u{1D52}', '\u{1D3C}', '\u{2070}'],
-                // C Hani: "田 囗" (afscript.h).  Hani uses the CJK writing
-                // system, so this only selects the standard glyph for CJK
-                // width detection below.
-                "hani" => &['\u{7530}', '\u{56D7}'],
-                // Most scripts have a single standard character.
-                _ => &[
-                    super::globals_data::standard_char_for_script(style.script_tag),
-                    '\0',
-                ],
-            };
+            // FreeType's no-HarfBuzz shaper consumes one candidate from the
+            // space-separated `standard_charstring` per loop iteration.  Both
+            // width initializers stop at the first mapped candidate
+            // (`aflatin.c:95-138`, `afcjk.c:102-140`, `afshaper.c:631-653`).
             let mut char_glyph: u16 = 0;
-            for &sc in std_chars {
-                if sc == '\0' {
-                    break;
-                }
+            for &sc in standard_chars_for_script(style.script_tag) {
                 let g = self.font_data.cmap.char_index(sc as u32).unwrap_or(0);
-                let gi = g as usize;
-                if g > 0 && gi < coverage.glyph_styles.len() && coverage.glyph_styles[gi] == si {
+                if g > 0 {
                     char_glyph = g;
                     break;
                 }

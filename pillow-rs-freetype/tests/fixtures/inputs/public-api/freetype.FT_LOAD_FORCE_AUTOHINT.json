@@ -1109,6 +1109,27 @@
             ]
           },
           {
+            "id": "arabic-standard-fallback-ha-target-mono-20",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/arabic-standard-fallback.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 1575,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT",
+                "FT_LOAD_TARGET_MONO"
+              ]
+            },
+            "coverage": [
+              "autohint/globals:arabic-standard-char-fallback-later-ha"
+            ]
+          },
+          {
             "id": "script-armenian",
             "assets": {
               "font": {

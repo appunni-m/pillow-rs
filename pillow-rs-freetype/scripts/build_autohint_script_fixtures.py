@@ -858,6 +858,62 @@ def build_script_coverage() -> None:
     font.save(OUT_DIR / "script-coverage.ttf")
 
 
+def build_arabic_standard_fallback() -> None:
+    glyph_order = [".notdef", "space", "arabic_target", "arabic_standard_ha"]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -120, 520, 720),
+        "space": empty_glyph(),
+        "arabic_target": rectangle_glyph(100, 0, 180, 680),
+        "arabic_standard_ha": ring_glyph(80, 0, 520, 500, 200, 120, 400, 380),
+    }
+    metrics = {
+        ".notdef": (600, 80),
+        "space": (300, 0),
+        "arabic_target": (420, 100),
+        "arabic_standard_ha": (620, 80),
+    }
+    cmap = {
+        0x20: "space",
+        # U+0644 LAM, the first pinned standard character, is intentionally
+        # absent.  U+062D HAH is the next candidate in afscript.h.
+        0x062D: "arabic_standard_ha",
+    }
+    for codepoint in (0x0627, 0x0625, 0x0643, 0x0637, 0x0638, 0x062A, 0x062B):
+        cmap[codepoint] = "arabic_target"
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint Arabic Standard Fallback",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint Arabic Standard Fallback Regular",
+            "fullName": "Autohint Arabic Standard Fallback Regular",
+            "psName": "AutohintArabicStandardFallback-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "arabic-standard-fallback.ttf")
+
+
 def build_cjk_empty_standard() -> None:
     glyph_order = [".notdef", "space", "hani_empty"]
     glyphs = {
@@ -2320,6 +2376,7 @@ def build_latin_low_upem() -> None:
 
 def main() -> None:
     build_script_coverage()
+    build_arabic_standard_fallback()
     build_cjk_empty_standard()
     build_latin_small_ignore()
     build_latin_remaining_topology()

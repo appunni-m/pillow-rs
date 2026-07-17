@@ -44,6 +44,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `7078fe9e41a8` | 0.03 | 3 | `assets/fonts/module-dependent-type1.pfa` | intentionally invalid/minimal Type 1 control |
 | `4c44206cbb02` | 17.2 | 72 | `input/fonts/DejaVuSans.ttf` | glyf, 131 glyphs, 18 Unicode, native hinting; compact general control |
 | `e6bc1ae1a7f7` | 11.5 | 1 | `fonts/autohint/basic-latin.ttf` | glyf, 42 glyphs, 45 Unicode mappings, native hinting, GPOS |
+| `cb9b396e5d11` | 1.2 | 1 | `fonts/autohint/arabic-standard-fallback.ttf` | generated glyf, 4 glyphs and 9 Unicode mappings; omits U+0644 Lam while mapping later Arabic standard candidate U+062D Ha to distinct width geometry |
 | `f6fa317b2fbb` | 2.4 | 1 | `fonts/autohint/cjk-coverage.ttf` | source-backed glyf, 22 glyphs, 37 Unicode mappings, vertical metrics, CJK geometry plus Latin adjustment, blue-zone, stem-sort, and serif topologies |
 | `b17d2e85af72` | 0.7 | 1 | `fonts/autohint/cjk-width-order.ttf` | source-backed glyf, 2 glyphs, one U+56D7 mapping, no U+7530; owns Hani fallback-standard width ordering with descending stems |
 | `f24b500c50bf` | 1.2 | 1 | `fonts/autohint/cjk-malformed-blue.ttf` | source-backed glyf, 4 glyphs, valid U+7530 load glyph plus U+4E2A mapped to a deliberately truncated final glyph; owns the ignored malformed CJK blue-string load during autohint metrics setup |
@@ -270,12 +271,13 @@ listed because they enter different hinting and scaling conditions.
 | `cjk-coverage.ttf` | U+004D gid 16 | 20 | vertical reversals exercise shared-start segment retention and replacement |
 | `cjk-coverage.ttf` | U+004F gid 17, U+006F gid 18 | 20 | distinct capital/lowercase round extrema paired with flat H/n calibration geometry |
 | `cjk-coverage.ttf` | U+0049 gid 19 | 20 | compact four-edge micro-serif with close cross-links and intermediate-edge overlap rejection |
+| `arabic-standard-fallback.ttf` | U+0627 gid 2, U+062D gid 3; no U+0644 or U+0640 | 20 | public target-mono force-autohint load proves the no-HarfBuzz Arabic standard-character loop skips missing Lam and initializes widths from later Ha through exact C oracle, Rust FFI, C ABI, and WASM ABI parity |
 | `cjk-width-order.ttf` | U+56D7 gid 1 | 20 | Hani fallback standard character without U+7530; wide-then-narrow stems exercise CJK standard-width insertion sort and quantization |
 | `cjk-malformed-blue.ttf` | U+7530 gid 2, with U+4E2A gid 3 truncated to a two-byte glyf record | 20 | public force-autohint load keeps the selected Hani glyph valid while CJK blue-zone initialization tries and ignores the malformed bottom-fill blue glyph, matching pinned FreeType's metrics fallback behavior |
 | `digit-notdef-cmap.ttf` | U+006F gid 2, with U+0030 cmap-covered as gid 0 | 20 | public force-autohint metrics setup scans an explicitly covered digit that resolves to glyph 0, exercising the face-global digit-width skip branch without selecting `.notdef` as the rendered glyph |
 | `latin-blue-edge-cases.ttf` | U+0041 gid 3, with Latin blue-string aliases U+0054 gid 4 empty, U+0048 gid 5 one-point, and U+0045 gid 6 flat loop | 20 | public force-autohint load keeps the selected Latin glyph valid while Latin blue-zone initialization skips empty/degenerate blue glyphs and completes previous/next extremum walks through exact Rust/C ABI/WASM parity |
 | `latin-malformed-standard.ttf` | U+0041 gid 2, with U+006F gid 3 truncated to a two-byte glyf record | 20 | public force-autohint load keeps the selected Latin glyph valid while standard-width initialization tries and ignores the malformed `o` standard glyph, matching pinned FreeType's metrics fallback behavior |
-| `script-coverage.ttf` | all generated `SCRIPT_PROBES` codepoints from `scripts/build_autohint_script_fixtures.py` plus Latin branch probes U+01D5, U+00F1, U+1E4D, U+00E3, U+00D1, U+1E1B, U+1E1A, U+1E75, U+1EAA, U+1EB4, U+1EAD, U+1E02, U+01D7, U+0244, U+0245, and U+0303 | 17, 20 | explicit `FT_LOAD_FORCE_AUTOHINT` script-selection rows for compact script glyphs plus Latin double-top, top/top2/bottom tilde, top-vs-second-top tilde, secondary top-tilde centering, top/bottom accent separation, disjoint top-accent overlap rejection, serif-m symmetry, serif intermediate-overlap, vertical-cusp target-mono, and non-base combining-mark topology probes; this proves each selected script tag and the added Latin topology branches through real Rust/C ABI/WASM parity without an implicit script matrix |
+| `script-coverage.ttf` | all generated `SCRIPT_PROBES` codepoints from `scripts/build_autohint_script_fixtures.py` plus Latin branch probes U+01D5, U+00F1, U+1E4D, U+00E3, U+00D1, U+1E1B, U+1E1A, U+1E75, U+1EAA, U+1EB4, U+1EAD, U+1E02, U+01D7, U+0244, U+0245, and U+0303 | 17, 20 | explicit `FT_LOAD_FORCE_AUTOHINT` script-selection rows for compact script glyphs plus Latin double-top, top/top2/bottom tilde, top-vs-second-top tilde, secondary top-tilde centering, top/bottom accent separation, disjoint top-accent overlap rejection, serif-m symmetry, serif intermediate-overlap, vertical-cusp target-mono, and non-base combining-mark topology probes; U+006F is owned by Latin before the Limbu, Oriya, Syloti Nagri, and Tibetan aliases are inserted, so those exact rows also prove pinned no-HarfBuzz C and Rust accept a mapped standard candidate regardless of style ownership |
 | `hdmx_observable.ttf` | U+0041 gid 36 (`A`) | 20 | default, compute-metrics, mono hdmx, and mono suppression conditions |
 | `hhea-zero-typo-fallback.ttf` | face open and active size metrics only | 20 | hhea ascent/descent/lineGap are zero and OS/2 `USE_TYPO_METRICS` is clear, so public `FT_Size_Metrics` selects the OS/2 typo fallback branch |
 | `hhea-zero-win-fallback.ttf` | face open and active size metrics only | 20 | hhea and OS/2 typo metrics are zero, so public `FT_Size_Metrics` selects the OS/2 Windows ascent/descent fallback branch |
@@ -603,8 +605,9 @@ and selected-glyph obligations still come from explicit inputs.
 
 30. The compact autohint script fixture provides one glyph per script tag plus
     standard-character cmap aliases. The same generator also emits focused
-    autohint branch fixtures such as `latin-blue-edge-cases.ttf` and the
-    64-UPEM `latin-low-upem.ttf` zero-near-limit probe. It is generated by
+    autohint branch fixtures such as `arabic-standard-fallback.ttf`,
+    `latin-blue-edge-cases.ttf`, and the 64-UPEM `latin-low-upem.ttf`
+    zero-near-limit probe. It is generated by
     `scripts/build_autohint_script_fixtures.py` and rebuilt with
     `make font-fixture-autohint-scripts`. Current public inputs select all 59
     generated script glyphs plus Latin double-top, top/top2/bottom tilde,
