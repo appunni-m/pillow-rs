@@ -111,26 +111,39 @@ def empty_image_eblc() -> bytes:
     return eblc_with_index_tables(index_array, index_subtable)
 
 
-def gray_format1_tables(hori_advance: int = 3) -> tuple[bytes, bytes]:
+def gray_format1_tables(
+    hori_advance: int = 3,
+    *,
+    include_opaque_neighborhood: bool = False,
+) -> tuple[bytes, bytes]:
     # EBDT image format 1 stores small metrics followed by byte-aligned bitmap
     # bytes. With an 8-bit strike, FreeType exposes FT_PIXEL_MODE_GRAY and a
     # pitch equal to the bitmap width.
     image = bytes([2, 2, 1, 2, hori_advance]) + bytes([0x11, 0x80, 0xC0, 0xFF])
-    index_array = struct.pack(">HHI", 1, 1, 8)
-    index_subtable = (
-        struct.pack(">HHI", 1, 1, 4)
-        + struct.pack(">II", 0, len(image))
-    )
+    # FreeType 2.14.3 `sdf/ftbsdf.c:311-359` classifies a fully opaque pixel
+    # as non-edge only when all eight neighbors exist and are nonzero.  A 3x3
+    # glyph provides that public topology without synthetic bitmap buffers.
+    if include_opaque_neighborhood:
+        opaque_neighborhood = bytes([3, 3, 1, 3, 4]) + bytes([0xFF] * 9)
+        images = image + opaque_neighborhood
+        end_glyph = 2
+        offsets = struct.pack(">III", 0, len(image), len(images))
+    else:
+        images = image
+        end_glyph = 1
+        offsets = struct.pack(">II", 0, len(image))
+    index_array = struct.pack(">HHI", 1, end_glyph, 8)
+    index_subtable = struct.pack(">HHI", 1, 1, 4) + offsets
     index_tables = index_array + index_subtable
     strike = bitmap_size_table(
         8 + 48,
         len(index_tables),
         1,
-        1,
+        end_glyph,
         bit_depth=8,
     )
     eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
-    ebdt = struct.pack(">I", 0x00020000) + image
+    ebdt = struct.pack(">I", 0x00020000) + images
     return eblc, ebdt
 
 
@@ -637,7 +650,7 @@ def build_missing_bitmap() -> None:
 
 
 def build_gray_format1_bitmap() -> None:
-    eblc, ebdt = gray_format1_tables()
+    eblc, ebdt = gray_format1_tables(include_opaque_neighborhood=True)
     save_sbit_font("sbit_gray_format1.ttf", eblc, ebdt)
 
     eblc, ebdt = gray_format1_tables(hori_advance=0)

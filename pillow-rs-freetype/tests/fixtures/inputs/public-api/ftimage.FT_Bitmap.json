@@ -278,6 +278,25 @@
             "coverage": ["render:bitmap-sdf-mono-public"]
           },
           {
+            "id": "m5-sbit-gray-opaque-neighborhood-sdf",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fixtures/assets/fonts/sbit_gray_format1.ttf",
+                "requirements": "Generated scalable SFNT with a 20 ppem EBLC/EBDT format-1 8-bit gray strike whose glyph 2 is a fully opaque 3x3 bitmap."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {"x": 0, "y": 20},
+              "glyph_index": 2,
+              "load_flags": ["FT_LOAD_DEFAULT"],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": ["render:bitmap-sdf-all-neighbors-public"]
+          },
+          {
             "id": "m5-cff-cubic-sdf",
             "assets": {
               "font": {
