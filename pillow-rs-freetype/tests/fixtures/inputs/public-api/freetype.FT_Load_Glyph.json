@@ -5951,6 +5951,31 @@
             ]
           },
           {
+            "id": "hinter-stretched-mppem-shpix-mono-x",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 20,
+                "y": 32
+              },
+              "glyph_index": 59,
+              "load_flags": [
+                "FT_LOAD_RENDER",
+                "FT_LOAD_TARGET_MONO"
+              ]
+            },
+            "coverage": [
+              "tt/hinter:stretched-x-mppem-public-slot-and-bitmap"
+            ]
+          },
+          {
             "id": "hinter-control-flow-matrix",
             "assets": {
               "font": {

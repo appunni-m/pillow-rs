@@ -56,6 +56,8 @@ pub struct FontData {
     pub size_y_scale: Cell<i32>,
     pub size_tt_scale: Cell<i32>,
     pub size_tt_ppem: Cell<i32>,
+    pub size_tt_x_ratio: Cell<i32>,
+    pub size_tt_y_ratio: Cell<i32>,
     pub size_tt_point_size: Cell<i32>,
     /// Active 2×2 transform set via FT_Set_Transform.  The scaler reads these
     /// before the auto-hinter runs so hinting decisions match the transformed

@@ -185,6 +185,8 @@ fn type1_font_data(data: &[u8], size_pt: f32, metadata: &Type1Metadata) -> Arc<F
         size_y_scale: std::cell::Cell::new(0),
         size_tt_scale: std::cell::Cell::new(0),
         size_tt_ppem: std::cell::Cell::new(0),
+        size_tt_x_ratio: std::cell::Cell::new(0x1_0000),
+        size_tt_y_ratio: std::cell::Cell::new(0x1_0000),
         size_tt_point_size: std::cell::Cell::new(0),
         transform_xx: std::cell::Cell::new(0x1_0000),
         transform_xy: std::cell::Cell::new(0),
@@ -767,6 +769,8 @@ impl Font {
             size_y_scale: std::cell::Cell::new(0),
             size_tt_scale: std::cell::Cell::new(0),
             size_tt_ppem: std::cell::Cell::new(0),
+            size_tt_x_ratio: std::cell::Cell::new(0x1_0000),
+            size_tt_y_ratio: std::cell::Cell::new(0x1_0000),
             size_tt_point_size: std::cell::Cell::new(0),
             transform_xx: std::cell::Cell::new(0x1_0000),
             transform_xy: std::cell::Cell::new(0),
@@ -2964,6 +2968,25 @@ impl SizeMetrics {
         })
     }
 
+    fn tt_ratios(&self) -> (i32, i32) {
+        // C `tt_size_reset` rejects a zero ppem before ratio setup.  Our
+        // shared undefined-size sync still runs, so equal axes (including
+        // 0/0) must be the identity instead of calling `FT_DivFix(0, 0)`.
+        if self.x_ppem == self.y_ppem {
+            (0x1_0000, 0x1_0000)
+        } else if self.x_ppem > self.y_ppem {
+            (
+                0x1_0000,
+                ft_div_fix(i32::from(self.y_ppem), i32::from(self.x_ppem)),
+            )
+        } else {
+            (
+                ft_div_fix(i32::from(self.x_ppem), i32::from(self.y_ppem)),
+                0x1_0000,
+            )
+        }
+    }
+
     fn tt_point_size(&self) -> i32 {
         if self.char_height != 0 {
             self.char_height
@@ -3186,6 +3209,9 @@ fn sync_active_size_metrics(data: &FontData, metrics: SizeMetrics) {
         y_scale
     });
     data.size_tt_ppem.set(metrics.tt_ppem());
+    let (x_ratio, y_ratio) = metrics.tt_ratios();
+    data.size_tt_x_ratio.set(x_ratio);
+    data.size_tt_y_ratio.set(y_ratio);
     data.size_tt_point_size.set(metrics.tt_point_size());
 }
 

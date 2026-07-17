@@ -23,6 +23,8 @@ pub struct ScaleMetrics {
     pub y_scale: i32, // 16.16
     pub tt_scale: i32,
     pub ppem: i32,
+    pub x_ratio: i32,
+    pub y_ratio: i32,
     pub point_size: i32,
 }
 
@@ -43,6 +45,8 @@ impl ScaleMetrics {
             y_scale: scale,
             tt_scale: scale,
             ppem,
+            x_ratio: 0x1_0000,
+            y_ratio: 0x1_0000,
             point_size: ppem << 6,
         }
     }
@@ -56,6 +60,8 @@ impl ScaleMetrics {
             y_scale: data.size_y_scale.get(),
             tt_scale: data.size_tt_scale.get(),
             ppem: data.size_tt_ppem.get(),
+            x_ratio: data.size_tt_x_ratio.get(),
+            y_ratio: data.size_tt_y_ratio.get(),
             point_size: data.size_tt_point_size.get(),
         }
     }
@@ -85,6 +91,8 @@ pub(crate) fn prepare_native_bytecode_context(
         y_scale: scale.y_scale,
         tt_scale: scale.tt_scale,
         ppem: scale.ppem,
+        x_ratio: scale.x_ratio,
+        y_ratio: scale.y_ratio,
         point_size: scale.point_size,
         storage_size: data.maxp.max_storage as usize,
         max_function_defs: data.maxp.max_function_defs as usize,
@@ -1075,6 +1083,8 @@ fn scale_glyph_impl_with_context(
                 y_scale: y_adj,
                 tt_scale: scale.tt_scale,
                 ppem: scale.ppem,
+                x_ratio: scale.x_ratio,
+                y_ratio: scale.y_ratio,
                 point_size: scale.point_size,
                 storage_size: data.maxp.max_storage as usize,
                 max_function_defs: data.maxp.max_function_defs as usize,

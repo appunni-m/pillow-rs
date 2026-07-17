@@ -14,7 +14,7 @@ use super::iup;
 use super::zone::GlyphZone;
 use super::{HintScale, NativeHintMode};
 use crate::error::FontError;
-use crate::fixed::{ft_mul_div, ft_mul_fix, ft_normalize_2dot14};
+use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix, ft_normalize_2dot14, ft_vector_length};
 
 /// Maximum stack depth. TrueType spec says max 255, but fonts may request
 /// more via maxp->maxStackElements. We use a generous default.
@@ -40,6 +40,12 @@ fn delta_step(delta_shift: u32) -> i32 {
     } else {
         0
     }
+}
+
+#[inline]
+fn tt_mul_fix14(a: i32, b: i32) -> i32 {
+    let c = i64::from(a) * i64::from(b);
+    ((c + 0x2000 + (c >> 63)) >> 14) as i32
 }
 
 /// A code range (pointer into a bytecode stream).
@@ -98,6 +104,9 @@ pub struct ExecContext {
 
     /// Pixels per em (for MPPEM opcode).
     pub ppem: i32,
+    /// FreeType `TT_Size_Metrics` ratios for non-square pixel CVT access.
+    pub x_ratio: i32,
+    pub y_ratio: i32,
     /// Requested point size in 26.6 units (for MPS opcode).
     pub point_size: i32,
 
@@ -195,6 +204,8 @@ impl ExecContext {
             y_scale: scale.y_scale,
             tt_scale: scale.tt_scale,
             ppem: scale.ppem,
+            x_ratio: scale.x_ratio,
+            y_ratio: scale.y_ratio,
             point_size: scale.point_size,
             font_range: CodeRange {
                 base: 0,
@@ -423,7 +434,8 @@ impl ExecContext {
     #[allow(dead_code)]
     pub fn get_cvt(&self, idx: usize) -> Result<i32, FontError> {
         if let Some(value) = self.cvt.get(idx) {
-            Ok(*value)
+            // C `Read_CVT_Stretched` applies the projection-dependent ratio.
+            Ok(ft_mul_fix(*value, self.current_ratio()))
         } else if self.pedantic_hinting {
             // C `Ins_RCVT` (`ttinterp.c:2859-2874`) has the same
             // normal-mode zero and pedantic Invalid_Reference split.
@@ -436,14 +448,61 @@ impl ExecContext {
     /// Set a CVT value. No-op if index is out of range.
     #[allow(dead_code)]
     pub fn set_cvt(&mut self, idx: usize, val: i32) -> Result<(), FontError> {
+        let ratio = self.current_ratio();
         if let Some(slot) = self.cvt.get_mut(idx) {
-            *slot = val;
+            // C `Write_CVT_Stretched` stores pixel writes divided by the
+            // current projection ratio; reads apply the ratio again.
+            *slot = ft_div_fix(val, ratio);
         } else if self.pedantic_hinting {
             // C `Ins_WCVTP` (`ttinterp.c:2809-2824`) ignores this write in
             // normal mode and reports Invalid_Reference in pedantic mode.
             return Err(FontError::InvalidReference);
         }
         Ok(())
+    }
+
+    fn set_cvt_raw(&mut self, idx: usize, val: i32) -> Result<(), FontError> {
+        if let Some(slot) = self.cvt.get_mut(idx) {
+            *slot = val;
+        } else if self.pedantic_hinting {
+            return Err(FontError::InvalidReference);
+        }
+        Ok(())
+    }
+
+    fn move_cvt(&mut self, idx: usize, delta: i32) -> Result<(), FontError> {
+        let ratio = self.current_ratio();
+        if let Some(slot) = self.cvt.get_mut(idx) {
+            // C `Move_CVT_Stretched` inverse-projects only the delta.
+            *slot = slot.wrapping_add(ft_div_fix(delta, ratio));
+        } else if self.pedantic_hinting {
+            return Err(FontError::InvalidReference);
+        }
+        Ok(())
+    }
+
+    fn current_ratio(&self) -> i32 {
+        // Pinned FreeType 2.14.3 `ttinterp.c:Current_Ratio` selects the
+        // TT_Size_Metrics ratio from the current projection vector.
+        if self.x_ratio == 0x1_0000 && self.y_ratio == 0x1_0000 {
+            return 0x1_0000;
+        }
+        let (proj_x, proj_y) = self.gs.proj_vector;
+        if proj_y == 0 {
+            self.x_ratio
+        } else if proj_x == 0 {
+            self.y_ratio
+        } else {
+            let x = tt_mul_fix14(self.x_ratio, proj_x);
+            let y = tt_mul_fix14(self.y_ratio, proj_y);
+            ft_vector_length(x, y)
+        }
+    }
+
+    fn current_ppem(&self) -> i32 {
+        // Pinned FreeType 2.14.3 `ttinterp.c:Current_Ppem_Stretched` applies
+        // the projection-dependent ratio to the max-axis ppem.
+        ft_mul_fix(self.ppem, self.current_ratio())
     }
 
     fn touch_point(&self, zone: &mut GlyphZone, p: usize) {
@@ -1109,7 +1168,7 @@ impl ExecContext {
 
                 // ── MPPEM / MPS ────────────────────────────────
                 0x4B => {
-                    self.push(self.ppem);
+                    self.push(self.current_ppem());
                 }
                 0x4C => {
                     // C: `Ins_MPS` returns `exec->pointSize` for interpreter
@@ -1979,7 +2038,9 @@ impl ExecContext {
                     let scaled = crate::fixed::ft_mul_fix(val, self.tt_scale);
                     // C `Ins_WCVTF` uses the same normal no-op / pedantic
                     // Invalid_Reference split as WCVTP.
-                    self.set_cvt(idx, scaled)?;
+                    // C `Ins_WCVTF` writes raw `FT_MulFix(value, scale)`;
+                    // unlike WCVTP it does not use the stretched callback.
+                    self.set_cvt_raw(idx, scaled)?;
                 }
                 // ── GetINFO (0x88) — Get Info ───────────────────────
                 0x88 => {
@@ -2083,7 +2144,7 @@ impl ExecContext {
                         count
                     };
                     // C: P = ppem - delta_base, range offset by opcode.
-                    let base_ppem = self.ppem;
+                    let base_ppem = self.current_ppem();
                     let p = base_ppem
                         - self.gs.delta_base as i32
                         - match opcode {
@@ -2132,7 +2193,7 @@ impl ExecContext {
                     } else {
                         count
                     };
-                    let base_ppem = self.ppem;
+                    let base_ppem = self.current_ppem();
                     let p = base_ppem
                         - self.gs.delta_base as i32
                         - match opcode {
@@ -2165,10 +2226,9 @@ impl ExecContext {
                                     d += 1;
                                 }
                                 d *= f;
-                                let cv = self.cvt[a].wrapping_add(d);
                                 // The explicit C-equivalent bounds check above
-                                // proves that `set_cvt` cannot fail here.
-                                self.set_cvt(a, cv)?;
+                                // proves that `move_cvt` cannot fail here.
+                                self.move_cvt(a, d)?;
                             }
                         }
                     }
