@@ -84,15 +84,29 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
             offset: u16::from_be_bytes([data[off + 10], data[off + 11]]),
         });
     }
-    let raw_records: Vec<SfntNameRecord> = records
-        .iter()
-        .filter_map(|record| raw_record(data, string_offset, record))
-        .collect();
     let lang_tags = if format == 1 {
         parse_lang_tags(data, string_offset, 6 + count * 12)?
     } else {
         Vec::new()
     };
+    let storage_start = if format == 1 {
+        6 + count * 12 + 2 + lang_tags.len() * 4
+    } else {
+        6 + count * 12
+    };
+    let raw_records: Vec<SfntNameRecord> = records
+        .iter()
+        .filter_map(|record| raw_record(data, string_offset, storage_start, record))
+        // `tt_face_load_name` compacts records that reference a missing or
+        // invalid format-1 language tag before exposing `face->num_names`.
+        .filter(|record| {
+            format != 1
+                || record.language_id < 0x8000
+                || lang_tags
+                    .get(usize::from(record.language_id - 0x8000))
+                    .is_some_and(|tag| !tag.string.is_empty())
+        })
+        .collect();
 
     // `tt_face_load_name` drops empty and out-of-range records before
     // `tt_face_get_name` selects public face names.  Select from the validated
@@ -115,7 +129,12 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
     })
 }
 
-fn raw_record(data: &[u8], string_base: usize, record: &NameRecord) -> Option<SfntNameRecord> {
+fn raw_record(
+    data: &[u8],
+    string_base: usize,
+    storage_start: usize,
+    record: &NameRecord,
+) -> Option<SfntNameRecord> {
     if record.length == 0 {
         return None;
     }
@@ -123,6 +142,9 @@ fn raw_record(data: &[u8], string_base: usize, record: &NameRecord) -> Option<Sf
     // cannot overflow usize; the slice lookup below owns the range check.
     let start = string_base + record.offset as usize;
     let end = start + record.length as usize;
+    if start < storage_start {
+        return None;
+    }
     let bytes = data.get(start..end)?;
     Some(SfntNameRecord {
         platform_id: record.platform_id,
@@ -156,9 +178,15 @@ fn parse_lang_tags(
         let offset = u16::from_be_bytes([data[off + 2], data[off + 3]]) as usize;
         let start = string_base + offset;
         let end = start + length;
-        let bytes = data.get(start..end).ok_or_else(|| {
-            FontError::InvalidFont("name table: language-tag string out of range".into())
-        })?;
+        // `tt_face_load_name` (`src/sfnt/ttload.c`) keeps the language-tag
+        // slot but sets its length to zero when its string is outside the
+        // format-1 storage area.  Dependent name records are filtered after
+        // all tags have been loaded.
+        let bytes = if start < records_offset + count * 4 {
+            &[][..]
+        } else {
+            data.get(start..end).unwrap_or_default()
+        };
         lang_tags.push(SfntLangTagRecord {
             string: bytes.to_vec(),
         });
@@ -167,7 +195,7 @@ fn parse_lang_tags(
 }
 
 /// Return the preferred FreeType face-name string for a raw name ID.
-pub fn name_string(table: &NameTable, name_id: u16) -> Option<String> {
+pub(crate) fn name_string(table: &NameTable, name_id: u16) -> Option<String> {
     name_string_from_records(&table.records, name_id)
 }
 
@@ -179,7 +207,7 @@ fn name_string_from_records(records: &[SfntNameRecord], name_id: u16) -> Option<
     let mut win_is_english = false;
 
     for (index, record) in records.iter().enumerate() {
-        if record.name_id != name_id || record.string.is_empty() {
+        if record.name_id != name_id {
             continue;
         }
         match record.platform_id {
@@ -212,7 +240,7 @@ fn name_string_from_records(records: &[SfntNameRecord], name_id: u16) -> Option<
 }
 
 /// Return the nameID 25 variation PostScript-name prefix, if present.
-pub fn variations_postscript_prefix(table: &NameTable) -> Option<String> {
+pub(crate) fn variations_postscript_prefix(table: &NameTable) -> Option<String> {
     [
         NAME_ID_VARIATIONS_PREFIX,
         NAME_ID_TYPO_FAMILY,
@@ -230,7 +258,7 @@ fn postscript_prefix_string(table: &NameTable, name_id: u16) -> Option<String> {
     let mut found_win = None;
     let mut found_apple = None;
     for (index, record) in table.records.iter().enumerate() {
-        if record.name_id != name_id || record.string.is_empty() {
+        if record.name_id != name_id {
             continue;
         }
         if record.platform_id == 3

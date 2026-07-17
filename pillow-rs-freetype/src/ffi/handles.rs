@@ -1703,7 +1703,13 @@ pub fn FT_Get_Sfnt_LangTag(
     let Some(record) = inner.sfnt_lang_tag(index) else {
         return FT_Err_Invalid_Argument;
     };
-    lang_tag.string = record.string.as_ptr().cast_mut().cast::<FT_Byte>();
+    // `tt_face_load_name` leaves invalid format-1 tag strings as a retained
+    // zero-length entry whose lazy string pointer is still NULL.
+    lang_tag.string = if record.string.is_empty() {
+        std::ptr::null_mut()
+    } else {
+        record.string.as_ptr().cast_mut().cast::<FT_Byte>()
+    };
     lang_tag.string_len = FT_UInt::try_from(record.string.len()).unwrap_or(FT_UInt::MAX);
     FT_Err_Ok
 }

@@ -232,6 +232,57 @@ def write_format1_langtag_malformed_controls() -> None:
     )
 
 
+def write_format1_invalid_langtag_references() -> None:
+    records = [
+        NameRecordSpec(3, 1, 0x0409, 1, utf16be("VisibleFamily")),
+        NameRecordSpec(3, 1, 0x8001, 1, utf16be("DroppedInvalidTag")),
+        NameRecordSpec(3, 1, 0x8002, 2, utf16be("DroppedMissingTag")),
+    ]
+    lang_tags = [
+        # Public FT_Get_Sfnt_LangTag cannot address index zero.
+        LangTagSpec(utf16be("unused")),
+        # FreeType retains this slot with stringLength=0, then drops the name
+        # record that references language ID 0x8001.
+        LangTagSpec(b"x", offset_override=0xFF00),
+    ]
+    write_name_payload(
+        BASE_STATIC,
+        ROOT
+        / "tests"
+        / "fixtures"
+        / "fonts"
+        / "sfnt"
+        / "name-format1-invalid-langtag-references.ttf",
+        build_name_table(records, lang_tags),
+    )
+
+
+def write_format1_prestorage_strings() -> None:
+    payload = bytearray(
+        build_name_table(
+            [NameRecordSpec(3, 1, 0x0409, 1, utf16be("Hidden"))],
+            [
+                LangTagSpec(utf16be("unused")),
+                LangTagSpec(b"x"),
+            ],
+        )
+    )
+    # Make all storage-relative offsets start from the table header instead of
+    # the actual storage area. FreeType opens the face, zeroes both language
+    # tags, and compacts away the name record.
+    payload[4:6] = (0).to_bytes(2, "big")
+    write_name_payload(
+        BASE_STATIC,
+        ROOT
+        / "tests"
+        / "fixtures"
+        / "fonts"
+        / "sfnt"
+        / "name-format1-prestorage-strings.ttf",
+        bytes(payload),
+    )
+
+
 def write_missing_name_table() -> None:
     font = TTFont(BASE_STATIC, recalcTimestamp=False)
     del font["name"]
@@ -591,6 +642,8 @@ def main() -> None:
     write_postscript_branch_matrix()
     write_format1_langtag()
     write_format1_langtag_malformed_controls()
+    write_format1_invalid_langtag_references()
+    write_format1_prestorage_strings()
     write_missing_name_table()
     write_variable_apple_prefix()
     write_variable_unicode_prefix()
