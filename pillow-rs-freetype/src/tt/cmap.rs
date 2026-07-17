@@ -779,15 +779,10 @@ fn parse_format14(
         .get(offset..offset + length)
         .ok_or_else(|| FontError::InvalidFont("cmap format 14: length exceeds data".into()))?;
     let num_records = u32::from_be_bytes([body[6], body[7], body[8], body[9]]) as usize;
-    let selector_records_len = num_records
-        .checked_mul(11)
-        .and_then(|len| 10usize.checked_add(len))
-        .ok_or_else(|| {
-            FontError::InvalidFont(
-                "cmap format 14: variation selector records overflow length".into(),
-            )
-        })?;
-    if selector_records_len > body.len() {
+    // C `tt_cmap14_validate` divides the remaining bytes by each record
+    // width before iterating.  This both validates the table and proves the
+    // offset arithmetic below cannot overflow.
+    if num_records > (body.len() - 10) / 11 {
         return Err(FontError::InvalidFont(
             "cmap format 14: variation selector records exceed length".into(),
         ));
@@ -849,7 +844,11 @@ fn parse_format14_default_ranges(
     body: &[u8],
     offset: usize,
 ) -> Result<Vec<VariationDefaultRange>, FontError> {
-    let count_bytes = body.get(offset..offset + 4).ok_or_else(|| {
+    // `parse_format14` rejects every nonzero offset at or beyond `length`
+    // before calling this private helper, like C validates `defOff` before
+    // forming `table + defOff`.
+    let table = &body[offset..];
+    let count_bytes = table.get(..4).ok_or_else(|| {
         FontError::InvalidFont("cmap format 14: default UVS count missing".into())
     })?;
     let count = u32::from_be_bytes([
@@ -858,24 +857,17 @@ fn parse_format14_default_ranges(
         count_bytes[2],
         count_bytes[3],
     ]) as usize;
-    let records_offset = offset + 4;
-    let records_len = count
-        .checked_mul(4)
-        .and_then(|len| records_offset.checked_add(len))
-        .ok_or_else(|| {
-            FontError::InvalidFont("cmap format 14: default UVS records overflow length".into())
-        })?;
-    if records_len > body.len() {
+    let record_bytes = &table[4..];
+    if count > record_bytes.len() / 4 {
         return Err(FontError::InvalidFont(
             "cmap format 14: default UVS records exceed length".into(),
         ));
     }
     let mut ranges = Vec::with_capacity(count);
     let mut last_base = 0;
-    for i in 0..count {
-        let record_offset = records_offset + i * 4;
-        let start = read_u24(&body[record_offset..record_offset + 3]);
-        let additional = u32::from(body[record_offset + 3]);
+    for record in record_bytes[..count * 4].chunks_exact(4) {
+        let start = read_u24(&record[..3]);
+        let additional = u32::from(record[3]);
         let end = start + additional;
         if end >= 0x11_0000 {
             return Err(FontError::InvalidFont(
@@ -897,7 +889,9 @@ fn parse_format14_non_default_mappings(
     body: &[u8],
     offset: usize,
 ) -> Result<Vec<VariationMapping>, FontError> {
-    let count_bytes = body.get(offset..offset + 4).ok_or_else(|| {
+    // The caller applies the same validated-offset invariant for `nondefOff`.
+    let table = &body[offset..];
+    let count_bytes = table.get(..4).ok_or_else(|| {
         FontError::InvalidFont("cmap format 14: non-default UVS count missing".into())
     })?;
     let count = u32::from_be_bytes([
@@ -906,24 +900,17 @@ fn parse_format14_non_default_mappings(
         count_bytes[2],
         count_bytes[3],
     ]) as usize;
-    let records_offset = offset + 4;
-    let records_len = count
-        .checked_mul(5)
-        .and_then(|len| records_offset.checked_add(len))
-        .ok_or_else(|| {
-            FontError::InvalidFont("cmap format 14: non-default UVS records overflow length".into())
-        })?;
-    if records_len > body.len() {
+    let record_bytes = &table[4..];
+    if count > record_bytes.len() / 5 {
         return Err(FontError::InvalidFont(
             "cmap format 14: non-default UVS records exceed length".into(),
         ));
     }
     let mut mappings = Vec::with_capacity(count);
     let mut last_codepoint = 0;
-    for i in 0..count {
-        let record_offset = records_offset + i * 5;
-        let codepoint = read_u24(&body[record_offset..record_offset + 3]);
-        let glyph_id = u16::from_be_bytes([body[record_offset + 3], body[record_offset + 4]]);
+    for record in record_bytes[..count * 5].chunks_exact(5) {
+        let codepoint = read_u24(&record[..3]);
+        let glyph_id = u16::from_be_bytes([record[3], record[4]]);
         if codepoint >= 0x11_0000 {
             return Err(FontError::InvalidFont(
                 "cmap format 14: non-default UVS codepoint exceeds Unicode".into(),
