@@ -5932,42 +5932,6 @@
             "coverage": ["tt/hinter:error-divide-by-zero"]
           },
           {
-            "id": "hinter-error-truncated-npushb",
-            "assets": {
-              "font": {
-                "kind": "ref",
-                "role": "font",
-                "id": "fonts/glyf/hinter-control-matrix.ttf"
-              }
-            },
-            "params": {
-              "face_index": 0,
-              "size": 20,
-              "glyph_index": 36,
-              "load_flags": ["FT_LOAD_DEFAULT"]
-            },
-            "expect_error": true,
-            "coverage": ["tt/hinter:error-truncated-npushb"]
-          },
-          {
-            "id": "hinter-error-truncated-pushw",
-            "assets": {
-              "font": {
-                "kind": "ref",
-                "role": "font",
-                "id": "fonts/glyf/hinter-control-matrix.ttf"
-              }
-            },
-            "params": {
-              "face_index": 0,
-              "size": 20,
-              "glyph_index": 37,
-              "load_flags": ["FT_LOAD_DEFAULT"]
-            },
-            "expect_error": true,
-            "coverage": ["tt/hinter:error-truncated-pushw"]
-          },
-          {
             "id": "hinter-error-idef-in-glyph",
             "assets": {
               "font": {
@@ -6858,6 +6822,268 @@
           ]
         },
         "error": "c_oracle"
+      }
+    },
+    {
+      "case_id": "freetype.FT_Load_Glyph.matrix_load.exec_code_range_and_composite",
+      "subject": "freetype.FT_Load_Glyph",
+      "case": "matrix_load",
+      "operation": "load_glyph",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "variants": [
+          {
+            "id": "hinter-error-truncated-npushb",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 36,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/hinter:error-truncated-npushb",
+              "tt/hinter:code-overflow-glyph-npushb"
+            ]
+          },
+          {
+            "id": "hinter-error-truncated-pushw",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 37,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/hinter:error-truncated-pushw",
+              "tt/hinter:code-overflow-glyph-pushw"
+            ]
+          },
+          {
+            "id": "hinter-exec-fdef-truncated-npushb",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-fpgm-truncated-fdef-npushb.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_NO_AUTOHINT"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:code-overflow-fdef-npushb"]
+          },
+          {
+            "id": "hinter-exec-fdef-truncated-npushw",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-fpgm-truncated-fdef-npushw.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_NO_AUTOHINT"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:code-overflow-fdef-npushw"]
+          },
+          {
+            "id": "hinter-exec-fdef-truncated-npushb-payload",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-fpgm-truncated-fdef-npushb-payload.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_NO_AUTOHINT"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:code-overflow-fdef-npushb-payload"]
+          },
+          {
+            "id": "hinter-exec-unterminated-if",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-unterminated-control-flow.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:code-overflow-unterminated-if"]
+          },
+          {
+            "id": "hinter-exec-unterminated-else",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-unterminated-control-flow.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 2,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:code-overflow-unterminated-else"]
+          },
+          {
+            "id": "hinter-exec-direct-fpgm-instctrl",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-direct-fpgm-instctrl.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_NO_AUTOHINT"]
+            },
+            "coverage": ["tt/hinter:direct-fpgm-instctrl-normal"]
+          },
+          {
+            "id": "hinter-exec-direct-fpgm-instctrl-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-direct-fpgm-instctrl.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_NO_AUTOHINT", "FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:direct-fpgm-instctrl-pedantic"]
+          },
+          {
+            "id": "hinter-exec-invalid-twilight-scfs",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-invalid-twilight-scfs.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "coverage": ["tt/hinter:invalid-twilight-scfs-normal"]
+          },
+          {
+            "id": "hinter-exec-invalid-twilight-scfs-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-invalid-twilight-scfs.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:invalid-twilight-scfs-pedantic"]
+          },
+          {
+            "id": "hinter-exec-composite-compatibility-moves",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-composite-compatibility-moves.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 10,
+              "load_flags": ["FT_LOAD_DEFAULT"]
+            },
+            "coverage": [
+              "tt/hinter:composite-shpix-compatibility",
+              "tt/hinter:composite-deltap-compatibility"
+            ]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-load",
+        "coverage:real-error-trigger",
+        "font_variability:input/fonts"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "rows": "per-font glyph load status and slot snapshot"
+        },
+        "compare": {
+          "mode": "exact",
+          "compare_error_output": true,
+          "paths": [
+            "rows[].status",
+            "rows[].slot"
+          ]
+        },
+        "sources_checked": [
+          "freetype/src/truetype/ttinterp.c:3070-3175",
+          "freetype/src/truetype/ttinterp.c:4352-4379",
+          "freetype/src/truetype/ttinterp.c:4682-4734",
+          "freetype/src/truetype/ttinterp.c:5163-5214",
+          "freetype/src/truetype/ttinterp.c:6304-6388"
+        ]
       }
     }
   ]

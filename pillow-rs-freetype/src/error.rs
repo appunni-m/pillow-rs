@@ -24,6 +24,10 @@ pub enum FontError {
     #[error("TrueType bytecode execution too long")]
     ExecutionTooLong,
 
+    /// TrueType bytecode tried to fetch past the active code range.
+    #[error("TrueType bytecode code range overflow")]
+    CodeOverflow,
+
     /// Pedantic TrueType bytecode referenced a point outside its active zone.
     #[error("Invalid TrueType bytecode point reference")]
     InvalidReference,
@@ -71,6 +75,12 @@ mod tests {
     fn execution_too_long_has_static_message() {
         let err = FontError::ExecutionTooLong;
         assert_eq!(err.to_string(), "TrueType bytecode execution too long");
+    }
+
+    #[test]
+    fn code_overflow_has_static_message() {
+        let err = FontError::CodeOverflow;
+        assert_eq!(err.to_string(), "TrueType bytecode code range overflow");
     }
 
     #[test]

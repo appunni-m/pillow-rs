@@ -20807,6 +20807,7 @@ fn font_error_to_ft(error: FontError) -> FT_Error {
         FontError::RasterOverflow => FT_Err_Raster_Overflow,
         FontError::InvalidOutline(_) => FT_Err_Invalid_Outline,
         FontError::ExecutionTooLong => FT_Err_Execution_Too_Long as FT_Error,
+        FontError::CodeOverflow => FT_Err_Code_Overflow as FT_Error,
         FontError::InvalidReference => FT_Err_Invalid_Reference as FT_Error,
         FontError::CannotRenderGlyph(_) => FT_Err_Cannot_Render_Glyph,
         FontError::InvalidArgument(_) => FT_Err_Invalid_Argument,
