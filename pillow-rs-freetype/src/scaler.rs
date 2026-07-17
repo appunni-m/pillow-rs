@@ -1524,10 +1524,10 @@ fn scale_composite_components(
         let sub_tags = sub.outline.tags.clone();
         let mut transformed = Vec::with_capacity(sub.outline.points.len());
         for (index, point) in sub.outline.points.iter().enumerate() {
-            // Recursive component loading happens before the final top-level
-            // `-loader.pp1.x` outline translation in `TT_Load_Glyph`
-            // (`ttgload.c:1858-1888, 2578-2583`). `scale_glyph_impl` returns
-            // standalone glyph coordinates after that translation, so add the
+            // C aborts the parent on a recursive component error, including
+            // pedantic VM failures (`ttgload.c:1838-1859`). Components otherwise
+            // load before the final top-level `-loader.pp1.x` translation
+            // (`ttgload.c:1858-1888, 2578-2583`), so add the standalone glyph's
             // subglyph pp1 back when reconstructing component coordinates.
             let x = point.x + off_x + sub.phantom_pp1_x;
             let y = point.y + off_y;

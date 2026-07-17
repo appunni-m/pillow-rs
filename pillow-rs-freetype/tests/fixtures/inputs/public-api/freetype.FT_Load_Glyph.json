@@ -6387,13 +6387,6 @@
                 "kind": "file",
                 "role": "font",
                 "path": "input/fonts/DejaVuSans.ttf"
-              },
-              "vertical_font": {
-                "kind": "ref",
-                "role": "font",
-                "path": "input/fonts/vertical/vertical-metrics.ttf",
-                "status": "required_future_asset",
-                "requires": "font with vertical metrics for VERTICAL_LAYOUT comparison"
               }
             },
             "params": {
@@ -6415,13 +6408,6 @@
                 "kind": "file",
                 "role": "font",
                 "path": "input/fonts/DejaVuSans.ttf"
-              },
-              "vertical_font": {
-                "kind": "ref",
-                "role": "font",
-                "path": "input/fonts/vertical/vertical-metrics.ttf",
-                "status": "required_future_asset",
-                "requires": "font with vertical metrics for VERTICAL_LAYOUT comparison"
               }
             },
             "params": {
@@ -6443,13 +6429,6 @@
                 "kind": "file",
                 "role": "font",
                 "path": "input/fonts/DejaVuSans.ttf"
-              },
-              "vertical_font": {
-                "kind": "ref",
-                "role": "font",
-                "path": "input/fonts/vertical/vertical-metrics.ttf",
-                "status": "required_future_asset",
-                "requires": "font with vertical metrics for VERTICAL_LAYOUT comparison"
               }
             },
             "params": {
@@ -6468,22 +6447,15 @@
             "id": "f4",
             "assets": {
               "font": {
-                "kind": "file",
-                "role": "font",
-                "path": "input/fonts/DejaVuSans.ttf"
-              },
-              "vertical_font": {
                 "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/vertical/vertical-metrics.ttf",
-                "status": "required_future_asset",
-                "requires": "font with vertical metrics for VERTICAL_LAYOUT comparison"
+                "id": "input/fonts/sfnt/vhea-vmtx-present.ttf"
               }
             },
             "params": {
               "face_index": 0,
               "size": 20,
-              "glyph_index": 36,
+              "glyph_index": 1,
               "load_flags": [
                 "FT_LOAD_VERTICAL_LAYOUT"
               ]
@@ -6499,13 +6471,6 @@
                 "kind": "file",
                 "role": "font",
                 "path": "input/fonts/DejaVuSans.ttf"
-              },
-              "vertical_font": {
-                "kind": "ref",
-                "role": "font",
-                "path": "input/fonts/vertical/vertical-metrics.ttf",
-                "status": "required_future_asset",
-                "requires": "font with vertical metrics for VERTICAL_LAYOUT comparison"
               }
             },
             "params": {
@@ -6527,13 +6492,6 @@
                 "kind": "file",
                 "role": "font",
                 "path": "input/fonts/DejaVuSans.ttf"
-              },
-              "vertical_font": {
-                "kind": "ref",
-                "role": "font",
-                "path": "input/fonts/vertical/vertical-metrics.ttf",
-                "status": "required_future_asset",
-                "requires": "font with vertical metrics for VERTICAL_LAYOUT comparison"
               }
             },
             "params": {
@@ -6964,6 +6922,27 @@
             "coverage": ["tt/hinter:nonpedantic-truncated-npushb-suppressed"]
           },
           {
+            "id": "hinter-composite-component-truncated-npushb-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-glyph-code-overflow.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 10,
+              "load_flags": ["FT_LOAD_DEFAULT", "FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": [
+              "scaler:composite-component-pedantic-error-propagation",
+              "tt/hinter:code-overflow-composite-component-npushb"
+            ]
+          },
+          {
             "id": "hinter-error-truncated-pushw",
             "assets": {
               "font": {
@@ -7242,7 +7221,9 @@
           "freetype/src/truetype/ttinterp.c:4352-4379",
           "freetype/src/truetype/ttinterp.c:4682-4734",
           "freetype/src/truetype/ttinterp.c:5163-5214",
-          "freetype/src/truetype/ttinterp.c:6304-6388"
+          "freetype/src/truetype/ttinterp.c:6304-6388",
+          "freetype/src/truetype/ttgload.c:828-837",
+          "freetype/src/truetype/ttgload.c:1838-1859"
         ]
       }
     }

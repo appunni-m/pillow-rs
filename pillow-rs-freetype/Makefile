@@ -11,6 +11,9 @@ PARITY_ARGS ?= -- --nocapture
 COVERAGE_OUTPUT ?= target/coverage/unified-summary.json
 CONDITION_COVERAGE_OUTPUT ?= target/coverage/unified-condition-summary.json
 CONDITION_COVERAGE_LINES_OUTPUT ?= target/coverage/unified-condition-missing-lines.txt
+SCALER_CONDITION_COVERAGE_OUTPUT ?= target/coverage/scaler-unified-condition-summary.json
+SCALER_CONDITION_COVERAGE_LINES_OUTPUT ?= target/coverage/scaler-unified-condition-missing-lines.txt
+SCALER_CONDITION_COVERAGE_MCP_OUTPUT ?= target/coverage/scaler-unified-condition-summary-mcp.json
 CORE_COVERAGE_IGNORE_REGEX := /(ffi-c|ffi-wasm)/src/
 
 .DEFAULT_GOAL := help
@@ -54,6 +57,10 @@ help:
 	@printf "  make api-abi-check    Check manifest/input coverage and thin FFI ABI surfaces\n"
 	@printf "  make route-audit      Classify public input rows by real, fallback, pending, or unsupported route\n"
 	@printf "  make real-parity-verify Run coverage parity, route audit, FFI gates, fmt, and clippy\n"
+	@printf "  make scaler-parity-focused Run the exact public FT_Load_Glyph vertical-flags bucket\n"
+	@printf "  make scaler-condition-coverage Run full condition coverage into scaler-owned artifacts\n"
+	@printf "  make scaler-condition-normalize Normalize the scaler condition report for Coverage MCP\n"
+	@printf "  make scaler-route-lint-ffi-gates Run route audit, lint, and both FFI gates\n"
 	@printf "\nSingle Feature Testing (<1 min per operation, use for debugging):\n"
 	@printf "  make test-op OP=<op>      Run parity filtered to one operation (always refreshes oracle)\n"
 	@printf "  make test-case CASE=<s>   Run parity filtered to case/subject substring (always refreshes oracle)\n"
@@ -109,6 +116,24 @@ test-parity: test-unified-fixtures test-ffi
 .PHONY: real-parity-verify
 real-parity-verify: test-unified-condition-coverage route-audit test-ffi test-ffi-compat lint
 
+.PHONY: scaler-parity-focused
+scaler-parity-focused:
+	$(MAKE) test-case CASE=freetype.FT_Load_Glyph.no_scale_no_hinting_and_vertical_flags
+	$(MAKE) test-case CASE=freetype.FT_Load_Glyph.matrix_load.exec_code_range_and_composite
+
+.PHONY: scaler-condition-coverage
+scaler-condition-coverage: CONDITION_COVERAGE_OUTPUT=$(SCALER_CONDITION_COVERAGE_OUTPUT)
+scaler-condition-coverage: CONDITION_COVERAGE_LINES_OUTPUT=$(SCALER_CONDITION_COVERAGE_LINES_OUTPUT)
+scaler-condition-coverage: test-unified-condition-coverage
+
+.PHONY: scaler-condition-normalize
+scaler-condition-normalize:
+	jq 'walk(if type == "number" and . > 2147483647 then 2147483647 else . end)' \
+		$(SCALER_CONDITION_COVERAGE_OUTPUT) > $(SCALER_CONDITION_COVERAGE_MCP_OUTPUT)
+
+.PHONY: scaler-route-lint-ffi-gates
+scaler-route-lint-ffi-gates: route-audit lint test-ffi test-ffi-compat
+
 .PHONY: unified-oracle
 unified-oracle: oracle-fetch
 	bash scripts/build_ft.sh
@@ -158,9 +183,9 @@ test-api-abi: test-unified-fixtures test-ffi
 test-ffi:
 # Core rendering code must not pull in native FreeType, bindgen, or system
 # FFI libraries.  extern "C" in src/ffi/ is expected (thin facade types).
-	@! rg -n 'freetype-sys|^bindgen |^cc |dlopen|libloading|pkg-config' Cargo.toml
+	@! grep -En 'freetype-sys|^bindgen |^cc |dlopen|libloading|pkg-config' Cargo.toml
 	@for f in $$(find src -name '*.rs' ! -path 'src/ffi/*'); do \
-		if rg -qn 'freetype-sys|bindgen|dlopen|libloading|pkg-config' "$$f"; then \
+		if grep -Eqn 'freetype-sys|bindgen|dlopen|libloading|pkg-config' "$$f"; then \
 			echo "$$f: forbidden FFI dependency" >&2; exit 1; \
 		fi; \
 	done
