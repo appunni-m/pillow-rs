@@ -1364,8 +1364,18 @@ impl ExecContext {
                 0x32 | 0x33 => {
                     let loop_count = self.gs.loop_counter as usize;
                     let (dx, dy, _, _) = self.point_displacement(opcode, zone);
+                    let point_limit = if self.gs.zp2 == 0 {
+                        self.twilight.n_points as usize
+                    } else {
+                        zone.n_points as usize
+                    };
                     for _ in 0..loop_count {
                         let p = self.pop()? as usize;
+                        // C `Ins_SHP` ignores out-of-zone points normally but
+                        // reports Invalid_Reference for FT_LOAD_PEDANTIC.
+                        if p >= point_limit && self.pedantic_hinting {
+                            return Err(FontError::InvalidReference);
+                        }
                         let (cx, cy) = self.cur_in(zone, self.gs.zp2, p);
                         self.set_cur_in(zone, self.gs.zp2, p, cx + dx, cy + dy);
                         self.touch_in(zone, self.gs.zp2, p);
@@ -1925,6 +1935,16 @@ impl ExecContext {
                 // by the current freedom vector.
                 0x29 => {
                     let p = self.pop()? as usize;
+                    let point_limit = if self.gs.zp0 == 0 {
+                        self.twilight.n_points as usize
+                    } else {
+                        zone.n_points as usize
+                    };
+                    // C `Ins_UTP` uses the same non-pedantic ignore and
+                    // pedantic Invalid_Reference split as SHP.
+                    if p >= point_limit && self.pedantic_hinting {
+                        return Err(FontError::InvalidReference);
+                    }
                     self.clear_touch_in(zone, self.gs.zp0, p);
                 }
                 // ── MSIRP (0x3A-0x3B) — Move Stack Indirect Relative Point ──
