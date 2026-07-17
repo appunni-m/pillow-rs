@@ -6335,15 +6335,10 @@ static int emit_new_size_null_face(int argc, char** argv) {
     FT_Error err = FT_New_Size(NULL, &size);
     printf("{");
     print_status(err);
-    if (err) {
-        printf(",\"output\":null}\n");
-    } else {
-        printf(",\"output\":{\"size_is_null\":");
-        print_json_bool(size == NULL);
-        printf("}}\n");
-        if (size) {
-            FT_Done_Size(size);
-        }
+    printf(",\"output\":{\"output_size_nullness\":\"%s\"}}\n",
+           size ? "non_null" : "null");
+    if (size) {
+        FT_Done_Size(size);
     }
     return 0;
 }
@@ -6355,10 +6350,15 @@ static int emit_new_size_null_output(int argc, char** argv) {
     if (opened != 0) {
         return opened;
     }
+    int active_size_was_null = face.face->size == NULL;
     FT_Error err = FT_New_Size(face.face, NULL);
     printf("{");
     print_status(err);
-    printf(",\"output\":null}\n");
+    printf(",\"output\":{\"output_pointer_null\":true,");
+    printf("\"active_size_nullness_before\":\"%s\",",
+           active_size_was_null ? "null" : "non_null");
+    printf("\"active_size_nullness_after\":\"%s\"}}\n",
+           face.face->size ? "non_null" : "null");
     close_oracle_face(&face);
     return 0;
 }
@@ -6369,7 +6369,7 @@ static int emit_done_size_null(int argc, char** argv) {
     FT_Error err = FT_Done_Size(NULL);
     printf("{");
     print_status(err);
-    printf(",\"output\":null}\n");
+    printf(",\"output\":{\"size_input_null\":true}}\n");
     return 0;
 }
 
@@ -6379,7 +6379,7 @@ static int emit_activate_size_null(int argc, char** argv) {
     FT_Error err = FT_Activate_Size(NULL);
     printf("{");
     print_status(err);
-    printf(",\"output\":null}\n");
+    printf(",\"output\":{\"size_input_null\":true}}\n");
     return 0;
 }
 

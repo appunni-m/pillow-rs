@@ -2718,6 +2718,15 @@ pub fn FT_Request_Size(face: Option<&mut FT_Face>, req: Option<&FT_Size_RequestR
         FT_SIZE_REQUEST_TYPE_SCALES => SizeRequestType::Scales,
         _ => return FT_Err_Invalid_Argument,
     };
+    if face.probe_only {
+        // FreeType 2.14.3 `FT_Request_Size` -> `FT_Request_Metrics`
+        // (`src/base/ftobjs.c:3438-3484`, `3264-3410`) treats a negative-index
+        // probe face as non-scalable: the request succeeds with zero metrics
+        // and identity scales instead of using the parsed face dimensions.
+        face.inner.borrow_mut().reset_probe_size_request_metrics();
+        sync_active_size_state(face);
+        return FT_Err_Ok;
+    }
     let request = SizeRequest {
         request_type,
         width: req.width,

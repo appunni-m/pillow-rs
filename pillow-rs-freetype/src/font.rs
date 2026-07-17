@@ -1152,6 +1152,13 @@ impl Font {
         self.bytecode_context = BytecodeContextCache::default();
     }
 
+    pub(crate) fn reset_probe_size_request_metrics(&mut self) {
+        self.reset_size_to_undefined();
+        self.size_metrics.x_scale = 1 << 16;
+        self.size_metrics.y_scale = 1 << 16;
+        sync_active_size_metrics(&self.data, self.size_metrics);
+    }
+
     pub(crate) fn clone_with_load_mode(&self, load_mode: LoadMode) -> Self {
         let mut font = self.clone();
         font.load_mode = load_mode;

@@ -3603,20 +3603,40 @@ fn rust_new_size(case: &InputCase) -> Result<RunOutput, String> {
     let mut size: FT_Size = std::ptr::null_mut();
     let face_is_null = lifecycle_handle_param(&case.inputs.params, "face") == Some("null");
     let output_is_null = lifecycle_handle_param(&case.inputs.params, "output") == Some("null");
-    let err = if face_is_null {
-        FT_New_Size(None, Some(&mut size))
-    } else {
-        let face = open_face(case)?;
-        if output_is_null {
-            FT_New_Size(Some(&face), None)
+    if face_is_null {
+        let err = FT_New_Size(None, Some(&mut size));
+        return if err == FT_Err_Ok {
+            Ok(ok(json!({"size_is_null": size.is_null()})))
         } else {
-            FT_New_Size(Some(&face), Some(&mut size))
-        }
+            Ok(error_with_output(
+                err,
+                json!({"output_size_nullness": if size.is_null() { "null" } else { "non_null" }}),
+            ))
+        };
+    }
+
+    let face = rust_new_face_without_size(case)?;
+    let active_size_nullness_before = if face.size.is_null() {
+        "null"
+    } else {
+        "non_null"
+    };
+    let err = if output_is_null {
+        FT_New_Size(Some(&face), None)
+    } else {
+        FT_New_Size(Some(&face), Some(&mut size))
     };
     if err == FT_Err_Ok {
         Ok(ok(json!({"size_is_null": size.is_null()})))
     } else {
-        Ok(error(err))
+        Ok(error_with_output(
+            err,
+            json!({
+                "output_pointer_null": output_is_null,
+                "active_size_nullness_before": active_size_nullness_before,
+                "active_size_nullness_after": if face.size.is_null() { "null" } else { "non_null" }
+            }),
+        ))
     }
 }
 
@@ -3630,7 +3650,7 @@ fn rust_done_size(case: &InputCase) -> Result<RunOutput, String> {
     if err == FT_Err_Ok {
         Ok(ok(json!({"done": true})))
     } else {
-        Ok(error(err))
+        Ok(error_with_output(err, json!({"size_input_null": true})))
     }
 }
 
@@ -3644,7 +3664,7 @@ fn rust_activate_size(case: &InputCase) -> Result<RunOutput, String> {
     if err == FT_Err_Ok {
         Ok(ok(json!({"activated": true})))
     } else {
-        Ok(error(err))
+        Ok(error_with_output(err, json!({"size_input_null": true})))
     }
 }
 
@@ -7718,7 +7738,7 @@ fn assert_no_implicit_inputs(path: &Path, raw: &Value) {
 
 fn append_concrete_input_cases(path: &Path, case: InputCase, cases: &mut Vec<InputCase>) {
     if case.inputs.variants.is_empty() {
-        cases.push(case);
+        cases.push(with_public_family_exact_error(case));
         return;
     }
 
@@ -7766,8 +7786,17 @@ fn append_concrete_input_cases(path: &Path, case: InputCase, cases: &mut Vec<Inp
             params: variant.params.clone(),
             variants: Vec::new(),
         };
-        cases.push(concrete);
+        cases.push(with_public_family_exact_error(concrete));
     }
+}
+
+fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
+    // The public size-handle family has dedicated pinned-C, Rust FFI, C ABI,
+    // and WASM runners; expected errors must compare status and observations.
+    if case.expect_error && case.operation.starts_with("ftsizes.") {
+        case.expectation.compare.compare_error_output = true;
+    }
+    case
 }
 
 fn assert_unique_runtime_case_ids(cases: &[InputCase]) {
@@ -14256,23 +14285,40 @@ fn c_new_size(case: &InputCase) -> Result<RunOutput, String> {
         return if err == FT_Err_Ok {
             Ok(ok(json!({"size_is_null": size.is_null()})))
         } else {
-            Ok(error(err))
+            Ok(error_with_output(
+                err,
+                json!({"output_size_nullness": if size.is_null() { "null" } else { "non_null" }}),
+            ))
         };
     }
 
     let (library, face) = c_new_face_without_size(case)?;
-    let err = if lifecycle_handle_param(&case.inputs.params, "output") == Some("null") {
+    let output_is_null = lifecycle_handle_param(&case.inputs.params, "output") == Some("null");
+    let active_size_nullness_before = if c_active_size(face).is_null() {
+        "null"
+    } else {
+        "non_null"
+    };
+    let err = if output_is_null {
         c_abi::FT_New_Size(face, std::ptr::null_mut())
     } else {
         c_abi::FT_New_Size(face, &mut size)
     };
-    c_done_face(face);
-    c_done_library(library);
-    if err == FT_Err_Ok {
+    let result = if err == FT_Err_Ok {
         Ok(ok(json!({"size_is_null": size.is_null()})))
     } else {
-        Ok(error(err))
-    }
+        Ok(error_with_output(
+            err,
+            json!({
+                "output_pointer_null": output_is_null,
+                "active_size_nullness_before": active_size_nullness_before,
+                "active_size_nullness_after": if c_active_size(face).is_null() { "null" } else { "non_null" }
+            }),
+        ))
+    };
+    c_done_face(face);
+    c_done_library(library);
+    result
 }
 
 fn c_done_size(case: &InputCase) -> Result<RunOutput, String> {
@@ -14283,7 +14329,7 @@ fn c_done_size(case: &InputCase) -> Result<RunOutput, String> {
     if err == FT_Err_Ok {
         Ok(ok(json!({"done": true})))
     } else {
-        Ok(error(err))
+        Ok(error_with_output(err, json!({"size_input_null": true})))
     }
 }
 
@@ -14295,7 +14341,7 @@ fn c_activate_size(case: &InputCase) -> Result<RunOutput, String> {
     if err == FT_Err_Ok {
         Ok(ok(json!({"activated": true})))
     } else {
-        Ok(error(err))
+        Ok(error_with_output(err, json!({"size_input_null": true})))
     }
 }
 
@@ -14659,27 +14705,45 @@ fn wasm_glyph_metrics_fields_json(handle: usize) -> Result<Value, String> {
 
 fn wasm_new_size(case: &InputCase) -> Result<RunOutput, String> {
     if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
-        let status = wasm_abi::fontdone_wasm_new_size(0);
-        return if status.error == FT_Err_Ok {
-            Ok(ok(json!({"size_is_null": status.handle == 0})))
+        let mut size = 0usize;
+        let err = wasm_abi::fontdone_wasm_new_size_out(0, &mut size);
+        return if err == FT_Err_Ok {
+            Ok(ok(json!({"size_is_null": size == 0})))
         } else {
-            Ok(error(status.error))
+            Ok(error_with_output(
+                err,
+                json!({"output_size_nullness": if size == 0 { "null" } else { "non_null" }}),
+            ))
         };
     }
 
     let handle = wasm_new_face_without_size(case)?;
     let mut size = 0usize;
-    let err = if lifecycle_handle_param(&case.inputs.params, "output") == Some("null") {
+    let output_is_null = lifecycle_handle_param(&case.inputs.params, "output") == Some("null");
+    let active_size_nullness_before = if wasm_abi::fontdone_wasm_active_size(handle) == 0 {
+        "null"
+    } else {
+        "non_null"
+    };
+    let err = if output_is_null {
         wasm_abi::fontdone_wasm_new_size_out(handle, std::ptr::null_mut())
     } else {
         wasm_abi::fontdone_wasm_new_size_out(handle, &mut size)
     };
-    wasm_done_face(handle);
-    if err == FT_Err_Ok {
+    let result = if err == FT_Err_Ok {
         Ok(ok(json!({"size_is_null": size == 0})))
     } else {
-        Ok(error(err))
-    }
+        Ok(error_with_output(
+            err,
+            json!({
+                "output_pointer_null": output_is_null,
+                "active_size_nullness_before": active_size_nullness_before,
+                "active_size_nullness_after": if wasm_abi::fontdone_wasm_active_size(handle) == 0 { "null" } else { "non_null" }
+            }),
+        ))
+    };
+    wasm_done_face(handle);
+    result
 }
 
 fn wasm_done_size(case: &InputCase) -> Result<RunOutput, String> {
@@ -14690,7 +14754,7 @@ fn wasm_done_size(case: &InputCase) -> Result<RunOutput, String> {
     if err == FT_Err_Ok {
         Ok(ok(json!({"done": true})))
     } else {
-        Ok(error(err))
+        Ok(error_with_output(err, json!({"size_input_null": true})))
     }
 }
 
@@ -14702,7 +14766,7 @@ fn wasm_activate_size(case: &InputCase) -> Result<RunOutput, String> {
     if err == FT_Err_Ok {
         Ok(ok(json!({"activated": true})))
     } else {
-        Ok(error(err))
+        Ok(error_with_output(err, json!({"size_input_null": true})))
     }
 }
 
