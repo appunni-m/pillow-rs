@@ -152,10 +152,9 @@ pub fn FT_Bitmap_Copy(
         return FT_Err_Invalid_Argument;
     };
 
-    if ptr::eq(source, target) {
-        return FT_Err_Ok;
-    }
-
+    // Safe Rust source and target references cannot alias.  The C and WASM
+    // raw-pointer wrappers handle FreeType's `source == target` no-op before
+    // constructing these disjoint views.
     let flip = (source.pitch < 0 && target.pitch > 0) || (source.pitch > 0 && target.pitch < 0);
 
     // FreeType `src/base/ftbitmap.c:63-116` frees the target buffer before
@@ -248,6 +247,8 @@ pub fn FT_Bitmap_Convert(
     };
     let negative_pitch = (target.pitch == 0 && source.pitch < 0) || target.pitch < 0;
 
+    // FreeType accepts negative alignment and rounds width toward the next
+    // multiple of its magnitude (`src/base/ftbitmap.c:532-540`).
     if alignment != 0 {
         let rem = width % alignment;
         if rem != 0 {
@@ -614,6 +615,8 @@ pub fn FT_Bitmap_Embolden(
 }
 
 fn ft_bitmap_strength_pixels(strength: FT_Pos) -> Option<i32> {
+    // C rejects a rounded strength above `FT_INT_MAX << 6` before entering
+    // `ft_bitmap_assure_buffer` (`src/base/ftbitmap.c:302-309`).
     let rounded = strength.checked_add(32)? & !63;
     let pixels = rounded >> 6;
     if pixels > i64::from(i32::MAX) {
@@ -3241,12 +3244,12 @@ pub fn FT_Sfnt_Table_Info(
     let Some(length) = length else {
         return FT_Err_Invalid_Argument;
     };
-    if tag.is_none() {
+    let Some(tag) = tag else {
         // C `sfnt_table_info` returns the table count when `tag == NULL`,
         // ignoring `table_index` (sfnt/sfdriver.c:156-158).
         *length = font.sfnt_tables().len() as FT_ULong;
         return FT_Err_Ok;
-    }
+    };
     let index = match usize::try_from(table_index) {
         Ok(i) => i,
         Err(_) => return FT_Err_Table_Missing as FT_Error,
@@ -3254,9 +3257,7 @@ pub fn FT_Sfnt_Table_Info(
     let Some(info) = font.sfnt_table_info(index) else {
         return FT_Err_Table_Missing as FT_Error;
     };
-    if let Some(tag) = tag {
-        *tag = info.tag as FT_ULong;
-    }
+    *tag = info.tag as FT_ULong;
     *length = info.length as FT_ULong;
     FT_Err_Ok
 }

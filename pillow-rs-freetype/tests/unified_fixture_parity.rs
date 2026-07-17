@@ -23888,6 +23888,7 @@ struct BitmapCopySetup {
     alias: bool,
     null_library: bool,
     null_source: bool,
+    null_target: bool,
 }
 
 fn bitmap_copy_output(case: &InputCase, backend: BitmapCopyBackend) -> Result<RunOutput, String> {
@@ -23922,7 +23923,8 @@ fn bitmap_copy_rust(setup: &mut BitmapCopySetup) -> FT_Error {
     let library = FT_Init_FreeType();
     let library = (!setup.null_library).then_some(&library);
     let source = (!setup.null_source).then_some(&setup.source);
-    FT_Bitmap_Copy(library, source, Some(&mut setup.target))
+    let target = (!setup.null_target).then_some(&mut setup.target);
+    FT_Bitmap_Copy(library, source, target)
 }
 
 fn bitmap_copy_c_abi(setup: &mut BitmapCopySetup) -> FT_Error {
@@ -23963,7 +23965,9 @@ fn bitmap_copy_c_abi(setup: &mut BitmapCopySetup) -> FT_Error {
             return err;
         }
     }
-    let target_ptr = if setup.alias {
+    let target_ptr = if setup.null_target {
+        ptr::null_mut()
+    } else if setup.alias {
         (&mut source) as *mut c_abi::FT_Bitmap
     } else {
         &mut target
@@ -24020,7 +24024,9 @@ fn bitmap_copy_wasm(setup: &mut BitmapCopySetup) -> FT_Error {
         palette_mode: setup.target.palette_mode,
         palette: setup.target.palette,
     };
-    let target_ptr = if setup.alias {
+    let target_ptr = if setup.null_target {
+        ptr::null_mut()
+    } else if setup.alias {
         (&mut source) as *mut wasm_abi::FontdoneWasmBitmap
     } else {
         &mut target
@@ -24054,21 +24060,28 @@ fn bitmap_copy_setup(scenario: &str) -> Result<BitmapCopySetup, String> {
         alias: false,
         null_library: false,
         null_source: false,
+        null_target: false,
     };
     match scenario {
-        "success_deep_copy_all_public_fields" => {}
+        "success_deep_copy_all_public_fields" => setup.source.pitch = -4,
         "success_source_equals_target_noop" => setup.alias = true,
         "success_null_source_buffer" => {
             setup.source.buffer = ptr::null_mut();
             setup.source_bytes = None;
+            setup.target.pitch = -1;
         }
-        "success_flow_flip" => setup.target.pitch = -1,
+        "success_flow_flip" => {
+            setup.source.pitch = -4;
+            setup.target.pitch = 1;
+        }
         "ownership_replaces_target_buffer" => {
             setup.target = dirty_bitmap_record();
             setup.target.pitch = 4;
             setup.target_bytes = Some(vec![0xE5; 12]);
         }
-        "error_null_library_or_bitmaps" => setup.null_source = true,
+        "error_null_library" => setup.null_library = true,
+        "error_null_source" | "error_null_library_or_bitmaps" => setup.null_source = true,
+        "error_null_target" => setup.null_target = true,
         other => return Err(format!("unsupported bitmap_copy scenario {other}")),
     }
     Ok(setup)
@@ -24144,7 +24157,7 @@ fn bitmap_convert_output(
         }
         "success_alignment_and_flow" => {
             let mut runs = Vec::new();
-            for alignment in [0, 1, 2, 3, 4] {
+            for alignment in [0, 1, 2, 3, 4, -1, -2, -4] {
                 runs.push(bitmap_convert_run(
                     &format!("align_{alignment}"),
                     FT_PIXEL_MODE_GRAY,
@@ -24863,6 +24876,10 @@ fn glyphslot_own_bitmap_rust(case: &InputCase) -> Result<RunOutput, String> {
         );
     }
     if scenario == "success_non_bitmap_or_null_slot_noop" {
+        let null_err = FT_GlyphSlot_Own_Bitmap(None);
+        if null_err != FT_Err_Ok {
+            return Ok(error(null_err));
+        }
         let mut slot = rust_glyphslot_own_load(case, false)?;
         let err = FT_GlyphSlot_Own_Bitmap(Some(&mut slot));
         if err != FT_Err_Ok {
@@ -24902,6 +24919,10 @@ fn glyphslot_own_bitmap_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         );
     }
     if scenario == "success_non_bitmap_or_null_slot_noop" {
+        let null_err = c_abi::FT_GlyphSlot_Own_Bitmap(ptr::null_mut());
+        if null_err != FT_Err_Ok {
+            return Ok(error(null_err));
+        }
         let (library, face) = c_glyphslot_own_load(case, false)?;
         let err = c_abi::abi_glyphslot_own_bitmap_from_face(face);
         let slot = c_glyphslot_own_slot_json(face)?;
@@ -24954,6 +24975,10 @@ fn glyphslot_own_bitmap_wasm(case: &InputCase) -> Result<RunOutput, String> {
         );
     }
     if scenario == "success_non_bitmap_or_null_slot_noop" {
+        let null_err = wasm_abi::fontdone_wasm_glyphslot_own_bitmap(0);
+        if null_err != FT_Err_Ok {
+            return Ok(error(null_err));
+        }
         let handle = wasm_glyphslot_own_load(case, false)?;
         let err = wasm_abi::fontdone_wasm_glyphslot_own_bitmap(handle);
         let slot = wasm_glyphslot_own_slot_json(handle)?;
@@ -25949,7 +25974,9 @@ fn bitmap_embolden_rows(scenario: &str) -> Result<Vec<BitmapEmboldenRow>, String
             }
         }
         "success_strength_rounding_and_zero" => {
-            for (x_strength, y_strength) in [(0, 0), (32, 32), (64, 96), (512, 64)] {
+            for (x_strength, y_strength) in
+                [(0, 0), (32, 32), (64, 0), (0, 64), (64, 96), (512, 64)]
+            {
                 rows.push(BitmapEmboldenRow::new(
                     "strength",
                     FT_PIXEL_MODE_GRAY as u8,
@@ -26021,6 +26048,20 @@ fn bitmap_embolden_rows(scenario: &str) -> Result<Vec<BitmapEmboldenRow>, String
                 FT_PIXEL_MODE_GRAY as u8,
                 false,
                 -64,
+                0,
+            ));
+            rows.push(BitmapEmboldenRow::new(
+                "negative-y-strength",
+                FT_PIXEL_MODE_GRAY as u8,
+                false,
+                0,
+                -64,
+            ));
+            rows.push(BitmapEmboldenRow::new(
+                "overflow-strength",
+                FT_PIXEL_MODE_GRAY as u8,
+                false,
+                137_438_953_472,
                 0,
             ));
         }

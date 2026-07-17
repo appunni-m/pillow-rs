@@ -2726,6 +2726,57 @@ the C oracle, Rust FFI, C ABI, and WASM ABI exactly. Runtime parity moves
 7,138 -> 7,140 with six unchanged pending rows, and `font.rs` condition
 coverage moves 285/324 -> 287/324 branches.
 
+## `ffi/handles.rs` Real-Route Audit (2026-07-17)
+
+Coverage MCP snapshot `a5c69a1b-6a26-431d-b8fb-b53d3e559b13` is the frozen
+baseline for this bucket: 2,469 / 2,661 lines, 538 / 697 branches, and
+228 / 245 functions.  The LLVM file summary has 159 unique missing branch
+outcomes.  Its line projection contains 160 missing branch records because one
+LLVM region is attributed to two source segments; the file summary is the
+canonical count.
+
+The verified result is Coverage MCP full run
+`32e10913-e896-421c-94f6-0e866ecdcd45`, normalization run
+`54e56d71-8195-4ade-a88e-33cd774347a1`, and snapshot
+`2024b96c-1b91-4bbd-94ff-e1cccc37f804`.  Runtime parity is exact at
+7,138 / 7,138 with six existing pending dependencies.  `handles.rs` moved to
+2,492 / 2,655 lines, 561 / 693 branches, 231 / 245 functions, and
+3,793 / 4,032 regions.  Against the frozen baseline this is +23 covered lines,
++23 covered branch outcomes, +3 covered functions, and +47 covered regions;
+the four removed branch outcomes include the safe-core alias condition that
+valid Rust references cannot express.  The remaining canonical branch miss
+count is 132.  Strict no-runtime-FFI and API/ABI verification passed in MCP run
+`55d4c49f-a09b-4366-95ee-4af87cd91bdf` with no stderr.  Route audit is
+`real-parity=3942`, `generic-fallback=809`, and `pending-core=7`.
+
+Every partial branch was read against FreeType 2.14.3.  The complete inventory
+is classified below by owning function group; no generic fallback row is
+accepted as proof.
+
+| Rust function group | Pinned C path | Classification and route decision |
+|---|---|---|
+| `FT_Error_String` | `base/fterrors.c:26-44` | Build configuration.  The missing side is the build without `FT_CONFIG_OPTION_ERROR_STRINGS`, not a runtime public route. |
+| Bitmap ownership registry (`bitmap_owned_bytes`, `bitmap_source_bytes`, `FT_Bitmap_Set_Owned_Buffer`, `FT_Bitmap_Owned_Buffer_Bytes`) | C uses raw `FT_Bitmap.buffer` pointers | Thin Rust ABI storage validation.  Missing absent, poisoned, truncated, and overflow sides cannot use C as a deterministic oracle because C has no buffer length and would read or write through the caller pointer. |
+| `FT_Bitmap_Copy` | `base/ftbitmap.c:63-128` | Real null-library/source/target and both pitch-flow routes are exact.  The public alias no-op remains in the raw C/WASM wrappers; the equivalent safe-core alias test was removed because valid `&T` and `&mut T` cannot alias.  Remaining length/registry failures are thin validation. |
+| `FT_Bitmap_Convert` and row unpackers | `base/ftbitmap.c:491-690` | Real positive/negative alignment, source flow, and target flow are exact.  Residual slice, pitch, multiplication, and packed-row errors require malformed or truncated storage that C does not bound-check. |
+| `FT_Bitmap_Embolden`, `ft_bitmap_assure_buffer`, packed conversion | `base/ftbitmap.c:135-438` | Real zero, x-only, y-only, negative-x, negative-y, overflow, packed-depth, MONO, LCD, LCD_V, BGRA, and both-flow rows are exact.  The private assure helper's GRAY2/GRAY4 arms cannot be reached through C 2.14.3 because the public caller converts those modes to GRAY first.  Remaining checked arithmetic and slice guards are safe-Rust validation. |
+| `FT_Bitmap_Blend` | `base/ftbitmap.c:762-1058` | Existing mode, offset, allocation, and flow rows are public parity.  Residual byte-range and undersized-buffer checks are thin validation; C's negative-target-pitch branches are empty `/* XXX */` blocks. |
+| Outline bitmap/orientation/reverse validation | `base/ftoutln.c:545-690,1051-1117` | Valid, empty, null, orientation, and reverse routes are public.  Residual contour-array, endpoint, pitch, and write-range paths require malformed raw storage; C validates fewer of these and can access out of bounds. |
+| Size handle registry (`sync_active_size_state`, `FT_Done_Size`, `FT_Activate_Size`, `FT_Select_Size`) | `base/ftobjs.c:3039-3079,3380-3428` | Valid/null lifecycle routes are exact.  Unknown, dangling, poisoned-registry, and dead-owner states are thin handle validation; C dereferences an invalid `FT_Size` and has no deterministic public result. |
+| `FT_GlyphSlot_Own_Bitmap` | `base/ftbitmap.c:1084-1102` | Null slot and loaded non-bitmap slot are exact.  The sole pending row is allocator fault injection for the public deep-copy failure. |
+| `FT_Get_Sfnt_LangTag`, `FT_Get_SubGlyph_Info`, `FT_Set_Named_Instance`, `FT_Sfnt_Table_Info` index conversions | corresponding public base/SFNT functions | `FT_UInt` to `usize` failure is impossible on supported 64-bit native and wasm32 targets.  Named-instance behavior remains explicit pending until Adobe MM, `FT_MM_Var`, and gvar/HVAR support exists.  The redundant second SFNT tag-option decision was simplified to match C's single count-mode branch. |
+| SFNT parsers (`parse_tt_header`, `parse_tt_horiheader`, `parse_tt_vertheader`) | `sfnt/ttload.c` loaders | Defensive bridge parsing.  A face that exposes these tables has already passed the driver's minimum table-size checks; truncated inputs are rejected before these helpers. |
+| Charmap metadata, `FT_Set_Charmap`, iteration | `base/ftobjs.c:3952-3995,4475-4530` | Foreign-charmap and normal iteration are public.  Registry poisoning and impossible null-record tails are thin validation.  Null `agindex` for first/next char is a remaining real public route and needs explicit runner output that omits the write. |
+| `FT_Load_Glyph`, `FT_Get_Advance`, `advance_fast_path_supported` | `base/ftobjs.c:1079-1177`; `base/ftadvanc.c:26-141` | Independent transform operands and FAST_ONLY target-light are exact routes.  Residual probe/no-size lifecycle and oversized-glyph conversion paths remain either public lifecycle work or target-width-impossible conversions. |
+
+Extra Rust helpers in this file are not FreeType C exports:
+
+| Helper | Current owners | Removal plan |
+|---|---|---|
+| `FT_Bitmap_Set_Owned_Buffer` | core bitmap operations, thin C/WASM bitmap adapters, parity runner | Keep as a Rust ownership bridge.  If the Rust module surface is later cleaned, move it with the byte accessor into a clearly named bridge module consumed only by the ABI crates; do not export a C symbol. |
+| `FT_Bitmap_Owned_Buffer_Bytes` | embolden/convert/blend core paths and parity result extraction | Same bridge-module move as above.  Deleting it now would force raw-pointer reads or duplicate ownership logic into thin wrappers. |
+| Private registry/parser/handle helpers | `handles.rs` public implementations only | Keep private.  They model storage and validation that C implements with raw pointers or private static functions; they are not manifest endpoints and should not receive standalone green rows. |
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
