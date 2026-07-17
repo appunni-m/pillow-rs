@@ -77,7 +77,7 @@ pub struct CallRecord {
     pub caller_ip: usize,
     /// Current loop count (for LOOPCALL).
     pub cur_count: i32,
-    /// Pointer to the function definition being called.
+    /// Stable slot identity for C's mutable `TT_CallRec.Def` pointer.
     pub def_index: usize,
 }
 
@@ -151,6 +151,12 @@ pub struct ExecContext {
     /// Which code range is currently executing (0=cvt, 1=font, 2=glyph).
     pub cur_range: u8,
 
+    /// Code range that initiated the current interpreter run.
+    ///
+    /// C `TT_Set_CodeRange` initializes both `iniRange` and `curRange`, while
+    /// `Ins_Goto_CodeRange` changes only `curRange` for CALL/ENDF transitions.
+    pub initial_range: u8,
+
     // ── Flags ─────────────────────────────────────────────────────────
     /// Whether we're hinting a composite glyph.
     pub is_composite: bool,
@@ -209,6 +215,7 @@ impl ExecContext {
             call_stack: Vec::with_capacity(MAX_CALL_DEPTH),
             ip: 0,
             cur_range: 0,
+            initial_range: 0,
             is_composite: false,
             pedantic_hinting: scale.pedantic_hinting,
             glyph_program: Vec::new(),
@@ -297,6 +304,7 @@ impl ExecContext {
         self.stack.clear();
         self.ip = 0;
         self.cur_range = 1;
+        self.initial_range = 1;
 
         // Empty zone: fpgm runs without glyph points (C: exec->pts.n_points = 0)
         let mut empty_zone = GlyphZone {
@@ -354,6 +362,7 @@ impl ExecContext {
         self.glyph_program.clear();
         self.ip = 0;
         self.cur_range = 0;
+        self.initial_range = 0;
 
         // C: prep runs with zp0=zp1=zp2=0 (twilight zone)
         self.gs.zp0 = 0;
@@ -386,14 +395,26 @@ impl ExecContext {
     /// Get a value from the storage area.
     #[allow(dead_code)]
     pub fn get_storage(&self, idx: usize) -> Result<i32, FontError> {
-        Ok(*self.storage.get(idx).unwrap_or(&0))
+        if let Some(value) = self.storage.get(idx) {
+            Ok(*value)
+        } else if self.pedantic_hinting {
+            // C `Ins_RS` (`ttinterp.c:2739-2755`) reports Invalid_Reference
+            // for an out-of-range storage index only in pedantic mode.
+            Err(FontError::InvalidReference)
+        } else {
+            Ok(0)
+        }
     }
 
     /// Set a value in the storage area.
     #[allow(dead_code)]
     pub fn set_storage(&mut self, idx: usize, val: i32) -> Result<(), FontError> {
-        if idx < self.storage.len() {
-            self.storage[idx] = val;
+        if let Some(slot) = self.storage.get_mut(idx) {
+            *slot = val;
+        } else if self.pedantic_hinting {
+            // C `Ins_WS` (`ttinterp.c:2765-2798`) ignores this write in
+            // normal mode and reports Invalid_Reference in pedantic mode.
+            return Err(FontError::InvalidReference);
         }
         Ok(())
     }
@@ -401,14 +422,26 @@ impl ExecContext {
     /// Get a CVT value. Returns 0 if index is out of range.
     #[allow(dead_code)]
     pub fn get_cvt(&self, idx: usize) -> Result<i32, FontError> {
-        Ok(*self.cvt.get(idx).unwrap_or(&0))
+        if let Some(value) = self.cvt.get(idx) {
+            Ok(*value)
+        } else if self.pedantic_hinting {
+            // C `Ins_RCVT` (`ttinterp.c:2859-2874`) has the same
+            // normal-mode zero and pedantic Invalid_Reference split.
+            Err(FontError::InvalidReference)
+        } else {
+            Ok(0)
+        }
     }
 
     /// Set a CVT value. No-op if index is out of range.
     #[allow(dead_code)]
     pub fn set_cvt(&mut self, idx: usize, val: i32) -> Result<(), FontError> {
-        if idx < self.cvt.len() {
-            self.cvt[idx] = val;
+        if let Some(slot) = self.cvt.get_mut(idx) {
+            *slot = val;
+        } else if self.pedantic_hinting {
+            // C `Ins_WCVTP` (`ttinterp.c:2809-2824`) ignores this write in
+            // normal mode and reports Invalid_Reference in pedantic mode.
+            return Err(FontError::InvalidReference);
         }
         Ok(())
     }
@@ -557,8 +590,9 @@ impl ExecContext {
         let func_num = self.pop()? as u16;
         let range = self.cur_range;
         // FreeType `ttinterp.c:3274-3335` allows FDEF in `fpgm` and `prep`,
-        // but rejects glyph-program definitions and nested FDEF/IDEF opcodes.
-        if range == 2 {
+        // but rejects a definition initiated by glyph execution even if CALL
+        // has temporarily switched `curRange` to the font program.
+        if self.initial_range == 2 {
             return Err(FontError::InvalidOutline(
                 "bytecode: FDEF in glyph program".into(),
             ));
@@ -620,9 +654,9 @@ impl ExecContext {
     fn define_instruction(&mut self) -> Result<(), FontError> {
         let opcode = self.pop()?;
         let range = self.cur_range;
-        // FreeType `ttinterp.c:3563-3619` has the same definition-range and
+        // FreeType `ttinterp.c:3563-3619` has the same initiating-range and
         // nested-definition rules for IDEF as for FDEF.
-        if range == 2 {
+        if self.initial_range == 2 {
             return Err(FontError::InvalidOutline(
                 "bytecode: IDEF in glyph program".into(),
             ));
@@ -870,6 +904,7 @@ impl ExecContext {
         };
         self.ip = 0;
         self.cur_range = 2; // glyph
+        self.initial_range = 2;
     }
 
     /// Fetch a byte from the active program at current IP.
@@ -1469,11 +1504,18 @@ impl ExecContext {
                     // ENDF: return from function
                     if let Some(call) = self.call_stack.pop() {
                         if call.cur_count > 1 {
-                            let def = self.functions[call.def_index].as_ref().ok_or_else(|| {
-                                FontError::InvalidOutline(
-                                    "bytecode: missing function definition".into(),
-                                )
-                            })?;
+                            // Pinned FreeType `Ins_ENDF` dereferences the mutable
+                            // `TT_CallRec.Def` on every LOOPCALL repeat so an FDEF
+                            // redefinition by a broken font changes the next body.
+                            let def = self
+                                .functions
+                                .get(call.def_index)
+                                .and_then(Option::as_ref)
+                                .ok_or_else(|| {
+                                    FontError::InvalidOutline(
+                                        "bytecode: missing function definition".into(),
+                                    )
+                                })?;
                             let def_start = def.start;
                             let def_range = def.range;
                             self.call_stack.push(CallRecord {
@@ -1919,7 +1961,9 @@ impl ExecContext {
                     let idx = self.pop()? as usize; // deeper = index
                     // Scale: FT_MulFix(value, scale) then write to CVT
                     let scaled = crate::fixed::ft_mul_fix(val, self.tt_scale);
-                    let _ = self.set_cvt(idx, scaled);
+                    // C `Ins_WCVTF` uses the same normal no-op / pedantic
+                    // Invalid_Reference split as WCVTP.
+                    self.set_cvt(idx, scaled)?;
                 }
                 // ── GetINFO (0x88) — Get Info ───────────────────────
                 0x88 => {
@@ -2091,14 +2135,24 @@ impl ExecContext {
                         for _ in 0..nump {
                             let a = self.pop()? as usize;
                             let b = self.pop()?;
-                            if a < self.cvt.len() && (b & 0xF0) == ppem_bits {
+                            if a >= self.cvt.len() {
+                                // C `Ins_DELTAC` validates the CVT reference
+                                // before testing the encoded ppem.
+                                if self.pedantic_hinting {
+                                    return Err(FontError::InvalidReference);
+                                }
+                                continue;
+                            }
+                            if (b & 0xF0) == ppem_bits {
                                 let mut d = (b & 0x0F) - 8;
                                 if d >= 0 {
                                     d += 1;
                                 }
                                 d *= f;
                                 let cv = self.cvt[a].wrapping_add(d);
-                                let _ = self.set_cvt(a, cv);
+                                // The explicit C-equivalent bounds check above
+                                // proves that `set_cvt` cannot fail here.
+                                self.set_cvt(a, cv)?;
                             }
                         }
                     }
@@ -2245,19 +2299,33 @@ impl ExecContext {
                     let selector = self.pop()?;
                     let value = self.pop()?;
                     if !(1..=3).contains(&selector) {
+                        // C rejects an invalid selector only under pedantic
+                        // hinting; normal execution ignores the instruction.
+                        if self.pedantic_hinting {
+                            return Err(FontError::InvalidReference);
+                        }
                         continue;
                     }
 
                     let flag = 1u8 << (selector - 1);
                     if value != 0 && value != flag as i32 {
+                        // Nonzero values must equal the selector's flag value.
+                        if self.pedantic_hinting {
+                            return Err(FontError::InvalidReference);
+                        }
                         continue;
                     }
 
-                    if self.cur_range == 0 {
+                    if self.initial_range == 0 {
                         self.gs.instruct_control &= !flag;
                         self.gs.instruct_control |= value as u8;
-                    } else if self.cur_range == 2 && selector == 3 {
+                    } else if self.initial_range == 2 && selector == 3 {
                         self.backward_compatibility = ((value as u8) & 4) ^ 4;
+                    } else if self.pedantic_hinting {
+                        // C `Ins_INSTCTRL` checks `iniRange`, so selectors 1/2
+                        // are valid for prep-initiated calls and selector 3 is
+                        // valid for glyph-initiated calls into an fpgm FDEF.
+                        return Err(FontError::InvalidReference);
                     }
                 }
                 // ── ADJUST/GX opcodes (FreeType routes these through IDEF
