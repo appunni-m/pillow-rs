@@ -346,6 +346,7 @@ class ConcreteInput:
     operation: str
     variant_id: str | None
     expect_error: bool
+    compare_error_output: bool
     expectation_status: str
     assets: dict[str, object]
     params: dict[str, object]
@@ -654,6 +655,7 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
         data = json.loads(path.read_text())
         for case in data.get("cases", []):
             expectation = object_dict(case.get("expectation", {}))
+            compare = object_dict(expectation.get("compare", {}))
             expectation_status = str(expectation.get("status", ""))
             inputs = case.get("inputs", {})
             if not isinstance(inputs, dict):
@@ -671,6 +673,7 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
                             operation=str(case.get("operation", "")),
                             variant_id=str(variant.get("id", "")) or None,
                             expect_error=bool(variant.get("expect_error", case.get("expect_error", False))),
+                            compare_error_output=bool(compare.get("compare_error_output", False)),
                             expectation_status=expectation_status,
                             assets=object_dict(variant.get("assets", {})),
                             params=object_dict(variant.get("params", {})),
@@ -685,6 +688,7 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
                         operation=str(case.get("operation", "")),
                         variant_id=None,
                         expect_error=bool(case.get("expect_error", False)),
+                        compare_error_output=bool(compare.get("compare_error_output", False)),
                         expectation_status=expectation_status,
                         assets=object_dict(inputs.get("assets", {})),
                         params=object_dict(inputs.get("params", {})),
@@ -969,6 +973,11 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
         return ("explicit-unsupported", "explicit Rust stub returns Unimplemented_Feature")
     if operation_is_compile_contract(row.operation):
         return ("compile-contract", "header, layout, macro, or scalar contract")
+    if row.expect_error and not row.compare_error_output:
+        return (
+            "generic-error-fallback",
+            "expected error is accepted without exact C status/output comparison",
+        )
     size_null_reason = size_null_validation_reason(row)
     if size_null_reason:
         return ("real-null-validation", size_null_reason)
@@ -1028,6 +1037,7 @@ def build_route_audit(items: dict[str, ManifestSubject]) -> dict[str, object]:
                 "category": category,
                 "reason": reason,
                 "expect_error": row.expect_error,
+                "compare_error_output": row.compare_error_output,
                 "expectation_status": row.expectation_status,
                 "supplementary_safe_api_flags": supplementary_flags,
             }
