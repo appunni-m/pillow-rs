@@ -165,6 +165,20 @@ def write_unterminated_control_flow() -> None:
     save_font("hinter-unterminated-control-flow.ttf", font)
 
 
+def write_glyph_code_overflow() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    # Keep setup programs nonempty but side-effect free so native bytecode is
+    # active and FT_LOAD_PEDANTIC reaches the intended glyph-program failure.
+    # Pinned Ins_NPUSHB, Ins_PUSHW, Ins_IF, and Ins_ELSE all report
+    # Code_Overflow when their stream crosses codeSize.
+    no_op = program_from_bytes(bytes.fromhex("b0 00 21"))
+    font["fpgm"].program = no_op
+    font["prep"].program = no_op
+    font["glyf"]["base"].program = program_from_bytes(bytes.fromhex("b0 00 58"))
+    font["glyf"]["mark"].program = program_from_bytes(bytes.fromhex("1b"))
+    save_font("hinter-glyph-code-overflow.ttf", font)
+
+
 def write_invalid_twilight_scfs() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     # Select twilight zp2, then address point 65535.  C ignores invalid SCFS
@@ -301,6 +315,7 @@ def main() -> None:
     write_direct_fpgm_instctrl()
     write_fpgm_truncated_definition_pushes()
     write_unterminated_control_flow()
+    write_glyph_code_overflow()
     write_invalid_twilight_scfs()
     write_composite_compatibility_moves()
     write_fpgm_call_errors()

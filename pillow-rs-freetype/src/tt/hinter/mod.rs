@@ -305,7 +305,14 @@ pub(crate) fn hint_glyph(
             ctx.gs.set_vectors_to_x();
         }
         ctx.set_glyph_program(glyph_ins);
-        ctx.run_program(&mut zone)?;
+        if let Err(error) = ctx.run_program(&mut zone) {
+            // Pinned `TT_Hint_Glyph` preserves the partially interpreted zone
+            // and suppresses `TT_Run_Context` errors unless FT_LOAD_PEDANTIC
+            // is active (ttgload.c:828-837).
+            if scale.pedantic_hinting {
+                return Err(error);
+            }
+        }
     }
 
     // ── Write hinted coordinates back ──────────────────────────────────
