@@ -566,24 +566,27 @@ impl ExecContext {
         }
     }
 
-    fn skip_instruction_operands(program: &[u8], ip: &mut usize, opcode: u8) {
-        match opcode {
-            0xB0..=0xB7 => {
-                *ip = ip.saturating_add((opcode - 0xB0 + 1) as usize);
+    fn skip_instruction_operands(
+        program: &[u8],
+        ip: &mut usize,
+        opcode: u8,
+    ) -> Result<(), FontError> {
+        let operand_bytes = match opcode {
+            0xB0..=0xB7 => (opcode - 0xB0 + 1) as usize,
+            0xB8..=0xBF => (opcode - 0xB8 + 1) as usize * 2,
+            0x40 | 0x41 => {
+                let count = *program.get(*ip).ok_or(FontError::CodeOverflow)? as usize;
+                *ip += 1;
+                if opcode == 0x40 { count } else { count * 2 }
             }
-            0xB8..=0xBF => {
-                *ip = ip.saturating_add((opcode - 0xB8 + 1) as usize * 2);
-            }
-            0x40 if *ip < program.len() => {
-                let count = program[*ip] as usize;
-                *ip = ip.saturating_add(1 + count);
-            }
-            0x41 if *ip < program.len() => {
-                let count = program[*ip] as usize;
-                *ip = ip.saturating_add(1 + count * 2);
-            }
-            _ => {}
+            _ => return Ok(()),
+        };
+        let remaining = program.len().saturating_sub(*ip);
+        if operand_bytes > remaining {
+            return Err(FontError::CodeOverflow);
         }
+        *ip += operand_bytes;
+        Ok(())
     }
 
     fn define_function(&mut self) -> Result<(), FontError> {
@@ -642,7 +645,7 @@ impl ExecContext {
                     self.ip = scan_ip;
                     return Ok(());
                 }
-                _ => Self::skip_instruction_operands(program, &mut scan_ip, op),
+                _ => Self::skip_instruction_operands(program, &mut scan_ip, op)?,
             }
         }
 
@@ -707,7 +710,7 @@ impl ExecContext {
                     self.ip = scan_ip;
                     return Ok(());
                 }
-                _ => Self::skip_instruction_operands(program, &mut scan_ip, op),
+                _ => Self::skip_instruction_operands(program, &mut scan_ip, op)?,
             }
         }
 
@@ -796,11 +799,11 @@ impl ExecContext {
             let op = self.fetch_byte_glyph()?;
             match op {
                 0x58 => depth += 1,
-                0x1B if depth == 1 => break,
+                0x1B if depth == 1 => return Ok(()),
                 0x59 => {
                     depth -= 1;
                     if depth == 0 {
-                        break;
+                        return Ok(());
                     }
                 }
                 _ => {
@@ -809,11 +812,11 @@ impl ExecContext {
                         1 => &self.font_program,
                         _ => &self.glyph_program,
                     };
-                    Self::skip_instruction_operands(program, &mut self.ip, op);
+                    Self::skip_instruction_operands(program, &mut self.ip, op)?;
                 }
             }
         }
-        Ok(())
+        Err(FontError::CodeOverflow)
     }
 
     fn skip_to_eif(&mut self) -> Result<(), FontError> {
@@ -825,7 +828,7 @@ impl ExecContext {
                 0x59 => {
                     depth -= 1;
                     if depth == 0 {
-                        break;
+                        return Ok(());
                     }
                 }
                 _ => {
@@ -834,11 +837,11 @@ impl ExecContext {
                         1 => &self.font_program,
                         _ => &self.glyph_program,
                     };
-                    Self::skip_instruction_operands(program, &mut self.ip, op);
+                    Self::skip_instruction_operands(program, &mut self.ip, op)?;
                 }
             }
         }
-        Ok(())
+        Err(FontError::CodeOverflow)
     }
 
     fn line_vector(dx: i32, dy: i32, perpendicular: bool) -> (i32, i32) {
@@ -916,9 +919,9 @@ impl ExecContext {
             _ => &self.glyph_program,
         };
         if self.ip >= program.len() {
-            return Err(FontError::InvalidOutline(
-                "bytecode: IP overflow in program".into(),
-            ));
+            // Pinned FreeType `SkipCode` and `TT_RunIns` report
+            // `FT_Err_Code_Overflow` when any opcode operand crosses codeSize.
+            return Err(FontError::CodeOverflow);
         }
         let b = program[self.ip];
         self.ip += 1;
@@ -1170,6 +1173,19 @@ impl ExecContext {
                     // coordinate.  The target is on top of the VM stack.
                     let val = self.pop()?;
                     let p = self.pop()? as usize;
+                    let point_count = if self.gs.zp2 == 0 {
+                        self.twilight.n_points as usize
+                    } else {
+                        zone.n_points as usize
+                    };
+                    if p >= point_count {
+                        // C `Ins_SCFS` ignores invalid points normally and
+                        // reports Invalid_Reference only for pedantic loads.
+                        if self.pedantic_hinting {
+                            return Err(FontError::InvalidReference);
+                        }
+                        continue;
+                    }
                     let (cx, cy) = self.cur_in(zone, self.gs.zp2, p);
                     let old_proj = self.gs.project(cx, cy);
                     let dist = val - old_proj;

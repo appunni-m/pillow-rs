@@ -131,6 +131,65 @@ def write_called_fpgm_instctrl() -> None:
     save_font("hinter-called-fpgm-instctrl.ttf", font)
 
 
+def write_direct_fpgm_instctrl() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    # Direct fpgm execution has iniRange 1.  C ignores selector 1 normally and
+    # reports Invalid_Reference under pedantic hinting; this differs from the
+    # prep-initiated CALL control above, whose iniRange remains 0.
+    font["fpgm"].program = program_from_bytes(bytes.fromhex("b1 00 01 8e"))
+    save_font("hinter-direct-fpgm-instctrl.ttf", font)
+
+
+def write_fpgm_truncated_definition_pushes() -> None:
+    for name, terminal_push in (
+        ("hinter-fpgm-truncated-fdef-npushb.ttf", "40"),
+        ("hinter-fpgm-truncated-fdef-npushw.ttf", "41"),
+        ("hinter-fpgm-truncated-fdef-npushb-payload.ttf", "40 02 01"),
+    ):
+        font = TTFont(BASE_FONT, recalcTimestamp=False)
+        # FreeType `SkipCode` reads the variable-push count while scanning the
+        # FDEF body and returns Code_Overflow when the count or payload is
+        # truncated.
+        font["fpgm"].program = program_from_bytes(
+            bytes.fromhex(f"b0 00 2c {terminal_push}")
+        )
+        save_font(name, font)
+
+
+def write_unterminated_control_flow() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    # A false IF and a standalone ELSE both require the scanner to find EIF.
+    # Pinned FreeType reaches codeSize and reports Code_Overflow in each case.
+    font["glyf"]["base"].program = program_from_bytes(bytes.fromhex("b0 00 58"))
+    font["glyf"]["mark"].program = program_from_bytes(bytes.fromhex("1b"))
+    save_font("hinter-unterminated-control-flow.ttf", font)
+
+
+def write_invalid_twilight_scfs() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    # Select twilight zp2, then address point 65535.  C ignores invalid SCFS
+    # points normally and reports Invalid_Reference under FT_LOAD_PEDANTIC.
+    font["glyf"]["base"].program = program_from_bytes(
+        bytes.fromhex("b0 00 15 b9 ff ff 00 00 48")
+    )
+    save_font("hinter-invalid-twilight-scfs.ttf", font)
+
+
+def write_composite_compatibility_moves() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    # The instructed composite runs with v40 compatibility enabled.  Vertical
+    # and horizontal SHPIX prove both composite/freedom-vector outcomes; the
+    # final vertical DELTAP1 proves the matching composite compatibility path.
+    font["glyf"]["withInstructions"].program = program_from_bytes(
+        bytes.fromhex(
+            "04 b1 00 20 38 "
+            "05 b1 00 20 38 "
+            "04 b2 b8 00 01 5d"
+        )
+    )
+    save_font("hinter-composite-compatibility-moves.ttf", font)
+
+
 def write_fpgm_call_errors() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     # This single font keeps CALL/LOOPCALL error coverage compact.  Its fpgm
@@ -239,6 +298,11 @@ def main() -> None:
     write_fpgm_loopcall()
     write_fpgm_loopcall_redefinition()
     write_called_fpgm_instctrl()
+    write_direct_fpgm_instctrl()
+    write_fpgm_truncated_definition_pushes()
+    write_unterminated_control_flow()
+    write_invalid_twilight_scfs()
+    write_composite_compatibility_moves()
     write_fpgm_call_errors()
     write_execution_too_long_loop()
     write_fpgm_fdef_index_overflow()
