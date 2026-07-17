@@ -24,9 +24,7 @@
               "font": {
                 "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/kerning/legacy-av-kern.ttf",
-                "status": "required_future_asset",
-                "requires": "SFNT with legacy kern table containing A/V pair and no GPOS-only ambiguity"
+                "id": "input/fonts/generated/kerning/legacy-av-kern.ttf"
               }
             },
             "params": {
@@ -46,9 +44,7 @@
               "font": {
                 "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/kerning/legacy-av-kern.ttf",
-                "status": "required_future_asset",
-                "requires": "SFNT with legacy kern table containing A/V pair and no GPOS-only ambiguity"
+                "id": "input/fonts/generated/kerning/legacy-av-kern.ttf"
               }
             },
             "params": {
@@ -68,9 +64,7 @@
               "font": {
                 "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/kerning/legacy-av-kern.ttf",
-                "status": "required_future_asset",
-                "requires": "SFNT with legacy kern table containing A/V pair and no GPOS-only ambiguity"
+                "id": "input/fonts/generated/kerning/legacy-av-kern.ttf"
               }
             },
             "params": {
@@ -119,9 +113,7 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/kerning/legacy-av-kern.ttf",
-            "status": "required_future_asset",
-            "requires": "SFNT with legacy kern table containing A/V pair and no GPOS-only ambiguity"
+            "id": "input/fonts/generated/kerning/legacy-av-kern.ttf"
           }
         },
         "params": {
@@ -174,9 +166,7 @@
           "no_kern_font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/kerning/no-kern-table.ttf",
-            "status": "required_future_asset",
-            "requires": "font with no legacy kern and no GPOS kerning"
+            "id": "input/fonts/generated/kerning/no-kern-table.ttf"
           }
         },
         "params": {
@@ -224,9 +214,7 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/kerning/gpos-only-av.ttf",
-            "status": "required_future_asset",
-            "requires": "OpenType font with GPOS pair adjustment and no legacy kern table"
+            "id": "input/fonts/generated/kerning/gpos-only-av.ttf"
           }
         },
         "params": {
@@ -292,9 +280,7 @@
               "font": {
                 "kind": "ref",
                 "role": "font",
-                "path": "input/fonts/kerning/legacy-av-kern.ttf",
-                "status": "required_future_asset",
-                "requires": "SFNT with legacy kern table containing A/V pair and no GPOS-only ambiguity"
+                "id": "input/fonts/generated/kerning/legacy-av-kern.ttf"
               }
             },
             "params": {

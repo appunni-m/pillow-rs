@@ -88,9 +88,7 @@
           "kern_font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/kerning/legacy-av-kern.ttf",
-            "status": "required_future_asset",
-            "requires": "Non-PFR SFNT with legacy kern table for a nonzero fallback vector"
+            "id": "input/fonts/generated/kerning/legacy-av-kern.ttf"
           }
         },
         "params": {
