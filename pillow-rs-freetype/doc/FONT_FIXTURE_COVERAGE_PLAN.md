@@ -2597,6 +2597,52 @@ FTMM named-instance obligations.
 | 2026-07-17 | TrueType prepared-context ownership contract | Reading all three residual `src/tt/hinter/mod.rs` branches against pinned `TT_Hint_Glyph` and `TT_Process_Composite_Glyph` (`ttgload.c:770-865,1180-1270`) showed that C receives size execution state prepared before glyph loading and never runs executable glyph instructions for an empty outline. Rust instead exposed `hint_glyph` publicly, let it run `fpgm`/`prep` as a fallback, prepared a second context inside direct composite scaling with drifted `tt_scale`/`point_size`, and guarded first-contour/tag writes for impossible empty vectors. The scaler now owns one reusable prepared context for both top-level and component loads, `Font` and direct scaler paths share one active-size constructor, and crate-private `hint_glyph` consumes the same non-empty prepared-state contract as C. Existing exact public native-hinter rows keep runtime parity at 7,095 / 7,095 with four unchanged pending rows and no route-count change. `src/tt/hinter/mod.rs` moves from 283 / 284 lines, 67 / 70 branches, and 415 / 421 regions to complete 281 / 281 lines, 64 / 64 branches, 11 / 11 functions, and 411 / 411 regions. The caller consolidation also moves `src/scaler.rs` from 1,215 / 1,278 lines, 192 / 202 branches, 58 / 62 functions, and 1,332 / 1,390 regions to 1,242 / 1,296 lines, 196 / 206 branches, 59 / 63 functions, and 1,346 / 1,386 regions. |
 | 2026-07-17 | Format-1 name language-tag compaction parity | Re-reading `tt_face_load_name` (`ttload.c:937-1040`) corrected the earlier malformed-language-tag classification: an out-of-range language-tag string does not fail face creation. C retains the tag slot with `stringLength=0`, exposes it through `FT_Get_Sfnt_LangTag` as `NULL` plus zero length, and compacts away name records that reference that tag or an index outside `numLangTagRecords`. Rust now follows that load-time contract, including rejecting strings that point before the format-1 storage area. One generated format-1 font carries a valid record plus records referencing an empty and a missing tag; a second sets `storageOffset` to the table header so both name and tag strings fall before storage. Five exact public rows cover both empty-tag causes, name count, and indexed name compaction through C oracle, Rust FFI, C ABI, and WASM ABI. The selector helpers are crate-private and no longer recheck empty strings already excluded by the loader, removing two post-loader-impossible branch sides. Full Coverage MCP parity rises from 7,095 / 7,095 to 7,100 / 7,100 with four unchanged pending rows; route-audit real parity rises from 3,896 to 3,901. `src/tt/name.rs` moves from 274 / 274 lines, 106 / 108 branches, and 23 / 23 functions to complete 292 / 292 lines, 116 / 116 branches, and 24 / 24 functions. |
 
+### API Residual Public-Route Audit - 2026-07-17
+
+Every missing line and branch side in `src/api.rs` at Coverage MCP snapshot
+`51ff11fb-3a0f-4810-b9e7-a47972350634` was read against its public callers and
+the pinned FreeType 2.14.3 implementation.  The baseline is 1,081 / 1,131
+lines, 1,616 / 1,675 regions, 244 / 302 branches, and 97 / 97 functions.
+
+| Rust lines | Pinned C path | Public-route decision |
+|---|---|---|
+| `500-501` | `ftobjs.c:975-1016`; `afglobal.c:444-462`; `ttgload.c:1442-1448` | Add the real out-of-range TARGET_LIGHT row: C returns `Invalid_Argument` from autohint metrics lookup, and C oracle, Rust FFI, C ABI, WASM ABI, and safe `Face::load_glyph` take that same path.  Reject the FORCE_AUTOHINT plus NO_AUTOHINT probe: C and Rust FFI correctly return `Invalid_Glyph_Index` from the TrueType driver, but safe `Face::load_glyph` returns `Invalid_Outline` because this base has no core invalid-glyph-index error category.  Keep that branch visible rather than remapping an existing error in the harness or crossing this `api.rs` bucket into the separately integrated error cleanup. |
+| `603,613,616` | `ftobjs.c:1079-1084,1162-1177` | Retain.  These are render-after-load failure propagation paths.  Public font loading validates outlines before the slot reaches this safe renderer; unsupported synthetic slot states remain explicit pending work. |
+| `810-811,857-873,949-954` | `ftobjs.c:1065-1114`; `ftsynth.c:106-177` | Retain.  Every successful public outline load constructs paired slot/render outline snapshots.  Missing one side is a private inconsistent `GlyphSlot`, not a C glyph-slot state. |
+| `909-910,984-1118` | `ftbitmap.c:135-412` | Retain.  Public loaded bitmaps satisfy dimensions, pitch, buffer length, and packed-depth invariants before the private in-place weight helper runs.  Direct public `FT_Bitmap_Embolden` has a separate exact route in the FFI layer. |
+| `1146-1238` | `ftbitmap.c:135-276,283-412` | Retain.  The error arms require malformed or overflowing private bitmap storage.  For valid tight MONO rows, byte-aligned `bit_last` equals `pitch * 8` and returns before `shift == 0`; a row that reaches `1238` would require caller-supplied excess pitch rather than a loaded glyph slot. |
+| `1359-1360` | `ftobjs.c:1116-1147` | Retain.  The helper is called only after the public load path rejects an empty outline, so a missing cbox here is a caller-contract violation. |
+| `1422-1443` | `ftoutln.c:917-1045`; `ftsynth.c:151-166` | Do not claim through FTSynth.  These guards model invalid direct-outline storage, while C FTSynth deliberately ignores `FT_Outline_EmboldenXY` errors.  The separate `FT_Outline_Embolden` and `FT_Outline_EmboldenXY` manifest rows remain generic fallback until complete direct public wrappers exist. |
+| `1557-1598` | `ftoutln.c:1051-1117` | Retain.  Exact public orientation rows cover null, empty, valid, collapsed, oversized, and zero-area outlines.  The residuals require negative/mismatched counts or endpoints that cannot be represented by the validated owned outline snapshot without manufacturing invalid raw-pointer storage. |
+
+No implementation guard is removed by this audit.  Candidates that pass parity
+without proving one of the listed public outcomes are not retained.
+
+The retained row passed the focused Coverage MCP run
+`020d89e8-5107-4154-9cac-705e3fc30a4c` (4 / 4 exact comparisons) and the
+definitive full run `ae3676a8-848a-4e1d-b94b-1d56cb967464` (7,103 / 7,103
+runtime parity, four unchanged pending rows).  Route audit moves from 7,106 to
+7,107 concrete cases and from 3,903 to 3,904 real-parity cases; generic fallback
+remains 811, generic-error fallback remains 129, and pending-core remains 6.
+The API-only report from that exact full-run artifact is Coverage MCP snapshot
+`a4dd2495-d71d-4d29-ace4-00090679b9d5`: `src/api.rs` remains 1,081 / 1,131
+lines, 1,616 / 1,675 regions, and 97 / 97 functions, while branches improve
+from 244 / 302 to 245 / 302.  Line 501 is the sole newly covered branch side;
+line 500 still has one uncovered side.
+
+The definitive zero-hit source records are `613`, `616`, `811`, `859`, `870`,
+`873`, `910`, `954`, `1017`, `1020`, `1023`, `1027-1030`, `1034`, `1037`,
+`1048`, `1083`, `1100`, `1103`, `1106`, `1109`, `1112`, `1115`, `1118`,
+`1151`, `1154`, `1157`, `1160`, `1163`, `1166`, `1176`, `1179`, `1182`,
+`1220`, `1238`, `1360`, `1423`, `1426`, `1434`, `1437`, `1440`, `1443`,
+`1558`, `1577`, `1580`, `1589`, `1592`, `1595`, and `1598`.  The exact
+partial-branch records are `500`, `603`, `810`, `857`, `868`, `871`, `909`,
+`949`, `984-985`, `988-989`, `1012`, `1019`, `1022`, `1026`, `1033`, `1036`,
+`1079`, `1095`, `1102`, `1105`, `1108`, `1111`, `1114`, `1117`, `1146`,
+`1153`, `1156`, `1159`, `1162`, `1165`, `1169`, `1175`, `1178`, `1181`,
+`1216`, `1235`, `1359`, `1422`, `1425`, `1433`, `1436`, `1439`, `1442`,
+`1557`, `1576`, `1579`, `1588`, `1591`, `1594`, and `1597`.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
