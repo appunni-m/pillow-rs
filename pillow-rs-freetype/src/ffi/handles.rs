@@ -1532,6 +1532,100 @@ pub fn FT_Outline_Get_Bitmap(
     })
 }
 
+/// Renders an outline through the safe bitmap-mode equivalent of
+/// `FT_Outline_Render`.
+///
+/// Callback-based direct rendering and the monochrome renderer are separate
+/// public routes and are not modeled by this bitmap return value.
+pub fn FT_Outline_Render(
+    library: Option<&FT_Library>,
+    outline: Option<&FT_OutlineSnapshot>,
+    target: Option<&FT_Bitmap_C>,
+    flags: FT_Int,
+    _clip_box: FT_BBox,
+) -> Result<FT_Bitmap, FT_Error> {
+    if library.is_none() {
+        return Err(FT_Err_Invalid_Library_Handle as FT_Error);
+    }
+    let Some(outline_snapshot) = outline else {
+        return Err(FT_Err_Invalid_Outline as FT_Error);
+    };
+
+    let mut cbox = FT_BBox::default();
+    FT_Outline_Get_CBox(Some(outline_snapshot), Some(&mut cbox));
+    if cbox.xMin < -0x1000000
+        || cbox.yMin < -0x1000000
+        || cbox.xMax > 0x1000000
+        || cbox.yMax > 0x1000000
+    {
+        return Err(FT_Err_Invalid_Outline as FT_Error);
+    }
+
+    let Some(outline) = outline_snapshot_to_core(outline_snapshot) else {
+        return Err(FT_Err_Invalid_Outline as FT_Error);
+    };
+    if flags & FT_RASTER_FLAG_DIRECT as FT_Int != 0 {
+        return Err(FT_Err_Unimplemented_Feature as FT_Error);
+    }
+    if flags & FT_RASTER_FLAG_AA as FT_Int == 0 {
+        return Err(FT_Err_Cannot_Render_Glyph as FT_Error);
+    }
+
+    // ftgrays.c:gray_raster_render returns before inspecting the target for an
+    // empty outline, but validates the final contour endpoint before its
+    // zero-sized-target fast path.
+    let empty_outline = outline.points.is_empty() || outline.n_contours == 0;
+    if !empty_outline
+        && outline
+            .contours
+            .last()
+            .is_none_or(|&last| usize::try_from(last).ok() != Some(outline.points.len() - 1))
+    {
+        return Err(FT_Err_Invalid_Outline as FT_Error);
+    }
+    let Some(target) = target else {
+        if empty_outline {
+            return Ok(FT_Bitmap::default());
+        }
+        return Err(FT_Err_Invalid_Argument as FT_Error);
+    };
+    let width = usize::try_from(target.width).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?;
+    let rows = usize::try_from(target.rows).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?;
+    let pitch_abs = usize::try_from(target.pitch.unsigned_abs()).unwrap_or(width);
+    let mut pixels = vec![0; pitch_abs.saturating_mul(rows)];
+    if empty_outline || width == 0 || rows == 0 {
+        return Ok(FT_Bitmap {
+            rows: target.rows,
+            width: target.width,
+            pitch: target.pitch,
+            buffer: pixels,
+            num_grays: target.num_grays,
+            pixel_mode: target.pixel_mode.into(),
+        });
+    }
+
+    // In non-DIRECT mode, pinned FreeType 2.14.3's gray_raster_render
+    // overwrites params.clip_box with the target dimensions.  Consequently,
+    // FT_RASTER_FLAG_CLIP is deliberately ignored for bitmap rendering.
+    let raster = crate::grays::rasterize_in_box(outline, width, rows).map_err(error_to_ft)?;
+    if raster.pixels.len() == width.saturating_mul(rows) {
+        for y in 0..rows {
+            let src = y * width;
+            let dst = y * pitch_abs;
+            let row_bytes = width.min(pitch_abs);
+            pixels[dst..dst + row_bytes].copy_from_slice(&raster.pixels[src..src + row_bytes]);
+        }
+    }
+    Ok(FT_Bitmap {
+        rows: target.rows,
+        width: target.width,
+        pitch: target.pitch,
+        buffer: pixels,
+        num_grays: target.num_grays,
+        pixel_mode: target.pixel_mode.into(),
+    })
+}
+
 pub fn FT_Outline_Get_Orientation(outline: Option<&FT_OutlineSnapshot>) -> FT_Orientation {
     let Some(outline) = outline else {
         return FT_ORIENTATION_TRUETYPE as FT_Orientation;
@@ -3363,11 +3457,14 @@ fn outline_snapshot_to_core(outline: &FT_OutlineSnapshot) -> Option<crate::outli
             })
         })
         .collect::<Option<Vec<_>>>()?;
+    // The public FT_Outline contour array is FT_Short.  The compatibility
+    // snapshot stores the ABI bits in FT_UShort, so preserve negative contour
+    // endpoints (notably -1) instead of rejecting them before the rasterizer.
     let contours = outline
         .contours
         .iter()
-        .map(|&contour| i16::try_from(contour).ok())
-        .collect::<Option<Vec<_>>>()?;
+        .map(|&contour| i16::from_ne_bytes(contour.to_ne_bytes()))
+        .collect::<Vec<_>>();
     Some(crate::outline::Outline {
         n_contours: i32::try_from(contours.len()).ok()?,
         contours,

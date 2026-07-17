@@ -14,241 +14,241 @@
         "variants": [
           {
             "id": "simple-filled-square",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/simple-filled-square.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/simple-filled-square.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:baseline-line-square"]
           },
           {
             "id": "even-odd-overlap",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/even-odd-overlap.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/even-odd-overlap.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:even-odd-fill-overlap"]
           },
           {
             "id": "even-odd-double-wind",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/even-odd-double-wind.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/even-odd-double-wind.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:even-odd-fill-high-coverage"]
           },
           {
             "id": "even-odd-quad-wind",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/even-odd-quad-wind.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/even-odd-quad-wind.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:even-odd-fill-unmasked-overflow"]
           },
           {
             "id": "clipped-crossing-lines",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/clipped-crossing-lines.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-16x16.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/clipped-crossing-lines.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 16, "rows": 16, "pitch": 16, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid", "target_box": {"width": 16, "height": 16}},
             "coverage": ["grays:clip-box-outside-cells"]
           },
           {
             "id": "right-edge-clip-outside-target",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/right-edge-clip-outside-target.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/right-edge-clip-outside-target.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA", "FT_RASTER_FLAG_CLIP"], "target": "bitmap", "source": "ignored_sentinel", "clip_box": {"xMin": 32, "yMin": 0, "xMax": 40, "yMax": 1}}, "library": "valid", "target_box": {"width": 32, "height": 32}},
             "coverage": ["grays:right-edge-clip-target-bounds"]
           },
           {
             "id": "explicit-box-square",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/simple-filled-square.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/simple-filled-square.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid", "target_box": {"width": 32, "height": 32}},
             "coverage": ["grays:explicit-box-shifted-entry"]
           },
           {
             "id": "cubic-closed-loop",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-closed-loop.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-closed-loop.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-tagged-outline"]
           },
           {
             "id": "cubic-default-tag3",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-default-tag3.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-default-tag3.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-default-tag3"]
           },
           {
             "id": "zero-width-target",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/simple-filled-square.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-0x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/simple-filled-square.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 0, "rows": 32, "pitch": 0, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid", "target_box": {"width": 0, "height": 32}},
             "coverage": ["grays:zero-width-target"]
           },
           {
             "id": "zero-height-target",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/simple-filled-square.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x0.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/simple-filled-square.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 0, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid", "target_box": {"width": 32, "height": 0}},
             "coverage": ["grays:zero-height-target"]
           },
           {
             "id": "empty-outline",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/empty-outline.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/empty-outline.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:empty-outline"]
           },
           {
             "id": "zero-contours-nonempty-points",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/zero-contours-nonempty-points.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/zero-contours-nonempty-points.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:zero-contours-nonempty-points"]
           },
           {
             "id": "empty-outline-target-box",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/empty-outline.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/empty-outline.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid", "target_box": {"width": 32, "height": 32}},
             "coverage": ["grays:empty-outline-explicit-target-box"]
           },
           {
             "id": "zero-contours-nonempty-points-target-box",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/zero-contours-nonempty-points.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/zero-contours-nonempty-points.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid", "target_box": {"width": 32, "height": 32}},
             "coverage": ["grays:zero-contours-explicit-target-box"]
           },
           {
             "id": "line-above-clip",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/line-above-clip.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/line-above-clip.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:line-above-clip"]
           },
           {
             "id": "line-below-clip",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/line-below-clip.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/line-below-clip.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:line-below-clip"]
           },
           {
             "id": "line-partial-above-clip",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/line-partial-above-clip.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/line-partial-above-clip.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:line-partial-above-clip"]
           },
           {
             "id": "line-partial-below-clip",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/line-partial-below-clip.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/line-partial-below-clip.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:line-partial-below-clip"]
           },
           {
             "id": "conic-below-clip",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/conic-below-clip.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/conic-below-clip.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:conic-below-clip"]
           },
           {
             "id": "conic-partial-above-clip",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/conic-partial-above-clip.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/conic-partial-above-clip.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:conic-partial-above-clip"]
           },
           {
             "id": "conic-partial-below-clip",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/conic-partial-below-clip.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/conic-partial-below-clip.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:conic-partial-below-clip"]
           },
           {
             "id": "conic-above-control-inside",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/conic-above-control-inside.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/conic-above-control-inside.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:conic-above-control-inside"]
           },
           {
             "id": "conic-above-to-inside",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/conic-above-to-inside.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/conic-above-to-inside.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:conic-above-to-inside"]
           },
           {
             "id": "conic-below-control-inside",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/conic-below-control-inside.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/conic-below-control-inside.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:conic-below-control-inside"]
           },
           {
             "id": "conic-below-to-inside",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/conic-below-to-inside.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/conic-below-to-inside.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:conic-below-to-inside"]
           },
           {
             "id": "cubic-above-clip",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-above-clip.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-above-clip.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-above-clip"]
           },
           {
             "id": "cubic-below-clip",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-below-clip.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-below-clip.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-below-clip"]
           },
           {
             "id": "cubic-partial-above-clip",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-partial-above-clip.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-partial-above-clip.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-partial-above-clip"]
           },
           {
             "id": "cubic-partial-below-clip",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-partial-below-clip.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-partial-below-clip.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-partial-below-clip"]
           },
           {
             "id": "cubic-above-c2-inside",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-above-c2-inside.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-above-c2-inside.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-above-c2-inside"]
           },
           {
             "id": "cubic-above-c1-inside",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-above-c1-inside.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-above-c1-inside.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-above-c1-inside"]
           },
           {
             "id": "cubic-above-start-inside",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-above-start-inside.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-above-start-inside.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-above-start-inside"]
           },
           {
             "id": "cubic-below-c2-inside",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-below-c2-inside.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-below-c2-inside.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-below-c2-inside"]
           },
           {
             "id": "cubic-below-c1-inside",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-below-c1-inside.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-below-c1-inside.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-below-c1-inside"]
           },
           {
             "id": "cubic-below-start-inside",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-below-start-inside.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-below-start-inside.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-below-start-inside"]
           },
           {
             "id": "cubic-third-flatness",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-third-flatness.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-third-flatness.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-third-flatness"]
           },
           {
             "id": "cubic-fourth-flatness",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-fourth-flatness.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-fourth-flatness.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-fourth-flatness"]
           },
           {
             "id": "cubic-close-to-start",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/cubic-close-to-start.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/cubic-close-to-start.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "coverage": ["grays:cubic-close-to-start"]
           },
           {
             "id": "invalid-contour-order",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/invalid-contour-order.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/invalid-contour-order.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "expect_error": true,
             "expectation": {"compare": {"compare_error_output": true}},
@@ -256,7 +256,7 @@
           },
           {
             "id": "invalid-starts-cubic",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/invalid-starts-cubic.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/invalid-starts-cubic.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "expect_error": true,
             "expectation": {"compare": {"compare_error_output": true}},
@@ -264,7 +264,7 @@
           },
           {
             "id": "invalid-conic-bad-tag",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/invalid-conic-bad-tag.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/invalid-conic-bad-tag.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "expect_error": true,
             "expectation": {"compare": {"compare_error_output": true}},
@@ -272,7 +272,7 @@
           },
           {
             "id": "invalid-cubic-single-control",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/invalid-cubic-single-control.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/invalid-cubic-single-control.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "expect_error": true,
             "expectation": {"compare": {"compare_error_output": true}},
@@ -280,7 +280,7 @@
           },
           {
             "id": "invalid-cubic-second-not-cubic",
-            "assets": {"outline": {"kind": "ref", "id": "outlines/render/invalid-cubic-second-not-cubic.json", "asset_kind": "outline_model"}, "bitmap": {"kind": "ref", "id": "bitmaps/targets/gray-32x32.json", "asset_kind": "bitmap_model"}},
+            "assets": {"outline": {"kind": "synthetic_outline", "id": "outlines/render/invalid-cubic-second-not-cubic.json", "generator": "unified-inline-outline-v1"}, "bitmap": {"kind": "bitmap_target", "width": 32, "rows": 32, "pitch": 32, "pixel_mode": "FT_PIXEL_MODE_GRAY", "num_grays": 256}},
             "params": {"raster_params": {"flags": ["FT_RASTER_FLAG_AA"], "target": "bitmap", "source": "ignored_sentinel"}, "library": "valid"},
             "expect_error": true,
             "expectation": {"compare": {"compare_error_output": true}},

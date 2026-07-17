@@ -113,6 +113,20 @@ pub struct FontdoneWasmBitmap {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmRasterParams {
+    pub target: *mut FontdoneWasmBitmap,
+    pub source: *const c_void,
+    pub flags: FT_Int,
+    pub gray_spans: *const c_void,
+    pub black_spans: *const c_void,
+    pub bit_test: *const c_void,
+    pub bit_set: *const c_void,
+    pub user: *mut c_void,
+    pub clip_box: FontdoneWasmBBox,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmColor {
     pub blue: FT_Byte,
     pub green: FT_Byte,
@@ -834,6 +848,53 @@ pub extern "C" fn fontdone_wasm_outline_get_bitmap(
     {
         Ok(rendered) => {
             copy_rendered_bitmap_to_wasm(target, &rendered);
+            rust_ffi::FT_Err_Ok
+        }
+        Err(err) => err,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_render(
+    library_present: i32,
+    outline: *const FontdoneWasmOutline,
+    params: *mut FontdoneWasmRasterParams,
+) -> FT_Error {
+    let Some(params) = (unsafe { params.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let library = if library_present != 0 {
+        Some(rust_ffi::FT_Init_FreeType())
+    } else {
+        None
+    };
+    let snapshot = outline_snapshot_from_wasm(outline);
+    let target = unsafe { params.target.as_ref() };
+    let bitmap_view = target.map(wasm_bitmap_to_rust);
+    let clip_box = rust_ffi::FT_BBox {
+        xMin: params.clip_box.xMin,
+        yMin: params.clip_box.yMin,
+        xMax: params.clip_box.xMax,
+        yMax: params.clip_box.yMax,
+    };
+    match rust_ffi::FT_Outline_Render(
+        library.as_ref(),
+        snapshot.as_ref(),
+        bitmap_view.as_ref(),
+        params.flags,
+        clip_box,
+    ) {
+        Ok(rendered) => {
+            params.source = outline.cast();
+            if let Some(target) = target {
+                if target.width != 0 && target.rows != 0 && target.buffer.is_null() {
+                    return rust_ffi::FT_Err_Invalid_Argument;
+                }
+                // SAFETY: the WASM descriptor points at writable linear-memory
+                // bitmap storage for this synchronous call.
+                let target = unsafe { &mut *params.target };
+                copy_rendered_bitmap_to_wasm(target, &rendered);
+            }
             rust_ffi::FT_Err_Ok
         }
         Err(err) => err,

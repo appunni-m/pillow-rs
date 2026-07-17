@@ -112,6 +112,28 @@ typedef struct FT_Bitmap_ {
   void* palette;
 } FT_Bitmap;
 
+typedef struct FT_Span_ {
+  short x;
+  unsigned short len;
+  unsigned char coverage;
+} FT_Span;
+
+typedef void (*FT_SpanFunc)(int y, int count, const FT_Span* spans, void* user);
+typedef int (*FT_Raster_BitTest_Func)(int y, int x, void* user);
+typedef void (*FT_Raster_BitSet_Func)(int y, int x, void* user);
+
+typedef struct FT_Raster_Params_ {
+  const FT_Bitmap* target;
+  const void* source;
+  int flags;
+  FT_SpanFunc gray_spans;
+  FT_SpanFunc black_spans;
+  FT_Raster_BitTest_Func bit_test;
+  FT_Raster_BitSet_Func bit_set;
+  void* user;
+  FT_BBox clip_box;
+} FT_Raster_Params;
+
 typedef struct FT_Color_ {
   FT_Byte blue;
   FT_Byte green;
@@ -245,6 +267,7 @@ FT_Bool FT_Face_CheckTrueTypePatents(FT_Face face);
 FT_Bool FT_Face_SetUnpatentedHinting(FT_Face face, FT_Bool value);
 void FT_Outline_Get_CBox(const FT_Outline* outline, FT_BBox* acbox);
 FT_Error FT_Outline_Get_Bitmap(FT_Library library, const FT_Outline* outline, FT_Bitmap* abitmap);
+FT_Error FT_Outline_Render(FT_Library library, FT_Outline* outline, FT_Raster_Params* params);
 FT_Orientation FT_Outline_Get_Orientation(const FT_Outline* outline);
 void FT_Outline_Reverse(FT_Outline* outline);
 void FT_Outline_Transform(const FT_Outline* outline, const FT_Matrix* matrix);

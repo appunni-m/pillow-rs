@@ -138,6 +138,36 @@ pub struct FT_Bitmap {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FT_Span {
+    pub x: c_short,
+    pub len: c_ushort,
+    pub coverage: c_uchar,
+}
+
+pub type FT_SpanFunc = Option<
+    unsafe extern "C" fn(y: c_int, count: c_int, spans: *const FT_Span, user: *mut c_void),
+>;
+pub type FT_Raster_BitTest_Func =
+    Option<unsafe extern "C" fn(y: c_int, x: c_int, user: *mut c_void) -> c_int>;
+pub type FT_Raster_BitSet_Func =
+    Option<unsafe extern "C" fn(y: c_int, x: c_int, user: *mut c_void)>;
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FT_Raster_Params {
+    pub target: *const FT_Bitmap,
+    pub source: *const c_void,
+    pub flags: c_int,
+    pub gray_spans: FT_SpanFunc,
+    pub black_spans: FT_SpanFunc,
+    pub bit_test: FT_Raster_BitTest_Func,
+    pub bit_set: FT_Raster_BitSet_Func,
+    pub user: *mut c_void,
+    pub clip_box: FT_BBox,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FT_Color {
     pub blue: FT_Byte,
     pub green: FT_Byte,
@@ -1406,6 +1436,46 @@ pub extern "C" fn FT_Outline_Get_Bitmap(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_Render(
+    library: FT_Library,
+    outline: *const FT_Outline,
+    params: *mut FT_Raster_Params,
+) -> FT_Error {
+    let Some(params) = (unsafe { params.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let snapshot = outline_snapshot_from_c(outline);
+    let target = unsafe { params.target.as_ref() };
+    let bitmap_view = target.map(bitmap_to_rust);
+    let clip_box = rust_ffi::FT_BBox {
+        xMin: params.clip_box.xMin,
+        yMin: params.clip_box.yMin,
+        xMax: params.clip_box.xMax,
+        yMax: params.clip_box.yMax,
+    };
+
+    match rust_ffi::FT_Outline_Render(
+        library_ref(library),
+        snapshot.as_ref(),
+        bitmap_view.as_ref(),
+        params.flags,
+        clip_box,
+    ) {
+        Ok(rendered) => {
+            params.source = outline.cast();
+            if let Some(target) = target {
+                if target.width != 0 && target.rows != 0 && target.buffer.is_null() {
+                    return rust_ffi::FT_Err_Invalid_Argument;
+                }
+                copy_rendered_bitmap_to_c(target, &rendered);
+            }
+            rust_ffi::FT_Err_Ok
+        }
+        Err(err) => err,
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Outline_Get_Orientation(outline: *const FT_Outline) -> FT_Orientation {
     let Some(snapshot) = outline_snapshot_from_c(outline) else {
         return rust_ffi::FT_ORIENTATION_TRUETYPE as FT_Orientation;
@@ -2510,7 +2580,7 @@ fn copy_outline_snapshot_to_c(
     }
 }
 
-fn copy_rendered_bitmap_to_c(target: &mut FT_Bitmap, rendered: &rust_ffi::FT_Bitmap) {
+fn copy_rendered_bitmap_to_c(target: &FT_Bitmap, rendered: &rust_ffi::FT_Bitmap) {
     let rows = usize::try_from(target.rows).unwrap_or(0);
     let width = usize::try_from(target.width).unwrap_or(0);
     let pitch_abs = usize::try_from(target.pitch.unsigned_abs()).unwrap_or(0);
