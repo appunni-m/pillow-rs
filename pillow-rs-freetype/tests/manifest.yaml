@@ -5054,7 +5054,7 @@ subjects:
       - id: value_matches_header
         description: Numeric value is exactly 0x10, matching the pinned fterrdef.h entry.
       - id: load_glyph_rejects_out_of_range_index
-        description: FT_Load_Glyph returns Invalid_Glyph_Index when glyph_index is greater than or equal to face->num_glyphs, with no successful slot population.
+        description: Legacy-named route audit proving FT_Load_Glyph returns driver-owned Invalid_Argument for face.num_glyphs; Invalid_Glyph_Index is returned by FT_Get_Advance before loading.
 
   - id: fterrdef.FT_Err_Invalid_Handle
     kind: error

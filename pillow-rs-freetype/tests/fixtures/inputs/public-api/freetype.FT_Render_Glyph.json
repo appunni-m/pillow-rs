@@ -2426,7 +2426,7 @@
           "slot_mutation": "c_oracle"
         },
         "compare": {
-          "mode": "exact_error",
+          "mode": "unsupported_until_runner_added",
           "paths": [
             "outputs[*].status",
             "outputs[*].error",

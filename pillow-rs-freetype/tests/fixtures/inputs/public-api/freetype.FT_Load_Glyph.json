@@ -6667,6 +6667,112 @@
       }
     },
     {
+      "case_id": "freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags.above_core_u16_invalid_argument",
+      "subject": "freetype.FT_Load_Glyph",
+      "case": "error_out_of_range_null_face_or_invalid_flags",
+      "operation": "load_glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_index": 65536,
+          "load_flags": [
+            "FT_LOAD_FORCE_AUTOHINT",
+            "FT_LOAD_NO_AUTOHINT"
+          ],
+          "size": 20
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-load",
+        "coverage:real-error-trigger"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Argument",
+        "output_shape": {
+          "return": "FT_Error",
+          "slot_mutation": "cleared_then_driver_error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "compare_error_output": true,
+          "paths": [
+            "status",
+            "error",
+            "slot_snapshot"
+          ]
+        },
+        "sources_checked": [
+          "freetype/src/base/ftobjs.c:922-924,976-989,1071-1078",
+          "freetype/src/truetype/ttdriver.c:469-475"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags.cff_driver_invalid_argument",
+      "subject": "freetype.FT_Load_Glyph",
+      "case": "error_out_of_range_null_face_or_invalid_flags",
+      "operation": "load_glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "fonts/cff/pure-cff-cubic.otf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_index": 65535,
+          "load_flags": [
+            "FT_LOAD_NO_AUTOHINT"
+          ],
+          "size": 20,
+          "assert_api_load_glyph_agrees": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:glyph-load",
+        "coverage:real-error-trigger"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Argument",
+        "output_shape": {
+          "return": "FT_Error",
+          "slot_mutation": "cleared_then_driver_error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "compare_error_output": true,
+          "paths": [
+            "status",
+            "error",
+            "slot_snapshot"
+          ]
+        },
+        "sources_checked": [
+          "freetype/src/base/ftobjs.c:922-924,1071-1078",
+          "freetype/src/cff/cffgload.c:238-239"
+        ]
+      }
+    },
+    {
       "case_id": "freetype.FT_Load_Glyph.error_null_face_or_invalid_flags.null_face",
       "subject": "freetype.FT_Load_Glyph",
       "case": "error_out_of_range_null_face_or_invalid_flags",

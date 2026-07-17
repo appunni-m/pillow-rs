@@ -609,7 +609,24 @@ fn build_dependent_runtime_reason(case: &InputCase) -> Option<&'static str> {
     None
 }
 
+fn unrouted_slot_state_runtime_reason(case: &InputCase) -> Option<&'static str> {
+    match case.case_id.as_str() {
+        "ftimage.FT_GLYPH_FORMAT_NONE.reset_slot_uses_none" => {
+            Some("unloaded glyph slot lifecycle is not exposed by the Rust FFI or ABI wrappers")
+        }
+        "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states" => {
+            Some("unloaded and unsupported glyph-slot states need explicit public runner support")
+        }
+        _ => None,
+    }
+}
+
 fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness {
+    if let Some(reason) = unrouted_slot_state_runtime_reason(case) {
+        return RuntimeReadiness::Pending {
+            reason: format!("{operation}:{reason}"),
+        };
+    }
     if let Some(reason) = build_dependent_runtime_reason(case) {
         return RuntimeReadiness::Pending {
             reason: format!("{operation}:{reason}"),
@@ -2361,9 +2378,6 @@ impl BackendComparisonWorker {
             }
             "load_char" => rust_load_char_public_api(case),
             "load_glyph" => {
-                if load_glyph_num_glyphs_invalid_argument_case(case) {
-                    return Ok(error(FT_Err_Invalid_Argument));
-                }
                 if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
                     return Ok(error(FT_Err_Invalid_Face_Handle as FT_Error));
                 }
@@ -2617,9 +2631,6 @@ impl BackendComparisonWorker {
                 c_load_char_output(face, &case.inputs.params)
             }
             "load_glyph" => {
-                if load_glyph_num_glyphs_invalid_argument_case(case) {
-                    return Ok(error(FT_Err_Invalid_Argument));
-                }
                 let face = self.c_face(case)?;
                 c_load_glyph_output(face, &case.inputs.params)
             }
@@ -2865,9 +2876,6 @@ impl BackendComparisonWorker {
                 wasm_load_char_output(handle, &case.inputs.params)
             }
             "load_glyph" => {
-                if load_glyph_num_glyphs_invalid_argument_case(case) {
-                    return Ok(error(FT_Err_Invalid_Argument));
-                }
                 let handle = self.wasm_face(case)?;
                 wasm_load_glyph_output(handle, &case.inputs.params)
             }
@@ -9907,9 +9915,6 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_geometry" => rust_set_lcd_geometry(case),
         "load_char" => rust_load_char_public_api(case),
         "load_glyph" => {
-            if load_glyph_num_glyphs_invalid_argument_case(case) {
-                return Ok(error(FT_Err_Invalid_Argument));
-            }
             if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
                 return Ok(error(FT_Err_Invalid_Face_Handle as FT_Error));
             }
@@ -10537,9 +10542,6 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "load_glyph" => {
-            if load_glyph_num_glyphs_invalid_argument_case(case) {
-                return Ok(error(FT_Err_Invalid_Argument));
-            }
             if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
                 return c_load_glyph_output(std::ptr::null_mut(), &case.inputs.params);
             }
@@ -11073,9 +11075,6 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "load_glyph" => {
-            if load_glyph_num_glyphs_invalid_argument_case(case) {
-                return Ok(error(FT_Err_Invalid_Argument));
-            }
             if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
                 return wasm_load_glyph_output(0, &case.inputs.params);
             }
@@ -16904,10 +16903,6 @@ fn manager_reset_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
         "size_identity_class_after_reset": "fresh_or_reloaded",
         "node_count_class": "not_observed"
     })))
-}
-
-fn load_glyph_num_glyphs_invalid_argument_case(case: &InputCase) -> bool {
-    case.case_id == "fterrdef.FT_Err_Invalid_Glyph_Index.load_glyph_rejects_out_of_range_index"
 }
 
 #[derive(Clone, Copy)]

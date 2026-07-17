@@ -62,7 +62,7 @@
       "case_id": "fterrdef.FT_Err_Invalid_Composite.truetype_composite_component_rejected",
       "subject": "fterrdef.FT_Err_Invalid_Composite",
       "case": "truetype_composite_component_rejected",
-      "operation": "truetype.load_glyph",
+      "operation": "load_glyph",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -70,59 +70,55 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "id": "fonts/synthetic/truetype/invalid-composite-glyph.ttf",
+            "id": "fonts/glyf/glyf-malformed-matrix.ttf",
             "asset_kind": "font"
           }
         },
         "params": {
-          "call_sequence": [
-            "FT_New_Memory_Face",
-            "FT_Load_Glyph"
-          ],
           "face_index": 0,
-          "glyph_index": 2,
+          "size": 20,
+          "glyph_index": 18,
           "load_flags": [
-            "FT_LOAD_DEFAULT"
+            "FT_LOAD_NO_SCALE"
           ],
-          "malformation": "composite glyph has invalid component flags, truncated component arguments, recursive reference, or out-of-range component glyph index",
+          "assert_api_load_glyph_agrees": true,
+          "malformation": "composite glyph references a component index outside num_glyphs",
           "expected_error_symbol": "FT_Err_Invalid_Composite",
           "expected_error_value": 21,
-          "c_behavior": "TrueType glyph loading reports Invalid_Composite for malformed composite component records instead of fabricating an outline"
+          "c_behavior": "FreeType 2.14.3 TT_Load_Composite_Glyph rejects an out-of-range component index as Invalid_Composite"
         }
       },
       "classifiers": [
         "kind:error",
         "header:fterrdef",
         "surface:public-c-api",
-        "coverage:modeled-error-trigger"
+        "coverage:real-error-trigger"
       ],
       "expectation": {
         "status": "error",
+        "error": "FT_Err_Invalid_Composite",
         "output_shape": {
           "error": "FT_Error",
           "expected_error_symbol": "FT_Err_Invalid_Composite",
           "expected_error_value": 21,
-          "side_effects": "public output pointer, stream, slot, or face state as described by the source path"
+          "slot_state": "cleared_then_driver_error"
         },
         "compare": {
-          "mode": "unsupported_until_runner_added",
+          "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
-            "error.symbol",
-            "error.value",
-            "glyph_slot.format",
-            "glyph_slot.outline"
+            "status",
+            "error",
+            "slot_snapshot"
           ]
         },
         "oracle": "generated_at_runtime_from_c_freetype",
         "sources_checked": [
           "freetype/include/freetype/fterrdef.h",
           "freetype/include/freetype/fterrors.h",
-          "freetype/src/truetype/ttgload.c",
-          "freetype/src/sfnt/ttsbit.c"
+          "freetype/src/truetype/ttgload.c:573-587"
         ],
-        "fixture_requirements": [
-          "Synthetic glyf table with a malformed composite glyph and a valid simple-glyph control."
-        ]
+        "fixture_requirements": "Maintained fonts/glyf/glyf-malformed-matrix.ttf gid 18 contains an out-of-range composite component index."
       }
     }
   ]

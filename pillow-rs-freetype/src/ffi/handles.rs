@@ -2906,13 +2906,13 @@ pub fn FT_Load_Glyph(
     if face.probe_only || !has_active_size(face) {
         return Err(FT_Err_Invalid_Size_Handle);
     }
-    let glyph_index = u16::try_from(glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
+    let Ok(glyph_index) = u16::try_from(glyph_index) else {
+        // FreeType 2.14.3's TT and CFF drivers classify every index outside
+        // `num_glyphs` as Invalid_Argument, including FT_UInt values above
+        // this core's u16 glyph-index representation.
+        return Err(FT_Err_Invalid_Argument);
+    };
     let flags = load_flags_to_core(load_flags)?;
-    let inner = face.inner.borrow();
-    if glyph_index >= inner.info().num_glyphs && !inner.uses_explicit_autohinter(flags) {
-        return Err(FT_Err_Invalid_Glyph_Index);
-    }
-    drop(inner);
     let transform = if load_flags & FT_LOAD_IGNORE_TRANSFORM != 0 {
         None
     } else if face.transform_matrix.xx != 1 << 16
@@ -2955,7 +2955,8 @@ pub fn FT_Get_Advance(
     }
     let glyph_index = u16::try_from(glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
     let flags = load_flags_to_core(load_flags)?;
-    // Match the same driver-side glyph index guard used by `FT_Load_Glyph`.
+    // `FT_Get_Advance` owns this Invalid_Glyph_Index precheck in `ftadvanc.c`;
+    // `FT_Load_Glyph` instead delegates range errors to its font driver.
     if glyph_index >= face.inner.borrow().info().num_glyphs {
         return Err(FT_Err_Invalid_Glyph_Index);
     }

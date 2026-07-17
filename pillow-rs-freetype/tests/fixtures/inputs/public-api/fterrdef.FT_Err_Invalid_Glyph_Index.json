@@ -84,40 +84,45 @@
             "expression": "face.num_glyphs"
           },
           "load_flags": [
-            "FT_LOAD_DEFAULT"
+            "FT_LOAD_FORCE_AUTOHINT",
+            "FT_LOAD_NO_AUTOHINT"
           ],
-          "expected_error_symbol": "FT_Err_Invalid_Glyph_Index",
-          "expected_error_value": 16,
-          "c_behavior": "FT_Load_Glyph returns Invalid_Glyph_Index when glyph_index is greater than or equal to face->num_glyphs before driver loading"
+          "assert_api_load_glyph_agrees": true,
+          "expected_error_symbol": "FT_Err_Invalid_Argument",
+          "expected_error_value": 6,
+          "c_behavior": "FT_Load_Glyph delegates index validation to tt_glyph_load, which returns Invalid_Argument before load_truetype_glyph; FT_Get_Advance owns the public Invalid_Glyph_Index route"
         }
       },
       "classifiers": [
         "kind:error",
         "header:fterrdef",
         "surface:public-c-api",
-        "coverage:modeled-error-trigger"
+        "coverage:real-error-trigger"
       ],
       "expectation": {
         "status": "error",
         "output_shape": {
           "error": "FT_Error",
-          "expected_error_symbol": "FT_Err_Invalid_Glyph_Index",
-          "expected_error_value": 16,
+          "expected_error_symbol": "FT_Err_Invalid_Argument",
+          "expected_error_value": 6,
           "side_effects": "public output pointer, stream, slot, or face state as described by the source path"
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
-            "error.symbol",
-            "error.value",
-            "glyph_slot_state"
+            "status",
+            "error",
+            "slot_snapshot"
           ]
         },
         "oracle": "generated_at_runtime_from_c_freetype",
         "sources_checked": [
           "freetype/include/freetype/fterrdef.h",
           "freetype/include/freetype/fterrors.h",
-          "freetype/src/base/ftobjs.c"
+          "freetype/src/base/ftobjs.c:922-924,976-989,1071-1078",
+          "freetype/src/truetype/ttdriver.c:469-475",
+          "freetype/src/base/ftadvanc.c:107-126"
         ]
       }
     }

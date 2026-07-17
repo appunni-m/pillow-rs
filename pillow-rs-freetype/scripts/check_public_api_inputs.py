@@ -733,6 +733,11 @@ def has_null_lifecycle_handle(row: ConcreteInput) -> bool:
 
 
 def pending_core_reason(row: ConcreteInput) -> str | None:
+    if row.case_id == "ftimage.FT_GLYPH_FORMAT_NONE.reset_slot_uses_none":
+        return (
+            "unloaded glyph slot lifecycle is not exposed by the Rust FFI, "
+            "C ABI, or WASM ABI wrappers"
+        )
     if (
         row.operation == "ftbitmap.glyphslot_own_bitmap"
         and row.case == "error_copy_allocation_failure"

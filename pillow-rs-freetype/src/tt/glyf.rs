@@ -184,8 +184,16 @@ fn load_glyph_inner(
         ));
     }
 
-    let loc = get_glyph_location(loca, glyph_index, index_to_loc_format)
-        .ok_or_else(|| FontError::InvalidOutline("loca: glyph index out of range".into()))?;
+    let loc = get_glyph_location(loca, glyph_index, index_to_loc_format).ok_or_else(|| {
+        // FreeType 2.14.3 `tt_glyph_load` rejects an out-of-range public
+        // request as Invalid_Argument before `load_truetype_glyph`; a bad
+        // component index is Invalid_Composite (`ttdriver.c`, `ttgload.c`).
+        if depth == 0 {
+            FontError::InvalidArgument("loca: glyph index out of range".into())
+        } else {
+            FontError::InvalidComposite
+        }
+    })?;
     if loc.length == 0 {
         return Ok(GlyphOutline::default());
     }
