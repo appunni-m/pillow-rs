@@ -2926,6 +2926,75 @@ No defensive malformed-outline or composite guard is removed by this audit.
 The remaining paths require a real public loader state or a separate
 source-backed first-divergence proof; passing rows that do not move one of
 these records are not retained.
+### Render bitmap-SDF error retention and residual audit - 2026-07-17
+
+Pinned FreeType's bitmap-SDF renderer accepts the SDF render mode, allocates a
+temporary target, and then returns `FT_Err_Unimplemented_Feature` for GRAY2,
+GRAY4, LCD, LCD_V, and BGRA sources (`sdf/ftbsdf.c:805-810`).  Its renderer
+wrapper frees only that temporary target on failure and leaves the source slot
+unchanged (`sdf/ftsdfrend.c:552-601`).  Rust previously returned
+`FT_Err_Cannot_Render_Glyph` and the harness discarded the post-error slot, so
+the first divergence was both error taxonomy and observable retention.
+
+`ftimage.FT_Bitmap.sdf_unsupported_source_preserves_bitmap` now loads real
+20-ppem GRAY2, GRAY4, and BGRA SBIT strikes, calls the public render endpoint,
+and compares the exact error plus retained slot through the pinned C oracle,
+Rust FFI, C ABI, and WASM ABI.  The existing render matrix also gains a real
+MONO SBIT SDF success row.  No slot state is synthesized.  Coverage MCP run
+`61842b3a-150c-4e96-a983-e49f363a36d9` and snapshot
+`10459f6b-4ee1-4f8f-8c25-571cfd5e7df5` pass 7,027 / 7,027 runnable rows with
+153 unchanged pending rows.  The route ledger moves from 7,176 to 7,180
+concrete rows and from 3,597 to 3,601 real-parity rows; generic, generic-error,
+null-error, and pending categories do not move.  `src/render.rs` moves from
+2,325 / 2,459 lines, 419 / 490 branches, 144 / 158 functions, and
+3,246 / 3,432 regions to 2,339 / 2,459 lines, 423 / 490 branches,
+144 / 158 functions, and 3,274 / 3,432 regions.
+The operation-specific `render_glyph` ledger is now 206 real-parity rows while
+the existing nine generic-error rows, one null-error row, and one pending-core
+unloaded/unsupported-slot row remain visible and unchanged.
+
+Every residual line record and partial branch was read against its Rust caller
+and pinned C before selecting the SBIT subgroup.  The LLVM file summary is
+canonical: 120 missing instrumented lines, 67 missing branch outcomes,
+14 missing functions, and 158 missing regions.  Coverage MCP's normalized
+source projection exposes 82 distinct zero-hit source records and 50 partial
+branch records; it does not expose stable LLVM function or region identities,
+so the 14 functions and 158 regions are classified by their owning source
+scope below rather than credited as separate endpoints.
+
+| Residual source scope | Zero-hit lines | Partial-branch lines | Pinned C disposition / dependency |
+|---|---|---|---|
+| Pixel-mode metadata | `148-149` | none | GRAY2/GRAY4 SBITs are public, but the failing SDF route retains C's source `num_grays` instead of constructing a Rust output through `PixelMode::num_grays`.  A future exact non-SDF bitmap-output route must move these lines. |
+| Empty/render dispatch | `237-238,305,309,579` | `362,578` | MONO and LCD match arms are preempted by earlier returns; normal empty rendering takes the smooth-render preset path.  The remaining `points nonempty && n_contours == 0` side is not a valid loaded C outline.  Main commit `5bd9d91a` independently owns the empty pre-rendered bitmap-SDF API route and must not be duplicated here. |
+| Raster error propagation | `408,489,564,868,2906,2947` | none | Valid loaded outlines do not make the gray, SDF, mono, LCD, or LCD_V raster calls fail.  Exact coverage needs a public malformed/renderer-failure lifecycle or deterministic allocation failure, not a broad accepted error. |
+| Mono setup and profile entry | `718,771,800,1109,1134,1165` | `716,770,799,1108,1164` | `ttgload.c:2566-2618` clears `FT_OUTLINE_SINGLE_PASS` and derives only dropout flags.  Zero dimensions/empty profiles and opposite-flow profile transitions need a public glyph topology that survives the loader and produces a measured delta. |
+| Mono malformed decomposition | `1222,1234,1243-1244,1268,1278,1315,1332,1343-1346,1349` | `1221,1233,1271-1272,1274,1314,1329-1330,1339` | Out-of-order contour ends, invalid first cubic points, broken conic/cubic tag sequences, and missing contour points are rejected or normalized before `FT_Render_Glyph`.  They remain blocked by a real public malformed-outline route. |
+| Mono sweep/dropout topology | `1435,1437,1534,1536,1603,1617,1630,2014,2028,2041,2046` | `1397,1432,1484,1523,1582,1584,1602,1616,1629,1809,2013,2016,2025,2040,2045` | These are genuine black-raster profile-link, clipping, neighbor, and dropout shapes.  Existing exact scan-type/topology rows cover the reachable common states; further rows require compact glyphs that demonstrate new condition coverage, not helper calls. |
+| SDF malformed decomposition | `2083,2205,2216,2224-2225,2275,2293,2306-2307,2309,2312` | `2204,2215,2274,2290-2291,2300` | As in C's outline decomposition, invalid endpoints and curve tag sequences require a malformed public outline after loading.  Font loading preempts these states. |
+| SDF vector geometry | `2429` | `2428,2533` | Real outline geometry can still cover the remaining distance/cross-product sides.  Negative SDF saturation beyond 128 is unreachable because the caller clamps to renderer spread before mapping. |
+| Bitmap-SDF storage validation | `2588-2589,2591-2592,2603-2604,2606-2607,2609-2610` | none | Dimension overflow, negative MONO pitch, and truncated owned buffers are safe-Rust validation.  Public loaded SBITs have consistent positive pitch/storage, while C uses unchecked raw buffers and has no deterministic oracle for truncated storage. |
+| Bitmap-SDF edge topology | `2697,2706,2715,2727,2781` | `2647,2696,2701-2704,2726,2780` | GRAY and MONO SBIT success routes are real.  Remaining all-neighbor, border, alpha-gradient, and zero-radicand sides need source-backed SBIT alpha/mono shapes with exact retained bytes. |
+| Orientation, LCD box, and empty cbox | `2869,3023,3029` | `2868,3028` | Invalid contour endpoints and nonempty points with no usable contours are loader-inconsistent.  The non-LCD padding arm is private-call only because public dispatch calls this helper for LCD/LCD_V. |
+| `unpack_mono_row` | `2969-2974,2976,2979-2980` | `2973` | No production renderer caller exists.  Direct harness invocation, including historical commit `2e0f2637`, is helper-only and must not count as a FreeType route. |
+
+The exact source projection after the verified change is therefore:
+
+- zero-hit: `148-149,237-238,305,309,408,489,564,579,718,771,800,868,1109,1134,1165,1222,1234,1243-1244,1268,1278,1315,1332,1343-1346,1349,1435,1437,1534,1536,1603,1617,1630,2014,2028,2041,2046,2083,2205,2216,2224-2225,2275,2293,2306-2307,2309,2312,2429,2588-2589,2591-2592,2603-2604,2606-2607,2609-2610,2697,2706,2715,2727,2781,2869,2906,2947,2969-2974,2976,2979-2980,3023,3029`;
+- partial branch: `362,578,716,770,799,1108,1164,1221,1233,1271-1272,1274,1314,1329-1330,1339,1397,1432,1484,1523,1582,1584,1602,1616,1629,1809,2013,2016,2025,2040,2045,2204,2215,2274,2290-2291,2300,2428,2533,2647,2696,2701-2704,2726,2780,2868,2973,3028`.
+
+The preserved render worktrees were also reconciled against this exact
+snapshot.  Coverage MCP run `b9bcd856-e500-4a92-88c9-417f18fcf500` and
+snapshot `69763016-8a4a-4a88-b79a-2ea345774971` adapt the clipped-close mono,
+off-grid-close mono, and transform-plus-MONO candidates to the current public
+runner.  All three pass exact C/Rust/C-ABI/WASM parity (7,030 / 7,030), but
+their combined `render.rs` metrics are identical to the preceding snapshot, so
+none may be retained for this file bucket.  The wave2 centerline-SDF candidate
+is already present in the current generated font and render matrix.  The
+`current-render-untouched-lines` match-arm simplification and unused
+`MonoOutlineProfileBuilder::move_to` removal are caller-proven cleanup only,
+with no public route or coverage gain.  Archive all four preserved trees after
+review; if the cleanup is desired, submit it separately as route-neutral code
+maintenance rather than as parity coverage.
 
 ## Immediate Next Actions
 
