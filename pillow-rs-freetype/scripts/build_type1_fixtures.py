@@ -110,6 +110,14 @@ def build_simple_type1(
     write(str(path), data, kind="PFB")
 
 
+def invalidate_first_pfb_segment(path: Path) -> None:
+    data = bytearray(path.read_bytes())
+    if data[:2] != b"\x80\x01":
+        raise ValueError("expected an ASCII PFB first segment")
+    data[1] = 2
+    path.write_bytes(data)
+
+
 def main() -> None:
     build_simple_type1(
         OUT_DIR / "simple-type1.pfb",
@@ -132,6 +140,23 @@ def main() -> None:
         "Generated for fontdone Type 1 fixed-pitch face-flag coverage",
         is_fixed_pitch=True,
     )
+    build_simple_type1(
+        OUT_DIR / "bbox-array-type1.pfb",
+        "BBoxArrayTypeOne",
+        "BBox Array Type One",
+        "Generated for fontdone Type 1 array bbox coverage",
+        cleartext_replacements=[
+            (b"/FontBBox {0 0 500 700} def", b"/FontBBox [0 0 500 700] def")
+        ],
+    )
+    invalid_segment_path = OUT_DIR / "invalid-first-segment-type1.pfb"
+    build_simple_type1(
+        invalid_segment_path,
+        "InvalidSegmentTypeOne",
+        "Invalid Segment Type One",
+        "Generated for fontdone Type 1 PFB segment coverage",
+    )
+    invalidate_first_pfb_segment(invalid_segment_path)
     build_simple_type1(
         INPUT_OUT_DIR / "attach-afm-base.pfb",
         "AttachAfmBase",

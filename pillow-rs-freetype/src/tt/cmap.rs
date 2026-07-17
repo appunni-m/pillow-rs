@@ -233,8 +233,12 @@ impl CmapTable {
 }
 
 impl CharmapRecord {
-    fn is_unicode(&self) -> bool {
-        self.platform_id == 0 || (self.platform_id == 3 && matches!(self.encoding_id, 1 | 10))
+    pub(crate) fn is_unicode(&self) -> bool {
+        // `sfnt_find_encoding` classifies every Apple Unicode and ISO
+        // platform map as Unicode, plus Microsoft Unicode BMP/UCS-4.
+        self.platform_id == 0
+            || self.platform_id == 2
+            || (self.platform_id == 3 && matches!(self.encoding_id, 1 | 10))
     }
 }
 

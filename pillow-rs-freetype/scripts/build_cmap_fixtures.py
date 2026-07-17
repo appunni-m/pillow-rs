@@ -120,6 +120,17 @@ def pack_raw_cmap(records: list[tuple[int, int, bytes]]) -> bytes:
     return header + directory + b"".join(subtable for _, _, subtable in records)
 
 
+def compile_cmap_subtable(
+    font: TTFont,
+    format_: int,
+    platform_id: int,
+    encoding_id: int,
+    mapping: dict[int, str],
+) -> bytes:
+    table = cmap_subtable(format_, platform_id, encoding_id, 0, mapping)
+    return table.compile(font)
+
+
 def raw_cmap_table(data: bytes):
     table = DefaultTable("cmap")
     table.data = data
@@ -286,6 +297,57 @@ def build_non_unicode_format6_font() -> None:
     font.save(out, reorderTables=True)
 
 
+def build_default_charmap_order_fonts() -> None:
+    cases = [
+        (
+            "cmap-default-ucs4-order.ttf",
+            [
+                (3, 10, 12, {0x0041: "base"}),
+                (0, 4, 12, {0x0041: "mark"}),
+            ],
+        ),
+        (
+            "cmap-default-unicode-fallback-order.ttf",
+            [
+                (3, 1, 4, {0x0041: "base"}),
+                (0, 3, 4, {0x0041: "mark"}),
+            ],
+        ),
+        (
+            "cmap-default-iso-fallback-order.ttf",
+            [
+                (3, 1, 4, {0x0041: "base"}),
+                (2, 0, 4, {0x0041: "mark"}),
+            ],
+        ),
+    ]
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    for name, records in cases:
+        font = TTFont(BASE_FONT, recalcTimestamp=False)
+        font["cmap"] = raw_cmap_table(
+            pack_raw_cmap(
+                [
+                    (
+                        platform_id,
+                        encoding_id,
+                        compile_cmap_subtable(
+                            font,
+                            format_,
+                            platform_id,
+                            encoding_id,
+                            mapping,
+                        ),
+                    )
+                    for platform_id, encoding_id, format_, mapping in records
+                ]
+            )
+        )
+        out = OUT_DIR / name
+        if out.exists() or out.is_symlink():
+            out.unlink()
+        font.save(out, reorderTables=True)
+
+
 def build_format14_only_font() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     cmap = newTable("cmap")
@@ -349,6 +411,7 @@ def main() -> None:
     build_matrix_font()
     build_malformed_format14_font()
     build_non_unicode_format6_font()
+    build_default_charmap_order_fonts()
     build_format14_only_font()
     build_platform0_variation_font()
     build_non_uvs_format14_platforms_font()
