@@ -1139,12 +1139,10 @@ fn scale_glyph_impl_with_context(
                     }
                     final_hint_context = Some(outcome.context);
                 }
-                Err(e) => {
-                    if bytecode_context.pedantic_hinting {
-                        return Err(e);
-                    }
-                    log::debug!("[VM] gi={glyph_index}: {e}");
-                }
+                // `hint_glyph` owns the pinned `TT_Hint_Glyph` error policy:
+                // it suppresses non-pedantic `TT_Run_Context` failures and
+                // returns `Err` only for FT_LOAD_PEDANTIC (`ttgload.c:828-837`).
+                Err(e) => return Err(e),
             }
         }
     }
