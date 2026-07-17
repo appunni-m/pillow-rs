@@ -51,6 +51,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_face_set_unpatented_hinting",
     "fontdone_wasm_outline_get_cbox",
     "fontdone_wasm_outline_get_bitmap",
+    "fontdone_wasm_outline_render",
     "fontdone_wasm_outline_get_orientation",
     "fontdone_wasm_outline_reverse",
     "fontdone_wasm_outline_transform",
@@ -278,6 +279,12 @@ EXPLICIT_UNSUPPORTED_OPERATIONS = {
 
 AUDIT_ONLY_PENDING_CORE_CASES = {
     "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation",
+}
+
+SHARED_RUNTIME_FALLBACK_CASES = {
+    # The unified runtime currently compares one shared Rust direct-span
+    # fallback for all three actual lanes, not exported C/WASM public routes.
+    "ftimage.FT_Raster_Span_Func.direct_render_emits_spans",
 }
 
 PLACEHOLDER_STYLE_CATEGORIES = {
@@ -1041,6 +1048,11 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
         return (
             "generic-fallback",
             "oracle errors are explicitly accepted instead of requiring the declared route",
+        )
+    if row.case_id in SHARED_RUNTIME_FALLBACK_CASES:
+        return (
+            "generic-fallback",
+            "shared Rust fallback across Rust, C ABI, and WASM actual lanes; not public-route parity",
         )
     size_null_reason = size_null_validation_reason(row)
     if size_null_reason:
