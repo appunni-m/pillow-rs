@@ -2808,6 +2808,55 @@ no-OS/2 no-scale vertical metrics, and nominal zero-by-zero in the exact-error
 request matrix to prove the public preemption behavior. Every row uses the existing
 C-oracle/Rust-FFI/C-ABI/WASM-ABI comparison path.
 
+### Kerning asset resolution and duplicate helper audit
+
+The `FT_Get_Kerning` input matrix named three generated SFNT fixtures under
+the obsolete `input/fonts/kerning/` path and still marked them
+`required_future_asset`. The tracked standard fixtures actually live under
+`input/fonts/generated/kerning/`, so all six kerning cases were classified as
+pending before any C, Rust, C ABI, or WASM comparison ran. The declarations now
+reference those tracked assets directly. This makes the existing 9, 20, and 32
+ppem rows exercise both sides of FreeType 2.14.3's small-ppem scaling rule in
+`src/base/ftobjs.c:3603-3681`, and lets the existing unfitted row compare the
+safe `Font::getkerning` convenience result against the same pinned-C vector.
+
+The same audit found private `font.rs` wrapper chains that had no callers and
+added no behavior: metric-only force-autohint, target-light, no-hinting,
+no-scale, and no-autohint adapters; default/no-autohint scaler aliases; and the
+orphaned `layout_glyphs`/`layout_bounds` path. Public `FT_Load_Glyph` dispatch
+already calls the retained slot-loading implementations in `api.rs`, including
+the full layout, native target, hdmx, and pedantic inputs. Removing the aliases
+therefore consolidates each load mode on its actual public implementation
+without deleting any exported Rust, C ABI, or WASM endpoint.
+
+The public-surface audit also checked the retained `Font`/`Face` behavior
+against `tests/manifest.yaml`. All 34 C functions reached by these Rust routes
+are manifest subjects: face construction; size, charmap, variation-selector,
+name, SFNT, kerning, advance, and glyph-load APIs; font-format and `gasp`
+queries; and both named-instance functions. The four C records surfaced by the
+same implementation (`FT_FaceRec`, `FT_CharMapRec`, `FT_Size_Metrics`, and
+`FT_GlyphSlotRec`) are present too. Rust conveniences such as `Font::truetype`,
+`getname`, `getmetrics`, `getlength`, `getkerning`, `getbbox`, and `getmask`
+are intentionally not separate manifest subjects: they compose public C
+behavior but are not declarations in FreeType's public C headers. Likewise,
+`pub(crate)` and private load adapters are implementation details and must not
+be added to the C-interface catalog. The maintained `api-abi-check` remains
+the authoritative gate: it compares the manifest to every pinned public C
+subject and rejects missing, extra, duplicate, or header/symbol-mismatched
+entries.
+
+Coverage MCP focused run `ae75cca6-f29a-4cbd-97e2-3912a7b46486` verifies all
+8 / 8 `FT_Get_Kerning` rows with zero pending rows and checks all 1,543 public
+API input files against the generated pinned-C audit. Full run
+`1a22b5d8-a701-49f8-9c1d-79e4b00c3f0b` passes 7,052 / 7,052 runnable rows and
+ingests snapshot `529cca1e-6474-4d08-a221-08ca67aab132`. Runtime parity moves
+from 7,045 to 7,052 rows, route real-parity from 3,626 to 3,632, and route
+pending from 135 to 128. `font.rs` moves from 2,306 / 2,576 to 2,318 / 2,378
+covered lines, 291 / 328 to 293 / 328 branches, 196 / 239 to 199 / 218
+functions, and 3,128 / 3,505 to 3,160 / 3,301 regions. Overall coverage moves
+from 20,280 / 21,431 to 20,293 / 21,233 lines and from 4,906 / 5,487 to
+4,909 / 5,487 branch outcomes.
+
 ### Descender-only face metric predicates
 
 Pinned FreeType `sfnt_load_face` (`src/sfnt/sfobjs.c:1388-1410`) tests the

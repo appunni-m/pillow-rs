@@ -8,7 +8,6 @@ use crate::casts::{i16_from_i32, i32_from_f32, u32_from_i64, u32_from_usize, usi
 
 use crate::error::FontError;
 use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
-use crate::grays::{self, RasterResult};
 use crate::outline::{Outline, OutlinePoint};
 use crate::scaler::{self, ft_pix_ceil, ft_pix_floor, ft_pix_round, pixel_round};
 use crate::tables::FontData;
@@ -491,16 +490,6 @@ pub(crate) struct LoadedOutline {
     pub left: i32,
     pub bottom: i32,
     pub top: i32,
-}
-
-struct PositionedGlyph {
-    x_position: i32,
-    advance_width: i32,
-    bbox_x_min: i32,
-    bbox_x_max: i32,
-    bbox_y_min: i32,
-    bbox_y_max: i32,
-    raster: Option<RasterResult>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1638,40 +1627,6 @@ impl Font {
         Ok(sbit_glyph)
     }
 
-    pub(crate) fn glyph_metrics_for_index_force_autohint(
-        &self,
-        glyph: u16,
-    ) -> Result<GlyphSlotMetrics, FontError> {
-        self.glyph_metrics_for_index_force_autohint_with_layout(glyph, false)
-    }
-
-    pub(crate) fn glyph_metrics_for_index_force_autohint_with_layout(
-        &self,
-        glyph: u16,
-        vertical_layout: bool,
-    ) -> Result<GlyphSlotMetrics, FontError> {
-        self.glyph_metrics_for_index_force_autohint_with_layout_and_mode(
-            glyph,
-            vertical_layout,
-            NativeHintMode::Normal,
-        )
-    }
-
-    pub(crate) fn glyph_metrics_for_index_force_autohint_with_layout_and_mode(
-        &self,
-        glyph: u16,
-        vertical_layout: bool,
-        native_hint_mode: NativeHintMode,
-    ) -> Result<GlyphSlotMetrics, FontError> {
-        Ok(self
-            .glyph_slot_load_force_autohint_with_layout_and_mode(
-                glyph,
-                vertical_layout,
-                native_hint_mode,
-            )?
-            .metrics)
-    }
-
     pub(crate) fn glyph_slot_load_force_autohint_with_layout_and_mode(
         &self,
         glyph: u16,
@@ -1687,14 +1642,6 @@ impl Font {
             native_hint_mode,
         )?;
         Ok(self.slot_load_from_scaled(glyph, scaled, grid_fit_for_layout(vertical_layout)))
-    }
-
-    pub(crate) fn glyph_metrics_for_index_target_light_with_layout(
-        &self,
-        glyph: u16,
-        _vertical_layout: bool,
-    ) -> Result<GlyphSlotMetrics, FontError> {
-        Ok(self.glyph_slot_load_target_light(glyph)?.metrics)
     }
 
     pub(crate) fn glyph_slot_load_target_light(
@@ -1713,13 +1660,6 @@ impl Font {
         Ok(self.slot_load_from_scaled(glyph, scaled, MetricsGridFit::Horizontal))
     }
 
-    pub(crate) fn glyph_metrics_for_index_no_hinting(
-        &self,
-        glyph: u16,
-    ) -> Result<GlyphSlotMetrics, FontError> {
-        Ok(self.glyph_slot_load_no_hinting(glyph)?.metrics)
-    }
-
     pub(crate) fn glyph_slot_load_no_hinting(
         &self,
         glyph: u16,
@@ -1729,13 +1669,6 @@ impl Font {
         // `FT_LOAD_NO_HINTING` is not set (`src/base/ftobjs.c`).  No-hinting
         // slot metrics keep the fractional 26.6 values from `ttgload.c`.
         Ok(self.slot_load_from_scaled(glyph, scaled, MetricsGridFit::None))
-    }
-
-    pub(crate) fn glyph_metrics_for_index_no_scale(
-        &self,
-        glyph: u16,
-    ) -> Result<GlyphSlotMetrics, FontError> {
-        Ok(self.glyph_slot_load_no_scale(glyph)?.metrics)
     }
 
     pub(crate) fn glyph_slot_load_no_scale(&self, glyph: u16) -> Result<GlyphSlotLoad, FontError> {
@@ -1951,54 +1884,6 @@ impl Font {
             loaded.render_outline = None;
         }
         Ok(loaded)
-    }
-
-    pub(crate) fn glyph_metrics_for_index_no_autohint(
-        &self,
-        glyph: u16,
-    ) -> Result<GlyphSlotMetrics, FontError> {
-        self.glyph_metrics_for_index_no_autohint_with_layout(glyph, false)
-    }
-
-    pub(crate) fn glyph_metrics_for_index_no_autohint_with_layout(
-        &self,
-        glyph: u16,
-        vertical_layout: bool,
-    ) -> Result<GlyphSlotMetrics, FontError> {
-        self.glyph_metrics_for_index_no_autohint_with_layout_and_mode(
-            glyph,
-            vertical_layout,
-            NativeHintMode::Normal,
-        )
-    }
-
-    pub(crate) fn glyph_metrics_for_index_no_autohint_with_layout_and_mode(
-        &self,
-        glyph: u16,
-        vertical_layout: bool,
-        native_hint_mode: NativeHintMode,
-    ) -> Result<GlyphSlotMetrics, FontError> {
-        Ok(self
-            .glyph_slot_load_no_autohint_with_layout_and_mode(
-                glyph,
-                vertical_layout,
-                native_hint_mode,
-            )?
-            .metrics)
-    }
-
-    pub(crate) fn glyph_slot_load_no_autohint_with_layout_and_mode(
-        &self,
-        glyph: u16,
-        vertical_layout: bool,
-        native_hint_mode: NativeHintMode,
-    ) -> Result<GlyphSlotLoad, FontError> {
-        self.glyph_slot_load_no_autohint_with_layout_and_mode_and_pedantic(
-            glyph,
-            vertical_layout,
-            native_hint_mode,
-            false,
-        )
     }
 
     pub(crate) fn glyph_slot_load_no_autohint_with_layout_and_mode_and_pedantic(
@@ -2243,35 +2128,6 @@ impl Font {
         }
     }
 
-    pub(crate) fn scale_glyph_for_metrics_default(
-        &self,
-        glyph: u16,
-    ) -> Result<scaler::ScaledGlyph, FontError> {
-        self.scale_glyph_for_metrics_default_with_mode(glyph, NativeHintMode::Normal)
-    }
-
-    fn scale_glyph_for_metrics_default_with_mode(
-        &self,
-        glyph: u16,
-        native_hint_mode: NativeHintMode,
-    ) -> Result<scaler::ScaledGlyph, FontError> {
-        self.scale_glyph_for_metrics_default_with_mode_and_hdmx(glyph, native_hint_mode, true)
-    }
-
-    fn scale_glyph_for_metrics_default_with_mode_and_hdmx(
-        &self,
-        glyph: u16,
-        native_hint_mode: NativeHintMode,
-        use_hdmx: bool,
-    ) -> Result<scaler::ScaledGlyph, FontError> {
-        self.scale_glyph_for_metrics_default_with_mode_and_hdmx_and_pedantic(
-            glyph,
-            native_hint_mode,
-            use_hdmx,
-            false,
-        )
-    }
-
     fn scale_glyph_for_metrics_default_with_mode_and_hdmx_and_pedantic(
         &self,
         glyph: u16,
@@ -2326,13 +2182,6 @@ impl Font {
         }
     }
 
-    fn scale_glyph_no_autohint_for_load(
-        &self,
-        glyph: u16,
-    ) -> Result<scaler::ScaledGlyph, FontError> {
-        self.scale_glyph_no_autohint_for_load_with_mode(glyph, NativeHintMode::Normal)
-    }
-
     fn scale_glyph_no_autohint_for_load_with_mode(
         &self,
         glyph: u16,
@@ -2367,25 +2216,6 @@ impl Font {
         } else {
             scaler::scale_glyph_no_hinting(&self.data, glyph, self.is_italic)
         }
-    }
-
-    fn scale_glyph_no_autohint_for_metrics(
-        &self,
-        glyph: u16,
-    ) -> Result<scaler::ScaledGlyph, FontError> {
-        self.scale_glyph_no_autohint_for_metrics_with_mode(glyph, NativeHintMode::Normal)
-    }
-
-    fn scale_glyph_no_autohint_for_metrics_with_mode(
-        &self,
-        glyph: u16,
-        native_hint_mode: NativeHintMode,
-    ) -> Result<scaler::ScaledGlyph, FontError> {
-        self.scale_glyph_no_autohint_for_metrics_with_mode_and_pedantic(
-            glyph,
-            native_hint_mode,
-            false,
-        )
     }
 
     fn scale_glyph_no_autohint_for_metrics_with_mode_and_pedantic(
@@ -2478,36 +2308,6 @@ impl Font {
         )
     }
 
-    fn layout_glyphs(&self, text: &str) -> Result<Vec<PositionedGlyph>, FontError> {
-        let mut glyphs = Vec::new();
-        let mut x_position = 0;
-        let mut previous = None;
-        for ch in text.chars() {
-            let glyph_index = self.char_index(ch as u32);
-            if let Some(previous) = previous {
-                x_position += self.glyph_kerning(previous, glyph_index);
-            }
-            let scaled = self.scale_glyph_for_load_mode(glyph_index)?;
-            let raster = if scaled.outline.n_contours == 0 {
-                None
-            } else {
-                Some(grays::rasterize(scaled.outline)?)
-            };
-            glyphs.push(PositionedGlyph {
-                x_position,
-                advance_width: scaled.advance_width,
-                bbox_x_min: scaled.bbox_x_min,
-                bbox_x_max: scaled.bbox_x_max,
-                bbox_y_min: scaled.bbox_y_min,
-                bbox_y_max: scaled.bbox_y_max,
-                raster,
-            });
-            x_position += scaled.advance_width;
-            previous = Some(glyph_index);
-        }
-        Ok(glyphs)
-    }
-
     fn layout_advance(&self, text: &str) -> i32 {
         text.chars().fold(0, |total, ch| {
             let glyph = self.char_index(ch as u32);
@@ -2526,21 +2326,6 @@ impl Font {
             let value = i32::from(kern.get(left, right));
             ft_mul_fix(value, self.size_metrics.x_scale)
         })
-    }
-
-    fn layout_bounds(&self, text: &str) -> Result<(i32, i32, i32, i32), FontError> {
-        let glyphs = self.layout_glyphs(text)?;
-        Ok(layout_bounds_from_glyphs(&glyphs))
-    }
-
-    fn slot_metrics_from_scaled(
-        &self,
-        glyph_index: u16,
-        scaled: scaler::ScaledGlyph,
-        grid_fit_metrics: MetricsGridFit,
-    ) -> GlyphSlotMetrics {
-        self.slot_load_from_scaled(glyph_index, scaled, grid_fit_metrics)
-            .metrics
     }
 
     fn slot_load_from_scaled(
@@ -2736,16 +2521,6 @@ fn scaled_slot_outline_from_outline(
     }
 }
 
-fn scaled_slot_outline(scaled: &scaler::ScaledGlyph) -> Outline {
-    scaled_slot_outline_from_outline(
-        &scaled.outline,
-        scaled.outline_cbox_x_min,
-        scaled.outline_cbox_y_min,
-        scaled.outline_cbox_x_max,
-        scaled.outline_cbox_y_max,
-    )
-}
-
 fn no_scale_slot_outline(outline: &tt::glyf::GlyphOutline, pp1x: i32, cbox: BBox) -> Outline {
     Outline {
         n_contours: i32::from(outline.num_contours),
@@ -2847,26 +2622,6 @@ fn synthesize_vertical_metrics(metrics: &mut GlyphSlotMetrics) {
     metrics.vert_bearing_x = metrics.hori_bearing_x - metrics.hori_advance / 2;
     metrics.vert_bearing_y = (advance - height) / 2;
     metrics.vert_advance = advance;
-}
-
-fn layout_bounds_from_glyphs(glyphs: &[PositionedGlyph]) -> (i32, i32, i32, i32) {
-    let mut x_min = 0;
-    let mut x_max = 0;
-    let mut y_min = 0;
-    let mut y_max = 0;
-    let mut position = 0;
-    for glyph in glyphs {
-        let px = pixel_round(position);
-        position += glyph.advance_width;
-        x_max = x_max.max(pixel_round(position));
-        if glyph.raster.is_some() {
-            x_min = x_min.min(px + glyph.bbox_x_min);
-            x_max = x_max.max(px + glyph.bbox_x_max);
-            y_min = y_min.min(glyph.bbox_y_min);
-            y_max = y_max.max(glyph.bbox_y_max);
-        }
-    }
-    (x_min, x_max, y_min, y_max)
 }
 
 fn vertical_advance_font_units(data: &FontData) -> i32 {
