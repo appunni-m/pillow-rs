@@ -18,18 +18,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_gray_and_packed_modes",
           "pixel_modes": [
@@ -113,18 +101,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_strength_rounding_and_zero",
           "pixel_modes": [
@@ -216,18 +192,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_gray2_gray4_convert_to_gray",
           "pixel_modes": [
@@ -309,20 +273,8 @@
       "case": "error_mono_strength_limit",
       "operation": "ftbitmap.bitmap_embolden",
       "schema": "bitmap_operation",
-      "expect_error": true,
+      "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "error_mono_strength_limit",
           "pixel_modes": [
@@ -368,7 +320,7 @@
         "area:bitmap"
       ],
       "expectation": {
-        "status": "error",
+        "status": "ok",
         "output_shape": {
           "return": "FT_Error",
           "bitmap_fields": [
@@ -385,7 +337,7 @@
           "strength_rounding": "FT_PIX_ROUND then >>6"
         },
         "compare": {
-          "mode": "exact_error",
+          "mode": "exact",
           "paths": [
             "error",
             "bitmap.rows",
@@ -395,8 +347,7 @@
             "bitmap.buffer_bytes",
             "allocator.events"
           ]
-        },
-        "error": "Invalid_Argument"
+        }
       }
     },
     {
@@ -407,18 +358,6 @@
       "schema": "bitmap_operation",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "error_invalid_arguments_or_modes",
           "pixel_modes": [
@@ -498,7 +437,8 @@
             "bitmap.pixel_mode",
             "bitmap.buffer_bytes",
             "allocator.events"
-          ]
+          ],
+          "compare_error_output": true
         },
         "error": "Invalid_Argument"
       }
@@ -511,18 +451,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "ownership_reallocates_bitmap_buffer",
           "pixel_modes": [

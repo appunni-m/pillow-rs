@@ -2204,6 +2204,11 @@ impl BackendComparisonWorker {
                     | "ftlcdfil.set_lcd_geometry"
                     | "ftoutln.outline_render"
                     | "ftoutln.outline_render_direct"
+                    | "ftbitmap.bitmap_copy"
+                    | "ftbitmap.bitmap_convert"
+                    | "ftbitmap.bitmap_done"
+                    | "ftbitmap.bitmap_embolden"
+                    | "ftbitmap.bitmap_blend"
                     | "ftmodapi.get_truetype_engine_type"
                     | "freetype.get_kerning"
                     | "freetype.get_subglyph_info"
@@ -8459,19 +8464,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                         .to_string(),
                 );
             }
-            Ok(vec![
-                "--glyphslot-own-bitmap".to_string(),
-                scenario.to_string(),
-                "file".to_string(),
-                fixture_dir()
-                    .join("input/fonts/DejaVuSans.ttf")
-                    .display()
-                    .to_string(),
+            let mut args = vec!["--glyphslot-own-bitmap".to_string(), scenario.to_string()];
+            push_font_source(case, &mut args)?;
+            args.extend([
                 face_index_param(params)?.to_string(),
                 "20".to_string(),
                 glyph_index_param(params)?.to_string(),
                 load_flags_param(params)?.to_string(),
-            ])
+            ]);
+            Ok(args)
         }
         "fterrors.error_string" => Ok(vec![
             "--error-string".to_string(),
@@ -9777,6 +9778,15 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "ftlcdfil.set_lcd_geometry"
                 | "ftoutln.outline_render"
                 | "ftoutln.outline_render_direct"
+                // These synthetic public bitmap routes own their precise
+                // null-handle setup below.  Sending them through the generic
+                // face-null classifier would replace the real FreeType error
+                // (for example Invalid_Library_Handle) with Invalid_Face_Handle.
+                | "ftbitmap.bitmap_copy"
+                | "ftbitmap.bitmap_convert"
+                | "ftbitmap.bitmap_done"
+                | "ftbitmap.bitmap_embolden"
+                | "ftbitmap.bitmap_blend"
                 | "ftmodapi.get_truetype_engine_type"
                 | "freetype.get_kerning"
                 | "freetype.get_subglyph_info"
@@ -24381,7 +24391,13 @@ fn bitmap_convert_output(
         "error_unsupported_pixel_mode" => bitmap_convert_unsupported_runs(backend)?,
         other => return Err(format!("unsupported bitmap_convert scenario {other}")),
     };
-    Ok(ok(json!({ "runs": runs })))
+    let output = json!({ "runs": runs });
+    if case.expect_error {
+        let first_error = first_nested_error(&output, "runs", "status")?;
+        Ok(error_with_output(first_error, output))
+    } else {
+        Ok(ok(output))
+    }
 }
 
 fn bitmap_done_output(case: &InputCase, backend: BitmapDoneBackend) -> Result<RunOutput, String> {
@@ -24402,7 +24418,29 @@ fn bitmap_done_output(case: &InputCase, backend: BitmapDoneBackend) -> Result<Ru
         "error_null_library_or_bitmap" => bitmap_done_error_runs(backend)?,
         other => return Err(format!("unsupported bitmap_done scenario {other}")),
     };
-    Ok(ok(json!({ "runs": runs })))
+    let output = json!({ "runs": runs });
+    if case.expect_error {
+        let first_error = first_nested_error(&output, "runs", "status")?;
+        Ok(error_with_output(first_error, output))
+    } else {
+        Ok(ok(output))
+    }
+}
+
+fn first_nested_error(output: &Value, rows_key: &str, status_key: &str) -> Result<i32, String> {
+    output
+        .get(rows_key)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|row| {
+            row.get(status_key)
+                .and_then(|status| status.get("error_code"))
+                .and_then(Value::as_i64)
+        })
+        .find(|error| *error != i64::from(FT_Err_Ok))
+        .and_then(|error| i32::try_from(error).ok())
+        .ok_or_else(|| format!("expected an error in {rows_key}[].{status_key}"))
 }
 
 fn bitmap_convert_repeated_runs(backend: BitmapConvertBackend) -> Result<Vec<Value>, String> {
@@ -25205,7 +25243,7 @@ fn glyphslot_own_bitmap_wasm(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn rust_glyphslot_own_load(case: &InputCase, render: bool) -> Result<FT_GlyphSlot, String> {
-    let bytes = glyphslot_own_font_bytes()?;
+    let bytes = glyphslot_own_font_bytes(case)?;
     let library = FT_Init_FreeType();
     let mut face = FT_New_Memory_Face(
         &library,
@@ -25230,7 +25268,7 @@ fn c_glyphslot_own_load(
     case: &InputCase,
     render: bool,
 ) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
-    let bytes = glyphslot_own_font_bytes()?;
+    let bytes = glyphslot_own_font_bytes(case)?;
     let (library, face) =
         c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let err = c_abi::FT_Set_Pixel_Sizes(face, 0, 20);
@@ -25253,7 +25291,7 @@ fn c_glyphslot_own_load(
 }
 
 fn wasm_glyphslot_own_load(case: &InputCase, render: bool) -> Result<usize, String> {
-    let bytes = glyphslot_own_font_bytes()?;
+    let bytes = glyphslot_own_font_bytes(case)?;
     let status = wasm_abi::fontdone_wasm_open_face(
         bytes.as_ptr(),
         bytes.len(),
@@ -25280,8 +25318,8 @@ fn wasm_glyphslot_own_load(case: &InputCase, render: bool) -> Result<usize, Stri
     Ok(status.handle)
 }
 
-fn glyphslot_own_font_bytes() -> Result<Arc<[u8]>, String> {
-    cached_file_bytes("input/fonts/DejaVuSans.ttf")
+fn glyphslot_own_font_bytes(case: &InputCase) -> Result<Arc<[u8]>, String> {
+    font_bytes(case)
 }
 
 fn glyphslot_own_load_flags(case: &InputCase, render: bool) -> Result<i32, String> {
@@ -26001,7 +26039,20 @@ fn bitmap_embolden_output(
         };
         output_rows.push(bitmap_embolden_row_json(&row, result?));
     }
-    Ok(ok(json!({ "rows": output_rows })))
+    let output = json!({ "rows": output_rows });
+    if case.expect_error {
+        let first_error = output["rows"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|row| row.get("error").and_then(Value::as_i64))
+            .find(|error| *error != i64::from(FT_Err_Ok))
+            .and_then(|error| i32::try_from(error).ok())
+            .ok_or_else(|| "expected an error in rows[].error".to_string())?;
+        Ok(error_with_output(first_error, output))
+    } else {
+        Ok(ok(output))
+    }
 }
 
 fn bitmap_embolden_rust(row: &BitmapEmboldenRow) -> Result<BitmapEmboldenResult, String> {

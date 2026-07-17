@@ -18,18 +18,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_supported_depths_to_gray",
           "pixel_modes": [
@@ -101,18 +89,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_alignment_and_flow",
           "pixel_modes": [
@@ -187,18 +163,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_repeated_conversion_reallocates",
           "pixel_modes": [
@@ -270,18 +234,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_empty_or_null_source_buffer",
           "pixel_modes": [
@@ -353,18 +305,6 @@
       "schema": "bitmap_operation",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "error_invalid_arguments_or_alignment",
           "pixel_modes": [
@@ -424,7 +364,8 @@
             "target.pixel_mode",
             "target.buffer_bytes",
             "allocator.events"
-          ]
+          ],
+          "compare_error_output": true
         },
         "error": "Invalid_Argument"
       }
@@ -437,18 +378,6 @@
       "schema": "bitmap_operation",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "error_unsupported_pixel_mode",
           "pixel_modes": [
@@ -508,7 +437,8 @@
             "target.pixel_mode",
             "target.buffer_bytes",
             "allocator.events"
-          ]
+          ],
+          "compare_error_output": true
         },
         "error": "Invalid_Argument"
       }

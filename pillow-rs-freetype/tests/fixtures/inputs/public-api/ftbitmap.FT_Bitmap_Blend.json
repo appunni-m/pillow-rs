@@ -21,18 +21,6 @@
         "variants": [
           {
             "id": "f1",
-            "assets": {
-              "synthetic_bitmaps": {
-                "kind": "ref",
-                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-                "asset_kind": "binary"
-              },
-              "font": {
-                "kind": "ref",
-                "id": "fonts/basic/dejavu-sans.ttf",
-                "asset_kind": "font"
-              }
-            },
             "params": {
               "scenario": "success_empty_target_allocates_bgra",
               "source_pixel_modes": [
@@ -117,18 +105,6 @@
         "variants": [
           {
             "id": "f1",
-            "assets": {
-              "synthetic_bitmaps": {
-                "kind": "ref",
-                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-                "asset_kind": "binary"
-              },
-              "font": {
-                "kind": "ref",
-                "id": "fonts/basic/dejavu-sans.ttf",
-                "asset_kind": "font"
-              }
-            },
             "params": {
               "scenario": "success_existing_bgra_reallocates_or_preserves",
               "source_pixel_modes": [
@@ -213,18 +189,6 @@
         "variants": [
           {
             "id": "f1",
-            "assets": {
-              "synthetic_bitmaps": {
-                "kind": "ref",
-                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-                "asset_kind": "binary"
-              },
-              "font": {
-                "kind": "ref",
-                "id": "fonts/basic/dejavu-sans.ttf",
-                "asset_kind": "font"
-              }
-            },
             "params": {
               "scenario": "success_source_pixel_modes_and_flow",
               "source_pixel_modes": [
@@ -309,18 +273,6 @@
         "variants": [
           {
             "id": "f1",
-            "assets": {
-              "synthetic_bitmaps": {
-                "kind": "ref",
-                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-                "asset_kind": "binary"
-              },
-              "font": {
-                "kind": "ref",
-                "id": "fonts/basic/dejavu-sans.ttf",
-                "asset_kind": "font"
-              }
-            },
             "params": {
               "scenario": "success_integerizes_offsets",
               "source_pixel_modes": [
@@ -405,18 +357,6 @@
         "variants": [
           {
             "id": "f1",
-            "assets": {
-              "synthetic_bitmaps": {
-                "kind": "ref",
-                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-                "asset_kind": "binary"
-              },
-              "font": {
-                "kind": "ref",
-                "id": "fonts/basic/dejavu-sans.ttf",
-                "asset_kind": "font"
-              }
-            },
             "params": {
               "scenario": "error_invalid_arguments_or_target_mode",
               "source_pixel_modes": [
@@ -483,7 +423,8 @@
             "target.buffer_bgra_bytes",
             "target_offset",
             "allocator.events"
-          ]
+          ],
+          "compare_error_output": true
         },
         "error": "Invalid_Argument",
         "fixture_requirements": [
@@ -502,18 +443,6 @@
         "variants": [
           {
             "id": "f1",
-            "assets": {
-              "synthetic_bitmaps": {
-                "kind": "ref",
-                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-                "asset_kind": "binary"
-              },
-              "font": {
-                "kind": "ref",
-                "id": "fonts/basic/dejavu-sans.ttf",
-                "asset_kind": "font"
-              }
-            },
             "params": {
               "scenario": "error_overflow_or_flow_mismatch",
               "source_pixel_modes": [
@@ -580,7 +509,8 @@
             "target.buffer_bgra_bytes",
             "target_offset",
             "allocator.events"
-          ]
+          ],
+          "compare_error_output": true
         },
         "error": "Invalid_Argument",
         "fixture_requirements": [

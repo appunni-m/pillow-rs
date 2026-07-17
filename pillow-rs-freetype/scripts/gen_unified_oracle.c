@@ -264,14 +264,14 @@ static int emit_bitmap_convert(const char* scenario) {
         return 0;
     }
 
-    printf("{");
-    print_status(FT_Err_Ok);
-    printf(",\"output\":{\"runs\":[");
+    FT_Error first_error = FT_Err_Ok;
+    printf("{\"output\":{\"runs\":[");
     int first = 1;
 #define RUN_SEP() do { if (!first) printf(","); first = 0; } while (0)
 #define RUN_CONVERT(label, src_ptr, tgt_ptr, align_value, lib_value) do { \
         RUN_SEP(); \
         FT_Error run_err = FT_Bitmap_Convert((lib_value), (src_ptr), (tgt_ptr), (align_value)); \
+        if (!first_error && run_err) first_error = run_err; \
         print_bitmap_convert_run((label), run_err, (tgt_ptr)); \
     } while (0)
 
@@ -336,6 +336,7 @@ static int emit_bitmap_convert(const char* scenario) {
         RUN_CONVERT("null_source", NULL, &target, 1, library);
         RUN_SEP();
         err = FT_Bitmap_Convert(library, &source, NULL, 1);
+        if (!first_error && err) first_error = err;
         print_bitmap_convert_run("null_target", err, NULL);
     } else if (streq(scenario, "error_unsupported_pixel_mode")) {
         bitmap_convert_source(&source, bytes, FT_PIXEL_MODE_GRAY, 0);
@@ -353,7 +354,9 @@ static int emit_bitmap_convert(const char* scenario) {
 
 #undef RUN_CONVERT
 #undef RUN_SEP
-    printf("]}}\n");
+    printf("]},");
+    print_status(first_error);
+    printf("}\n");
     FT_Done_FreeType(library);
     return 0;
 }
@@ -368,14 +371,14 @@ static int emit_bitmap_done(const char* scenario) {
         return 0;
     }
 
-    printf("{");
-    print_status(FT_Err_Ok);
-    printf(",\"output\":{\"runs\":[");
+    FT_Error first_error = FT_Err_Ok;
+    printf("{\"output\":{\"runs\":[");
     int first = 1;
 #define DONE_SEP() do { if (!first) printf(","); first = 0; } while (0)
 #define RUN_DONE(label, bitmap_ptr, lib_value) do { \
         DONE_SEP(); \
         FT_Error run_err = FT_Bitmap_Done((lib_value), (bitmap_ptr)); \
+        if (!first_error && run_err) first_error = run_err; \
         print_bitmap_convert_run((label), run_err, (bitmap_ptr)); \
     } while (0)
 
@@ -408,6 +411,7 @@ static int emit_bitmap_done(const char* scenario) {
         FT_Bitmap_Done(library, &bitmap);
         DONE_SEP();
         err = FT_Bitmap_Done(library, NULL);
+        if (!first_error && err) first_error = err;
         print_bitmap_convert_run("null_bitmap", err, NULL);
     } else {
         fprintf(stderr, "unsupported bitmap done scenario: %s\n", scenario);
@@ -417,7 +421,9 @@ static int emit_bitmap_done(const char* scenario) {
 
 #undef RUN_DONE
 #undef DONE_SEP
-    printf("]}}\n");
+    printf("]},");
+    print_status(first_error);
+    printf("}\n");
     FT_Done_FreeType(library);
     return 0;
 }
@@ -541,7 +547,7 @@ static int bitmap_embolden_alloc(FT_Bitmap* bitmap, unsigned char pixel_mode, in
     return 0;
 }
 
-static void print_bitmap_embolden_row(
+static FT_Error print_bitmap_embolden_row(
     const char* label,
     FT_Library library_arg,
     FT_Library cleanup_library,
@@ -558,7 +564,7 @@ static void print_bitmap_embolden_row(
     if (!null_bitmap) {
         if (bitmap_embolden_alloc(&bitmap, pixel_mode, negative_pitch)) {
             printf("{\"label\":\"%s\",\"error\":%d,\"bitmap\":null,\"buffer_hex\":\"\",\"buffer_len\":0,\"buffer_identity_class\":\"null\"}", label, FT_Err_Out_Of_Memory);
-            return;
+            return FT_Err_Out_Of_Memory;
         }
         if (null_buffer) {
             free(bitmap.buffer);
@@ -593,6 +599,7 @@ static void print_bitmap_embolden_row(
             free(bitmap.buffer);
         }
     }
+    return err;
 }
 
 static void bitmap_blend_source(FT_Bitmap* bitmap, unsigned char* bytes, FT_Pixel_Mode mode, int negative) {
@@ -714,15 +721,15 @@ static int emit_bitmap_embolden(const char* scenario) {
         return 0;
     }
 
-    printf("{");
-    print_status(0);
-    printf(",\"output\":{\"rows\":[");
+    FT_Error first_error = FT_Err_Ok;
+    printf("{\"output\":{\"rows\":[");
     int first = 1;
 #define EMIT_ROW(label, lib, mode, neg, xs, ys, null_bitmap, null_buffer) \
     do { \
         if (!first) printf(","); \
         first = 0; \
-        print_bitmap_embolden_row(label, lib, library, mode, neg, xs, ys, null_bitmap, null_buffer); \
+        FT_Error row_error = print_bitmap_embolden_row(label, lib, library, mode, neg, xs, ys, null_bitmap, null_buffer); \
+        if (!first_error && row_error) first_error = row_error; \
     } while (0)
 
     if (streq(scenario, "success_gray_and_packed_modes")) {
@@ -764,7 +771,9 @@ static int emit_bitmap_embolden(const char* scenario) {
     }
 #undef EMIT_ROW
 
-    printf("]}}\n");
+    printf("]},");
+    print_status(first_error);
+    printf("}\n");
     FT_Done_FreeType(library);
     return 0;
 }

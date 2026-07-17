@@ -15,18 +15,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_zeroes_record",
           "initial_record": "dirty non-zero FT_Bitmap",
@@ -73,18 +61,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_null_pointer_noop",
           "initial_record": "dirty non-zero FT_Bitmap",
@@ -131,18 +107,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "alias_matches_ft_bitmap_new",
           "initial_record": "dirty non-zero FT_Bitmap",

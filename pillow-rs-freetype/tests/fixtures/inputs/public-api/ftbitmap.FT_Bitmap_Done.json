@@ -16,18 +16,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_frees_and_zeroes_bitmap",
           "initial_state": "success_frees_and_zeroes_bitmap",
@@ -74,18 +62,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_empty_bitmap",
           "initial_state": "success_empty_bitmap",
@@ -132,18 +108,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_repeated_done_after_reinit",
           "initial_state": "success_repeated_done_after_reinit",
@@ -190,18 +154,6 @@
       "schema": "bitmap_operation",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "error_null_library_or_bitmap",
           "initial_state": "error_null_library_or_bitmap",
@@ -236,7 +188,8 @@
             "bitmap.fields",
             "bitmap.buffer_nullness",
             "allocator.free_count"
-          ]
+          ],
+          "compare_error_output": true
         },
         "error": "Invalid_Argument"
       }

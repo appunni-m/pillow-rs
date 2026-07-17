@@ -19,12 +19,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          },
-          "bitmap_strike_font": {
-            "kind": "ref",
-            "id": "fonts/bitmap/embedded-strike.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "asset_kind": "font"
           }
         },
@@ -81,12 +76,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          },
-          "bitmap_strike_font": {
-            "kind": "ref",
-            "id": "fonts/bitmap/embedded-strike.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "asset_kind": "font"
           }
         },
@@ -143,12 +133,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          },
-          "bitmap_strike_font": {
-            "kind": "ref",
-            "id": "fonts/bitmap/embedded-strike.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "asset_kind": "font"
           }
         },
@@ -205,12 +190,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          },
-          "bitmap_strike_font": {
-            "kind": "ref",
-            "id": "fonts/bitmap/embedded-strike.ttf",
+            "id": "input/fonts/DejaVuSans.ttf",
             "asset_kind": "font"
           }
         },

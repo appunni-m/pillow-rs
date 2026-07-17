@@ -18,18 +18,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_deep_copy_all_public_fields",
           "source_target_alias": false,
@@ -91,18 +79,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_source_equals_target_noop",
           "source_target_alias": true,
@@ -164,18 +140,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_null_source_buffer",
           "source_target_alias": false,
@@ -237,18 +201,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "success_flow_flip",
           "source_target_alias": false,
@@ -313,45 +265,30 @@
         "variants": [
           {
             "id": "null-library",
-            "assets": {
-              "synthetic_bitmaps": {
-                "kind": "ref",
-                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-                "asset_kind": "binary"
-              }
-            },
             "params": {
               "scenario": "error_null_library"
             },
-            "coverage": ["ftbitmap.bitmap_copy:null-library"]
+            "coverage": [
+              "ftbitmap.bitmap_copy:null-library"
+            ]
           },
           {
             "id": "null-source",
-            "assets": {
-              "synthetic_bitmaps": {
-                "kind": "ref",
-                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-                "asset_kind": "binary"
-              }
-            },
             "params": {
               "scenario": "error_null_source"
             },
-            "coverage": ["ftbitmap.bitmap_copy:null-source"]
+            "coverage": [
+              "ftbitmap.bitmap_copy:null-source"
+            ]
           },
           {
             "id": "null-target",
-            "assets": {
-              "synthetic_bitmaps": {
-                "kind": "ref",
-                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-                "asset_kind": "binary"
-              }
-            },
             "params": {
               "scenario": "error_null_target"
             },
-            "coverage": ["ftbitmap.bitmap_copy:null-target"]
+            "coverage": [
+              "ftbitmap.bitmap_copy:null-target"
+            ]
           }
         ]
       },
@@ -384,7 +321,8 @@
             "target.buffer_bytes",
             "buffer_identity_class",
             "allocator.events"
-          ]
+          ],
+          "compare_error_output": true
         },
         "error": "Invalid_Argument"
       }
@@ -397,18 +335,6 @@
       "schema": "bitmap_operation",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
-          },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
-          }
-        },
         "params": {
           "scenario": "ownership_replaces_target_buffer",
           "source_target_alias": false,
