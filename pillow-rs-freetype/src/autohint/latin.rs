@@ -1051,10 +1051,10 @@ fn sort_pos(table: &mut [i32]) {
 
 /// Sort widths by `.org`, then collapse clusters ≤ threshold into their mean.
 ///
-/// This mirrors `af_latin_sort_and_quantize_widths` from `afhints.c`. FreeType
-/// divides the cluster sum by the loop's end index instead of by the cluster
-/// length; downstream stem snapping depends on preserving that behavior.
-fn sort_and_quantize_widths(count: &mut usize, widths: &mut [AfWidth], threshold: i32) {
+/// This mirrors the shared `af_sort_and_quantize_widths` from `afhints.c`.
+/// FreeType divides the cluster sum by the loop's end index instead of by the
+/// cluster length; downstream stem snapping depends on preserving that behavior.
+pub(super) fn sort_and_quantize_widths(count: &mut usize, widths: &mut [AfWidth], threshold: i32) {
     if *count <= 1 {
         return;
     }
