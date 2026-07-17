@@ -891,24 +891,41 @@ def build_script_coverage() -> None:
 
 
 def build_arabic_standard_fallback() -> None:
-    glyph_order = [".notdef", "space", "arabic_target", "arabic_standard_ha"]
+    glyph_order = [
+        ".notdef",
+        "space",
+        "arabic_target",
+        "arabic_standard_ha",
+        "arabic_join_sample",
+        "arabic_neutral_stem",
+    ]
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
         "space": empty_glyph(),
         "arabic_target": rectangle_glyph(100, 0, 180, 680),
         "arabic_standard_ha": ring_glyph(80, 0, 520, 500, 200, 120, 400, 380),
+        # afblue.dat defines U+0640 TATWEEL as the Arabic neutral zone.
+        # Its lower flat establishes y=300; the target below links that
+        # neutral edge to the normal Arabic bottom zone at y=0, exercising
+        # FreeType's linked-blue neutral dedup in aflatin.c:4276-4290.
+        "arabic_join_sample": rectangle_glyph(80, 300, 520, 340),
+        "arabic_neutral_stem": rectangle_glyph(100, 0, 500, 300),
     }
     metrics = {
         ".notdef": (600, 80),
         "space": (300, 0),
         "arabic_target": (420, 100),
         "arabic_standard_ha": (620, 80),
+        "arabic_join_sample": (620, 80),
+        "arabic_neutral_stem": (620, 100),
     }
     cmap = {
         0x20: "space",
         # U+0644 LAM, the first pinned standard character, is intentionally
         # absent.  U+062D HAH is the next candidate in afscript.h.
         0x062D: "arabic_standard_ha",
+        0x0628: "arabic_neutral_stem",
+        0x0640: "arabic_join_sample",
     }
     for codepoint in (0x0627, 0x0625, 0x0643, 0x0637, 0x0638, 0x062A, 0x062B):
         cmap[codepoint] = "arabic_target"
