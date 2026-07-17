@@ -46,6 +46,29 @@ def write_hhea_zero_typo_fallback() -> None:
     save_font("hhea-zero-typo-fallback.ttf", font)
 
 
+def write_hhea_descender_only() -> None:
+    font = base_font()
+    hhea = font["hhea"]
+    hhea.ascent = 0
+    hhea.descent = -320
+    hhea.lineGap = 40
+    font["OS/2"].fsSelection &= ~USE_TYPO_METRICS
+    save_font("hhea-descender-only.ttf", font)
+
+
+def write_hhea_zero_typo_descender_only() -> None:
+    font = base_font()
+    clear_hhea_metrics(font)
+    os2 = font["OS/2"]
+    os2.fsSelection &= ~USE_TYPO_METRICS
+    os2.sTypoAscender = 0
+    os2.sTypoDescender = -210
+    os2.sTypoLineGap = 50
+    os2.usWinAscent = 900
+    os2.usWinDescent = 260
+    save_font("hhea-zero-typo-descender-only.ttf", font)
+
+
 def write_hhea_zero_win_fallback() -> None:
     font = base_font()
     clear_hhea_metrics(font)
@@ -98,6 +121,8 @@ def write_vertical_zero_advance() -> None:
 
 def main() -> None:
     write_hhea_zero_typo_fallback()
+    write_hhea_descender_only()
+    write_hhea_zero_typo_descender_only()
     write_hhea_zero_win_fallback()
     write_hhea_zero_no_os2_fallback()
     write_vertical_zero_advance()
