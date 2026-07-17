@@ -2712,6 +2712,20 @@ no-OS/2 no-scale vertical metrics, and nominal zero-by-zero in the exact-error
 request matrix to prove the public preemption behavior. Every row uses the existing
 C-oracle/Rust-FFI/C-ABI/WASM-ABI comparison path.
 
+### Descender-only face metric predicates
+
+Pinned FreeType `sfnt_load_face` (`src/sfnt/sfobjs.c:1388-1410`) tests the
+horizontal ascender and descender independently before consulting OS/2, then
+tests `sTypoAscender` and `sTypoDescender` independently before falling back to
+Windows metrics. The earlier public rows covered ascender-first and both-zero
+outcomes but not the second true operand in either predicate.
+
+`build_metric_fixtures.py` now emits `hhea-descender-only.ttf` and
+`hhea-zero-typo-descender-only.ttf`. Their `FT_Size_Metrics` variants compare
+the C oracle, Rust FFI, C ABI, and WASM ABI exactly. Runtime parity moves
+7,138 -> 7,140 with six unchanged pending rows, and `font.rs` condition
+coverage moves 285/324 -> 287/324 branches.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:

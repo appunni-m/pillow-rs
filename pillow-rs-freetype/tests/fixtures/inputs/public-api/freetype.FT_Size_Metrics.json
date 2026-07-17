@@ -199,6 +199,48 @@
             ]
           },
           {
+            "id": "hhea-descender-only",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hhea-descender-only.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "requests": [
+                {
+                  "pixel_size": 20
+                }
+              ]
+            },
+            "coverage": [
+              "font-metrics:hhea-descender-only"
+            ]
+          },
+          {
+            "id": "hhea-zero-typo-descender-only",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metrics/hhea-zero-typo-descender-only.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "requests": [
+                {
+                  "pixel_size": 20
+                }
+              ]
+            },
+            "coverage": [
+              "font-metrics:hhea-zero-os2-typo-descender-only"
+            ]
+          },
+          {
             "id": "hhea-zero-win-fallback",
             "assets": {
               "font": {
