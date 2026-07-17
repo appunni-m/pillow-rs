@@ -87,12 +87,17 @@ const NEAR_THRESHOLD: i64 = 50; // font units
 /// same-sign quadrant detection, then `corner_is_flat`. The flat-corner test
 /// also updates direction-chain deltas, which downstream IUP reference
 /// selection depends on.
-pub fn reload(
+pub(super) fn reload(
     hints: &mut GlyphHints,
     raw_outline: &crate::tt::glyf::GlyphOutline,
     scaled_points: &[crate::outline::OutlinePoint],
+    units_per_em: i32,
 ) {
-    let num_points = scaled_points.len();
+    // FreeType receives one `FT_Outline` and uses its single `n_points` value
+    // for both source and scaled coordinates (`afhints.c:960, 994-1015`).
+    // Our three internal callers build `scaled_points` one-for-one from this
+    // raw point array, so a missing raw-coordinate fallback is not a C state.
+    let num_points = raw_outline.points.len();
     let num_contours = raw_outline.num_contours as usize;
 
     hints.points.clear();
@@ -101,14 +106,13 @@ pub fn reload(
     hints.contours.reserve(num_contours);
 
     // ── Copy coordinates: fx/fy from raw font units, ox/oy from scaled 26.6 ──
-    for (i, sp) in scaled_points.iter().enumerate() {
+    for (i, rp) in raw_outline.points.iter().enumerate() {
+        let sp = &scaled_points[i];
         let mut pt = AFPoint::default();
 
         // Unscaled font units (from glyf parser) — for fpos edge positions.
-        if let Some(rp) = raw_outline.points.get(i) {
-            pt.fx = i16_from_i32(rp.x.clamp(i16::MIN as i32, i16::MAX as i32));
-            pt.fy = i16_from_i32(rp.y.clamp(i16::MIN as i32, i16::MAX as i32));
-        }
+        pt.fx = i16_from_i32(rp.x.clamp(i16::MIN as i32, i16::MAX as i32));
+        pt.fy = i16_from_i32(rp.y.clamp(i16::MIN as i32, i16::MAX as i32));
 
         // Scaled 26.6 (already computed by scaler).
         pt.ox = sp.x;
@@ -212,7 +216,7 @@ pub fn reload(
     }
 
     // ── Build direction chain (C: afhints.c:1100-1200) ──
-    build_direction_chain(hints);
+    build_direction_chain(hints, units_per_em);
 
     // ── Simplify topology (C: afhints.c:1205-1255) ───────────────────
     // Merge same-quadrant consecutive None/None vectors — update u/v to
@@ -331,13 +335,13 @@ pub fn reload(
 /// near_limit = 20 * UPEM / 2048
 ///   UPEM=2048 → 20 FU (sparse chain)
 ///   UPEM=1000 →  9 FU (dense chain, more points merge)
+///   UPEM=  64 →  0 FU (every segment is non-near)
 /// ```
-fn build_direction_chain(hints: &mut GlyphHints) {
-    let near_limit_chain = if let Some(ref met) = hints.metrics {
-        (20 * met.units_per_em / 2048).max(1)
-    } else {
-        20
-    };
+fn build_direction_chain(hints: &mut GlyphHints, units_per_em: i32) {
+    // C `af_glyph_hints_reload` reads UPEM from its mandatory metrics object
+    // and does not clamp the integer result (`afhints.c:989-991`).  Legal
+    // low-UPEM fonts can therefore produce a zero near limit.
+    let near_limit_chain = 20 * units_per_em / 2048;
     let near_limit2 = 2 * near_limit_chain - 1;
     for pt in &mut hints.points {
         pt.u = 0;

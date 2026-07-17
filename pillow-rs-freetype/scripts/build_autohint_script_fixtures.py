@@ -589,6 +589,24 @@ def one_point_contour_glyph(points: list[tuple[int, int]]):
     return glyph
 
 
+def low_upem_duplicate_point_glyph():
+    """One contour whose first segment has zero length."""
+    points = [(4, 0), (4, 0), (4, 48), (44, 48), (44, 0)]
+    glyph = Glyph()
+    glyph.numberOfContours = 1
+    glyph.coordinates = GlyphCoordinates(points)
+    glyph.endPtsOfContours = [len(points) - 1]
+    glyph.flags = bytearray([1] * len(points))
+    program = Program()
+    program.fromBytecode([])
+    glyph.program = program
+    glyph.xMin = 4
+    glyph.yMin = 0
+    glyph.xMax = 44
+    glyph.yMax = 48
+    return glyph
+
+
 def mixed_contour_glyph(contours: list[object]):
     coordinates: list[tuple[int, int]] = []
     end_pts: list[int] = []
@@ -2061,6 +2079,74 @@ def build_latin_blue_overlap() -> None:
     font.save(OUT_DIR / "latin-blue-overlap.ttf")
 
 
+def build_latin_low_upem() -> None:
+    units_per_em = 64
+    glyph_order = [
+        ".notdef",
+        "space",
+        "latin_o",
+        "latin_small_flat",
+        "latin_cap_duplicate",
+    ]
+    glyphs = {
+        ".notdef": rectangle_glyph(4, -8, 36, 48),
+        "space": empty_glyph(),
+        "latin_o": ring_glyph(4, 0, 44, 36, 12, 8, 36, 28),
+        "latin_small_flat": rectangle_glyph(6, 0, 40, 32),
+        "latin_cap_duplicate": low_upem_duplicate_point_glyph(),
+    }
+    metrics = {
+        ".notdef": (52, 4),
+        "space": (24, 0),
+        "latin_o": (52, 4),
+        "latin_small_flat": (48, 6),
+        "latin_cap_duplicate": (52, 4),
+    }
+    cmap = {
+        0x20: "space",
+        0x41: "latin_cap_duplicate",
+        0x6F: "latin_o",
+    }
+    for codepoint in (0x54, 0x48, 0x45, 0x5A, 0x4C):
+        cmap[codepoint] = "latin_cap_duplicate"
+    for codepoint in (0x78, 0x7A, 0x6E, 0x72):
+        cmap[codepoint] = "latin_small_flat"
+    for codepoint in (0x65, 0x73, 0x63):
+        cmap[codepoint] = "latin_o"
+
+    font = FontBuilder(units_per_em, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=52, descent=-12)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint Latin Low UPEM",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint Latin Low UPEM Regular",
+            "fullName": "Autohint Latin Low UPEM Regular",
+            "psName": "AutohintLatinLowUPEM-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=52,
+        sTypoDescender=-12,
+        usWinAscent=52,
+        usWinDescent=12,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "latin-low-upem.ttf")
+
+
 def main() -> None:
     build_script_coverage()
     build_cjk_empty_standard()
@@ -2083,6 +2169,7 @@ def main() -> None:
     build_latin_malformed_standard()
     build_latin_blue_delta()
     build_latin_blue_overlap()
+    build_latin_low_upem()
 
 
 if __name__ == "__main__":

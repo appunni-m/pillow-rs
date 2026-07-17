@@ -1147,7 +1147,7 @@ pub fn metrics_init_widths(
     hints.metrics = Some(metrics.clone());
     hints.other_flags =
         AF_LATIN_HINTS_HORZ_SNAP | AF_LATIN_HINTS_VERT_SNAP | AF_LATIN_HINTS_STEM_ADJUST;
-    loader::reload(&mut hints, raw_outline, scaled_points);
+    loader::reload(&mut hints, raw_outline, scaled_points, metrics.units_per_em);
 
     if hints.num_points() == 0 {
         return;
@@ -2654,14 +2654,17 @@ pub fn apply_hints(
     _pp1x_shift: i32,
 ) -> ApplyHintsMetrics {
     let mut output = ApplyHintsMetrics::default();
+    let Some(metrics) = metrics else {
+        return output;
+    };
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
-    hints.metrics = metrics.cloned();
+    hints.metrics = Some(metrics.clone());
 
     // C: when no blue zones can be built for a Latin-style script, C remaps to
     // NONE_DFLT. Our Latin pipeline with blue_count==0 produces different
     // results than that dummy-style path, so skip it. Do not skip the CJK path:
     // af_cjk_hints_apply still runs edge hinting without active blue zones.
-    if metrics.is_none_or(|m| !m.no_advance_hinting && m.axis[1].blue_count == 0) {
+    if !metrics.no_advance_hinting && metrics.axis[1].blue_count == 0 {
         return output;
     }
     // Match FreeType's af_latin_hints_init target table:
@@ -2680,7 +2683,7 @@ pub fn apply_hints(
         hints.other_flags |= AF_LATIN_HINTS_MONO;
     }
 
-    let no_advance_hinting = hints.metrics.as_ref().is_some_and(|m| m.no_advance_hinting);
+    let no_advance_hinting = metrics.no_advance_hinting;
     // CJK/Hani fallback uses `af_cjk_hints_init`, which always sets
     // AF_SCALER_FLAG_NO_ADVANCE but does not inherit Latin light-mode
     // AF_SCALER_FLAG_NO_HORIZONTAL (afcjk.c:1390-1421).
@@ -2693,13 +2696,16 @@ pub fn apply_hints(
 
     // Compute ppem for bdelta in compute_stem_width
     // At 72dpi: x_scale = (ppem * 64 * 0x10000) / upem → ppem = x_scale * upem / 0x10000 / 64
-    let ppem = i32_from_i64(
-        (x_scale as i64).abs() * metrics.map_or(2048, |m| m.units_per_em as i64) / 65536 / 64,
-    );
+    let ppem = i32_from_i64((x_scale as i64).abs() * metrics.units_per_em as i64 / 65536 / 64);
     let ppem = ppem.clamp(1, 100);
 
     // Step 1: Load outline into hints (raw font units → fx/fy; scaled 26.6 → ox/oy)
-    loader::reload(&mut hints, raw_outline, &outline.points);
+    loader::reload(
+        &mut hints,
+        raw_outline,
+        &outline.points,
+        metrics.units_per_em,
+    );
     if hints.num_points() == 0 {
         return output;
     }
@@ -2709,7 +2715,7 @@ pub fn apply_hints(
     // by earlier ones.
     // Phase A: detect_features for HORZ (segs → link → edges)
     let do_horz = hints.scaler_flags & AF_SCALER_FLAG_NO_HORIZONTAL == 0;
-    let use_cjk_edges = hints.metrics.as_ref().is_some_and(|m| m.no_advance_hinting);
+    let use_cjk_edges = metrics.no_advance_hinting;
     let mut horz_widths_26_6: Vec<i32> = Vec::new();
     if do_horz {
         compute_segments(&mut hints, Dimension::Horz);
@@ -2820,14 +2826,13 @@ pub fn apply_hints(
         });
         let target_light = no_horizontal_hinting && !stem_adjust && !horz_snap && !vert_snap;
         let preserve_original_advance = !target_light
-            && metrics.is_some_and(|m| {
-                m.fixed_width
-                    || (m.digits_have_same_width
-                        && m.digit_glyphs
-                            .get(glyph_index as usize)
-                            .copied()
-                            .unwrap_or(false))
-            });
+            && (metrics.fixed_width
+                || (metrics.digits_have_same_width
+                    && metrics
+                        .digit_glyphs
+                        .get(glyph_index as usize)
+                        .copied()
+                        .unwrap_or(false)));
         #[cfg(debug_assertions)]
         if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
             log::trace!(target: "autohint::pipeline", "[PHANTOM_PRE] gi={glyph_index} num_horz_edges={num_horz_edges}");
