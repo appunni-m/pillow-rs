@@ -689,6 +689,10 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
                                     "compare_error_output",
                                     compare.get("compare_error_output", False),
                                 )
+                            )
+                            or exact_error_public_family(
+                                str(case.get("operation", "")),
+                                bool(variant.get("expect_error", case.get("expect_error", False))),
                             ),
                             allow_oracle_errors=bool(
                                 variant_compare.get(
@@ -710,7 +714,11 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
                         operation=str(case.get("operation", "")),
                         variant_id=None,
                         expect_error=bool(case.get("expect_error", False)),
-                        compare_error_output=bool(compare.get("compare_error_output", False)),
+                        compare_error_output=bool(compare.get("compare_error_output", False))
+                        or exact_error_public_family(
+                            str(case.get("operation", "")),
+                            bool(case.get("expect_error", False)),
+                        ),
                         allow_oracle_errors=bool(compare.get("allow_oracle_errors", False)),
                         expectation_status=expectation_status,
                         assets=object_dict(inputs.get("assets", {})),
@@ -722,6 +730,11 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
 
 def object_dict(value: object) -> dict[str, object]:
     return value if isinstance(value, dict) else {}
+
+
+def exact_error_public_family(operation: str, expect_error: bool) -> bool:
+    """Require exact status and output for the public size-handle lifecycle."""
+    return expect_error and operation.startswith("ftsizes.")
 
 
 def operation_is_compile_contract(operation: str) -> bool:
