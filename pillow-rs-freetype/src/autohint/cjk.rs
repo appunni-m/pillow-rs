@@ -39,9 +39,6 @@ use crate::tables::FontData;
 /// bidirectional segment pairs. This is DIFFERENT from the Latin
 /// 'o'-based approach which scans individual stems from the 'o' outline.
 ///
-/// For Indic scripts, the standard character is script-specific
-/// (e.g., Bengali uses U+09E6 "০" from afscript.h).
-///
 /// This function is part of the CJK metrics path; callers provide the already
 /// scaled standard-character outline so width extraction can reuse the Latin
 /// segment and link machinery.
@@ -275,11 +272,11 @@ pub fn cjk_metrics_scale(
         axis.scale = scale;
         axis.delta = delta;
 
-        for width in axis.widths.iter_mut() {
-            width.cur = ft_mul_fix(width.org, scale);
-            width.fit = width.cur;
-        }
-        axis.extra_light = ft_mul_fix(axis.standard_width, scale) < 40;
+        // Unlike the Latin scaler, FreeType's `af_cjk_metrics_scale_dim`
+        // does not scale `axis->widths` or recompute `extra_light`
+        // (`afcjk.c:648-742`).  This means a no-HarfBuzz Indic style can
+        // borrow a mapped Latin standard glyph for font-unit measurements,
+        // while `af_cjk_compute_stem_width` still sees zero `cur` widths.
 
         for blue in &mut axis.blues {
             blue.ref_width.cur = ft_mul_fix(blue.ref_width.org, scale) + delta;

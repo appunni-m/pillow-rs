@@ -142,10 +142,19 @@ Builds the stem-width histogram for **one standard character** (first of
      axis.extra_light = false
 ```
 
-`standard_charstring` for Latin = `"o"` (fallback chain in afscript.h: typically
-just `'o'`; the loop tries each char until one maps to a glyph). Practically: use
-char `'o'` (glyph for U+006F); if 0, try `'O'`, `'0'`; if all 0, use the constant
-fallback (width_count stays 0 → max_width=0).
+`standard_charstring` is script-specific.  With HarfBuzz disabled,
+`af_shaper_get_cluster_nohb` consumes one UTF-8 candidate and calls
+`FT_Get_Char_Index`; `aflatin.c` and `afcjk.c` repeat until the first nonzero
+glyph index.  For Latin the pinned list is `"o O 0"`; for Arabic it is
+`"Lam Ha Tatweel"` (U+0644, U+062D, U+0640).  If every candidate is missing,
+the constant fallback remains in effect (`width_count` stays 0, so
+`max_width=0`).
+
+The CJK/Indic scaler has a separate pinned-C detail: `af_cjk_metrics_scale_dim`
+scales blue zones but leaves `axis->widths[].cur/fit` and `extra_light`
+unchanged.  The selected standard glyph still supplies the font-unit
+`standard_width` and `edge_distance_threshold`, but its width list is not
+substituted into `af_cjk_compute_stem_width` at glyph-load time.
 
 ### A.2 `af_sort_and_quantize_widths` (afhints.c:58-131)
 
