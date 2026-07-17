@@ -608,14 +608,14 @@ name counts, format 2.0 missing custom strings, format 2.5 above-limit counts,
 valid deltas, invalid negative deltas, glyph-name lookup, and name-index lookup
 through public parity. The malformed controls exposed two correctness fixes:
 unsupported `post` formats must not set `FT_FACE_FLAG_GLYPH_NAMES`, and missing
-format 2.0 custom names surface as `.notdef`. Remaining lines are the direct
-invalid-index guard (`src/tt/post.rs:47`) plus format 3.0
-(`src/tt/post.rs:66`) and unsupported-format (`src/tt/post.rs:70`) direct
-fallbacks inside the private resolver. `FT_Get_Glyph_Name` rejects
-`glyph_index >= num_glyphs` before calling into `post.rs`, `FT_Get_Name_Index`
-only scans `0..num_glyphs`, and both wrappers reject format 3.0/unsupported
-formats through `FT_FACE_FLAG_GLYPH_NAMES` before the private resolver runs.
-Keep them classified unless a supported public route is identified.
+format 2.0 custom names surface as `.notdef`. Core now preserves FreeType's
+layering: `Font::glyph_name` and `Font::name_index` own the public face-flag
+equivalent for formats 1.0, 2.0, and 2.5, while `PostTable::glyph_name` mirrors
+the `tt_face_get_ps_name` service's initialized `.notdef` result. The only
+remaining line is the direct invalid-index guard (`src/tt/post.rs:47`).
+`FT_Get_Glyph_Name` rejects `glyph_index >= num_glyphs` before service
+dispatch, and `FT_Get_Name_Index` scans only `0..num_glyphs`; keep that guard
+classified unless a supported public route is identified.
 
 Immediate `name` residuals: compact public `FT_Get_Postscript_Name` rows now
 cover unsupported name records, invalid Apple string offsets, Unicode family
@@ -863,7 +863,7 @@ Per-file source gap ledger:
 | `src/tt/fvar.rs` | 7 | 91/98 (92.86%) | 4 | 13 | 0 |
 | `src/ffi/convert.rs` | 6 | 145/151 (96.03%) | 0 | 6 | 0 |
 | `src/tt/hinter/iup.rs` | 2 | 98/100 (98.00%) | 0 | 2 | 6 |
-| `src/tt/post.rs` | 3 | 95/98 (96.94%) | 0 | 13 | 2 |
+| `src/tt/post.rs` | 1 | 96/97 (98.97%) | 0 | 6 | 1 |
 | `src/tt/gasp.rs` | 2 | 45/47 (95.74%) | 2 | 6 | 0 |
 | `src/autohint/loader.rs` | 1 | 226/227 (99.56%) | 0 | 2 | 2 |
 | `src/tt/hinter/gs.rs` | 1 | 185/186 (99.46%) | 0 | 1 | 0 |
@@ -1296,16 +1296,17 @@ in `ADJUSTMENT_DATABASE`, so no public Unicode input could select it. The
 retained runtime now has one script-selection path through `FaceGlobals`,
 `STYLE_TABLE`, and `globals::detect_script`.
 
-2026-07-13 reachability note: the current condition report still lists several
-metadata parser guards that should not be assigned to new font rows without a
-new public route. `tt/post.rs` format 3.0 and unknown-format fallback arms are
-blocked by the public `FT_FACE_FLAG_GLYPH_NAMES` gate in `FT_Get_Glyph_Name`;
-supported format 2.0/2.5 malformed rows already cover the public `.notdef`
-fallback behavior. The former `tt/cmap.rs`, `tt/fvar.rs`, and `tt/gasp.rs`
-checked arithmetic closures were resolved on 2026-07-16 by matching C's
-remaining-length validation, bounded header validation, and direct count
-arithmetic; the maintained malformed public rows cover every retained parser
-guard.
+2026-07-13 reachability note, updated 2026-07-17: metadata parser guards should
+not be assigned to new font rows without a public route. The former
+`tt/post.rs` format 3.0 and unknown-format fallback arms mixed the public
+`FT_FACE_FLAG_GLYPH_NAMES` gate with the private service behavior; core now
+models those layers separately, leaving only the service invalid-index guard
+that the public API preempts. Supported format 2.0/2.5 malformed rows cover the
+public `.notdef` fallback behavior. The former `tt/cmap.rs`, `tt/fvar.rs`, and
+`tt/gasp.rs` checked arithmetic closures were resolved on 2026-07-16 by
+matching C's remaining-length validation, bounded header validation, and
+direct count arithmetic; the maintained malformed public rows cover every
+retained parser guard.
 
 1. For every uncovered function, identify its public manifest operation and
    current call path.
@@ -2243,7 +2244,7 @@ fixture-row candidates unless a new public route appears:
 | Source lines | Classification | Reason |
 |---|---|---|
 | `autohint/coverage.rs:110-135` | Resolved by public-row assertion | The existing `FT_LOAD_FORCE_AUTOHINT.load_char_force_autohint_behavior@latin-italic-no-horizontal` row now declares `assert_autohint_coverage_bits_include: [32]`, proving the safe public load route records `COV_ITALIC_NO_HORZ` without adding a standalone fixture test |
-| `tt/post.rs:47,66,70` | Public-gate unreachable | `FT_Get_Glyph_Name` validates `glyph_index < num_glyphs` before `PostTable::glyph_name`; `FT_Get_Name_Index` scans only valid glyph indexes; both wrappers suppress format 3.0 and unsupported `post` formats with `FT_FACE_FLAG_GLYPH_NAMES` before direct name lookup |
+| `tt/post.rs:47` | Public-gate unreachable | `FT_Get_Glyph_Name` validates `glyph_index < num_glyphs` before `PostTable::glyph_name`, and `FT_Get_Name_Index` scans only valid glyph indexes. The format 3.0 and unsupported-format residuals were resolved by assigning the face-flag gate to `Font` and retaining the C service's initialized `.notdef` behavior in `PostTable` |
 | `autohint/loader.rs:339` | Private metric-less hints fallback | Public `apply_hints` builds `GlyphHints` and the Latin/CJK setup paths install metrics before direction-chain construction. The default `near_limit_chain = 20` fallback only exists for private or diagnostic `GlyphHints` values without metrics; do not add synthetic autohint calls for it |
 | Former `tt/fvar.rs:58-59` | Resolved by C validation parity | Rust now mirrors `sfnt_init_face`'s version, axis/instance count, record-size, and table-length limits before direct offset arithmetic. Five exact public face-flag rows prove malformed minor versions, oversized records, and count limits; no synthetic parser call is used |
 | Former `tt/cmap.rs:786-789,866-867,914-915` | Resolved by format-14 validator parity | Rust now mirrors `tt_cmap14_validate` by comparing selector/default/non-default counts with remaining bytes divided by record width. The existing exact malformed format-14 matrix proves all three rejection paths; no overflow-only row is needed |
@@ -2562,6 +2563,7 @@ FTMM named-instance obligations.
 | 2026-07-16 | Complete `fvar` header validation parity | Pinned `sfnt_init_face` (`sfobjs.c:605-658`) exposes GX variation support only when the complete `fvar` header has version `0x00010000`, axis size 20, a nonzero axis count no greater than `0x3FFE`, an instance count no greater than `0x7EFF`, an instance size exactly `4 + 4 * axes` or `6 + 4 * axes`, and table-bounded arrays. Rust previously checked only the major version, accepted axis records larger than 20 and arbitrary oversized instance records, and carried four checked-arithmetic closures instead of applying C's limits first. The parser now mirrors those limits; the resulting arithmetic is bounded as documented by `TT_Get_MM_Var` in `ttgxvar.c`. Five reproducible public `FT_FACE_FLAG_MULTIPLE_MASTERS` rows cover a nonzero minor version, oversized axis and instance records, and both C count limits. The focused lane passes 13 / 13 exact C-oracle, Rust FFI, C ABI, and WASM comparisons. Full Coverage MCP parity rises from 7,084 / 7,084 to 7,089 / 7,089 with four unchanged pending rows; route audit real-parity rises from 3,885 to 3,890. `src/tt/fvar.rs` moves from 91 / 98 lines, 14 / 14 branches, 2 / 6 functions, and 119 / 132 regions to 85 / 85 lines, 20 / 20 branches, 2 / 2 functions, and 118 / 118 regions. |
 | 2026-07-17 | Format-14 remaining-length validation parity | Pinned `tt_cmap14_validate` (`ttcmap.c:3013-3131`) rejects malformed selector, default-range, and non-default-mapping arrays by dividing the bytes remaining in the declared subtable by record widths 11, 4, and 5 before iteration. Rust previously modeled those checks with six zero-hit checked-arithmetic error lines and private helper offset checks that their validated caller could never fail. The parser now uses the same remaining-length predicates and slice-based record iteration; private helpers rely on the caller's already-proved nonzero offset-below-length invariant, matching C's `table + defOff` / `table + nondefOff` sequence. The existing exact `FT_Get_Char_Index.matrix_char_code` lane passes 15 / 15 C-oracle, Rust FFI, C ABI, and WASM comparisons, including the malformed format-14 matrix. Full parity remains 7,089 / 7,089 with four unchanged pending rows and no route-count change. `src/tt/cmap.rs` moves from 726 / 740 lines, 164 / 164 branches, 56 / 59 functions, and 957 / 971 regions to 711 / 711 lines, 164 / 164 branches, 53 / 53 functions, and 934 / 936 regions. The two residual LLVM regions have no uncovered source line or branch side. |
 | 2026-07-17 | Zero-contour glyph and IUP contour-state parity | Pinned `TT_Load_Simple_Glyph` starts its last endpoint at -1, so a valid zero-contour `glyf` record has zero points; Rust previously defaulted the absent endpoint to zero and attempted to decode one point, returning error 20. A reproducible derived font retains a raw zero-contour record with an instruction body, and one exact `FT_Load_Glyph.matrix_load@hinter-empty-glyph-iup-phantoms` row now passes through the C oracle, Rust FFI, C ABI, and WASM ABI. Reading the downstream C path also proved that `TT_Load_Glyph` shortcuts empty glyphs before parsing instructions and that `Ins_IUP` returns for `n_contours == 0`; Rust's synthetic fallback that treated four phantom points as one contour was therefore removed. Full Coverage MCP parity rises from 7,089 / 7,089 to 7,090 / 7,090 with four unchanged pending rows, and route-audit real parity rises from 3,890 to 3,891. `src/tt/glyf.rs` remains fully covered at 531 / 531 lines and 90 / 90 branches. `src/tt/hinter/iup.rs` moves from 99 / 102 lines, 53 / 60 branches, and 202 / 206 regions to 98 / 100 lines, 52 / 58 branches, and 200 / 202 regions, improving branch rate from 88.33% to 89.66%; the residual six branch sides are malformed contour/array guards, not public fixture candidates. |
+| 2026-07-17 | SFNT glyph-name gate and service layering | Pinned `FT_Get_Glyph_Name` and `FT_Get_Name_Index` in `ftobjs.c` apply `FT_HAS_GLYPH_NAMES` before glyph-dictionary service dispatch; `sfobjs.c` sets that SFNT face flag only after a successful `post` load and excludes format 3.0, while `tt_face_get_ps_name` in `ttpost.c` separately initializes its service result to `.notdef`. Rust previously mixed these two layers inside `PostTable::glyph_name` and duplicated the face-flag check in the FFI wrapper. `Font::glyph_name` and `Font::name_index` now own public format availability, `PostTable` retains service semantics, and the thin FFI wrappers delegate availability to core. Existing exact lanes pass 23 / 23 `FT_Get_Glyph_Name` and 9 / 9 `FT_Get_Name_Index` comparisons through C oracle, Rust FFI, C ABI, and WASM ABI. Full Coverage MCP parity remains 7,090 / 7,090 with four unchanged pending rows and no route-count change. `src/tt/post.rs` moves from 95 / 98 lines, 21 / 22 branches, and 184 / 192 regions to 96 / 97 lines, 23 / 24 branches, and 184 / 190 regions. Its only remaining miss is the service's invalid-index guard, which the public API must preempt to return `FT_Err_Invalid_Glyph_Index`. |
 
 ## Immediate Next Actions
 

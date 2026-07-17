@@ -1990,9 +1990,6 @@ pub fn FT_Get_Glyph_Name(
     if glyph_index >= FT_UInt::from(inner.info().num_glyphs) {
         return Err(FT_Err_Invalid_Glyph_Index);
     }
-    if (inner.info().face_flags & (1 << 9)) == 0 {
-        return Err(FT_Err_Invalid_Argument);
-    }
     let Some(name) = inner.glyph_name(glyph_index) else {
         return Err(FT_Err_Invalid_Argument);
     };
@@ -2008,9 +2005,6 @@ pub fn FT_Get_Name_Index(face: Option<&FT_Face>, glyph_name: Option<&str>) -> FT
         return 0;
     };
     let inner = face.inner.borrow();
-    if (inner.info().face_flags & (1 << 9)) == 0 {
-        return 0;
-    }
     inner.name_index(glyph_name)
 }
 

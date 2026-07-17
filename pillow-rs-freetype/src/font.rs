@@ -922,14 +922,24 @@ impl Font {
     /// Equivalent to `FT_Get_Glyph_Name` for supported SFNT `post` names.
     pub fn glyph_name(&self, glyph_index: u32) -> Option<&str> {
         let glyph_index = usize::try_from(glyph_index).ok()?;
-        self.data
-            .post
-            .as_ref()?
-            .glyph_name(glyph_index, self.data.maxp.num_glyphs)
+        let post = self.data.post.as_ref()?;
+        // C `FT_Get_Glyph_Name` checks `FT_FACE_FLAG_GLYPH_NAMES` before
+        // dispatching to `tt_face_get_ps_name`; SFNT sets that flag only for
+        // accepted post formats 1.0, 2.0, and 2.5 (`sfobjs.c:1118-1121`).
+        if !matches!(post.format_type, 0x0001_0000 | 0x0002_0000 | 0x0002_5000) {
+            return None;
+        }
+        post.glyph_name(glyph_index, self.data.maxp.num_glyphs)
     }
 
     /// Equivalent to `FT_Get_Name_Index` for supported SFNT `post` names.
     pub fn name_index(&self, glyph_name: &str) -> u32 {
+        let Some(post) = self.data.post.as_ref() else {
+            return 0;
+        };
+        if !matches!(post.format_type, 0x0001_0000 | 0x0002_0000 | 0x0002_5000) {
+            return 0;
+        }
         (0..u32::from(self.data.maxp.num_glyphs))
             .find(|glyph_index| self.glyph_name(*glyph_index) == Some(glyph_name))
             .unwrap_or(0)
