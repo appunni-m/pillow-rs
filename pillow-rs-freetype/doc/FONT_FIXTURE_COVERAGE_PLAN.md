@@ -2953,13 +2953,29 @@ The operation-specific `render_glyph` ledger is now 206 real-parity rows while
 the existing nine generic-error rows, one null-error row, and one pending-core
 unloaded/unsupported-slot row remain visible and unchanged.
 
+The follow-up
+`ftimage.FT_Bitmap.public_fields_match_render_output@m5-sbit-gray-opaque-neighborhood-sdf`
+row adds glyph 2 to the maintained format-1 gray SBIT fixture as a fully
+opaque 3x3 bitmap.  FreeType 2.14.3 `bsdf_is_edge`
+(`sdf/ftbsdf.c:311-359`) classifies the center as non-edge only after all
+eight neighbors have been visited and found nonzero; the Rust renderer follows
+the same topology, so there is no output divergence to mask.  Coverage MCP run
+`89b1e418-7d71-452b-8d8a-751f5bc1f408` passes 7,032 / 7,032 runnable rows
+with 153 pending rows and ingests snapshot
+`c138e0ad-b87e-4374-aed0-79d44025987b`.  The route ledger moves to 7,185
+concrete rows and 3,608 real-parity rows, while fallback and pending categories
+remain unchanged.  `src/render.rs` moves from 2,339 to 2,341 covered lines,
+423 to 424 covered branch outcomes, and 3,274 to 3,276 covered regions;
+covered functions remain 144 / 158.  The exact new records are lines 2697 and
+2715 plus the previously missing branch outcome at line 2696.
+
 Every residual line record and partial branch was read against its Rust caller
 and pinned C before selecting the SBIT subgroup.  The LLVM file summary is
-canonical: 120 missing instrumented lines, 67 missing branch outcomes,
-14 missing functions, and 158 missing regions.  Coverage MCP's normalized
-source projection exposes 82 distinct zero-hit source records and 50 partial
+canonical: 118 missing instrumented lines, 66 missing branch outcomes,
+14 missing functions, and 156 missing regions.  Coverage MCP's normalized
+source projection exposes 80 distinct zero-hit source records and 49 partial
 branch records; it does not expose stable LLVM function or region identities,
-so the 14 functions and 158 regions are classified by their owning source
+so the 14 functions and 156 regions are classified by their owning source
 scope below rather than credited as separate endpoints.
 
 | Residual source scope | Zero-hit lines | Partial-branch lines | Pinned C disposition / dependency |
@@ -2973,14 +2989,14 @@ scope below rather than credited as separate endpoints.
 | SDF malformed decomposition | `2083,2205,2216,2224-2225,2275,2293,2306-2307,2309,2312` | `2204,2215,2274,2290-2291,2300` | As in C's outline decomposition, invalid endpoints and curve tag sequences require a malformed public outline after loading.  Font loading preempts these states. |
 | SDF vector geometry | `2429` | `2428,2533` | Real outline geometry can still cover the remaining distance/cross-product sides.  Negative SDF saturation beyond 128 is unreachable because the caller clamps to renderer spread before mapping. |
 | Bitmap-SDF storage validation | `2588-2589,2591-2592,2603-2604,2606-2607,2609-2610` | none | Dimension overflow, negative MONO pitch, and truncated owned buffers are safe-Rust validation.  Public loaded SBITs have consistent positive pitch/storage, while C uses unchecked raw buffers and has no deterministic oracle for truncated storage. |
-| Bitmap-SDF edge topology | `2697,2706,2715,2727,2781` | `2647,2696,2701-2704,2726,2780` | GRAY and MONO SBIT success routes are real.  Remaining all-neighbor, border, alpha-gradient, and zero-radicand sides need source-backed SBIT alpha/mono shapes with exact retained bytes. |
+| Bitmap-SDF edge topology | `2706,2727,2781` | `2647,2701-2704,2726,2780` | GRAY and MONO SBIT success routes are real.  The opaque 3x3 SBIT resolves the all-eight-neighbors non-edge side.  Remaining border, alpha-gradient, and zero-radicand sides need source-backed SBIT alpha/mono shapes with exact retained bytes. |
 | Orientation, LCD box, and empty cbox | `2869,3023,3029` | `2868,3028` | Invalid contour endpoints and nonempty points with no usable contours are loader-inconsistent.  The non-LCD padding arm is private-call only because public dispatch calls this helper for LCD/LCD_V. |
 | `unpack_mono_row` | `2969-2974,2976,2979-2980` | `2973` | No production renderer caller exists.  Direct harness invocation, including historical commit `2e0f2637`, is helper-only and must not count as a FreeType route. |
 
 The exact source projection after the verified change is therefore:
 
-- zero-hit: `148-149,237-238,305,309,408,489,564,579,718,771,800,868,1109,1134,1165,1222,1234,1243-1244,1268,1278,1315,1332,1343-1346,1349,1435,1437,1534,1536,1603,1617,1630,2014,2028,2041,2046,2083,2205,2216,2224-2225,2275,2293,2306-2307,2309,2312,2429,2588-2589,2591-2592,2603-2604,2606-2607,2609-2610,2697,2706,2715,2727,2781,2869,2906,2947,2969-2974,2976,2979-2980,3023,3029`;
-- partial branch: `362,578,716,770,799,1108,1164,1221,1233,1271-1272,1274,1314,1329-1330,1339,1397,1432,1484,1523,1582,1584,1602,1616,1629,1809,2013,2016,2025,2040,2045,2204,2215,2274,2290-2291,2300,2428,2533,2647,2696,2701-2704,2726,2780,2868,2973,3028`.
+- zero-hit: `148-149,237-238,305,309,408,489,564,579,718,771,800,868,1109,1134,1165,1222,1234,1243-1244,1268,1278,1315,1332,1343-1346,1349,1435,1437,1534,1536,1603,1617,1630,2014,2028,2041,2046,2083,2205,2216,2224-2225,2275,2293,2306-2307,2309,2312,2429,2588-2589,2591-2592,2603-2604,2606-2607,2609-2610,2706,2727,2781,2869,2906,2947,2969-2974,2976,2979-2980,3023,3029`;
+- partial branch: `362,578,716,770,799,1108,1164,1221,1233,1271-1272,1274,1314,1329-1330,1339,1397,1432,1484,1523,1582,1584,1602,1616,1629,1809,2013,2016,2025,2040,2045,2204,2215,2274,2290-2291,2300,2428,2533,2647,2701-2704,2726,2780,2868,2973,3028`.
 
 The preserved render worktrees were also reconciled against this exact
 snapshot.  Coverage MCP run `b9bcd856-e500-4a92-88c9-417f18fcf500` and
