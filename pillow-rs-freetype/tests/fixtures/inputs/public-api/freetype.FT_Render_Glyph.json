@@ -1018,6 +1018,31 @@
             ]
           },
           {
+            "id": "dejavu-space-rendered-empty-bitmap-sdf",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 3,
+              "load_flags": [
+                "FT_LOAD_RENDER"
+              ],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": [
+              "render/bitmap-sdf:empty-bitmap-retains-slot"
+            ]
+          },
+          {
             "id": "liberation-a-normal",
             "assets": {
               "font": {
