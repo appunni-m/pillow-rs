@@ -2731,6 +2731,7 @@ impl BackendComparisonWorker {
                     load_flags,
                     render_mode,
                     render_repeat_count_param(&case.inputs.params)?,
+                    bool_param(&case.inputs.params, "capture_render_error_slot", false)?,
                 )
             }
             _ => run_c_abi(case),
@@ -2976,6 +2977,7 @@ impl BackendComparisonWorker {
                     load_flags,
                     render_mode,
                     render_repeat_count_param(&case.inputs.params)?,
+                    bool_param(&case.inputs.params, "capture_render_error_slot", false)?,
                 )
             }
             _ => run_wasm_abi(case),
@@ -9597,6 +9599,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             let repeat_count = render_repeat_count_param(params)?;
             if repeat_count > 1 {
                 args.push(repeat_count.to_string());
+            } else if bool_param(params, "capture_render_error_slot", false)? {
+                args.push("1".to_string());
+            }
+            if bool_param(params, "capture_render_error_slot", false)? {
+                args.push("capture-error-slot".to_string());
             }
             Ok(args)
         }
@@ -10853,6 +10860,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
                 load_flags_param(&case.inputs.params)?,
                 render_mode_param(&case.inputs.params)?,
                 render_repeat_count_param(&case.inputs.params)?,
+                bool_param(&case.inputs.params, "capture_render_error_slot", false)?,
             );
             c_done_face(face);
             c_done_library(library);
@@ -11369,6 +11377,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
                 load_flags_param(&case.inputs.params)?,
                 render_mode_param(&case.inputs.params)?,
                 render_repeat_count_param(&case.inputs.params)?,
+                bool_param(&case.inputs.params, "capture_render_error_slot", false)?,
             );
             wasm_done_face(handle);
             output
@@ -13246,6 +13255,30 @@ fn autohint_coverage_bits_param(case: &InputCase) -> Result<Option<Vec<u32>>, St
 fn rust_render_glyph_public_api(case: &InputCase) -> Result<RunOutput, String> {
     let raw_load_flags = load_flags_param(&case.inputs.params)?;
     let repeat_count = render_repeat_count_param(&case.inputs.params)?;
+    let capture_error_slot = bool_param(&case.inputs.params, "capture_render_error_slot", false)?;
+    if capture_error_slot {
+        if repeat_count != 1 || !case.expect_error {
+            return Err(format!(
+                "{} capture_render_error_slot requires one expected-error render",
+                case.case_id
+            ));
+        }
+        let face = open_face(case)?;
+        let loaded = match glyph_load_input_param(&case.inputs.params)? {
+            GlyphLoadInput::CharCode(char_code) => FT_Load_Char(&face, char_code, raw_load_flags),
+            GlyphLoadInput::GlyphIndex(glyph_index) => {
+                FT_Load_Glyph(&face, glyph_index, raw_load_flags)
+            }
+        };
+        let loaded = match loaded {
+            Ok(slot) => slot,
+            Err(err) => return Ok(error(err)),
+        };
+        return match FT_Render_Glyph(loaded.clone(), render_mode_param(&case.inputs.params)?) {
+            Ok(slot) => Ok(ok(slot_json(&slot))),
+            Err(err) => Ok(error_with_output(err, slot_json(&loaded))),
+        };
+    }
     if raw_load_flags & FT_LOAD_RENDER != 0 {
         let face = open_face(case)?;
         return rust_render_glyph(
@@ -13675,6 +13708,7 @@ fn c_render_glyph(
     load_flags: i32,
     render_mode: i32,
     repeat_count: u32,
+    capture_error_slot: bool,
 ) -> Result<RunOutput, String> {
     if repeat_count > 1 {
         let mut rows = Vec::new();
@@ -13713,6 +13747,8 @@ fn c_render_glyph(
     };
     if err == FT_Err_Ok {
         c_slot_json(face).map(ok)
+    } else if capture_error_slot && load_err == FT_Err_Ok {
+        Ok(error_with_output(err, c_slot_json(face)?))
     } else {
         Ok(error(err))
     }
@@ -13724,6 +13760,7 @@ fn wasm_render_glyph(
     load_flags: i32,
     render_mode: i32,
     repeat_count: u32,
+    capture_error_slot: bool,
 ) -> Result<RunOutput, String> {
     if repeat_count > 1 {
         let mut rows = Vec::new();
@@ -13765,7 +13802,11 @@ fn wasm_render_glyph(
     } else {
         load_err
     };
-    wasm_slot_output(handle, err)
+    if err != FT_Err_Ok && capture_error_slot && load_err == FT_Err_Ok {
+        Ok(error_with_output(err, wasm_slot_json(handle)?))
+    } else {
+        wasm_slot_output(handle, err)
+    }
 }
 
 fn face_macro_flags_values(params: &Value) -> Result<Vec<i64>, String> {
@@ -21332,6 +21373,7 @@ fn font_error_to_ft(error: FontError) -> FT_Error {
         FontError::CodeOverflow => FT_Err_Code_Overflow as FT_Error,
         FontError::InvalidReference => FT_Err_Invalid_Reference as FT_Error,
         FontError::CannotRenderGlyph(_) => FT_Err_Cannot_Render_Glyph,
+        FontError::UnimplementedFeature(_) => FT_Err_Unimplemented_Feature as FT_Error,
         FontError::InvalidArgument(_) => FT_Err_Invalid_Argument,
         FontError::MissingBitmap => FT_Err_Missing_Bitmap as FT_Error,
         FontError::InvalidComposite => FT_Err_Invalid_Composite as FT_Error,

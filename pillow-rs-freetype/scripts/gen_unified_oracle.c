@@ -3516,6 +3516,10 @@ static int render_glyph_repeat_count(int argc, char** argv) {
     return repeat_count > 0 ? repeat_count : 1;
 }
 
+static int render_glyph_capture_error_slot(int argc, char** argv) {
+    return argc > 11 && streq(argv[11], "capture-error-slot");
+}
+
 static int print_render_glyph_sequence(
     FT_Face face,
     FT_UInt glyph_index,
@@ -8996,6 +9000,8 @@ static int emit_face_or_slot(int argc, char** argv) {
     }
 
     err = FT_Load_Glyph(face, glyph_index, load_flags);
+    int render_error_slot_ready = !err &&
+        (streq(command, "--render-glyph") || streq(command, "--render-glyph-index"));
     if (!err && (streq(command, "--render-glyph") || streq(command, "--render-glyph-index") || (streq(command, "--inspect-glyph-slot") && argc == 10))) {
         FT_Render_Mode render_mode = (FT_Render_Mode)strtol(argv[9], NULL, 10);
         err = FT_Render_Glyph(face->glyph, render_mode);
@@ -9061,7 +9067,13 @@ static int emit_face_or_slot(int argc, char** argv) {
     }
     print_status(err);
     if (err) {
-        printf(",\"output\":null}\n");
+        if (render_error_slot_ready && render_glyph_capture_error_slot(argc, argv)) {
+            printf(",");
+            print_slot(face->glyph, glyph_index);
+            printf("}\n");
+        } else {
+            printf(",\"output\":null}\n");
+        }
     } else if (streq(command, "--inspect-glyph-metrics")) {
         printf(",");
         print_glyph_metrics(face->glyph->metrics);
@@ -10439,7 +10451,9 @@ static int dispatch(int argc, char** argv) {
     if (argc == 11 && streq(argv[1], "--get-subglyph-info-null-outputs")) {
         return emit_face_or_slot(argc, argv);
     }
-    if ((argc == 10 || argc == 11) && (streq(argv[1], "--render-glyph") || streq(argv[1], "--render-glyph-index"))) {
+    if ((argc == 10 || argc == 11 ||
+         (argc == 12 && streq(argv[11], "capture-error-slot"))) &&
+        (streq(argv[1], "--render-glyph") || streq(argv[1], "--render-glyph-index"))) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 10 && streq(argv[1], "--inspect-glyph-slot")) {

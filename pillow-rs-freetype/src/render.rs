@@ -2625,7 +2625,12 @@ fn rasterize_bitmap_sdf(
         | PixelMode::Lcd
         | PixelMode::LcdV
         | PixelMode::Bgra => {
-            return Err(FontError::CannotRenderGlyph(
+            // FreeType's bitmap-SDF raster has already accepted the SDF mode
+            // and allocated its temporary target here.  Unsupported source
+            // pixel modes fail with Unimplemented_Feature, after which
+            // `ft_bsdf_render` frees only that target and retains the source
+            // slot (`sdf/ftbsdf.c:805-810`, `sdf/ftsdfrend.c:552-601`).
+            return Err(FontError::UnimplementedFeature(
                 "bitmap SDF requires an 8-bit gray or monochrome source".into(),
             ));
         }

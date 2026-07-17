@@ -7465,6 +7465,8 @@ subjects:
         description: Size, alignment, and field offsets match the pinned C record.
       - id: public_fields_match_render_output
         description: Rendered glyph outputs match C for dimensions, pitch sign, pixel mode, gray count, and buffer bytes.
+      - id: sdf_unsupported_source_preserves_bitmap
+        description: Bitmap SDF rendering returns Unimplemented_Feature for unsupported loaded pixel modes and preserves the source bitmap exactly like C.
       - id: empty_bitmap_is_valid
         description: C accepts empty bitmaps with null buffer when width or rows are zero and reports matching zero-output behavior.
       - id: invalid_target_buffer_errors

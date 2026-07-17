@@ -36,6 +36,11 @@ pub enum FontError {
     #[error("Cannot render glyph: {0}")]
     CannotRenderGlyph(String),
 
+    /// The requested operation is valid but the selected renderer does not
+    /// implement the source format.
+    #[error("Unimplemented feature: {0}")]
+    UnimplementedFeature(String),
+
     /// The requested FreeType-style argument combination is invalid.
     #[error("Invalid argument: {0}")]
     InvalidArgument(String),
@@ -93,6 +98,12 @@ mod tests {
     fn cannot_render_glyph_displays_message() {
         let err = FontError::CannotRenderGlyph("composite slot".into());
         assert_eq!(err.to_string(), "Cannot render glyph: composite slot");
+    }
+
+    #[test]
+    fn unimplemented_feature_displays_message() {
+        let err = FontError::UnimplementedFeature("packed bitmap SDF".into());
+        assert_eq!(err.to_string(), "Unimplemented feature: packed bitmap SDF");
     }
 
     #[test]

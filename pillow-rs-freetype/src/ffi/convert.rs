@@ -203,6 +203,7 @@ pub(super) fn error_to_ft(error: FontError) -> FT_Error {
         FontError::CodeOverflow => FT_Err_Code_Overflow as FT_Error,
         FontError::InvalidReference => FT_Err_Invalid_Reference as FT_Error,
         FontError::CannotRenderGlyph(_) => FT_Err_Cannot_Render_Glyph,
+        FontError::UnimplementedFeature(_) => FT_Err_Unimplemented_Feature,
         FontError::InvalidArgument(_) => FT_Err_Invalid_Argument,
         FontError::MissingBitmap => FT_Err_Missing_Bitmap as FT_Error,
         FontError::InvalidComposite => FT_Err_Invalid_Composite as FT_Error,

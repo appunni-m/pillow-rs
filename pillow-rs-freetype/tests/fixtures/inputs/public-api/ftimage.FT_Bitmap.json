@@ -4,6 +4,7 @@
   "manifest_cases": [
     "layout_matches_c",
     "public_fields_match_render_output",
+    "sdf_unsupported_source_preserves_bitmap",
     "empty_bitmap_is_valid",
     "invalid_target_buffer_errors"
   ],
@@ -256,6 +257,25 @@
             "coverage": [
               "render_glyph:explicit-m5"
             ]
+          },
+          {
+            "id": "m5-sbit-mono-sdf",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fixtures/assets/fonts/sbit_mono_format1.ttf",
+                "requirements": "Generated scalable SFNT with one 20 ppem EBLC/EBDT format-1 1-bit monochrome strike for glyph 1."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {"x": 0, "y": 20},
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_DEFAULT"],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": ["render:bitmap-sdf-mono-public"]
           },
           {
             "id": "m5-cff-cubic-sdf",
@@ -923,6 +943,106 @@
           "freetype/include/freetype/ftimage.h:265-273",
           "freetype/src/raster/ftrend1.c:90-176",
           "freetype/src/smooth/ftsmooth.c:462-650"
+        ]
+      }
+    },
+    {
+      "case_id": "ftimage.FT_Bitmap.sdf_unsupported_source_preserves_bitmap",
+      "subject": "ftimage.FT_Bitmap",
+      "case": "sdf_unsupported_source_preserves_bitmap",
+      "operation": "render_glyph",
+      "schema": "glyph_render",
+      "expect_error": true,
+      "inputs": {
+        "variants": [
+          {
+            "id": "gray2",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fixtures/assets/fonts/sbit_gray2_format1.ttf",
+                "requirements": "Generated 20 ppem EBLC/EBDT format-1 2-bit grayscale strike for glyph 1."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {"x": 0, "y": 20},
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_DEFAULT"],
+              "render_mode": "FT_RENDER_MODE_SDF",
+              "capture_render_error_slot": true
+            },
+            "coverage": ["render:bitmap-sdf-gray2-unimplemented-retained"]
+          },
+          {
+            "id": "gray4",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fixtures/assets/fonts/sbit_gray4_format1.ttf",
+                "requirements": "Generated 20 ppem EBLC/EBDT format-1 4-bit grayscale strike for glyph 1."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {"x": 0, "y": 20},
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_DEFAULT"],
+              "render_mode": "FT_RENDER_MODE_SDF",
+              "capture_render_error_slot": true
+            },
+            "coverage": ["render:bitmap-sdf-gray4-unimplemented-retained"]
+          },
+          {
+            "id": "bgra",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fixtures/assets/fonts/sbit_bgra_format1.ttf",
+                "requirements": "Generated 20 ppem EBLC/EBDT format-1 32-bit BGRA strike for glyph 1."
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {"x": 0, "y": 20},
+              "glyph_index": 1,
+              "load_flags": ["FT_LOAD_COLOR"],
+              "render_mode": "FT_RENDER_MODE_SDF",
+              "capture_render_error_slot": true
+            },
+            "coverage": ["render:bitmap-sdf-bgra-unimplemented-retained"]
+          }
+        ]
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftimage",
+        "area:bitmap_sdf",
+        "path:exact_error_retention"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Unimplemented_Feature",
+        "output_shape": {
+          "return": "FT_Error",
+          "slot_after_error": "FT_GlyphSlotRec"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "compare_error_output": true,
+          "paths": [
+            "status",
+            "error",
+            "slot_after_error.format",
+            "slot_after_error.bitmap"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/sdf/ftbsdf.c:805-810",
+          "freetype/src/sdf/ftsdfrend.c:552-601"
         ]
       }
     },
