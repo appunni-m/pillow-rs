@@ -369,6 +369,7 @@ fn assert_unified_fixture_cases_match_runtime_c_oracle(all_cases: &[InputCase]) 
         let _profile = ProfileStage::new("runtime.select_runtime_cases");
         select_runtime_cases(all_cases)
     };
+    assert_explicit_runtime_filter_matched(&runtime_selection);
     let pending_report = format_operation_counts(
         &runtime_selection.unsupported_operations,
         operation_counts_limit("FONTDONE_UNIFIED_PENDING_LIMIT", 12),
@@ -575,6 +576,19 @@ struct RuntimeSelection {
     model_only: usize,
     unsupported_operations: BTreeMap<String, usize>,
     pending_samples: Vec<String>,
+}
+
+fn assert_explicit_runtime_filter_matched(selection: &RuntimeSelection) {
+    let case_filter = case_filter();
+    let operation_filter = operation_filter();
+    if case_filter.is_none() && operation_filter.is_none() {
+        return;
+    }
+
+    assert!(
+        !selection.executable.is_empty() || selection.model_only != 0,
+        "explicit runtime filter matched no fixture cases: case_filter={case_filter:?} operation_filter={operation_filter:?}"
+    );
 }
 
 fn flag_value(value: &Value, key: &str) -> Result<i32, String> {
