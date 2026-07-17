@@ -2661,6 +2661,85 @@ partial-branch records are `500`, `603`, `810`, `857`, `868`, `871`, `909`,
 `1216`, `1235`, `1359`, `1422`, `1425`, `1433`, `1436`, `1439`, `1442`,
 `1557`, `1576`, `1579`, `1588`, `1591`, `1594`, and `1597`.
 
+### API exact render-error refresh - 2026-07-17
+
+The current bucket started from Coverage MCP run
+`e69e354c-2520-4320-bd3f-5767ba41dac2` and normalized snapshot
+`d7b55494-895b-4603-8bce-28730abe45a0`: `src/api.rs` was 1,075 / 1,125
+lines, 1,605 / 1,664 regions, 240 / 296 branches, and 96 / 96 functions.
+Every zero-hit line and missing branch outcome was reread against its Rust
+caller and pinned FreeType 2.14.3 control flow before selecting routes.
+
+The retained case is
+`freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags.render_overlap_raster_overflow`.
+Pinned `FT_Load_Glyph` calls `FT_Render_Glyph` when `FT_LOAD_RENDER` is set and
+the loaded slot is neither bitmap nor composite, then returns that renderer
+error (`ftobjs.c:1159-1178`).  The overlap renderer returns
+`FT_Err_Raster_Overflow` when the scaled preset width exceeds `0x7FFF`
+(`ftsmooth.c:511-515,621-637`).  Rust already propagated the corresponding
+`render_loaded_outline` error through `?` at `api.rs:606`, but no exact public
+load row reached it.  The older grouped load-error row accepted any Rust error.
+The new standalone row sets case-level `compare_error_output=true` and compares
+`status`, `error`, and `slot_snapshot`.  Focused Coverage MCP run
+`1e5f8c3e-ecda-458f-bf51-6d3f4dd7ca84` passes 1 / 1; its C-oracle cache key
+`65904b3ead61ebbb8a44a514f7d92afd2aa618de7a78a26b7b2e1dc332004e3f`
+contains `status.kind=error` and `error_code=98`, independently proving that C
+returned `FT_Err_Raster_Overflow` rather than `OK`.
+
+An exact `FT_LOAD_RENDER` SBIT probe was also planned and focused run
+`97f0fae1-7675-480b-b15a-bbccae6f4fa1` passed 1 / 1.  It tested C's
+`slot->format == FT_GLYPH_FORMAT_BITMAP` render bypass at `ftobjs.c:1163-1178`,
+but full condition coverage remained flat for `api.rs`.  The row was removed;
+it neither moved this bucket nor retired a placeholder.
+
+Expected-error rows that remain disqualified as `api.rs` proof are:
+
+| Case | Safe API relevance | Exact-error blocker |
+|---|---|---|
+| `freetype.FT_LOAD_PEDANTIC.pedantic_error_behavior` | Sets `assert_api_load_glyph_agrees=true` | Its case-level comparison omits `compare_error_output=true`, so any Rust error can satisfy the old harness path. |
+| `freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags` | The `target-light-out-of-range-autohinter-order` variant sets `assert_api_load_glyph_agrees=true` | The grouped parent comparison omits `compare_error_output=true`; this variant is not exact C-status proof. |
+| `fterrdef.FT_Err_Raster_Overflow.raster_buffer_or_cell_overflow` | Exercises public `FT_Render_Glyph`, not safe `Face::load_glyph` | It also omits exact error-output comparison and cannot prove `api.rs:606`. |
+
+The definitive full run is
+`f44fb849-cb7e-48e8-a77f-1f438e0d88bf`, normalization run
+`1fb9c5f3-16a2-404e-89ea-d678cda20853`, and snapshot
+`3e084d87-64ff-46f3-9091-288bec050a3c`.  Runtime parity is 7,160 / 7,160
+with the same six runtime pending rows.  `src/api.rs` moves to 1,076 / 1,125
+lines and 1,606 / 1,664 regions; branches remain 240 / 296 and functions remain
+96 / 96.  Line 606 is the sole newly covered source record, with four hits and
+no regressions.
+
+Corrected exact-error route audit run
+`2d989730-fa10-4d3f-9e37-5fe38a157137` applies the already-verified classifier
+from commit `4a774272` without including it in this bucket.  Corrected counts
+move from 7,165 to 7,166 concrete cases and from 3,681 to 3,682 real-parity
+cases.  The other relevant buckets stay at 701 generic fallback, 524 generic
+error fallback, 7 pending core, and 4 real null validation.  The uncorrected
+historical ledger was 3,963 real parity, 809 generic fallback, and 129 generic
+error fallback and must not be used as proof.
+
+| Remaining Rust lines | Pinned C path | Precise blocker |
+|---|---|---|
+| `596,609` | `ftobjs.c:1159-1178` | C bypasses rendering for a slot already in bitmap format.  The exact scalable SBIT probe passed but did not reach the safe API's absent-render-outline arm; a real supported bitmap-only safe `Face` load is required. |
+| `803-804` | `ftobjs.c:4732-4993` | A valid outline slot always carries C's outline storage.  Rust's outline format with a missing owned render snapshot is an inconsistent private slot; unloaded/unsupported public slot states remain an explicit runtime dependency. |
+| `850-866,942-947` | `ftobjs.c:1065-1156`; `ftsynth.c:106-177` | Public outline loading constructs paired slot and render snapshots.  A one-sided optional snapshot or recompute without slot outline is not a C glyph-slot state. |
+| `902-903,977-1231` | `ftsynth.c:137-160`; `ftbitmap.c:135-438` | Valid loaded bitmaps have checked dimensions, pitch, and storage before the private helper.  Remaining conversion, length, checked-arithmetic, pitch, and allocation failures require malformed private storage or host-width/allocator overflow; C uses unchecked raw buffers and has no deterministic oracle for those states. |
+| `1352-1353` | `ftobjs.c:1129-1178`; `ftsmooth.c:595-619` | The caller rejects an empty loaded outline before repositioning.  Missing point cbox is caller-inconsistent. |
+| `1415-1436,1550-1591` | `ftoutln.c:911-1117`; `ftsynth.c:151-166` | Negative/mismatched contour counts and out-of-range endpoints require invalid owned outline arrays.  C validates fewer raw-array invariants, can read out of bounds, and FTSynth ignores direct embolden errors, so these cannot be deterministic public C-oracle routes. |
+
+The final zero-hit records are `609`, `804`, `852`, `863`, `866`, `903`,
+`947`, `1010`, `1013`, `1016`, `1020-1023`, `1027`, `1030`, `1041`, `1076`,
+`1093`, `1096`, `1099`, `1102`, `1105`, `1108`, `1111`, `1144`, `1147`,
+`1150`, `1153`, `1156`, `1159`, `1169`, `1172`, `1175`, `1213`, `1231`,
+`1353`, `1416`, `1419`, `1427`, `1430`, `1433`, `1436`, `1551`, `1570`,
+`1573`, `1582`, `1585`, `1588`, and `1591`.  The final partial-branch records
+are `596`, `803`, `850`, `861`, `864`, `902`, `942`, `977-978`, `981-982`,
+`1005`, `1012`, `1015`, `1019`, `1026`, `1029`, `1072`, `1088`, `1095`,
+`1098`, `1101`, `1104`, `1107`, `1110`, `1139`, `1146`, `1149`, `1152`,
+`1155`, `1158`, `1162`, `1168`, `1171`, `1174`, `1209`, `1228`, `1352`,
+`1415`, `1418`, `1426`, `1429`, `1432`, `1435`, `1550`, `1569`, `1572`,
+`1581`, `1584`, `1587`, and `1590` (56 uncovered branch outcomes total).
+
 ### Font.rs Residual Public-Route Audit - 2026-07-17
 
 Coverage MCP snapshot `60cb8c8d-7f89-4a58-9752-c42b3bce4706`
