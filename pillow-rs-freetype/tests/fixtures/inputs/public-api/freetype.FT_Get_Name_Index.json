@@ -237,6 +237,23 @@
             "coverage": [
               "freetype.get_name_index:explicit-known_name_on_no_names"
             ]
+          },
+          {
+            "id": "known-name-on-unsupported-post-format",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/metadata/post-format-unsupported.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "glyph_name": "A"
+            },
+            "coverage": [
+              "font:name-index-unsupported-post-format"
+            ]
           }
         ]
       },

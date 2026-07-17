@@ -2659,6 +2659,59 @@ partial-branch records are `500`, `603`, `810`, `857`, `868`, `871`, `909`,
 `1216`, `1235`, `1359`, `1422`, `1425`, `1433`, `1436`, `1439`, `1442`,
 `1557`, `1576`, `1579`, `1588`, `1591`, `1594`, and `1597`.
 
+### Font.rs Residual Public-Route Audit - 2026-07-17
+
+Coverage MCP snapshot `60cb8c8d-7f89-4a58-9752-c42b3bce4706`
+reports `src/font.rs` at 2,294 / 2,356 lines, 3,115 / 3,266 regions,
+278 / 326 branches, and 201 / 219 functions.  The corresponding full run
+`90cf941a-0ec0-4d75-b87c-de842a7ef09a` passes 7,106 / 7,106 runtime
+comparisons with four explicit pending rows.  The bounded zero-function audit
+is Coverage MCP run `cff86f32-20a9-4abe-824b-ef207e2fe249`.
+
+Every zero-hit source record and partial branch was read in context and against
+the pinned FreeType 2.14.3 implementation and callers before selecting cases:
+
+| Rust function or route | Zero-hit lines | Partial branch lines | Pinned C evidence and disposition |
+|---|---|---|---|
+| `type1_cleartext` | none | `86` | `type1/t1parse.c:68-238` distinguishes the first ASCII PFB segment from invalid segment tags. Add an exact invalid-first-segment `FT_New_Memory_Face` row. |
+| `type1_bbox` | `246` | `246` | `psaux/psobjs.c` accepts both procedure and array delimiters for `/FontBBox`. Add a bracketed-bbox Type 1 face row. |
+| `truetype_face_with_load_mode` | `679,715,720` | `675,714,719` | `ftobjs.c:1510-1578`, `ttobjs.c:724-743`, and `ttpload.c:63-179` define named-instance naming and missing `loca`/`glyf` construction errors. Retain the malformed-table guards; named-instance coverage remains blocked by complete variation behavior. |
+| `name_index` | `941` | `940` | `ftobjs.c:4263-4285`, `sfobjs.c:1118-1121`, and `ttpost.c:410-473` gate the glyph dictionary service by accepted `post` formats. Add an exact unsupported-format zero result. |
+| `glyph_slot_load_truetype_no_scale` | none | `1756` | `ttgload.c:1534-1560,1970-2086` makes a valid empty glyph have both zero contours and zero points. The opposite split state is parser-unreachable and remains visible. |
+| `glyph_slot_load_cff_no_scale` | `1850` | `1848` | `cffgload.c:411-428,617-742` sets high precision only below 24 ppem, including no-scale loads. Add the exact 24-ppem false boundary. |
+| `glyph_slot_load_no_recurse` | `1907` | none | `ttgload.c:1804-1813,2389-2645` returns no-recurse subglyph data only for composites. The remaining error propagation needs a public malformed composite that reaches the second load. |
+| `getmask_single_glyph` | `2112,2115-2117,2138` | `2099,2111` | This is a high-level `fontdone::Font`/Pillow-style mask helper, not a public C FreeType route. Public rendering is covered through `FT_Load_Glyph`/`FT_Render_Glyph`; do not add an internal helper test. |
+| default/native metric scaling | `2279,2289-2294,2347,2357,2403-2408` | `2288,2339,2395` | `ftobjs.c:905-1178` and `ttgload.c:2188-2645` define public native/autohint dispatch. Context errors require real bytecode failures. The 16,384 pathological fallback has no pinned C counterpart and must not gain a coverage-only font without a separate behavior audit. |
+| `layout_advance` | `2504,2508` | `2503` | `ftadvanc.c:54-201` implements public `FT_Get_Advance(s)`, while this helper is convenience text layout that suppresses missing glyphs and errors. Keep it outside public FreeType coverage. |
+| `slot_load_from_scaled` | `2605` | `2604,2616` | `ttgload.c:1970-2086` and `cffgload.c:617-742` define scaled horizontal and vertical metrics. Zero scale and vertical-layout sides remain reachable only through exact public load states. |
+| `glyph_is_composite` | `2669` | `2668` | `ttgload.c` consumes a parser-validated glyph header; fewer than two bytes is a malformed-glyf guard that normally fails earlier. Retain it unless a public short-glyph row reaches this caller. |
+| `synthesize_vertical_metrics` | `2826,2828,2831` | `2825,2826,2829,2833` | `ftobjs.c:3143-3166` supplies the exact negative/positive bearing and zero-advance algorithm. Future rows must expose these states through a public glyph load. |
+| `vertical_advance_font_units` | `2864-2865` | `2862` | `ttgload.c:2017-2032` uses OS/2 typo metrics when present and hhea otherwise. Add a no-OS/2 no-scale vertical TrueType row. |
+| pathological metric predicates | none | `2879-2884,2888-2889` | No matching predicate exists in pinned C. Keep all eight short-circuit sides visible pending a root-cause audit of the Rust fallback. |
+| `default_unicode_charmap_index` | none | `2905,2915` | `ftobjs.c:1371-1448,1565-1576,3712-3731` scans the directory in reverse, first for UCS-4 Unicode maps and then for any Unicode map, including ISO platform maps. Rust scans forward by hard-coded format/platform buckets. Add exact UCS-4, Apple Unicode fallback, and ISO fallback-order fonts, then fix core selection. |
+| `SizeMetrics::from_size_request` | `3079` | `3090` | `ftobjs.c:3239-3373` accepts zero nominal scales, then `truetype/ttdriver.c:349-413` calls `tt_size_reset`, whose `ttobjs.c:1238-1248` zero-ppem guard returns `Invalid_PPem` (151). Add nominal zero-by-zero to the exact public error matrix; retain the caller-preempted inner `Scales` arm. |
+| `ft_div_fix_i64`, `ft_mul_div_i64` | `3216,3227` | `3215,3226` | `ftcalc.c:161-250` returns a saturated value for direct public zero divisors, while `FT_Request_Metrics` rejects zero face dimensions before calling it. These request helpers preserve explicit divide-by-zero errors; no public request can reach them after the C-equivalent guards. |
+| `named_instance_postscript_name` | none | `3276` | `sfdriver.c:804-1064` falls back from invalid direct PostScript IDs to subfamily/coordinate construction. Additional coverage requires real named-instance variation support. |
+| `fixed_16_16_to_short_decimal` | `3346,3361` | `3345,3351,3355,3357,3366` | `sfdriver.c:700-793` (`fixed2float`) defines truncation and rounding. Cover only through `FT_Get_Postscript_Name` named-instance rows after the variation route is real. |
+| `face_metric_values` | none | `3405,3418` | `sfobjs.c:1330-1419` uses hhea when either ascender or descender is nonzero, then OS/2 typo when either typo field is nonzero. One-sided generated metric fonts are valid future exact rows. |
+
+The 18 uncovered LLVM functions are compiler-generated symbols, grouped as:
+two `glyph_is_composite` error closures (`2659,2667`), one
+`SizeMetrics::from_char_size` closure (`2980`), one `Font::type1_face` closure
+(`573`), three `load_sfnt_table(s)` closures (`1403,1405,1409`), five
+`truetype_face_with_load_mode` closures (`638,641,647,652,657`), one
+`type1_bbox` closure (`247`), and five `parse_type1_metadata` closures
+(`96,98-100,102`).  They are instrumentation artifacts attached to the public
+constructor/parser paths, not independent helper functions.
+
+The selected exact case plan is: three `FT_Get_Char_Index` directory-order
+fonts, covering UCS-4 preference plus Apple Unicode and ISO fallback order;
+Type 1 array-bbox success and invalid-PFB-segment error rows, one
+unsupported-`post` `FT_Get_Name_Index` row, CFF no-scale at 24 ppem, TrueType
+no-OS/2 no-scale vertical metrics, and nominal zero-by-zero in the exact-error
+request matrix to prove the public preemption behavior. Every row uses the existing
+C-oracle/Rust-FFI/C-ABI/WASM-ABI comparison path.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:

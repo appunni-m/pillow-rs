@@ -682,6 +682,28 @@
             ]
           },
           {
+            "id": "type1-bbox-array",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/type1/bbox-array-type1.pfb"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/type1/bbox-array-type1.pfb"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "memory_source": "whole_file"
+            },
+            "coverage": [
+              "font:type1-bbox-array-delimiters"
+            ]
+          },
+          {
             "id": "multiface-cjk-indic-collection",
             "assets": {
               "font_bytes": {
@@ -994,6 +1016,31 @@
             },
             "coverage": [
               "type1:new-memory-face-positive-face-index-out-of-range"
+            ]
+          },
+          {
+            "id": "type1-invalid-first-pfb-segment",
+            "assets": {
+              "font_bytes": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/type1/invalid-first-segment-type1.pfb"
+              },
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/type1/invalid-first-segment-type1.pfb"
+              }
+            },
+            "params": {
+              "variants": [
+                {
+                  "face_index": 0
+                }
+              ]
+            },
+            "coverage": [
+              "font:type1-invalid-first-pfb-segment"
             ]
           },
           {

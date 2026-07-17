@@ -2894,25 +2894,21 @@ fn is_pathological_metrics_advance(scaled: &scaler::ScaledGlyph) -> bool {
 }
 
 fn default_unicode_charmap_index(cmap: &tt::cmap::CmapTable) -> Option<usize> {
+    // C `find_unicode_charmap` scans in reverse directory order, first for
+    // UCS-4 platform/encoding pairs and then for any Unicode charmap
+    // (`src/base/ftobjs.c:1371-1448`).
     cmap.charmaps
         .iter()
-        .position(|record| {
-            record.format == 12 && record.platform_id == 3 && record.encoding_id == 10
+        .rposition(|record| {
+            record.is_unicode()
+                && ((record.platform_id == 3 && record.encoding_id == 10)
+                    || (record.platform_id == 0 && record.encoding_id == 4)
+                    || (record.platform_id == 0 && record.encoding_id == 6 && record.format == 13))
         })
         .or_else(|| {
             cmap.charmaps
                 .iter()
-                .position(|record| record.format == 12 && record.platform_id == 0)
-        })
-        .or_else(|| {
-            cmap.charmaps
-                .iter()
-                .position(|record| record.format == 4 && record.platform_id == 3)
-        })
-        .or_else(|| {
-            cmap.charmaps
-                .iter()
-                .position(|record| record.format == 4 && record.platform_id == 0)
+                .rposition(tt::cmap::CharmapRecord::is_unicode)
         })
 }
 

@@ -479,6 +479,69 @@
             "coverage": [
               "get_char_index:explicit-NotoSans-Regular-s20-cp128512-f15"
             ]
+          },
+          {
+            "id": "default-ucs4-directory-order",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cmap/cmap-default-ucs4-order.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 65
+            },
+            "coverage": [
+              "font:default-unicode-charmap-reverse-ucs4-order"
+            ]
+          },
+          {
+            "id": "default-unicode-fallback-directory-order",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cmap/cmap-default-unicode-fallback-order.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 65
+            },
+            "coverage": [
+              "font:default-unicode-charmap-reverse-fallback-order"
+            ]
+          },
+          {
+            "id": "default-iso-unicode-fallback-directory-order",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cmap/cmap-default-iso-fallback-order.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "char_code": 65
+            },
+            "coverage": [
+              "font:default-unicode-charmap-iso-fallback-order"
+            ]
           }
         ]
       },

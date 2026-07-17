@@ -217,6 +217,30 @@
             ]
           },
           {
+            "id": "pure-cff-no-scale-ppem-24",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 24
+              },
+              "glyph_index": 4,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE"
+              ]
+            },
+            "coverage": [
+              "font:cff-no-scale-high-precision-boundary"
+            ]
+          },
+          {
             "id": "pure-cff-no-scale-vertical-synthesized",
             "assets": {
               "font": {
@@ -264,6 +288,31 @@
             },
             "coverage": [
               "font:cff-no-scale-vmtx-vertical-metrics"
+            ]
+          },
+          {
+            "id": "truetype-no-os2-no-scale-vertical",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/sfnt/no-os2.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_NO_SCALE",
+                "FT_LOAD_VERTICAL_LAYOUT"
+              ]
+            },
+            "coverage": [
+              "font:truetype-no-os2-horizontal-header-vertical-fallback"
             ]
           },
           {

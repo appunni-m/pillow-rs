@@ -332,6 +332,11 @@
             },
             {
               "type": "FT_SIZE_REQUEST_TYPE_NOMINAL",
+              "width": 0,
+              "height": 0
+            },
+            {
+              "type": "FT_SIZE_REQUEST_TYPE_NOMINAL",
               "width": 4294967296,
               "height": 4294967296
             }
