@@ -294,7 +294,7 @@ static int emit_bitmap_convert(const char* scenario) {
             FT_Bitmap_Done(library, &target);
         }
     } else if (streq(scenario, "success_alignment_and_flow")) {
-        const int alignments[] = {0, 1, 2, 3, 4};
+        const int alignments[] = {0, 1, 2, 3, 4, -1, -2, -4};
         for (size_t i = 0; i < sizeof(alignments) / sizeof(alignments[0]); i++) {
             char label[32];
             snprintf(label, sizeof(label), "align_%d", alignments[i]);
@@ -443,12 +443,16 @@ static int emit_bitmap_copy(const char* scenario) {
     FT_Bitmap* target_arg = &target;
     FT_Library library_arg = library;
 
-    if (streq(scenario, "success_source_equals_target_noop")) {
+    if (streq(scenario, "success_deep_copy_all_public_fields")) {
+        source.pitch = -4;
+    } else if (streq(scenario, "success_source_equals_target_noop")) {
         target_arg = &source;
     } else if (streq(scenario, "success_null_source_buffer")) {
         source.buffer = NULL;
-    } else if (streq(scenario, "success_flow_flip")) {
         target.pitch = -1;
+    } else if (streq(scenario, "success_flow_flip")) {
+        source.pitch = -4;
+        target.pitch = 1;
     } else if (streq(scenario, "ownership_replaces_target_buffer")) {
         memset(target_bytes, 0xE5, sizeof(target_bytes));
         FT_Bitmap pre_source;
@@ -461,9 +465,14 @@ static int emit_bitmap_copy(const char* scenario) {
             FT_Done_FreeType(library);
             return 0;
         }
-    } else if (streq(scenario, "error_null_library_or_bitmaps")) {
+    } else if (streq(scenario, "error_null_library")) {
+        library_arg = NULL;
+    } else if (streq(scenario, "error_null_source") ||
+               streq(scenario, "error_null_library_or_bitmaps")) {
         source_arg = NULL;
-    } else if (!streq(scenario, "success_deep_copy_all_public_fields")) {
+    } else if (streq(scenario, "error_null_target")) {
+        target_arg = NULL;
+    } else {
         fprintf(stderr, "unsupported bitmap copy scenario: %s\n", scenario);
         FT_Done_FreeType(library);
         return 2;
@@ -722,7 +731,9 @@ static int emit_bitmap_embolden(const char* scenario) {
             EMIT_ROW("mode", library, modes[i], 0, 64, 96, 0, 0);
         }
     } else if (streq(scenario, "success_strength_rounding_and_zero")) {
-        FT_Pos strengths[][2] = { {0, 0}, {32, 32}, {64, 96}, {512, 64} };
+        FT_Pos strengths[][2] = {
+            {0, 0}, {32, 32}, {64, 0}, {0, 64}, {64, 96}, {512, 64}
+        };
         for (size_t i = 0; i < sizeof(strengths) / sizeof(strengths[0]); i++) {
             EMIT_ROW("strength", library, FT_PIXEL_MODE_GRAY, 0, strengths[i][0], strengths[i][1], 0, 0);
         }
@@ -741,6 +752,8 @@ static int emit_bitmap_embolden(const char* scenario) {
         EMIT_ROW("null-buffer", library, FT_PIXEL_MODE_GRAY, 0, 64, 64, 0, 1);
         EMIT_ROW("unsupported-mode", library, 99, 0, 64, 64, 0, 0);
         EMIT_ROW("negative-strength", library, FT_PIXEL_MODE_GRAY, 0, -64, 0, 0, 0);
+        EMIT_ROW("negative-y-strength", library, FT_PIXEL_MODE_GRAY, 0, 0, -64, 0, 0);
+        EMIT_ROW("overflow-strength", library, FT_PIXEL_MODE_GRAY, 0, 137438953472LL, 0, 0, 0);
     } else if (streq(scenario, "ownership_reallocates_bitmap_buffer")) {
         EMIT_ROW("realloc-positive-pitch", library, FT_PIXEL_MODE_GRAY, 0, 64, 96, 0, 0);
         EMIT_ROW("realloc-negative-pitch", library, FT_PIXEL_MODE_GRAY, 1, 64, 96, 0, 0);

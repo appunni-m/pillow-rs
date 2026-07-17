@@ -484,6 +484,29 @@
             "coverage": [
               "ftadvanc.get_advance:explicit-g36-f2"
             ]
+          },
+          {
+            "id": "g36-f3",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "sentinel_padvance": "0x13572468",
+              "glyph_index": 36,
+              "load_flags": [
+                "FT_LOAD_TARGET_LIGHT",
+                "FT_ADVANCE_FLAG_FAST_ONLY"
+              ]
+            },
+            "coverage": [
+              "ftadvanc.get_advance:explicit-g36-f3"
+            ]
           }
         ]
       },

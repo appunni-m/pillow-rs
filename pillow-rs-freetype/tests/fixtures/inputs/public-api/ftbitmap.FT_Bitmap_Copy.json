@@ -310,37 +310,50 @@
       "schema": "bitmap_operation",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "synthetic_bitmaps": {
-            "kind": "ref",
-            "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
-            "asset_kind": "binary"
+        "variants": [
+          {
+            "id": "null-library",
+            "assets": {
+              "synthetic_bitmaps": {
+                "kind": "ref",
+                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+                "asset_kind": "binary"
+              }
+            },
+            "params": {
+              "scenario": "error_null_library"
+            },
+            "coverage": ["ftbitmap.bitmap_copy:null-library"]
           },
-          "font": {
-            "kind": "ref",
-            "id": "fonts/basic/dejavu-sans.ttf",
-            "asset_kind": "font"
+          {
+            "id": "null-source",
+            "assets": {
+              "synthetic_bitmaps": {
+                "kind": "ref",
+                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+                "asset_kind": "binary"
+              }
+            },
+            "params": {
+              "scenario": "error_null_source"
+            },
+            "coverage": ["ftbitmap.bitmap_copy:null-source"]
+          },
+          {
+            "id": "null-target",
+            "assets": {
+              "synthetic_bitmaps": {
+                "kind": "ref",
+                "id": "bitmaps/synthetic/public-bitmap-matrix.bin",
+                "asset_kind": "binary"
+              }
+            },
+            "params": {
+              "scenario": "error_null_target"
+            },
+            "coverage": ["ftbitmap.bitmap_copy:null-target"]
           }
-        },
-        "params": {
-          "scenario": "error_null_library_or_bitmaps",
-          "source_target_alias": false,
-          "pitch_pairs": [
-            [
-              4,
-              0
-            ],
-            [
-              4,
-              -1
-            ],
-            [
-              -4,
-              1
-            ]
-          ],
-          "preallocated_target": false
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
