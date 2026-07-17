@@ -9099,14 +9099,19 @@ static int parse_memory_face_row(char* row, MemoryFaceRow* out) {
     return 1;
 }
 
-static void print_memory_face_row(MemoryFaceRow row, FT_Error err) {
+static void print_memory_face_row(MemoryFaceRow row, FT_Error err, int face_is_null) {
     printf("{\"face_index\":%ld,\"file_size\":", row.face_index);
     if (row.has_file_size) {
         printf("%ld", row.file_size);
     } else {
         printf("null");
     }
-    printf(",\"status\":%d,\"opened\":%s}", err, err ? "false" : "true");
+    printf(",\"status\":%d,\"error\":%d,\"opened\":%s,"
+           "\"face_nullness\":\"%s\"}",
+           err,
+           err,
+           face_is_null ? "false" : "true",
+           face_is_null ? "null" : "non_null");
 }
 
 static int emit_new_memory_face_variants(int argc, char** argv) {
@@ -9148,11 +9153,13 @@ static int emit_new_memory_face_variants(int argc, char** argv) {
     }
     MemoryFaceRow* rows = (MemoryFaceRow*)calloc(row_count, sizeof(MemoryFaceRow));
     FT_Error* errors = (FT_Error*)calloc(row_count, sizeof(FT_Error));
-    if ((!rows || !errors) && row_count > 0) {
+    int* face_is_null = (int*)calloc(row_count, sizeof(int));
+    if ((!rows || !errors || !face_is_null) && row_count > 0) {
         free(data);
         free(rows_arg);
         free(rows);
         free(errors);
+        free(face_is_null);
         return 1;
     }
 
@@ -9169,6 +9176,7 @@ static int emit_new_memory_face_variants(int argc, char** argv) {
             free(rows_arg);
             free(rows);
             free(errors);
+            free(face_is_null);
             return 2;
         }
         row_index++;
@@ -9185,6 +9193,7 @@ static int emit_new_memory_face_variants(int argc, char** argv) {
         free(rows_arg);
         free(rows);
         free(errors);
+        free(face_is_null);
         return 0;
     }
 
@@ -9193,6 +9202,11 @@ static int emit_new_memory_face_variants(int argc, char** argv) {
         FT_Face face = NULL;
         FT_Long file_size = rows[i].has_file_size ? rows[i].file_size : data_len;
         errors[i] = FT_New_Memory_Face(library, data, file_size, rows[i].face_index, &face);
+        /* FT_New_Memory_Face delegates through FT_Open_Face.  A valid `aface`
+         * is assigned only after the face opens successfully; error exits leave
+         * the caller's output unchanged.  Capture it before success cleanup so
+         * exact-error rows verify that public output-pointer contract. */
+        face_is_null[i] = face == NULL;
         if (!first_error && errors[i]) {
             first_error = errors[i];
         }
@@ -9208,7 +9222,7 @@ static int emit_new_memory_face_variants(int argc, char** argv) {
         if (i) {
             printf(",");
         }
-        print_memory_face_row(rows[i], errors[i]);
+        print_memory_face_row(rows[i], errors[i], face_is_null[i]);
     }
     printf("]}}\n");
 
@@ -9219,6 +9233,7 @@ static int emit_new_memory_face_variants(int argc, char** argv) {
     free(rows_arg);
     free(rows);
     free(errors);
+    free(face_is_null);
     return 0;
 }
 
