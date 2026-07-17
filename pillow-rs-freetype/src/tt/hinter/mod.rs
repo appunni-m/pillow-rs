@@ -18,13 +18,12 @@
 //!
 //! The hinter runs in three stages:
 //!
-//! 1. **Setup**: Load fpgm/prep bytecode, initialize execution context
-//!    with CVT values scaled to the current ppem, set up the glyph zone
-//!    with 4 phantom points.
+//! 1. **Setup**: Reuse the face/size execution context prepared by the caller,
+//!    then set up the glyph zone with 4 phantom points.
 //!
-//! 2. **Execution**: Run the font program (fpgm) once to define functions,
-//!    then run the glyph's instruction stream through the bytecode VM.
-//!    This modifies point coordinates in the `zone.cur` array.
+//! 2. **Execution**: Use the function definitions and graphics state saved
+//!    by `fpgm`/`prep`, then run the glyph's instruction stream through the
+//!    bytecode VM. This modifies point coordinates in `zone.cur`.
 //!
 //! 3. **Cleanup**: Copy hinted coordinates from `zone.cur` back to the
 //!    scaled outline, restore freedom/projection vectors.
@@ -96,7 +95,7 @@ pub struct HintOutcome {
 /// FreeType runs `fpgm` and `prep` for the active size, then reuses the saved
 /// context for glyph loads. Keeping the prepared state in Rust avoids paying
 /// bytecode setup cost for every glyph while preserving pure-Rust execution.
-pub fn prepare_context(
+pub(crate) fn prepare_context(
     cvt: &[i32],
     fpgm: &[u8],
     prep: &[u8],
@@ -132,21 +131,15 @@ pub fn prepare_context(
 /// # Arguments
 /// * `scaled` — 26.6 coordinates (modified in-place)
 /// * `raw` — font-unit coordinates from the glyf table
-/// * `cvt` — control value table (scaled to 26.6, one entry per CVT index)
-/// * `fpgm` — font program bytecode (function definitions)
-/// * `prep` — CVT program bytecode (executed when ppem changes)
-/// * `x_scale` — horizontal scale factor (16.16)
-/// * `y_scale` — vertical scale factor (16.16)
-/// * `ppem` — pixels per em
+/// * `prepared_context` — face/size state after running `fpgm` and `prep`
 ///
 /// # Execution Stages
 ///
-/// The entry point prepares glyph and twilight zones, initializes the execution
-/// context, executes font-program definitions and prep state as required, runs
-/// glyph bytecode, and applies untouched-point interpolation before returning
-/// the modified coordinates to the caller.
+/// The entry point prepares glyph and twilight zones, clones the prepared size
+/// state, runs glyph bytecode, and applies untouched-point interpolation before
+/// returning the modified coordinates to the caller.
 #[allow(clippy::too_many_arguments)]
-pub fn hint_glyph(
+pub(crate) fn hint_glyph(
     scaled: &mut [OutlinePoint],
     raw: &[OutlinePoint],
     raw_tags: &[u8],
@@ -157,12 +150,9 @@ pub fn hint_glyph(
     raw_pp1_x: i32,
     raw_pp3_y: i32,
     raw_pp4_y: i32,
-    cvt: &[i32],
-    fpgm: &[u8],
-    prep: &[u8],
     scale: &HintScale,
     glyph_ins: &[u8],
-    prepared_context: Option<&exec::ExecContext>,
+    prepared_context: &exec::ExecContext,
 ) -> Result<HintOutcome, FontError> {
     // ── Build the glyph zone ──────────────────────────────────────────
     // C: ttgload.c:874-891 — adds 4 phantom points to the zone.
@@ -281,11 +271,10 @@ pub fn hint_glyph(
     }
 
     // ── Initialize execution context ──────────────────────────────────
-    let mut ctx = if let Some(prepared) = prepared_context {
-        prepared.clone()
-    } else {
-        prepare_context(cvt, fpgm, prep, scale)?
-    };
+    // C `TT_Hint_Glyph` receives `loader->exec` after face/size setup has
+    // already run `fpgm` and `prep` (`ttgload.c:770-865`). It never owns a
+    // fallback size-context initialization path.
+    let mut ctx = prepared_context.clone();
     ctx.is_composite = scale.is_composite;
     if scale.is_composite {
         ctx.x_scale = 1 << 16;
@@ -370,10 +359,12 @@ pub fn hint_glyph(
     let outline_flags = outline_flags_from_scan_control(ctx.gs.scan_control, ctx.gs.scan_type);
     let mut contour_dropouts =
         vec![dropout_control_from_outline_flags(outline_flags); contours.len()];
-    if !glyph_ins.is_empty() && !contour_dropouts.is_empty() {
+    if !glyph_ins.is_empty() {
         // C `TT_Hint_Glyph` stores `GS.scan_type` in the first outline tag
         // after executing glyph bytecode; `ftraster.c` lets that tag override
-        // outline-level dropout flags for the first contour only.
+        // outline-level dropout flags for the first contour only. The scaler
+        // rejects zero-contour or zero-point outlines before bytecode dispatch,
+        // matching `TT_Load_Glyph`, so an executing glyph program has both.
         contour_dropouts[0] = ctx.gs.scan_type & 7;
     }
     let mut point_tags = Vec::with_capacity(n_points);
@@ -391,7 +382,7 @@ pub fn hint_glyph(
         }
         point_tags.push(tag);
     }
-    if !glyph_ins.is_empty() && !point_tags.is_empty() {
+    if !glyph_ins.is_empty() {
         // C stores `(scan_type << 5) | FT_CURVE_TAG_HAS_SCANMODE` in
         // `outline.tags[0]` after TrueType bytecode execution
         // (`src/truetype/ttgload.c:839-840`).

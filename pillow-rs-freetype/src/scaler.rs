@@ -72,6 +72,35 @@ impl ScaleMetrics {
     }
 }
 
+pub(crate) fn prepare_native_bytecode_context(
+    data: &FontData,
+    scale: ScaleMetrics,
+    native_hint_mode: NativeHintMode,
+    pedantic_hinting: bool,
+    cvt: &[i32],
+    fpgm: &[u8],
+) -> Result<crate::tt::hinter::exec::ExecContext, FontError> {
+    let context_scale = crate::tt::hinter::HintScale {
+        x_scale: scale.x_scale,
+        y_scale: scale.y_scale,
+        tt_scale: scale.tt_scale,
+        ppem: scale.ppem,
+        point_size: scale.point_size,
+        storage_size: data.maxp.max_storage as usize,
+        max_function_defs: data.maxp.max_function_defs as usize,
+        max_instruction_defs: data.maxp.max_instruction_defs as usize,
+        twilight_points: data.maxp.max_twilight_points as usize,
+        is_composite: false,
+        reset_vectors_at_glyph_entry: false,
+        metrics_legacy_phantoms: false,
+        pedantic_hinting,
+        native_hint_mode,
+        phantom_x_override: None,
+    };
+    let prep = data.prep.as_deref().unwrap_or(&[]);
+    crate::tt::hinter::prepare_context(cvt, fpgm, prep, &context_scale)
+}
+
 /// FT_DivFix in 16.16 (local alias to avoid importing the whole fixed module).
 #[inline]
 fn ft_div_fix_local(a: i32, b: i32) -> i32 {
@@ -888,6 +917,34 @@ fn scale_glyph_impl_with_context(
     // point after loading. Apply it after scaling so FT_MulFix rounding stays
     // separate from point-coordinate rounding.
     let can_execute_native_bytecode = data.fpgm.is_some() && data.cvt.is_some();
+    let native_bytecode_context = if !use_autohint && allow_bytecode {
+        if let (Some(fpgm), Some(cvt)) = (&data.fpgm, &data.cvt) {
+            Some(if let Some(context) = bytecode_context {
+                std::borrow::Cow::Borrowed(context)
+            } else {
+                // C prepares the size execution state before entering
+                // `TT_Hint_Glyph` (`ttobjs.c`, `ttgload.c`). Keep the direct
+                // Rust scaler helpers working, but establish their context at
+                // the same caller boundary and reuse it for component loads.
+                std::borrow::Cow::Owned(prepare_native_bytecode_context(
+                    data,
+                    ScaleMetrics {
+                        y_scale: y_adj,
+                        ..scale
+                    },
+                    native_hint_mode,
+                    false,
+                    cvt,
+                    fpgm,
+                )?)
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let bytecode_context = native_bytecode_context.as_deref();
     let no_hinting_origin_shift_x =
         if data.cff.is_none() && !use_autohint && (!allow_bytecode || !can_execute_native_bytecode)
         {
@@ -1001,7 +1058,7 @@ fn scale_glyph_impl_with_context(
             }
         }
     } else if allow_bytecode {
-        if let (Some(fpgm), Some(cvt)) = (&data.fpgm, &data.cvt) {
+        if let Some(bytecode_context) = bytecode_context {
             // Bytecode VM: run on glyphs with per-glyph instructions.
             // Falls through to unhinted on error (graceful degradation).
             let raw_pts: Vec<OutlinePoint> = outline_raw
@@ -1026,11 +1083,10 @@ fn scale_glyph_impl_with_context(
                 is_composite: outline_raw.is_composite,
                 reset_vectors_at_glyph_entry,
                 metrics_legacy_phantoms: legacy_hinter_phantoms,
-                pedantic_hinting: bytecode_context.is_some_and(|ctx| ctx.pedantic_hinting),
+                pedantic_hinting: bytecode_context.pedantic_hinting,
                 native_hint_mode,
                 phantom_x_override: composite_use_my_metrics_phantoms,
             };
-            let prep = data.prep.as_deref().unwrap_or(&[]);
             let hint_result = crate::tt::hinter::hint_glyph(
                 &mut scaled,
                 &raw_pts,
@@ -1042,9 +1098,6 @@ fn scale_glyph_impl_with_context(
                 pp1x_fu,
                 raw_pp3_y,
                 raw_pp4_y,
-                cvt,
-                fpgm,
-                prep,
                 &hs,
                 &outline_raw.instructions,
                 bytecode_context,
@@ -1087,7 +1140,7 @@ fn scale_glyph_impl_with_context(
                     final_hint_context = Some(outcome.context);
                 }
                 Err(e) => {
-                    if bytecode_context.is_some_and(|ctx| ctx.pedantic_hinting) {
+                    if bytecode_context.pedantic_hinting {
                         return Err(e);
                     }
                     log::debug!("[VM] gi={glyph_index}: {e}");
@@ -1439,34 +1492,6 @@ fn scale_composite_components(
     let mut use_my_metrics_advance = None;
     let mut use_my_metrics_vertical_advance = None;
     let mut use_my_metrics_phantoms = None;
-    let owned_base_context = if bytecode_context.is_none() {
-        if let (Some(fpgm), Some(cvt)) = (&data.fpgm, &data.cvt) {
-            let hs = crate::tt::hinter::HintScale {
-                x_scale: scale.x_scale,
-                y_scale: scale.y_scale,
-                tt_scale: scale.x_scale,
-                ppem: scale.ppem,
-                point_size: scale.ppem << 6,
-                storage_size: data.maxp.max_storage as usize,
-                max_function_defs: data.maxp.max_function_defs as usize,
-                max_instruction_defs: data.maxp.max_instruction_defs as usize,
-                twilight_points: data.maxp.max_twilight_points as usize,
-                is_composite: false,
-                reset_vectors_at_glyph_entry: false,
-                metrics_legacy_phantoms: legacy_hinter_phantoms,
-                pedantic_hinting: false,
-                native_hint_mode,
-                phantom_x_override: None,
-            };
-            let prep = data.prep.as_deref().unwrap_or(&[]);
-            Some(crate::tt::hinter::prepare_context(cvt, fpgm, prep, &hs)?)
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-    let base_context = bytecode_context.or(owned_base_context.as_ref());
     for comp in &outline_raw.components {
         let (sub, _) = scale_glyph_impl_with_context(
             data,
@@ -1486,7 +1511,7 @@ fn scale_composite_components(
             false,
             false,
             legacy_hinter_phantoms,
-            base_context,
+            bytecode_context,
             use_hdmx,
         )?;
         if comp.use_my_metrics {
