@@ -361,8 +361,23 @@ class ConcreteInput:
     params: dict[str, object]
 
 
+CASE_COLLISION_CARRIERS = {
+    # FreeType still exposes these deprecated mixed-case aliases alongside the
+    # modern macros.  Store each alias with its modern spelling so a checkout
+    # remains representable on case-insensitive filesystems.
+    "ftimage.FT_Curve_Tag_Conic": "ftimage.FT_CURVE_TAG_CONIC",
+    "ftimage.FT_Curve_Tag_Cubic": "ftimage.FT_CURVE_TAG_CUBIC",
+    "ftimage.FT_Curve_Tag_On": "ftimage.FT_CURVE_TAG_ON",
+    "ftimage.FT_Curve_Tag_Touch_X": "ftimage.FT_CURVE_TAG_TOUCH_X",
+    "ftimage.FT_Curve_Tag_Touch_Y": "ftimage.FT_CURVE_TAG_TOUCH_Y",
+    # FT_Bool is the public typedef; FT_BOOL is the distinct conversion macro.
+    "fttypes.FT_BOOL": "fttypes.FT_Bool",
+}
+
+
 def filename_for_subject(subject: str) -> str:
-    return re.sub(r"[^A-Za-z0-9_.-]", "_", subject) + ".json"
+    carrier = CASE_COLLISION_CARRIERS.get(subject, subject)
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", carrier) + ".json"
 
 
 def read_manifest() -> dict[str, ManifestSubject]:
@@ -494,7 +509,15 @@ def check_file(subject: ManifestSubject) -> list[str]:
 
     if data.get("version") != 1:
         errors.append(f"{subject.subject_id}: version must be 1")
-    if data.get("subject") != subject.subject_id:
+    declared_subjects = data.get("subjects")
+    if declared_subjects is None:
+        declared_subjects = [data.get("subject")]
+    if not isinstance(declared_subjects, list) or not all(
+        isinstance(item, str) for item in declared_subjects
+    ):
+        errors.append(f"{subject.subject_id}: top-level subjects must be a string list")
+        declared_subjects = []
+    elif subject.subject_id not in declared_subjects:
         errors.append(f"{subject.subject_id}: top-level subject mismatch")
     manifest_cases_field = data.get("manifest_cases")
     if manifest_cases_field is not None:
@@ -505,18 +528,26 @@ def check_file(subject: ManifestSubject) -> list[str]:
             if unknown:
                 errors.append(f"{subject.subject_id}: manifest_cases contains unknown cases {unknown}")
 
-    cases = data.get("cases")
-    if not isinstance(cases, list) or not cases:
+    all_cases = data.get("cases")
+    if not isinstance(all_cases, list) or not all_cases:
         errors.append(f"{subject.subject_id}: cases must be a non-empty list")
+        return errors
+    for index, case in enumerate(all_cases):
+        if not isinstance(case, dict):
+            errors.append(f"{subject.subject_id}: cases[{index}] must be object")
+        elif case.get("subject") not in declared_subjects:
+            errors.append(f"{subject.subject_id}: cases[{index}] has undeclared subject")
+    cases = [
+        case
+        for case in all_cases
+        if isinstance(case, dict) and case.get("subject") == subject.subject_id
+    ]
+    if not cases:
+        errors.append(f"{subject.subject_id}: cases must cover the subject")
         return errors
 
     covered: set[str] = set()
     for index, case in enumerate(cases):
-        if not isinstance(case, dict):
-            errors.append(f"{subject.subject_id}: cases[{index}] must be object")
-            continue
-        if case.get("subject") != subject.subject_id:
-            errors.append(f"{subject.subject_id}: cases[{index}] subject mismatch")
         manifest_case = case.get("case")
         covers_manifest_cases = case.get("covers_manifest_cases", [])
         if not isinstance(covers_manifest_cases, list):
@@ -663,6 +694,8 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
         path = INPUT_DIR / filename_for_subject(subject_id)
         data = json.loads(path.read_text())
         for case in data.get("cases", []):
+            if case.get("subject") != subject_id:
+                continue
             expectation = object_dict(case.get("expectation", {}))
             compare = object_dict(expectation.get("compare", {}))
             expectation_status = str(expectation.get("status", ""))
