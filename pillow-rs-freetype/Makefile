@@ -215,6 +215,24 @@ test-case: unified-oracle api-abi-check
 	FONTDONE_UNIFIED_ORACLE_REFRESH=1 \
 	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
 
+.PHONY: test-filter-guard
+test-filter-guard: unified-oracle api-abi-check
+	@output="$$(mktemp)"; \
+	trap 'rm -f "$$output"' EXIT; \
+	if FONTDONE_UNIFIED_CASE_FILTER="__fontdone_no_matching_fixture__" \
+		FONTDONE_UNIFIED_ORACLE_REFRESH=1 \
+		$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture \
+		>"$$output" 2>&1; then \
+		cat "$$output"; \
+		echo "expected an unmatched explicit fixture filter to fail" >&2; \
+		exit 1; \
+	fi; \
+	if ! grep -Fq "explicit runtime filter matched no fixture cases" "$$output"; then \
+		cat "$$output"; \
+		echo "unmatched fixture filter failed for an unexpected reason" >&2; \
+		exit 1; \
+	fi
+
 .PHONY: test-list
 test-list: unified-oracle api-abi-check
 	FONTDONE_UNIFIED_SELECTION_ONLY=1 \
