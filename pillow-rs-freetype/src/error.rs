@@ -12,10 +12,6 @@ pub enum FontError {
     #[error("Invalid TrueType font: {0}")]
     InvalidFont(String),
 
-    /// The cmap table uses an unsupported format.
-    #[error("Unsupported cmap table format: {0}")]
-    UnsupportedCmapFormat(u16),
-
     /// The rasterizer render pool overflowed (FreeType `Raster_Overflow`).
     #[error("Rasterizer buffer overflow")]
     RasterOverflow,
@@ -36,10 +32,6 @@ pub enum FontError {
     #[error("Cannot render glyph: {0}")]
     CannotRenderGlyph(String),
 
-    /// The requested FreeType-style load flag combination is not implemented.
-    #[error("Unsupported load flags: {0}")]
-    UnsupportedLoadFlags(String),
-
     /// The requested FreeType-style argument combination is invalid.
     #[error("Invalid argument: {0}")]
     InvalidArgument(String),
@@ -48,8 +40,8 @@ pub enum FontError {
     #[error("Missing embedded bitmap")]
     MissingBitmap,
 
-    /// A composite embedded bitmap could not load one of its components.
-    #[error("Invalid embedded bitmap composite")]
+    /// A TrueType outline or embedded bitmap composite is malformed.
+    #[error("Invalid glyph composite")]
     InvalidComposite,
 }
 
@@ -61,12 +53,6 @@ mod tests {
     fn invalid_font_displays_message() {
         let err = FontError::InvalidFont("bad table".into());
         assert_eq!(err.to_string(), "Invalid TrueType font: bad table");
-    }
-
-    #[test]
-    fn unsupported_cmap_displays_format() {
-        let err = FontError::UnsupportedCmapFormat(42);
-        assert_eq!(err.to_string(), "Unsupported cmap table format: 42");
     }
 
     #[test]
@@ -100,15 +86,6 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_load_flags_displays_message() {
-        let err = FontError::UnsupportedLoadFlags("NO_HINTING | RENDER".into());
-        assert_eq!(
-            err.to_string(),
-            "Unsupported load flags: NO_HINTING | RENDER"
-        );
-    }
-
-    #[test]
     fn invalid_argument_displays_message() {
         let err = FontError::InvalidArgument("missing strike".into());
         assert_eq!(err.to_string(), "Invalid argument: missing strike");
@@ -123,6 +100,6 @@ mod tests {
     #[test]
     fn invalid_composite_has_static_message() {
         let err = FontError::InvalidComposite;
-        assert_eq!(err.to_string(), "Invalid embedded bitmap composite");
+        assert_eq!(err.to_string(), "Invalid glyph composite");
     }
 }

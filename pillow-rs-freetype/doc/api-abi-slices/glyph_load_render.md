@@ -102,8 +102,9 @@ against C FreeType rather than silently normalized.
   force-autohint, or no-hinting paths.
 - `LoadFlags::RENDER` renders during load; this does not yet model
   `FT_Render_Glyph` as a separate operation on an existing slot.
-- `NO_HINTING | RENDER` currently returns `UnsupportedLoadFlags`; C accepts
-  this combination and renders an unhinted outline, so this remains an ABI gap.
+- `NO_HINTING | RENDER` renders an unhinted outline and has an exact public
+  parity row. Unknown raw `FT_LOAD_*` bits are rejected by the FFI flag parser
+  before constructing core `LoadFlags`.
 - `LoadFlags::render_mode` chooses mono, LCD, LCD_V, else normal. It does not
   support LIGHT, SDF, `FT_LOAD_MONOCHROME`, or invalid target diagnostics.
 - `GlyphSlot::new` sets format to bitmap if rendered, none for zero-width and
