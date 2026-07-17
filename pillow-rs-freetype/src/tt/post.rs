@@ -46,29 +46,30 @@ impl PostTable {
         if glyph_index >= usize::from(num_glyphs) {
             return None;
         }
-        match self.format_type {
-            0x0001_0000 if num_glyphs == 258 => mac_post_name(glyph_index).or(Some(".notdef")),
-            0x0001_0000 => Some(".notdef"),
-            0x0002_0000 | 0x0002_5000 => self
-                .glyph_indices
-                .get(glyph_index)
-                .and_then(|index| {
-                    if *index < 258 {
-                        mac_post_name(usize::from(*index))
-                    } else {
-                        self.custom_names
-                            .get(usize::from(*index - 258))
-                            .map(String::as_str)
-                            .or(Some(".notdef"))
-                    }
-                })
-                .or(Some(".notdef")),
-            0x0003_0000 => None,
-            // If a caller bypasses the public face-flag gate, FreeType's
-            // name service leaves the initialized Mac glyph 0 fallback in
-            // place for non-3.0 formats.
-            _ => Some(".notdef"),
+        if self.format_type == 0x0001_0000 {
+            return if num_glyphs == 258 {
+                mac_post_name(glyph_index).or(Some(".notdef"))
+            } else {
+                Some(".notdef")
+            };
         }
+
+        // `Font::glyph_name` applies FreeType's face-flag gate before service
+        // dispatch.  The service itself initializes `.notdef`, then formats
+        // 2.0 and 2.5 replace it when their name arrays contain this glyph.
+        self.glyph_indices
+            .get(glyph_index)
+            .and_then(|index| {
+                if *index < 258 {
+                    mac_post_name(usize::from(*index))
+                } else {
+                    self.custom_names
+                        .get(usize::from(*index - 258))
+                        .map(String::as_str)
+                        .or(Some(".notdef"))
+                }
+            })
+            .or(Some(".notdef"))
     }
 }
 
