@@ -68,11 +68,11 @@
       },
       "inputs": {
         "assets": {
-          "variable_font": {
-            "kind": "ref",
-            "id": "fonts/variable/multi-axis-named-instances.ttf",
-            "asset_kind": "font",
-            "status": "required_future_asset"
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/variable/named-instances.ttf",
+            "status": "active"
           }
         },
         "params": {
@@ -91,15 +91,15 @@
         "output_shape": {
           "status": "FT_Error",
           "instance_index": "FT_UInt",
-          "named_instance_metadata": "num_namedstyles and synthesized default class"
+          "instance_index_before": "FT_UInt sentinel",
+          "instance_index_after": "one-based default named instance index"
         },
         "compare": {
           "mode": "exact",
           "paths": [
             "status",
-            "instance_index",
-            "mm_var.num_namedstyles",
-            "mm_var.default_named_instance_class"
+            "instance_index_before",
+            "instance_index_after"
           ]
         },
         "source_refs": [
@@ -175,7 +175,7 @@
       },
       "inputs": {
         "assets": {
-          "non_variable_font": {
+          "font": {
             "kind": "file",
             "role": "font",
             "path": "input/fonts/DejaVuSans.ttf"
@@ -207,6 +207,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "rows[*].status",
             "rows[*].instance_index_after"

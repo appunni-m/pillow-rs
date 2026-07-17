@@ -6582,6 +6582,64 @@ static int emit_set_named_instance_null_face(int argc, char** argv) {
     return 0;
 }
 
+static void print_default_named_instance_row(
+    const char* variant,
+    FT_Error error,
+    FT_UInt before,
+    FT_UInt after) {
+    printf("{\"variant\":\"%s\",\"status\":%d,\"instance_index_before\":%u,"
+           "\"instance_index_after\":%u}",
+           variant,
+           error,
+           before,
+           after);
+}
+
+static int emit_get_default_named_instance(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_UInt before = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_UInt after = before;
+    FT_Error err = FT_Get_Default_Named_Instance(face.face, &after);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":");
+    print_default_named_instance_row("variable", err, before, after);
+    printf("}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_get_default_named_instance_invalid(int argc, char** argv) {
+    (void)argc;
+    FT_UInt before = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_UInt null_after = before;
+    FT_Error null_err = FT_Get_Default_Named_Instance(NULL, &null_after);
+
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_UInt non_variable_after = before;
+    FT_Error non_variable_err =
+        FT_Get_Default_Named_Instance(face.face, &non_variable_after);
+    printf("{");
+    print_status(null_err);
+    printf(",\"output\":{\"rows\":[");
+    print_default_named_instance_row("null", null_err, before, null_after);
+    printf(",");
+    print_default_named_instance_row(
+        "non_variable", non_variable_err, before, non_variable_after);
+    printf("]}}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_get_first_char_null_face(int argc, char** argv) {
     (void)argc;
     (void)argv;
@@ -10408,6 +10466,12 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--set-named-instance-null-face")) {
         return emit_set_named_instance_null_face(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--get-default-named-instance")) {
+        return emit_get_default_named_instance(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--get-default-named-instance-invalid")) {
+        return emit_get_default_named_instance_invalid(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--get-first-char-null-face")) {
         return emit_get_first_char_null_face(argc, argv);

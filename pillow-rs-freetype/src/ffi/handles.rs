@@ -2156,6 +2156,75 @@ pub fn FT_Set_Named_Instance(face: Option<&mut FT_Face>, instance_index: FT_UInt
     }
 }
 
+pub fn FT_Get_Default_Named_Instance(
+    face: Option<&FT_Face>,
+    instance_index: Option<&mut FT_UInt>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    // `ft_face_get_mm_service` in FreeType `base/ftmm.c` rejects faces that
+    // don't advertise a multiple-master service before the TrueType callback
+    // is reached.
+    if face.face_flags & FT_FACE_FLAG_MULTIPLE_MASTERS == 0 {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    let Some(instance_index) = instance_index else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let inner = face.inner.borrow();
+    let font = inner.font();
+    let fvar = font
+        .load_sfnt_table(u32::from_be_bytes(*b"fvar"), 0, None)
+        .ok()
+        .and_then(|bytes| crate::tt::fvar::parse_fvar(&bytes).ok());
+    let Some(fvar) = fvar else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+
+    // `sfobjs.c` records the one-based entry whose coordinates equal every
+    // axis default.  If `fvar` omits that entry, FreeType appends a synthesized
+    // default style and reports the position immediately after the table's
+    // named styles (`ttgxvar.c:2800-2850`).
+    let explicit_default = fvar.instances.iter().position(|style| {
+        style
+            .coords
+            .iter()
+            .zip(&fvar.axes)
+            .all(|(coord, axis)| *coord == axis.default_value)
+    });
+    // `sfnt_get_name_id` in `sfdriver.c` considers non-empty Microsoft
+    // Unicode/Symbol and Apple Roman records.  `TT_Get_MM_Var` leaves the
+    // default index at zero unless both a subfamily name and a PostScript name
+    // exist, even though `sfobjs.c` provisionally counted the synthesized
+    // style while opening the face.
+    let has_name_id = |name_id| {
+        (0..font.sfnt_name_count()).any(|index| {
+            font.sfnt_name(index).is_some_and(|record| {
+                record.name_id == name_id
+                    && !record.string.is_empty()
+                    && ((record.platform_id == 3 && matches!(record.encoding_id, 0 | 1))
+                        || (record.platform_id == 1 && record.encoding_id == 0))
+            })
+        })
+    };
+    let can_synthesize = (has_name_id(17) || has_name_id(2)) && has_name_id(6);
+    let default = explicit_default
+        .and_then(|index| index.checked_add(1))
+        .or_else(|| {
+            can_synthesize
+                .then(|| usize::from(fvar.instance_count).checked_add(1))
+                .flatten()
+        })
+        .or(Some(0))
+        .and_then(|index| FT_UInt::try_from(index).ok());
+    let Some(default) = default else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    *instance_index = default;
+    FT_Err_Ok
+}
+
 pub fn FT_Get_CMap_Format(charmap: FT_CharMap) -> FT_Long {
     registered_charmap_metadata(charmap).map_or(-1, |(format, _, _)| format)
 }

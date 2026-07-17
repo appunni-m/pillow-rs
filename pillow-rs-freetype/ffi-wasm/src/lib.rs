@@ -1766,6 +1766,19 @@ pub extern "C" fn fontdone_wasm_set_named_instance(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_default_named_instance(
+    handle: usize,
+    instance_index: *mut FT_UInt,
+) -> FT_Error {
+    // SAFETY: the caller provides writable storage for the scalar output or null.
+    let instance_index = unsafe { instance_index.as_mut() };
+    rust_ffi::FT_Get_Default_Named_Instance(
+        face_ref(handle).map(|face| &face.face),
+        instance_index,
+    )
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_sfnt_name_count(handle: usize) -> FT_UInt {
     rust_ffi::FT_Get_Sfnt_Name_Count(face_ref(handle).map(|face| &face.face))
 }
