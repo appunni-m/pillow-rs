@@ -11,6 +11,7 @@ PARITY_ARGS ?= -- --nocapture
 COVERAGE_OUTPUT ?= target/coverage/unified-summary.json
 CONDITION_COVERAGE_OUTPUT ?= target/coverage/unified-condition-summary.json
 CONDITION_COVERAGE_LINES_OUTPUT ?= target/coverage/unified-condition-missing-lines.txt
+CONDITION_COVERAGE_NORMALIZED_OUTPUT ?= target/coverage/unified-condition-summary-normalized.json
 SCALER_CONDITION_COVERAGE_OUTPUT ?= target/coverage/scaler-unified-condition-summary.json
 SCALER_CONDITION_COVERAGE_LINES_OUTPUT ?= target/coverage/scaler-unified-condition-missing-lines.txt
 SCALER_CONDITION_COVERAGE_MCP_OUTPUT ?= target/coverage/scaler-unified-condition-summary-mcp.json
@@ -50,6 +51,7 @@ help:
 	@printf "  make test-unified-fixtures-release Full parity test with Cargo --release\n"
 	@printf "  make test-unified-coverage Run parity and write core Rust llvm-cov JSON\n"
 	@printf "  make test-unified-condition-coverage Run parity with nightly branch/condition coverage and missing lines\n"
+	@printf "  make normalize-unified-condition-coverage Cap LLVM segment hits for Coverage MCP ingestion\n"
 	@printf "  make test-api-abi     Run unified API/ABI fixture and coverage gates\n"
 	@printf "  make test-ffi         Run the no-runtime-FFI guard for core (<1s)\n"
 	@printf "  make test-ffi-compat  Run API/ABI coverage and thin-wrapper checks\n"
@@ -175,6 +177,13 @@ test-unified-condition-coverage: unified-oracle api-abi-check
 		--show-missing-lines \
 		--ignore-filename-regex '$(CORE_COVERAGE_IGNORE_REGEX)' \
 		> $(CONDITION_COVERAGE_LINES_OUTPUT)
+
+.PHONY: normalize-unified-condition-coverage
+normalize-unified-condition-coverage:
+	mkdir -p $(dir $(CONDITION_COVERAGE_NORMALIZED_OUTPUT))
+	jq -c '(.data[]?.files[]?.segments[]? | select(length >= 3) | .[2]) |= if . > 2147483647 then 2147483647 else . end' \
+		$(CONDITION_COVERAGE_OUTPUT) > $(CONDITION_COVERAGE_NORMALIZED_OUTPUT).tmp
+	mv $(CONDITION_COVERAGE_NORMALIZED_OUTPUT).tmp $(CONDITION_COVERAGE_NORMALIZED_OUTPUT)
 
 .PHONY: test-api-abi
 test-api-abi: test-unified-fixtures test-ffi
