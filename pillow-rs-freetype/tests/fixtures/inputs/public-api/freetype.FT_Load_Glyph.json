@@ -5599,7 +5599,47 @@
               "glyph_index": 51,
               "load_flags": ["FT_LOAD_DEFAULT"]
             },
-            "coverage": ["tt/hinter:branch-edge-matrix"]
+            "coverage": [
+              "tt/hinter:branch-edge-matrix",
+              "tt/hinter/zone:set-cur-invalid-nonpedantic-noop",
+              "tt/hinter/zone:clear-tag-invalid-nonpedantic-noop"
+            ]
+          },
+          {
+            "id": "hinter-invalid-shp-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 51,
+              "load_flags": ["FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-invalid-shp-reference-pedantic"]
+          },
+          {
+            "id": "hinter-invalid-utp-pedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-control-matrix.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 58,
+              "load_flags": ["FT_LOAD_PEDANTIC"]
+            },
+            "expect_error": true,
+            "coverage": ["tt/hinter:error-invalid-utp-reference-pedantic"]
           },
           {
             "id": "hinter-branch-edge-nonuniform-scale",

@@ -61,6 +61,7 @@
     <GlyphID id="55" name="emboldenZeroAreaBowtie"/>
     <GlyphID id="56" name="renderSmartDropoutNeighbor"/>
     <GlyphID id="57" name="iupSameOrusX"/>
+    <GlyphID id="58" name="invalidUtpReference"/>
   </GlyphOrder>
 
   <head>
@@ -234,6 +235,7 @@
     <mtx name="emboldenZeroAreaBowtie" width="700" lsb="0"/>
     <mtx name="renderSmartDropoutNeighbor" width="700" lsb="205"/>
     <mtx name="iupSameOrusX" width="700" lsb="0"/>
+    <mtx name="invalidUtpReference" width="700" lsb="0"/>
     <mtx name="withInstructions" width="700" lsb="0"/>
   </hmtx>
 
@@ -1076,6 +1078,8 @@
           b0 00 15 b1 02 40 48 b0 00 16 b0 00 11 b0 00 12 b0 02 39 b0 01 16
           b4 00 00 00 09 00 0f
           b0 01 10 b0 01 13 b0 00 14 b9 00 00 ff f6 44 b1 00 00 ec b0 01 14
+          b0 01 14 b0 00 12 b0 00 16 b0 09 32 b0 01 16
+          b0 01 13 b0 09 29
           93
           2d
         </bytecode>
@@ -1097,6 +1101,19 @@
         <bytecode>
           b0 00 2e b1 02 01 3e 31
         </bytecode>
+      </instructions>
+    </TTGlyph>
+
+    <TTGlyph name="invalidUtpReference" xMin="0" yMin="0" xMax="500" yMax="600">
+      <contour>
+        <pt x="0" y="0" on="1"/>
+        <pt x="500" y="0" on="1"/>
+        <pt x="250" y="600" on="1"/>
+      </contour>
+      <instructions>
+        <!-- Public FT_LOAD_PEDANTIC control for C Ins_UTP's
+             out-of-zone Invalid_Reference error. -->
+        <bytecode>b0 01 13 b0 09 29</bytecode>
       </instructions>
     </TTGlyph>
 

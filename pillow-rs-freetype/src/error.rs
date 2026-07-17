@@ -28,6 +28,10 @@ pub enum FontError {
     #[error("TrueType bytecode execution too long")]
     ExecutionTooLong,
 
+    /// Pedantic TrueType bytecode referenced a point outside its active zone.
+    #[error("Invalid TrueType bytecode point reference")]
+    InvalidReference,
+
     /// The loaded glyph slot format cannot be rendered.
     #[error("Cannot render glyph: {0}")]
     CannotRenderGlyph(String),
@@ -81,6 +85,12 @@ mod tests {
     fn execution_too_long_has_static_message() {
         let err = FontError::ExecutionTooLong;
         assert_eq!(err.to_string(), "TrueType bytecode execution too long");
+    }
+
+    #[test]
+    fn invalid_reference_has_static_message() {
+        let err = FontError::InvalidReference;
+        assert_eq!(err.to_string(), "Invalid TrueType bytecode point reference");
     }
 
     #[test]
