@@ -5388,6 +5388,27 @@
             ]
           },
           {
+            "id": "hinter-empty-glyph-iup-phantoms",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-empty-glyph-iup.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 21,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "coverage": [
+              "tt/glyf:zero-contour-instruction-body-ignored"
+            ]
+          },
+          {
             "id": "hinter-delta-control-matrix",
             "assets": {
               "font": {

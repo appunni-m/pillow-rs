@@ -16,6 +16,12 @@ pub fn iup_y(zone: &mut GlyphZone) {
 }
 
 fn iup_impl(zone: &mut GlyphZone, do_x: bool) {
+    // C `Ins_IUP` returns on `pts.n_contours == 0` before inspecting any
+    // points.  In particular, the four phantom points are never a contour.
+    if zone.n_contours == 0 {
+        return;
+    }
+
     let touch_bit: u8 = if do_x { 0x01 } else { 0x02 };
     let cur_arr = if do_x {
         &mut zone.cur_x
@@ -25,15 +31,7 @@ fn iup_impl(zone: &mut GlyphZone, do_x: bool) {
     let org_arr = if do_x { &zone.org_x } else { &zone.org_y };
     let orus_arr = if do_x { &zone.orus_x } else { &zone.orus_y };
     let n = zone.n_points as usize;
-    if n == 0 {
-        return;
-    }
-
-    let ends: Vec<usize> = if zone.contours.is_empty() {
-        vec![n]
-    } else {
-        zone.contours.iter().map(|&e| e as usize + 1).collect()
-    };
+    let ends: Vec<usize> = zone.contours.iter().map(|&end| end as usize + 1).collect();
 
     let mut p = 0usize;
     for &ep in &ends {

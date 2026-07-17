@@ -490,7 +490,11 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
             data[end_off + i * 2 + 1],
         ]));
     }
-    let num_points = end_pts.last().copied().unwrap_or(0) as usize + 1;
+    // C `TT_Load_Simple_Glyph` starts `last` at -1, so a valid zero-contour
+    // record has zero points while still being allowed to carry instructions.
+    let num_points = end_pts
+        .last()
+        .map_or(0, |&end_point| end_point as usize + 1);
 
     let inst_off = end_off + nc * 2;
     let instruction_length = u16::from_be_bytes([data[inst_off], data[inst_off + 1]]) as usize;

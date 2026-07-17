@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fontTools.ttLib import TTFont
+from fontTools.ttLib.tables._g_l_y_f import Glyph
 from fontTools.ttLib.tables.ttProgram import Program
 
 
@@ -36,6 +37,22 @@ def write_empty_fpgm() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     font["fpgm"].program = empty_program()
     save_font("hinter-empty-fpgm.ttf", font)
+
+
+def write_empty_glyph_iup() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False, recalcBBoxes=False)
+    # This body waives v40 compatibility, moves pp1, then invokes IUP[x].
+    # C's empty-glyph shortcut ignores the entire body before simple-glyph
+    # instruction parsing, so none of those phantom mutations may be observed.
+    # FontTools normally compiles a zero-contour `Glyph` to a zero-length glyf
+    # record, so preserve the valid raw header, instruction length, and program.
+    font["glyf"]["empty"] = Glyph(
+        bytes.fromhex(
+            "00 00 00 00 00 00 00 00 00 00"
+            " 00 09 b1 04 03 8e b1 00 40 48 31"
+        )
+    )
+    save_font("hinter-empty-glyph-iup.ttf", font)
 
 
 def write_prep_definitions() -> None:
@@ -148,6 +165,7 @@ def write_fpgm_unterminated_idef() -> None:
 
 def main() -> None:
     write_empty_fpgm()
+    write_empty_glyph_iup()
     write_prep_definitions()
     write_prep_idef()
     write_prep_redefine_defs()
