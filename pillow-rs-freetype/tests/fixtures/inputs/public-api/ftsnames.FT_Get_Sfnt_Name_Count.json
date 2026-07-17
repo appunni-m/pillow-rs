@@ -95,6 +95,88 @@
       }
     },
     {
+      "case_id": "ftsnames.FT_Get_Sfnt_Name_Count.sfnt_name_count_success.invalid_langtag_records_dropped",
+      "subject": "ftsnames.FT_Get_Sfnt_Name_Count",
+      "case": "sfnt_name_count_success",
+      "operation": "ftsnames.get_sfnt_name_count",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/sfnt/name-format1-invalid-langtag-references.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsnames",
+        "area:sfnt_name",
+        "area:malformed_input"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_UInt"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return"
+          ]
+        },
+        "fixture_requirements": [
+          "One valid name record plus records referencing an empty and an out-of-range format-1 language tag"
+        ]
+      }
+    },
+    {
+      "case_id": "ftsnames.FT_Get_Sfnt_Name_Count.sfnt_name_count_success.prestorage_record_dropped",
+      "subject": "ftsnames.FT_Get_Sfnt_Name_Count",
+      "case": "sfnt_name_count_success",
+      "operation": "ftsnames.get_sfnt_name_count",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/sfnt/name-format1-prestorage-strings.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftsnames",
+        "area:sfnt_name",
+        "area:malformed_input"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_UInt"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return"
+          ]
+        },
+        "fixture_requirements": [
+          "Format-1 storageOffset points into the table header, so FreeType compacts the otherwise in-range name record"
+        ]
+      }
+    },
+    {
       "case_id": "ftsnames.FT_Get_Sfnt_Name_Count.null_or_non_sfnt_returns_zero",
       "subject": "ftsnames.FT_Get_Sfnt_Name_Count",
       "case": "null_or_non_sfnt_returns_zero",

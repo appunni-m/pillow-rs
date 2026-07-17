@@ -1193,7 +1193,7 @@
               ]
             },
             "coverage": [
-              "tt/name:langtag-string-out-of-range-error"
+              "tt/name:langtag-string-out-of-range-ignored"
             ]
           },
           {
