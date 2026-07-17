@@ -531,6 +531,10 @@ pub fn cjk_link_segments(hints: &mut GlyphHints, dim: Dimension) {
         hints.y_scale
     };
     let dist_threshold = ft_div_fix(64 * 3, scale);
+    // C keeps the best overlap in `AF_SegmentRec.len`, independently of the
+    // geometric `height` populated by the segment scanner (afcjk.c:883-895).
+    // Keep that CJK-only matching state local instead of overwriting `height`.
+    let mut match_lengths = vec![0i32; n];
 
     for seg in &mut axis.segments {
         seg.score = 32000;
@@ -565,18 +569,18 @@ pub fn cjk_link_segments(hints: &mut GlyphHints, dim: Dimension) {
             }
 
             if dist * 8 < axis.segments[i].score * 9
-                && (dist * 8 < axis.segments[i].score * 7 || (axis.segments[i].height as i32) < len)
+                && (dist * 8 < axis.segments[i].score * 7 || match_lengths[i] < len)
             {
                 axis.segments[i].score = dist;
-                axis.segments[i].height = i16_from_i32(len);
+                match_lengths[i] = len;
                 axis.segments[i].link = j;
             }
 
             if dist * 8 < axis.segments[j].score * 9
-                && (dist * 8 < axis.segments[j].score * 7 || (axis.segments[j].height as i32) < len)
+                && (dist * 8 < axis.segments[j].score * 7 || match_lengths[j] < len)
             {
                 axis.segments[j].score = dist;
-                axis.segments[j].height = i16_from_i32(len);
+                match_lengths[j] = len;
                 axis.segments[j].link = i;
             }
         }
@@ -617,7 +621,7 @@ pub fn cjk_link_segments(hints: &mut GlyphHints, dim: Dimension) {
                 continue;
             }
 
-            if axis.segments[i].height as i32 >= axis.segments[j].height as i32 * 3 {
+            if match_lengths[i] >= match_lengths[j] * 3 {
                 for k in 0..n {
                     let link = axis.segments[k].link;
                     if link == j {
