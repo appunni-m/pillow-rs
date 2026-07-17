@@ -1876,26 +1876,23 @@ impl ExecContext {
                     }
                 }
                 // ── Rounding modes ────────────────────────────────
-                // C stores TT_Round_* numeric constants in GS.round_state;
-                // route through the Rust conversion to keep that contract
-                // centralized while preserving each opcode's behavior.
                 0x18 => {
-                    self.gs.round_state = RoundMode::from_u8(1);
+                    self.gs.round_state = RoundMode::Grid;
                 } // RTG
                 0x19 => {
-                    self.gs.round_state = RoundMode::from_u8(0);
+                    self.gs.round_state = RoundMode::HalfGrid;
                 } // RTHG
                 0x3D => {
-                    self.gs.round_state = RoundMode::from_u8(2);
+                    self.gs.round_state = RoundMode::DoubleGrid;
                 } // RTDG
                 0x7A => {
-                    self.gs.round_state = RoundMode::from_u8(5);
+                    self.gs.round_state = RoundMode::Off;
                 } // ROFF
                 0x7C => {
-                    self.gs.round_state = RoundMode::from_u8(4);
+                    self.gs.round_state = RoundMode::UpToGrid;
                 } // RUTG
                 0x7D => {
-                    self.gs.round_state = RoundMode::from_u8(3);
+                    self.gs.round_state = RoundMode::DownToGrid;
                 } // RDTG
                 0x7E => {
                     let _ = self.pop()?;
@@ -1907,13 +1904,13 @@ impl ExecContext {
                 0x76 => {
                     let selector = self.pop()?;
                     self.gs.set_super_round(0x4000, selector);
-                    self.gs.round_state = RoundMode::from_u8(6);
+                    self.gs.round_state = RoundMode::Super;
                 }
                 // ── S45ROUND (0x77) — Super Round 45 ────────────────
                 0x77 => {
                     let selector = self.pop()?;
                     self.gs.set_super_round(0x2D41, selector);
-                    self.gs.round_state = RoundMode::from_u8(7);
+                    self.gs.round_state = RoundMode::Super45;
                 }
                 // ── WCVTF (0x70) — Write CVT in Font Units ──────────
                 // C: Ins_WCVTF. Scales value by metrics.scale before writing.
