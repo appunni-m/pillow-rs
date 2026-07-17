@@ -8,10 +8,10 @@ use crate::fixed::{ft_div_fix, ft_mul_fix};
 
 use super::zone::GlyphZone;
 
-pub fn iup_x(zone: &mut GlyphZone) {
+pub(super) fn iup_x(zone: &mut GlyphZone) {
     iup_impl(zone, true);
 }
-pub fn iup_y(zone: &mut GlyphZone) {
+pub(super) fn iup_y(zone: &mut GlyphZone) {
     iup_impl(zone, false);
 }
 
@@ -30,18 +30,16 @@ fn iup_impl(zone: &mut GlyphZone, do_x: bool) {
     };
     let org_arr = if do_x { &zone.org_x } else { &zone.org_y };
     let orus_arr = if do_x { &zone.orus_x } else { &zone.orus_y };
-    let n = zone.n_points as usize;
     let ends: Vec<usize> = zone.contours.iter().map(|&end| end as usize + 1).collect();
 
     let mut p = 0usize;
     for &ep in &ends {
-        let ep = ep.min(n);
-        if ep <= p {
-            p = ep;
-            continue;
-        }
+        // `TT_Load_Simple_Glyph` rejects non-increasing contour endpoints.
+        // `hint_glyph` then builds all coordinate/tag arrays one-for-one and
+        // appends four phantoms, so every contour range is present in each
+        // array just as it is in C's internal `TT_GlyphZoneRec`.
         let fp = p;
-        while p < ep && p < zone.tags.len() && zone.tags[p] & touch_bit == 0 {
+        while p < ep && zone.tags[p] & touch_bit == 0 {
             p += 1;
         }
         if p >= ep {
@@ -52,7 +50,7 @@ fn iup_impl(zone: &mut GlyphZone, do_x: bool) {
         let mut ct = p;
         p += 1;
         while p < ep {
-            if p < zone.tags.len() && zone.tags[p] & touch_bit != 0 {
+            if zone.tags[p] & touch_bit != 0 {
                 seg(
                     cur_arr,
                     org_arr,
@@ -88,10 +86,11 @@ fn iup_impl(zone: &mut GlyphZone, do_x: bool) {
 }
 
 fn seg(cur: &mut [i32], org: &[i32], orus: &[i32], a: usize, b: usize, r1: usize, r2: usize) {
-    if a > b || a >= cur.len() || r1 >= orus.len() || r2 >= orus.len() {
+    // Adjacent touched points intentionally produce an empty interval.  The
+    // remaining indices come from a validated contour in aligned zone arrays.
+    if a > b {
         return;
     }
-    let b = b.min(cur.len() - 1);
     let (mut o1, mut o2) = (orus[r1], orus[r2]);
     let (ra, rb) = if o1 > o2 {
         std::mem::swap(&mut o1, &mut o2);

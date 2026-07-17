@@ -13,7 +13,7 @@ input selects a glyph whose geometry or font tables enter a distinct behavior.
 
 | Corpus | Paths | Stored files | Symlinks | Unique SHA-256 contents | Stored size |
 |---|---:|---:|---:|---:|---:|
-| Active fixtures | 176 | 133 | 43 | 144 | 909 KiB |
+| Active fixtures | 177 | 134 | 43 | 145 | 914 KiB |
 | Deprecated corpus | 101 | 101 | 0 | 99 | 23 MiB |
 | Compact active autohint set | 9 | 9 | 0 | 9 | 195 KiB |
 
@@ -164,6 +164,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `4d12744a319b` | 1.0 | 1 | `fonts/glyf/render-notdef-composite.ttf` | generated from the render coverage topology with a composite `.notdef` and exact-boundary ascender; owns the public default-load scaler branch for glyph zero composites without native bytecode tables |
 | `8947881ee039` | 1.0 | 1 | `fonts/glyf/render-prep-only.ttf` | generated from `render-coverage.ttf` with a side-effect-free prep program longer than seven bytes and no fpgm/cvt tables; owns the public default-load scaler branch where bytecode is allowed but native bytecode tables are unavailable |
 | `47ae52a76141` | 4.5 | 1 | `fonts/glyf/hinter-control-matrix.ttf` | source-backed VM, render-topology, and ftsynth matrix covering state, geometry, control flow, DELTA, invalid coordinate reads, non-pedantic and pedantic out-of-zone SHP/UTP behavior, indexed-stack and scan-control fallbacks, twilight zone-pointer MD/MDRP/SHC branch probes, DELTAP Y-touched compatibility, repeated post-IUP compatibility return, prep-range empty-zone SHZ and IUP, seven exact bytecode error classes, conic chains, intersections, thin outlines, mixed winding, degenerate contours, empty outlines, collapsed spans, mono low-precision raster selection, scan-type dropout modes, PostScript-orientation embolden, zero-length embolden segment skipping, nearly-opposite embolden vector zero-shift, and zero-area orientation-none embolden |
+| `8c56e9dd0c6d` | 4.6 | 1 | `fonts/glyf/hinter-invalid-contour-endpoints.ttf` | generated from the hinter matrix with a raw two-contour glyph whose duplicate endpoint is rejected by `TT_Load_Simple_Glyph` before point decoding; owns exact public invalid-outline parity for the IUP zone contract |
 | `270d82716a52` | 4.6 | 1 | `fixtures/assets/fonts/sbit_missing_bitmap.ttf` | source-backed TrueType control with one EBLC/EBDT strike at 20 ppem and a glyph-1 index-format-1 record whose equal image offsets exercise the internal SBIT missing-image branch; public scalable `FT_LOAD_SBITS_ONLY` reports `FT_Err_Invalid_Argument` |
 | `18159d790c14` | 4.6 | 1 | `fixtures/assets/fonts/sbit_gray_format1.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT strike; glyph 1 uses index format 1 and image format 1 with 8-bit gray small metrics plus bitmap bytes, owning the scalable `FT_LOAD_SBITS_ONLY` bitmap-success path, FreeType's fallback from missing SBIT vertical advance to the glyph linear vertical advance, and 8-bit ftsynth bitmap-slot emboldening |
 | `eda68c0e2927` | 4.6 | 1 | `fixtures/assets/fonts/sbit_mono_format1.ttf` | source-backed TrueType control with one 20 ppem EBLC/EBDT strike; glyph 1 uses index format 1 and image format 1 with 1-bit monochrome small metrics plus a 9-pixel-wide bitmap, owning the scalable `FT_LOAD_SBITS_ONLY` MONO bitmap-success path, final-byte pitch/mask behavior, and MONO ftsynth bitmap-slot emboldening |
@@ -572,7 +573,9 @@ and selected-glyph obligations still come from explicit inputs.
     contour, empty outlines, collapsed horizontal/vertical spans, and mono
     dropout scan modes 0/2/4/5 across normal, mono, LCD, LCD_V, and SDF modes. Its
     inspectable source is `tests/fixtures/font-sources/hinter-control-matrix.ttx`;
-    rebuild it with `make font-fixture-hinter`.
+    `scripts/build_hinter_edge_fixtures.py` also derives the duplicate-contour
+    endpoint error control from it. Rebuild the set with
+    `make font-fixture-hinter`.
 
 28. Seven compact 3.8 KiB gasp controls replace the previous
     `fonts/gasp/*.ttf` symlink aliases to `DejaVuSans.ttf`. They are generated

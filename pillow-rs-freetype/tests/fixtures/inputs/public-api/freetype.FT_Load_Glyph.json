@@ -4190,6 +4190,28 @@
             ]
           },
           {
+            "id": "glyf-malformed-duplicate-contour-endpoint",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-invalid-contour-endpoints.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 21,
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ]
+            },
+            "expect_error": true,
+            "coverage": [
+              "tt/glyf:duplicate-contour-endpoint-rejected-before-iup"
+            ]
+          },
+          {
             "id": "glyf-malformed-flags-overflow",
             "assets": {
               "font": {

@@ -55,6 +55,21 @@ def write_empty_glyph_iup() -> None:
     save_font("hinter-empty-glyph-iup.ttf", font)
 
 
+def write_invalid_contour_endpoints() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False, recalcBBoxes=False)
+    # Two contours both end at point zero.  C `TT_Load_Simple_Glyph` rejects
+    # the second endpoint before reading the otherwise complete point record.
+    font["glyf"]["empty"] = Glyph(
+        bytes.fromhex(
+            "00 02 00 00 00 00 00 00 00 00"
+            " 00 00 00 00"
+            " 00 02 30 31"
+            " 31"
+        )
+    )
+    save_font("hinter-invalid-contour-endpoints.ttf", font)
+
+
 def write_prep_definitions() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     prep = font["prep"].program.getBytecode()
@@ -166,6 +181,7 @@ def write_fpgm_unterminated_idef() -> None:
 def main() -> None:
     write_empty_fpgm()
     write_empty_glyph_iup()
+    write_invalid_contour_endpoints()
     write_prep_definitions()
     write_prep_idef()
     write_prep_redefine_defs()
