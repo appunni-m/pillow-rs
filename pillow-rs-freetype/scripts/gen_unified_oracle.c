@@ -8966,6 +8966,14 @@ static int emit_face_or_slot(int argc, char** argv) {
     FT_UInt pixel_width = (FT_UInt)strtoul(size_arg, NULL, 10);
     FT_UInt pixel_height = (FT_UInt)strtoul(argv[6], NULL, 10);
 
+    if (streq(command, "--set-pixel-sizes") && streq(source_kind, "null")) {
+        FT_Error err = FT_Set_Pixel_Sizes(NULL, pixel_width, pixel_height);
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
     unsigned char* data = NULL;
     long data_len = 0;
     if (streq(source_kind, "file")) {
