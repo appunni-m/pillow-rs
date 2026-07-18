@@ -769,6 +769,8 @@ def build_script_coverage() -> None:
     glyph_order = [".notdef", "space"]
     glyph_order.extend(glyph_name(tag) for tag, _ in SCRIPT_PROBES)
     glyph_order.extend(name for name, _, _ in DIGIT_WIDTH_PROBES)
+    # Append-only: public FT_Load_Glyph fixtures below this generator use
+    # stable numeric glyph IDs.  New char-code probes must not shift them.
     glyph_order.append("latin_double_top")
     glyph_order.append("latin_tilde_top")
     glyph_order.append("latin_tilde_top2")
@@ -785,12 +787,12 @@ def build_script_coverage() -> None:
     glyph_order.append("latin_disjoint_top_accent")
     glyph_order.append("latin_serif_m_symmetry")
     glyph_order.append("latin_serif_overlap_break")
-    glyph_order.append("beng_serif_pointer_order")
     glyph_order.append("latin_tilde_top2_centering")
     glyph_order.append("latin_vertical_cusp")
     glyph_order.append("latin_nonbase_tilde")
     glyph_order.append("latin_extreme_coordinate")
     glyph_order.append("latin_segment_limit")
+    glyph_order.append("beng_serif_pointer_order")
 
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
