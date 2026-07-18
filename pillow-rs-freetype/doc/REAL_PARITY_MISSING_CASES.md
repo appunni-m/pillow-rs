@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Load_Char` null-face error route
+Current verified result after `FT_Load_Glyph` null-face error route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3737`
+  - `real-parity`: `3738`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `456`
+  - `generic-error-fallback`: `455`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -746,6 +746,43 @@ make -C pillow-rs-freetype test-op OP=load_char
 
 Result: `1854 / 1854` operation rows passed, `0` failed, `0` pending.
 
+### Issue Set L: `FT_Load_Glyph` null-face exact error route
+
+Previous blocker:
+
+- `freetype.FT_Load_Glyph.error_null_face_or_invalid_flags.null_face` was
+  classified as `generic-error-fallback`, even though it already had a pinned C
+  oracle command and Rust FFI, C ABI, and WASM ABI null-face runners.
+
+Verified progress:
+
+- The fixture loader now requires exact error status/output comparison only for
+  `load_glyph` rows whose `face` parameter is explicitly `null`.
+- The route audit now treats that single null-face row as real parity through
+  the existing explicit C oracle and backend routes.
+- Other `load_glyph` expected-error rows, including asset-backed invalid flag,
+  bytecode, and malformed-font rows, remain in their existing categories until
+  independently proven; this change does not claim broad `load_glyph`
+  expected-error parity.
+- Runtime behavior is unchanged: pinned C FreeType and the Rust/C/WASM routes
+  all return `FT_Err_Invalid_Face_Handle` and null slot output for
+  `FT_Load_Glyph(NULL, 36, FT_LOAD_DEFAULT)`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Load_Glyph.error_null_face_or_invalid_flags.null_face
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3738`, `generic-error-fallback` `455`.
+
+```bash
+make -C pillow-rs-freetype test-op OP=load_glyph
+```
+
+Result: `587 / 587` operation rows passed, `0` failed, `0` pending.
+
 Focused non-coverage result:
 
 ```bash
@@ -898,7 +935,7 @@ Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
 audit: `real-parity` `3735`, `generic-error-fallback` `458`, `pending-route`
 `82`, and `pending-core` `7`.
 
-Full non-coverage result after the `FT_Load_Char` null-face error route
+Full non-coverage result after the `FT_Load_Glyph` null-face error route
 classification:
 
 ```bash
@@ -906,7 +943,7 @@ make -C pillow-rs-freetype test
 ```
 
 Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
-audit: `real-parity` `3737`, `generic-error-fallback` `456`, `pending-route`
+audit: `real-parity` `3738`, `generic-error-fallback` `455`, `pending-route`
 `82`, and `pending-core` `7`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
