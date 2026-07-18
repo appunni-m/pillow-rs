@@ -100,6 +100,10 @@ pub const COV_NONBASE_GLYPH: u64 = 1 << 34;
 pub const COV_EXTRA_LIGHT: u64 = 1 << 35;
 /// hint_edges Phase 2: BOUND skipped because the linked stem is within a quarter pixel.
 pub const COV_HINT_PHASE2_BOUND_NEAR: u64 = 1 << 36;
+/// hint_edges Phase 4: a nearby intermediate edge invalidated a nominal serif.
+pub const COV_HINT_PHASE4_SERIF_OVERLAP: u64 = 1 << 37;
+/// vertical separation: a dimensionless contour retained C's extrema sentinels.
+pub const COV_VSEP_DIMENSIONLESS_CONTOUR: u64 = 1 << 38;
 
 /// Record a coverage bit for the current glyph.
 pub fn record(bit: u64) {

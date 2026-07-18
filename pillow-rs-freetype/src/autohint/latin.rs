@@ -2472,9 +2472,22 @@ fn vertical_separation_adjustments(
             }
             let min_y = hints.contour_y_minima[ci];
             let max_y = hints.contour_y_maxima[ci];
-            let distance = high_min_y - max_y;
-            if distance < 64 && distance < min_distance && min_y < high_min_y {
-                min_distance = distance;
+            if min_y == i32::MAX && max_y == i32::MIN {
+                crate::autohint::coverage::record(
+                    crate::autohint::coverage::COV_VSEP_DIMENSIONLESS_CONTOUR,
+                );
+            }
+            // `af_compute_vertical_extrema` leaves dimensionless contours at
+            // `FT_LONG_MAX`/`FT_LONG_MIN`.  Pinned C evaluates `SUB_LONG`
+            // with defined unsigned arithmetic, then rejects that contour by
+            // `min_y < high_min_y`.  Check the rejecting predicate first and
+            // widen real coordinate subtraction so Rust never panics on the
+            // sentinel pair while preserving C's selected distance.
+            if min_y < high_min_y {
+                let distance = i64::from(high_min_y) - i64::from(max_y);
+                if distance < 64 && distance < i64::from(min_distance) {
+                    min_distance = i32_from_i64(distance);
+                }
             }
         }
 
@@ -2551,9 +2564,18 @@ fn vertical_separation_adjustments(
             }
             let min_y = hints.contour_y_minima[ci];
             let max_y = hints.contour_y_maxima[ci];
-            let distance = min_y - low_max_y;
-            if distance < 64 && distance < min_distance && max_y > low_max_y {
-                min_distance = distance;
+            if min_y == i32::MAX && max_y == i32::MIN {
+                crate::autohint::coverage::record(
+                    crate::autohint::coverage::COV_VSEP_DIMENSIONLESS_CONTOUR,
+                );
+            }
+            // As above, reject the `FT_LONG_MAX`/`FT_LONG_MIN` sentinel
+            // contour before calculating the C `SUB_LONG` distance.
+            if max_y > low_max_y {
+                let distance = i64::from(min_y) - i64::from(low_max_y);
+                if distance < 64 && distance < i64::from(min_distance) {
+                    min_distance = i32_from_i64(distance);
+                }
             }
         }
 
@@ -4480,6 +4502,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
             // For VERT dim, v = fx = fpos already.
             let serif_idx = axis.edges[i].serif;
             if serif_idx != usize::MAX {
+                crate::autohint::coverage::record(crate::autohint::coverage::COV_HINT_PHASE4_SERIF);
                 delta = axis.edges[serif_idx].opos - axis.edges[i].opos;
                 if delta < 0 {
                     delta = -delta;
@@ -4530,6 +4553,9 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                         }
                     }
                     if overlap {
+                        crate::autohint::coverage::record(
+                            crate::autohint::coverage::COV_HINT_PHASE4_SERIF_OVERLAP,
+                        );
                         continue;
                     }
                 }
@@ -4571,6 +4597,9 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                 }
 
                 if let (Some(b), Some(a)) = (before, after) {
+                    crate::autohint::coverage::record(
+                        crate::autohint::coverage::COV_HINT_PHASE4_INTERP,
+                    );
                     let before_opos = axis.edges[b].opos;
                     let before_pos = axis.edges[b].pos;
                     let after_opos = axis.edges[a].opos;
@@ -4587,6 +4616,9 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                             );
                     }
                 } else {
+                    crate::autohint::coverage::record(
+                        crate::autohint::coverage::COV_HINT_PHASE4_ANCHOR_REL,
+                    );
                     // Anchor-relative: round delta to nearest half-pixel.
                     let anchor_pos = axis.edges[anchor].pos;
                     let anchor_opos = axis.edges[anchor].opos;
