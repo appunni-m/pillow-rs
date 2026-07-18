@@ -75,6 +75,7 @@ struct SbitImageRecord {
     offset: u32,
     start: u32,
     end: u32,
+    metrics: Option<SbitMetrics>,
 }
 
 pub fn parse_sbit(directory: &TableDirectory, data: &[u8]) -> Option<SbitTable> {
@@ -238,6 +239,7 @@ fn find_image_in_subtable(
                     offset: image_offset,
                     start: image_start,
                     end: image_end,
+                    metrics: None,
                 },
                 recurse_count,
             )
@@ -269,6 +271,7 @@ fn find_image_in_subtable(
                     offset: image_offset,
                     start: image_start,
                     end: image_end,
+                    metrics: None,
                 },
                 recurse_count,
             )
@@ -291,6 +294,7 @@ fn find_image_in_subtable(
                     offset: image_offset,
                     start: image_start,
                     end: image_end,
+                    metrics: None,
                 },
                 recurse_count,
             )
@@ -341,6 +345,66 @@ fn find_image_in_subtable(
                         offset: image_offset,
                         start: image_start,
                         end: image_end,
+                        metrics: None,
+                    },
+                    recurse_count,
+                );
+            }
+
+            Err(no_bitmap_error(recurse_count))
+        }
+        5 => {
+            // C: `tt_sbit_decoder_load_image` in `src/sfnt/ttsbit.c:1367-1401`
+            // reads EBLC constant metrics and a sparse glyph-code array, then
+            // image format 5 uses those metrics for bit-aligned EBDT payloads.
+            let image_size =
+                read_u32(eblc, subtable_start + 8).ok_or_else(|| no_bitmap_error(recurse_count))?;
+            let metrics = read_big_metrics(
+                eblc.get(subtable_start + 12..subtable_start + 20)
+                    .ok_or_else(|| no_bitmap_error(recurse_count))?,
+            )?;
+            let num_glyphs = read_u32(eblc, subtable_start + 20)
+                .ok_or_else(|| no_bitmap_error(recurse_count))?;
+            let glyphs_start = subtable_start.checked_add(24).ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap sparse glyph array overflow".into())
+            })?;
+            let entries = usize::try_from(num_glyphs).map_err(|_| {
+                FontError::InvalidFont("embedded bitmap sparse glyph array too large".into())
+            })?;
+            let glyphs_len = entries.checked_mul(2).ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap sparse glyph array too large".into())
+            })?;
+            let glyphs_end = glyphs_start.checked_add(glyphs_len).ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap sparse glyph array too large".into())
+            })?;
+            eblc.get(glyphs_start..glyphs_end)
+                .ok_or_else(|| no_bitmap_error(recurse_count))?;
+            for entry_index in 0..entries {
+                let entry = glyphs_start + entry_index * 2;
+                let sparse_glyph =
+                    read_u16(eblc, entry).ok_or_else(|| no_bitmap_error(recurse_count))?;
+                if sparse_glyph != glyph_index {
+                    continue;
+                }
+                let glyph_offset = u32::try_from(entry_index).map_err(|_| {
+                    FontError::InvalidFont("embedded bitmap sparse glyph array too large".into())
+                })?;
+                let image_start = image_size.checked_mul(glyph_offset).ok_or_else(|| {
+                    FontError::InvalidFont("embedded bitmap image offset overflow".into())
+                })?;
+                let image_end = image_start.checked_add(image_size).ok_or_else(|| {
+                    FontError::InvalidFont("embedded bitmap image offset overflow".into())
+                })?;
+                return image_found_or_missing(
+                    strike,
+                    eblc,
+                    ebdt,
+                    SbitImageRecord {
+                        format: image_format,
+                        offset: image_offset,
+                        start: image_start,
+                        end: image_end,
+                        metrics: Some(metrics),
                     },
                     recurse_count,
                 );
@@ -389,10 +453,10 @@ fn load_simple_image(
     ebdt: &[u8],
     image_record: SbitImageRecord,
 ) -> Result<SbitGlyph, FontError> {
-    // FreeType `sfnt/ttsbit.c:544-589,700-743` routes image format 1 through
-    // the byte-aligned decoder after mapping bit depths 1/2/4/8/32 to
-    // MONO/GRAY2/GRAY4/GRAY/BGRA and copying row-aligned image bytes.
-    if image_record.format != 1 {
+    // FreeType `sfnt/ttsbit.c:544-589,700-743,828-955` routes image format 1
+    // through the byte-aligned decoder and image format 5 through the
+    // bit-aligned decoder after mapping bit depths to pixel modes.
+    if image_record.format != 1 && image_record.format != 5 {
         return Err(FontError::InvalidFont(format!(
             "unsupported embedded bitmap image format {}",
             image_record.format
@@ -415,6 +479,15 @@ fn load_simple_image(
     let image = ebdt
         .get(start..end)
         .ok_or_else(|| FontError::InvalidFont("embedded bitmap image exceeds data".into()))?;
+    if image_record.format == 5 {
+        return load_bit_aligned_image(
+            strike,
+            image,
+            image_record.metrics.ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap bit-aligned metrics missing".into())
+            })?,
+        );
+    }
     let raw_height = *image
         .first()
         .ok_or_else(|| FontError::InvalidFont("embedded bitmap small metrics missing".into()))?;
@@ -441,6 +514,61 @@ fn load_simple_image(
         bitmap: SbitBitmap {
             width: u32::from(raw_width),
             rows: u32::from(raw_height),
+            pitch: row_bytes as i32,
+            pixel_mode,
+            num_grays,
+            buffer,
+        },
+    })
+}
+
+fn load_bit_aligned_image(
+    strike: SbitStrike,
+    image: &[u8],
+    metrics: SbitMetrics,
+) -> Result<SbitGlyph, FontError> {
+    let width = metric_dimension(metrics.width);
+    let rows = metric_dimension(metrics.height);
+    let (pixel_mode, row_bytes, num_grays) = bitmap_layout_for_bit_depth(strike.bit_depth, width)?;
+    let line_bits = width
+        .checked_mul(usize::from(strike.bit_depth))
+        .ok_or_else(|| {
+            FontError::InvalidFont("embedded bitmap bit-aligned line overflow".into())
+        })?;
+    let total_bits = line_bits.checked_mul(rows).ok_or_else(|| {
+        FontError::InvalidFont("embedded bitmap bit-aligned buffer overflow".into())
+    })?;
+    let payload_len = total_bits.div_ceil(8);
+    let payload = image.get(0..payload_len).ok_or_else(|| {
+        FontError::InvalidFont("embedded bitmap bit-aligned image data truncated".into())
+    })?;
+    let mut buffer = vec![
+        0;
+        row_bytes.checked_mul(rows).ok_or_else(|| {
+            FontError::InvalidFont("embedded bitmap bit-aligned target overflow".into())
+        })?
+    ];
+    for bit_index in 0..total_bits {
+        let source_byte = payload[bit_index / 8];
+        let source_mask = 0x80u8 >> (bit_index & 7);
+        if source_byte & source_mask == 0 {
+            continue;
+        }
+        let row = bit_index / line_bits;
+        let bit_in_row = bit_index % line_bits;
+        let target_index = row
+            .checked_mul(row_bytes)
+            .and_then(|start| start.checked_add(bit_in_row / 8))
+            .ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap bit-aligned target overflow".into())
+            })?;
+        buffer[target_index] |= 0x80u8 >> (bit_in_row & 7);
+    }
+    Ok(SbitGlyph {
+        metrics,
+        bitmap: SbitBitmap {
+            width: width as u32,
+            rows: rows as u32,
             pitch: row_bytes as i32,
             pixel_mode,
             num_grays,

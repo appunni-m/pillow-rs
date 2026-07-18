@@ -2047,6 +2047,31 @@
           ]
         },
         {
+          "id": "sbit-mono-index-format5-sbits-only",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_mono_index_format5.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT index-format-5 sparse glyph-code array and image-format-5 bit-aligned 1-bit bitmap for glyph 1."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 1,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "coverage": [
+            "sbit:mono-index-format5-bit-aligned-bitmap-success"
+          ]
+        },
+        {
           "id": "sbit-cblc-cbdt-gray-format1",
           "assets": {
             "font": {
