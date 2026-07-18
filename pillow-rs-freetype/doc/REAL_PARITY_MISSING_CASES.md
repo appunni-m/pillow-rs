@@ -10,24 +10,25 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current result at `a8cdaa567`:
+Current verified result after `FT_Done_FreeType(NULL)` exact-error route
+classification:
 
-- Runnable public parity rows: `7100 / 7100` pass.
-- Pending runtime rows: `134`.
+- Runnable public parity rows: `7144 / 7144` pass.
+- Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3684`
+  - `real-parity`: `3732`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
-  - `generic-fallback`: `700`
-  - `generic-error-fallback`: `460`
-  - `pending-route`: `127`
+  - `generic-fallback`: `698`
+  - `generic-error-fallback`: `461`
+  - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
   - `explicit-unsupported`: `6`
-  - `void-fallback`: `2`
+  - `void-fallback`: removed
 
 Parity-only rule for this phase:
 
@@ -565,6 +566,42 @@ make -C pillow-rs-freetype test-op OP=ftmodapi.add_default_modules
 Result: `2 / 2` operation rows passed, `0` failed, `0` pending, with the same
 classification split.
 
+### Issue Set G: `FT_Done_FreeType` null-library exact error route
+
+Previous blocker:
+
+- `freetype.FT_Done_FreeType.error_null_library` was classified as
+  `generic-error-fallback`, even though the row already had exact native C
+  oracle, Rust FFI, C ABI, and WASM ABI comparisons for
+  `FT_Done_FreeType(NULL)`.
+
+Verified progress:
+
+- The route audit now recognizes this row as real parity only when the public
+  input is `freetype.done_freetype`, the case id is
+  `freetype.FT_Done_FreeType.error_null_library`, and the library handle is
+  explicitly null.
+- Runtime behavior is unchanged: pinned C FreeType and the Rust/C/WASM routes
+  all return `FT_Err_Invalid_Library_Handle` (`35`) for the null-library input.
+- This is an audit-classification fix for an already exact route, not a
+  placeholder or broader error fallback.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Done_FreeType.error_null_library
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3732`, `generic-error-fallback` `461`.
+
+```bash
+make -C pillow-rs-freetype test-op OP=freetype.done_freetype
+```
+
+Result: `3 / 3` operation rows passed, `0` failed, `0` pending, with the
+null-library error row classified as real parity.
+
 Focused non-coverage result:
 
 ```bash
@@ -683,6 +720,17 @@ make -C pillow-rs-freetype test
 Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
 audit: `real-parity` `3731`, `pending-route` `82`, `pending-core` `7`, and
 `void-fallback` removed from the route-audit categories.
+
+Full non-coverage result after the `FT_Done_FreeType` null-library exact-error
+route classification:
+
+```bash
+make -C pillow-rs-freetype test
+```
+
+Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
+audit: `real-parity` `3732`, `generic-error-fallback` `461`, `pending-route`
+`82`, and `pending-core` `7`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
 

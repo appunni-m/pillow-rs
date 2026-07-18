@@ -979,6 +979,16 @@ def add_default_modules_real_parity_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
+    if (
+        row.operation == "freetype.done_freetype"
+        and row.case_id == "freetype.FT_Done_FreeType.error_null_library"
+        and lifecycle_handle(row, "library") == "null"
+    ):
+        return "FT_Done_FreeType null-library error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    return None
+
+
 def wrapper_null_validation_reason(row: ConcreteInput) -> str | None:
     if row.operation == "freetype.get_subglyph_info" and "null_output_indices" in row.params:
         return (
@@ -1101,6 +1111,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     route_pending = pending_route_reason(row)
     if route_pending:
         return ("pending-route", route_pending)
+    lifecycle_null_reason = lifecycle_null_real_parity_reason(row)
+    if lifecycle_null_reason:
+        return ("real-parity", lifecycle_null_reason)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",
