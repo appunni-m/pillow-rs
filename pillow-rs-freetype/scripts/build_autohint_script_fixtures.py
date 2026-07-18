@@ -2264,17 +2264,24 @@ def build_latin_standard_fallbacks() -> None:
                 ".notdef": rectangle_glyph(80, -120, 520, 720),
                 "space": empty_glyph(),
                 "latin_A": rectangle_glyph(100, 0, 540, 680),
+                "latin_aacute": top_tilde_glyph(),
             },
             {
                 ".notdef": (600, 80),
                 "space": (300, 0),
                 "latin_A": (700, 100),
+                "latin_aacute": (700, 100),
             },
             {
                 0x20: "space",
                 0x41: "latin_A",
+                # Keep Latin hinting active with only a capital-top blue zone;
+                # no lowercase or uppercase pair exists, so vertical accent
+                # separation must use FreeType's scaled-EM height fallback.
+                0x54: "latin_A",
+                0xE1: "latin_aacute",
             },
-            [".notdef", "space", "latin_A"],
+            [".notdef", "space", "latin_A", "latin_aacute"],
         ),
         (
             "latin-empty-standard.ttf",
