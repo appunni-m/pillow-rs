@@ -3569,6 +3569,34 @@
             ]
           },
           {
+            "id": "latin-x-height-scale-rejection-force-autohint",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/autohint/latin-x-height-rejection.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 2
+              },
+              "glyph_index": 6,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ],
+              "assert_api_load_glyph_agrees": true,
+              "assert_autohint_coverage_bits_include": [
+                42
+              ]
+            },
+            "coverage": [
+              "autohint/latin:x-height-excessive-scale-rejection"
+            ]
+          },
+          {
             "id": "latin-serif-overlap-break-force-autohint",
             "assets": {
               "font": {

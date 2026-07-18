@@ -110,6 +110,8 @@ pub const COV_VSEP_EM_HEIGHT_FALLBACK: u64 = 1 << 39;
 pub const COV_X_HEIGHT_SCALE_ADJUSTMENT: u64 = 1 << 40;
 /// blue metrics: ignore a round extremum while building a neutral blue zone.
 pub const COV_BLUE_NEUTRAL_ROUND_SKIP: u64 = 1 << 41;
+/// metrics scaling: reject an x-height adjustment that moves the tallest blue extent by two pixels or more.
+pub const COV_X_HEIGHT_SCALE_REJECTED: u64 = 1 << 42;
 
 /// Record a coverage bit for the current glyph.
 pub fn record(bit: u64) {
