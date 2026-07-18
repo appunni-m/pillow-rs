@@ -1048,6 +1048,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Select_Charmap missing-encoding error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "freetype.select_charmap"
+        and row.case_id == "freetype.FT_Select_Charmap.error_missing_unicode_charmap"
+    ):
+        return "FT_Select_Charmap missing-Unicode-charmap error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "freetype.set_charmap"
         and row.case_id == "freetype.FT_Set_Charmap.error_null_face"
         and lifecycle_handle_is_null(row, "face")
