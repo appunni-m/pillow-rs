@@ -1056,6 +1056,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_Select_Size null-face error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "freetype.select_size"
+        and row.case_id == "freetype.FT_Select_Size.error_no_fixed_sizes_or_null_face"
+        and not lifecycle_handle_is_null(row, "face")
+    ):
+        return "FT_Select_Size no-fixed-sizes error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "freetype.select_size"
         and row.case_id == "freetype.FT_Select_Size.error_strike_index_past_end_direct"
     ):
         return "FT_Select_Size past-end strike-index error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
