@@ -64,11 +64,12 @@ pub struct ApplyHintsMetrics {
 pub const AF_ADJUST_UP: u32 = 0x0001;
 pub const AF_ADJUST_DOWN: u32 = 0x0002;
 pub const AF_ADJUST_UP2: u32 = 0x0004;
-pub const AF_ADJUST_DOWN2: u32 = 0x0008;
+// Pinned FreeType 2.14.3 defines DOWN2/TILDE_BOTTOM2 in `afadjust.h`, but
+// `afadjust.c` never emits those flags from the public adjustment database.
+// Keep only C-reachable public glyph-load paths here.
 pub const AF_ADJUST_TILDE_TOP: u32 = 0x0010;
 pub const AF_ADJUST_TILDE_BOTTOM: u32 = 0x0020;
 pub const AF_ADJUST_TILDE_TOP2: u32 = 0x0040;
-pub const AF_ADJUST_TILDE_BOTTOM2: u32 = 0x0080;
 pub const AF_IGNORE_CAPITAL_TOP: u32 = 0x0100;
 pub const AF_IGNORE_CAPITAL_BOTTOM: u32 = 0x0200;
 pub const AF_IGNORE_SMALL_TOP: u32 = 0x0400;
@@ -2308,28 +2309,6 @@ fn find_lowest_contour(hints: &GlyphHints) -> usize {
     lowest_contour
 }
 
-fn find_second_lowest_contour(hints: &GlyphHints) -> usize {
-    if hints.contours.len() < 3 {
-        return 0;
-    }
-    let lowest = find_lowest_contour(hints);
-    let lowest_max_y = hints.contour_y_maxima[lowest];
-    let mut second = 0;
-    let mut second_min_y = i32::MAX;
-    for ci in 0..hints.contours.len() {
-        if ci == lowest {
-            continue;
-        }
-        let current_min_y = hints.contour_y_minima[ci];
-        let current_max_y = hints.contour_y_maxima[ci];
-        if current_min_y < second_min_y && current_max_y > lowest_max_y {
-            second_min_y = current_min_y;
-            second = ci;
-        }
-    }
-    second
-}
-
 fn contour_horizontal_overlap(hints: &GlyphHints, contour_index: usize) -> bool {
     let mut contour_min_x = i32::MAX;
     let mut contour_max_x = i32::MIN;
@@ -2536,8 +2515,7 @@ fn apply_tilde_stretch_alignment(hints: &mut GlyphHints, adj_type: u32) {
     let is_top_tilde = (adj_type & AF_ADJUST_TILDE_TOP) != 0;
     let is_bottom_tilde = (adj_type & AF_ADJUST_TILDE_BOTTOM) != 0;
     let is_below_top_tilde = (adj_type & AF_ADJUST_TILDE_TOP2) != 0;
-    let is_above_bottom_tilde = (adj_type & AF_ADJUST_TILDE_BOTTOM2) != 0;
-    if !(is_top_tilde || is_bottom_tilde || is_below_top_tilde || is_above_bottom_tilde) {
+    if !(is_top_tilde || is_bottom_tilde || is_below_top_tilde) {
         return;
     }
 
@@ -2548,14 +2526,6 @@ fn apply_tilde_stretch_alignment(hints: &mut GlyphHints, adj_type: u32) {
         recompute_vertical_extrema(hints);
         let limit = hints.contour_y_minima[contour];
         move_contours_up(hints, limit, y_offset);
-        recompute_vertical_extrema(hints);
-    }
-    if is_above_bottom_tilde {
-        let contour = find_second_lowest_contour(hints);
-        let y_offset = stretch_bottom_tilde(hints, contour) - align_bottom_tilde(hints, contour);
-        recompute_vertical_extrema(hints);
-        let limit = hints.contour_y_maxima[contour];
-        move_contours_down(hints, limit, y_offset);
         recompute_vertical_extrema(hints);
     }
     if is_top_tilde {
@@ -2619,10 +2589,9 @@ fn vertical_separation_adjustments(
     let adjust_top = (adj_type & AF_ADJUST_UP) != 0;
     let adjust_below_top = (adj_type & AF_ADJUST_UP2) != 0;
     let adjust_bottom = (adj_type & AF_ADJUST_DOWN) != 0;
-    let adjust_above_bottom = (adj_type & AF_ADJUST_DOWN2) != 0;
 
     if !((adjust_top || adjust_bottom) && hints.contours.len() >= 2
-        || (adjust_below_top || adjust_above_bottom) && hints.contours.len() >= 3)
+        || adjust_below_top && hints.contours.len() >= 3)
     {
         return;
     }
@@ -2724,14 +2693,8 @@ fn vertical_separation_adjustments(
         }
     }
 
-    if (adjust_bottom && hints.contours.len() >= 2)
-        || (adjust_above_bottom && hints.contours.len() >= 3)
-    {
-        let low_contour = if adjust_above_bottom {
-            find_second_lowest_contour(hints)
-        } else {
-            find_lowest_contour(hints)
-        };
+    if adjust_bottom && hints.contours.len() >= 2 {
+        let low_contour = find_lowest_contour(hints);
         if !contour_horizontal_overlap(hints, low_contour) {
             return;
         }
@@ -2767,30 +2730,18 @@ fn vertical_separation_adjustments(
 
         let adjustment_amount = 64 - min_distance;
         let is_bottom_tilde = (adj_type & AF_ADJUST_TILDE_BOTTOM) != 0;
-        let is_above_bottom_tilde = (adj_type & AF_ADJUST_TILDE_BOTTOM2) != 0;
         let mut centering_adjustment = 0;
-        if is_bottom_tilde || is_above_bottom_tilde {
-            let tilde_contour = if adjust_bottom {
-                low_contour
-            } else if is_above_bottom_tilde {
-                low_contour
-            } else {
-                find_lowest_contour(hints)
-            };
+        if is_bottom_tilde {
+            let tilde_contour = low_contour;
             let tilde_height =
                 hints.contour_y_maxima[tilde_contour] - hints.contour_y_minima[tilde_contour];
-            let mut pos = low_max_y - adjustment_amount;
-            if adjust_above_bottom && is_bottom_tilde {
-                pos -= low_height;
-            }
+            let pos = low_max_y - adjustment_amount;
             if pos % 64 == 0 && tilde_height < 3 * 64 {
                 centering_adjustment = (ft_pix_round(tilde_height) - tilde_height) / 2;
             }
         }
 
-        let calculated_amount = if (adjust_bottom && is_bottom_tilde)
-            || (adjust_above_bottom && is_above_bottom_tilde)
-        {
+        let calculated_amount = if adjust_bottom && is_bottom_tilde {
             adjustment_amount + centering_adjustment
         } else {
             adjustment_amount
@@ -2806,9 +2757,6 @@ fn vertical_separation_adjustments(
             // tilde centering is only applied to the secondary below-contour path.
             // See `aflatin.c` around the `af_move_contours_down` calls.
             move_contours_down(hints, max_y_limit, adjustment_amount);
-            if adjust_above_bottom && is_bottom_tilde {
-                move_contours_down(hints, max_y_limit - low_height, centering_adjustment);
-            }
             recompute_vertical_extrema(hints);
         }
     }
