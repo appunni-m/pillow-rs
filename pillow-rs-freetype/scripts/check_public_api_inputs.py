@@ -963,6 +963,12 @@ def outline_get_bitmap_real_parity_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def set_debug_hook_real_parity_reason(row: ConcreteInput) -> str | None:
+    if row.operation == "ftmodapi.set_debug_hook" and row.subject == "ftmodapi.FT_Set_Debug_Hook":
+        return "FT_Set_Debug_Hook slot mutation/no-op behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    return None
+
+
 def wrapper_null_validation_reason(row: ConcreteInput) -> str | None:
     if row.operation == "freetype.get_subglyph_info" and "null_output_indices" in row.params:
         return (
@@ -1115,6 +1121,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     outline_get_bitmap_real_reason = outline_get_bitmap_real_parity_reason(row)
     if outline_get_bitmap_real_reason:
         return ("real-parity", outline_get_bitmap_real_reason)
+    set_debug_hook_real_reason = set_debug_hook_real_parity_reason(row)
+    if set_debug_hook_real_reason:
+        return ("real-parity", set_debug_hook_real_reason)
     wrapper_null_reason = wrapper_null_validation_reason(row)
     if wrapper_null_reason:
         return ("wrapper-null-validation", wrapper_null_reason)

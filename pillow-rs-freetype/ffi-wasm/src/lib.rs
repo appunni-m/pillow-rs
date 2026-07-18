@@ -1140,6 +1140,66 @@ pub fn abi_support_truetype_engine_observation(library_present: i32) -> (i32, bo
     )
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_debug_hook_classes(
+    library_present: i32,
+    action: i32,
+) -> (bool, [rust_ffi::FT_Int; 4], [rust_ffi::FT_Int; 4]) {
+    let mut library = if library_present != 0 {
+        Some(rust_ffi::FT_Init_FreeType())
+    } else {
+        None
+    };
+    if action == 3 {
+        rust_ffi::FT_Set_Debug_Hook(
+            library.as_mut(),
+            rust_ffi::FT_DEBUG_HOOK_TRUETYPE as rust_ffi::FT_UInt,
+            Some(abi_support_debug_hook_a),
+        );
+    }
+    let before = rust_ffi::FT_Library_Debug_Hook_Classes(
+        library.as_ref(),
+        Some(abi_support_debug_hook_a),
+        Some(abi_support_debug_hook_b),
+    );
+    match action {
+        1 => rust_ffi::FT_Set_Debug_Hook(
+            library.as_mut(),
+            rust_ffi::FT_DEBUG_HOOK_TRUETYPE as rust_ffi::FT_UInt,
+            Some(abi_support_debug_hook_a),
+        ),
+        3 => {
+            rust_ffi::FT_Set_Debug_Hook(library.as_mut(), 4, Some(abi_support_debug_hook_b));
+            rust_ffi::FT_Set_Debug_Hook(
+                library.as_mut(),
+                rust_ffi::FT_DEBUG_HOOK_TRUETYPE as rust_ffi::FT_UInt,
+                None,
+            );
+        }
+        _ => rust_ffi::FT_Set_Debug_Hook(
+            library.as_mut(),
+            rust_ffi::FT_DEBUG_HOOK_TRUETYPE as rust_ffi::FT_UInt,
+            Some(abi_support_debug_hook_a),
+        ),
+    }
+    let after = rust_ffi::FT_Library_Debug_Hook_Classes(
+        library.as_ref(),
+        Some(abi_support_debug_hook_a),
+        Some(abi_support_debug_hook_b),
+    );
+    (library.is_some(), before, after)
+}
+
+#[cfg(feature = "abi-test-support")]
+extern "C" fn abi_support_debug_hook_a(_arg: rust_ffi::FT_Pointer) -> rust_ffi::FT_Error {
+    rust_ffi::FT_Err_Ok
+}
+
+#[cfg(feature = "abi-test-support")]
+extern "C" fn abi_support_debug_hook_b(_arg: rust_ffi::FT_Pointer) -> rust_ffi::FT_Error {
+    rust_ffi::FT_Err_Ok
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_mul_div(a: FT_Long, b: FT_Long, c: FT_Long) -> FT_Long {
     rust_ffi::FT_MulDiv(a, b, c)

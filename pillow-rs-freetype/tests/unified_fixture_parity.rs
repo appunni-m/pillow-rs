@@ -48,6 +48,14 @@ use sha2::{Digest, Sha256};
 
 const OUTLINE_RENDER_USER_TOKEN: usize = 0x1234_5678;
 
+extern "C" fn debug_hook_a(_arg: FT_Pointer) -> FT_Error {
+    FT_Err_Ok
+}
+
+extern "C" fn debug_hook_b(_arg: FT_Pointer) -> FT_Error {
+    FT_Err_Ok
+}
+
 #[path = "support/generated_constant_lookup.rs"]
 mod generated_constant_lookup;
 use generated_constant_lookup::generated_rust_constant;
@@ -6956,6 +6964,156 @@ fn wasm_truetype_engine_output(params: &Value) -> Result<Value, String> {
     }))
 }
 
+fn debug_hook_action(case: &InputCase) -> Result<i32, String> {
+    if case.case_id.contains(".stores_valid_hook") {
+        Ok(1)
+    } else if case.case_id.contains(".null_library_noop") {
+        Ok(2)
+    } else if case.case_id.contains(".invalid_index_or_null_hook_noop") {
+        Ok(3)
+    } else {
+        Err(format!("unsupported debug hook case {}", case.case_id))
+    }
+}
+
+fn debug_hook_library_present(params: &Value) -> i32 {
+    if params
+        .get("library")
+        .and_then(Value::as_str)
+        .is_some_and(|library| library == "null")
+    {
+        0
+    } else {
+        1
+    }
+}
+
+fn debug_hook_class_name(class: FT_Int) -> &'static str {
+    match class {
+        1 => "hook_a",
+        2 => "hook_b",
+        3 => "other",
+        _ => "null",
+    }
+}
+
+fn debug_hook_snapshot_json(classes: [FT_Int; 4]) -> Value {
+    json!(classes.map(debug_hook_class_name))
+}
+
+fn debug_hook_output(action: i32, before: [FT_Int; 4], after: [FT_Int; 4]) -> Value {
+    match action {
+        1 => json!({
+            "return": "void",
+            "debug_hooks_snapshot": debug_hook_snapshot_json(after),
+            "stored_slot_identity": debug_hook_class_name(after[0])
+        }),
+        2 => json!({
+            "return": "void",
+            "crashed": false,
+            "observable_writes": "none"
+        }),
+        3 => json!({
+            "return": "void",
+            "debug_hooks_before": debug_hook_snapshot_json(before),
+            "debug_hooks_after": debug_hook_snapshot_json(after)
+        }),
+        _ => json!({ "return": "void" }),
+    }
+}
+
+fn rust_set_debug_hook(case: &InputCase) -> Result<RunOutput, String> {
+    let Ok(action) = debug_hook_action(case) else {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    };
+    let mut library = if debug_hook_library_present(&case.inputs.params) != 0 {
+        Some(FT_Init_FreeType())
+    } else {
+        None
+    };
+    if action == 3 {
+        FT_Set_Debug_Hook(
+            library.as_mut(),
+            FT_DEBUG_HOOK_TRUETYPE as FT_UInt,
+            Some(debug_hook_a),
+        );
+    }
+    let before =
+        FT_Library_Debug_Hook_Classes(library.as_ref(), Some(debug_hook_a), Some(debug_hook_b));
+    match action {
+        1 => FT_Set_Debug_Hook(
+            library.as_mut(),
+            FT_DEBUG_HOOK_TRUETYPE as FT_UInt,
+            Some(debug_hook_a),
+        ),
+        3 => {
+            FT_Set_Debug_Hook(library.as_mut(), 4, Some(debug_hook_b));
+            FT_Set_Debug_Hook(library.as_mut(), FT_DEBUG_HOOK_TRUETYPE as FT_UInt, None);
+        }
+        _ => FT_Set_Debug_Hook(
+            library.as_mut(),
+            FT_DEBUG_HOOK_TRUETYPE as FT_UInt,
+            Some(debug_hook_a),
+        ),
+    }
+    let after =
+        FT_Library_Debug_Hook_Classes(library.as_ref(), Some(debug_hook_a), Some(debug_hook_b));
+    Ok(ok(debug_hook_output(action, before, after)))
+}
+
+fn c_set_debug_hook(case: &InputCase) -> Result<RunOutput, String> {
+    let Ok(action) = debug_hook_action(case) else {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    };
+    let mut library = std::ptr::null_mut();
+    if debug_hook_library_present(&case.inputs.params) != 0 {
+        let err = c_abi::FT_Init_FreeType(&mut library);
+        if err != FT_Err_Ok {
+            return Err(format!("FT_Init_FreeType returned {err}"));
+        }
+    }
+    if action == 3 {
+        c_abi::FT_Set_Debug_Hook(
+            library,
+            FT_DEBUG_HOOK_TRUETYPE as FT_UInt,
+            Some(debug_hook_a),
+        );
+    }
+    let before =
+        c_abi::abi_support_debug_hook_classes(library, Some(debug_hook_a), Some(debug_hook_b));
+    match action {
+        1 => c_abi::FT_Set_Debug_Hook(
+            library,
+            FT_DEBUG_HOOK_TRUETYPE as FT_UInt,
+            Some(debug_hook_a),
+        ),
+        3 => {
+            c_abi::FT_Set_Debug_Hook(library, 4, Some(debug_hook_b));
+            c_abi::FT_Set_Debug_Hook(library, FT_DEBUG_HOOK_TRUETYPE as FT_UInt, None);
+        }
+        _ => c_abi::FT_Set_Debug_Hook(
+            library,
+            FT_DEBUG_HOOK_TRUETYPE as FT_UInt,
+            Some(debug_hook_a),
+        ),
+    }
+    let after =
+        c_abi::abi_support_debug_hook_classes(library, Some(debug_hook_a), Some(debug_hook_b));
+    c_done_library(library);
+    Ok(ok(debug_hook_output(action, before, after)))
+}
+
+fn wasm_set_debug_hook(case: &InputCase) -> Result<RunOutput, String> {
+    let Ok(action) = debug_hook_action(case) else {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    };
+    let (_library_present, before, after) = wasm_abi::abi_support_debug_hook_classes(
+        debug_hook_library_present(&case.inputs.params),
+        action,
+    );
+    Ok(ok(debug_hook_output(action, before, after)))
+}
+
 fn rust_done_freetype(case: &InputCase) -> Result<RunOutput, String> {
     if lifecycle_handle_param(&case.inputs.params, "library") == Some("null") {
         return Ok(lifecycle_result(FT_Done_FreeType(None)));
@@ -9523,6 +9681,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 truetype_engine_library_present_arg(params)?.to_string(),
             ])
         }
+        "ftmodapi.set_debug_hook" => Ok(vec![
+            "--set-debug-hook".to_string(),
+            match debug_hook_action(case) {
+                Ok(action) => action.to_string(),
+                Err(_) => return oracle_fallback_args(case),
+            },
+        ]),
         "freetype.done_freetype" => {
             if lifecycle_handle_param(params, "library") == Some("null") {
                 return Ok(vec!["--done-freetype".to_string(), "null".to_string()]);
@@ -10134,6 +10299,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         if !matches!(
             op,
             "ftmodapi.get_truetype_engine_type"
+                | "ftmodapi.set_debug_hook"
                 | "freetype.face_check_truetype_patents"
                 | "freetype.face_set_unpatented_hinting"
                 | "ftotval.open_type_free"
@@ -10363,6 +10529,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_truetype_engine_type" => {
             Ok(ok(rust_truetype_engine_output(&case.inputs.params)?))
         }
+        "ftmodapi.set_debug_hook" => rust_set_debug_hook(case),
         "freetype.done_freetype" => rust_done_freetype(case),
         "freetype.done_face" => rust_done_face(case),
         "freetype.face_check_truetype_patents" => rust_face_check_truetype_patents(case),
@@ -10998,6 +11165,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_truetype_engine_type" => {
             Ok(ok(c_truetype_engine_output(&case.inputs.params)?))
         }
+        "ftmodapi.set_debug_hook" => c_set_debug_hook(case),
         "freetype.done_freetype" => c_done_freetype_output(case),
         "freetype.done_face" => c_done_face_output(case),
         "freetype.face_check_truetype_patents" => c_face_check_truetype_patents(case),
@@ -11534,6 +11702,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_truetype_engine_type" => {
             Ok(ok(wasm_truetype_engine_output(&case.inputs.params)?))
         }
+        "ftmodapi.set_debug_hook" => wasm_set_debug_hook(case),
         "freetype.done_freetype" => wasm_done_freetype_output(case),
         "freetype.done_face" => wasm_done_face_output(case),
         "freetype.face_check_truetype_patents" => wasm_face_check_truetype_patents(case),

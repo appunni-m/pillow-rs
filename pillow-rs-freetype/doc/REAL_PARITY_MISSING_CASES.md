@@ -482,6 +482,51 @@ make -C pillow-rs-freetype test-op OP=ftmodapi.get_truetype_engine_type
 
 Result: `6 / 6` runtime parity rows passed, `0` failed, `0` pending.
 
+### Issue Set E: `FT_Set_Debug_Hook` slot mutation and no-op behavior
+
+Previous blocker:
+
+- `ftmodapi.FT_Set_Debug_Hook` rows were placeholder/fallback routes even
+  though the C behavior is a bounded public slot mutation:
+  `library && debug_hook && hook_index < 4`.
+
+Verified progress:
+
+- Native C oracle now records FreeType's `library->debug_hooks[4]` slot state
+  for valid hook storage, null-library no-op, invalid-index no-op, and null-hook
+  no-op.
+- `fontdone` now models the four public debug-hook slots in `FT_Library` and
+  implements `FT_Set_Debug_Hook` with the same three C preconditions from
+  `freetype/src/base/ftobjs.c:FT_Set_Debug_Hook`.
+- C ABI exposes the public `FT_Set_Debug_Hook` symbol as a thin wrapper that
+  delegates to core state.
+- WASM and C ABI test-support observation routes expose only hook identity
+  classes for parity comparison; they do not implement interpreter/debugger
+  behavior in wrappers.
+- The separate
+  `ftmodapi.FT_DEBUG_HOOK_TRUETYPE.debug_hook_index_import_contract` row still
+  needs the missing `fonts/truetype/bytecode-debug-hook.ttf` fixture before
+  hook invocation during glyph loading can be claimed as real parity. It remains
+  fallback evidence and is not counted as a real-parity route by this fix.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Set_Debug_Hook
+```
+
+Result: `3 / 3` exact `FT_Set_Debug_Hook` runtime parity rows passed, `0`
+failed, `0` pending.
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftmodapi.set_debug_hook
+```
+
+Result: `4 / 4` operation-filtered rows passed, `0` failed, `0` pending. This
+includes the unchanged generic fallback row for
+`FT_DEBUG_HOOK_TRUETYPE.debug_hook_index_import_contract`; only the three
+`FT_Set_Debug_Hook` rows are classified as real parity.
+
 Focused non-coverage result:
 
 ```bash
@@ -580,6 +625,16 @@ make -C pillow-rs-freetype test
 
 Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
 audit: `real-parity` `3727`, `pending-route` `82`, `pending-core` `7`.
+
+Full non-coverage result after the `FT_Set_Debug_Hook` slot mutation/no-op
+route:
+
+```bash
+make -C pillow-rs-freetype test
+```
+
+Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
+audit: `real-parity` `3730`, `pending-route` `82`, `pending-core` `7`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
 
