@@ -2587,6 +2587,9 @@
               "char_code": 20893,
               "load_flags": [
                 "FT_LOAD_FORCE_AUTOHINT"
+              ],
+              "assert_autohint_coverage_bits_include": [
+                14
               ]
             },
             "coverage": [

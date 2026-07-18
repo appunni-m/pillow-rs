@@ -3601,6 +3601,31 @@ exactly unchanged from `92533418-1966-4449-bf23-14e1be5925f6`: the named
 glyphs were already reached by char-code rows, but their numeric public
 endpoint evidence is no longer false-green.
 
+## Explicit CJK 12-edge symmetry route proof
+
+The existing `cjk-serif-m-20` public `FT_LOAD_FORCE_AUTOHINT` row already
+executes the 12-edge symmetric-stem correction.  It now asserts autohint route
+bit 14 explicitly, so a future change cannot keep output parity while silently
+losing the intended `af_cjk_hint_edges` path.  No new font or duplicate row is
+needed.
+
+Focused Coverage MCP run `962a30a8-ca0f-468f-9ead-2cf777d8fab6` passes the
+pinned-C, Rust, C ABI, and WASM comparison with the route assertion.  Full
+managed run `0a3ba591-a392-4b81-b1b6-8017892d9da5` passes all 7,069 runnable
+rows with 135 pending, 7,204 concrete, zero runtime failures, and 3,649
+real-parity rows, and ingests snapshot
+`d4ba47d7-052c-4ead-9dbb-5ade86957072`.  Aggregate coverage is exactly
+unchanged from `bc2820d5-d34e-4080-9cfc-91c8c9ff1b6e` at 20,561 / 21,513
+lines, 4,958 / 5,555 branches, 1,281 / 1,417 functions, and 29,771 / 31,447
+regions; this change strengthens route evidence for an already executed arm.
+
+The adjacent uncovered-file audit rejected `casts.rs` debug-assert failure
+outcomes and `tt/post.rs`'s service-internal invalid-glyph guard as invalid
+public parity targets.  It identified the next real proof gap instead:
+`freetype.FT_Load_Glyph.matrix_load@hinter-execution-too-long-loop` still uses
+generic expected-error acceptance even though its maintained font and public
+oracle routes exist.  Promote that row to exact error comparison next.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
