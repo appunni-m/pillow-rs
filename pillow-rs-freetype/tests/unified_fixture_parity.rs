@@ -8261,6 +8261,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
                 && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
             || (case.operation == "freetype.select_size"
                 && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
+            || (case.operation == "freetype.request_size"
+                && case.case_id == "freetype.FT_Request_Size.error_null_face_or_request")
             || (case.operation == "load_char"
                 && (lifecycle_handle_param_is_null(&case.inputs.params, "face")
                     || case.case_id == "freetype.FT_Load_Char.error_null_face_or_invalid_flags"))
@@ -9084,8 +9086,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "freetype.request_size" => {
-            // Accept both "requests" (array) and "request" (singular object).
-            if params.get("requests").is_none() && params.get("request").is_none() {
+            // Accept "requests" arrays, singular "request" objects, and
+            // variant rows.  FreeType 2.14.3 `FT_Request_Size`
+            // (`src/base/ftobjs.c:3438-3505`) reports distinct native errors
+            // for null face and null request; variants keep both rows routed to
+            // the pinned C oracle instead of the generic fallback.
+            if params.get("requests").is_none()
+                && params.get("request").is_none()
+                && params.get("variants").is_none()
+            {
                 return oracle_fallback_args(case);
             }
             let mut args = vec!["--request-size".to_string()];
