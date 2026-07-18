@@ -98,6 +98,8 @@ pub const COV_ITALIC_HORZ_SKIPPED: u64 = 1 << 33;
 pub const COV_NONBASE_GLYPH: u64 = 1 << 34;
 /// Extra-light / thin font detected.
 pub const COV_EXTRA_LIGHT: u64 = 1 << 35;
+/// hint_edges Phase 2: BOUND skipped because the linked stem is within a quarter pixel.
+pub const COV_HINT_PHASE2_BOUND_NEAR: u64 = 1 << 36;
 
 /// Record a coverage bit for the current glyph.
 pub fn record(bit: u64) {

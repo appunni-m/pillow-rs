@@ -3122,6 +3122,34 @@ branches, and from 3,827 / 4,212 to 3,829 / 4,212 regions; functions remain
 67 / 68.  LLVM's normalized source record reports line 4155 newly hit, while
 the file summary credits the complete three-line current-edge clearing arm.
 
+## Latin Phase-2 BOUND quarter-pixel threshold
+
+Pinned FreeType 2.14.3 `af_latin_hint_edges` (`aflatin.c:4549-4568`)
+corrects a relative edge that crosses the preceding edge only when the linked
+stem remains more than 16 units (one quarter pixel) away.  At 16 units or
+less, C deliberately preserves the linked stem and permits the ordering
+violation instead of collapsing the stem.  Rust already implemented that
+comparison and assignment exactly, but the full public corpus exercised only
+one threshold outcome and the coverage-bit assertions on the first proposed
+rows were inactive because they did not opt into the public `Face::load_glyph`
+agreement route.
+
+The retained `FT_Load_Glyph.matrix_load@latin-phase2-bound-quarter-pixel-force-autohint`
+row loads glyph 2 from `latin-many-widths.ttf` at 12 ppem with
+`FT_LOAD_FORCE_AUTOHINT`.  One public glyph load reaches both the correction
+and quarter-pixel-preservation outcomes and asserts Phase-2 relative, BOUND,
+and BOUND-near coverage bits.  This keeps the proof deterministic across the
+parallel full harness and compares the complete slot through the pinned C
+oracle, Rust FFI, C ABI, and WASM ABI.  Focused Coverage MCP run
+`242708c8-6804-4692-9e66-fe21e74456ce` passes 1 / 1.  Full run
+`080dbc4d-bc22-4632-b008-1f3a304f7488` passes 7,055 / 7,055 with 135 pending
+rows unchanged; concrete cases rise from 7,189 to 7,190 and route-audit real
+parity rises from 3,634 to 3,635.  Snapshot
+`5520bcd6-ba62-4ba5-8ba6-8b5067c6bc49` moves `src/autohint/latin.rs` from
+2,629 / 2,838 to 2,641 / 2,850 lines, from 1,088 / 1,284 to
+1,089 / 1,284 branches, and from 3,829 / 4,212 to 3,832 / 4,214 regions;
+functions remain 67 / 68.  The threshold condition is now 2 / 2 covered.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
