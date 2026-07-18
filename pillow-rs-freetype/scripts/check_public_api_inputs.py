@@ -815,10 +815,6 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
 
 
 def pending_route_reason(row: ConcreteInput) -> str | None:
-    if row.operation == "ftmodapi.get_truetype_engine_type" and row.params.get(
-        "library"
-    ) == "new_from_FT_New_Library_without_default_modules":
-        return "runner lacks an FT_New_Library lifecycle without default modules"
     if not operation_is_real_parity(row.operation):
         return None
     for name, asset in sorted(row.assets.items()):

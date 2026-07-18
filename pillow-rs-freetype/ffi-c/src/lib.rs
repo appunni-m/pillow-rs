@@ -1031,6 +1031,24 @@ pub extern "C" fn FT_Get_TrueType_Engine_Type(library: FT_Library) -> FT_TrueTyp
     rust_ffi::FT_Get_TrueType_Engine_Type(library_ref(library))
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_new_library_without_default_modules() -> FT_Library {
+    Box::into_raw(Box::new(FT_LibraryRec {
+        internal: Box::into_raw(Box::new(rust_ffi::FT_New_Library_Without_Default_Modules()))
+            .cast::<c_void>(),
+    }))
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_library_has_truetype_module(library: FT_Library) -> bool {
+    rust_ffi::FT_Library_Has_TrueType_Module(library_ref(library))
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_library_has_truetype_engine_service(library: FT_Library) -> bool {
+    rust_ffi::FT_Library_Has_TrueType_Engine_Service(library_ref(library))
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_MulDiv(a: FT_Long, b: FT_Long, c: FT_Long) -> FT_Long {
     rust_ffi::FT_MulDiv(a, b, c)

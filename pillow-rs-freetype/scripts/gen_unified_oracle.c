@@ -40,6 +40,22 @@ static int streq(const char* a, const char* b) {
     return strcmp(a, b) == 0;
 }
 
+static void* oracle_alloc(FT_Memory memory, long size) {
+    (void)memory;
+    return malloc((size_t)size);
+}
+
+static void oracle_free(FT_Memory memory, void* block) {
+    (void)memory;
+    free(block);
+}
+
+static void* oracle_realloc(FT_Memory memory, long cur_size, long new_size, void* block) {
+    (void)memory;
+    (void)cur_size;
+    return realloc(block, (size_t)new_size);
+}
+
 static int is_moveto_starts_each_contour_case(const char* case_id) {
     return streq(case_id, "ftimage.FT_Outline_MoveTo_Func.decompose_starts_each_contour@g36-f1") ||
            streq(case_id, "ftimage.FT_Outline_MoveTo_Func.decompose_starts_each_contour@g37-f2");
@@ -8449,11 +8465,14 @@ static int emit_set_lcd_geometry(int argc, char** argv) {
 
 static int emit_truetype_engine_type(int argc, char** argv) {
     (void)argc;
-    int library_present = atoi(argv[2]);
+    int library_kind = atoi(argv[2]);
     FT_Library library = NULL;
     FT_Error err = FT_Err_Ok;
-    if (library_present) {
+    struct FT_MemoryRec_ memory = {NULL, oracle_alloc, oracle_free, oracle_realloc};
+    if (library_kind == 1) {
         err = FT_Init_FreeType(&library);
+    } else if (library_kind == 2) {
+        err = FT_New_Library(&memory, &library);
     }
 
     printf("{");
@@ -8463,10 +8482,19 @@ static int emit_truetype_engine_type(int argc, char** argv) {
         return 0;
     }
     FT_TrueTypeEngineType engine_type = FT_Get_TrueType_Engine_Type(library);
+    FT_Module truetype_module = library ? FT_Get_Module(library, "truetype") : NULL;
+    int module_present = truetype_module != NULL;
+    int service_present = engine_type != FT_TRUETYPE_ENGINE_TYPE_NONE;
     print_status(FT_Err_Ok);
-    printf(",\"output\":{\"engine_type\":%d}}\n", engine_type);
-    if (library) {
+    printf(
+        ",\"output\":{\"engine_type\":%d,\"module_present\":%s,\"service_present\":%s}}\n",
+        engine_type,
+        module_present ? "true" : "false",
+        service_present ? "true" : "false");
+    if (library_kind == 1 && library) {
         FT_Done_FreeType(library);
+    } else if (library_kind == 2 && library) {
+        FT_Done_Library(library);
     }
     return 0;
 }

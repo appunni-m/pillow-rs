@@ -1119,12 +1119,25 @@ pub extern "C" fn fontdone_wasm_library_set_lcd_geometry(
 pub extern "C" fn fontdone_wasm_get_truetype_engine_type(
     library_present: i32,
 ) -> FT_TrueTypeEngineType {
-    let library = if library_present != 0 {
-        Some(rust_ffi::FT_Init_FreeType())
-    } else {
-        None
+    let library = match library_present {
+        0 => None,
+        _ => Some(rust_ffi::FT_Init_FreeType()),
     };
     rust_ffi::FT_Get_TrueType_Engine_Type(library.as_ref())
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_truetype_engine_observation(library_present: i32) -> (i32, bool, bool) {
+    let library = match library_present {
+        0 => None,
+        2 => Some(rust_ffi::FT_New_Library_Without_Default_Modules()),
+        _ => Some(rust_ffi::FT_Init_FreeType()),
+    };
+    (
+        rust_ffi::FT_Get_TrueType_Engine_Type(library.as_ref()),
+        rust_ffi::FT_Library_Has_TrueType_Module(library.as_ref()),
+        rust_ffi::FT_Library_Has_TrueType_Engine_Service(library.as_ref()),
+    )
 }
 
 #[unsafe(no_mangle)]
