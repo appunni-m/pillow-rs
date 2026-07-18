@@ -3,7 +3,9 @@
   "subject": "fterrdef.FT_Err_Invalid_Composite",
   "manifest_cases": [
     "value_matches_header",
-    "truetype_composite_component_rejected"
+    "truetype_composite_component_rejected",
+    "truetype_composite_parent_point_rejected",
+    "truetype_composite_component_point_rejected"
   ],
   "cases": [
     {
@@ -119,6 +121,134 @@
           "freetype/src/truetype/ttgload.c:573-587"
         ],
         "fixture_requirements": "Maintained fonts/glyf/glyf-malformed-matrix.ttf gid 18 contains an out-of-range composite component index."
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Composite.truetype_composite_parent_point_rejected",
+      "subject": "fterrdef.FT_Err_Invalid_Composite",
+      "case": "truetype_composite_parent_point_rejected",
+      "operation": "load_glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/glyf/hinter-invalid-composite-parent-point.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "size": 20,
+          "glyph_index": 3,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "assert_api_load_glyph_agrees": true,
+          "malformation": "composite glyph attachment parent point index is outside the already-loaded base outline",
+          "expected_error_symbol": "FT_Err_Invalid_Composite",
+          "expected_error_value": 21,
+          "c_behavior": "FreeType 2.14.3 TT_Process_Composite_Component rejects out-of-range parent attachment point indices as Invalid_Composite"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "surface:public-c-api",
+        "coverage:real-error-trigger",
+        "coverage:scaler-composite-attachment-error"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Composite",
+        "output_shape": {
+          "error": "FT_Error",
+          "expected_error_symbol": "FT_Err_Invalid_Composite",
+          "expected_error_value": 21,
+          "slot_state": "cleared_then_driver_error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "compare_error_output": true,
+          "paths": [
+            "status",
+            "error",
+            "slot_snapshot"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "sources_checked": [
+          "freetype/include/freetype/fterrdef.h",
+          "freetype/include/freetype/fterrors.h",
+          "freetype/src/truetype/ttgload.c:1059-1071"
+        ],
+        "fixture_requirements": "Maintained fonts/glyf/hinter-invalid-composite-parent-point.ttf gid 3 mutates attachPoint's second component firstPt to an out-of-range parent point while keeping component glyph indices valid."
+      }
+    },
+    {
+      "case_id": "fterrdef.FT_Err_Invalid_Composite.truetype_composite_component_point_rejected",
+      "subject": "fterrdef.FT_Err_Invalid_Composite",
+      "case": "truetype_composite_component_point_rejected",
+      "operation": "load_glyph",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/glyf/hinter-invalid-composite-component-point.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "size": 20,
+          "glyph_index": 3,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "assert_api_load_glyph_agrees": true,
+          "malformation": "composite glyph attachment component point index is outside the newly-loaded component outline",
+          "expected_error_symbol": "FT_Err_Invalid_Composite",
+          "expected_error_value": 21,
+          "c_behavior": "FreeType 2.14.3 TT_Process_Composite_Component rejects out-of-range component attachment point indices as Invalid_Composite"
+        }
+      },
+      "classifiers": [
+        "kind:error",
+        "header:fterrdef",
+        "surface:public-c-api",
+        "coverage:real-error-trigger",
+        "coverage:scaler-composite-attachment-error"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Composite",
+        "output_shape": {
+          "error": "FT_Error",
+          "expected_error_symbol": "FT_Err_Invalid_Composite",
+          "expected_error_value": 21,
+          "slot_state": "cleared_then_driver_error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "compare_error_output": true,
+          "paths": [
+            "status",
+            "error",
+            "slot_snapshot"
+          ]
+        },
+        "oracle": "generated_at_runtime_from_c_freetype",
+        "sources_checked": [
+          "freetype/include/freetype/fterrdef.h",
+          "freetype/include/freetype/fterrors.h",
+          "freetype/src/truetype/ttgload.c:1059-1071"
+        ],
+        "fixture_requirements": "Maintained fonts/glyf/hinter-invalid-composite-component-point.ttf gid 3 mutates attachPoint's second component secondPt to an out-of-range component point while keeping component glyph indices valid."
       }
     }
   ]

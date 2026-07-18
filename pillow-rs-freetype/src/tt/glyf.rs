@@ -287,10 +287,9 @@ fn load_glyph_inner(
                     _ => {
                         // C's TT_Process_Composite_Component in
                         // ttgload.c:1059-1071 rejects invalid attachment
-                        // point indices instead of applying a zero offset.
-                        return Err(FontError::InvalidOutline(
-                            "glyf: composite attachment point out of range".into(),
-                        ));
+                        // point indices as Invalid_Composite instead of
+                        // applying a zero offset.
+                        return Err(FontError::InvalidComposite);
                     }
                 }
             };

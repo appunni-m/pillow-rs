@@ -70,6 +70,21 @@ def write_invalid_contour_endpoints() -> None:
     save_font("hinter-invalid-contour-endpoints.ttf", font)
 
 
+def write_invalid_composite_attachment_points() -> None:
+    for name, field, value in (
+        ("hinter-invalid-composite-parent-point.ttf", "firstPt", 99),
+        ("hinter-invalid-composite-component-point.ttf", "secondPt", 99),
+    ):
+        font = TTFont(BASE_FONT, recalcTimestamp=False, recalcBBoxes=False)
+        # `attachPoint` has a base component with three points and a mark
+        # component with three points.  Mutating only the attachment index keeps
+        # the component glyph references valid so C reaches
+        # `TT_Process_Composite_Component` and returns Invalid_Composite for the
+        # out-of-range point (`src/truetype/ttgload.c:1059-1071`).
+        setattr(font["glyf"]["attachPoint"].components[1], field, value)
+        save_font(name, font)
+
+
 def write_prep_definitions() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     prep = font["prep"].program.getBytecode()
@@ -310,6 +325,7 @@ def main() -> None:
     write_empty_fpgm()
     write_empty_glyph_iup()
     write_invalid_contour_endpoints()
+    write_invalid_composite_attachment_points()
     write_prep_definitions()
     write_prep_idef()
     write_prep_redefine_defs()

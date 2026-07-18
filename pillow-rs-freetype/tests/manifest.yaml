@@ -4978,6 +4978,10 @@ subjects:
         description: Numeric value is exactly 0x15, matching the pinned fterrdef.h entry.
       - id: truetype_composite_component_rejected
         description: The TrueType glyph loader reports Invalid_Composite for malformed composite glyph component records, recursion, or invalid component references in ttgload.c.
+      - id: truetype_composite_parent_point_rejected
+        description: The TrueType glyph loader reports Invalid_Composite when a composite attachment parent point index is outside the already-loaded base outline in ttgload.c.
+      - id: truetype_composite_component_point_rejected
+        description: The TrueType glyph loader reports Invalid_Composite when a composite attachment component point index is outside the newly-loaded component outline in ttgload.c.
     # needs-input: operation=load_glyph; fixture_asset=synthetic glyf composite with invalid component flags, truncated component data, and invalid referenced glyph index controls; expected output shape=FT_Error and slot outline/format state; comparison=exact C oracle error and slot mutation.
 
   - id: fterrdef.FT_Err_Invalid_Driver_Handle
