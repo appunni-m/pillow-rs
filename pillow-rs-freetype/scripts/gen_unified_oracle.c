@@ -8001,6 +8001,26 @@ static int emit_new_memory_face_null_base(int argc, char** argv) {
     return 0;
 }
 
+static int emit_new_face_missing_path(int argc, char** argv) {
+    (void)argc;
+    const char* pathname = argv[2];
+    FT_Long face_index = atol(argv[3]);
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (!err) {
+        FT_Face face = (FT_Face)0x1;
+        err = FT_New_Face(library, pathname, face_index, &face);
+        if (!err && face) {
+            FT_Done_Face(face);
+        }
+        FT_Done_FreeType(library);
+    }
+    printf("{");
+    print_status(err);
+    printf(",\"output\":null}\n");
+    return 0;
+}
+
 static int emit_face_or_slot(int argc, char** argv) {
     const char* command = argv[1];
     const char* source_kind = argv[2];
@@ -10421,6 +10441,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 4 && streq(argv[1], "--new-memory-face-null-base")) {
         return emit_new_memory_face_null_base(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--new-face-missing-path")) {
+        return emit_new_face_missing_path(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--select-charmaps")) {
         return emit_select_charmaps(argc, argv);

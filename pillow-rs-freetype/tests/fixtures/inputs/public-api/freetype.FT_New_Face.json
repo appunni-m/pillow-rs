@@ -210,26 +210,42 @@
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "missing": {
-            "kind": "ref",
-            "role": "missing_path",
-            "path": "input/fonts/missing/no-such.ttf"
+        "variants": [
+          {
+            "id": "missing_path_face_index_0",
+            "expect_error": true,
+            "coverage": [
+              "FT_New_Face reaches pinned C FT_OPEN_PATHNAME missing-file path at ftobjs.c:1604-1620 and ftsystem.c Cannot_Open_Resource"
+            ],
+            "assets": {
+              "missing": {
+                "kind": "ref",
+                "role": "missing_path",
+                "path": "input/fonts/missing/no-such.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0
+            }
           },
-          "malformed": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/malformed/not-a-font.bin",
-            "status": "required_future_asset",
-            "requires": "Small deterministic malformed byte blob rejected by C FreeType"
+          {
+            "id": "missing_path_face_index_9999",
+            "expect_error": true,
+            "coverage": [
+              "FT_New_Face missing pathname fails during stream open before face-index validation, preserving Cannot_Open_Resource for an out-of-range face_index"
+            ],
+            "assets": {
+              "missing": {
+                "kind": "ref",
+                "role": "missing_path",
+                "path": "input/fonts/missing/no-such.ttf"
+              }
+            },
+            "params": {
+              "face_index": 9999
+            }
           }
-        },
-        "params": {
-          "face_indexes": [
-            0,
-            9999
-          ]
-        }
+        ]
       },
       "classifiers": [
         "kind:function",
@@ -243,6 +259,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "outputs[*].status",
             "outputs[*].error",

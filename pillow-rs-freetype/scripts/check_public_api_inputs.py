@@ -804,6 +804,8 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
                 return reason
     if value.get("kind") not in {"ref", "file"}:
         return None
+    if value.get("role") == "missing_path":
+        return None
     reference = value.get("id") or value.get("path")
     if not isinstance(reference, str) or "/" not in reference:
         return None
