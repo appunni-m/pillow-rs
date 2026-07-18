@@ -4430,6 +4430,101 @@ static void print_recorded_outline_spans(void) {
     printf("]");
 }
 
+typedef struct RecordedOutlineEvent_ {
+    const char* kind;
+    FT_Vector points[3];
+    int count;
+} RecordedOutlineEvent;
+
+#define MAX_RECORDED_OUTLINE_EVENTS 256
+static RecordedOutlineEvent recorded_outline_events[MAX_RECORDED_OUTLINE_EVENTS];
+static int recorded_outline_event_count = 0;
+static int recorded_outline_decompose_user_seen = 0;
+static void* recorded_outline_decompose_user_token = (void*)0x87654321;
+
+static void reset_recorded_outline_events(void) {
+    recorded_outline_event_count = 0;
+    recorded_outline_decompose_user_seen = 0;
+}
+
+static void record_outline_event(const char* kind, const FT_Vector* a, const FT_Vector* b, const FT_Vector* c, void* user) {
+    if (user == recorded_outline_decompose_user_token) {
+        recorded_outline_decompose_user_seen = 1;
+    }
+    if (recorded_outline_event_count >= MAX_RECORDED_OUTLINE_EVENTS) {
+        return;
+    }
+    RecordedOutlineEvent* out = &recorded_outline_events[recorded_outline_event_count++];
+    out->kind = kind;
+    out->count = 0;
+    if (a) {
+        out->points[out->count++] = *a;
+    }
+    if (b) {
+        out->points[out->count++] = *b;
+    }
+    if (c) {
+        out->points[out->count++] = *c;
+    }
+}
+
+static int record_outline_move_to(const FT_Vector* to, void* user) {
+    record_outline_event("move_to", to, NULL, NULL, user);
+    return 0;
+}
+
+static int record_outline_line_to(const FT_Vector* to, void* user) {
+    record_outline_event("line_to", to, NULL, NULL, user);
+    return 0;
+}
+
+static int record_outline_conic_to(const FT_Vector* control, const FT_Vector* to, void* user) {
+    record_outline_event("conic_to", control, to, NULL, user);
+    return 0;
+}
+
+static int record_outline_cubic_to(const FT_Vector* control1, const FT_Vector* control2, const FT_Vector* to, void* user) {
+    record_outline_event("cubic_to", control1, control2, to, user);
+    return 0;
+}
+
+static void print_recorded_outline_events(void) {
+    printf("\"events\":[");
+    for (int i = 0; i < recorded_outline_event_count; i++) {
+        if (i) {
+            printf(",");
+        }
+        printf("{\"kind\":\"%s\",\"points\":[", recorded_outline_events[i].kind);
+        for (int j = 0; j < recorded_outline_events[i].count; j++) {
+            if (j) {
+                printf(",");
+            }
+            printf("{\"x\":%ld,\"y\":%ld}",
+                   recorded_outline_events[i].points[j].x,
+                   recorded_outline_events[i].points[j].y);
+        }
+        printf("]}");
+    }
+    printf("]");
+}
+
+static void print_recorded_outline_event_points(void) {
+    printf("\"transformed_points\":[");
+    int first = 1;
+    for (int i = 0; i < recorded_outline_event_count; i++) {
+        for (int j = 0; j < recorded_outline_events[i].count; j++) {
+            if (!first) {
+                printf(",");
+            }
+            first = 0;
+            printf("{\"x\":%ld,\"y\":%ld}",
+                   recorded_outline_events[i].points[j].x,
+                   recorded_outline_events[i].points[j].y);
+        }
+    }
+    printf("]");
+}
+
 static void setup_outline_get_bitmap_square(FT_Outline* outline, FT_Vector* points, char* tags, short* contours, int oversized) {
     long lo = oversized ? 0x1000001L * 64L : 8L * 64L;
     long hi = oversized ? 0x1000011L * 64L : 24L * 64L;
@@ -5135,6 +5230,68 @@ static int emit_outline_render(int argc, char** argv) {
         printf("}\n");
     }
     FT_Done_FreeType(library);
+    return 0;
+}
+
+static int emit_outline_decompose(int argc, char** argv) {
+    (void)argc;
+    const char* case_id = argv[2];
+    if (!streq(case_id, "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c")) {
+        printf("{");
+        print_status(FT_Err_Unimplemented_Feature);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    FT_Vector points[4];
+    points[0].x = 8 * 64;
+    points[0].y = 8 * 64;
+    points[1].x = 24 * 64;
+    points[1].y = 8 * 64;
+    points[2].x = 24 * 64;
+    points[2].y = 24 * 64;
+    points[3].x = 8 * 64;
+    points[3].y = 24 * 64;
+    unsigned char tags[4] = {
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+    };
+    unsigned short contours[1] = {3};
+    FT_Outline outline;
+    outline.n_contours = 1;
+    outline.n_points = 4;
+    outline.points = points;
+    outline.tags = tags;
+    outline.contours = contours;
+    outline.flags = 0;
+
+    const int shifts[3] = {0, 1, 2};
+    const FT_Pos deltas[3] = {0, 16, -32};
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"runs\":[");
+    for (int i = 0; i < 3; i++) {
+        FT_Outline_Funcs funcs;
+        funcs.move_to = record_outline_move_to;
+        funcs.line_to = record_outline_line_to;
+        funcs.conic_to = record_outline_conic_to;
+        funcs.cubic_to = record_outline_cubic_to;
+        funcs.shift = shifts[i];
+        funcs.delta = deltas[i];
+        reset_recorded_outline_events();
+        FT_Error err = FT_Outline_Decompose(&outline, &funcs, recorded_outline_decompose_user_token);
+        if (i) {
+            printf(",");
+        }
+        printf("{\"shift\":%d,\"delta\":%ld,\"status\":%d,", shifts[i], deltas[i], err);
+        print_recorded_outline_events();
+        printf(",");
+        print_recorded_outline_event_points();
+        printf(",\"user_seen\":%s}", recorded_outline_decompose_user_seen ? "true" : "false");
+    }
+    printf("]}}\n");
     return 0;
 }
 
@@ -10403,6 +10560,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 4 && streq(argv[1], "--outline-render")) {
         return emit_outline_render(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--outline-decompose")) {
+        return emit_outline_decompose(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--outline-get-bitmap")) {
         return emit_outline_get_bitmap(argc, argv);

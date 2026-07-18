@@ -1764,6 +1764,209 @@ pub fn FT_Outline_Render_Direct_Spans(
         })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FTOutlineDecomposeEvent {
+    pub kind: &'static str,
+    pub points: Vec<FT_Vector>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FTOutlineDecomposeRun {
+    pub shift: FT_Int,
+    pub delta: FT_Pos,
+    pub events: Vec<FTOutlineDecomposeEvent>,
+    pub transformed_points: Vec<FT_Vector>,
+    pub user_seen: bool,
+}
+
+pub fn FT_Outline_Decompose_Trace(
+    outline: Option<&FT_OutlineSnapshot>,
+    transforms: &[(FT_Int, FT_Pos)],
+) -> Result<Vec<FTOutlineDecomposeRun>, FT_Error> {
+    let Some(outline_snapshot) = outline else {
+        return Err(FT_Err_Invalid_Outline as FT_Error);
+    };
+    let Some(outline) = outline_snapshot_to_core(outline_snapshot) else {
+        return Err(FT_Err_Invalid_Outline as FT_Error);
+    };
+    transforms
+        .iter()
+        .map(|&(shift, delta)| outline_decompose_trace_run(&outline, shift, delta))
+        .collect()
+}
+
+fn outline_decompose_trace_run(
+    outline: &crate::outline::Outline,
+    shift: FT_Int,
+    delta: FT_Pos,
+) -> Result<FTOutlineDecomposeRun, FT_Error> {
+    let mut events = Vec::new();
+    let mut last: i64 = -1;
+    for &contour_end in outline
+        .contours
+        .iter()
+        .take(usize_from_i32(outline.n_contours))
+    {
+        let first = usize_from_i32(i32::try_from(last + 1).unwrap_or(0));
+        last = i64::from(contour_end);
+        if last < first as i64 {
+            return Err(FT_Err_Invalid_Outline as FT_Error);
+        }
+        let limit = usize_from_i32(i32::from(contour_end));
+        let mut v_start = outline.points[first];
+        let v_last = outline.points[limit];
+        let mut limit_eff = limit;
+        let first_tag = outline_trace_curve_tag(outline, first);
+        if first_tag == 2 {
+            return Err(FT_Err_Invalid_Outline as FT_Error);
+        }
+        if first_tag == 0 {
+            if outline_trace_curve_tag(outline, limit) == 1 {
+                v_start = v_last;
+                limit_eff = limit - 1;
+            } else {
+                v_start.x = (v_start.x + v_last.x) / 2;
+                v_start.y = (v_start.y + v_last.y) / 2;
+            }
+        }
+        outline_trace_push(&mut events, "move_to", &[v_start], shift, delta);
+        let start = if first_tag == 0 {
+            if first == 0 {
+                -1
+            } else {
+                i32::try_from(first).unwrap_or(i32::MAX) - 1
+            }
+        } else {
+            i32::try_from(first).unwrap_or(i32::MAX)
+        };
+        outline_trace_walk_contour(
+            &mut events,
+            outline,
+            start,
+            limit_eff,
+            v_start,
+            shift,
+            delta,
+        )?;
+    }
+    let transformed_points = events
+        .iter()
+        .flat_map(|event| event.points.iter().copied())
+        .collect();
+    Ok(FTOutlineDecomposeRun {
+        shift,
+        delta,
+        events,
+        transformed_points,
+        user_seen: true,
+    })
+}
+
+fn outline_trace_curve_tag(outline: &crate::outline::Outline, index: usize) -> u8 {
+    outline
+        .tags
+        .get(index)
+        .map_or_else(|| u8::from(outline.points[index].on_curve), |tag| tag & 3)
+}
+
+fn outline_trace_transform(
+    point: crate::outline::OutlinePoint,
+    shift: FT_Int,
+    delta: FT_Pos,
+) -> FT_Vector {
+    FT_Vector {
+        x: (i64::from(point.x) << shift) - delta,
+        y: (i64::from(point.y) << shift) - delta,
+    }
+}
+
+fn outline_trace_push(
+    events: &mut Vec<FTOutlineDecomposeEvent>,
+    kind: &'static str,
+    points: &[crate::outline::OutlinePoint],
+    shift: FT_Int,
+    delta: FT_Pos,
+) {
+    events.push(FTOutlineDecomposeEvent {
+        kind,
+        points: points
+            .iter()
+            .map(|&point| outline_trace_transform(point, shift, delta))
+            .collect(),
+    });
+}
+
+fn outline_trace_walk_contour(
+    events: &mut Vec<FTOutlineDecomposeEvent>,
+    outline: &crate::outline::Outline,
+    mut cursor: i32,
+    limit: usize,
+    v_start: crate::outline::OutlinePoint,
+    shift: FT_Int,
+    delta: FT_Pos,
+) -> Result<(), FT_Error> {
+    let limit_i32 = i32::try_from(limit).map_err(|_| FT_Err_Invalid_Outline as FT_Error)?;
+    while cursor < limit_i32 {
+        cursor += 1;
+        let idx = usize_from_i32(cursor);
+        match outline_trace_curve_tag(outline, idx) {
+            1 => {
+                outline_trace_push(events, "line_to", &[outline.points[idx]], shift, delta);
+            }
+            0 => {
+                let mut control = outline.points[idx];
+                loop {
+                    if cursor < limit_i32 {
+                        cursor += 1;
+                        let idx2 = usize_from_i32(cursor);
+                        let point = outline.points[idx2];
+                        let tag = outline_trace_curve_tag(outline, idx2);
+                        if tag == 1 {
+                            outline_trace_push(events, "conic_to", &[control, point], shift, delta);
+                            break;
+                        }
+                        if tag != 0 {
+                            return Err(FT_Err_Invalid_Outline as FT_Error);
+                        }
+                        let mid = crate::outline::OutlinePoint {
+                            x: (control.x + point.x) / 2,
+                            y: (control.y + point.y) / 2,
+                            on_curve: true,
+                        };
+                        outline_trace_push(events, "conic_to", &[control, mid], shift, delta);
+                        control = point;
+                        continue;
+                    }
+                    outline_trace_push(events, "conic_to", &[control, v_start], shift, delta);
+                    return Ok(());
+                }
+            }
+            2 | 3 => {
+                if cursor + 1 > limit_i32
+                    || outline_trace_curve_tag(outline, usize_from_i32(cursor + 1)) != 2
+                {
+                    return Err(FT_Err_Invalid_Outline as FT_Error);
+                }
+                let control1 = outline.points[idx];
+                let control2 = outline.points[usize_from_i32(cursor + 1)];
+                cursor += 2;
+                let to = if cursor <= limit_i32 {
+                    outline.points[usize_from_i32(cursor)]
+                } else {
+                    v_start
+                };
+                outline_trace_push(events, "cubic_to", &[control1, control2, to], shift, delta);
+                if cursor > limit_i32 {
+                    return Ok(());
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+    outline_trace_push(events, "line_to", &[v_start], shift, delta);
+    Ok(())
+}
+
 pub fn FT_Outline_Get_Orientation(outline: Option<&FT_OutlineSnapshot>) -> FT_Orientation {
     let Some(outline) = outline else {
         return FT_ORIENTATION_TRUETYPE as FT_Orientation;

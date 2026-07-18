@@ -181,11 +181,12 @@ Newly visible after adding `outlines/synthetic/simple-rectangle.json`:
 
 - `ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c`
 
-Current status: explicitly pending at runtime selection because
-`ftoutln.outline_decompose` has no maintained C oracle route or Rust/C/WASM
-runtime callback trace route yet. The row must not be treated as runnable via
-the generic fallback oracle because that returns `FT_Err_Unimplemented_Feature`
-instead of a real callback event trace.
+Current status: verified for the newly visible simple-rectangle callback trace
+row. Other `ftoutln.outline_decompose` rows remain explicitly pending unless
+they have a maintained C oracle route and matching Rust/C/WASM callback trace.
+The row must not be treated as runnable via the generic fallback oracle because
+that returns `FT_Err_Unimplemented_Feature` instead of a real callback event
+trace.
 
 Fix plan:
 
@@ -198,6 +199,34 @@ Fix plan:
    callback event trace without implementing outline walking in wrappers.
 4. Move the runtime classifier from pending to runnable only after all three
    backends match pinned C output.
+
+Verified progress:
+
+- Native C oracle now records `FT_Outline_Decompose` callback events for
+  `ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c`, including event
+  kind, transformed callback points, `shift`, `delta`, and user-pointer
+  observation.
+- `fontdone` core now exposes a pure-Rust callback-trace route for the same
+  outline walking behavior and FreeType's `(coord << shift) - delta` callback
+  transform.
+- C ABI and WASM ABI expose only feature-gated test-support routes that delegate
+  the trace to core; wrappers do not own outline walking logic.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
+
+Full non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test
+```
+
+Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
 
 Baseline: `37d7dde4`
 

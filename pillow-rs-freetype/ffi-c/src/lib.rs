@@ -1591,6 +1591,15 @@ pub fn abi_support_outline_render_direct_spans(
     (error, spans, user_seen)
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_outline_decompose_trace(
+    outline: *const FT_Outline,
+    transforms: &[(rust_ffi::FT_Int, rust_ffi::FT_Pos)],
+) -> Result<Vec<rust_ffi::FTOutlineDecomposeRun>, FT_Error> {
+    let snapshot = outline_snapshot_from_c(outline);
+    rust_ffi::FT_Outline_Decompose_Trace(snapshot.as_ref(), transforms)
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Outline_Get_Orientation(outline: *const FT_Outline) -> FT_Orientation {
     let Some(snapshot) = outline_snapshot_from_c(outline) else {
