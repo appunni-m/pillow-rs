@@ -63,6 +63,8 @@ CUBIC_GLYPH_ORDER = [
     "repeated_moveto_empty_contours",
     "explicit_close_point",
     "same_x_open_contour",
+    # Append-only: public fixture rows use stable numeric glyph IDs.
+    "cubic_close_to_start",
 ]
 NAMES = {
     "familyName": "Hybrid OTTO Coverage",
@@ -93,6 +95,12 @@ def t2_charstring(rectangle: bool = False, cubic: str | None = None):
         # reaches FreeType black rasterizer's Bezier_Up early span rejection.
         pen.moveTo((0, 0))
         pen.curveTo((100, 4), (200, 8), (300, 12))
+    elif cubic == "close_to_start":
+        # CFF's builder removes the explicit on-curve endpoint because it
+        # duplicates the contour start.  The resulting [on, cubic, cubic]
+        # outline makes the SDF walker close the cubic directly to v_start.
+        pen.moveTo((100, 100))
+        pen.curveTo((100, 500), (500, 500), (100, 100))
     elif rectangle:
         pen.moveTo((80, 0))
         pen.lineTo((520, 0))
@@ -194,6 +202,7 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
         "repeated_moveto_empty_contours": (420, 0),
         "explicit_close_point": (420, 0),
         "same_x_open_contour": (420, 0),
+        "cubic_close_to_start": (620, 0),
     }
     builder = FontBuilder(UNITS_PER_EM, isTTF=False)
     builder.setupGlyphOrder(CUBIC_GLYPH_ORDER)
@@ -238,6 +247,7 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
             0x65: "repeated_moveto_empty_contours",
             0x66: "explicit_close_point",
             0x67: "same_x_open_contour",
+            0x68: "cubic_close_to_start",
         }
     )
     builder.setupHorizontalMetrics(metrics)
@@ -262,6 +272,7 @@ def build_cubic_cff(path: Path, with_vertical_metrics: bool = False) -> None:
             "A": t2_charstring(cubic="arched"),
             "cubic_c2_x_flatness": t2_charstring(cubic="c2_x"),
             "cubic_c2_y_flatness": t2_charstring(cubic="c2_y"),
+            "cubic_close_to_start": t2_charstring(cubic="close_to_start"),
             "vertical_lines": t2_program_charstring(
                 [
                     600,

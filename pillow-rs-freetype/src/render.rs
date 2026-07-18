@@ -1326,7 +1326,10 @@ impl MonoOutlineProfileBuilder {
                     }
                 }
                 CURVE_TAG_CUBIC => {
-                    if cursor + 2 > limit
+                    // Pinned `FT_Outline_Decompose` accepts two final cubic
+                    // controls without an explicit endpoint and closes the
+                    // curve to `v_start` (`base/ftoutln.c:224-273`).
+                    if cursor + 1 > limit
                         || curve_tag_at(pts, tags, usize_from_i32(cursor + 1)) != CURVE_TAG_CUBIC
                     {
                         return Err(FontError::InvalidOutline(
@@ -2287,7 +2290,10 @@ impl SdfFlattener {
                     }
                 }
                 CURVE_TAG_CUBIC => {
-                    if cursor + 2 > limit
+                    // Pinned `FT_Outline_Decompose` accepts two final cubic
+                    // controls without an explicit endpoint and closes the
+                    // curve to `v_start` (`base/ftoutln.c:224-273`).
+                    if cursor + 1 > limit
                         || curve_tag_at(pts, tags, usize_from_i32(cursor + 1)) != CURVE_TAG_CUBIC
                     {
                         return Err(FontError::InvalidOutline(
