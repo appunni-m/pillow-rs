@@ -8266,7 +8266,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || (case.operation == "freetype.select_size"
                 && (lifecycle_handle_param_is_null(&case.inputs.params, "face")
                     || case.case_id
-                        == "freetype.FT_Select_Size.error_strike_index_past_end_direct"))
+                        == "freetype.FT_Select_Size.error_strike_index_past_end_direct"
+                    || case.case_id == "freetype.FT_Select_Size.error_strike_index_out_of_range"))
             || (case.operation == "freetype.request_size"
                 && (case.case_id == "freetype.FT_Request_Size.error_null_face_or_request"
                     || case.case_id == "freetype.FT_Request_Size.error_ppem_overflow"
