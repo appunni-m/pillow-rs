@@ -3613,10 +3613,12 @@
               "char_code": 81,
               "load_flags": [
                 "FT_LOAD_FORCE_AUTOHINT"
-              ]
+              ],
+              "assert_autohint_coverage_bits_include": [44]
             },
             "coverage": [
-              "autohint/latin:representative-u0051"
+              "autohint/latin:representative-u0051",
+              "autohint/latin:ignore-capital-bottom-blue"
             ]
           },
           {

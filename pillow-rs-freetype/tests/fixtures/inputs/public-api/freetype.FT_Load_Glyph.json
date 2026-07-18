@@ -2903,7 +2903,7 @@
                 "x": 0,
                 "y": 20
               },
-              "glyph_index": 79,
+              "glyph_index": 80,
               "load_flags": [
                 "FT_LOAD_FORCE_AUTOHINT"
               ]

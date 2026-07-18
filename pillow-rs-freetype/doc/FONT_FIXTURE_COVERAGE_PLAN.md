@@ -3380,6 +3380,40 @@ overlap loop adds twelve measurable branch outcomes, seven covered by this
 exact route; consequently the raw branch rate decreases slightly even though
 the implementation restores missing C logic and adds covered behavior.
 
+## Latin capital-bottom blue suppression route
+
+Pinned FreeType 2.14.3 assigns `AF_IGNORE_CAPITAL_BOTTOM` to U+0051 (`Q`)
+in `afadjust.c`.  During
+`af_latin_hints_apply` (`aflatin.c:4929,5020-5030`), C finds the active
+capital top and bottom blues and prevents edges below the derived limit from
+aligning to a blue zone.  Rust already implemented the same calculation, but
+the existing `full-dejavu-u0051` row was only a representative output check:
+it did not make the safe public route or the specific adjustment branch
+non-vacuous.
+
+That existing public row now asserts route bit 44 after loading U+0051 at
+10 ppem with `FT_LOAD_FORCE_AUTOHINT`.  The bit is recorded only inside the
+capital-bottom branch after both active base-glyph blues have been found, so
+the row proves the same C-mandated suppression runs through the public Rust
+load path while retaining exact pinned-C, Rust FFI, C ABI, and WASM ABI slot
+parity.  The adjacent vertical-cusp row now selects generated gid 80, the
+actual U+0245 cusp glyph; it previously selected gid 79, the secondary
+top-tilde-centering glyph, despite claiming cusp-segment coverage.
+
+Focused Coverage MCP run `4228a939-c865-499c-b543-2dedf9cbe8e4` passes the
+selected U+0051 row.  Full managed run
+`8e1659c1-086f-4eee-8012-a58fe3bdc2a8` passes all 7,066 runnable cases with
+135 pending rows unchanged and ingests snapshot
+`fb4c6aec-fcd3-4122-8a2d-24dca839cb23`.  Concrete cases remain 7,201 with
+zero implicit rows, and route-audit real parity remains 3,646 because both
+changes repair existing public rows.  Project coverage moves from
+20,370 / 21,301 to 20,373 / 21,304 lines and from 29,473 / 31,119 to
+29,474 / 31,120 regions; branches remain 4,928 / 5,507 and functions remain
+1,278 / 1,414.  `src/autohint/latin.rs` moves from 2,701 / 2,906 to
+2,704 / 2,909 lines and from 3,887 / 4,261 to 3,888 / 4,262 regions, while
+branches remain 1,105 / 1,304 and functions remain 68 / 69.  Every added
+executable line and region is covered, so both project and file rates improve.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
