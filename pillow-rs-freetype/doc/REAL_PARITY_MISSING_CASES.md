@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Load_Char` reserved-load-flag error route
+Current verified result after `FT_Set_Char_Size` null-face exact-error route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3740`
+  - `real-parity`: `3741`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `453`
+  - `generic-error-fallback`: `452`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1177,6 +1177,33 @@ repo-visible buckets for handoff and subagent selection.
 | `ftmm.FT_Set_Named_Instance` | `ftmm.set_named_instance` | `output_changes_to_named_instance` | Named-instance glyph-output parity requires `gvar`/`HVAR` support. |
 | `ftmm.FT_Var_Named_Style` | `ftmm.set_named_instance` | `selected_instance_matches_descriptor` | Named-style coordinate parity requires `FT_MM_Var` support. |
 | `tttables.TT_VertHeader` | `sfnt.get_sfnt_table.record` | `sfnt_table_present_runtime.mvar_variation` | `MVAR` variation table behavior must be implemented before this SFNT table row can run. |
+
+### Issue Set O: `FT_Set_Char_Size` null-face exact-error route
+
+Previous blocker:
+
+- `freetype.FT_Set_Char_Size.error_null_face` was classified as
+  `generic-error-fallback` even though the fixture expected exact
+  `Invalid_Face_Handle` behavior. The runtime harness accepted the expected
+  error without exact C status/output comparison.
+
+Verified progress:
+
+- The pinned C oracle now has a maintained `--set-char-size null ...` path that
+  calls `FT_Set_Char_Size(NULL, 768, 768, 72, 72)` and records the native
+  `FT_Err_Invalid_Face_Handle` result.
+- The unified harness now requires exact error status/output comparison for
+  `set_char_size` rows with a null `face`.
+- The route audit now classifies
+  `freetype.FT_Set_Char_Size.error_null_face` as `real-parity`, validated
+  through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Set_Char_Size.error_null_face
+make -C pillow-rs-freetype test-op OP=set_char_size
+```
 
 ## Coverage Bulk Context
 
