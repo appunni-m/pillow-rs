@@ -1436,6 +1436,15 @@
             "coverage": [ "tt/cff:index-offsize-error" ]
           },
           {
+            "id": "cff-name-index-offset-overflow",
+            "assets": {
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-name-index-offset-overflow.otf" },
+              "font": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-name-index-offset-overflow.otf" }
+            },
+            "params": { "variants": [ { "face_index": 0 } ] },
+            "coverage": [ "tt/cff:index-offset-overflow-error" ]
+          },
+          {
             "id": "cff-name-index-offsets-out-of-order",
             "assets": {
               "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-name-index-offsets-out-of-order.otf" },
@@ -1452,6 +1461,24 @@
             },
             "params": { "variants": [ { "face_index": 0 } ] },
             "coverage": [ "tt/cff:top-dict-escaped-op-overflow-error" ]
+          },
+          {
+            "id": "cff-escaped-top-dict-op-missing-charstrings",
+            "assets": {
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-escaped-top-dict-op-missing-charstrings.otf" },
+              "font": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-escaped-top-dict-op-missing-charstrings.otf" }
+            },
+            "params": { "variants": [ { "face_index": 0 } ] },
+            "coverage": [ "tt/cff:top-dict-escaped-op-present-missing-charstrings-error" ]
+          },
+          {
+            "id": "cff-charstrings-operand-missing",
+            "assets": {
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-charstrings-operand-missing.otf" },
+              "font": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-charstrings-operand-missing.otf" }
+            },
+            "params": { "variants": [ { "face_index": 0 } ] },
+            "coverage": [ "tt/cff:top-dict-charstrings-operand-missing-error" ]
           }
         ]
       },
@@ -1471,6 +1498,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "outputs[*].status",
             "outputs[*].error",

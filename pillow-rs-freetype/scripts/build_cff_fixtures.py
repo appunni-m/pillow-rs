@@ -813,17 +813,30 @@ def cff_index(objects: list[bytes]) -> bytes:
 
 def malformed_cff_payload(kind: str) -> bytes:
     header = b"\x01\x00\x04\x04"
-    match kind:
-        case "short_header":
-            return b"\x01\x00\x04"
-        case "invalid_name_index_offsize":
-            return header + b"\x00\x01\x00"
-        case "name_index_offsets_out_of_order":
-            return header + b"\x00\x01\x01\x02\x01"
-        case "escaped_top_dict_op_overflow":
-            return header + cff_index([]) + cff_index([b"\x0C"]) + cff_index([]) + cff_index([])
-        case _:
-            raise ValueError(f"unknown malformed CFF fixture kind {kind}")
+    if kind == "short_header":
+        return b"\x01\x00\x04"
+    if kind == "invalid_name_index_offsize":
+        return header + b"\x00\x01\x00"
+    if kind == "name_index_offset_overflow":
+        # INDEX count=1 and offSize=4 require two four-byte offsets.  This
+        # supplies only the first offset so both FreeType and Rust fail
+        # while reading the offset array, not while slicing object bytes.
+        return header + b"\x00\x01\x04\x00\x00\x00\x01"
+    if kind == "name_index_offsets_out_of_order":
+        return header + b"\x00\x01\x01\x02\x01"
+    if kind == "escaped_top_dict_op_overflow":
+        return header + cff_index([]) + cff_index([b"\x0C"]) + cff_index([]) + cff_index([])
+    if kind == "escaped_top_dict_op_missing_charstrings":
+        # A complete escaped Top DICT operator exercises the two-byte
+        # operator path.  It is not CharStrings, so the face is rejected
+        # later for the missing required CharStrings offset.
+        return header + cff_index([]) + cff_index([b"\x0C\x00"]) + cff_index([]) + cff_index([])
+    if kind == "charstrings_operand_missing":
+        # Top DICT operator 17 is CharStrings.  With no preceding operand,
+        # pinned FreeType reports stack underflow while Rust reports the
+        # same public face-open failure class.
+        return header + cff_index([]) + cff_index([b"\x11"]) + cff_index([]) + cff_index([])
+    raise ValueError(f"unknown malformed CFF fixture kind {kind}")
 
 
 def write_malformed_cff_faces() -> None:
@@ -834,8 +847,11 @@ def write_malformed_cff_faces() -> None:
         for kind in [
             "short_header",
             "invalid_name_index_offsize",
+            "name_index_offset_overflow",
             "name_index_offsets_out_of_order",
             "escaped_top_dict_op_overflow",
+            "escaped_top_dict_op_missing_charstrings",
+            "charstrings_operand_missing",
         ]:
             replace_sfnt_table(
                 base,
