@@ -1060,6 +1060,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Select_Size past-end strike-index error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "freetype.select_size"
+        and row.case_id == "freetype.FT_Select_Size.error_strike_index_out_of_range"
+    ):
+        return "FT_Select_Size strike-index range errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "freetype.request_size"
         and row.case_id == "freetype.FT_Request_Size.error_null_face_or_request"
         and any(
