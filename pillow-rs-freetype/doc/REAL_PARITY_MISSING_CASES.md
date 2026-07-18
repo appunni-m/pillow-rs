@@ -360,6 +360,17 @@ Verified progress:
   error row. The generic no-font expected-error fallback explicitly does not
   intercept `ftoutln.outline_decompose`, because these rows are outline-only
   and still require real callback routing.
+- Added real `outline_model` fixture
+  `outlines/decompose/scaled-delta-square.json`.
+- Native C oracle now records
+  `ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks` with
+  `FT_Outline_Funcs.shift = 2` and `delta = 7`. The first divergence during
+  this conversion was in the new oracle metadata: callbacks used the correct
+  function table values, but the JSON initially printed the default
+  `shifts[]/deltas[]` entry. The oracle now prints `funcs.shift` and
+  `funcs.delta`, matching the values passed to pinned FreeType.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for the shift/delta
+  callback transform row.
 
 Focused non-coverage result:
 
@@ -376,6 +387,12 @@ make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Decompose.line_coni
 Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
 
 ```bash
+make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
+
+```bash
 make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Decompose.callback_error_propagates
 ```
 
@@ -385,8 +402,9 @@ Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
 make -C pillow-rs-freetype test-op OP=ftoutln.outline_decompose
 ```
 
-Result after the line/conic/cubic fixture and callback-error route: `3 / 3`
-runtime parity rows passed, `0` failed, `12` pending.
+Result after the line/conic/cubic fixture, shift/delta fixture, and
+callback-error route: `4 / 4` runtime parity rows passed, `0` failed,
+`11` pending.
 
 Full non-coverage result:
 
@@ -394,9 +412,9 @@ Full non-coverage result:
 make -C pillow-rs-freetype test
 ```
 
-Result after the line/conic/cubic fixture and callback-error route:
-`7134 / 7134` runnable rows passed, `0` failed, `100` pending. Route audit:
-`real-parity` `3717`, `pending-route` `92`.
+Result after the line/conic/cubic fixture, shift/delta fixture, and
+callback-error route: `7135 / 7135` runnable rows passed, `0` failed,
+`99` pending. Route audit: `real-parity` `3718`, `pending-route` `91`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
 
