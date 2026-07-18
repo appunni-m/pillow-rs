@@ -2413,25 +2413,22 @@ pub extern "C" fn FT_Get_Advances(
     padvances: *mut FT_Fixed,
 ) -> FT_Error {
     let Some(state) = face_state(face) else {
+        // FreeType `src/base/ftadvanc.c:158-164` checks `face` before
+        // `padvances`, so a missing face reports `Invalid_Face_Handle`.
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(out) = non_null_mut(padvances) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
     let Ok(out_len) = usize::try_from(count) else {
         return rust_ffi::FT_Err_Invalid_Argument;
-    };
-    let out = if out_len == 0 {
-        None
-    } else {
-        let Some(out) = non_null_mut(padvances) else {
-            return rust_ffi::FT_Err_Invalid_Argument;
-        };
-        Some(out)
     };
     match rust_ffi::FT_Get_Advances(&state.inner, start, count, load_flags) {
         Ok(advances) => {
             if advances.len() != out_len {
                 return rust_ffi::FT_Err_Invalid_Argument;
             }
-            if let Some(out) = out {
+            if out_len != 0 {
                 // SAFETY: `out` is non-null and caller promises at least `count` writable entries.
                 let out = unsafe { slice::from_raw_parts_mut(out.as_ptr(), out_len) };
                 out.copy_from_slice(&advances);

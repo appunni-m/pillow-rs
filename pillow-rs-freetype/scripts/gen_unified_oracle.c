@@ -10036,6 +10036,92 @@ static int emit_face_or_slot(int argc, char** argv) {
         FT_UInt start = (FT_UInt)strtoul(argv[7], NULL, 10);
         FT_UInt count = (FT_UInt)strtoul(argv[8], NULL, 10);
         FT_Int32 load_flags = (FT_Int32)strtol(argv[9], NULL, 10);
+        if (argc == 12) {
+            FT_Fixed sentinel = (FT_Fixed)strtoll(argv[11], NULL, 10);
+            FT_Error first_error = 0;
+            size_t alloc_count = count ? (size_t)count : 1;
+            char* probes_first = (char*)malloc(strlen(argv[10]) + 1);
+            char* probes_second = (char*)malloc(strlen(argv[10]) + 1);
+            FT_Fixed* advances = (FT_Fixed*)malloc(alloc_count * sizeof(FT_Fixed));
+            if (!probes_first || !probes_second || !advances) {
+                free(probes_first);
+                free(probes_second);
+                free(advances);
+                FT_Done_Face(face);
+                FT_Done_FreeType(library);
+                free(data);
+                return 2;
+            }
+            memcpy(probes_first, argv[10], strlen(argv[10]) + 1);
+            memcpy(probes_second, argv[10], strlen(argv[10]) + 1);
+
+            char* token = strtok(probes_first, ",");
+            while (token) {
+                for (FT_UInt i = 0; i < count; i++) {
+                    advances[i] = sentinel;
+                }
+                if (streq(token, "null_face")) {
+                    err = FT_Get_Advances(NULL, start, count, load_flags, advances);
+                } else if (streq(token, "null_padvances")) {
+                    err = FT_Get_Advances(face, start, count, load_flags, NULL);
+                } else {
+                    err = FT_Err_Invalid_Argument;
+                }
+                if (!first_error && err) {
+                    first_error = err;
+                }
+                token = strtok(NULL, ",");
+            }
+
+            print_status(first_error);
+            printf(",\"output\":{\"rows\":[");
+            token = strtok(probes_second, ",");
+            int first = 1;
+            while (token) {
+                for (FT_UInt i = 0; i < count; i++) {
+                    advances[i] = sentinel;
+                }
+                if (streq(token, "null_face")) {
+                    err = FT_Get_Advances(NULL, start, count, load_flags, advances);
+                } else if (streq(token, "null_padvances")) {
+                    err = FT_Get_Advances(face, start, count, load_flags, NULL);
+                } else {
+                    err = FT_Err_Invalid_Argument;
+                }
+                int preserved = 1;
+                for (FT_UInt i = 0; i < count; i++) {
+                    if (advances[i] != sentinel) {
+                        preserved = 0;
+                    }
+                }
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf(
+                    "{\"probe\":\"%s\",\"status\":%ld,\"error\":%ld,"
+                    "\"padvances\":[",
+                    token,
+                    (long)err,
+                    (long)err);
+                for (FT_UInt i = 0; i < count; i++) {
+                    if (i) {
+                        printf(",");
+                    }
+                    printf("%ld", (long)advances[i]);
+                }
+                printf("],\"padvances_preserved\":%s}", preserved ? "true" : "false");
+                token = strtok(NULL, ",");
+            }
+            printf("]}}\n");
+            free(probes_first);
+            free(probes_second);
+            free(advances);
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 0;
+        }
         size_t alloc_count = count ? (size_t)count : 1;
         FT_Fixed* advances = (FT_Fixed*)calloc(alloc_count, sizeof(FT_Fixed));
         if (!advances) {
@@ -11620,7 +11706,7 @@ static int dispatch(int argc, char** argv) {
     if ((argc == 9 || argc == 11) && streq(argv[1], "--get-advance")) {
         return emit_face_or_slot(argc, argv);
     }
-    if (argc == 10 && streq(argv[1], "--get-advances")) {
+    if ((argc == 10 || argc == 12) && streq(argv[1], "--get-advances")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--get-subglyph-info-null-slot")) {

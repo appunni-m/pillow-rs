@@ -2305,26 +2305,24 @@ pub extern "C" fn fontdone_wasm_get_advances(
     padvances: *mut FT_Fixed,
 ) -> FT_Error {
     let Some(face) = face_ref(handle) else {
+        // FreeType `src/base/ftadvanc.c:158-164` checks `face` before
+        // `padvances`, so a missing face reports `Invalid_Face_Handle`.
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    if padvances.is_null() {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
     let Ok(out_len) = usize::try_from(count) else {
         return rust_ffi::FT_Err_Invalid_Argument;
-    };
-    let out = if out_len == 0 {
-        None
-    } else if padvances.is_null() {
-        return rust_ffi::FT_Err_Invalid_Argument;
-    } else {
-        Some(padvances)
     };
     match rust_ffi::FT_Get_Advances(&face.face, start, count, load_flags) {
         Ok(advances) => {
             if advances.len() != out_len {
                 return rust_ffi::FT_Err_Invalid_Argument;
             }
-            if let Some(out) = out {
+            if out_len != 0 {
                 // SAFETY: `out` is non-null and caller promises at least `count` writable entries.
-                let out = unsafe { slice::from_raw_parts_mut(out, out_len) };
+                let out = unsafe { slice::from_raw_parts_mut(padvances, out_len) };
                 out.copy_from_slice(&advances);
             }
             rust_ffi::FT_Err_Ok
