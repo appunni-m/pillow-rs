@@ -4620,6 +4620,38 @@ fn get_advance_probe_labels(params: &Value) -> Result<Vec<String>, String> {
     string_array_param(params, "probes")
 }
 
+fn get_advances_probe_output<F>(params: &Value, mut run: F) -> Result<RunOutput, String>
+where
+    F: FnMut(&str, &mut [FT_Fixed]) -> FT_Error,
+{
+    let probes = get_advances_probe_labels(params)?;
+    let sentinel = i64_param(params, "sentinel_array")?;
+    let (_, count) = advance_range_param(params)?;
+    let out_len = usize::try_from(count).map_err(|err| err.to_string())?;
+    let mut first_error = FT_Err_Ok;
+    let mut rows = Vec::with_capacity(probes.len());
+    for probe in probes {
+        let mut advances = vec![sentinel; out_len.max(1)];
+        let error = run(&probe, &mut advances[..out_len]);
+        if first_error == FT_Err_Ok && error != FT_Err_Ok {
+            first_error = error;
+        }
+        let output_values = advances[..out_len].to_vec();
+        rows.push(json!({
+            "probe": probe,
+            "status": error,
+            "error": error,
+            "padvances": output_values,
+            "padvances_preserved": output_values.iter().all(|advance| *advance == sentinel)
+        }));
+    }
+    Ok(error_with_output(first_error, json!({"rows": rows})))
+}
+
+fn get_advances_probe_labels(params: &Value) -> Result<Vec<String>, String> {
+    string_array_param(params, "probes")
+}
+
 fn assert_font_hori_advance_agrees(case: &InputCase, output: &RunOutput) -> Result<(), String> {
     if !bool_param(
         &case.inputs.params,
@@ -8306,6 +8338,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "freetype.FT_IS_NAMED_INSTANCE.encoded_named_instance_face_index_returns_true"
             || case.case_id == "ftadvanc.FT_Get_Advance.error_null_face_or_output"
+            || case.case_id == "ftadvanc.FT_Get_Advances.error_null_face_or_output"
             || case.case_id == "freetype.FT_Get_Track_Kerning.error_null_face_or_output"
             || case.case_id == "freetype.FT_Get_Track_Kerning.sfnt_or_no_track_data_error"
             || (case.operation == "freetype.reference_face"
@@ -10229,6 +10262,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(start.to_string());
             args.push(count.to_string());
             args.push(load_flags_param(params)?.to_string());
+            if params.get("probes").is_some() {
+                args.push(string_array_param(params, "probes")?.join(","));
+                args.push(i64_param(params, "sentinel_array")?.to_string());
+            }
             Ok(args)
         }
         "render_glyph" => {
@@ -10808,6 +10845,23 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             } else {
                 open_face(case)?
             };
+            if get_advances_probe_labels(&case.inputs.params).is_ok() {
+                return get_advances_probe_output(&case.inputs.params, |probe, advances| {
+                    match probe {
+                        // The safe Rust FFI takes `&FT_Face` and returns the
+                        // advance vector by value.  These branches represent
+                        // public C argument validation from FreeType
+                        // `src/base/ftadvanc.c:158-164`.
+                        "null_face" => FT_Err_Invalid_Face_Handle as FT_Error,
+                        "null_padvances" => {
+                            let _ = &face;
+                            let _ = advances;
+                            FT_Err_Invalid_Argument
+                        }
+                        _ => FT_Err_Invalid_Argument,
+                    }
+                });
+            }
             let (start, count) = advance_range_param(&case.inputs.params)?;
             match FT_Get_Advances(&face, start, count, load_flags_param(&case.inputs.params)?) {
                 Ok(advances) => Ok(ok(advances_json(&advances))),
@@ -11524,6 +11578,26 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
                 c_open_face(case)?
             };
             let (start, count) = advance_range_param(&case.inputs.params)?;
+            if get_advances_probe_labels(&case.inputs.params).is_ok() {
+                let load_flags = load_flags_param(&case.inputs.params)?;
+                let output =
+                    get_advances_probe_output(&case.inputs.params, |probe, advances| match probe {
+                        "null_face" => c_abi::FT_Get_Advances(
+                            ptr::null_mut(),
+                            start,
+                            count,
+                            load_flags,
+                            advances.as_mut_ptr(),
+                        ),
+                        "null_padvances" => {
+                            c_abi::FT_Get_Advances(face, start, count, load_flags, ptr::null_mut())
+                        }
+                        _ => FT_Err_Invalid_Argument,
+                    });
+                c_done_face(face);
+                c_done_library(library);
+                return output;
+            }
             let out_len = usize::try_from(count).map_err(|err| err.to_string())?;
             let mut advances = vec![0; out_len];
             let err = c_abi::FT_Get_Advances(
@@ -12066,6 +12140,29 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
                 wasm_open_face(case)?
             };
             let (start, count) = advance_range_param(&case.inputs.params)?;
+            if get_advances_probe_labels(&case.inputs.params).is_ok() {
+                let load_flags = load_flags_param(&case.inputs.params)?;
+                let output =
+                    get_advances_probe_output(&case.inputs.params, |probe, advances| match probe {
+                        "null_face" => wasm_abi::fontdone_wasm_get_advances(
+                            0,
+                            start,
+                            count,
+                            load_flags,
+                            advances.as_mut_ptr(),
+                        ),
+                        "null_padvances" => wasm_abi::fontdone_wasm_get_advances(
+                            handle,
+                            start,
+                            count,
+                            load_flags,
+                            ptr::null_mut(),
+                        ),
+                        _ => FT_Err_Invalid_Argument,
+                    });
+                wasm_done_face(handle);
+                return output;
+            }
             let out_len = usize::try_from(count).map_err(|err| err.to_string())?;
             let mut advances = vec![0; out_len];
             let err = wasm_abi::fontdone_wasm_get_advances(

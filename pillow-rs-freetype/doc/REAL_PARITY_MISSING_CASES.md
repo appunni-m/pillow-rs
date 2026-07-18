@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_Advance` null-face/null-output
+Current verified result after `FT_Get_Advances` null-face/null-output
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3778`
+  - `real-parity`: `3779`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `415`
+  - `generic-error-fallback`: `414`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2407,6 +2407,43 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftadvanc.FT_Get_Advance.error_null_face_or_output
+```
+
+### Issue Set AY: `FT_Get_Advances` null-face/null-output exact probe route
+
+Previous blocker:
+
+- `ftadvanc.FT_Get_Advances.error_null_face_or_output` stayed in
+  `generic-error-fallback`.
+- The fixture requested `null_face` and `null_padvances` probes, but the
+  maintained oracle and runtime runners were using a normal face and valid
+  output array, so the row was not exercising the public C error path.
+
+Plan:
+
+1. Keep the fixture intact; it is a valid public `FT_Get_Advances` error route.
+2. Wire the pinned C oracle helper to execute
+   `FT_Get_Advances(NULL, ...)` and `FT_Get_Advances(face, ..., NULL)`.
+3. Wire Rust FFI, thin C ABI, and WASM ABI runtime lanes to emit matching probe
+   rows with sentinel `padvances` preservation.
+4. Match FreeType `src/base/ftadvanc.c:158-164`: null face returns
+   `Invalid_Face_Handle`; null `padvances` returns `Invalid_Argument`.
+5. Require exact error status/output comparison and classify the row as real
+   parity only after focused parity passes.
+
+Verified progress:
+
+- The focused case now passes exact comparison against pinned C FreeType, Rust
+  FFI, thin C ABI, and WASM ABI for both null probes.
+- Thin C and WASM wrappers now return `Invalid_Face_Handle` for null/missing
+  face handles in `FT_Get_Advances`, matching FreeType's check order.
+- The route audit now classifies
+  `ftadvanc.FT_Get_Advances.error_null_face_or_output` as `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftadvanc.FT_Get_Advances.error_null_face_or_output
 ```
 
 ## Coverage Bulk Context

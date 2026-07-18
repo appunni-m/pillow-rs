@@ -1051,6 +1051,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Get_Advance null-face/null-output error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftadvanc.get_advances"
+        and row.case_id == "ftadvanc.FT_Get_Advances.error_null_face_or_output"
+    ):
+        return "FT_Get_Advances null-face/null-output error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "set_char_size"
         and row.case_id == "freetype.FT_Set_Char_Size.error_oversized_dimensions"
     ):
