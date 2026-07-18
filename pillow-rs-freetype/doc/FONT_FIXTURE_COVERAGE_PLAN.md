@@ -3758,6 +3758,38 @@ public composite that reaches scaled attachment; empty-outline autohint return
 real public bytecode failure or context-reuse rows.  Future work should select
 one of those public states and pin C behavior before adding cases.
 
+## FT_Get_Advances zero-count range ordering
+
+Pinned FreeType 2.14.3 checks the unsigned `start + count` glyph range in
+`FT_Get_Advances` before accepting `count == 0` as success
+(`src/base/ftadvanc.c:148-194`).  Therefore `start >= num_glyphs` with
+`count == 0` returns `FT_Err_Invalid_Glyph_Index`, not success.  Rust
+previously returned `Ok([])` because the range loop did not execute.
+
+`ffi/handles.rs` now mirrors the C range check before allocation or the
+zero-count return.  The new public
+`ftadvanc.FT_Get_Advances.error_invalid_range_or_flags@f7-r6253-0` row uses
+DejaVuSans `start=6253,count=0` and proves the C error through the Rust FFI,
+C ABI, and WASM route.  Focused Coverage MCP run
+`c5a26f47-34c0-472e-9e5a-52fafc4fe532` passes the row target, and focused
+condition-coverage run `2d09635f-0ba2-4da6-abfa-bc69e12cf760` ingests
+snapshot `4c3b81ac-32fe-4732-8a2f-6fe7f22eb61f` with the new invalid return
+covered.
+
+Full managed run `578083c5-abd9-4901-9f5a-5adce6ad06ae` passes and ingests
+snapshot `0be9773b-ea8a-440f-a65d-7e122daf55c4`.  Against
+`43202fbb-3cf9-49ab-a8e4-8272a20a788d`, total coverage moves from
+20,781 / 21,752 to 20,789 / 21,760 lines, from 4,979 / 5,569 to
+4,985 / 5,577 branches, and from 30,146 / 31,820 to 30,159 / 31,835
+regions; functions remain 1,295 / 1,451.  `handles.rs` moves from
+2,609 / 2,803 to 2,617 / 2,811 lines, from 603 / 763 to 609 / 771 branches,
+and from 3,979 / 4,257 to 3,992 / 4,272 regions.  The route audit reports
+7,233 concrete cases and `ftadvanc.get_advances` at 11 real-parity rows.
+
+The next `FT_Get_Advances` candidate is the no-active-size/probe-face route,
+but keep it separate from this range-ordering change so each C behavior and
+coverage delta remains independently reviewable.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
