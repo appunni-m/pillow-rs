@@ -8338,6 +8338,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "freetype.FT_IS_NAMED_INSTANCE.encoded_named_instance_face_index_returns_true"
             || case.case_id == "ftadvanc.FT_Get_Advance.error_null_face_or_output"
+            || case.case_id == "ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY.fast_only_error_behavior"
             || case
                 .case_id
                 .starts_with("ftadvanc.FT_Get_Advance.error_invalid_glyph_or_flags@")

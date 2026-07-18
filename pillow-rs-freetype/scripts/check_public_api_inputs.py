@@ -1052,6 +1052,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_Get_Advance null-face/null-output error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftadvanc.get_advance"
+        and row.case_id == "ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY.fast_only_error_behavior"
+    ):
+        return "FT_ADVANCE_FLAG_FAST_ONLY error behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftadvanc.get_advance"
         and row.case_id == "ftadvanc.FT_Get_Advance.error_invalid_glyph_or_flags"
     ):
         return "FT_Get_Advance invalid-glyph/invalid-flags errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
