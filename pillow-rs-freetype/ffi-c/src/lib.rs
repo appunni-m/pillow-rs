@@ -2386,10 +2386,12 @@ pub extern "C" fn FT_Get_Advance(
     load_flags: FT_Int32,
     padvance: *mut FT_Fixed,
 ) -> FT_Error {
-    let Some(out) = non_null_mut(padvance) else {
-        return rust_ffi::FT_Err_Invalid_Argument;
-    };
     let Some(state) = face_state(face) else {
+        // FreeType `src/base/ftadvanc.c:116-120` checks `face` before
+        // `padvance`, so a missing face reports `Invalid_Face_Handle`.
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(out) = non_null_mut(padvance) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
     match rust_ffi::FT_Get_Advance(&state.inner, glyph_index, load_flags) {
