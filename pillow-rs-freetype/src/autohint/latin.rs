@@ -1909,18 +1909,10 @@ pub fn metrics_scale_dim(
 /// Each edge is checked against active blue zones. An edge within the zone's
 /// shoot range gets assigned `blue_edge` with the zone's fitted position.
 /// This enables `hint_edges` Phase 3 to snap the edge to the correct grid line.
-fn compute_blue_edges(hints: &mut GlyphHints) {
+fn compute_blue_edges(hints: &mut GlyphHints, metrics: &AfLatinMetrics) {
     let dim = Dimension::Vert;
-    let metrics = match hints.metrics {
-        Some(ref m) => m.clone(),
-        None => return,
-    };
     let axis = &mut hints.axis[dim as usize];
-    let scale = if dim == Dimension::Horz {
-        hints.x_scale
-    } else {
-        hints.y_scale
-    };
+    let scale = metrics.axis[dim as usize].scale;
     let major_dir = axis.major_dir;
     let upem = metrics.units_per_em;
     let blues = &metrics.axis[dim as usize];
@@ -2921,7 +2913,7 @@ pub fn apply_hints(
     let is_nonbase = (glyph_index as usize) < metrics.non_base_glyphs.len()
         && metrics.non_base_glyphs[glyph_index as usize];
     if !use_cjk_edges && !is_nonbase {
-        compute_blue_edges(&mut hints);
+        compute_blue_edges(&mut hints, metrics);
     }
     // Phase C: grid-fit the outline — for-loop over both dims (aflatin.c:5169-5177).
     for dim_i in 0..2 {
