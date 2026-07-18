@@ -41,10 +41,11 @@ use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
 use log::trace;
 
 use super::types::{
-    AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM, AF_BLUE_PROP_LATIN_NEUTRAL, AF_BLUE_PROP_LATIN_SMALL_BOTTOM,
-    AF_BLUE_PROP_LATIN_SUB_TOP, AF_BLUE_PROP_LATIN_TOP, AF_BLUE_PROP_LATIN_X_HEIGHT,
-    AF_LATIN_BLUE_ACTIVE, AF_LATIN_BLUE_ADJUSTMENT, AF_LATIN_BLUE_BOTTOM,
-    AF_LATIN_BLUE_BOTTOM_SMALL, AF_LATIN_BLUE_NEUTRAL, AF_LATIN_BLUE_SUB_TOP, AF_LATIN_BLUE_TOP,
+    AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM, AF_BLUE_PROP_LATIN_LONG, AF_BLUE_PROP_LATIN_NEUTRAL,
+    AF_BLUE_PROP_LATIN_SMALL_BOTTOM, AF_BLUE_PROP_LATIN_SUB_TOP, AF_BLUE_PROP_LATIN_TOP,
+    AF_BLUE_PROP_LATIN_X_HEIGHT, AF_LATIN_BLUE_ACTIVE, AF_LATIN_BLUE_ADJUSTMENT,
+    AF_LATIN_BLUE_BOTTOM, AF_LATIN_BLUE_BOTTOM_SMALL, AF_LATIN_BLUE_NEUTRAL, AF_LATIN_BLUE_SUB_TOP,
+    AF_LATIN_BLUE_TOP,
 };
 use super::types::{
     AF_EDGE_DONE, AF_EDGE_NEUTRAL, AF_EDGE_NO_BLUE, AF_EDGE_NORMAL, AF_EDGE_ROUND, AF_EDGE_SERIF,
@@ -1246,6 +1247,11 @@ macro_rules! is_x_height {
         ($p & AF_BLUE_PROP_LATIN_X_HEIGHT) != 0
     };
 }
+macro_rules! is_long_blue {
+    ($p:expr) => {
+        ($p & AF_BLUE_PROP_LATIN_LONG) != 0
+    };
+}
 
 /// Core blue zone initialization, parameterized by script entries.
 pub fn metrics_init_blues_impl(
@@ -1266,7 +1272,7 @@ pub fn metrics_init_blues_impl(
         let mut ascender: i32 = 0;
         let mut descender: i32 = 0;
 
-        for &ch in entry.chars {
+        'characters: for &ch in entry.chars {
             let gid = font_data.cmap.char_index(ch as u32).unwrap_or(0);
             if gid == 0 {
                 continue;
@@ -1425,7 +1431,159 @@ pub fn metrics_init_blues_impl(
                     }
                 }
 
-                // Round vs flat (aflatin.c:846-857). LONG-blue variant skipped.
+                // Pinned FreeType 2.14.3 `af_latin_metrics_init_blues`
+                // (aflatin.c:645-822) replaces a short extremum segment with
+                // the next sufficiently long, same-direction segment.  This
+                // ignores small vertical-serif bumps in Hebrew top zones.
+                if is_long_blue!(entry.props) {
+                    let length_threshold = metrics.units_per_em / 25;
+                    let extremum_length = (points[usize_from_i32(best_seg_last)].x
+                        - points[usize_from_i32(best_seg_first)].x)
+                        .abs();
+
+                    if extremum_length < length_threshold
+                        && best_seg_last - best_seg_first + 2
+                            <= best_contour_last - best_contour_first
+                    {
+                        let height_threshold = metrics.units_per_em / 4;
+
+                        // Determine the direction immediately before the
+                        // extremum.  C skips a degenerate all-vertical glyph.
+                        prev = best_point;
+                        loop {
+                            prev = if prev > best_contour_first {
+                                prev - 1
+                            } else {
+                                best_contour_last
+                            };
+                            if points[usize_from_i32(prev)].x != best_x || prev == best_point {
+                                break;
+                            }
+                        }
+                        if prev == best_point {
+                            continue 'characters;
+                        }
+
+                        let left_to_right =
+                            points[usize_from_i32(prev)].x < points[usize_from_i32(best_point)].x;
+                        let mut first = best_seg_last;
+                        let mut last = first;
+                        let mut hit = false;
+                        let mut p_first = 0i32;
+                        let mut p_last = 0i32;
+
+                        loop {
+                            if !hit {
+                                first = last;
+                                if points[usize_from_i32(first)].on_curve {
+                                    p_first = first;
+                                    p_last = first;
+                                } else {
+                                    p_first = -1;
+                                    p_last = -1;
+                                }
+                                hit = true;
+                            }
+
+                            last = if last < best_contour_last {
+                                last + 1
+                            } else {
+                                best_contour_first
+                            };
+
+                            if (best_y - points[usize_from_i32(first)].y).abs() > height_threshold {
+                                hit = false;
+                            } else {
+                                let segment_dist = (points[usize_from_i32(last)].y
+                                    - points[usize_from_i32(first)].y)
+                                    .abs();
+                                if segment_dist > 5
+                                    && (points[usize_from_i32(last)].x
+                                        - points[usize_from_i32(first)].x)
+                                        .abs()
+                                        <= 20 * segment_dist
+                                {
+                                    hit = false;
+                                } else {
+                                    if points[usize_from_i32(last)].on_curve {
+                                        p_last = last;
+                                        if p_first < 0 {
+                                            p_first = last;
+                                        }
+                                    }
+
+                                    let candidate_left_to_right = points[usize_from_i32(first)].x
+                                        < points[usize_from_i32(last)].x;
+                                    let candidate_length = (points[usize_from_i32(last)].x
+                                        - points[usize_from_i32(first)].x)
+                                        .abs();
+
+                                    if candidate_left_to_right == left_to_right
+                                        && candidate_length >= length_threshold
+                                    {
+                                        // Preserve the pinned C loop exactly,
+                                        // including its use of `next` and the
+                                        // preceding walk's `dist` in the stop
+                                        // test (aflatin.c:778-807).
+                                        let walk_dist =
+                                            (points[usize_from_i32(next)].y - best_y).abs();
+                                        loop {
+                                            last = if last < best_contour_last {
+                                                last + 1
+                                            } else {
+                                                best_contour_first
+                                            };
+
+                                            let d = (points[usize_from_i32(last)].y
+                                                - points[usize_from_i32(first)].y)
+                                                .abs();
+                                            if d > 5
+                                                && (points[usize_from_i32(next)].x
+                                                    - points[usize_from_i32(first)].x)
+                                                    .abs()
+                                                    <= 20 * walk_dist
+                                            {
+                                                last = if last > best_contour_first {
+                                                    last - 1
+                                                } else {
+                                                    best_contour_last
+                                                };
+                                                break;
+                                            }
+
+                                            p_last = last;
+                                            if points[usize_from_i32(last)].on_curve {
+                                                p_last = last;
+                                                if p_first < 0 {
+                                                    p_first = last;
+                                                }
+                                            }
+                                            if last == best_seg_first {
+                                                break;
+                                            }
+                                        }
+
+                                        best_y = points[usize_from_i32(first)].y;
+                                        best_seg_first = first;
+                                        best_seg_last = last;
+                                        best_on_first = p_first;
+                                        best_on_last = p_last;
+                                        crate::autohint::coverage::record(
+                                            crate::autohint::coverage::COV_BLUE_LONG_SEGMENT_REPLACED,
+                                        );
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if last == best_seg_first {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Round vs flat (aflatin.c:838-857).
                 if best_on_first >= 0
                     && best_on_last >= 0
                     && (points[usize_from_i32(best_on_first)].x
@@ -1502,23 +1660,6 @@ pub fn metrics_init_blues_impl(
                 let mean = (shoot_val + ref_val) / 2;
                 ref_val = mean;
                 shoot_val = mean;
-            }
-        }
-
-        // Correction: TrueType bytecode at FT_LOAD_NO_SCALE can alter
-        // the outline for instructed fonts.  LiberationSerif hebr
-        // bytecode lowers the headline from ~1204 FU to ~1133 FU.
-        // Our unhinted outline loader sees the raw ~1204 value,
-        // producing wrong blue zone reference → edge pos drift.
-        // Detect and correct: if top-zone ref is in the range
-        // [1200, 1220] and upem==2048, set to 1133.
-        if (is_top_blue!(entry.props) || is_sub_top!(entry.props))
-            && (1200..=1220).contains(&ref_val)
-            && metrics.units_per_em == 2048
-        {
-            ref_val = 1133;
-            if shoot_val > ref_val {
-                shoot_val = 1133;
             }
         }
 

@@ -444,7 +444,7 @@
             ]
           },
           {
-            "id": "hebrew-liberationserif-bytecode-blue-correction",
+            "id": "hebrew-liberationserif-long-blue-segment-replacement",
             "assets": {
               "font": {
                 "kind": "ref",
@@ -460,8 +460,9 @@
               ]
             },
             "coverage": [
-              "autohint/latin:hebrew-bytecode-blue-correction"
-            ]
+              "autohint/latin:hebrew-long-blue-segment-replacement"
+            ],
+            "assert_autohint_coverage_bits_include": [45]
           },
           {
             "id": "latin-shared-start-segment-merge",
