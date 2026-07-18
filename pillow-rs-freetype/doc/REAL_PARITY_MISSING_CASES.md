@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Set_Char_Size` null-face exact-error route
+Current verified result after `FT_Select_Size` null-face exact-error route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3741`
+  - `real-parity`: `3742`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `452`
+  - `generic-error-fallback`: `451`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1203,6 +1203,35 @@ Verified commands:
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Set_Char_Size.error_null_face
 make -C pillow-rs-freetype test-op OP=set_char_size
+```
+
+### Issue Set P: `FT_Select_Size` null-face exact-error route
+
+Previous blocker:
+
+- `freetype.FT_Select_Size.error_no_fixed_sizes_or_null_face@null-face`
+  stayed in `generic-error-fallback` even though the fixture expected exact
+  `Invalid_Face_Handle` behavior. The runtime harness accepted the expected
+  error without exact C status/output comparison.
+
+Verified progress:
+
+- The existing pinned C oracle `--select-size-null` route calls
+  `FT_Select_Size(NULL, 0)` and records the native
+  `FT_Err_Invalid_Face_Handle` result.
+- The unified harness now requires exact error status/output comparison for
+  `freetype.select_size` rows with a null `face`.
+- The route audit now classifies only the null-face
+  `freetype.FT_Select_Size.error_no_fixed_sizes_or_null_face` variant as
+  `real-parity`, validated through pinned C FreeType, Rust FFI, thin C ABI,
+  and WASM ABI. The no-fixed-size and strike-index error variants remain
+  separate rows and were not promoted by this change.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Select_Size.error_no_fixed_sizes_or_null_face@null-face
+make -C pillow-rs-freetype test-op OP=freetype.select_size
 ```
 
 ## Coverage Bulk Context

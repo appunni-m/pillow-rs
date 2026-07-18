@@ -1020,6 +1020,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Set_Char_Size null-face error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "freetype.select_size"
+        and row.case_id == "freetype.FT_Select_Size.error_no_fixed_sizes_or_null_face"
+        and lifecycle_handle_is_null(row, "face")
+    ):
+        return "FT_Select_Size null-face error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "load_glyph"
         and row.case_id == "freetype.FT_Load_Glyph.error_null_face_or_invalid_flags.null_face"
         and lifecycle_handle_is_null(row, "face")
