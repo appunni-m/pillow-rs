@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Set_Pixel_Sizes` null-face exact-error route
+Current verified result after `FT_Select_Charmap` null-face exact-error route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3743`
+  - `real-parity`: `3744`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `450`
+  - `generic-error-fallback`: `449`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1262,6 +1262,33 @@ Verified commands:
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Set_Pixel_Sizes.error_null_face
 make -C pillow-rs-freetype test-op OP=set_pixel_sizes
+```
+
+### Issue Set R: `FT_Select_Charmap` null-face exact-error route
+
+Previous blocker:
+
+- `freetype.FT_Select_Charmap.error_null_face` stayed in
+  `generic-error-fallback` even though the fixture expected exact
+  `Invalid_Face_Handle` behavior. The runtime harness accepted the expected
+  error without exact C status/output comparison.
+
+Verified progress:
+
+- The pinned C oracle `--select-charmap-null-face` route calls
+  `FT_Select_Charmap(NULL, FT_ENCODING_UNICODE)` for the exact fixture input
+  and records the native `FT_Err_Invalid_Face_Handle` result.
+- The unified harness now requires exact error status/output comparison for
+  `freetype.select_charmap` rows with a null `face`.
+- The route audit now classifies
+  `freetype.FT_Select_Charmap.error_null_face` as `real-parity`, validated
+  through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Select_Charmap.error_null_face
+make -C pillow-rs-freetype test-op OP=freetype.select_charmap
 ```
 
 ## Coverage Bulk Context
