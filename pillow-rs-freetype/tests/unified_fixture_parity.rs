@@ -704,6 +704,7 @@ fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness 
             case.case_id.as_str(),
             "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c"
                 | "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order"
+                | "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks"
                 | "ftoutln.FT_Outline_Decompose.callback_error_propagates"
         )
     {
@@ -9847,6 +9848,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 case.case_id.as_str(),
                 "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c"
                     | "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order"
+                    | "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks"
                     | "ftoutln.FT_Outline_Decompose.callback_error_propagates"
             ) =>
         {

@@ -5460,6 +5460,7 @@ static int emit_outline_decompose(int argc, char** argv) {
     const char* case_id = argv[2];
     if (!streq(case_id, "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c") &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") &&
+        !streq(case_id, "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks") &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
         printf("{");
         print_status(FT_Err_Unimplemented_Feature);
@@ -5530,6 +5531,15 @@ static int emit_outline_decompose(int argc, char** argv) {
         contours[2] = 10;
         n_contours = 3;
         n_points = 11;
+    } else if (streq(case_id, "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks")) {
+        points[0].x = 32;
+        points[0].y = 48;
+        points[1].x = 160;
+        points[1].y = 48;
+        points[2].x = 160;
+        points[2].y = 176;
+        points[3].x = 32;
+        points[3].y = 176;
     }
     FT_Outline outline;
     outline.n_contours = n_contours;
@@ -5543,6 +5553,7 @@ static int emit_outline_decompose(int argc, char** argv) {
     const FT_Pos deltas[3] = {0, 16, -32};
     int transform_count = 3;
     if (streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") ||
+        streq(case_id, "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks") ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
         transform_count = 1;
     }
@@ -5588,14 +5599,19 @@ static int emit_outline_decompose(int argc, char** argv) {
         funcs.line_to = record_outline_line_to;
         funcs.conic_to = record_outline_conic_to;
         funcs.cubic_to = record_outline_cubic_to;
-        funcs.shift = shifts[i];
-        funcs.delta = deltas[i];
+        if (streq(case_id, "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks")) {
+            funcs.shift = 2;
+            funcs.delta = 7;
+        } else {
+            funcs.shift = shifts[i];
+            funcs.delta = deltas[i];
+        }
         reset_recorded_outline_events();
         FT_Error err = FT_Outline_Decompose(&outline, &funcs, recorded_outline_decompose_user_token);
         if (i) {
             printf(",");
         }
-        printf("{\"shift\":%d,\"delta\":%ld,\"status\":%d,", shifts[i], deltas[i], err);
+        printf("{\"shift\":%d,\"delta\":%ld,\"status\":%d,", funcs.shift, funcs.delta, err);
         print_recorded_outline_events();
         printf(",");
         print_recorded_outline_event_points();
