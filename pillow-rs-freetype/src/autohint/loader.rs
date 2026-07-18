@@ -92,6 +92,7 @@ pub(super) fn reload(
     raw_outline: &crate::tt::glyf::GlyphOutline,
     scaled_points: &[crate::outline::OutlinePoint],
     units_per_em: i32,
+    pp1x_shift: i32,
 ) {
     // FreeType receives one `FT_Outline` and uses its single `n_points` value
     // for both source and scaled coordinates (`afhints.c:960, 994-1015`).
@@ -111,7 +112,14 @@ pub(super) fn reload(
         let mut pt = AFPoint::default();
 
         // Unscaled font units (from glyf parser) — for fpos edge positions.
-        pt.fx = i16_from_i32(rp.x.clamp(i16::MIN as i32, i16::MAX as i32));
+        // The pinned TrueType driver applies its left phantom translation
+        // even for the auto-hinter's `FT_LOAD_NO_SCALE` reload.  Feature
+        // detection must see the same shifted font-unit origin as the scaled
+        // point array (ttgload.c, then afloader.c:316-322).
+        pt.fx = i16_from_i32(
+            rp.x.wrapping_sub(pp1x_shift)
+                .clamp(i16::MIN as i32, i16::MAX as i32),
+        );
         pt.fy = i16_from_i32(rp.y.clamp(i16::MIN as i32, i16::MAX as i32));
 
         // Scaled 26.6 (already computed by scaler).

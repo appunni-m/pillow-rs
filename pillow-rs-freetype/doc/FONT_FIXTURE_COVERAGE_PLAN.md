@@ -3523,6 +3523,60 @@ of ten branch outcomes, all three functions, and 185 regions.  Uncovered tail
 length outcomes remain visible rather than multiplying equivalent long-name
 fixtures.
 
+## CJK symmetric-stem phantom-origin parity
+
+Pinned FreeType 2.14.3 translates a TrueType outline by the left phantom
+point even when the auto-hinter reloads it with `FT_LOAD_NO_SCALE`
+(`ttgload.c:1337-1347,2569-2583`).  Rust already subtracted that phantom
+from the scaled 26.6 points, but `af_glyph_hints_reload` still received the
+untranslated font-unit coordinates used for segment and edge positions.  A
+new source-generated six-edge Hani glyph exposed the first observable
+divergence: pinned C returned `metrics.width=576` with final x coordinates
+`63..514`, while Rust returned width `512` with x coordinates `21..470`.
+
+`loader::reload` now applies the same font-unit origin shift before storing
+`fx`, while preserving the existing signed-short clamp.  The obsolete
+zero-advance compensation in `scaler.rs` is removed: after raw and scaled
+coordinates share one origin, subtracting the TrueType phantom again moves a
+combining mark twice.  This supersedes the earlier zero-advance workaround
+described in the historical ledger; the public combining-mark row keeps
+`horiBearingX=0` without a second translation.
+
+`build_autohint_script_fixtures.py` extends the maintained
+`cjk-remaining-branches.ttf` font with three evenly spaced rectangles, and
+the exact `cjk-six-edge-symmetric-stems-17` public row asserts route bit 13
+only after the pinned `af_cjk_hint_edges` reciprocal-link and symmetry
+predicates succeed.  Focused Coverage MCP runs
+`d91333bf-c6c4-48ff-81da-517a01085355`,
+`8eac3789-8f65-4090-817d-efd2f67e1d3e`, and
+`a6803553-7b62-42ad-b442-f141f0cf7d2d` pass the new CJK row and both
+zero-advance public regression routes.  Full parity run
+`6f51212f-248f-4d3e-a51a-d1be3049438f` compares all 7,069 runnable rows
+with zero failures, 135 pending rows unchanged, 7,204 concrete rows, zero
+implicit rows, and 3,649 real-parity routes; its only terminal failure was
+the subsequently corrected rustfmt line wrap.  Managed formatted
+coverage/lint run `fe7db073-6d97-43e1-ae18-53a7cddbc3b9` passes and ingests
+snapshot `92533418-1966-4449-bf23-14e1be5925f6`.
+
+Against snapshot `fadc1ecc-46fb-4860-a54a-6ea7bf1924d4`, project coverage
+moves from 20,554 / 21,506 to 20,561 / 21,513 lines; functions remain
+1,281 / 1,417 and regions remain 29,771 / 31,447.  Removing the fully covered
+obsolete compensation and adding the symmetric-route predicate changes
+branches from 4,962 / 5,559 to 4,958 / 5,555.  `autohint/cjk.rs` moves from
+855 / 876 lines, 376 / 402 branches, and 1,148 / 1,176 regions to
+858 / 879, 378 / 404, and 1,152 / 1,180 respectively.
+`autohint/loader.rs` remains complete at 229 / 229 lines, 64 / 64 branches,
+5 / 5 functions, and 404 / 404 regions.
+
+The wait-time adjacent audit found that the existing `cjk-serif-m-20` row
+already executes the 12-edge symmetry arm; its next improvement is an
+explicit route-bit-14 assertion, not another font.  A higher-priority
+false-green audit found that inserting the Bengali glyph at generated gid 79
+shifted three numeric `script-coverage.ttf` rows.  The next section should
+restore append-only generated glyph ordering, regenerate the single owned
+font, and prove the top-tilde-centering, vertical-cusp, and extreme-coordinate
+rows before adding the bit-14 assertion.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
