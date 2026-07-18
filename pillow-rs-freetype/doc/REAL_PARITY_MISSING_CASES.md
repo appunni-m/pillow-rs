@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Request_Size` invalid-request matrix
+Current verified result after `FT_Request_Size` probe-face invalid-size-handle
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3750`
+  - `real-parity`: `3751`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `443`
+  - `generic-error-fallback`: `442`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1482,6 +1482,42 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Request_Size.error_invalid_request_or_unavailable_strike
+```
+
+### Issue Set Y: `FT_Request_Size` probe-face invalid-size-handle exact-error route
+
+Previous blocker:
+
+- `freetype.FT_Request_Size.error_probe_face_invalid_size_handle` stayed in
+  `generic-error-fallback`, even though the fixture targets a concrete pinned-C
+  `FT_Request_Size` call with `face_index = -1` probe-face loading and expects
+  `FT_Err_Invalid_Size_Handle`.
+
+Plan:
+
+1. Confirm the row has a real font asset and pinned-C oracle output.
+2. Enable exact status/output comparison for this one public row.
+3. Run the focused public case through Rust FFI, thin C ABI, and WASM ABI.
+4. If exact comparison fails, fix the first Rust/core or ABI divergence. If it
+   passes, classify the existing behavior as real parity.
+5. Re-run the request-size lane and route audit before committing.
+
+Verified progress:
+
+- The fixture row uses `input/fonts/DejaVuSans.ttf` with `face_index = -1`,
+  which exercises FreeType's probe-face path before calling `FT_Request_Size`.
+- The unified harness now requires exact error status/output comparison for
+  this concrete public row.
+- Focused exact comparison passed for pinned C FreeType, Rust FFI, thin C ABI,
+  and WASM ABI; no core Rust logic change was required.
+- The route audit now classifies
+  `freetype.FT_Request_Size.error_probe_face_invalid_size_handle` as
+  `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Request_Size.error_probe_face_invalid_size_handle
 ```
 
 ## Coverage Bulk Context
