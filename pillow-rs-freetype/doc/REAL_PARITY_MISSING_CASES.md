@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Select_Size` strike-index range
+Current verified result after `FT_Select_Size` no-fixed-sizes
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3755`
+  - `real-parity`: `3756`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `438`
+  - `generic-error-fallback`: `437`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1667,6 +1667,44 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Select_Size.error_strike_index_out_of_range
+```
+
+### Issue Set AD: `FT_Select_Size` no-fixed-sizes exact-error route
+
+Previous blocker:
+
+- The `no-fixed-sizes` concrete row inside
+  `freetype.FT_Select_Size.error_no_fixed_sizes_or_null_face` stayed in
+  `generic-error-fallback`, even though the fixture targets a concrete pinned-C
+  `FT_Select_Size` call against a scalable face with no bitmap strikes. The
+  sibling null-face variant was already classified as real parity.
+
+Plan:
+
+1. Confirm the row has a real scalable font asset and exact-error expectation.
+2. Enable exact status/output comparison for this public case.
+3. Keep the existing null-face exact classification and add the no-fixed-sizes
+   concrete row to real parity.
+4. Run the focused public case through Rust FFI, thin C ABI, and WASM ABI.
+5. Re-run the select-size lane, full parity, and non-coverage gates before
+   committing.
+
+Verified progress:
+
+- The fixture row uses `input/fonts/DejaVuSans.ttf`, a scalable face without
+  fixed bitmap strikes, and calls `FT_Select_Size(face, 0)`.
+- The unified harness now requires exact error status/output comparison for
+  this concrete public case.
+- Focused exact comparison passed for pinned C FreeType, Rust FFI, thin C ABI,
+  and WASM ABI; no core Rust logic change was required.
+- The route audit now classifies the no-fixed-sizes concrete row for
+  `freetype.FT_Select_Size.error_no_fixed_sizes_or_null_face` as
+  `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Select_Size.error_no_fixed_sizes_or_null_face
 ```
 
 ## Coverage Bulk Context
