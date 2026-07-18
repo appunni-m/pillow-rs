@@ -525,6 +525,18 @@ def latin_vertical_cusp_glyph():
     )
 
 
+def latin_segment_limit_glyph():
+    """501 contours produce 1,002 segments in both hint dimensions."""
+    rects = []
+    for index in range(501):
+        column = index % 25
+        row = index // 25
+        left = 10 + column * 38
+        bottom = 10 + row * 38
+        rects.append((left, bottom, left + 12, bottom + 12))
+    return rectangles_glyph(rects)
+
+
 def latin_blue_delta_round_glyph():
     return ring_glyph(90, 0, 510, 530, 190, 120, 410, 400)
 
@@ -766,6 +778,7 @@ def build_script_coverage() -> None:
     glyph_order.append("latin_vertical_cusp")
     glyph_order.append("latin_nonbase_tilde")
     glyph_order.append("latin_extreme_coordinate")
+    glyph_order.append("latin_segment_limit")
 
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
@@ -856,6 +869,9 @@ def build_script_coverage() -> None:
     glyphs["latin_extreme_coordinate"] = extreme_rectangle_glyph()
     metrics["latin_extreme_coordinate"] = (1000, -32768)
     cmap[0x0246] = "latin_extreme_coordinate"
+    glyphs["latin_segment_limit"] = latin_segment_limit_glyph()
+    metrics["latin_segment_limit"] = (1000, 10)
+    cmap[0xE100] = "latin_segment_limit"
 
     font = FontBuilder(UNITS_PER_EM, isTTF=True)
     font.setupGlyphOrder(glyph_order)
