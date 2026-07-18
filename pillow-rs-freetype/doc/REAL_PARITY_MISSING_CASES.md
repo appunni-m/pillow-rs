@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Init_FreeType` null-output-pointer
+Current verified result after `FT_Get_Track_Kerning` null-face/null-output
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3763`
+  - `real-parity`: `3764`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `430`
+  - `generic-error-fallback`: `429`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1959,6 +1959,43 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Init_FreeType.error_null_output_pointer
+```
+
+### Issue Set AL: `FT_Get_Track_Kerning` null-face/null-output exact-error route
+
+Previous blocker:
+
+- `freetype.FT_Get_Track_Kerning.error_null_face_or_output` stayed in
+  `generic-error-fallback`, even though the fixture targets concrete public
+  `FT_Get_Track_Kerning` error variants for a null face and a null output
+  pointer.
+
+Plan:
+
+1. Confirm the row is a concrete public call set with exact-error expectation.
+2. Enable exact status/output comparison for this public case.
+3. Run the focused public case through Rust FFI, thin C ABI, and WASM ABI.
+4. If exact comparison fails, fix the first Rust/core or ABI divergence. If it
+   passes, classify the existing behavior as real parity.
+5. Re-run the get-track-kerning lane, full parity, and non-coverage gates
+   before committing.
+
+Verified progress:
+
+- The fixture row calls `FT_Get_Track_Kerning` for both `face: null` and
+  `akerning: null` variants. The error variants do not require the future Type1
+  track-kerning asset.
+- The unified harness now requires exact error status/output comparison for
+  this concrete public case.
+- Focused exact comparison passed for pinned C FreeType, Rust FFI, thin C ABI,
+  and WASM ABI; no core Rust logic change was required.
+- The route audit now classifies
+  `freetype.FT_Get_Track_Kerning.error_null_face_or_output` as `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Get_Track_Kerning.error_null_face_or_output
 ```
 
 ## Coverage Bulk Context
