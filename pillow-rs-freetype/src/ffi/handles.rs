@@ -3574,18 +3574,20 @@ pub fn FT_Get_Advance(
     if face.probe_only || !has_active_size(face) {
         return Err(FT_Err_Invalid_Size_Handle);
     }
+    let glyph_index = u16::try_from(glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
+    // FreeType `src/base/ftadvanc.c:116-126` performs the glyph-index range
+    // check before fast-only fallback and load-flag conversion, so invalid
+    // glyph indices still report `Invalid_Glyph_Index` even when flags contain
+    // otherwise unsupported public bits.
+    if glyph_index >= face.inner.borrow().info().num_glyphs {
+        return Err(FT_Err_Invalid_Glyph_Index);
+    }
     let fast_only = load_flags & FT_ADVANCE_FLAG_FAST_ONLY_I32 != 0;
     let load_flags = load_flags & !FT_ADVANCE_FLAG_FAST_ONLY_I32;
     if fast_only && !advance_fast_path_supported(load_flags) {
         return Err(FT_Err_Unimplemented_Feature);
     }
-    let glyph_index = u16::try_from(glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
     let flags = load_flags_to_core(load_flags)?;
-    // `FT_Get_Advance` owns this Invalid_Glyph_Index precheck in `ftadvanc.c`;
-    // `FT_Load_Glyph` instead delegates range errors to its font driver.
-    if glyph_index >= face.inner.borrow().info().num_glyphs {
-        return Err(FT_Err_Invalid_Glyph_Index);
-    }
     if use_fast_horizontal_advance(flags) {
         // C `tt_get_advances` returns raw hmtx advances; `ft_face_scale_advances_`
         // scales them directly to 16.16 with `FT_MulFix(1024 * advance, x_scale)`.
