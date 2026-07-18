@@ -269,6 +269,26 @@ def gray_index_format2_tables() -> tuple[bytes, bytes]:
     return eblc, ebdt
 
 
+def gray_index_format4_tables() -> tuple[bytes, bytes]:
+    # EBLC index format 4 stores sparse (glyph, offset) pairs.  The final pair
+    # is a sentinel; pinned FreeType uses the next pair's offset as image_end.
+    image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x55, 0x99, 0xEE])
+    index_array = struct.pack(">HHI", 1, 2, 8)
+    sparse_pairs = struct.pack(">HHHH", 1, 0, 2, len(image))
+    index_subtable = struct.pack(">HHI", 4, 1, 4) + struct.pack(">I", 1) + sparse_pairs
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        2,
+        bit_depth=8,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000) + image
+    return eblc, ebdt
+
+
 def with_eblc_version(eblc: bytes, version: int) -> bytes:
     return struct.pack(">I", version) + eblc[4:]
 
@@ -723,6 +743,11 @@ def build_gray_index_format2_bitmap() -> None:
     save_sbit_font("sbit_gray_index_format2.ttf", eblc, ebdt)
 
 
+def build_gray_index_format4_bitmap() -> None:
+    eblc, ebdt = gray_index_format4_tables()
+    save_sbit_font("sbit_gray_index_format4.ttf", eblc, ebdt)
+
+
 def build_sbit_table_tag_and_strike_probes() -> None:
     eblc, ebdt = gray_format1_tables()
     save_sbit_font("sbit_cblc_cbdt_gray_format1.ttf", eblc, ebdt, table_tags=("CBLC", "CBDT"))
@@ -820,6 +845,7 @@ def main() -> None:
     build_missing_small_metrics_width_bitmap()
     build_gray_format3_bitmap()
     build_gray_index_format2_bitmap()
+    build_gray_index_format4_bitmap()
     build_sbit_table_tag_and_strike_probes()
     build_sbit_error_branch_fixtures()
     build_composite_missing_subglyphs()

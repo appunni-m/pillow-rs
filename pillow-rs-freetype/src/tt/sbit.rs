@@ -295,6 +295,59 @@ fn find_image_in_subtable(
                 recurse_count,
             )
         }
+        4 => {
+            // C: `tt_sbit_decoder_load_image` in `src/sfnt/ttsbit.c:1332-1365`
+            // scans sparse `(glyph, offset)` pairs and uses the following
+            // pair's offset as the matched glyph's image end.
+            let num_glyphs =
+                read_u32(eblc, subtable_start + 8).ok_or_else(|| no_bitmap_error(recurse_count))?;
+            let entries_start = subtable_start.checked_add(12).ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap sparse array overflow".into())
+            })?;
+            let entries = usize::try_from(num_glyphs).map_err(|_| {
+                FontError::InvalidFont("embedded bitmap sparse array too large".into())
+            })?;
+            let table_entries = entries.checked_add(1).ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap sparse array too large".into())
+            })?;
+            let entries_len = table_entries.checked_mul(4).ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap sparse array too large".into())
+            })?;
+            let entries_end = entries_start.checked_add(entries_len).ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap sparse array too large".into())
+            })?;
+            eblc.get(entries_start..entries_end)
+                .ok_or_else(|| no_bitmap_error(recurse_count))?;
+
+            for entry_index in 0..entries {
+                let entry = entries_start + entry_index * 4;
+                let sparse_glyph =
+                    read_u16(eblc, entry).ok_or_else(|| no_bitmap_error(recurse_count))?;
+                if sparse_glyph != glyph_index {
+                    continue;
+                }
+                let image_start = u32::from(
+                    read_u16(eblc, entry + 2).ok_or_else(|| no_bitmap_error(recurse_count))?,
+                );
+                let image_end = u32::from(
+                    read_u16(eblc, entry + 6).ok_or_else(|| no_bitmap_error(recurse_count))?,
+                );
+                return image_found_or_missing(
+                    strike,
+                    eblc,
+                    ebdt,
+                    SbitImageRecord {
+                        format: image_format,
+                        offset: image_offset,
+                        start: image_start,
+                        end: image_end,
+                    },
+                    recurse_count,
+                );
+            }
+
+            Err(no_bitmap_error(recurse_count))
+        }
         _ => Err(no_bitmap_error(recurse_count)),
     }
 }
