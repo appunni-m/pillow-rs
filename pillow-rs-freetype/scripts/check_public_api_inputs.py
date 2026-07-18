@@ -1024,6 +1024,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Attach_Stream null-face error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "freetype.attach_stream"
+        and row.case_id == "freetype.FT_Attach_Stream.error_null_open_args"
+    ):
+        return "FT_Attach_Stream null-open-args error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "freetype.done_freetype"
         and row.case_id == "freetype.FT_Done_FreeType.error_null_library"
         and lifecycle_handle(row, "library") == "null"
