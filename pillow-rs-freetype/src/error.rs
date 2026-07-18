@@ -12,6 +12,10 @@ pub enum FontError {
     #[error("Invalid TrueType font: {0}")]
     InvalidFont(String),
 
+    /// A required SFNT subtable is structurally malformed.
+    #[error("Invalid font table: {0}")]
+    InvalidTable(String),
+
     /// The rasterizer render pool overflowed (FreeType `Raster_Overflow`).
     #[error("Rasterizer buffer overflow")]
     RasterOverflow,
@@ -68,6 +72,12 @@ mod tests {
     fn raster_overflow_has_static_message() {
         let err = FontError::RasterOverflow;
         assert_eq!(err.to_string(), "Rasterizer buffer overflow");
+    }
+
+    #[test]
+    fn invalid_table_displays_message() {
+        let err = FontError::InvalidTable("bad CFF INDEX".into());
+        assert_eq!(err.to_string(), "Invalid font table: bad CFF INDEX");
     }
 
     #[test]

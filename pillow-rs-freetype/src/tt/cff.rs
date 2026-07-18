@@ -17,7 +17,10 @@ pub struct CffTable {
 
 pub fn parse_cff(data: &[u8]) -> Result<CffTable, FontError> {
     if data.len() < 4 {
-        return Err(FontError::InvalidFont("CFF: header too short".into()));
+        // FreeType 2.14.3 rejects malformed OpenType CFF table framing as
+        // `FT_Err_Invalid_Table` during face open (`cffload.c` INDEX/header
+        // loading), before a face is exposed.
+        return Err(FontError::InvalidTable("CFF: header too short".into()));
     }
     let header_size = usize::from(data[2]);
     let mut pos = header_size;
@@ -35,7 +38,10 @@ pub fn parse_cff(data: &[u8]) -> Result<CffTable, FontError> {
     let top = parse_top_dict(top_dict)?;
     let charstrings_offset = top
         .charstrings_offset
-        .ok_or_else(|| FontError::InvalidFont("CFF: missing CharStrings offset".into()))?;
+        // `cff_parser_run`/Top DICT handling treats a missing required
+        // CharStrings entry as the same public Invalid_Argument class as
+        // malformed Top DICT operands (`cffparse.c`, `cffload.c`).
+        .ok_or_else(|| FontError::InvalidArgument("CFF: missing CharStrings offset".into()))?;
     let (charstrings, _) = read_index(data, charstrings_offset)?;
     Ok(CffTable {
         charstrings: charstrings.into_iter().map(<[u8]>::to_vec).collect(),
@@ -69,7 +75,10 @@ fn parse_top_dict(data: &[u8]) -> Result<TopDict, FontError> {
             pos += 1;
             let op = if byte == 12 {
                 let escaped = *data.get(pos).ok_or_else(|| {
-                    FontError::InvalidFont("CFF: escaped dict op overflow".into())
+                    // Pinned `cffparse.c` requires the escaped operator's
+                    // second byte; a truncated escape is a public
+                    // Invalid_Argument face-open failure.
+                    FontError::InvalidArgument("CFF: escaped dict op overflow".into())
                 })?;
                 pos += 1;
                 0x0C00 | u16::from(escaped)
@@ -78,7 +87,10 @@ fn parse_top_dict(data: &[u8]) -> Result<TopDict, FontError> {
             };
             if op == 17 {
                 let offset = stack.last().copied().ok_or_else(|| {
-                    FontError::InvalidFont("CFF: CharStrings operand missing".into())
+                    // CFF Top DICT operator 17 (`CharStrings`) consumes one
+                    // operand.  Pinned `cffparse.c` reports the underflow as a
+                    // public Invalid_Argument face-open failure.
+                    FontError::InvalidArgument("CFF: CharStrings operand missing".into())
                 })?;
                 dict.charstrings_offset = usize::try_from(offset).ok();
             }
@@ -108,17 +120,22 @@ fn read_index(data: &[u8], pos: usize) -> Result<(Vec<&[u8]>, usize), FontError>
     );
     cursor += 1;
     if !(1..=4).contains(&off_size) {
-        return Err(FontError::InvalidFont("CFF: invalid INDEX offSize".into()));
+        // Pinned `cffload.c` classifies malformed CFF INDEX framing as
+        // Invalid_Table.  Keep object-order validation below as
+        // Invalid_File_Format; the oracle distinguishes that later failure.
+        return Err(FontError::InvalidTable("CFF: invalid INDEX offSize".into()));
     }
     let mut offsets = Vec::with_capacity(count + 1);
     for _ in 0..=count {
         let mut value = 0usize;
         for _ in 0..off_size {
-            value =
-                (value << 8)
-                    | usize::from(*data.get(cursor).ok_or_else(|| {
-                        FontError::InvalidFont("CFF: INDEX offset overflow".into())
-                    })?);
+            value = (value << 8)
+                | usize::from(*data.get(cursor).ok_or_else(|| {
+                    // Truncated INDEX offset arrays fail while loading
+                    // CFF INDEX metadata, matching FreeType's public
+                    // Invalid_Table face-open status.
+                    FontError::InvalidTable("CFF: INDEX offset overflow".into())
+                })?);
             cursor += 1;
         }
         offsets.push(value);
