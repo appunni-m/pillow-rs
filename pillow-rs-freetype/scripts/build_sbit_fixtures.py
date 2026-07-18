@@ -289,6 +289,27 @@ def gray_index_format4_tables() -> tuple[bytes, bytes]:
     return eblc, ebdt
 
 
+def gray_index_format4_sparse_miss_tables() -> tuple[bytes, bytes]:
+    # The strike range includes glyph 1, but the sparse index-format-4 array
+    # contains only glyph 2.  Pinned FreeType scans the sparse array and then
+    # takes the top-level NoBitmap path for glyph 1.
+    image = bytes([2, 2, 1, 2, 3]) + bytes([0x11, 0x55, 0x99, 0xEE])
+    index_array = struct.pack(">HHI", 1, 1, 8)
+    sparse_pairs = struct.pack(">HHHH", 2, 0, 3, len(image))
+    index_subtable = struct.pack(">HHI", 4, 1, 4) + struct.pack(">I", 1) + sparse_pairs
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        1,
+        bit_depth=8,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000) + image
+    return eblc, ebdt
+
+
 def mono_index_format5_tables() -> tuple[bytes, bytes]:
     # EBLC index format 5 stores a constant image size, big metrics, and sparse
     # glyph codes.  Image format 5 is bit-aligned and uses the EBLC metrics
@@ -302,6 +323,33 @@ def mono_index_format5_tables() -> tuple[bytes, bytes]:
         + big_metrics
         + struct.pack(">I", 1)
         + struct.pack(">H", 1)
+    )
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        1,
+        bit_depth=1,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000) + image
+    return eblc, ebdt
+
+
+def mono_index_format5_sparse_miss_tables() -> tuple[bytes, bytes]:
+    # The strike range includes glyph 1, but the sparse index-format-5 glyph
+    # code array contains only glyph 2.  Pinned FreeType reaches NoBitmap after
+    # reading EBLC constant metrics and scanning the sparse glyph-code array.
+    image = bytes([0xAB, 0x80])
+    index_array = struct.pack(">HHI", 1, 1, 8)
+    big_metrics = bytes([2, 5, 0, 2, 5, 0, 0, 2])
+    index_subtable = (
+        struct.pack(">HHI", 5, 5, 4)
+        + struct.pack(">I", len(image))
+        + big_metrics
+        + struct.pack(">I", 1)
+        + struct.pack(">H", 2)
     )
     index_tables = index_array + index_subtable
     strike = bitmap_size_table(
@@ -775,9 +823,19 @@ def build_gray_index_format4_bitmap() -> None:
     save_sbit_font("sbit_gray_index_format4.ttf", eblc, ebdt)
 
 
+def build_gray_index_format4_sparse_miss() -> None:
+    eblc, ebdt = gray_index_format4_sparse_miss_tables()
+    save_sbit_font("sbit_gray_index_format4_sparse_miss.ttf", eblc, ebdt)
+
+
 def build_mono_index_format5_bitmap() -> None:
     eblc, ebdt = mono_index_format5_tables()
     save_sbit_font("sbit_mono_index_format5.ttf", eblc, ebdt)
+
+
+def build_mono_index_format5_sparse_miss() -> None:
+    eblc, ebdt = mono_index_format5_sparse_miss_tables()
+    save_sbit_font("sbit_mono_index_format5_sparse_miss.ttf", eblc, ebdt)
 
 
 def build_sbit_table_tag_and_strike_probes() -> None:
@@ -878,7 +936,9 @@ def main() -> None:
     build_gray_format3_bitmap()
     build_gray_index_format2_bitmap()
     build_gray_index_format4_bitmap()
+    build_gray_index_format4_sparse_miss()
     build_mono_index_format5_bitmap()
+    build_mono_index_format5_sparse_miss()
     build_sbit_table_tag_and_strike_probes()
     build_sbit_error_branch_fixtures()
     build_composite_missing_subglyphs()
