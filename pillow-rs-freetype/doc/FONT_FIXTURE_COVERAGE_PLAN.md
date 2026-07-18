@@ -3211,6 +3211,37 @@ to 29,452 / 31,101 regions; branches remain 4,921 / 5,497 and functions remain
 2,673 / 2,882 lines and from 3,865 / 4,242 to 3,866 / 4,243 regions, with its
 1,098 / 1,294 branches and 67 / 68 functions unchanged.
 
+## Latin-style neutral-blue round rejection
+
+Pinned FreeType 2.14.3 `af_latin_metrics_init_blues`
+(`aflatin.c:846-907`) accepts only flat extrema for a neutral blue zone and
+skips a round extremum before adding it to either median array.  The dedicated
+generated `arabic-neutral-round-skip.ttf` maps the sole Arabic neutral-blue
+character U+0640 to a quadratic ring while retaining ordinary Arabic top,
+bottom, standard-character, and selected-glyph geometry.  The public
+`FT_Load_Glyph.matrix_load@arabic-neutral-round-blue-skip-force-autohint` row
+selects gid 5 at 20 ppem, asserts route bit 41, and compares the complete slot
+through the pinned C oracle, Rust FFI, C ABI, WASM ABI, and safe public load.
+Focused Coverage MCP run `08247304-2cac-4a89-8fe5-0f88578a789a` passes
+2 / 2 selected cases.  Full managed run
+`cd000f6b-b12f-4ea1-b59b-3ef0c141786f` passes 7,064 / 7,064 runnable cases
+with 135 pending rows unchanged and ingests snapshot
+`b3acf858-3967-44d6-9be1-52a77ed41fa4`.  Concrete cases rise from 7,198 to
+7,199 and route-audit real parity rises from 3,643 to 3,644.
+
+The connected `ch == '|'` guard was removed from the Latin-style initializer
+after a caller-and-table audit.  The generated table contains `|` only in the
+four Hani CJK strings, and `globals.rs` always dispatches Hani metrics to
+`cjk_metrics_init_blues`; no Latin-style public call can observe that guard.
+Accordingly, overall covered counts are 20,342 lines, 4,920 branches,
+1,277 functions, and 29,452 regions while the unreachable denominator falls
+to 21,275 lines, 5,495 branches, and 31,099 regions.  In `src/autohint/latin.rs`
+the uncovered inventory falls from 209 to 207 lines, from 196 to 195 branch
+outcomes, and from 377 to 375 regions; functions remain 67 / 68.  The one
+lower covered-branch count is the removed always-one-sided separator predicate,
+not a runtime regression; every retained neutral-round decision is 2 / 2
+covered.
+
 ## Latin smooth stem-width public routes
 
 Pinned FreeType 2.14.3 `af_latin_compute_stem_width`
