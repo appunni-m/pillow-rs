@@ -2185,15 +2185,31 @@ not every historical Rust convenience method that happens to live in
 | Fixture/font reachable | `autohint/latin.rs`, `autohint/cjk.rs`, `scaler.rs`, `tt/hinter/exec.rs`, and parts of `render.rs` still have real branch gaps tied to glyph topology, script selection, bytecode state, or render geometry | Add or extend compact source-backed fonts and explicit public rows only when the selected glyph moves the measured branch or line |
 | Public unsupported implementation paths | `FT_OpenType_Validate` non-null behavior still returns preserved stubs today | Implement the real public behavior first, then add parity rows; do not add fake success fixtures |
 | Public-construction unreachable guards | Short required `head`/`hhea` tables fail face construction before `face_to_ffi`; short optional `vhea` currently fails in `Font::truetype`; `tt/post.rs` format-1 exact-258 Mac names are now covered, leaving only helper arms that public `FT_Get_Glyph_Name`/`FT_Get_Name_Index` skip through invalid-glyph validation or face-flag gates | Leave visible and documented unless parser semantics change or a true public route appears |
-| SBIT residuals | `tt/sbit.rs` unsupported simple bit-depth, image-format, malformed small-metrics width, compound success, one packed MONO nonzero x-offset path, tail-bit carry, GRAY2/GRAY4 packed-depth dispatch arms, and zero-width packed component no-op are now covered through public rows; remaining misses are the unused/private load-status helper, checked arithmetic and 64-bit conversion guards, impossible compound count/component-read guards, impossible metric-conversion/pixel-mode mismatch guards, and defensive packed-blit overflow/truncation guards | Leave private helper and impossible overflow guards visible; add only real C-observable SBIT rows that move measured coverage through exact parity |
+| SBIT residuals | `tt/sbit.rs` unsupported simple bit-depth, image-format, malformed small-metrics width, bit-aligned missing metrics, bit-aligned truncated payload, compound success, one packed MONO nonzero x-offset path, tail-bit carry, GRAY2/GRAY4 packed-depth dispatch arms, and zero-width packed component no-op are now covered through public rows; remaining misses are the unused/private load-status helper, checked arithmetic and 64-bit conversion guards, impossible compound count/component-read guards, impossible metric-conversion/pixel-mode mismatch guards, and defensive packed-blit overflow/truncation guards | Leave private helper and impossible overflow guards visible; add only real C-observable SBIT rows that move measured coverage through exact parity |
 | Defensive invalid helper guards | `RoundMode::from_u8`'s invalid-value fallback remains missed after all valid FreeType `TT_Round_*` constants are routed through public `FT_Load_Glyph` rows | Leave visible; do not add a synthetic invalid round-state path unless a real public opcode or ABI surface can supply one |
 | Private/no-route helpers | `Font::layout_glyphs`, `Font::layout_bounds`, `layout_bounds_from_glyphs`, `grays::rasterize`, `grays::rasterize_shifted_in_box`, and `grays::render_scanline` are not selected by the current public FreeType fixtures | Do not call these through synthetic tests; either expose a real public operation with C parity or prove and remove independently of coverage |
 | Coverage instrumentation artifacts | `Font::load_sfnt_table` and several wrapper functions show zero-count closure symbols even while the public body is heavily executed; many missed `api.rs` and `font.rs` lines are trailing call arguments in covered functions | Use function bodies, contiguous blocks, and branch counters to choose cases; do not grow JSON for tail-line artifacts alone |
 
 ### SBIT Residual Map - 2026-07-14
 
-Current `src/tt/sbit.rs` misses are classified as follows before adding any new
-SBIT fixtures:
+2026-07-18 update: The latest malformed image-format-5 batch adds four compact
+generated SBIT fixtures and exact-error `FT_Load_Glyph.matrix_load` rows.  Two
+rows move measured full-suite `tt/sbit.rs` coverage: image-format-5 through an
+index-format-1 subtable covers the missing bit-aligned-metrics error arm, and
+index-format-5 with a too-short EBDT payload covers FreeType
+`sfnt/ttsbit.c:858-864` malformed bit-aligned bitmap parity.  The companion
+index-format-2 and index-format-5 truncated-big-metrics rows are retained as
+real C-observable public error routes even though LLVM attributes their covered
+setup lines outside the previously missed continuations.  Full Coverage MCP run
+`b71d431d-d7c9-42a8-b6fa-ca13982308dd` passes and ingests snapshot
+`d75aac4b-ebab-4411-b053-863a9b7e22f4`: overall coverage moves
+20,724 / 21,747 -> 20,734 / 21,747 lines, 1,286 -> 1,290 functions, and
+30,062 -> 30,076 regions; `tt/sbit.rs` moves 653 / 871 -> 663 / 871 lines,
+36 -> 40 functions, and 1,032 -> 1,046 regions.  Newly covered `tt/sbit.rs`
+misses are lines 487-488 and 543-544.
+
+Remaining `src/tt/sbit.rs` misses are classified as follows after the public
+SBIT fixture batches:
 
 | Lines | Disposition | Reason |
 |---|---|---|

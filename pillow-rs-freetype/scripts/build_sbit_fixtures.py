@@ -269,6 +269,27 @@ def gray_index_format2_tables() -> tuple[bytes, bytes]:
     return eblc, ebdt
 
 
+def gray_index_format2_missing_big_metrics_tables() -> tuple[bytes, bytes]:
+    # Index format 2 requires an image size plus eight big-metrics bytes in
+    # EBLC.  Pinned FreeType 2.14.3 `sfnt/ttsbit.c:1302-1318` treats a truncated
+    # big-metrics record as NoBitmap; the public scalable FT_LOAD_SBITS_ONLY
+    # path reports FT_Err_Invalid_Argument.
+    image = bytes([2, 2, 1, 2, 3]) + bytes([0x22, 0x44, 0x88, 0xFF])
+    index_array = struct.pack(">HHI", 1, 1, 8)
+    index_subtable = struct.pack(">HHI", 2, 1, 4) + struct.pack(">I", len(image)) + bytes([2, 2, 1])
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        1,
+        bit_depth=8,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000) + image
+    return eblc, ebdt
+
+
 def gray_index_format4_tables() -> tuple[bytes, bytes]:
     # EBLC index format 4 stores sparse (glyph, offset) pairs.  The final pair
     # is a sentinel; pinned FreeType uses the next pair's offset as image_end.
@@ -317,6 +338,80 @@ def mono_index_format5_tables() -> tuple[bytes, bytes]:
     image = bytes([0xAB, 0x80])
     index_array = struct.pack(">HHI", 1, 1, 8)
     big_metrics = bytes([2, 5, 0, 2, 5, 0, 0, 2])
+    index_subtable = (
+        struct.pack(">HHI", 5, 5, 4)
+        + struct.pack(">I", len(image))
+        + big_metrics
+        + struct.pack(">I", 1)
+        + struct.pack(">H", 1)
+    )
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        1,
+        bit_depth=1,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000) + image
+    return eblc, ebdt
+
+
+def mono_image_format5_missing_metrics_tables() -> tuple[bytes, bytes]:
+    # Image format 5 is bit-aligned and depends on EBLC-provided metrics from
+    # index format 5/19.  With index format 1 there are no such metrics, matching
+    # FreeType's public malformed-SBIT error path without fabricating behavior.
+    image = bytes([0x80])
+    index_array = struct.pack(">HHI", 1, 1, 8)
+    index_subtable = (
+        struct.pack(">HHI", 1, 5, 4)
+        + struct.pack(">II", 0, len(image))
+    )
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        1,
+        bit_depth=1,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000) + image
+    return eblc, ebdt
+
+
+def mono_index_format5_missing_big_metrics_tables() -> tuple[bytes, bytes]:
+    # Index format 5 requires constant image size, big metrics, count, and
+    # sparse glyph codes.  This stops inside big metrics to hit FreeType's
+    # `tt_sbit_decoder_load_metrics` NoBitmap branch through a public load.
+    image = bytes([0xAB, 0x80])
+    index_array = struct.pack(">HHI", 1, 1, 8)
+    index_subtable = (
+        struct.pack(">HHI", 5, 5, 4)
+        + struct.pack(">I", len(image))
+        + bytes([2, 5, 0])
+    )
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        1,
+        bit_depth=1,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000) + image
+    return eblc, ebdt
+
+
+def mono_index_format5_truncated_image_tables() -> tuple[bytes, bytes]:
+    # The EBLC index is complete and selects image format 5, but the constant
+    # image size is shorter than the bit-aligned payload implied by metrics.
+    # FreeType `sfnt/ttsbit.c:858-864` reports a malformed bitmap.
+    image = bytes([0xAB, 0x80])
+    index_array = struct.pack(">HHI", 1, 1, 8)
+    big_metrics = bytes([2, 9, 0, 2, 9, 0, 0, 2])
     index_subtable = (
         struct.pack(">HHI", 5, 5, 4)
         + struct.pack(">I", len(image))
@@ -818,6 +913,11 @@ def build_gray_index_format2_bitmap() -> None:
     save_sbit_font("sbit_gray_index_format2.ttf", eblc, ebdt)
 
 
+def build_gray_index_format2_missing_big_metrics() -> None:
+    eblc, ebdt = gray_index_format2_missing_big_metrics_tables()
+    save_sbit_font("sbit_gray_index_format2_missing_big_metrics.ttf", eblc, ebdt)
+
+
 def build_gray_index_format4_bitmap() -> None:
     eblc, ebdt = gray_index_format4_tables()
     save_sbit_font("sbit_gray_index_format4.ttf", eblc, ebdt)
@@ -831,6 +931,21 @@ def build_gray_index_format4_sparse_miss() -> None:
 def build_mono_index_format5_bitmap() -> None:
     eblc, ebdt = mono_index_format5_tables()
     save_sbit_font("sbit_mono_index_format5.ttf", eblc, ebdt)
+
+
+def build_mono_image_format5_missing_metrics() -> None:
+    eblc, ebdt = mono_image_format5_missing_metrics_tables()
+    save_sbit_font("sbit_mono_image_format5_missing_metrics.ttf", eblc, ebdt)
+
+
+def build_mono_index_format5_missing_big_metrics() -> None:
+    eblc, ebdt = mono_index_format5_missing_big_metrics_tables()
+    save_sbit_font("sbit_mono_index_format5_missing_big_metrics.ttf", eblc, ebdt)
+
+
+def build_mono_index_format5_truncated_image() -> None:
+    eblc, ebdt = mono_index_format5_truncated_image_tables()
+    save_sbit_font("sbit_mono_index_format5_truncated_image.ttf", eblc, ebdt)
 
 
 def build_mono_index_format5_sparse_miss() -> None:
@@ -935,9 +1050,13 @@ def main() -> None:
     build_missing_small_metrics_width_bitmap()
     build_gray_format3_bitmap()
     build_gray_index_format2_bitmap()
+    build_gray_index_format2_missing_big_metrics()
     build_gray_index_format4_bitmap()
     build_gray_index_format4_sparse_miss()
     build_mono_index_format5_bitmap()
+    build_mono_image_format5_missing_metrics()
+    build_mono_index_format5_missing_big_metrics()
+    build_mono_index_format5_truncated_image()
     build_mono_index_format5_sparse_miss()
     build_sbit_table_tag_and_strike_probes()
     build_sbit_error_branch_fixtures()
