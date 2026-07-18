@@ -290,6 +290,54 @@ def gray_index_format2_missing_big_metrics_tables() -> tuple[bytes, bytes]:
     return eblc, ebdt
 
 
+def gray_index_format2_huge_image_size_tables() -> tuple[bytes, bytes]:
+    # FreeType 2.14.3 `sfnt/ttsbit.c:1302-1318,1410-1419` derives format-2
+    # image offsets from `image_size * (glyph_index - start)`, then rejects the
+    # resulting out-of-range EBDT slice as malformed through the public load.
+    index_array = struct.pack(">HHI", 1, 3, 8)
+    big_metrics = bytes([2, 2, 1, 2, 3, 0, 0, 3])
+    index_subtable = (
+        struct.pack(">HHI", 2, 1, 4)
+        + struct.pack(">I", 0x80000000)
+        + big_metrics
+    )
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        3,
+        bit_depth=8,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000)
+    return eblc, ebdt
+
+
+def gray_index_format2_huge_image_end_tables() -> tuple[bytes, bytes]:
+    # FreeType 2.14.3 `sfnt/ttsbit.c:1302-1318,1410-1419` also accepts a
+    # one-glyph ordinal whose start offset fits but whose end offset overflows
+    # the 32-bit EBLC-derived image range before the bitmap loader rejects it.
+    index_array = struct.pack(">HHI", 1, 2, 8)
+    big_metrics = bytes([2, 2, 1, 2, 3, 0, 0, 3])
+    index_subtable = (
+        struct.pack(">HHI", 2, 1, 4)
+        + struct.pack(">I", 0xFFFFFFFF)
+        + big_metrics
+    )
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        2,
+        bit_depth=8,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000)
+    return eblc, ebdt
+
+
 def gray_index_format4_tables() -> tuple[bytes, bytes]:
     # EBLC index format 4 stores sparse (glyph, offset) pairs.  The final pair
     # is a sentinel; pinned FreeType uses the next pair's offset as image_end.
@@ -456,6 +504,58 @@ def mono_index_format5_sparse_miss_tables() -> tuple[bytes, bytes]:
     )
     eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
     ebdt = struct.pack(">I", 0x00020000) + image
+    return eblc, ebdt
+
+
+def mono_index_format5_huge_image_size_tables() -> tuple[bytes, bytes]:
+    # FreeType 2.14.3 `sfnt/ttsbit.c:1367-1401,1410-1419` applies the matched
+    # sparse glyph's ordinal to the constant image size, then the bitmap loader
+    # rejects the physically absent EBDT image range.
+    index_array = struct.pack(">HHI", 1, 3, 8)
+    big_metrics = bytes([2, 5, 0, 2, 5, 0, 0, 2])
+    index_subtable = (
+        struct.pack(">HHI", 5, 5, 4)
+        + struct.pack(">I", 0x80000000)
+        + big_metrics
+        + struct.pack(">I", 2)
+        + struct.pack(">HH", 2, 3)
+    )
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        3,
+        bit_depth=1,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000)
+    return eblc, ebdt
+
+
+def mono_index_format5_huge_image_start_tables() -> tuple[bytes, bytes]:
+    # FreeType 2.14.3 `sfnt/ttsbit.c:1367-1401,1410-1419` uses the sparse
+    # glyph ordinal as the multiplier; ordinal two with a 0x80000000 image size
+    # overflows Rust's checked 32-bit start offset path before public rejection.
+    index_array = struct.pack(">HHI", 1, 3, 8)
+    big_metrics = bytes([2, 5, 0, 2, 5, 0, 0, 2])
+    index_subtable = (
+        struct.pack(">HHI", 5, 5, 4)
+        + struct.pack(">I", 0x80000000)
+        + big_metrics
+        + struct.pack(">I", 3)
+        + struct.pack(">HHH", 1, 2, 3)
+    )
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        3,
+        bit_depth=1,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000)
     return eblc, ebdt
 
 
@@ -918,6 +1018,16 @@ def build_gray_index_format2_missing_big_metrics() -> None:
     save_sbit_font("sbit_gray_index_format2_missing_big_metrics.ttf", eblc, ebdt)
 
 
+def build_gray_index_format2_huge_image_size() -> None:
+    eblc, ebdt = gray_index_format2_huge_image_size_tables()
+    save_sbit_font("sbit_gray_index_format2_huge_image_size.ttf", eblc, ebdt)
+
+
+def build_gray_index_format2_huge_image_end() -> None:
+    eblc, ebdt = gray_index_format2_huge_image_end_tables()
+    save_sbit_font("sbit_gray_index_format2_huge_image_end.ttf", eblc, ebdt)
+
+
 def build_gray_index_format4_bitmap() -> None:
     eblc, ebdt = gray_index_format4_tables()
     save_sbit_font("sbit_gray_index_format4.ttf", eblc, ebdt)
@@ -951,6 +1061,16 @@ def build_mono_index_format5_truncated_image() -> None:
 def build_mono_index_format5_sparse_miss() -> None:
     eblc, ebdt = mono_index_format5_sparse_miss_tables()
     save_sbit_font("sbit_mono_index_format5_sparse_miss.ttf", eblc, ebdt)
+
+
+def build_mono_index_format5_huge_image_size() -> None:
+    eblc, ebdt = mono_index_format5_huge_image_size_tables()
+    save_sbit_font("sbit_mono_index_format5_huge_image_size.ttf", eblc, ebdt)
+
+
+def build_mono_index_format5_huge_image_start() -> None:
+    eblc, ebdt = mono_index_format5_huge_image_start_tables()
+    save_sbit_font("sbit_mono_index_format5_huge_image_start.ttf", eblc, ebdt)
 
 
 def build_sbit_table_tag_and_strike_probes() -> None:
@@ -1051,6 +1171,8 @@ def main() -> None:
     build_gray_format3_bitmap()
     build_gray_index_format2_bitmap()
     build_gray_index_format2_missing_big_metrics()
+    build_gray_index_format2_huge_image_size()
+    build_gray_index_format2_huge_image_end()
     build_gray_index_format4_bitmap()
     build_gray_index_format4_sparse_miss()
     build_mono_index_format5_bitmap()
@@ -1058,6 +1180,8 @@ def main() -> None:
     build_mono_index_format5_missing_big_metrics()
     build_mono_index_format5_truncated_image()
     build_mono_index_format5_sparse_miss()
+    build_mono_index_format5_huge_image_size()
+    build_mono_index_format5_huge_image_start()
     build_sbit_table_tag_and_strike_probes()
     build_sbit_error_branch_fixtures()
     build_composite_missing_subglyphs()
