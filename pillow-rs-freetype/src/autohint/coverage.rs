@@ -116,6 +116,8 @@ pub const COV_X_HEIGHT_SCALE_REJECTED: u64 = 1 << 42;
 pub const COV_SUB_TOP_BLUE_OVERLAP_SUPPRESSED: u64 = 1 << 43;
 /// blue-zone adjustments: suppress capital-bottom alignment for a flagged glyph.
 pub const COV_BLUE_IGNORE_CAPITAL_BOTTOM: u64 = 1 << 44;
+/// blue metrics: replace a short extremum with a qualifying long segment.
+pub const COV_BLUE_LONG_SEGMENT_REPLACED: u64 = 1 << 45;
 
 /// Record a coverage bit for the current glyph.
 pub fn record(bit: u64) {

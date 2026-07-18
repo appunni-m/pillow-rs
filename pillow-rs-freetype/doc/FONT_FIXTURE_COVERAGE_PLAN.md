@@ -3414,6 +3414,41 @@ changes repair existing public rows.  Project coverage moves from
 branches remain 1,105 / 1,304 and functions remain 68 / 69.  Every added
 executable line and region is covered, so both project and file rates improve.
 
+## Hebrew long-blue segment replacement route
+
+Pinned FreeType 2.14.3 marks the Hebrew top blue string with
+`AF_BLUE_PROPERTY_LATIN_LONG`.  In
+`af_latin_metrics_init_blues` (`aflatin.c:645-822`), C rejects a short
+topmost bump and searches the same contour for a sufficiently long,
+same-direction horizontal segment within one quarter EM.  Rust skipped that
+entire search and compensated for Liberation Serif with a font-specific
+`1200..=1220` reference-height clamp to 1133.
+
+Rust now ports the pinned contour search, including the C loop's exact
+wraparound, on-curve endpoint tracking, direction constraint, height and
+length thresholds, and its historical `next`/`dist` stop-test operands.  The
+existing Liberation Serif U+05D1 public row is renamed for the real behavior
+and asserts route bit 45, recorded only when a qualifying long segment
+actually replaces the short extremum.  The algorithm produces exact pinned-C,
+Rust FFI, C ABI, WASM ABI, and safe public load results without the old
+font-specific height clamp.
+
+Focused Coverage MCP run `84ff3dde-9084-492c-8fed-ef7c7584a9b9` passes the
+renamed public row.  Full managed run
+`7144aa21-81e8-4eb4-b2af-12ce1e728011` passes all 7,066 runnable cases with
+135 pending rows unchanged and ingests snapshot
+`4cc4efa6-ad32-4743-a76f-a4781a6be2e1`.  Concrete cases remain 7,201 with
+zero implicit rows, and route-audit real parity remains 3,646 because this
+repairs an existing public row.  Project coverage moves from
+20,373 / 21,304 to 20,458 / 21,404 lines, from 4,928 / 5,507 to
+4,954 / 5,549 branches, and from 29,474 / 31,120 to 29,587 / 31,247 regions;
+functions remain 1,278 / 1,414.  `src/autohint/latin.rs` moves from
+2,704 / 2,909 to 2,789 / 3,009 lines, from 1,105 / 1,304 to
+1,131 / 1,346 branches, and from 3,888 / 4,262 to 4,001 / 4,389 regions;
+functions remain 68 / 69.  The rates decrease slightly because the exact C
+search introduces 100 instrumented lines and 42 branch outcomes, but 85 lines,
+26 branches, and 113 regions are exercised by real public parity routes.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
