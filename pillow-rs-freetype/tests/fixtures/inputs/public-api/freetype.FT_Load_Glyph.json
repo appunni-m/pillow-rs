@@ -3334,10 +3334,17 @@
               "glyph_index": 77,
               "load_flags": [
                 "FT_LOAD_FORCE_AUTOHINT"
+              ],
+              "assert_api_load_glyph_agrees": true,
+              "assert_autohint_coverage_bits_include": [
+                15,
+                16,
+                17
               ]
             },
             "coverage": [
-              "autohint/latin:serif-m-symmetry"
+              "autohint/latin:serif-m-symmetry",
+              "autohint/latin:phase4-serif-anchor-relative-interpolation"
             ]
           },
           {
@@ -3389,10 +3396,46 @@
               "glyph_index": 78,
               "load_flags": [
                 "FT_LOAD_FORCE_AUTOHINT"
+              ],
+              "assert_api_load_glyph_agrees": true,
+              "assert_autohint_coverage_bits_include": [
+                15,
+                16,
+                37
               ]
             },
             "coverage": [
-              "autohint/latin:serif-overlap-break"
+              "autohint/latin:serif-overlap-break",
+              "autohint/latin:phase4-intermediate-edge-rejects-false-serif"
+            ]
+          },
+          {
+            "id": "latin-dimensionless-contour-vsep-force-autohint",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/charmap/multiple-charmaps.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 1
+              },
+              "glyph_index": 174,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ],
+              "assert_api_load_glyph_agrees": true,
+              "assert_autohint_coverage_bits_include": [
+                38
+              ]
+            },
+            "coverage": [
+              "autohint/latin:vertical-separation-dimensionless-contour-sentinel",
+              "autohint/latin:pinned-c-sub-long-no-panic"
             ]
           },
           {

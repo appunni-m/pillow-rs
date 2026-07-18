@@ -3150,6 +3150,38 @@ parity rises from 3,634 to 3,635.  Snapshot
 1,089 / 1,284 branches, and from 3,829 / 4,212 to 3,832 / 4,214 regions;
 functions remain 67 / 68.  The threshold condition is now 2 / 2 covered.
 
+## Latin dimensionless-contour separation and Phase-4 serif routes
+
+The first divergence in this slice was a public `FT_Load_Glyph` panic for
+`multiple-charmaps.ttf`, glyph 174, at 1 ppem with
+`FT_LOAD_FORCE_AUTOHINT`.  Pinned FreeType 2.14.3
+`af_compute_vertical_extrema` leaves a two-point, dimensionless contour at
+`FT_LONG_MAX`/`FT_LONG_MIN`; the later `SUB_LONG` calculation is defined in
+unsigned arithmetic, and the separation predicate rejects that sentinel
+contour.  Rust previously subtracted its `i32` sentinels before applying the
+rejection predicate and overflowed in debug/test builds.  The Rust path now
+rejects the sentinel pair first and widens real coordinate subtraction to
+`i64`, preserving C's selected-contour behavior without a panic.
+
+The retained `latin-dimensionless-contour-vsep-force-autohint` row proves that
+path through the C oracle, Rust FFI, C ABI, and WASM ABI.  Existing
+`latin-serif-m-symmetry-force-autohint` and
+`latin-serif-overlap-break-force-autohint` rows now also assert the Phase-4
+serif, anchor-relative, interpolation, and serif-overlap routes already
+present in their exact public loads.  Focused Coverage MCP runs
+`8d7baf91-b6ee-49c7-9515-16a35250cbdd` and
+`d09e8c3a-5cbe-4640-8aba-06bf37582147` pass these rows.
+
+Full managed run `3fbf98fe-6219-4f88-b903-12c327b2562a` passes 7,056 / 7,056
+runnable cases with 135 pending rows unchanged and ingests snapshot
+`2ae0503b-c214-441b-8d34-be45f035db05`.  Concrete cases rise from 7,190 to
+7,191 and route-audit real parity rises from 3,635 to 3,636.
+`src/autohint/latin.rs` moves from 2,641 / 2,850 to 2,657 / 2,870 lines, from
+1,089 / 1,284 to 1,094 / 1,292 branches, and from 3,832 / 4,214 to
+3,849 / 4,234 regions; functions remain 67 / 68.  The added implementation
+and permanent route markers account for the larger instrumented denominator;
+covered lines, branches, and regions all increase.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
