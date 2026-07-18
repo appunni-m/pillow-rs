@@ -40,7 +40,7 @@ Parity-only rule for this phase:
 
 ### Issue Set A: `ftoutln.outline_render` pending outline fixtures
 
-Current pending count by operation: `25` rows.
+Current pending count by operation: `19` rows.
 
 Largest blockers from the current parity run:
 
@@ -48,6 +48,8 @@ Largest blockers from the current parity run:
 - `6` rows: missing `outlines/synthetic/thin-diagonal-stems.json`
   (fixed by `FT_OUTLINE_HIGH_PRECISION` verified progress below)
 - `6` rows: missing `outlines/synthetic/large-render-limits.json`
+  (fixed for the synthetic `FT_Outline_Render` rows by
+  `FT_OUTLINE_SINGLE_PASS` verified progress below)
 - `3` rows: missing `outlines/synthetic/dropout-thin-stems-scantype.json`
 - `3` rows: missing `outlines/synthetic/simple-overlap-thin-matrix.json`
 - additional outline-render rows reference other missing synthetic outline
@@ -107,6 +109,15 @@ Verified progress:
   `FT_OUTLINE_NONE` and `FT_OUTLINE_HIGH_PRECISION`.
 - Rust FFI, C ABI, and WASM ABI now match pinned FreeType for all six
   `FT_OUTLINE_HIGH_PRECISION` synthetic diagonal-stem variants.
+- Added real `outline_model` fixture
+  `outlines/synthetic/large-render-limits.json`.
+- Pinned C oracle now emits the
+  `ftimage.FT_OUTLINE_SINGLE_PASS.large_outline_raster_hint_behavior` outline
+  flag matrix: `FT_OUTLINE_NONE` and `FT_OUTLINE_SINGLE_PASS`.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for all six
+  synthetic `FT_OUTLINE_SINGLE_PASS` `FT_Outline_Render` variants. This does
+  not claim glyph-slot mono `FT_Render_Glyph` parity for `OUTLINE_SINGLE_PASS`;
+  that separate surface is still tracked below.
 
 Focused non-coverage result:
 
@@ -122,14 +133,20 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_OUTLINE_HIGH_PRECISION
 
 Result: `7 / 7` runtime parity rows passed, `0` failed, `0` pending.
 
-Full non-coverage result after the `FT_OUTLINE_HIGH_PRECISION` rows:
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_OUTLINE_SINGLE_PASS
+```
+
+Result: `7 / 7` runtime parity rows passed, `0` failed, `0` pending.
+
+Full non-coverage result after the `FT_OUTLINE_SINGLE_PASS` rows:
 
 ```bash
 make -C pillow-rs-freetype test
 ```
 
-Result: `7116 / 7116` runnable rows passed, `0` failed, `118` pending. Route
-audit: `real-parity` `3699`, `pending-route` `110`.
+Result: `7122 / 7122` runnable rows passed, `0` failed, `112` pending. Route
+audit: `real-parity` `3705`, `pending-route` `104`.
 
 Broadened non-coverage result:
 
@@ -137,16 +154,15 @@ Broadened non-coverage result:
 make -C pillow-rs-freetype test-op OP=ftoutln.outline_render
 ```
 
-Result after `FT_OUTLINE_HIGH_PRECISION`: `64 / 64` runnable rows passed, `0`
-failed, `25` pending.
+Result after `FT_OUTLINE_SINGLE_PASS`: `70 / 70` runnable rows passed, `0`
+failed, `19` pending.
 
-Current blocker before commit: the four failed rows are
-`FT_RASTER_FLAG_DIRECT` / `FT_Span` direct-span callback cases. They currently
-route through the generic bitmap C oracle path, so making Rust return success
-without adding direct-span oracle output would be a green placeholder. Fix this
-as a separate issue set by first teaching the C oracle to emit direct span
-records, then implementing the equivalent Rust FFI, C ABI, and WASM ABI
-callback behavior.
+Current remaining `ftoutln.outline_render` blockers are missing explicit
+fixtures or non-fixture public harness surfaces, led by:
+`dropout-thin-stems-scantype.json`, `simple-overlap-thin-matrix.json`,
+`crossing-clip-boundaries.json`, `cw-ccw-orientation-pairs.json`, and
+`params-logging-renderer.json`. Keep fixing these as separate exact C oracle
+routes; do not reintroduce generic square fallback for missing assets.
 
 ### Issue Set B: `FT_RASTER_FLAG_DIRECT` direct-span callback parity
 
@@ -156,7 +172,8 @@ Current focused command:
 make -C pillow-rs-freetype test-op OP=ftoutln.outline_render
 ```
 
-Current result: `54 / 58` runnable rows pass, `4` fail, `31` remain pending.
+Original result before this issue set: `54 / 58` runnable rows passed, `4`
+failed, `31` remained pending.
 
 Failing direct-span rows:
 
