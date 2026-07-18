@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Request_Size` BBox divide-by-zero exact-error
-route classification:
+Current verified result after `FT_Request_Size` invalid-request matrix
+exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3749`
+  - `real-parity`: `3750`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `444`
+  - `generic-error-fallback`: `443`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1445,6 +1445,43 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Divide_By_Zero.invalid_size_transform_division_returns_error
+```
+
+### Issue Set X: `FT_Request_Size` invalid-request matrix exact-error route
+
+Previous blocker:
+
+- `freetype.FT_Request_Size.error_invalid_request_or_unavailable_strike`
+  stayed in `generic-error-fallback` even though the fixture contains an exact
+  pinned-C invalid-request matrix: sentinel request type, negative dimensions,
+  zero ppem, and oversize ppem rows. The runtime harness accepted the expected
+  error without exact pinned-C status/output comparison.
+
+First divergence:
+
+- Turning on exact comparison exposed the fourth row. Pinned C returned
+  `FT_Err_Invalid_PPem` (`151`) for a nominal zero-width/zero-height TrueType
+  request, while Rust returned success with zero metrics.
+
+Verified progress:
+
+- FreeType 2.14.3 `FT_Request_Size` dispatches TrueType faces through
+  `tt_size_request` (`src/truetype/ttdriver.c:349-410`). That path first calls
+  `FT_Request_Metrics`, then `tt_size_reset`, which rejects zero `x_ppem` or
+  `y_ppem` as `Invalid_PPem` (`src/truetype/ttobjs.c:1247-1248`).
+- Rust now preserves the existing `Invalid_Pixel_Size` overflow mapping and
+  adds a distinct `Invalid_PPem` result for TrueType-style zero ppem requests.
+- The unified harness now requires exact error status/output comparison for
+  this concrete public matrix case.
+- The route audit now classifies
+  `freetype.FT_Request_Size.error_invalid_request_or_unavailable_strike` as
+  `real-parity`, validated through pinned C FreeType, Rust FFI, thin C ABI,
+  and WASM ABI.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Request_Size.error_invalid_request_or_unavailable_strike
 ```
 
 ## Coverage Bulk Context

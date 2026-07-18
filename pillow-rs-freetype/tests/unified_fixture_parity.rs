@@ -8267,7 +8267,9 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
                     || case.case_id
                         == "freetype.FT_SIZE_REQUEST_TYPE_MAX.request_size_rejects_sentinel"
                     || case.case_id
-                        == "fterrdef.FT_Err_Divide_By_Zero.invalid_size_transform_division_returns_error"))
+                        == "fterrdef.FT_Err_Divide_By_Zero.invalid_size_transform_division_returns_error"
+                    || case.case_id
+                        == "freetype.FT_Request_Size.error_invalid_request_or_unavailable_strike"))
             || (case.operation == "load_char"
                 && (lifecycle_handle_param_is_null(&case.inputs.params, "face")
                     || case.case_id == "freetype.FT_Load_Char.error_null_face_or_invalid_flags"))
