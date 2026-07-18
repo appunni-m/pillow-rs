@@ -527,6 +527,44 @@ includes the unchanged generic fallback row for
 `FT_DEBUG_HOOK_TRUETYPE.debug_hook_index_import_contract`; only the three
 `FT_Set_Debug_Hook` rows are classified as real parity.
 
+### Issue Set F: `FT_Add_Default_Modules` null-library no-return behavior
+
+Previous blocker:
+
+- `ftmodapi.FT_Add_Default_Modules.null_library_no_return_error` was classified
+  as `void-fallback`, so the harness accepted a generic void placeholder
+  instead of comparing the exact no-return/no-crash C behavior.
+
+Verified progress:
+
+- Native C oracle now calls pinned FreeType `FT_Add_Default_Modules(NULL)` and
+  records the public observable output: `return="void"`, `crashed=false`, and
+  no observable writes.
+- `fontdone` now exposes `FT_Add_Default_Modules`; null libraries are a no-op,
+  matching C's swallowed `FT_Add_Module(NULL, ...)` errors inside the void API.
+- C ABI exposes public `FT_Add_Default_Modules` as a thin wrapper.
+- WASM test-support calls the same core function for the null-library route.
+- The broader `installs_default_module_table` row still requires exact default
+  module table/order modeling and remains fallback evidence. It is not claimed
+  as real parity by this fix.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Add_Default_Modules
+```
+
+Result: `2 / 2` operation rows passed, `0` failed, `0` pending. Only
+`null_library_no_return_error` is classified as real parity; the module-table
+install row remains fallback.
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftmodapi.add_default_modules
+```
+
+Result: `2 / 2` operation rows passed, `0` failed, `0` pending, with the same
+classification split.
+
 Focused non-coverage result:
 
 ```bash
@@ -635,6 +673,16 @@ make -C pillow-rs-freetype test
 
 Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
 audit: `real-parity` `3730`, `pending-route` `82`, `pending-core` `7`.
+
+Full non-coverage result after the `FT_Add_Default_Modules` null-library route:
+
+```bash
+make -C pillow-rs-freetype test
+```
+
+Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
+audit: `real-parity` `3731`, `pending-route` `82`, `pending-core` `7`, and
+`void-fallback` removed from the route-audit categories.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
 
