@@ -8247,6 +8247,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.operation == "freetype.get_subglyph_info"
             || (case.operation == "load_char"
                 && lifecycle_handle_param(&case.inputs.params, "face") == Some("null"))
+            || (case.operation == "load_glyph"
+                && lifecycle_handle_param(&case.inputs.params, "face") == Some("null"))
             || (case.operation == "freetype.done_face"
                 && lifecycle_handle_param(&case.inputs.params, "face") == Some("null"))
             || (case.operation == "freetype.done_freetype"
