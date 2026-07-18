@@ -2047,6 +2047,37 @@
           ]
         },
         {
+          "id": "sbit-gray-index-format4-sparse-miss",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_gray_index_format4_sparse_miss.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT index-format-4 sparse glyph array whose strike range covers glyph 1 but whose sparse entries omit glyph 1."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 1,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "expect_error": true,
+          "expectation": {
+            "compare": {
+              "compare_error_output": true
+            }
+          },
+          "coverage": [
+            "sbit:gray-index-format4-sparse-miss-public-error"
+          ]
+        },
+        {
           "id": "sbit-mono-index-format5-sbits-only",
           "assets": {
             "font": {
@@ -2069,6 +2100,37 @@
           },
           "coverage": [
             "sbit:mono-index-format5-bit-aligned-bitmap-success"
+          ]
+        },
+        {
+          "id": "sbit-mono-index-format5-sparse-miss",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_mono_index_format5_sparse_miss.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT index-format-5 sparse glyph-code array whose strike range covers glyph 1 but whose sparse glyph codes omit glyph 1."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 1,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "expect_error": true,
+          "expectation": {
+            "compare": {
+              "compare_error_output": true
+            }
+          },
+          "coverage": [
+            "sbit:mono-index-format5-sparse-miss-public-error"
           ]
         },
         {
