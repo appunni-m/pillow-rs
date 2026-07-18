@@ -8251,6 +8251,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
         && (case.operation.starts_with("ftsizes.")
             || case.operation == "freetype.get_kerning"
             || case.operation == "freetype.get_subglyph_info"
+            || (case.operation == "set_pixel_sizes"
+                && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
             || (case.operation == "set_char_size"
                 && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
             || (case.operation == "freetype.select_size"
@@ -9018,13 +9020,14 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         }
         "set_pixel_sizes" => {
             if lifecycle_handle_param(params, "face") == Some("null") {
+                let (pixel_width, pixel_height) = pixel_size_param(params)?;
                 return Ok(vec![
                     "--set-pixel-sizes".to_string(),
                     "null".to_string(),
                     "0".to_string(),
                     "0".to_string(),
-                    "0".to_string(),
-                    "0".to_string(),
+                    pixel_width.to_string(),
+                    pixel_height.to_string(),
                 ]);
             }
             let mut args = vec!["--set-pixel-sizes".to_string()];
