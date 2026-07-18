@@ -1267,13 +1267,6 @@ pub fn metrics_init_blues_impl(
         let mut descender: i32 = 0;
 
         for &ch in entry.chars {
-            // FreeType's afblue.dat uses `|` as blue-string syntax separating
-            // overshoot/fill values from reference/flat values. The generated
-            // Rust table stores it as a char, so skip it before cmap lookup.
-            if ch == '|' {
-                continue;
-            }
-
             let gid = font_data.cmap.char_index(ch as u32).unwrap_or(0);
             if gid == 0 {
                 continue;
@@ -1452,6 +1445,11 @@ pub fn metrics_init_blues_impl(
                     points[usize_from_i32(best_seg_first)].on_curve);
 
                 if round && is_neutral!(entry.props) {
+                    // Pinned FreeType 2.14.3 `af_latin_metrics_init_blues`
+                    // defines neutral zones from flat extrema only.
+                    crate::autohint::coverage::record(
+                        crate::autohint::coverage::COV_BLUE_NEUTRAL_ROUND_SKIP,
+                    );
                     continue;
                 } // neutral uses flats only
             }

@@ -3105,6 +3105,34 @@
             ]
           },
           {
+            "id": "arabic-neutral-round-blue-skip-force-autohint",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/autohint/arabic-neutral-round-skip.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 5,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ],
+              "assert_api_load_glyph_agrees": true,
+              "assert_autohint_coverage_bits_include": [
+                41
+              ]
+            },
+            "coverage": [
+              "autohint/latin:neutral-blue-round-extremum-skip"
+            ]
+          },
+          {
             "id": "latin-smooth-stem-serif-force-autohint",
             "assets": {
               "font": {

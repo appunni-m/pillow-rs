@@ -108,6 +108,8 @@ pub const COV_VSEP_DIMENSIONLESS_CONTOUR: u64 = 1 << 38;
 pub const COV_VSEP_EM_HEIGHT_FALLBACK: u64 = 1 << 39;
 /// metrics scaling: adjust the vertical scale to align the lowercase x-height.
 pub const COV_X_HEIGHT_SCALE_ADJUSTMENT: u64 = 1 << 40;
+/// blue metrics: ignore a round extremum while building a neutral blue zone.
+pub const COV_BLUE_NEUTRAL_ROUND_SKIP: u64 = 1 << 41;
 
 /// Record a coverage bit for the current glyph.
 pub fn record(bit: u64) {
