@@ -8251,6 +8251,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
         && (case.operation.starts_with("ftsizes.")
             || case.operation == "freetype.get_kerning"
             || case.operation == "freetype.get_subglyph_info"
+            || (case.operation == "freetype.reference_face"
+                && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
             || (case.operation == "set_pixel_sizes"
                 && (lifecycle_handle_param_is_null(&case.inputs.params, "face")
                     || case.case_id
