@@ -4833,6 +4833,15 @@ static int emit_outline_render(int argc, char** argv) {
         points[3].y = 24 * 64;
         bitmap_width = 16;
         bitmap_rows = 16;
+    } else if (strstr(case_id, "ftimage.FT_RASTER_FLAG_CLIP.")) {
+        points[0].x = -8 * 64;
+        points[0].y = 8 * 64;
+        points[1].x = 24 * 64;
+        points[1].y = 8 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 24 * 64;
+        points[3].x = -8 * 64;
+        points[3].y = 24 * 64;
     } else if (strstr(case_id, "@right-edge-clip-outside-target")) {
         points[0].x = 32 * 64;
         points[0].y = 0;
@@ -5210,10 +5219,19 @@ static int emit_outline_render(int argc, char** argv) {
         streq(case_id, "ftimage.FT_RASTER_FLAG_DIRECT.direct_missing_callback_noop") ||
         streq(case_id, "ftimage.FT_Raster_Params.direct_span_render_matches_c") ||
         streq(case_id, "ftimage.FT_Span.direct_span_values_match_c") ||
-        streq(case_id, "ftoutln.FT_Outline_Render.direct_render_clip_and_spans")) {
+        streq(case_id, "ftoutln.FT_Outline_Render.direct_render_clip_and_spans") ||
+        streq(case_id, "ftimage.FT_RASTER_FLAG_CLIP.direct_clip_box_limits_spans") ||
+        streq(case_id, "ftimage.FT_RASTER_FLAG_CLIP.direct_without_clip_presets_cbox")) {
         memset(buffer, 0xA5, sizeof(buffer));
         reset_recorded_outline_spans();
         params.flags = FT_RASTER_FLAG_AA | FT_RASTER_FLAG_DIRECT;
+        if (streq(case_id, "ftimage.FT_RASTER_FLAG_CLIP.direct_clip_box_limits_spans")) {
+            params.flags |= FT_RASTER_FLAG_CLIP;
+            params.clip_box.xMin = 1;
+            params.clip_box.yMin = 1;
+            params.clip_box.xMax = 6;
+            params.clip_box.yMax = 6;
+        }
         params.user = recorded_outline_user_token;
         if (!streq(case_id, "ftimage.FT_RASTER_FLAG_DIRECT.direct_missing_callback_noop")) {
             params.gray_spans = record_outline_gray_spans;

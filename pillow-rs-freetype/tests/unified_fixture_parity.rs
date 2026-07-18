@@ -18361,13 +18361,18 @@ fn rust_outline_render_once(
             Some(&outline),
             Some(&target),
             flags,
+            Some(clip_box),
             outline_render_gray_spans_present(&case.inputs.params),
         ) {
-            Ok(spans) => Ok(ok(outline_render_direct_payload(
-                spans,
-                outline_render_gray_spans_present(&case.inputs.params),
-                observed_clip_box,
-            ))),
+            Ok(spans) => {
+                let user_seen =
+                    outline_render_gray_spans_present(&case.inputs.params) && !spans.is_empty();
+                Ok(ok(outline_render_direct_payload(
+                    spans,
+                    user_seen,
+                    observed_clip_box,
+                )))
+            }
             Err(err) => Ok(error(err)),
         };
     }
@@ -19928,9 +19933,12 @@ fn outline_render_target_pitch(case: &InputCase, width: usize) -> Result<i32, St
 }
 
 fn outline_render_clip_box(params: &Value) -> Result<Option<(i32, i32, i32, i32)>, String> {
+    let raster_params = params.get("raster_params");
     let Some(clip_box) = params
-        .get("raster_params")
-        .and_then(|raster_params| raster_params.get("clip_box"))
+        .get("clip_box")
+        .or_else(|| params.get("initial_clip_box"))
+        .or_else(|| raster_params.and_then(|raster_params| raster_params.get("clip_box")))
+        .or_else(|| raster_params.and_then(|raster_params| raster_params.get("initial_clip_box")))
     else {
         return Ok(None);
     };

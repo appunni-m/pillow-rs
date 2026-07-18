@@ -379,6 +379,26 @@ pub fn rasterize_direct_spans_in_box(
     width: usize,
     height: usize,
 ) -> Result<Vec<GraySpan>, FontError> {
+    rasterize_direct_spans_in_clip_box(
+        outline,
+        width,
+        height,
+        0,
+        i32_from_usize(width),
+        0,
+        i32_from_usize(height),
+    )
+}
+
+pub fn rasterize_direct_spans_in_clip_box(
+    outline: &Outline,
+    width: usize,
+    height: usize,
+    cbox_x_min: i32,
+    cbox_x_max: i32,
+    cbox_y_min: i32,
+    cbox_y_max: i32,
+) -> Result<Vec<GraySpan>, FontError> {
     if outline.is_empty() || width == 0 || height == 0 {
         return Ok(Vec::new());
     }
@@ -403,10 +423,10 @@ pub fn rasterize_direct_spans_in_box(
         &outline.tags,
         &outline.contours,
         outline.n_contours,
-        0,
-        i32_from_usize(width),
-        0,
-        i32_from_usize(height),
+        cbox_x_min,
+        cbox_x_max,
+        cbox_y_min,
+        cbox_y_max,
     )?;
     Ok(spans)
 }
@@ -947,10 +967,6 @@ impl<'a> Worker<'a> {
         for y in self.min_ey..self.max_ey {
             let yi = usize_from_i32(y - self.min_ey);
             let scanline = &self.scanlines[yi];
-            // FT sweep: `line = origin - pitch * y`, bottom-up convention.
-            // With pitch positive: row = height-1-y for top-down buffer.
-            let dst_row = usize_from_i32(i32_from_usize(self.height) - 1 - y);
-            let row_base = dst_row * self.target_pitch + self.target_offset;
             let mut x = self.min_ex;
             let mut cover: i32 = 0;
 
@@ -962,15 +978,23 @@ impl<'a> Worker<'a> {
                         log::trace!(target: "autohint::rasterizer", "[SWEEP_SPAN] y={} x={}..{} cov_raw={} cov_out={}",
                             y, x, cell.x, cover, coverage);
                     }
-                    write_span(
-                        self.target,
-                        row_base + usize_from_i32(x) * self.target_x_step,
-                        coverage,
-                        cell.x - x,
-                        self.target_x_step,
-                    );
                     if let Some(spans) = self.spans.as_deref_mut() {
                         record_gray_span(spans, y, x, cell.x - x, coverage);
+                    } else {
+                        // FT sweep: `line = origin - pitch * y`, bottom-up
+                        // convention. With pitch positive: row = height-1-y
+                        // for top-down buffer.  Direct span mode skips target
+                        // writes and can legally report coordinates outside the
+                        // target bitmap.
+                        let dst_row = usize_from_i32(i32_from_usize(self.height) - 1 - y);
+                        let row_base = dst_row * self.target_pitch + self.target_offset;
+                        write_span(
+                            self.target,
+                            row_base + usize_from_i32(x) * self.target_x_step,
+                            coverage,
+                            cell.x - x,
+                            self.target_x_step,
+                        );
                     }
                 }
 
@@ -984,12 +1008,15 @@ impl<'a> Worker<'a> {
                         log::trace!(target: "autohint::rasterizer", "[SWEEP_PIX] y={} x={} area={} cov_raw={} cov_out={}",
                             y, cell.x, area, area, coverage);
                     }
-                    let off = row_base + usize_from_i32(cell.x) * self.target_x_step;
-                    if let Some(slot) = self.target.get_mut(off) {
-                        *slot = u8_from_i32(coverage);
-                    }
                     if let Some(spans) = self.spans.as_deref_mut() {
                         record_gray_span(spans, y, cell.x, 1, coverage);
+                    } else {
+                        let dst_row = usize_from_i32(i32_from_usize(self.height) - 1 - y);
+                        let row_base = dst_row * self.target_pitch + self.target_offset;
+                        let off = row_base + usize_from_i32(cell.x) * self.target_x_step;
+                        if let Some(slot) = self.target.get_mut(off) {
+                            *slot = u8_from_i32(coverage);
+                        }
                     }
                 }
 
@@ -1003,15 +1030,18 @@ impl<'a> Worker<'a> {
                     log::trace!(target: "autohint::rasterizer", "[SWEEP_TAIL] y={} x={}..{} cov_raw={} cov_out={}",
                         y, x, self.max_ex, cover, coverage);
                 }
-                write_span(
-                    self.target,
-                    row_base + usize_from_i32(x) * self.target_x_step,
-                    coverage,
-                    self.max_ex - x,
-                    self.target_x_step,
-                );
                 if let Some(spans) = self.spans.as_deref_mut() {
                     record_gray_span(spans, y, x, self.max_ex - x, coverage);
+                } else {
+                    let dst_row = usize_from_i32(i32_from_usize(self.height) - 1 - y);
+                    let row_base = dst_row * self.target_pitch + self.target_offset;
+                    write_span(
+                        self.target,
+                        row_base + usize_from_i32(x) * self.target_x_step,
+                        coverage,
+                        self.max_ex - x,
+                        self.target_x_step,
+                    );
                 }
             }
         }
@@ -1092,7 +1122,10 @@ fn record_gray_span(spans: &mut Vec<GraySpan>, y: i32, x: i32, len: i32, coverag
     }
     spans.push(GraySpan {
         y,
-        x: u16::try_from(x.max(0)).unwrap_or(u16::MAX),
+        // FreeType exposes direct smooth spans through `FT_Span.x` as an
+        // `short` (`ftimage.h`).  Preserve the signed 16-bit representation so
+        // negative direct-render coordinates match the C ABI bit pattern.
+        x: (x as i16) as u16,
         len: u16::try_from(len).unwrap_or(u16::MAX),
         coverage: u8_from_i32(coverage),
     });

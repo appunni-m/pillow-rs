@@ -136,6 +136,15 @@ Verified progress:
 - Rust FFI, C ABI, and WASM ABI direct-span test payloads now include the
   observed public `clip_box`, matching pinned FreeType's no-`CLIP` cbox preset
   behavior for this direct render row.
+- Added real `outline_model` fixture
+  `outlines/synthetic/crossing-clip-boundaries.json`.
+- Pinned C oracle now records the two `FT_RASTER_FLAG_CLIP` direct-render rows:
+  caller-supplied `CLIP` bounds and no-`CLIP` CBox preset behavior.
+- Rust direct-span rendering now passes the caller clip box to the gray
+  rasterizer when `FT_RASTER_FLAG_CLIP` is set, presets the integer-pixel CBox
+  from `FT_Outline_Get_CBox` when `CLIP` is absent, preserves signed
+  `FT_Span.x` bit patterns for negative direct spans, and skips target-buffer
+  writes in direct callback mode.
 
 Focused non-coverage result:
 
@@ -163,14 +172,14 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_OUTLINE_NONE
 
 Result: `4 / 4` runtime parity rows passed, `0` failed, `0` pending.
 
-Full non-coverage result after the direct-span clip row:
+Full non-coverage result after the `FT_RASTER_FLAG_CLIP` direct-span rows:
 
 ```bash
 make -C pillow-rs-freetype test
 ```
 
-Result: `7126 / 7126` runnable rows passed, `0` failed, `108` pending. Route
-audit: `real-parity` `3709`, `pending-route` `100`.
+Result: `7128 / 7128` runnable rows passed, `0` failed, `106` pending. Route
+audit: `real-parity` `3711`, `pending-route` `98`.
 
 Broadened non-coverage result:
 
@@ -178,15 +187,14 @@ Broadened non-coverage result:
 make -C pillow-rs-freetype test-op OP=ftoutln.outline_render
 ```
 
-Result after the direct-span clip row: `74 / 74` runnable rows passed, `0`
-failed, `15` pending.
+Result after the `FT_RASTER_FLAG_CLIP` direct-span rows: `76 / 76` runnable
+rows passed, `0` failed, `13` pending.
 
 Current remaining `ftoutln.outline_render` blockers are missing explicit
 fixtures or non-fixture public harness surfaces, led by:
-`dropout-thin-stems-scantype.json`, `crossing-clip-boundaries.json`,
-`cw-ccw-orientation-pairs.json`, and `params-logging-renderer.json`. Keep
-fixing these as separate exact C oracle routes; do not reintroduce generic
-square fallback for missing assets.
+`dropout-thin-stems-scantype.json`, `cw-ccw-orientation-pairs.json`, and
+`params-logging-renderer.json`. Keep fixing these as separate exact C oracle
+routes; do not reintroduce generic square fallback for missing assets.
 
 ### Issue Set B: `FT_RASTER_FLAG_DIRECT` direct-span callback parity
 

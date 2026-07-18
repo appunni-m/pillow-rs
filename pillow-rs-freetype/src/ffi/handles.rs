@@ -1702,6 +1702,7 @@ pub fn FT_Outline_Render_Direct_Spans(
     outline: Option<&FT_OutlineSnapshot>,
     target: Option<&FT_Bitmap_C>,
     flags: FT_Int,
+    clip_box: Option<FT_BBox>,
     gray_spans_present: bool,
 ) -> Result<Vec<(i32, FT_Span)>, FT_Error> {
     if library.is_none() {
@@ -1745,23 +1746,49 @@ pub fn FT_Outline_Render_Direct_Spans(
             usize_from_i32(outline.cbox_y_max - outline.cbox_y_min),
         )
     };
-    grays::rasterize_direct_spans_in_box(&outline, width, rows)
-        .map_err(error_to_ft)
-        .map(|spans| {
-            spans
-                .into_iter()
-                .map(|span| {
-                    (
-                        span.y,
-                        FT_Span {
-                            x: span.x,
-                            len: span.len,
-                            coverage: span.coverage,
-                        },
-                    )
-                })
-                .collect()
-        })
+    let spans = if flags & FT_RASTER_FLAG_CLIP as FT_Int != 0 {
+        let clip_box = clip_box.unwrap_or_default();
+        grays::rasterize_direct_spans_in_clip_box(
+            &outline,
+            width,
+            rows,
+            i32::try_from(clip_box.xMin).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?,
+            i32::try_from(clip_box.xMax).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?,
+            i32::try_from(clip_box.yMin).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?,
+            i32::try_from(clip_box.yMax).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?,
+        )
+    } else {
+        // FreeType 2.14.3 `src/base/ftoutln.c:635-640` presets
+        // `params.clip_box` from `FT_Outline_Get_CBox` when DIRECT is set and
+        // CLIP is absent.  The CBox is in 26.6 units; the gray renderer receives
+        // integer pixel bounds.
+        let cbox_x_min =
+            i32::try_from(cbox.xMin >> 6).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?;
+        let cbox_y_min =
+            i32::try_from(cbox.yMin >> 6).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?;
+        let cbox_x_max = i32::try_from((cbox.xMax + 63) >> 6)
+            .map_err(|_| FT_Err_Invalid_Argument as FT_Error)?;
+        let cbox_y_max = i32::try_from((cbox.yMax + 63) >> 6)
+            .map_err(|_| FT_Err_Invalid_Argument as FT_Error)?;
+        grays::rasterize_direct_spans_in_clip_box(
+            &outline, width, rows, cbox_x_min, cbox_x_max, cbox_y_min, cbox_y_max,
+        )
+    };
+    spans.map_err(error_to_ft).map(|spans| {
+        spans
+            .into_iter()
+            .map(|span| {
+                (
+                    span.y,
+                    FT_Span {
+                        x: span.x,
+                        len: span.len,
+                        coverage: span.coverage,
+                    },
+                )
+            })
+            .collect()
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
