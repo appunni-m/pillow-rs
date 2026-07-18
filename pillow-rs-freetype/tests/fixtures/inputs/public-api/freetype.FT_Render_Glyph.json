@@ -1243,6 +1243,60 @@
             ]
           },
           {
+            "id": "pure-cff-cubic-close-to-start-mono",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 24
+              },
+              "font_render_text": "h",
+              "assert_font_render_mode_agrees": true,
+              "glyph_index": 40,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_MONO"
+            },
+            "coverage": [
+              "render/mono:cff-cubic-close-to-start"
+            ]
+          },
+          {
+            "id": "pure-cff-cubic-close-to-start-sdf",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "fonts/cff/pure-cff-cubic.otf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 24
+              },
+              "font_render_text": "h",
+              "assert_font_render_mode_agrees": true,
+              "glyph_index": 40,
+              "load_flags": [
+                "FT_LOAD_NO_HINTING"
+              ],
+              "render_mode": "FT_RENDER_MODE_SDF"
+            },
+            "coverage": [
+              "render/sdf:cff-cubic-close-to-start"
+            ]
+          },
+          {
             "id": "pure-cff-tiny-cubic-y-span-mono",
             "assets": {
               "font": {

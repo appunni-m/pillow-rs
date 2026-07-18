@@ -3666,6 +3666,45 @@ explicit endpoint equals its start, let the pinned CFF builder behavior remove
 that duplicate endpoint, then prove the resulting `[on, cubic, cubic]` contour
 through an exact `FT_Render_Glyph` SDF row.
 
+## CFF cubic close-to-start render behavior
+
+The maintained CFF cubic fixture now appends `cubic_close_to_start` as stable
+gid 40 / U+0068.  Its source charstring explicitly curves back to the contour
+start, and the CFF builder removes that duplicate final on-curve endpoint, so
+the loaded outline reaches the render walkers as `[on, cubic, cubic]`.
+
+The first exact SDF row exposed the real divergence: pinned
+`FT_Outline_Decompose` accepted two final cubic controls and closed the curve to
+`v_start` (`base/ftoutln.c:224-273`), while Rust rejected the same valid contour
+with `FT_Err_Invalid_Outline` before its already-present close-to-start branch.
+Both Rust walkers had the same off-by-one endpoint precheck, so the fix applies
+to `MonoOutlineProfileBuilder` and `SdfFlattener`.  Two exact public
+`FT_Render_Glyph` rows now prove the topology through MONO and SDF rendering
+with pinned C oracle, Rust FFI, C ABI, and WASM ABI agreement.
+
+Failed focused runs `7a29e6bb-fad1-47fd-a8c0-7252770d32d2` and
+`1afe03a6-80cc-48b6-b02f-6644faab722a` caught the SDF arm before both walkers
+were corrected.  Focused runs `f9e07ccf-cc8e-460d-b8a7-87960eeb71d4` and
+`ddfbcbf6-7305-4765-8e41-599c19b671b9` pass the SDF-only and combined
+MONO/SDF rows.  Full managed run
+`81a6df6a-7a15-4665-9d58-d485c4736d8c` passes, ingests snapshot
+`57a961a0-a56f-4131-8130-b2cab079ae23`, and reports route audit
+`concrete_cases=7207` with 3,653 real-parity rows.  Against snapshot
+`52854a95-1a36-46fd-9a84-f226a12ad2c4`, coverage moves from 20,562 / 21,513
+to 20,569 / 21,513 lines, from 4,958 / 5,555 to 4,960 / 5,555 branches, and
+from 29,772 / 31,447 to 29,796 / 31,447 regions; functions remain
+1,281 / 1,417.
+
+The wait-time `src/scaler.rs` audit shows the next viable public targets are
+not duplicate files or public-name collisions.  Remaining gaps split into:
+self-`Arc` fallback setup (`792-793`) that should normally be unreachable after
+`FontData::self_arc` initialization; debug-only trace lines (`904-905`); exact
+composite point-attachment error guards (`1568-1572`) requiring a malformed
+public composite that reaches scaled attachment; empty-outline autohint return
+(`1808`); and native bytecode context construction sides (`937-947`) that need
+real public bytecode failure or context-reuse rows.  Future work should select
+one of those public states and pin C behavior before adding cases.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
