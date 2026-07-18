@@ -699,7 +699,9 @@ fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness 
             reason: format!("{operation}:{reason}"),
         };
     }
-    if operation == "ftoutln.outline_decompose" {
+    if operation == "ftoutln.outline_decompose"
+        && case.case_id != "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c"
+    {
         return RuntimeReadiness::Pending {
             reason: format!(
                 "{operation}:pending-core outline callback trace route not implemented"
@@ -9834,6 +9836,14 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             .to_string(),
             case.case_id.clone(),
         ]),
+        "ftoutln.outline_decompose"
+            if case.case_id == "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c" =>
+        {
+            Ok(vec![
+                "--outline-decompose".to_string(),
+                case.case_id.clone(),
+            ])
+        }
         "ftoutln.outline_get_bitmap" if outline_get_bitmap_runtime_supported(case) => Ok(vec![
             "--outline-get-bitmap".to_string(),
             outline_get_bitmap_mode(case).to_string(),
@@ -10414,6 +10424,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftoutln.outline_transform" => rust_outline_transform_runtime_output(case),
         "ftoutln.outline_render" => rust_outline_render_runtime_output(case),
         "ftoutln.outline_render_direct" => outline_render_direct_fallback_runtime_output(case),
+        "ftoutln.outline_decompose" => rust_outline_decompose_runtime_output(case),
         "ftadvanc.get_advance" => {
             let face = if advance_preserve_probe_face(case)? {
                 rust_new_face_without_size(case)?
@@ -11096,6 +11107,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftoutln.outline_transform" => c_outline_transform_runtime_output(case),
         "ftoutln.outline_render" => c_outline_render_runtime_output(case),
         "ftoutln.outline_render_direct" => outline_render_direct_fallback_runtime_output(case),
+        "ftoutln.outline_decompose" => c_outline_decompose_runtime_output(case),
         "ftadvanc.get_advance" => {
             let (library, face) = if advance_preserve_probe_face(case)? {
                 c_new_face_without_size(case)?
@@ -11617,6 +11629,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftoutln.outline_transform" => wasm_outline_transform_runtime_output(case),
         "ftoutln.outline_render" => wasm_outline_render_runtime_output(case),
         "ftoutln.outline_render_direct" => outline_render_direct_fallback_runtime_output(case),
+        "ftoutln.outline_decompose" => wasm_outline_decompose_runtime_output(case),
         "ftadvanc.get_advance" => {
             let handle = if advance_preserve_probe_face(case)? {
                 wasm_new_face_without_size(case)?
@@ -18106,6 +18119,103 @@ fn wasm_outline_transform_runtime_output(case: &InputCase) -> Result<RunOutput, 
     )
 }
 
+fn rust_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    let outline = outline_render_snapshot(&outline_render_outline(case)?);
+    match FT_Outline_Decompose_Trace(Some(&outline), &outline_decompose_transforms(case)?) {
+        Ok(runs) => Ok(ok(outline_decompose_trace_payload(runs))),
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn c_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    let outline_model = outline_render_outline(case)?;
+    let mut outline = CRenderOutlineStorage::new(&outline_model);
+    let outline_ptr = outline.as_ptr();
+    match c_abi::abi_support_outline_decompose_trace(
+        outline_ptr,
+        &outline_decompose_transforms(case)?,
+    ) {
+        Ok(runs) => Ok(ok(outline_decompose_trace_payload(runs))),
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn wasm_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    let outline_model = outline_render_outline(case)?;
+    let mut outline = WasmRenderOutlineStorage::new(&outline_model);
+    let outline_ptr = outline.as_ptr();
+    match wasm_abi::abi_support_outline_decompose_trace(
+        outline_ptr,
+        &outline_decompose_transforms(case)?,
+    ) {
+        Ok(runs) => Ok(ok(outline_decompose_trace_payload(runs))),
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn outline_decompose_transforms(case: &InputCase) -> Result<Vec<(FT_Int, FT_Pos)>, String> {
+    let values = case
+        .inputs
+        .params
+        .get("shift_delta_cases")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "shift_delta_cases must be an array".to_string())?;
+    values
+        .iter()
+        .map(|value| {
+            let shift = value
+                .get("shift")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| "shift_delta_cases[].shift must be an integer".to_string())?;
+            let delta = value
+                .get("delta")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| "shift_delta_cases[].delta must be an integer".to_string())?;
+            Ok((
+                FT_Int::try_from(shift).map_err(|err| err.to_string())?,
+                FT_Pos::try_from(delta).map_err(|err| err.to_string())?,
+            ))
+        })
+        .collect()
+}
+
+fn outline_decompose_trace_payload(runs: Vec<FTOutlineDecomposeRun>) -> Value {
+    json!({
+        "runs": runs
+            .into_iter()
+            .map(|run| {
+                json!({
+                    "shift": run.shift,
+                    "delta": run.delta,
+                    "status": FT_Err_Ok,
+                    "events": run.events
+                        .into_iter()
+                        .map(|event| {
+                            json!({
+                                "kind": event.kind,
+                                "points": event.points.into_iter().map(vector_json).collect::<Vec<_>>(),
+                            })
+                        })
+                        .collect::<Vec<_>>(),
+                    "transformed_points": run
+                        .transformed_points
+                        .into_iter()
+                        .map(vector_json)
+                        .collect::<Vec<_>>(),
+                    "user_seen": run.user_seen,
+                })
+            })
+            .collect::<Vec<_>>()
+    })
+}
+
+fn vector_json(vector: FT_Vector) -> Value {
+    json!({
+        "x": vector.x,
+        "y": vector.y,
+    })
+}
+
 // The legacy direct-span rows are still classified as fallback coverage and
 // intentionally remain on their pre-existing shared handler.  The public
 // bitmap matrix below must not turn them into apparent C/C-ABI/WASM parity.
@@ -22586,6 +22696,7 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
             require_path(output, "/node/locked", label, case)
         }
         "outline_render" => validate_outline_render_output(output, label, case),
+        "outline_decompose" => require_path(output, "/runs", label, case),
         "outline_get_bitmap" => validate_outline_get_bitmap_output(output, label, case),
         "api_void" => require_path(output, "/void", label, case),
         "cache_lifecycle" => {
@@ -22686,6 +22797,7 @@ fn comparison_schema(case: &InputCase) -> &str {
         | "ftglyph.matrix_multiply"
         | "ftglyph.matrix_invert" => return "math_rows",
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => return "outline_render",
+        "ftoutln.outline_decompose" => return "outline_decompose",
         "ftoutln.outline_reverse" | "ftoutln.outline_transform" => return "api_object",
         "ftoutln.outline_get_bitmap" if outline_get_bitmap_runtime_supported(case) => {
             return "outline_get_bitmap";

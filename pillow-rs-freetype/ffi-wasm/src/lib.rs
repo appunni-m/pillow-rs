@@ -982,6 +982,15 @@ pub fn abi_support_outline_render_direct_spans(
     }
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_outline_decompose_trace(
+    outline: *const FontdoneWasmOutline,
+    transforms: &[(rust_ffi::FT_Int, rust_ffi::FT_Pos)],
+) -> Result<Vec<rust_ffi::FTOutlineDecomposeRun>, FT_Error> {
+    let snapshot = outline_snapshot_from_wasm(outline);
+    rust_ffi::FT_Outline_Decompose_Trace(snapshot.as_ref(), transforms)
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_outline_get_orientation(
     outline: *const FontdoneWasmOutline,
