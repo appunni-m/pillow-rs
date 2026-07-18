@@ -700,19 +700,7 @@ fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness 
         };
     }
     if operation == "ftoutln.outline_decompose"
-        && !matches!(
-            case.case_id.as_str(),
-            "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c"
-                | "ftimage.FT_Outline_Funcs.callback_order_matches_c"
-                | "ftimage.FT_Outline_Funcs.callback_error_propagates"
-                | "ftimage.FT_CURVE_TAG.classifies_outline_tags"
-                | "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c"
-                | "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c"
-                | "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c"
-                | "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order"
-                | "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks"
-                | "ftoutln.FT_Outline_Decompose.callback_error_propagates"
-        )
+        && !outline_decompose_runtime_case_supported(&case.case_id)
     {
         return RuntimeReadiness::Pending {
             reason: format!(
@@ -9849,21 +9837,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             .to_string(),
             case.case_id.clone(),
         ]),
-        "ftoutln.outline_decompose"
-            if matches!(
-                case.case_id.as_str(),
-                "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c"
-                    | "ftimage.FT_Outline_Funcs.callback_order_matches_c"
-                    | "ftimage.FT_Outline_Funcs.callback_error_propagates"
-                    | "ftimage.FT_CURVE_TAG.classifies_outline_tags"
-                    | "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c"
-                    | "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c"
-                    | "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c"
-                    | "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order"
-                    | "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks"
-                    | "ftoutln.FT_Outline_Decompose.callback_error_propagates"
-            ) =>
-        {
+        "ftoutln.outline_decompose" if outline_decompose_runtime_case_supported(&case.case_id) => {
             Ok(vec![
                 "--outline-decompose".to_string(),
                 case.case_id.clone(),
@@ -18219,6 +18193,23 @@ fn wasm_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, 
     }
 }
 
+fn outline_decompose_runtime_case_supported(case_id: &str) -> bool {
+    matches!(
+        case_id,
+        "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c"
+            | "ftimage.FT_Outline_Funcs.callback_order_matches_c"
+            | "ftimage.FT_Outline_Funcs.callback_error_propagates"
+            | "ftimage.FT_CURVE_TAG.classifies_outline_tags"
+            | "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c"
+            | "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c"
+            | "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c"
+            | "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order"
+            | "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks"
+            | "ftoutln.FT_Outline_Decompose.callback_error_propagates"
+    ) || case_id.split_once('@').map_or(case_id, |(base, _)| base)
+        == "ftimage.FT_Outline_MoveTo_Func.decompose_starts_each_contour"
+}
+
 fn rust_cubic_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
     let outline = outline_render_snapshot(&outline_from_asset_key(case, "cff_outline")?);
     let runs = FT_Outline_Decompose_Trace(Some(&outline), &outline_decompose_transforms(case)?)
@@ -18297,6 +18288,7 @@ fn outline_decompose_transforms(case: &InputCase) -> Result<Vec<(FT_Int, FT_Pos)
         .inputs
         .params
         .get("shift_delta_cases")
+        .or_else(|| case.inputs.params.get("shift_delta_matrix"))
         .and_then(Value::as_array)
     {
         return values
@@ -20342,6 +20334,7 @@ fn outline_render_fixture_outline(
         .inputs
         .assets
         .get("outline")
+        .or_else(|| case.inputs.assets.get("synthetic_outline"))
         .or_else(|| case.inputs.assets.get("synthetic_outlines"))
     else {
         return Ok(None);
@@ -20570,6 +20563,7 @@ fn outline_asset_id(case: &InputCase) -> Option<&str> {
     case.inputs
         .assets
         .get("outline")
+        .or_else(|| case.inputs.assets.get("synthetic_outline"))
         .and_then(|asset| match asset {
             Asset::Ref { id: Some(id), .. } => Some(id.as_str()),
             Asset::File { path, .. } => Some(path.as_str()),

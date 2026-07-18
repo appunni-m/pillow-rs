@@ -40,6 +40,11 @@ static int streq(const char* a, const char* b) {
     return strcmp(a, b) == 0;
 }
 
+static int is_moveto_starts_each_contour_case(const char* case_id) {
+    return streq(case_id, "ftimage.FT_Outline_MoveTo_Func.decompose_starts_each_contour@g36-f1") ||
+           streq(case_id, "ftimage.FT_Outline_MoveTo_Func.decompose_starts_each_contour@g37-f2");
+}
+
 static void print_json_bool(int value);
 static void print_slot_body(FT_GlyphSlot slot, FT_UInt glyph_index);
 
@@ -5462,6 +5467,7 @@ static int emit_outline_decompose(int argc, char** argv) {
         !streq(case_id, "ftimage.FT_Outline_Funcs.callback_order_matches_c") &&
         !streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates") &&
         !streq(case_id, "ftimage.FT_CURVE_TAG.classifies_outline_tags") &&
+        !is_moveto_starts_each_contour_case(case_id) &&
         !streq(case_id, "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c") &&
         !streq(case_id, "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c") &&
         !streq(case_id, "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c") &&
@@ -5507,6 +5513,7 @@ static int emit_outline_decompose(int argc, char** argv) {
     if (streq(case_id, "ftimage.FT_Outline_Funcs.callback_order_matches_c") ||
         streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates") ||
         streq(case_id, "ftimage.FT_CURVE_TAG.classifies_outline_tags") ||
+        is_moveto_starts_each_contour_case(case_id) ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
         points[0].x = 0;
@@ -5539,12 +5546,49 @@ static int emit_outline_decompose(int argc, char** argv) {
             tags[0] = FT_CURVE_TAG_ON | FT_CURVE_TAG_TOUCH_X;
             tags[4] = FT_CURVE_TAG_CONIC | FT_CURVE_TAG_HAS_SCANMODE | 0x40;
             tags[8] = FT_CURVE_TAG_CUBIC | FT_CURVE_TAG_TOUCH_Y;
+            contours[0] = 2;
+            contours[1] = 6;
+            contours[2] = 10;
+            n_contours = 3;
+            n_points = 11;
+        } else if (is_moveto_starts_each_contour_case(case_id)) {
+            points[0].x = -96;
+            points[0].y = -64;
+            points[1].x = -32;
+            points[1].y = -64;
+            points[2].x = -32;
+            points[2].y = -16;
+            points[3].x = 32;
+            points[3].y = -48;
+            points[4].x = 64;
+            points[4].y = 16;
+            points[5].x = 96;
+            points[5].y = -48;
+            points[6].x = -128;
+            points[6].y = 64;
+            points[7].x = -96;
+            points[7].y = 128;
+            points[8].x = -32;
+            points[8].y = 128;
+            points[9].x = 0;
+            points[9].y = 64;
+            tags[4] = FT_CURVE_TAG_CONIC;
+            tags[5] = FT_CURVE_TAG_ON;
+            tags[7] = FT_CURVE_TAG_CUBIC;
+            tags[8] = FT_CURVE_TAG_CUBIC;
+            tags[9] = FT_CURVE_TAG_ON;
+            contours[0] = 2;
+            contours[1] = 5;
+            contours[2] = 9;
+            n_contours = 3;
+            n_points = 10;
+        } else {
+            contours[0] = 2;
+            contours[1] = 6;
+            contours[2] = 10;
+            n_contours = 3;
+            n_points = 11;
         }
-        contours[0] = 2;
-        contours[1] = 6;
-        contours[2] = 10;
-        n_contours = 3;
-        n_points = 11;
     } else if (streq(case_id, "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks")) {
         points[0].x = 32;
         points[0].y = 48;
@@ -5636,6 +5680,8 @@ static int emit_outline_decompose(int argc, char** argv) {
     } else if (streq(case_id, "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c")) {
         transform_count = 2;
     } else if (streq(case_id, "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c")) {
+        transform_count = 2;
+    } else if (is_moveto_starts_each_contour_case(case_id)) {
         transform_count = 2;
     }
     if (streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates")) {
@@ -5731,6 +5777,9 @@ static int emit_outline_decompose(int argc, char** argv) {
         } else if (streq(case_id, "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c") && i == 1) {
             funcs.shift = 1;
             funcs.delta = -16;
+        } else if (is_moveto_starts_each_contour_case(case_id) && i == 1) {
+            funcs.shift = 1;
+            funcs.delta = 32;
         } else {
             funcs.shift = shifts[i];
             funcs.delta = deltas[i];
