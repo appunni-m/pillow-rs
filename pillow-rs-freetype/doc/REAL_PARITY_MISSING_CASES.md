@@ -40,12 +40,13 @@ Parity-only rule for this phase:
 
 ### Issue Set A: `ftoutln.outline_render` pending outline fixtures
 
-Current pending count by operation: `41` rows.
+Current pending count by operation: `25` rows.
 
 Largest blockers from the current parity run:
 
 - `11` rows: missing `outlines/synthetic/simple-rectangle.json`
 - `6` rows: missing `outlines/synthetic/thin-diagonal-stems.json`
+  (fixed by `FT_OUTLINE_HIGH_PRECISION` verified progress below)
 - `6` rows: missing `outlines/synthetic/large-render-limits.json`
 - `3` rows: missing `outlines/synthetic/dropout-thin-stems-scantype.json`
 - `3` rows: missing `outlines/synthetic/simple-overlap-thin-matrix.json`
@@ -96,6 +97,16 @@ Verified progress:
   `FT_RASTER_FLAG_AA` outline-render behavior:
   no-AA gray targets render packed mono bytes and return success; AA mono
   targets return `FT_Err_Cannot_Render_Glyph`.
+- Added real `outline_model` fixture
+  `outlines/synthetic/thin-diagonal-stems.json`.
+- Unified harness now recognizes `outline_flags_matrix` separately from raster
+  `flags_matrix`, so rows that vary `FT_Outline.flags` compare the intended
+  public field instead of staying pending for missing raster flags.
+- Pinned C oracle now emits the
+  `ftimage.FT_OUTLINE_HIGH_PRECISION.raster_hint_behavior` outline flag matrix:
+  `FT_OUTLINE_NONE` and `FT_OUTLINE_HIGH_PRECISION`.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for all six
+  `FT_OUTLINE_HIGH_PRECISION` synthetic diagonal-stem variants.
 
 Focused non-coverage result:
 
@@ -105,13 +116,29 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_RASTER_FLAG_AA
 
 Result: `5 / 5` runtime parity rows passed, `0` failed, `0` pending.
 
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_OUTLINE_HIGH_PRECISION
+```
+
+Result: `7 / 7` runtime parity rows passed, `0` failed, `0` pending.
+
+Full non-coverage result after the `FT_OUTLINE_HIGH_PRECISION` rows:
+
+```bash
+make -C pillow-rs-freetype test
+```
+
+Result: `7116 / 7116` runnable rows passed, `0` failed, `118` pending. Route
+audit: `real-parity` `3699`, `pending-route` `110`.
+
 Broadened non-coverage result:
 
 ```bash
 make -C pillow-rs-freetype test-op OP=ftoutln.outline_render
 ```
 
-Result: `54 / 58` runnable rows passed, `4` failed, `31` pending.
+Result after `FT_OUTLINE_HIGH_PRECISION`: `64 / 64` runnable rows passed, `0`
+failed, `25` pending.
 
 Current blocker before commit: the four failed rows are
 `FT_RASTER_FLAG_DIRECT` / `FT_Span` direct-span callback cases. They currently
