@@ -989,6 +989,11 @@ def add_default_modules_real_parity_reason(row: ConcreteInput) -> str | None:
 
 def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     if (
+        row.operation == "freetype.init_free_type"
+        and row.case_id == "freetype.FT_Init_FreeType.error_null_output_pointer"
+    ):
+        return "FT_Init_FreeType null-output-pointer error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "freetype.done_freetype"
         and row.case_id == "freetype.FT_Done_FreeType.error_null_library"
         and lifecycle_handle(row, "library") == "null"

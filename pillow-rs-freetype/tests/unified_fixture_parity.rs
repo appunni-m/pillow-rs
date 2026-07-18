@@ -8249,6 +8249,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
     // and WASM runners; expected errors must compare status and observations.
     if case.expect_error
         && (case.operation.starts_with("ftsizes.")
+            || case.operation == "freetype.init_free_type"
             || case.operation == "freetype.get_kerning"
             || case.operation == "freetype.get_subglyph_info"
             || (case.operation == "freetype.reference_face"
