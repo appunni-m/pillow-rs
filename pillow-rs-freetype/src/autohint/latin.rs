@@ -1999,12 +1999,9 @@ fn compute_blue_edges(hints: &mut GlyphHints) {
 }
 
 fn base_glyph_blues(
-    hints: &GlyphHints,
+    metrics: &AfLatinMetrics,
     is_capital: bool,
 ) -> (Option<AfLatinBlue>, Option<AfLatinBlue>) {
-    let Some(metrics) = hints.metrics.as_ref() else {
-        return (None, None);
-    };
     let axis = &metrics.axis[Dimension::Vert as usize];
 
     let top_flag = (if is_capital {
@@ -2059,7 +2056,11 @@ fn ignore_bottom_blue_alignment(hints: &mut GlyphHints, top: AfLatinBlue, bottom
     prevent_bottom_blue_alignment(hints, limit);
 }
 
-fn apply_blue_zone_ignore_adjustments(hints: &mut GlyphHints, adj_type: u32) {
+fn apply_blue_zone_ignore_adjustments(
+    hints: &mut GlyphHints,
+    metrics: &AfLatinMetrics,
+    adj_type: u32,
+) {
     if adj_type == 0 {
         return;
     }
@@ -2070,7 +2071,7 @@ fn apply_blue_zone_ignore_adjustments(hints: &mut GlyphHints, adj_type: u32) {
     let ignore_small_bottom = (adj_type & AF_IGNORE_SMALL_BOTTOM) != 0;
 
     if ignore_capital_top || ignore_capital_bottom {
-        let (top, bottom) = base_glyph_blues(hints, true);
+        let (top, bottom) = base_glyph_blues(metrics, true);
         if let (Some(top), Some(bottom)) = (top, bottom) {
             if ignore_capital_top {
                 ignore_top_blue_alignment(hints, top, bottom);
@@ -2085,7 +2086,7 @@ fn apply_blue_zone_ignore_adjustments(hints: &mut GlyphHints, adj_type: u32) {
     }
 
     if ignore_small_top || ignore_small_bottom {
-        let (top, bottom) = base_glyph_blues(hints, false);
+        let (top, bottom) = base_glyph_blues(metrics, false);
         if let (Some(top), Some(bottom)) = (top, bottom) {
             if ignore_small_top {
                 ignore_top_blue_alignment(hints, top, bottom);
@@ -2542,17 +2543,17 @@ fn apply_tilde_stretch_alignment(hints: &mut GlyphHints, adj_type: u32) {
     }
 }
 
-fn vertical_separation_accent_height_limit(hints: &GlyphHints, adj_type: u32) -> i32 {
+fn vertical_separation_accent_height_limit(metrics: &AfLatinMetrics, adj_type: u32) -> i32 {
     if adj_type == 0 || (adj_type & AF_ADJUST_NO_HEIGHT_CHECK) != 0 {
         return 0;
     }
 
-    let (small_top, small_bottom) = base_glyph_blues(hints, false);
+    let (small_top, small_bottom) = base_glyph_blues(metrics, false);
     if let (Some(top), Some(bottom)) = (small_top, small_bottom) {
         return 2 * (top.shoot_width.cur - bottom.shoot_width.cur) / 3;
     }
 
-    let (capital_top, capital_bottom) = base_glyph_blues(hints, true);
+    let (capital_top, capital_bottom) = base_glyph_blues(metrics, true);
     if let (Some(top), Some(bottom)) = (capital_top, capital_bottom) {
         return (top.shoot_width.cur - bottom.shoot_width.cur) / 2;
     }
@@ -2561,15 +2562,13 @@ fn vertical_separation_accent_height_limit(hints: &GlyphHints, adj_type: u32) ->
     // four tenths of the scaled EM when neither lowercase nor uppercase
     // blue-zone pair exists.
     crate::autohint::coverage::record(crate::autohint::coverage::COV_VSEP_EM_HEIGHT_FALLBACK);
-    let Some(metrics) = hints.metrics.as_ref() else {
-        return 0;
-    };
     let scale = metrics.axis[Dimension::Vert as usize].scale;
     ft_mul_fix(metrics.units_per_em * 4 / 10, scale)
 }
 
 fn vertical_separation_adjustments(
     hints: &mut GlyphHints,
+    metrics: &AfLatinMetrics,
     glyph_index: u16,
     font_data: &crate::tables::FontData,
 ) {
@@ -2600,7 +2599,7 @@ fn vertical_separation_adjustments(
     // C: `af_latin_hints_apply` leaves `accent_height_limit` at zero for
     // `AF_ADJUST_NO_HEIGHT_CHECK`, then the later contour-height guard skips
     // this adjustment.  A fixed limit incorrectly moves punctuation stems.
-    let accent_height_limit = vertical_separation_accent_height_limit(hints, adj_type);
+    let accent_height_limit = vertical_separation_accent_height_limit(metrics, adj_type);
 
     if (adjust_top && hints.contours.len() >= 2) || (adjust_below_top && hints.contours.len() >= 3)
     {
@@ -2883,7 +2882,7 @@ pub fn apply_hints(
             super::cjk::cjk_compute_edges(&mut hints, Dimension::Horz, false);
             super::cjk::cjk_compute_blue_edges(&mut hints, Dimension::Horz);
         } else {
-            compute_edges(&mut hints, Dimension::Horz);
+            compute_edges(&mut hints, Dimension::Horz, metrics);
         }
     }
 
@@ -2913,15 +2912,14 @@ pub fn apply_hints(
         super::cjk::cjk_compute_edges(&mut hints, Dimension::Vert, false);
         super::cjk::cjk_compute_blue_edges(&mut hints, Dimension::Vert);
     } else {
-        compute_edges(&mut hints, Dimension::Vert);
+        compute_edges(&mut hints, Dimension::Vert, metrics);
     }
     if let Some(data) = font_data {
         let adj_type = reverse_cmap_lookup(data, glyph_index).map_or(0, adjustment_database_lookup);
-        apply_blue_zone_ignore_adjustments(&mut hints, adj_type);
+        apply_blue_zone_ignore_adjustments(&mut hints, metrics, adj_type);
     }
-    let is_nonbase = hints.metrics.as_ref().is_some_and(|m| {
-        (glyph_index as usize) < m.non_base_glyphs.len() && m.non_base_glyphs[glyph_index as usize]
-    });
+    let is_nonbase = (glyph_index as usize) < metrics.non_base_glyphs.len()
+        && metrics.non_base_glyphs[glyph_index as usize];
     if !use_cjk_edges && !is_nonbase {
         compute_blue_edges(&mut hints);
     }
@@ -2954,7 +2952,7 @@ pub fn apply_hints(
         align_weak_points(&mut hints, dim);
         if dim == Dimension::Vert {
             if let Some(data) = font_data {
-                vertical_separation_adjustments(&mut hints, glyph_index, data);
+                vertical_separation_adjustments(&mut hints, metrics, glyph_index, data);
             }
         }
     }
@@ -3512,7 +3510,7 @@ fn abs_dir(d: Direction) -> Direction {
 ///
 /// Uses `edge_distance_threshold` (standard_width/5) to determine when
 /// segments are "at the same position" and should merge.
-fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
+fn compute_edges(hints: &mut GlyphHints, dim: Dimension, metrics: &AfLatinMetrics) {
     let axis = &mut hints.axis[dim as usize];
     axis.edges.clear();
 
@@ -3531,13 +3529,12 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
     };
     let seg_width_thresh = ft_mul_div(32, 0x10000, scale); // 0.5px in font units
 
-    // Edge distance threshold: at most 0.25px, from metrics if available.
+    // Edge distance threshold: at most 0.25px.  C reaches this helper through
+    // `af_latin_hints_apply` with initialized scaler metrics
+    // (`aflatin.c:2154-2232`), so the private Rust helper takes metrics
+    // directly instead of carrying a public metric-less fallback.
     let edge_dist_thresh = {
-        let raw = if let Some(ref met) = hints.metrics {
-            met.axis[dim as usize].edge_distance_threshold
-        } else {
-            50 // fallback
-        };
+        let raw = metrics.axis[dim as usize].edge_distance_threshold;
         let mut edt = ft_mul_fix(raw, scale);
         if edt > 16 {
             edt = 16;
