@@ -242,6 +242,37 @@ fn find_image_in_subtable(
                 recurse_count,
             )
         }
+        2 => {
+            // C: `tt_sbit_decoder_load_image` in `src/sfnt/ttsbit.c:1302-1318`
+            // reads a constant image size plus big metrics from the EBLC index
+            // subtable, then derives the selected glyph's EBDT byte range from
+            // `(glyph_index - start) * image_size`.
+            let image_size =
+                read_u32(eblc, subtable_start + 8).ok_or_else(|| no_bitmap_error(recurse_count))?;
+            let _metrics = read_big_metrics(
+                eblc.get(subtable_start + 12..subtable_start + 20)
+                    .ok_or_else(|| no_bitmap_error(recurse_count))?,
+            )?;
+            let glyph_delta = u32::from(glyph_index - first_glyph);
+            let image_start = image_size.checked_mul(glyph_delta).ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap image offset overflow".into())
+            })?;
+            let image_end = image_start.checked_add(image_size).ok_or_else(|| {
+                FontError::InvalidFont("embedded bitmap image offset overflow".into())
+            })?;
+            image_found_or_missing(
+                strike,
+                eblc,
+                ebdt,
+                SbitImageRecord {
+                    format: image_format,
+                    offset: image_offset,
+                    start: image_start,
+                    end: image_end,
+                },
+                recurse_count,
+            )
+        }
         3 => {
             let offset_index = usize::from(glyph_index - first_glyph);
             let offsets_start = subtable_offset_start(subtable_start, offset_index, 2)?;
