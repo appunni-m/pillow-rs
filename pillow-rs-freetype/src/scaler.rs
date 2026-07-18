@@ -1564,12 +1564,12 @@ fn scale_composite_components(
             // C: TT_Process_Composite_Component in ttgload.c:1051-1079.
             // Match the current component point to a point from previously
             // loaded components after the component transform has been applied.
-            let parent = points.get(comp.arg1 as usize).ok_or_else(|| {
-                FontError::InvalidOutline("glyf: composite parent point out of range".into())
-            })?;
-            let component = transformed.get(comp.arg2 as usize).ok_or_else(|| {
-                FontError::InvalidOutline("glyf: composite component point out of range".into())
-            })?;
+            let parent = points
+                .get(comp.arg1 as usize)
+                .ok_or(FontError::InvalidComposite)?;
+            let component = transformed
+                .get(comp.arg2 as usize)
+                .ok_or(FontError::InvalidComposite)?;
             (parent.x - component.x, parent.y - component.y)
         };
         for point in transformed {
@@ -1803,17 +1803,12 @@ fn autohint_glyph(
 ) -> Option<i32> {
     use crate::outline::Outline;
 
-    let num_contours = raw_outline.num_contours as i32;
-    if num_contours == 0 {
-        return None;
-    }
-
     // Build a temporary Outline with scaled 26.6 coords.  Move the point
     // buffer into the outline and back out after hinting so glyph loads mirror
     // C's in-place glyph-zone mutation without cloning every point.
     let points = std::mem::take(scaled);
     let mut outline = Outline {
-        n_contours: num_contours,
+        n_contours: raw_outline.num_contours as i32,
         contours: raw_outline
             .end_pts_of_contours
             .iter()

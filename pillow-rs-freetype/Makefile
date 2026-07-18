@@ -299,8 +299,7 @@ route-audit: api-abi-check
 
 .PHONY: font-fixture-hinter
 font-fixture-hinter:
-	@command -v ttx >/dev/null || { echo "fonttools ttx is required" >&2; exit 1; }
-	ttx -q --no-recalc-timestamp -o tests/fixtures/fonts/glyf/hinter-control-matrix.ttf \
+	$(PYTHON) -m fontTools.ttx -q --no-recalc-timestamp -o tests/fixtures/fonts/glyf/hinter-control-matrix.ttf \
 		tests/fixtures/font-sources/hinter-control-matrix.ttx
 	$(PYTHON) scripts/build_hinter_edge_fixtures.py
 
@@ -310,10 +309,9 @@ font-fixture-render:
 
 .PHONY: font-fixture-cjk
 font-fixture-cjk:
-	@command -v ttx >/dev/null || { echo "fonttools ttx is required" >&2; exit 1; }
-	ttx -q --no-recalc-timestamp -o tests/fixtures/fonts/autohint/cjk-coverage.ttf \
+	$(PYTHON) -m fontTools.ttx -q --no-recalc-timestamp -o tests/fixtures/fonts/autohint/cjk-coverage.ttf \
 		tests/fixtures/font-sources/cjk-coverage.ttx
-	ttx -q --no-recalc-timestamp -o tests/fixtures/fonts/autohint/cjk-width-order.ttf \
+	$(PYTHON) -m fontTools.ttx -q --no-recalc-timestamp -o tests/fixtures/fonts/autohint/cjk-width-order.ttf \
 		tests/fixtures/font-sources/cjk-width-order.ttx
 
 .PHONY: font-fixture-autohint-scripts
