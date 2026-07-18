@@ -59,7 +59,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make fontdone-help$(NC)  Show crate-local fontdone targets\n"
 	@printf "  $(CYAN)make fontdone-ci$(NC)    Run fontdone docs, lint, tests, parity, FFI, bench contracts\n"
 	@printf "  $(CYAN)make fontdone-test$(NC)  Run all fontdone tests\n"
-	@printf "  $(CYAN)make fontdone-parity$(NC) Run the FreeType coverage matrix harness\n"
+	@printf "  $(CYAN)make fontdone-parity$(NC) Run the FreeType parity matrix harness\n"
 	@printf "  $(CYAN)make fontdone-ffi$(NC)   Run the no-runtime-FFI guard\n"
 	@printf "  $(CYAN)make fontdone-ffi-compat$(NC) Run FreeType-shaped facade tests\n"
 	@printf "  $(CYAN)make fontdone-doc$(NC)   Build strict fontdone rustdoc\n"

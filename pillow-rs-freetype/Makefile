@@ -52,13 +52,13 @@ help:
 	@printf "  make test-unified-coverage Run parity and write core Rust llvm-cov JSON\n"
 	@printf "  make test-unified-condition-coverage Run parity with nightly branch/condition coverage and missing lines\n"
 	@printf "  make normalize-unified-condition-coverage Cap LLVM segment hits for Coverage MCP ingestion\n"
-	@printf "  make test-api-abi     Run unified API/ABI fixture and coverage gates\n"
+	@printf "  make test-api-abi     Run unified API/ABI fixture and manifest gates\n"
 	@printf "  make test-ffi         Run the no-runtime-FFI guard for core (<1s)\n"
-	@printf "  make test-ffi-compat  Run API/ABI coverage and thin-wrapper checks\n"
+	@printf "  make test-ffi-compat  Run API/ABI manifest and thin-wrapper checks\n"
 	@printf "  make api-abi-audit    Generate C/Servo/fontdone API and ABI surface audit\n"
-	@printf "  make api-abi-check    Check manifest/input coverage and thin FFI ABI surfaces\n"
+	@printf "  make api-abi-check    Check manifest/input routing and thin FFI ABI surfaces\n"
 	@printf "  make route-audit      Classify public input rows by real, fallback, pending, or unsupported route\n"
-	@printf "  make real-parity-verify Run coverage parity, route audit, FFI gates, fmt, and clippy\n"
+	@printf "  make real-parity-verify Run parity, route audit, FFI gates, fmt, and clippy\n"
 	@printf "  make scaler-parity-focused Run the exact public FT_Load_Glyph vertical-flags bucket\n"
 	@printf "  make scaler-condition-coverage Run full condition coverage into scaler-owned artifacts\n"
 	@printf "  make scaler-condition-normalize Normalize the scaler condition report for Coverage MCP\n"
@@ -116,8 +116,7 @@ test: test-unified-fixtures test-ffi
 test-parity: test-unified-fixtures test-ffi
 
 .PHONY: real-parity-verify
-real-parity-verify: test-unified-condition-coverage route-audit test-ffi test-ffi-compat lint
-	$(MAKE) normalize-unified-condition-coverage
+real-parity-verify: test-unified-fixtures route-audit test-ffi test-ffi-compat lint
 
 .PHONY: scaler-parity-focused
 scaler-parity-focused:
