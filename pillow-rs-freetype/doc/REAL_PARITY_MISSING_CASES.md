@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_ADVANCE_FLAG_FAST_ONLY`
+Current verified result after `FT_Get_Advances` invalid-range/invalid-flags
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3784`
+  - `real-parity`: `3791`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `409`
+  - `generic-error-fallback`: `402`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2513,6 +2513,42 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY.fast_only_error_behavior
+```
+
+### Issue Set BB: `FT_Get_Advances` invalid-range/invalid-flags exact-error route
+
+Previous blocker:
+
+- `ftadvanc.FT_Get_Advances.error_invalid_range_or_flags` stayed in
+  `generic-error-fallback`.
+- The row exercised real public `FT_Get_Advances` invalid range and invalid
+  flag combinations, but the harness still accepted it as a generic
+  expected-error row instead of requiring exact C/Rust/C-ABI/WASM comparison.
+
+Plan:
+
+1. Keep the fixture intact; it covers out-of-range `start`, overflowing
+   `start + count`, invalid high-bit flags, and the `count == 0` ordering case.
+2. Compare FreeType `src/base/ftadvanc.c:158-170`: null checks first, then the
+   unsigned `start + count` range check, then `count == 0`.
+3. Require exact error comparison for all concrete variants.
+4. Classify the seven concrete variants as real parity only after focused
+   parity passes.
+
+Verified progress:
+
+- Rust already matched FreeType `src/base/ftadvanc.c:158-170` range-check
+  ordering, including invalid `start` before zero-count success.
+- The focused invalid-range/invalid-flags variants pass exact comparison
+  against pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies the seven concrete
+  `ftadvanc.FT_Get_Advances.error_invalid_range_or_flags` variants as
+  `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftadvanc.FT_Get_Advances.error_invalid_range_or_flags
 ```
 
 ## Coverage Bulk Context
