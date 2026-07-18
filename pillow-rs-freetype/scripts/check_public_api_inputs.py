@@ -1026,6 +1026,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Set_Pixel_Sizes null-face error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "set_pixel_sizes"
+        and row.case_id
+        == "freetype.FT_Set_Pixel_Sizes.error_probe_face_invalid_size_handle"
+    ):
+        return "FT_Set_Pixel_Sizes probe-face invalid-size-handle error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "freetype.select_charmap"
         and row.case_id == "freetype.FT_Select_Charmap.error_null_face"
         and lifecycle_handle_is_null(row, "face")
