@@ -130,12 +130,21 @@ struct Worker<'a> {
     target_pitch: usize,
     target_x_step: usize,
     target_offset: usize,
+    spans: Option<&'a mut Vec<GraySpan>>,
 }
 
 pub struct RasterResult {
     pub width: usize,
     pub height: usize,
     pub pixels: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GraySpan {
+    pub y: i32,
+    pub x: u16,
+    pub len: u16,
+    pub coverage: u8,
 }
 
 /// Reusable allocation storage for repeated gray rasterizer passes.
@@ -365,6 +374,43 @@ pub fn rasterize_shifted_in_box_to_with_scratch(
     )
 }
 
+pub fn rasterize_direct_spans_in_box(
+    outline: &Outline,
+    width: usize,
+    height: usize,
+) -> Result<Vec<GraySpan>, FontError> {
+    if outline.is_empty() || width == 0 || height == 0 {
+        return Ok(Vec::new());
+    }
+    let mut target = vec![0u8; width.saturating_mul(height)];
+    let mut scratch = RasterScratch::new();
+    let mut spans = Vec::new();
+    let mut worker = Worker::new(
+        &mut target,
+        &mut scratch.scanlines,
+        width,
+        height,
+        outline.flags,
+        0,
+        0,
+        width,
+        1,
+        0,
+    );
+    worker.spans = Some(&mut spans);
+    worker.convert_glyph(
+        &outline.points,
+        &outline.tags,
+        &outline.contours,
+        outline.n_contours,
+        0,
+        i32_from_usize(width),
+        0,
+        i32_from_usize(height),
+    )?;
+    Ok(spans)
+}
+
 impl<'a> Worker<'a> {
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -399,6 +445,7 @@ impl<'a> Worker<'a> {
             target_pitch,
             target_x_step,
             target_offset,
+            spans: None,
         }
     }
 
@@ -922,6 +969,9 @@ impl<'a> Worker<'a> {
                         cell.x - x,
                         self.target_x_step,
                     );
+                    if let Some(spans) = self.spans.as_deref_mut() {
+                        record_gray_span(spans, y, x, cell.x - x, coverage);
+                    }
                 }
 
                 cover = add_int(cover, cell.cover.wrapping_mul(i32_from_i64(ONE_PIXEL * 2)));
@@ -937,6 +987,9 @@ impl<'a> Worker<'a> {
                     let off = row_base + usize_from_i32(cell.x) * self.target_x_step;
                     if let Some(slot) = self.target.get_mut(off) {
                         *slot = u8_from_i32(coverage);
+                    }
+                    if let Some(spans) = self.spans.as_deref_mut() {
+                        record_gray_span(spans, y, cell.x, 1, coverage);
                     }
                 }
 
@@ -957,6 +1010,9 @@ impl<'a> Worker<'a> {
                     self.max_ex - x,
                     self.target_x_step,
                 );
+                if let Some(spans) = self.spans.as_deref_mut() {
+                    record_gray_span(spans, y, x, self.max_ex - x, coverage);
+                }
             }
         }
     }
@@ -1028,6 +1084,18 @@ fn write_span(buf: &mut [u8], off: usize, s: i32, count: i32, step: usize) {
         }
         cursor = cursor.saturating_add(step);
     }
+}
+
+fn record_gray_span(spans: &mut Vec<GraySpan>, y: i32, x: i32, len: i32, coverage: i32) {
+    if len <= 0 || coverage == 0 {
+        return;
+    }
+    spans.push(GraySpan {
+        y,
+        x: u16::try_from(x.max(0)).unwrap_or(u16::MAX),
+        len: u16::try_from(len).unwrap_or(u16::MAX),
+        coverage: u8_from_i32(coverage),
+    });
 }
 
 // Tag constants (ftimage.h).

@@ -4384,6 +4384,52 @@ static void print_outline_bitmap_object(const FT_Bitmap* bitmap) {
     printf("\"}");
 }
 
+typedef struct RecordedOutlineSpan_ {
+    int y;
+    unsigned short x;
+    unsigned short len;
+    unsigned char coverage;
+} RecordedOutlineSpan;
+
+#define MAX_RECORDED_OUTLINE_SPANS 4096
+static RecordedOutlineSpan recorded_outline_spans[MAX_RECORDED_OUTLINE_SPANS];
+static int recorded_outline_span_count = 0;
+static int recorded_outline_user_seen = 0;
+static void* recorded_outline_user_token = (void*)0x12345678;
+
+static void record_outline_gray_spans(int y, int count, const FT_Span* spans, void* user) {
+    if (user == recorded_outline_user_token) {
+        recorded_outline_user_seen = 1;
+    }
+    for (int i = 0; i < count && recorded_outline_span_count < MAX_RECORDED_OUTLINE_SPANS; i++) {
+        RecordedOutlineSpan* out = &recorded_outline_spans[recorded_outline_span_count++];
+        out->y = y;
+        out->x = spans[i].x;
+        out->len = spans[i].len;
+        out->coverage = spans[i].coverage;
+    }
+}
+
+static void reset_recorded_outline_spans(void) {
+    recorded_outline_span_count = 0;
+    recorded_outline_user_seen = 0;
+}
+
+static void print_recorded_outline_spans(void) {
+    printf("\"spans\":[");
+    for (int i = 0; i < recorded_outline_span_count; i++) {
+        if (i) {
+            printf(",");
+        }
+        printf("{\"y\":%d,\"x\":%u,\"len\":%u,\"coverage\":%u}",
+               recorded_outline_spans[i].y,
+               recorded_outline_spans[i].x,
+               recorded_outline_spans[i].len,
+               recorded_outline_spans[i].coverage);
+    }
+    printf("]");
+}
+
 static void setup_outline_get_bitmap_square(FT_Outline* outline, FT_Vector* points, char* tags, short* contours, int oversized) {
     long lo = oversized ? 0x1000001L * 64L : 8L * 64L;
     long hi = oversized ? 0x1000011L * 64L : 24L * 64L;
@@ -4998,6 +5044,10 @@ static int emit_outline_render(int argc, char** argv) {
     bitmap.buffer = buffer;
     bitmap.num_grays = 256;
     bitmap.pixel_mode = FT_PIXEL_MODE_GRAY;
+    if (streq(case_id, "ftimage.FT_RASTER_FLAG_AA.mono_rejects_aa")) {
+        bitmap.num_grays = 2;
+        bitmap.pixel_mode = FT_PIXEL_MODE_MONO;
+    }
 
     FT_Raster_Params params;
     memset(&params, 0, sizeof(params));
@@ -5010,6 +5060,62 @@ static int emit_outline_render(int argc, char** argv) {
         params.clip_box.yMin = 0;
         params.clip_box.xMax = 40;
         params.clip_box.yMax = 1;
+    }
+
+    if (streq(case_id, "ftimage.FT_RASTER_FLAG_DIRECT.direct_gray_span_callback") ||
+        streq(case_id, "ftimage.FT_RASTER_FLAG_DIRECT.direct_missing_callback_noop") ||
+        streq(case_id, "ftimage.FT_Raster_Params.direct_span_render_matches_c") ||
+        streq(case_id, "ftimage.FT_Span.direct_span_values_match_c")) {
+        memset(buffer, 0xA5, sizeof(buffer));
+        reset_recorded_outline_spans();
+        params.flags = FT_RASTER_FLAG_AA | FT_RASTER_FLAG_DIRECT;
+        params.user = recorded_outline_user_token;
+        if (!streq(case_id, "ftimage.FT_RASTER_FLAG_DIRECT.direct_missing_callback_noop")) {
+            params.gray_spans = record_outline_gray_spans;
+        }
+        err = FT_Outline_Render(library, &outline, &params);
+        int target_preserved = 1;
+        for (size_t i = 0; i < sizeof(buffer); i++) {
+            if (buffer[i] != 0xA5) {
+                target_preserved = 0;
+                break;
+            }
+        }
+        printf("{");
+        print_status(err);
+        printf(",\"output\":{");
+        printf("\"status\":%d,", err);
+        print_recorded_outline_spans();
+        printf(",\"user_seen\":%s", recorded_outline_user_seen ? "true" : "false");
+        printf(",\"target_preserved\":%s", target_preserved ? "true" : "false");
+        printf("}}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+
+    if (streq(case_id, "ftimage.FT_RASTER_FLAG_AA.smooth_requires_aa")) {
+        const char* flag_names[2] = {"FT_RASTER_FLAG_DEFAULT", "FT_RASTER_FLAG_AA"};
+        const int flag_values[2] = {FT_RASTER_FLAG_DEFAULT, FT_RASTER_FLAG_AA};
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"results\":[");
+        for (int i = 0; i < 2; i++) {
+            memset(buffer, 0, sizeof(buffer));
+            params.flags = flag_values[i];
+            params.source = (void*)0x1;
+            err = FT_Outline_Render(library, &outline, &params);
+            if (i) {
+                printf(",");
+            }
+            printf("{\"flags\":\"%s\",\"status\":%d,", flag_names[i], err);
+            print_outline_bitmap_object(&bitmap);
+            printf(",\"params_source_is_outline\":");
+            printf("%s", params.source == (void*)&outline ? "true" : "false");
+            printf("}");
+        }
+        printf("]}}\n");
+        FT_Done_FreeType(library);
+        return 0;
     }
 
     err = FT_Outline_Render(library, &outline, &params);

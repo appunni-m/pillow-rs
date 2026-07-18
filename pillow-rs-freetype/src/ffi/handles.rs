@@ -7,10 +7,11 @@ use std::ptr;
 use std::rc::{Rc, Weak};
 use std::sync::{Mutex, OnceLock};
 
-use crate::api;
+use crate::casts::usize_from_i32;
 use crate::font::{
     ActiveSizeState, KerningMode, SelectSizeError, SizeRequest, SizeRequestError, SizeRequestType,
 };
+use crate::{api, grays, render};
 
 use super::constants::*;
 use super::convert::{
@@ -23,7 +24,7 @@ use super::types::{
     FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_Long, FT_Matrix, FT_Orientation,
     FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag,
     FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec,
-    FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector, TT_Header,
+    FT_Span, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector, TT_Header,
     TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
 };
 
@@ -1572,9 +1573,6 @@ pub fn FT_Outline_Render(
     if flags & FT_RASTER_FLAG_DIRECT as FT_Int != 0 {
         return Err(FT_Err_Unimplemented_Feature as FT_Error);
     }
-    if flags & FT_RASTER_FLAG_AA as FT_Int == 0 {
-        return Err(FT_Err_Cannot_Render_Glyph as FT_Error);
-    }
 
     // ftgrays.c:gray_raster_render returns before inspecting the target for an
     // empty outline, but validates the final contour endpoint before its
@@ -1598,6 +1596,37 @@ pub fn FT_Outline_Render(
     let rows = usize::try_from(target.rows).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?;
     let pitch_abs = usize::try_from(target.pitch.unsigned_abs()).unwrap_or(width);
     let mut pixels = vec![0; pitch_abs.saturating_mul(rows)];
+    if flags & FT_RASTER_FLAG_AA as FT_Int == 0 {
+        if i32::from(target.pixel_mode) != FT_PIXEL_MODE_GRAY {
+            return Err(FT_Err_Cannot_Render_Glyph as FT_Error);
+        }
+        // FreeType 2.14.3 routes a no-AA FT_Outline_Render request through
+        // the black rasterizer.  With the public gray bitmap target used here,
+        // it writes packed mono bytes into caller storage and reports success.
+        let packed = render::rasterize_mono_center(&outline, width, rows).map_err(error_to_ft)?;
+        let packed_pitch = render::mono_pitch(width);
+        let row_bytes = packed_pitch.min(pitch_abs);
+        for y in 0..rows {
+            let src = y * packed_pitch;
+            let dst_y = if target.pitch < 0 { rows - 1 - y } else { y };
+            let dst = dst_y * pitch_abs;
+            pixels[dst..dst + row_bytes].copy_from_slice(&packed[src..src + row_bytes]);
+        }
+        return Ok(FT_Bitmap {
+            rows: target.rows,
+            width: target.width,
+            pitch: target.pitch,
+            buffer: pixels,
+            num_grays: target.num_grays,
+            pixel_mode: target.pixel_mode.into(),
+        });
+    }
+    if i32::from(target.pixel_mode) != FT_PIXEL_MODE_GRAY {
+        // FreeType 2.14.3 `src/smooth/ftgrays.c:gray_raster_render` is the
+        // AA bitmap renderer used by FT_Outline_Render here; it rejects target
+        // bitmaps whose pixel mode is not gray before writing caller storage.
+        return Err(FT_Err_Cannot_Render_Glyph as FT_Error);
+    }
     if empty_outline {
         return Ok(FT_Bitmap {
             rows: target.rows,
@@ -1630,6 +1659,109 @@ pub fn FT_Outline_Render(
         num_grays: target.num_grays,
         pixel_mode: target.pixel_mode.into(),
     })
+}
+
+pub fn FT_Outline_Render_Error_Output(
+    outline: Option<&FT_OutlineSnapshot>,
+    target: Option<&FT_Bitmap_C>,
+    flags: FT_Int,
+) -> Option<FT_Bitmap> {
+    if flags & FT_RASTER_FLAG_AA as FT_Int != 0 {
+        return None;
+    }
+    let outline = outline.and_then(outline_snapshot_to_core)?;
+    let target = target?;
+    if i32::from(target.pixel_mode) != FT_PIXEL_MODE_GRAY {
+        return None;
+    }
+    let width = usize::try_from(target.width).ok()?;
+    let rows = usize::try_from(target.rows).ok()?;
+    let pitch_abs = usize::try_from(target.pitch.unsigned_abs()).ok()?;
+    let packed = render::rasterize_mono_center(&outline, width, rows).ok()?;
+    let packed_pitch = render::mono_pitch(width);
+    let mut pixels = vec![0; pitch_abs.saturating_mul(rows)];
+    let row_bytes = packed_pitch.min(pitch_abs);
+    for y in 0..rows {
+        let src = y * packed_pitch;
+        let dst_y = if target.pitch < 0 { rows - 1 - y } else { y };
+        let dst = dst_y * pitch_abs;
+        pixels[dst..dst + row_bytes].copy_from_slice(&packed[src..src + row_bytes]);
+    }
+    Some(FT_Bitmap {
+        rows: target.rows,
+        width: target.width,
+        pitch: target.pitch,
+        buffer: pixels,
+        num_grays: target.num_grays,
+        pixel_mode: target.pixel_mode.into(),
+    })
+}
+
+pub fn FT_Outline_Render_Direct_Spans(
+    library: Option<&FT_Library>,
+    outline: Option<&FT_OutlineSnapshot>,
+    target: Option<&FT_Bitmap_C>,
+    flags: FT_Int,
+    gray_spans_present: bool,
+) -> Result<Vec<(i32, FT_Span)>, FT_Error> {
+    if library.is_none() {
+        return Err(FT_Err_Invalid_Library_Handle as FT_Error);
+    }
+    let Some(outline_snapshot) = outline else {
+        return Err(FT_Err_Invalid_Outline as FT_Error);
+    };
+    if flags & FT_RASTER_FLAG_DIRECT as FT_Int == 0 {
+        return Err(FT_Err_Invalid_Argument as FT_Error);
+    }
+    if flags & FT_RASTER_FLAG_AA as FT_Int == 0 {
+        return Err(FT_Err_Cannot_Render_Glyph as FT_Error);
+    }
+    if !gray_spans_present {
+        // FreeType 2.14.3 `src/smooth/ftgrays.c:1998-2001` returns success
+        // immediately for DIRECT smooth rendering when `gray_spans` is NULL.
+        return Ok(Vec::new());
+    }
+
+    let mut cbox = FT_BBox::default();
+    FT_Outline_Get_CBox(Some(outline_snapshot), Some(&mut cbox));
+    if cbox.xMin < -0x1000000
+        || cbox.yMin < -0x1000000
+        || cbox.xMax > 0x1000000
+        || cbox.yMax > 0x1000000
+    {
+        return Err(FT_Err_Invalid_Outline as FT_Error);
+    }
+    let Some(outline) = outline_snapshot_to_core(outline_snapshot) else {
+        return Err(FT_Err_Invalid_Outline as FT_Error);
+    };
+    let (width, rows) = if let Some(target) = target {
+        (
+            usize::try_from(target.width).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?,
+            usize::try_from(target.rows).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?,
+        )
+    } else {
+        (
+            usize_from_i32(outline.cbox_x_max - outline.cbox_x_min),
+            usize_from_i32(outline.cbox_y_max - outline.cbox_y_min),
+        )
+    };
+    grays::rasterize_direct_spans_in_box(&outline, width, rows)
+        .map_err(error_to_ft)
+        .map(|spans| {
+            spans
+                .into_iter()
+                .map(|span| {
+                    (
+                        span.y,
+                        FT_Span {
+                            x: span.x,
+                            len: span.len,
+                            coverage: span.coverage,
+                        },
+                    )
+                })
+                .collect()
+        })
 }
 
 pub fn FT_Outline_Get_Orientation(outline: Option<&FT_OutlineSnapshot>) -> FT_Orientation {
