@@ -313,12 +313,12 @@ Newly visible after adding `outlines/synthetic/simple-rectangle.json`:
 
 - `ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c`
 
-Current status: verified for the newly visible simple-rectangle callback trace
-row. Other `ftoutln.outline_decompose` rows remain explicitly pending unless
-they have a maintained C oracle route and matching Rust/C/WASM callback trace.
-The row must not be treated as runnable via the generic fallback oracle because
-that returns `FT_Err_Unimplemented_Feature` instead of a real callback event
-trace.
+Current status: verified for the simple-rectangle callback trace, the
+line/conic/cubic event-order trace, and callback error propagation. Other
+`ftoutln.outline_decompose` rows remain explicitly pending unless they have a
+maintained C oracle route and matching Rust/C/WASM callback trace. The rows
+must not be treated as runnable via the generic fallback oracle because that
+returns `FT_Err_Unimplemented_Feature` instead of a real callback event trace.
 
 Fix plan:
 
@@ -343,6 +343,23 @@ Verified progress:
   transform.
 - C ABI and WASM ABI expose only feature-gated test-support routes that delegate
   the trace to core; wrappers do not own outline walking logic.
+- Added real `outline_model` fixture
+  `outlines/decompose/line-conic-cubic.json`.
+- Native C oracle now records the
+  `ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order` callback trace
+  with line, consecutive-conic, and cubic contours.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for that trace row.
+  The harness accepts both maintained transform parameter shapes:
+  `shift_delta_cases[]` and the public `funcs { shift, delta }` form.
+- Native C oracle now records
+  `ftoutln.FT_Outline_Decompose.callback_error_propagates`: when a callback
+  returns `FT_Err_Invalid_Argument` (`0x06`), FreeType stops immediately and
+  returns that same error with only the events emitted before the failing
+  callback.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for that callback
+  error row. The generic no-font expected-error fallback explicitly does not
+  intercept `ftoutln.outline_decompose`, because these rows are outline-only
+  and still require real callback routing.
 
 Focused non-coverage result:
 
@@ -352,11 +369,34 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_Outline_Funcs.shift_delta_t
 
 Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
 
+```bash
+make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Decompose.callback_error_propagates
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftoutln.outline_decompose
+```
+
+Result after the line/conic/cubic fixture and callback-error route: `3 / 3`
+runtime parity rows passed, `0` failed, `12` pending.
+
 Full non-coverage result:
 
 ```bash
 make -C pillow-rs-freetype test
 ```
+
+Result after the line/conic/cubic fixture and callback-error route:
+`7134 / 7134` runnable rows passed, `0` failed, `100` pending. Route audit:
+`real-parity` `3717`, `pending-route` `92`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
 

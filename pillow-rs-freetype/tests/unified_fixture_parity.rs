@@ -700,7 +700,12 @@ fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness 
         };
     }
     if operation == "ftoutln.outline_decompose"
-        && case.case_id != "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c"
+        && !matches!(
+            case.case_id.as_str(),
+            "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c"
+                | "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order"
+                | "ftoutln.FT_Outline_Decompose.callback_error_propagates"
+        )
     {
         return RuntimeReadiness::Pending {
             reason: format!(
@@ -2223,6 +2228,7 @@ impl BackendComparisonWorker {
                     | "ftlcdfil.set_lcd_geometry"
                     | "ftoutln.outline_render"
                     | "ftoutln.outline_render_direct"
+                    | "ftoutln.outline_decompose"
                     | "ftbitmap.bitmap_copy"
                     | "ftbitmap.bitmap_convert"
                     | "ftbitmap.bitmap_done"
@@ -9837,7 +9843,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             case.case_id.clone(),
         ]),
         "ftoutln.outline_decompose"
-            if case.case_id == "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c" =>
+            if matches!(
+                case.case_id.as_str(),
+                "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c"
+                    | "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order"
+                    | "ftoutln.FT_Outline_Decompose.callback_error_propagates"
+            ) =>
         {
             Ok(vec![
                 "--outline-decompose".to_string(),
@@ -10085,6 +10096,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "ftlcdfil.set_lcd_geometry"
                 | "ftoutln.outline_render"
                 | "ftoutln.outline_render_direct"
+                | "ftoutln.outline_decompose"
                 // These synthetic public bitmap routes own their precise
                 // null-handle setup below.  Sending them through the generic
                 // face-null classifier would replace the real FreeType error
@@ -18122,6 +18134,9 @@ fn wasm_outline_transform_runtime_output(case: &InputCase) -> Result<RunOutput, 
 fn rust_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
     let outline = outline_render_snapshot(&outline_render_outline(case)?);
     match FT_Outline_Decompose_Trace(Some(&outline), &outline_decompose_transforms(case)?) {
+        Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
+            outline_decompose_callback_error_output(case, runs)
+        }
         Ok(runs) => Ok(ok(outline_decompose_trace_payload(runs))),
         Err(err) => Ok(error(err)),
     }
@@ -18135,6 +18150,9 @@ fn c_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, Str
         outline_ptr,
         &outline_decompose_transforms(case)?,
     ) {
+        Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
+            outline_decompose_callback_error_output(case, runs)
+        }
         Ok(runs) => Ok(ok(outline_decompose_trace_payload(runs))),
         Err(err) => Ok(error(err)),
     }
@@ -18148,35 +18166,65 @@ fn wasm_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, 
         outline_ptr,
         &outline_decompose_transforms(case)?,
     ) {
+        Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
+            outline_decompose_callback_error_output(case, runs)
+        }
         Ok(runs) => Ok(ok(outline_decompose_trace_payload(runs))),
         Err(err) => Ok(error(err)),
     }
 }
 
 fn outline_decompose_transforms(case: &InputCase) -> Result<Vec<(FT_Int, FT_Pos)>, String> {
-    let values = case
+    if let Some(values) = case
         .inputs
         .params
         .get("shift_delta_cases")
         .and_then(Value::as_array)
-        .ok_or_else(|| "shift_delta_cases must be an array".to_string())?;
-    values
-        .iter()
-        .map(|value| {
-            let shift = value
-                .get("shift")
-                .and_then(Value::as_i64)
-                .ok_or_else(|| "shift_delta_cases[].shift must be an integer".to_string())?;
-            let delta = value
-                .get("delta")
-                .and_then(Value::as_i64)
-                .ok_or_else(|| "shift_delta_cases[].delta must be an integer".to_string())?;
-            Ok((
-                FT_Int::try_from(shift).map_err(|err| err.to_string())?,
-                FT_Pos::try_from(delta).map_err(|err| err.to_string())?,
-            ))
+    {
+        return values
+            .iter()
+            .map(|value| {
+                let shift = value
+                    .get("shift")
+                    .and_then(Value::as_i64)
+                    .ok_or_else(|| "shift_delta_cases[].shift must be an integer".to_string())?;
+                let delta = value
+                    .get("delta")
+                    .and_then(Value::as_i64)
+                    .ok_or_else(|| "shift_delta_cases[].delta must be an integer".to_string())?;
+                Ok((
+                    FT_Int::try_from(shift).map_err(|err| err.to_string())?,
+                    FT_Pos::try_from(delta).map_err(|err| err.to_string())?,
+                ))
+            })
+            .collect();
+    }
+    let funcs = case
+        .inputs
+        .params
+        .get("funcs")
+        .or_else(|| {
+            case.inputs
+                .params
+                .get("callback_fail_at")
+                .map(|_| &Value::Null)
         })
-        .collect()
+        .ok_or_else(|| "shift_delta_cases or funcs must be present".to_string())?;
+    if funcs.is_null() {
+        return Ok(vec![(0, 0)]);
+    }
+    let shift = funcs
+        .get("shift")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| "funcs.shift must be an integer".to_string())?;
+    let delta = funcs
+        .get("delta")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| "funcs.delta must be an integer".to_string())?;
+    Ok(vec![(
+        FT_Int::try_from(shift).map_err(|err| err.to_string())?,
+        FT_Pos::try_from(delta).map_err(|err| err.to_string())?,
+    )])
 }
 
 fn outline_decompose_trace_payload(runs: Vec<FTOutlineDecomposeRun>) -> Value {
@@ -18190,12 +18238,7 @@ fn outline_decompose_trace_payload(runs: Vec<FTOutlineDecomposeRun>) -> Value {
                     "status": FT_Err_Ok,
                     "events": run.events
                         .into_iter()
-                        .map(|event| {
-                            json!({
-                                "kind": event.kind,
-                                "points": event.points.into_iter().map(vector_json).collect::<Vec<_>>(),
-                            })
-                        })
+                        .map(outline_decompose_event_json)
                         .collect::<Vec<_>>(),
                     "transformed_points": run
                         .transformed_points
@@ -18206,6 +18249,55 @@ fn outline_decompose_trace_payload(runs: Vec<FTOutlineDecomposeRun>) -> Value {
                 })
             })
             .collect::<Vec<_>>()
+    })
+}
+
+fn outline_decompose_callback_error_output(
+    case: &InputCase,
+    runs: Vec<FTOutlineDecomposeRun>,
+) -> Result<RunOutput, String> {
+    let fail_at = case
+        .inputs
+        .params
+        .get("callback_fail_at")
+        .ok_or_else(|| "callback_fail_at is required".to_string())?;
+    let event_index = fail_at
+        .get("event_index")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "callback_fail_at.event_index must be an integer".to_string())?;
+    let error_name = fail_at
+        .get("error")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "callback_fail_at.error must be a constant name".to_string())?;
+    let error_code = if error_name == "FT_Err_Invalid_Argument" {
+        // FreeType 2.14.3 fterrdef.h defines Invalid_Argument as 0x06.
+        0x06
+    } else {
+        i32::try_from(rust_constant(error_name)?).map_err(|err| err.to_string())?
+    };
+    let run = runs
+        .into_iter()
+        .next()
+        .ok_or_else(|| "callback error trace requires one run".to_string())?;
+    let events_before_error = run
+        .events
+        .into_iter()
+        .take(usize::try_from(event_index).map_err(|err| err.to_string())?)
+        .map(outline_decompose_event_json)
+        .collect::<Vec<_>>();
+    Ok(error_with_output(
+        error_code,
+        json!({
+            "return": error_code,
+            "events_before_error": events_before_error,
+        }),
+    ))
+}
+
+fn outline_decompose_event_json(event: FTOutlineDecomposeEvent) -> Value {
+    json!({
+        "kind": event.kind,
+        "points": event.points.into_iter().map(vector_json).collect::<Vec<_>>(),
     })
 }
 

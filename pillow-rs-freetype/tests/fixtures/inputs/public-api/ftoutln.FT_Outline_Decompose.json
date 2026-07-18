@@ -37,7 +37,7 @@
       "inputs": {"assets": {"outline": {"kind": "ref", "id": "outlines/decompose/line-conic-cubic.json", "asset_kind": "outline_model"}}, "params": {"callback_fail_at": {"event_index": 2, "error": "FT_Err_Invalid_Argument"}, "trace_events_before_failure": true}},
       "classifiers": ["kind:function", "header:ftoutln", "surface:public-c-api", "error:callback-propagation"],
       "metadata": {"abi": {"header": "freetype/ftoutln.h", "symbol": "FT_Outline_Decompose", "kind": "function", "c_signature": "FT_Error FT_Outline_Decompose(FT_Outline* outline, const FT_Outline_Funcs* func_interface, void* user)"}, "source_behavior": "A nonzero callback return exits immediately with the same error."},
-      "expectation": {"status": "error", "output_shape": {"return": "FT_Error", "events_before_error": "array"}, "compare": {"mode": "exact_error", "paths": ["return", "events_before_error"]}, "error": "callback_supplied_error", "source_refs": ["freetype/src/base/ftoutln.c:99-102", "freetype/src/base/ftoutln.c:137-140", "freetype/src/base/ftoutln.c:179-182"]}
+      "expectation": {"status": "error", "output_shape": {"return": "FT_Error", "events_before_error": "array"}, "compare": {"mode": "exact_error", "compare_error_output": true, "paths": ["return", "events_before_error"]}, "error": "callback_supplied_error", "source_refs": ["freetype/src/base/ftoutln.c:99-102", "freetype/src/base/ftoutln.c:137-140", "freetype/src/base/ftoutln.c:179-182"]}
     },
     {
       "case_id": "ftoutln.FT_Outline_Decompose.invalid_outline_or_interface_errors",

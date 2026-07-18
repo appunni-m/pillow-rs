@@ -4440,11 +4440,23 @@ typedef struct RecordedOutlineEvent_ {
 static RecordedOutlineEvent recorded_outline_events[MAX_RECORDED_OUTLINE_EVENTS];
 static int recorded_outline_event_count = 0;
 static int recorded_outline_decompose_user_seen = 0;
+static int recorded_outline_decompose_fail_index = -1;
+static int recorded_outline_decompose_fail_error = 0;
 static void* recorded_outline_decompose_user_token = (void*)0x87654321;
 
 static void reset_recorded_outline_events(void) {
     recorded_outline_event_count = 0;
     recorded_outline_decompose_user_seen = 0;
+    recorded_outline_decompose_fail_index = -1;
+    recorded_outline_decompose_fail_error = 0;
+}
+
+static int recorded_outline_decompose_maybe_fail(void) {
+    if (recorded_outline_decompose_fail_index >= 0 &&
+        recorded_outline_event_count == recorded_outline_decompose_fail_index) {
+        return recorded_outline_decompose_fail_error;
+    }
+    return 0;
 }
 
 static void record_outline_event(const char* kind, const FT_Vector* a, const FT_Vector* b, const FT_Vector* c, void* user) {
@@ -4469,21 +4481,37 @@ static void record_outline_event(const char* kind, const FT_Vector* a, const FT_
 }
 
 static int record_outline_move_to(const FT_Vector* to, void* user) {
+    int fail_error = recorded_outline_decompose_maybe_fail();
+    if (fail_error) {
+        return fail_error;
+    }
     record_outline_event("move_to", to, NULL, NULL, user);
     return 0;
 }
 
 static int record_outline_line_to(const FT_Vector* to, void* user) {
+    int fail_error = recorded_outline_decompose_maybe_fail();
+    if (fail_error) {
+        return fail_error;
+    }
     record_outline_event("line_to", to, NULL, NULL, user);
     return 0;
 }
 
 static int record_outline_conic_to(const FT_Vector* control, const FT_Vector* to, void* user) {
+    int fail_error = recorded_outline_decompose_maybe_fail();
+    if (fail_error) {
+        return fail_error;
+    }
     record_outline_event("conic_to", control, to, NULL, user);
     return 0;
 }
 
 static int record_outline_cubic_to(const FT_Vector* control1, const FT_Vector* control2, const FT_Vector* to, void* user) {
+    int fail_error = recorded_outline_decompose_maybe_fail();
+    if (fail_error) {
+        return fail_error;
+    }
     record_outline_event("cubic_to", control1, control2, to, user);
     return 0;
 }
@@ -5430,14 +5458,16 @@ static int emit_outline_render(int argc, char** argv) {
 static int emit_outline_decompose(int argc, char** argv) {
     (void)argc;
     const char* case_id = argv[2];
-    if (!streq(case_id, "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c")) {
+    if (!streq(case_id, "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c") &&
+        !streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") &&
+        !streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
         printf("{");
         print_status(FT_Err_Unimplemented_Feature);
         printf(",\"output\":null}\n");
         return 0;
     }
 
-    FT_Vector points[4];
+    FT_Vector points[16];
     points[0].x = 8 * 64;
     points[0].y = 8 * 64;
     points[1].x = 24 * 64;
@@ -5446,16 +5476,64 @@ static int emit_outline_decompose(int argc, char** argv) {
     points[2].y = 24 * 64;
     points[3].x = 8 * 64;
     points[3].y = 24 * 64;
-    unsigned char tags[4] = {
+    unsigned char tags[16] = {
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
         FT_CURVE_TAG_ON,
         FT_CURVE_TAG_ON,
         FT_CURVE_TAG_ON,
         FT_CURVE_TAG_ON,
     };
-    unsigned short contours[1] = {3};
+    unsigned short contours[4] = {3, 0, 0, 0};
+    short n_contours = 1;
+    short n_points = 4;
+    if (streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") ||
+        streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
+        points[0].x = 0;
+        points[0].y = 0;
+        points[1].x = 64;
+        points[1].y = 0;
+        points[2].x = 64;
+        points[2].y = 64;
+        points[3].x = 128;
+        points[3].y = 0;
+        points[4].x = 160;
+        points[4].y = 64;
+        points[5].x = 192;
+        points[5].y = 64;
+        points[6].x = 224;
+        points[6].y = 0;
+        points[7].x = 256;
+        points[7].y = 0;
+        points[8].x = 288;
+        points[8].y = 64;
+        points[9].x = 320;
+        points[9].y = 64;
+        points[10].x = 352;
+        points[10].y = 0;
+        tags[4] = FT_CURVE_TAG_CONIC;
+        tags[5] = FT_CURVE_TAG_CONIC;
+        tags[8] = FT_CURVE_TAG_CUBIC;
+        tags[9] = FT_CURVE_TAG_CUBIC;
+        contours[0] = 2;
+        contours[1] = 6;
+        contours[2] = 10;
+        n_contours = 3;
+        n_points = 11;
+    }
     FT_Outline outline;
-    outline.n_contours = 1;
-    outline.n_points = 4;
+    outline.n_contours = n_contours;
+    outline.n_points = n_points;
     outline.points = points;
     outline.tags = tags;
     outline.contours = contours;
@@ -5463,10 +5541,48 @@ static int emit_outline_decompose(int argc, char** argv) {
 
     const int shifts[3] = {0, 1, 2};
     const FT_Pos deltas[3] = {0, 16, -32};
+    int transform_count = 3;
+    if (streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") ||
+        streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
+        transform_count = 1;
+    }
+    if (streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
+        FT_Outline_Funcs funcs;
+        funcs.move_to = record_outline_move_to;
+        funcs.line_to = record_outline_line_to;
+        funcs.conic_to = record_outline_conic_to;
+        funcs.cubic_to = record_outline_cubic_to;
+        funcs.shift = 0;
+        funcs.delta = 0;
+        reset_recorded_outline_events();
+        recorded_outline_decompose_fail_index = 2;
+        recorded_outline_decompose_fail_error = FT_Err_Invalid_Argument;
+        FT_Error err = FT_Outline_Decompose(&outline, &funcs, recorded_outline_decompose_user_token);
+        printf("{");
+        print_status(err);
+        printf(",\"output\":{\"return\":%d,\"events_before_error\":[", err);
+        for (int i = 0; i < recorded_outline_event_count; i++) {
+            if (i) {
+                printf(",");
+            }
+            printf("{\"kind\":\"%s\",\"points\":[", recorded_outline_events[i].kind);
+            for (int j = 0; j < recorded_outline_events[i].count; j++) {
+                if (j) {
+                    printf(",");
+                }
+                printf("{\"x\":%ld,\"y\":%ld}",
+                       recorded_outline_events[i].points[j].x,
+                       recorded_outline_events[i].points[j].y);
+            }
+            printf("]}");
+        }
+        printf("]}}\n");
+        return 0;
+    }
     printf("{");
     print_status(0);
     printf(",\"output\":{\"runs\":[");
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < transform_count; i++) {
         FT_Outline_Funcs funcs;
         funcs.move_to = record_outline_move_to;
         funcs.line_to = record_outline_line_to;
