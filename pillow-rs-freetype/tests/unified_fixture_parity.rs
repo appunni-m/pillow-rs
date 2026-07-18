@@ -8268,6 +8268,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || (case.operation == "freetype.set_charmap"
                 && (lifecycle_handle_param_is_null(&case.inputs.params, "face")
                     || case.case_id == "freetype.FT_Set_Charmap.error_null_or_foreign_charmap"
+                    || case.case_id == "freetype.FT_Set_Charmap.error_format14_charmap"
                     || case.case_id
                         == "fterrdef.FT_Err_Invalid_CharMap_Handle.set_charmap_rejects_foreign_or_null_charmap"))
             || (case.operation == "freetype.select_size"
