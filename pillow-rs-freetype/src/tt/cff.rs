@@ -36,12 +36,18 @@ pub fn parse_cff(data: &[u8]) -> Result<CffTable, FontError> {
     let (_, _) = read_index(data, pos)?;
 
     let top = parse_top_dict(top_dict)?;
-    let charstrings_offset = top
-        .charstrings_offset
-        // `cff_parser_run`/Top DICT handling treats a missing required
-        // CharStrings entry as the same public Invalid_Argument class as
-        // malformed Top DICT operands (`cffparse.c`, `cffload.c`).
-        .ok_or_else(|| FontError::InvalidArgument("CFF: missing CharStrings offset".into()))?;
+    let charstrings_offset = top.charstrings_offset.ok_or_else(|| {
+        if top.consumed_non_charstrings_operands {
+            // Pinned FreeType 2.14.3 (`cffparse.c`, `cffload.c`) reports
+            // Invalid_Table when a Top DICT contains parsed non-CharStrings
+            // operands but still lacks the required CharStrings offset.
+            FontError::InvalidTable("CFF: missing CharStrings offset".into())
+        } else {
+            // Empty/minimal Top DICT shapes and CharStrings operand underflow
+            // preserve the historical public Invalid_Argument classification.
+            FontError::InvalidArgument("CFF: missing CharStrings offset".into())
+        }
+    })?;
     let (charstrings, _) = read_index(data, charstrings_offset)?;
     Ok(CffTable {
         charstrings: charstrings.into_iter().map(<[u8]>::to_vec).collect(),
@@ -63,6 +69,7 @@ impl CffTable {
 #[derive(Default)]
 struct TopDict {
     charstrings_offset: Option<usize>,
+    consumed_non_charstrings_operands: bool,
 }
 
 fn parse_top_dict(data: &[u8]) -> Result<TopDict, FontError> {
@@ -93,6 +100,8 @@ fn parse_top_dict(data: &[u8]) -> Result<TopDict, FontError> {
                     FontError::InvalidArgument("CFF: CharStrings operand missing".into())
                 })?;
                 dict.charstrings_offset = usize::try_from(offset).ok();
+            } else if !stack.is_empty() {
+                dict.consumed_non_charstrings_operands = true;
             }
             stack.clear();
         } else {
@@ -204,7 +213,12 @@ fn read_dict_number(data: &[u8], pos: usize) -> Result<(i32, usize), FontError> 
                 })?);
             Ok((-((i32::from(byte) - 251) * 256) - next - 108, pos + 2))
         }
-        _ => Err(FontError::InvalidFont("CFF: invalid DICT number".into())),
+        _ => {
+            // FreeType rejects bytes that are neither CFF DICT operators nor
+            // DICT number encodings while parsing CFF INDEX/Top DICT metadata
+            // (`cffparse.c`, `cffload.c`) as the public Invalid_Table class.
+            Err(FontError::InvalidTable("CFF: invalid DICT number".into()))
+        }
     }
 }
 

@@ -813,6 +813,10 @@ def cff_index(objects: list[bytes]) -> bytes:
 
 def malformed_cff_payload(kind: str) -> bytes:
     header = b"\x01\x00\x04\x04"
+
+    def minimal_payload(top_dict: bytes) -> bytes:
+        return header + cff_index([]) + cff_index([top_dict]) + cff_index([]) + cff_index([])
+
     if kind == "short_header":
         return b"\x01\x00\x04"
     if kind == "invalid_name_index_offsize":
@@ -825,17 +829,37 @@ def malformed_cff_payload(kind: str) -> bytes:
     if kind == "name_index_offsets_out_of_order":
         return header + b"\x00\x01\x01\x02\x01"
     if kind == "escaped_top_dict_op_overflow":
-        return header + cff_index([]) + cff_index([b"\x0C"]) + cff_index([]) + cff_index([])
+        return minimal_payload(b"\x0C")
     if kind == "escaped_top_dict_op_missing_charstrings":
         # A complete escaped Top DICT operator exercises the two-byte
         # operator path.  It is not CharStrings, so the face is rejected
         # later for the missing required CharStrings offset.
-        return header + cff_index([]) + cff_index([b"\x0C\x00"]) + cff_index([]) + cff_index([])
+        return minimal_payload(b"\x0C\x00")
     if kind == "charstrings_operand_missing":
         # Top DICT operator 17 is CharStrings.  With no preceding operand,
         # pinned FreeType reports stack underflow while Rust reports the
         # same public face-open failure class.
-        return header + cff_index([]) + cff_index([b"\x11"]) + cff_index([]) + cff_index([])
+        return minimal_payload(b"\x11")
+    if kind == "top_dict_longint_operand_missing_charstrings":
+        # CFF DICT longint operand encoding (`cffparse.c:cff_parse_integer`) is
+        # parsed by a normal numeric Top DICT operator (`UnderlinePosition`).
+        # The public face-open failure remains the missing required
+        # CharStrings offset, but this keeps the longint parser route
+        # C-observable.
+        return minimal_payload(b"\x1D\x00\x00\x00\x01\x0C\x03")
+    if kind == "top_dict_real_operand_missing_charstrings":
+        # CFF DICT real operands are legal Top DICT operands.  FreeType parses
+        # the BCD real number and later rejects this minimal Top DICT for the
+        # absent required CharStrings offset.
+        return minimal_payload(b"\x1E\x1A\x5F\x0C\x03")
+    if kind == "top_dict_positive_operand_missing_charstrings":
+        return minimal_payload(b"\xF7\x00\x0C\x03")
+    if kind == "top_dict_negative_operand_missing_charstrings":
+        return minimal_payload(b"\xFB\x00\x0C\x03")
+    if kind == "top_dict_invalid_number":
+        # Byte 31 is neither a valid CFF DICT operator nor a valid DICT number.
+        # Pinned FreeType rejects it during Top DICT parsing.
+        return minimal_payload(b"\x1F")
     raise ValueError(f"unknown malformed CFF fixture kind {kind}")
 
 
@@ -852,6 +876,11 @@ def write_malformed_cff_faces() -> None:
             "escaped_top_dict_op_overflow",
             "escaped_top_dict_op_missing_charstrings",
             "charstrings_operand_missing",
+            "top_dict_longint_operand_missing_charstrings",
+            "top_dict_real_operand_missing_charstrings",
+            "top_dict_positive_operand_missing_charstrings",
+            "top_dict_negative_operand_missing_charstrings",
+            "top_dict_invalid_number",
         ]:
             replace_sfnt_table(
                 base,
