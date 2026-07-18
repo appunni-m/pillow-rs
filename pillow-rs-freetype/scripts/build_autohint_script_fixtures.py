@@ -2294,6 +2294,7 @@ def build_cjk_remaining_branches() -> None:
         "hani_standard",
         "hani_minor_same_position",
         "hani_grouped_shorter_link",
+        "hani_symmetric_stems",
     ]
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
@@ -2301,6 +2302,15 @@ def build_cjk_remaining_branches() -> None:
         "hani_standard": rectangle_glyph(100, 0, 200, 560),
         "hani_minor_same_position": cjk_same_position_minor_edge_glyph(),
         "hani_grouped_shorter_link": cjk_grouped_shorter_link_glyph(),
+        # Three equal, evenly spaced rectangles form the six vertical edges
+        # recognized by `af_cjk_hint_edges` as a symmetric sans-serif m.
+        "hani_symmetric_stems": rectangles_glyph(
+            [
+                (80, 20, 140, 620),
+                (280, 20, 340, 620),
+                (480, 20, 540, 620),
+            ]
+        ),
     }
     metrics = {
         ".notdef": (700, 80),
@@ -2308,11 +2318,13 @@ def build_cjk_remaining_branches() -> None:
         "hani_standard": (700, 100),
         "hani_minor_same_position": (700, 40),
         "hani_grouped_shorter_link": (700, 40),
+        "hani_symmetric_stems": (700, 40),
     }
     cmap = {
         0x20: "space",
         0x51B0: "hani_minor_same_position",
         0x51B1: "hani_grouped_shorter_link",
+        0x51B2: "hani_symmetric_stems",
         0x7530: "hani_standard",
     }
 

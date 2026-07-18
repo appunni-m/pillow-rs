@@ -56,7 +56,7 @@ pub fn cjk_metrics_init_widths(
     hints.metrics = Some(dummy);
 
     // afcjk.c:155 — reload outline into hints
-    super::loader::reload(&mut hints, outline, scaled_points, upem);
+    super::loader::reload(&mut hints, outline, scaled_points, upem, 0);
 
     // afcjk.c:166-202 — for each dimension: compute segments, link, extract widths
     for dim in 0..2 {
@@ -1086,6 +1086,14 @@ pub(super) fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i
             && axis.edges[edge2].link == edge2 + 1
             && axis.edges[edge3].link == edge3 + 1
         {
+            // Pinned FreeType 2.14.3 `af_cjk_hint_edges` (afcjk.c:2066-2097)
+            // applies this correction only after all three reciprocal stem
+            // links and the sub-eighth-pixel symmetry test succeed.
+            crate::autohint::coverage::record(if num_edges == 6 {
+                crate::autohint::coverage::COV_HINT_PHASE3_6EDGE
+            } else {
+                crate::autohint::coverage::COV_HINT_PHASE3_12EDGE
+            });
             let delta = axis.edges[edge3].pos - (2 * axis.edges[edge2].pos - axis.edges[edge1].pos);
             axis.edges[edge3].pos -= delta;
             let edge3_link = axis.edges[edge3].link;

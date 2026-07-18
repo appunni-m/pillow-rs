@@ -1148,7 +1148,13 @@ pub fn metrics_init_widths(
     hints.metrics = Some(metrics.clone());
     hints.other_flags =
         AF_LATIN_HINTS_HORZ_SNAP | AF_LATIN_HINTS_VERT_SNAP | AF_LATIN_HINTS_STEM_ADJUST;
-    loader::reload(&mut hints, raw_outline, scaled_points, metrics.units_per_em);
+    loader::reload(
+        &mut hints,
+        raw_outline,
+        scaled_points,
+        metrics.units_per_em,
+        0,
+    );
 
     if hints.num_points() == 0 {
         return;
@@ -2846,7 +2852,7 @@ pub fn apply_hints(
     vert_snap: bool,
     font_data: Option<&crate::tables::FontData>,
     target_mono: bool,
-    _pp1x_shift: i32,
+    pp1x_shift: i32,
 ) -> ApplyHintsMetrics {
     let mut output = ApplyHintsMetrics::default();
     let Some(metrics) = metrics else {
@@ -2900,6 +2906,7 @@ pub fn apply_hints(
         raw_outline,
         &outline.points,
         metrics.units_per_em,
+        pp1x_shift,
     );
     if hints.num_points() == 0 {
         return output;

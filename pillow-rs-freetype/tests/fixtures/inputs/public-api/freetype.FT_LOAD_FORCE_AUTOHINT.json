@@ -3048,6 +3048,30 @@
             ]
           },
           {
+            "id": "cjk-six-edge-symmetric-stems-17",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/cjk-remaining-branches.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 17,
+              "char_code": 20914,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ],
+              "assert_autohint_coverage_bits_include": [
+                13
+              ]
+            },
+            "coverage": [
+              "autohint/cjk:six-edge-symmetric-stem-correction",
+              "autohint/coverage:COV_HINT_PHASE3_6EDGE"
+            ]
+          },
+          {
             "id": "cjk-shared-latin",
             "assets": {
               "font": {
