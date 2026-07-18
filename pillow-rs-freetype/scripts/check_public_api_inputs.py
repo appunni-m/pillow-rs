@@ -1040,6 +1040,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Face null/done handle error policy validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "set_char_size"
+        and row.case_id == "freetype.FT_Set_Char_Size.error_oversized_dimensions"
+    ):
+        return "FT_Set_Char_Size oversized-dimensions error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "freetype.done_freetype"
         and row.case_id == "freetype.FT_Done_FreeType.error_null_library"
         and lifecycle_handle(row, "library") == "null"
