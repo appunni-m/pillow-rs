@@ -2110,8 +2110,12 @@ pub extern "C" fn FT_Sfnt_Table_Info(
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_First_Char(face: FT_Face, agindex: *mut FT_UInt) -> FT_ULong {
     let mut glyph_index = 0;
-    let char_code =
-        rust_ffi::FT_Get_First_Char(face_state(face).map(|state| &state.inner), Some(&mut glyph_index));
+    let char_code = rust_ffi::FT_Get_First_Char(
+        face_state(face).map(|state| &state.inner),
+        // FreeType `base/ftobjs.c:3952-3972` accepts a null `agindex`;
+        // it still returns the charcode and skips only the glyph-index write.
+        non_null_mut(agindex).map(|_| &mut glyph_index),
+    );
     if let Some(out) = non_null_mut(agindex) {
         // SAFETY: `out` is non-null and caller provides writable storage.
         unsafe { *out.as_ptr() = glyph_index };
@@ -2129,7 +2133,9 @@ pub extern "C" fn FT_Get_Next_Char(
     let next_char = rust_ffi::FT_Get_Next_Char(
         face_state(face).map(|state| &state.inner),
         char_code,
-        Some(&mut glyph_index),
+        // FreeType `base/ftobjs.c:3977-4003` accepts a null `agindex`;
+        // it still returns the next charcode and skips only the glyph-index write.
+        non_null_mut(agindex).map(|_| &mut glyph_index),
     );
     if let Some(out) = non_null_mut(agindex) {
         // SAFETY: `out` is non-null and caller provides writable storage.
