@@ -10352,6 +10352,19 @@ static int emit_set_char_size(int argc, char** argv) {
     FT_UInt horz_resolution = (FT_UInt)strtoul(argv[7], NULL, 10);
     FT_UInt vert_resolution = (FT_UInt)strtoul(argv[8], NULL, 10);
 
+    if (streq(source_kind, "null")) {
+        FT_Error err = FT_Set_Char_Size(
+            NULL,
+            char_width,
+            char_height,
+            horz_resolution,
+            vert_resolution);
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
     unsigned char* data = NULL;
     long data_len = 0;
     if (streq(source_kind, "file")) {
