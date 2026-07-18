@@ -18285,22 +18285,40 @@ fn rust_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, Str
     if let Some(flag_sets) = outline_render_flag_matrix(&case.inputs.params)? {
         let mut results = Vec::with_capacity(flag_sets.len());
         for (flags_label, flags) in flag_sets {
-            let output = rust_outline_render_once(case, flags, true)?;
+            let output = rust_outline_render_once(case, flags, None, true)?;
+            results.push(outline_render_result_payload(flags_label, output));
+        }
+        return Ok(ok(json!({ "results": results })));
+    }
+    if let Some(flag_sets) = outline_render_outline_flag_matrix(&case.inputs.params)? {
+        let mut results = Vec::with_capacity(flag_sets.len());
+        for (flags_label, outline_flags) in flag_sets {
+            let output = rust_outline_render_once(
+                case,
+                i32::try_from(FT_RASTER_FLAG_AA).map_err(|err| err.to_string())?,
+                Some(outline_flags),
+                true,
+            )?;
             results.push(outline_render_result_payload(flags_label, output));
         }
         return Ok(ok(json!({ "results": results })));
     }
     let flags = outline_render_flags(&case.inputs.params)?;
-    rust_outline_render_once(case, flags, false)
+    rust_outline_render_once(case, flags, None, false)
 }
 
 fn rust_outline_render_once(
     case: &InputCase,
     flags: i32,
+    outline_flags: Option<u32>,
     include_error_output: bool,
 ) -> Result<RunOutput, String> {
     let library = FT_Init_FreeType();
-    let outline = outline_render_snapshot(&outline_render_outline(case)?);
+    let mut outline_model = outline_render_outline(case)?;
+    if let Some(flags) = outline_flags {
+        outline_model.flags = flags;
+    }
+    let outline = outline_render_snapshot(&outline_model);
     let (width, rows) = outline_render_target_box(case)?;
     let pitch = outline_render_target_pitch(case, width)?;
     let pixel_mode = outline_render_target_pixel_mode(&case.inputs.params)?;
@@ -18374,18 +18392,32 @@ fn c_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String
     if let Some(flag_sets) = outline_render_flag_matrix(&case.inputs.params)? {
         let mut results = Vec::with_capacity(flag_sets.len());
         for (flags_label, flags) in flag_sets {
-            let output = c_outline_render_once(case, flags, true)?;
+            let output = c_outline_render_once(case, flags, None, true)?;
+            results.push(outline_render_result_payload(flags_label, output));
+        }
+        return Ok(ok(json!({ "results": results })));
+    }
+    if let Some(flag_sets) = outline_render_outline_flag_matrix(&case.inputs.params)? {
+        let mut results = Vec::with_capacity(flag_sets.len());
+        for (flags_label, outline_flags) in flag_sets {
+            let output = c_outline_render_once(
+                case,
+                i32::try_from(FT_RASTER_FLAG_AA).map_err(|err| err.to_string())?,
+                Some(outline_flags),
+                true,
+            )?;
             results.push(outline_render_result_payload(flags_label, output));
         }
         return Ok(ok(json!({ "results": results })));
     }
     let flags = outline_render_flags(&case.inputs.params)?;
-    c_outline_render_once(case, flags, false)
+    c_outline_render_once(case, flags, None, false)
 }
 
 fn c_outline_render_once(
     case: &InputCase,
     flags: i32,
+    outline_flags: Option<u32>,
     include_error_output: bool,
 ) -> Result<RunOutput, String> {
     let mut library = ptr::null_mut();
@@ -18393,7 +18425,10 @@ fn c_outline_render_once(
     if init_error != FT_Err_Ok {
         return Ok(error(init_error));
     }
-    let outline_model = outline_render_outline(case)?;
+    let mut outline_model = outline_render_outline(case)?;
+    if let Some(flags) = outline_flags {
+        outline_model.flags = flags;
+    }
     let mut outline = CRenderOutlineStorage::new(&outline_model);
     let outline_ptr = outline.as_ptr();
     let (width, rows) = outline_render_target_box(case)?;
@@ -18482,21 +18517,38 @@ fn wasm_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, Str
     if let Some(flag_sets) = outline_render_flag_matrix(&case.inputs.params)? {
         let mut results = Vec::with_capacity(flag_sets.len());
         for (flags_label, flags) in flag_sets {
-            let output = wasm_outline_render_once(case, flags, true)?;
+            let output = wasm_outline_render_once(case, flags, None, true)?;
+            results.push(outline_render_result_payload(flags_label, output));
+        }
+        return Ok(ok(json!({ "results": results })));
+    }
+    if let Some(flag_sets) = outline_render_outline_flag_matrix(&case.inputs.params)? {
+        let mut results = Vec::with_capacity(flag_sets.len());
+        for (flags_label, outline_flags) in flag_sets {
+            let output = wasm_outline_render_once(
+                case,
+                i32::try_from(FT_RASTER_FLAG_AA).map_err(|err| err.to_string())?,
+                Some(outline_flags),
+                true,
+            )?;
             results.push(outline_render_result_payload(flags_label, output));
         }
         return Ok(ok(json!({ "results": results })));
     }
     let flags = outline_render_flags(&case.inputs.params)?;
-    wasm_outline_render_once(case, flags, false)
+    wasm_outline_render_once(case, flags, None, false)
 }
 
 fn wasm_outline_render_once(
     case: &InputCase,
     flags: i32,
+    outline_flags: Option<u32>,
     include_error_output: bool,
 ) -> Result<RunOutput, String> {
-    let outline_model = outline_render_outline(case)?;
+    let mut outline_model = outline_render_outline(case)?;
+    if let Some(flags) = outline_flags {
+        outline_model.flags = flags;
+    }
     let mut outline = WasmRenderOutlineStorage::new(&outline_model);
     let outline_ptr = outline.as_ptr();
     let (width, rows) = outline_render_target_box(case)?;
@@ -18633,6 +18685,29 @@ fn outline_render_flag_matrix(params: &Value) -> Result<Option<Vec<(String, i32)
                 .as_str()
                 .ok_or_else(|| "raster flag matrix entry must be a constant name".to_string())?;
             let value = i32::try_from(rust_constant(symbol)?).map_err(|err| err.to_string())?;
+            Ok((symbol.to_string(), value))
+        })
+        .collect::<Result<Vec<_>, String>>()
+        .map(Some)
+}
+
+fn outline_render_outline_flag_matrix(
+    params: &Value,
+) -> Result<Option<Vec<(String, u32)>>, String> {
+    let Some(flags) = params.get("outline_flags_matrix").and_then(Value::as_array) else {
+        return Ok(None);
+    };
+    flags
+        .iter()
+        .map(|flag| {
+            let symbol = flag
+                .as_str()
+                .ok_or_else(|| "outline flag matrix entry must be a constant name".to_string())?;
+            let value = if symbol == "FT_OUTLINE_NONE" {
+                0
+            } else {
+                u32::try_from(rust_constant(symbol)?).map_err(|err| err.to_string())?
+            };
             Ok((symbol.to_string(), value))
         })
         .collect::<Result<Vec<_>, String>>()
