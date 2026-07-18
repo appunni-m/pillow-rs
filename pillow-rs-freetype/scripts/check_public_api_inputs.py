@@ -1004,6 +1004,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Get_Track_Kerning SFNT/no-track-data error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "freetype.attach_file"
+        and row.case_id == "freetype.FT_Attach_File.error_null_face"
+    ):
+        return "FT_Attach_File null-face error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "freetype.done_freetype"
         and row.case_id == "freetype.FT_Done_FreeType.error_null_library"
         and lifecycle_handle(row, "library") == "null"
