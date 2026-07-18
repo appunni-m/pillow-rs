@@ -4315,6 +4315,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
             }
         } else {
             // Relative to anchor (aflatin.c:4441–4563).
+            crate::autohint::coverage::record(crate::autohint::coverage::COV_HINT_PHASE2_RELATIVE);
             let edge_opos = axis.edges[i].opos;
             let edge_flags = axis.edges[i].flags;
             let edge2_opos = axis.edges[edge2_idx].opos;
@@ -4389,7 +4390,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
             }
 
             // C: BOUND check is inside the `else` (relative stem) block
-            //    only (aflatin.c:4606). It does NOT run for the anchor stem.
+            //    only (aflatin.c:4549-4568). It does NOT run for the anchor stem.
             if i > 0 {
                 let ordering_violated = if top_to_bottom_hinting {
                     axis.edges[i].pos > axis.edges[i - 1].pos
@@ -4402,7 +4403,18 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                         let link_pos = axis.edges[link_idx].pos;
                         let prev_pos = axis.edges[i - 1].pos;
                         if (link_pos - prev_pos).abs() > 16 {
+                            // Pinned `af_latin_hint_edges` applies BOUND only
+                            // when preserving the linked stem still leaves more
+                            // than a quarter pixel; otherwise it permits the
+                            // ordering violation to avoid erasing the stem.
+                            crate::autohint::coverage::record(
+                                crate::autohint::coverage::COV_HINT_PHASE2_BOUND,
+                            );
                             axis.edges[i].pos = prev_pos;
+                        } else {
+                            crate::autohint::coverage::record(
+                                crate::autohint::coverage::COV_HINT_PHASE2_BOUND_NEAR,
+                            );
                         }
                     }
                 }
