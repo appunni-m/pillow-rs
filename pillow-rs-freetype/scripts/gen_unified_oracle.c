@@ -5459,6 +5459,7 @@ static int emit_outline_decompose(int argc, char** argv) {
     (void)argc;
     const char* case_id = argv[2];
     if (!streq(case_id, "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c") &&
+        !streq(case_id, "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c") &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks") &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
@@ -5540,6 +5541,24 @@ static int emit_outline_decompose(int argc, char** argv) {
         points[2].y = 176;
         points[3].x = 32;
         points[3].y = 176;
+    } else if (streq(case_id, "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c")) {
+        points[0].x = 0;
+        points[0].y = 0;
+        points[1].x = 64;
+        points[1].y = 96;
+        points[2].x = 128;
+        points[2].y = 0;
+        points[3].x = 192;
+        points[3].y = 96;
+        points[4].x = 256;
+        points[4].y = 96;
+        points[5].x = 320;
+        points[5].y = 0;
+        tags[1] = FT_CURVE_TAG_CONIC;
+        tags[3] = FT_CURVE_TAG_CONIC;
+        tags[4] = FT_CURVE_TAG_CONIC;
+        contours[0] = 5;
+        n_points = 6;
     }
     FT_Outline outline;
     outline.n_contours = n_contours;
@@ -5556,6 +5575,8 @@ static int emit_outline_decompose(int argc, char** argv) {
         streq(case_id, "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks") ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
         transform_count = 1;
+    } else if (streq(case_id, "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c")) {
+        transform_count = 2;
     }
     if (streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
         FT_Outline_Funcs funcs;

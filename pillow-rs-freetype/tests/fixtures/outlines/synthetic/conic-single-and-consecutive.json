@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "kind": "outline_model",
+  "points": [
+    {"x": 0, "y": 0},
+    {"x": 64, "y": 96, "on_curve": false},
+    {"x": 128, "y": 0},
+    {"x": 192, "y": 96, "on_curve": false},
+    {"x": 256, "y": 96, "on_curve": false},
+    {"x": 320, "y": 0}
+  ],
+  "tags": [1, 0, 1, 0, 0, 1],
+  "contours": [5],
+  "flags": 0
+}
