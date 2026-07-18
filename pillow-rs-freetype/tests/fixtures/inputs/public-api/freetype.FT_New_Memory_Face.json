@@ -1479,6 +1479,51 @@
             },
             "params": { "variants": [ { "face_index": 0 } ] },
             "coverage": [ "tt/cff:top-dict-charstrings-operand-missing-error" ]
+          },
+          {
+            "id": "cff-top-dict-longint-operand-missing-charstrings",
+            "assets": {
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-top-dict-longint-operand-missing-charstrings.otf" },
+              "font": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-top-dict-longint-operand-missing-charstrings.otf" }
+            },
+            "params": { "variants": [ { "face_index": 0 } ] },
+            "coverage": [ "tt/cff:top-dict-longint-operand-missing-charstrings-error" ]
+          },
+          {
+            "id": "cff-top-dict-real-operand-missing-charstrings",
+            "assets": {
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-top-dict-real-operand-missing-charstrings.otf" },
+              "font": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-top-dict-real-operand-missing-charstrings.otf" }
+            },
+            "params": { "variants": [ { "face_index": 0 } ] },
+            "coverage": [ "tt/cff:top-dict-real-operand-missing-charstrings-error" ]
+          },
+          {
+            "id": "cff-top-dict-positive-operand-missing-charstrings",
+            "assets": {
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-top-dict-positive-operand-missing-charstrings.otf" },
+              "font": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-top-dict-positive-operand-missing-charstrings.otf" }
+            },
+            "params": { "variants": [ { "face_index": 0 } ] },
+            "coverage": [ "tt/cff:top-dict-positive-operand-missing-charstrings-error" ]
+          },
+          {
+            "id": "cff-top-dict-negative-operand-missing-charstrings",
+            "assets": {
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-top-dict-negative-operand-missing-charstrings.otf" },
+              "font": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-top-dict-negative-operand-missing-charstrings.otf" }
+            },
+            "params": { "variants": [ { "face_index": 0 } ] },
+            "coverage": [ "tt/cff:top-dict-negative-operand-missing-charstrings-error" ]
+          },
+          {
+            "id": "cff-top-dict-invalid-number",
+            "assets": {
+              "font_bytes": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-top-dict-invalid-number.otf" },
+              "font": { "kind": "ref", "role": "font", "id": "fonts/cff/malformed-top-dict-invalid-number.otf" }
+            },
+            "params": { "variants": [ { "face_index": 0 } ] },
+            "coverage": [ "tt/cff:top-dict-invalid-number-error" ]
           }
         ]
       },
