@@ -1969,31 +1969,6 @@
             ]
           },
           {
-            "id": "mono-geometry-gid-36",
-            "assets": {
-              "font": {
-                "kind": "file",
-                "role": "font",
-                "path": "input/fonts/DejaVuSans.ttf"
-              }
-            },
-            "params": {
-              "face_index": 0,
-              "pixel_size": {
-                "x": 0,
-                "y": 10
-              },
-              "glyph_index": 36,
-              "load_flags": [
-                "FT_LOAD_DEFAULT"
-              ],
-              "render_mode": "FT_RENDER_MODE_MONO"
-            },
-            "coverage": [
-              "render/mono:geometry-gid-36"
-            ]
-          },
-          {
             "id": "mono-geometry-gid-37",
             "assets": {
               "font": {
