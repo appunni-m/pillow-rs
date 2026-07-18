@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_Advances` null-face/null-output
+Current verified result after `FT_Get_Advance` invalid-glyph/invalid-flags
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3779`
+  - `real-parity`: `3783`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `414`
+  - `generic-error-fallback`: `410`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2444,6 +2444,42 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftadvanc.FT_Get_Advances.error_null_face_or_output
+```
+
+### Issue Set AZ: `FT_Get_Advance` invalid-glyph/invalid-flags exact-error route
+
+Previous blocker:
+
+- `ftadvanc.FT_Get_Advance.error_invalid_glyph_or_flags` stayed in
+  `generic-error-fallback`.
+- Exact-error gating exposed that pinned C returned `Invalid_Glyph_Index` for
+  high-bit invalid flag variants with out-of-range glyph indices, while Rust
+  returned `Unimplemented_Feature`.
+
+Plan:
+
+1. Keep the fixture intact; it exercises concrete same-input public errors.
+2. Compare FreeType `src/base/ftadvanc.c` check order.
+3. Move Rust `FT_Get_Advance` glyph-index validation before FAST_ONLY fallback
+   and load-flag conversion.
+4. Require exact error comparison for all concrete variants.
+5. Classify the four concrete variants as real parity only after focused
+   parity passes.
+
+Verified progress:
+
+- Rust now matches FreeType `src/base/ftadvanc.c:116-126` check order: glyph
+  index is validated before FAST_ONLY fallback and load-flag conversion.
+- The focused invalid-glyph/invalid-flags variants pass exact comparison
+  against pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies the four concrete
+  `ftadvanc.FT_Get_Advance.error_invalid_glyph_or_flags` variants as
+  `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftadvanc.FT_Get_Advance.error_invalid_glyph_or_flags
 ```
 
 ## Coverage Bulk Context
