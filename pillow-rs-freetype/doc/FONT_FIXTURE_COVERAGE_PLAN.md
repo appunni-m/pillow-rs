@@ -3076,6 +3076,30 @@ with no public route or coverage gain.  Archive all four preserved trees after
 review; if the cleanup is desired, submit it separately as route-neutral code
 maintenance rather than as parity coverage.
 
+## Latin segment-count safety cutoff
+
+Pinned FreeType 2.14.3 `af_latin_hints_compute_segments` in `aflatin.c`
+clears the axis segment array and returns when `num_segments > 1000`.  Rust's
+matching `compute_segments` cutoff was present but had no public oracle-backed
+route.  `script-coverage.ttf` now maps U+E100 to 501 rectangular contours,
+which produce 1,002 segment candidates in each axis, and
+`script-latin-segment-limit-force-autohint` exercises the cutoff through
+`FT_LOAD_FORCE_AUTOHINT`.  Focused Coverage MCP run
+`485ed468-a35a-4ae8-b7c6-79ac576dcd10` passes 1 / 1 through the C oracle, Rust
+FFI, C ABI, and WASM ABI.  Full run
+`9cf6e44c-5685-4df8-803e-028267e5c7bf` passes 7,053 / 7,053 with 135 pending
+rows unchanged; route-audit real parity rises from 3,632 to 3,633.  Snapshot
+`abb7118f-7878-483f-b965-8d2d70d697fc` moves `src/autohint/latin.rs` from
+2,624 / 2,838 to 2,626 / 2,838 lines, from 1,086 / 1,284 to 1,087 / 1,284
+branches, and from 3,824 / 4,212 to 3,827 / 4,212 regions; functions remain
+67 / 68.  The retained row covers the return at lines 3278-3279.
+
+The adjacent identical-direction merge branch was also audited against C's
+degenerate-outline comment.  Hand-built on-curve, conic, and near-collinear
+contours plus exhaustive collinear delta sequences did not produce a legal
+public simple-outline route, so no coverage-only fixture or behavioral claim
+is retained for that branch.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
