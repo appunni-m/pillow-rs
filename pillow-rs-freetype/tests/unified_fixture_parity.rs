@@ -8254,6 +8254,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.operation == "freetype.get_subglyph_info"
             || case.case_id == "freetype.FT_Attach_File.error_null_face"
             || case.case_id == "freetype.FT_Attach_File.error_null_pathname"
+            || case.case_id == "freetype.FT_Attach_File.error_missing_or_unsupported_file"
             || case.case_id == "freetype.FT_Get_Track_Kerning.error_null_face_or_output"
             || case.case_id == "freetype.FT_Get_Track_Kerning.sfnt_or_no_track_data_error"
             || (case.operation == "freetype.reference_face"
