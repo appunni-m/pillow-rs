@@ -3572,10 +3572,34 @@ The wait-time adjacent audit found that the existing `cjk-serif-m-20` row
 already executes the 12-edge symmetry arm; its next improvement is an
 explicit route-bit-14 assertion, not another font.  A higher-priority
 false-green audit found that inserting the Bengali glyph at generated gid 79
-shifted three numeric `script-coverage.ttf` rows.  The next section should
-restore append-only generated glyph ordering, regenerate the single owned
-font, and prove the top-tilde-centering, vertical-cusp, and extreme-coordinate
-rows before adding the bit-14 assertion.
+shifted three numeric `script-coverage.ttf` rows.  The following section
+restores append-only generated glyph ordering, regenerates the single owned
+font, and proves the top-tilde-centering, vertical-cusp, and extreme-coordinate
+rows before the bit-14 assertion.
+
+## Append-only script fixture glyph identity
+
+The Bengali serif-pointer probe was inserted at gid 79 even though three
+existing `FT_Load_Glyph` rows depend on stable numeric IDs in the generated
+`script-coverage.ttf`.  Consequently the rows labeled top-tilde-centering,
+vertical-cusp, and extreme-coordinate loaded the preceding glyph while still
+passing C/Rust/ABI output parity.  The generator now documents the glyph order
+as append-only and places the Bengali char-code probe at the tail.  Regeneration
+restores gid 79 to `latin_tilde_top2_centering`, gid 80 to
+`latin_vertical_cusp`, and gid 82 to `latin_extreme_coordinate`; Bengali
+moves to gid 84 and remains selected by U+0988.
+
+Focused Coverage MCP runs `958bf559-d288-4801-b6f4-a55d7ce13842`,
+`1f8d6c7f-cd65-42ec-955f-3518df7b32ce`,
+`6e6c16a8-971c-48aa-be89-38c3eff42f2b`, and
+`6a9f82e2-06a7-4edf-9f1e-163b0fd59b2c` pass the three restored numeric
+rows and the moved Bengali char route independently.  Full managed run
+`097f5efb-e515-4f96-ad2d-d2fe004f0cdb` passes all 7,069 runnable rows with
+135 pending, 7,204 concrete, zero implicit, and 3,649 real-parity rows, and
+ingests snapshot `bc2820d5-d34e-4080-9cfc-91c8c9ff1b6e`.  Coverage is
+exactly unchanged from `92533418-1966-4449-bf23-14e1be5925f6`: the named
+glyphs were already reached by char-code rows, but their numeric public
+endpoint evidence is no longer false-green.
 
 ## Immediate Next Actions
 
