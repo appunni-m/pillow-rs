@@ -160,6 +160,16 @@ Verified progress:
   `FT_Outline_Render` empty-outline route and the public
   `FT_Outline.empty_outline_success` row. The same synthetic fixture also
   keeps the `FT_PIXEL_MODE_NONE.empty_bitmap_state` route exact.
+- Added real `outline_model` fixture
+  `outlines/synthetic/clip-sensitive-rectangle.json`.
+- Pinned C oracle now emits the exact
+  `ftimage.FT_Raster_Params.clip_box_matches_c` direct-render matrix:
+  no-`CLIP` with a sentinel initial `clip_box`, and `CLIP` with caller bounds
+  `{1,2,8,10}`.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType's
+  `FT_Outline_Render` side effect: direct no-`CLIP` calls mutate
+  `params.clip_box` to the outline CBox in integer pixels before rasterizing,
+  while direct `CLIP` calls preserve the caller-provided bounds.
 
 Focused non-coverage result:
 
@@ -187,14 +197,28 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_OUTLINE_NONE
 
 Result: `4 / 4` runtime parity rows passed, `0` failed, `0` pending.
 
-Full non-coverage result after the explicit empty-outline fixtures:
+Full non-coverage result after the clip-box direct-render parity fix:
 
 ```bash
 make -C pillow-rs-freetype test
 ```
 
-Result: `7130 / 7130` runnable rows passed, `0` failed, `104` pending. Route
-audit: `real-parity` `3713`, `pending-route` `96`.
+Result: `7131 / 7131` runnable rows passed, `0` failed, `103` pending. Route
+audit: `real-parity` `3714`, `pending-route` `95`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_Raster_Params.clip_box_matches_c
+```
+
+Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending.
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_Raster_Params
+```
+
+Result: `5 / 5` runtime parity rows passed, `0` failed, `0` pending.
 
 Broadened non-coverage result:
 
@@ -202,8 +226,8 @@ Broadened non-coverage result:
 make -C pillow-rs-freetype test-op OP=ftoutln.outline_render
 ```
 
-Result after the explicit empty-outline fixtures: `78 / 78` runnable rows
-passed, `0` failed, `11` pending.
+Result after the clip-box direct-render parity fix: `79 / 79` runnable rows
+passed, `0` failed, `10` pending.
 
 Current remaining `ftoutln.outline_render` blockers are missing explicit
 fixtures or non-fixture public harness surfaces, led by:
