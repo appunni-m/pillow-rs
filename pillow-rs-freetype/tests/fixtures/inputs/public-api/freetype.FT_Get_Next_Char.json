@@ -6,6 +6,7 @@
     "strict_after_and_gap_behavior",
     "exhausted_or_no_active_charmap",
     "null_face_returns_zero",
+    "null_agindex_pointer_returns_charcode_without_write",
     "format14_only_charmap_returns_zero"
   ],
   "cases": [
@@ -254,6 +255,72 @@
                 "writes": {
                   "agindex": "FT_UInt zero sentinel"
                 }
+              }
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:3977-4003"
+        ]
+      }
+    },
+    {
+      "case_id": "freetype.FT_Get_Next_Char.null_agindex_pointer_returns_charcode_without_write",
+      "subject": "freetype.FT_Get_Next_Char",
+      "case": "null_agindex_pointer_returns_charcode_without_write",
+      "operation": "freetype.get_next_char",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "select_charmap": "FT_ENCODING_UNICODE",
+          "start_charcodes": [
+            0,
+            31,
+            32,
+            65,
+            1114111
+          ],
+          "agindex_pointer": "null"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:freetype",
+        "area:charmap-iteration",
+        "behavior:null-output-pointer"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/freetype.h",
+          "symbol": "FT_Get_Next_Char",
+          "kind": "function"
+        },
+        "source_behavior": "FT_Get_Next_Char computes the internal glyph index but writes it only when agindex is non-null."
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "rows": [
+            {
+              "start": "FT_ULong",
+              "result": {
+                "return": "FT_ULong next_charcode",
+                "writes": null
               }
             }
           ]

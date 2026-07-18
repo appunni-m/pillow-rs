@@ -3710,6 +3710,10 @@ static void print_char_iteration_result(FT_ULong char_code, FT_UInt glyph_index)
            (unsigned int)glyph_index);
 }
 
+static void print_char_iteration_return_only(FT_ULong char_code) {
+    printf("{\"return\":%lu}", (unsigned long)char_code);
+}
+
 static void print_bbox_named(const char* name, FT_BBox bbox) {
     printf("\"%s\":{\"xMin\":%ld,\"yMin\":%ld,\"xMax\":%ld,\"yMax\":%ld}",
            name,
@@ -8899,12 +8903,17 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
-    if (streq(command, "--get-first-char")) {
+    if (streq(command, "--get-first-char") || streq(command, "--get-first-char-null-agindex")) {
         FT_UInt glyph_index = 0;
-        FT_ULong char_code = FT_Get_First_Char(face, &glyph_index);
+        FT_UInt* glyph_index_ptr = streq(command, "--get-first-char-null-agindex") ? NULL : &glyph_index;
+        FT_ULong char_code = FT_Get_First_Char(face, glyph_index_ptr);
         print_status(0);
         printf(",\"output\":");
-        print_char_iteration_result(char_code, glyph_index);
+        if (glyph_index_ptr) {
+            print_char_iteration_result(char_code, glyph_index);
+        } else {
+            print_char_iteration_return_only(char_code);
+        }
         printf("}\n");
         FT_Done_Face(face);
         FT_Done_FreeType(library);
@@ -8912,16 +8921,21 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
-    if (streq(command, "--get-next-char-sequence")) {
+    if (streq(command, "--get-next-char-sequence") || streq(command, "--get-next-char-sequence-null-agindex")) {
         unsigned long max_steps = strtoul(argv[7], NULL, 10);
         FT_UInt glyph_index = 0;
-        FT_ULong char_code = FT_Get_First_Char(face, &glyph_index);
+        FT_UInt* glyph_index_ptr = streq(command, "--get-next-char-sequence-null-agindex") ? NULL : &glyph_index;
+        FT_ULong char_code = FT_Get_First_Char(face, glyph_index_ptr);
         print_status(0);
         printf(",\"output\":{\"sequence\":[");
-        for (unsigned long i = 0; i < max_steps && glyph_index != 0; i++) {
+        for (unsigned long i = 0; i < max_steps && (glyph_index_ptr ? glyph_index != 0 : char_code != 0); i++) {
             if (i) printf(",");
-            print_char_iteration_result(char_code, glyph_index);
-            char_code = FT_Get_Next_Char(face, char_code, &glyph_index);
+            if (glyph_index_ptr) {
+                print_char_iteration_result(char_code, glyph_index);
+            } else {
+                print_char_iteration_return_only(char_code);
+            }
+            char_code = FT_Get_Next_Char(face, char_code, glyph_index_ptr);
         }
         printf("]}}\n");
         FT_Done_Face(face);
@@ -8930,7 +8944,7 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
-    if (streq(command, "--get-next-char-starts")) {
+    if (streq(command, "--get-next-char-starts") || streq(command, "--get-next-char-starts-null-agindex")) {
         size_t starts_len = strlen(argv[7]);
         char* starts = (char*)malloc(starts_len + 1);
         if (!starts) {
@@ -8947,11 +8961,16 @@ static int emit_face_or_slot(int argc, char** argv) {
         while (token) {
             FT_ULong start = strtoul(token, NULL, 10);
             FT_UInt glyph_index = 0;
-            FT_ULong char_code = FT_Get_Next_Char(face, start, &glyph_index);
+            FT_UInt* glyph_index_ptr = streq(command, "--get-next-char-starts-null-agindex") ? NULL : &glyph_index;
+            FT_ULong char_code = FT_Get_Next_Char(face, start, glyph_index_ptr);
             if (!first) printf(",");
             first = 0;
             printf("{\"start\":%lu,\"result\":", (unsigned long)start);
-            print_char_iteration_result(char_code, glyph_index);
+            if (glyph_index_ptr) {
+                print_char_iteration_result(char_code, glyph_index);
+            } else {
+                print_char_iteration_return_only(char_code);
+            }
             printf("}");
             token = strtok(NULL, ",");
         }
@@ -10157,8 +10176,11 @@ static int dispatch(int argc, char** argv) {
                     return 0;
                 }
                 if (streq(argv[1], "--get-first-char")
+                    || streq(argv[1], "--get-first-char-null-agindex")
                     || streq(argv[1], "--get-next-char-sequence")
-                    || streq(argv[1], "--get-next-char-starts")) {
+                    || streq(argv[1], "--get-next-char-sequence-null-agindex")
+                    || streq(argv[1], "--get-next-char-starts")
+                    || streq(argv[1], "--get-next-char-starts-null-agindex")) {
                     printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"void\":true}}\n");
                     return 0;
                 }
@@ -10515,10 +10537,10 @@ static int dispatch(int argc, char** argv) {
     if (argc == 8 && streq(argv[1], "--get-sfnt-os2-unicode-ranges")) {
         return emit_face_or_slot(argc, argv);
     }
-    if (argc == 7 && streq(argv[1], "--get-first-char")) {
+    if (argc == 7 && (streq(argv[1], "--get-first-char") || streq(argv[1], "--get-first-char-null-agindex"))) {
         return emit_face_or_slot(argc, argv);
     }
-    if (argc == 8 && (streq(argv[1], "--get-next-char-sequence") || streq(argv[1], "--get-next-char-starts"))) {
+    if (argc == 8 && (streq(argv[1], "--get-next-char-sequence") || streq(argv[1], "--get-next-char-sequence-null-agindex") || streq(argv[1], "--get-next-char-starts") || streq(argv[1], "--get-next-char-starts-null-agindex"))) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 9 && (streq(argv[1], "--load-char") || streq(argv[1], "--load-glyph") || streq(argv[1], "--load-glyph-from-char") || streq(argv[1], "--inspect-glyph-metrics") || streq(argv[1], "--inspect-glyph-slot") || streq(argv[1], "--load-glyph-outline") || streq(argv[1], "--outline-get-bbox") || streq(argv[1], "--outline-get-cbox"))) {

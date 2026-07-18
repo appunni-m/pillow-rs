@@ -2281,7 +2281,10 @@ impl BackendComparisonWorker {
                 return Ok(ok(json!({"void": true})));
             }
             if matches!(case.operation.as_str(), "freetype.get_first_char") {
-                return Ok(ok(rust_first_char_optional_output(None)));
+                return Ok(ok(rust_first_char_optional_output(
+                    None,
+                    &case.inputs.params,
+                )));
             }
             if matches!(case.operation.as_str(), "freetype.get_next_char") {
                 return Ok(ok(rust_next_char_optional_output(
@@ -2431,10 +2434,13 @@ impl BackendComparisonWorker {
             }
             "freetype.get_first_char" => {
                 if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
-                    return Ok(ok(rust_first_char_optional_output(None)));
+                    return Ok(ok(rust_first_char_optional_output(
+                        None,
+                        &case.inputs.params,
+                    )));
                 }
                 let face = self.rust_face(case)?;
-                Ok(ok(rust_first_char_output(face)))
+                Ok(ok(rust_first_char_output(face, &case.inputs.params)))
             }
             "freetype.get_next_char" => {
                 if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
@@ -2535,7 +2541,10 @@ impl BackendComparisonWorker {
                     Ok(ok(uint32_list_json(c_abi::abi_uint32_list(ptr))))
                 }
                 "freetype.set_transform" => return run_rust_ffi(case),
-                "freetype.get_first_char" => Ok(ok(c_first_char_output(std::ptr::null_mut()))),
+                "freetype.get_first_char" => Ok(ok(c_first_char_output(
+                    std::ptr::null_mut(),
+                    &case.inputs.params,
+                ))),
                 "freetype.get_next_char" => Ok(ok(c_next_char_output(
                     std::ptr::null_mut(),
                     &case.inputs.params,
@@ -2681,10 +2690,13 @@ impl BackendComparisonWorker {
             }
             "freetype.get_first_char" => {
                 if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
-                    return Ok(ok(c_first_char_output(std::ptr::null_mut())));
+                    return Ok(ok(c_first_char_output(
+                        std::ptr::null_mut(),
+                        &case.inputs.params,
+                    )));
                 }
                 let face = self.c_face(case)?;
-                Ok(ok(c_first_char_output(face)))
+                Ok(ok(c_first_char_output(face, &case.inputs.params)))
             }
             "freetype.get_next_char" => {
                 if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
@@ -2785,7 +2797,7 @@ impl BackendComparisonWorker {
                     Ok(ok(uint32_list_json(wasm_abi::abi_uint32_list(ptr))))
                 }
                 "freetype.set_transform" => return run_rust_ffi(case),
-                "freetype.get_first_char" => Ok(ok(wasm_first_char_output(0))),
+                "freetype.get_first_char" => Ok(ok(wasm_first_char_output(0, &case.inputs.params))),
                 "freetype.get_next_char" => Ok(ok(wasm_next_char_output(0, &case.inputs.params)?)),
                 "ftsizes.new_size" => return wasm_new_size(case),
                 "ftsizes.done_size" => return wasm_done_size(case),
@@ -2930,10 +2942,10 @@ impl BackendComparisonWorker {
             }
             "freetype.get_first_char" => {
                 if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
-                    return Ok(ok(wasm_first_char_output(0)));
+                    return Ok(ok(wasm_first_char_output(0, &case.inputs.params)));
                 }
                 let handle = self.wasm_face(case)?;
-                Ok(ok(wasm_first_char_output(handle)))
+                Ok(ok(wasm_first_char_output(handle, &case.inputs.params)))
             }
             "freetype.get_next_char" => {
                 if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
@@ -3029,6 +3041,14 @@ fn char_iteration_json(char_code: u64, glyph_index: u32) -> Value {
             "agindex": glyph_index
         }
     })
+}
+
+fn char_iteration_return_only_json(char_code: u64) -> Value {
+    json!({ "return": char_code })
+}
+
+fn char_agindex_pointer_is_null(params: &Value) -> bool {
+    params.get("agindex_pointer").and_then(Value::as_str) == Some("null")
 }
 
 fn fstype_flags_json(flags: u16, params: &Value) -> Result<Value, String> {
@@ -6612,26 +6632,53 @@ fn wasm_charmap_json(info: &wasm_abi::FontdoneWasmCharmap) -> Value {
     })
 }
 
-fn rust_first_char_optional_output(face: Option<&FT_Face>) -> Value {
+fn rust_first_char_optional_output(face: Option<&FT_Face>, params: &Value) -> Value {
     let mut glyph_index = 0;
-    let char_code = FT_Get_First_Char(face, Some(&mut glyph_index));
-    char_iteration_json(char_code, glyph_index)
+    let agindex = if char_agindex_pointer_is_null(params) {
+        None
+    } else {
+        Some(&mut glyph_index)
+    };
+    let char_code = FT_Get_First_Char(face, agindex);
+    if char_agindex_pointer_is_null(params) {
+        char_iteration_return_only_json(char_code)
+    } else {
+        char_iteration_json(char_code, glyph_index)
+    }
 }
 
-fn rust_first_char_output(face: &FT_Face) -> Value {
-    rust_first_char_optional_output(Some(face))
+fn rust_first_char_output(face: &FT_Face, params: &Value) -> Value {
+    rust_first_char_optional_output(Some(face), params)
 }
 
-fn c_first_char_output(face: c_abi::FT_Face) -> Value {
+fn c_first_char_output(face: c_abi::FT_Face, params: &Value) -> Value {
     let mut glyph_index = 0;
-    let char_code = c_abi::FT_Get_First_Char(face, &mut glyph_index);
-    char_iteration_json(char_code, glyph_index)
+    let agindex = if char_agindex_pointer_is_null(params) {
+        std::ptr::null_mut()
+    } else {
+        &mut glyph_index
+    };
+    let char_code = c_abi::FT_Get_First_Char(face, agindex);
+    if char_agindex_pointer_is_null(params) {
+        char_iteration_return_only_json(char_code)
+    } else {
+        char_iteration_json(char_code, glyph_index)
+    }
 }
 
-fn wasm_first_char_output(handle: usize) -> Value {
+fn wasm_first_char_output(handle: usize, params: &Value) -> Value {
     let mut glyph_index = 0;
-    let char_code = wasm_abi::fontdone_wasm_get_first_char(handle, &mut glyph_index);
-    char_iteration_json(char_code, glyph_index)
+    let agindex = if char_agindex_pointer_is_null(params) {
+        std::ptr::null_mut()
+    } else {
+        &mut glyph_index
+    };
+    let char_code = wasm_abi::fontdone_wasm_get_first_char(handle, agindex);
+    if char_agindex_pointer_is_null(params) {
+        char_iteration_return_only_json(char_code)
+    } else {
+        char_iteration_json(char_code, glyph_index)
+    }
 }
 
 fn rust_next_char_optional_output(face: Option<&FT_Face>, params: &Value) -> Result<Value, String> {
@@ -6640,10 +6687,19 @@ fn rust_next_char_optional_output(face: Option<&FT_Face>, params: &Value) -> Res
             .into_iter()
             .map(|start| {
                 let mut glyph_index = 0;
-                let char_code = FT_Get_Next_Char(face, start, Some(&mut glyph_index));
+                let agindex = if char_agindex_pointer_is_null(params) {
+                    None
+                } else {
+                    Some(&mut glyph_index)
+                };
+                let char_code = FT_Get_Next_Char(face, start, agindex);
                 json!({
                     "start": start,
-                    "result": char_iteration_json(char_code, glyph_index)
+                    "result": if char_agindex_pointer_is_null(params) {
+                        char_iteration_return_only_json(char_code)
+                    } else {
+                        char_iteration_json(char_code, glyph_index)
+                    }
                 })
             })
             .collect::<Vec<_>>();
@@ -6672,10 +6728,19 @@ fn c_next_char_output(face: c_abi::FT_Face, params: &Value) -> Result<Value, Str
             .into_iter()
             .map(|start| {
                 let mut glyph_index = 0;
-                let char_code = c_abi::FT_Get_Next_Char(face, start, &mut glyph_index);
+                let agindex = if char_agindex_pointer_is_null(params) {
+                    std::ptr::null_mut()
+                } else {
+                    &mut glyph_index
+                };
+                let char_code = c_abi::FT_Get_Next_Char(face, start, agindex);
                 json!({
                     "start": start,
-                    "result": char_iteration_json(char_code, glyph_index)
+                    "result": if char_agindex_pointer_is_null(params) {
+                        char_iteration_return_only_json(char_code)
+                    } else {
+                        char_iteration_json(char_code, glyph_index)
+                    }
                 })
             })
             .collect::<Vec<_>>();
@@ -6700,11 +6765,22 @@ fn wasm_next_char_output(handle: usize, params: &Value) -> Result<Value, String>
             .into_iter()
             .map(|start| {
                 let mut glyph_index = 0;
-                let char_code =
-                    wasm_abi::fontdone_wasm_get_next_char(handle, start, &mut glyph_index);
+                let char_code = wasm_abi::fontdone_wasm_get_next_char(
+                    handle,
+                    start,
+                    if char_agindex_pointer_is_null(params) {
+                        std::ptr::null_mut()
+                    } else {
+                        &mut glyph_index
+                    },
+                );
                 json!({
                     "start": start,
-                    "result": char_iteration_json(char_code, glyph_index)
+                    "result": if char_agindex_pointer_is_null(params) {
+                        char_iteration_return_only_json(char_code)
+                    } else {
+                        char_iteration_json(char_code, glyph_index)
+                    }
                 })
             })
             .collect::<Vec<_>>();
@@ -9349,7 +9425,14 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if lifecycle_handle_param(params, "face") == Some("null") {
                 return Ok(vec!["--get-first-char-null-face".to_string()]);
             }
-            let mut args = vec!["--get-first-char".to_string()];
+            let mut args = vec![
+                if char_agindex_pointer_is_null(params) {
+                    "--get-first-char-null-agindex"
+                } else {
+                    "--get-first-char"
+                }
+                .to_string(),
+            ];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
             Ok(args)
@@ -9362,8 +9445,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 ]);
             }
             let mut args = vec![
-                if params.get("start_charcodes").is_some() {
+                if params.get("start_charcodes").is_some() && char_agindex_pointer_is_null(params)
+                {
+                    "--get-next-char-starts-null-agindex"
+                } else if params.get("start_charcodes").is_some() {
                     "--get-next-char-starts"
+                } else if char_agindex_pointer_is_null(params) {
+                    "--get-next-char-sequence-null-agindex"
                 } else {
                     "--get-next-char-sequence"
                 }

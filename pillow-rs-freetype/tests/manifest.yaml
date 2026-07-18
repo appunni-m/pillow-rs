@@ -1525,6 +1525,8 @@ subjects:
         description: Empty charmaps, no active charmap, and null face cases return and write the same sentinel values as C.
       - id: null_face_returns_zero
         description: A null face returns charcode zero and writes glyph index zero without requiring a font.
+      - id: null_agindex_pointer_returns_charcode_without_write
+        description: A null agindex output pointer is accepted; C returns the first charcode and skips the glyph-index write.
       - id: format14_only_charmap_returns_zero
         description: A face whose only cmap is format 14 returns the same zero sentinel as C for first-character iteration.
       - id: charcode_zero_disambiguated_by_glyph_index
@@ -1605,6 +1607,8 @@ subjects:
         description: Exhausted charmaps, null faces, and no active charmap cases return and write the same zero sentinels as C.
       - id: null_face_returns_zero
         description: A null face returns charcode zero and writes glyph index zero for every queried start code.
+      - id: null_agindex_pointer_returns_charcode_without_write
+        description: A null agindex output pointer is accepted; C returns the next charcode for each queried start and skips the glyph-index write.
       - id: format14_only_charmap_returns_zero
         description: A face whose only cmap is format 14 returns the same zero sentinel as C for next-character iteration.
 

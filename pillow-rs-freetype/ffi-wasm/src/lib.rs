@@ -1970,8 +1970,12 @@ pub extern "C" fn fontdone_wasm_sfnt_table_info(
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_first_char(handle: usize, agindex: *mut FT_UInt) -> FT_ULong {
     let mut glyph_index = 0;
-    let char_code =
-        rust_ffi::FT_Get_First_Char(face_ref(handle).map(|face| &face.face), Some(&mut glyph_index));
+    let char_code = rust_ffi::FT_Get_First_Char(
+        face_ref(handle).map(|face| &face.face),
+        // FreeType `base/ftobjs.c:3952-3972` accepts a null `agindex`;
+        // it still returns the charcode and skips only the glyph-index write.
+        (!agindex.is_null()).then_some(&mut glyph_index),
+    );
     if !agindex.is_null() {
         // SAFETY: `agindex` is non-null and caller provides writable storage.
         unsafe { *agindex = glyph_index };
@@ -1989,7 +1993,9 @@ pub extern "C" fn fontdone_wasm_get_next_char(
     let next_char = rust_ffi::FT_Get_Next_Char(
         face_ref(handle).map(|face| &face.face),
         char_code,
-        Some(&mut glyph_index),
+        // FreeType `base/ftobjs.c:3977-4003` accepts a null `agindex`;
+        // it still returns the next charcode and skips only the glyph-index write.
+        (!agindex.is_null()).then_some(&mut glyph_index),
     );
     if !agindex.is_null() {
         // SAFETY: `agindex` is non-null and caller provides writable storage.
