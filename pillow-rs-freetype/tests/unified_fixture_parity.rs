@@ -8253,6 +8253,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.operation == "freetype.get_subglyph_info"
             || (case.operation == "set_char_size"
                 && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
+            || (case.operation == "freetype.select_size"
+                && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
             || (case.operation == "load_char"
                 && (lifecycle_handle_param_is_null(&case.inputs.params, "face")
                     || case.case_id == "freetype.FT_Load_Char.error_null_face_or_invalid_flags"))
