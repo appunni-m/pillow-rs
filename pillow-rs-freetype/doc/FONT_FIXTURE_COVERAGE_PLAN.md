@@ -3340,6 +3340,46 @@ branches, and from 3,866 / 4,241 to 3,867 / 4,241 regions; functions remain
 67 / 68.  The one previously missing branch outcome is now covered and the
 file has one fewer uncovered line despite the seven-line permanent marker.
 
+## Khmer overlapping sub-top blue suppression
+
+Pinned FreeType 2.14.3 `af_latin_metrics_scale_dim`
+(`aflatin.c:1443-1481`) deactivates an active `AF_LATIN_BLUE_SUB_TOP` zone when
+its fitted interval overlaps any active primary blue interval.  The first
+implementation divergence was that Rust ended after initial blue activation
+and omitted this entire suppression pass, leaving the overlapping Khmer
+subscript-top zone active where C clears `AF_LATIN_BLUE_ACTIVE`.
+
+The deterministic `khmer-sub-top-overlap.ttf` produces a fitted primary-top
+interval of `[768, 832]` and a fitted subscript-top interval of `[832, 832]`,
+so the intervals overlap at their shared endpoint under C's inclusive test.
+The public
+`FT_Load_Glyph.matrix_load@khmer-overlapping-sub-top-blue-force-autohint` row
+loads gid 7 at 25 ppem with `FT_LOAD_FORCE_AUTOHINT`, asserts route bit 43,
+and compares the complete slot through the pinned C oracle, Rust FFI, C ABI,
+WASM ABI, and safe public load.  The selected glyph maps to Khmer U+1782; the
+fixture's U+1780-script coverage selects the Khmer autohinter and exposes its
+subscript-top blue.  Before the fix, the downstream grid happened to produce
+the same public slot despite the wrong active-zone state, so the permanent
+route bit proves the internal C-mandated suppression rather than treating the
+coincidental output match as sufficient.
+
+Focused Coverage MCP run `e955749e-d1b9-48f3-8510-8aa96e5280d6` passes
+1 / 1 selected runtime case.  Full managed run
+`a33702be-6308-49a6-a102-7612328a9545` passes 7,066 / 7,066 runnable cases
+with 135 pending rows unchanged and ingests snapshot
+`366f1b57-3409-4fff-a213-41d65f8386c6`.  Concrete cases rise from 7,200 to
+7,201 and route-audit real parity rises from 3,645 to 3,646.  Project coverage
+moves from 20,350 / 21,282 to 20,370 / 21,301 lines, from 4,921 / 5,495 to
+4,928 / 5,507 branches, from 1,277 / 1,413 to 1,278 / 1,414 functions, and
+from 29,453 / 31,099 to 29,473 / 31,119 regions.  `src/autohint/latin.rs`
+moves from 2,681 / 2,887 to 2,701 / 2,906 lines, from 1,098 / 1,292 to
+1,105 / 1,304 branches, from 67 / 68 to 68 / 69 functions, and from
+3,867 / 4,241 to 3,887 / 4,261 regions.  Every added line, region, and
+function is covered and the file has one fewer uncovered line.  The real
+overlap loop adds twelve measurable branch outcomes, seven covered by this
+exact route; consequently the raw branch rate decreases slightly even though
+the implementation restores missing C logic and adds covered behavior.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:

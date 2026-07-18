@@ -112,6 +112,8 @@ pub const COV_X_HEIGHT_SCALE_ADJUSTMENT: u64 = 1 << 40;
 pub const COV_BLUE_NEUTRAL_ROUND_SKIP: u64 = 1 << 41;
 /// metrics scaling: reject an x-height adjustment that moves the tallest blue extent by two pixels or more.
 pub const COV_X_HEIGHT_SCALE_REJECTED: u64 = 1 << 42;
+/// metrics scaling: deactivate an active sub-top zone that overlaps an active primary zone.
+pub const COV_SUB_TOP_BLUE_OVERLAP_SUPPRESSED: u64 = 1 << 43;
 
 /// Record a coverage bit for the current glyph.
 pub fn record(bit: u64) {

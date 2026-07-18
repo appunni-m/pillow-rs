@@ -425,7 +425,7 @@ for blue in blues:
     blue.shoot.fit = blue.ref.fit - delta2
     blue.flags |= ACTIVE
 // sub-top overlap suppression (aflatin.c:1443+): drop a SUB_TOP+ACTIVE blue
-// if it overlaps a non-SUB-TOP active blue. (Latin has no SUB_TOP zones → no-op.)
+// if it overlaps a non-SUB-TOP active blue (used by Khmer subscript tops).
 ```
 
 ### E.3 x-height scale optimization (aflatin.c:1238-1306)

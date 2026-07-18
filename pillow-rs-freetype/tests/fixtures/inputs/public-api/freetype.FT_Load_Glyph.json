@@ -3133,6 +3133,34 @@
             ]
           },
           {
+            "id": "khmer-overlapping-sub-top-blue-force-autohint",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/autohint/khmer-sub-top-overlap.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 25
+              },
+              "glyph_index": 7,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ],
+              "assert_api_load_glyph_agrees": true,
+              "assert_autohint_coverage_bits_include": [
+                43
+              ]
+            },
+            "coverage": [
+              "autohint/latin:overlapping-sub-top-blue-suppression"
+            ]
+          },
+          {
             "id": "latin-smooth-stem-serif-force-autohint",
             "assets": {
               "font": {
