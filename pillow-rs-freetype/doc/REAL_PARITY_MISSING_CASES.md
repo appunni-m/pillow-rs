@@ -32,6 +32,10 @@ Current result at `a8cdaa567`:
 Parity-only rule for this phase:
 
 - Do not use coverage targets or Coverage MCP to choose work.
+- Do not use `make -C pillow-rs-freetype real-parity-verify` for this phase
+  unless it remains parity-only; this target now expands to
+  `test-unified-fixtures`, route audit, FFI gates, fmt, and clippy, not
+  `cargo llvm-cov`.
 - Do not delete tests because they are pending or fallback.
 - Do not add green placeholder rows.
 - A row is fixed only when the same public input has exact output agreement
@@ -418,6 +422,16 @@ Verified progress:
   `FT_Err_Invalid_Outline`.
 - Rust FFI, C ABI, and WASM ABI now match pinned FreeType for the cubic trace
   and malformed cubic status row.
+- Added real `outline_model` fixture
+  `outlines/synthetic/tags-with-touch-and-scan-bits.json`.
+- Native C oracle now records
+  `ftimage.FT_CURVE_TAG.classifies_outline_tags` with high curve-tag bits mixed
+  into on-curve, conic, and cubic tags. This pins FreeType's public
+  `FT_CURVE_TAG(flag)` behavior from `ftimage.h`: only the low two bits select
+  the curve type, while `TOUCH_X`, `TOUCH_Y`, and `HAS_SCANMODE` remain stored
+  in the tag byte.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for the high-bit tag
+  classification trace and the emitted `masked_tags` vector.
 
 Focused non-coverage result:
 
@@ -470,6 +484,12 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_CURVE_TAG_CUBIC.cubic_decom
 Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
 
 ```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_CURVE_TAG.classifies_outline_tags
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
+
+```bash
 make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Decompose.callback_error_propagates
 ```
 
@@ -480,8 +500,9 @@ make -C pillow-rs-freetype test-op OP=ftoutln.outline_decompose
 ```
 
 Result after the line/conic/cubic fixture, shift/delta fixture, conic fixture,
-mixed callback fixture, on-curve fixture, cubic fixtures, and callback-error
-routes: `9 / 9` runtime parity rows passed, `0` failed, `6` pending.
+mixed callback fixture, on-curve fixture, cubic fixtures, callback-error
+routes, and high-bit curve-tag fixture: `10 / 10` runtime parity rows passed,
+`0` failed, `5` pending.
 
 Full non-coverage result:
 
@@ -490,9 +511,10 @@ make -C pillow-rs-freetype test
 ```
 
 Result after the line/conic/cubic fixture, shift/delta fixture, conic fixture,
-mixed callback fixture, on-curve fixture, cubic fixtures, and callback-error
-routes: `7140 / 7140` runnable rows passed, `0` failed, `94` pending. Route
-audit: `real-parity` `3723`, `pending-route` `86`.
+mixed callback fixture, on-curve fixture, cubic fixtures, callback-error
+routes, and high-bit curve-tag fixture: `7141 / 7141` runnable rows passed,
+`0` failed, `93` pending. Route audit: `real-parity` `3724`,
+`pending-route` `85`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
 
@@ -598,7 +620,6 @@ repo-visible buckets for handoff and subagent selection.
 | 12 | `generic-fallback` | `ftcolor` | `ftcolor.traverse_paint_graph` | `ftcolor.FT_COLR_COMPOSITE_CLEAR / paint_composite_runtime` | no explicit maintained route classification |
 | 11 | `generic-fallback` | `t1tables` | `t1tables.get_ps_font_private_mm_blend` | `t1tables.T1_BLEND_BLUE_SCALE / private_blue_scale_runtime_value` | no explicit maintained route classification |
 | 10 | `generic-fallback` | `ftcolor` | `ftcolor.get_paint` | `ftcolor.FT_Affine23 / root_transform_values` | no explicit maintained route classification |
-| 10 | `generic-fallback` | `ftimage` | `ftoutln.outline_decompose` | `ftimage.FT_CURVE_TAG / classifies_outline_tags` | no explicit maintained route classification |
 | 9 | `generic-fallback` | `ftgxval` | `ftgxval.truetype_gx_validate` | `ftgxval.FT_TrueTypeGX_Validate / validates_selected_gx_tables` | no explicit maintained route classification |
 | 8 | `generic-fallback` | `ftcache` | `ftcache.manager_lookup_size` | `ftcache.FTC_Manager_LookupSize / planned_cache_subsystem_not_out_of_scope` | no explicit maintained route classification |
 | 8 | `generic-fallback` | `ftcid` | `ftcid.get_cid_from_glyph_index` | `ftcid.FT_Get_CID_From_Glyph_Index / cid_face_returns_cid` | no explicit maintained route classification |

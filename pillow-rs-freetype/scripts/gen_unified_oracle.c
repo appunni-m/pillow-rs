@@ -5461,6 +5461,7 @@ static int emit_outline_decompose(int argc, char** argv) {
     if (!streq(case_id, "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c") &&
         !streq(case_id, "ftimage.FT_Outline_Funcs.callback_order_matches_c") &&
         !streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates") &&
+        !streq(case_id, "ftimage.FT_CURVE_TAG.classifies_outline_tags") &&
         !streq(case_id, "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c") &&
         !streq(case_id, "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c") &&
         !streq(case_id, "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c") &&
@@ -5505,6 +5506,7 @@ static int emit_outline_decompose(int argc, char** argv) {
     short n_points = 4;
     if (streq(case_id, "ftimage.FT_Outline_Funcs.callback_order_matches_c") ||
         streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates") ||
+        streq(case_id, "ftimage.FT_CURVE_TAG.classifies_outline_tags") ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
         points[0].x = 0;
@@ -5533,6 +5535,11 @@ static int emit_outline_decompose(int argc, char** argv) {
         tags[5] = FT_CURVE_TAG_CONIC;
         tags[8] = FT_CURVE_TAG_CUBIC;
         tags[9] = FT_CURVE_TAG_CUBIC;
+        if (streq(case_id, "ftimage.FT_CURVE_TAG.classifies_outline_tags")) {
+            tags[0] = FT_CURVE_TAG_ON | FT_CURVE_TAG_TOUCH_X;
+            tags[4] = FT_CURVE_TAG_CONIC | FT_CURVE_TAG_HAS_SCANMODE | 0x40;
+            tags[8] = FT_CURVE_TAG_CUBIC | FT_CURVE_TAG_TOUCH_Y;
+        }
         contours[0] = 2;
         contours[1] = 6;
         contours[2] = 10;
@@ -5619,6 +5626,7 @@ static int emit_outline_decompose(int argc, char** argv) {
     int transform_count = 3;
     if (streq(case_id, "ftimage.FT_Outline_Funcs.callback_order_matches_c") ||
         streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates") ||
+        streq(case_id, "ftimage.FT_CURVE_TAG.classifies_outline_tags") ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks") ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
@@ -5771,6 +5779,17 @@ static int emit_outline_decompose(int argc, char** argv) {
                 printf(",");
             }
             printf("{\"id\":\"%s\",\"status\":%d}", malformed_ids[row], err);
+        }
+        printf("]}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftimage.FT_CURVE_TAG.classifies_outline_tags")) {
+        printf("],\"masked_tags\":[");
+        for (int i = 0; i < outline.n_points; i++) {
+            if (i) {
+                printf(",");
+            }
+            printf("%d", FT_CURVE_TAG(outline.tags[i]));
         }
         printf("]}}\n");
         return 0;

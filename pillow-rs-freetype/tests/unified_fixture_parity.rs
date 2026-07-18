@@ -705,6 +705,7 @@ fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness 
             "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c"
                 | "ftimage.FT_Outline_Funcs.callback_order_matches_c"
                 | "ftimage.FT_Outline_Funcs.callback_error_propagates"
+                | "ftimage.FT_CURVE_TAG.classifies_outline_tags"
                 | "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c"
                 | "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c"
                 | "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c"
@@ -9854,6 +9855,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c"
                     | "ftimage.FT_Outline_Funcs.callback_order_matches_c"
                     | "ftimage.FT_Outline_Funcs.callback_error_propagates"
+                    | "ftimage.FT_CURVE_TAG.classifies_outline_tags"
                     | "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c"
                     | "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c"
                     | "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c"
@@ -18147,7 +18149,9 @@ fn rust_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, 
     if case.case_id == "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c" {
         return rust_cubic_outline_decompose_runtime_output(case);
     }
-    let outline = outline_render_snapshot(&outline_render_outline(case)?);
+    let outline_model = outline_render_outline(case)?;
+    let masked_tags = outline_decompose_masked_tags(&outline_model);
+    let outline = outline_render_snapshot(&outline_model);
     match FT_Outline_Decompose_Trace(Some(&outline), &outline_decompose_transforms(case)?) {
         Ok(runs) if case.case_id == "ftimage.FT_Outline_Funcs.callback_error_propagates" => {
             outline_funcs_callback_error_output(case, runs)
@@ -18155,6 +18159,9 @@ fn rust_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, 
         Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
             outline_decompose_callback_error_output(case, runs)
         }
+        Ok(runs) if case.case_id == "ftimage.FT_CURVE_TAG.classifies_outline_tags" => Ok(ok(
+            outline_decompose_trace_payload_with_masked_tags(runs, masked_tags),
+        )),
         Ok(runs) => Ok(ok(outline_decompose_trace_payload(runs))),
         Err(err) => Ok(error(err)),
     }
@@ -18165,6 +18172,7 @@ fn c_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, Str
         return c_cubic_outline_decompose_runtime_output(case);
     }
     let outline_model = outline_render_outline(case)?;
+    let masked_tags = outline_decompose_masked_tags(&outline_model);
     let mut outline = CRenderOutlineStorage::new(&outline_model);
     let outline_ptr = outline.as_ptr();
     match c_abi::abi_support_outline_decompose_trace(
@@ -18177,6 +18185,9 @@ fn c_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, Str
         Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
             outline_decompose_callback_error_output(case, runs)
         }
+        Ok(runs) if case.case_id == "ftimage.FT_CURVE_TAG.classifies_outline_tags" => Ok(ok(
+            outline_decompose_trace_payload_with_masked_tags(runs, masked_tags),
+        )),
         Ok(runs) => Ok(ok(outline_decompose_trace_payload(runs))),
         Err(err) => Ok(error(err)),
     }
@@ -18187,6 +18198,7 @@ fn wasm_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, 
         return wasm_cubic_outline_decompose_runtime_output(case);
     }
     let outline_model = outline_render_outline(case)?;
+    let masked_tags = outline_decompose_masked_tags(&outline_model);
     let mut outline = WasmRenderOutlineStorage::new(&outline_model);
     let outline_ptr = outline.as_ptr();
     match wasm_abi::abi_support_outline_decompose_trace(
@@ -18199,6 +18211,9 @@ fn wasm_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, 
         Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
             outline_decompose_callback_error_output(case, runs)
         }
+        Ok(runs) if case.case_id == "ftimage.FT_CURVE_TAG.classifies_outline_tags" => Ok(ok(
+            outline_decompose_trace_payload_with_masked_tags(runs, masked_tags),
+        )),
         Ok(runs) => Ok(ok(outline_decompose_trace_payload(runs))),
         Err(err) => Ok(error(err)),
     }
@@ -18305,6 +18320,9 @@ fn outline_decompose_transforms(case: &InputCase) -> Result<Vec<(FT_Int, FT_Pos)
     if case.inputs.params.get("callback_return").is_some() {
         return Ok(vec![(0, 0)]);
     }
+    if case.case_id == "ftimage.FT_CURVE_TAG.classifies_outline_tags" {
+        return Ok(vec![(0, 0)]);
+    }
     if case.inputs.params.get("shift").is_some() || case.inputs.params.get("delta").is_some() {
         let shift = case
             .inputs
@@ -18363,6 +18381,29 @@ fn outline_decompose_trace_payload_with_malformed_status(
         );
     }
     payload
+}
+
+fn outline_decompose_trace_payload_with_masked_tags(
+    runs: Vec<FTOutlineDecomposeRun>,
+    masked_tags: Vec<Value>,
+) -> Value {
+    let mut payload = outline_decompose_trace_payload(runs);
+    if let Some(object) = payload.as_object_mut() {
+        object.insert("masked_tags".to_string(), Value::Array(masked_tags));
+    }
+    payload
+}
+
+fn outline_decompose_masked_tags(outline: &fontdone::outline::Outline) -> Vec<Value> {
+    // FreeType's public FT_CURVE_TAG macro masks only the low two bits
+    // (`ftimage.h`), preserving TOUCH/SCANMODE bits in the stored tag byte
+    // while ignoring them for outline decomposition classification.
+    outline
+        .tags
+        .iter()
+        .copied()
+        .map(|tag| Value::from(i64::from(tag & 0x03)))
+        .collect()
 }
 
 fn outline_decompose_trace_payload(runs: Vec<FTOutlineDecomposeRun>) -> Value {
