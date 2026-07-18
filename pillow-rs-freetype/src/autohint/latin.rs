@@ -1680,6 +1680,13 @@ pub fn metrics_scale_dim(
                     );
                     v_scale = new_scale;
                     trace!(target: "autohint::pipeline", "[XHT] adjusted v_scale={v_scale} dist={dist}");
+                } else {
+                    // Pinned FreeType 2.14.3 `af_latin_metrics_scale_dim`
+                    // abandons an adjustment when the tallest blue-zone
+                    // extent would move by two pixels or more.
+                    crate::autohint::coverage::record(
+                        crate::autohint::coverage::COV_X_HEIGHT_SCALE_REJECTED,
+                    );
                 }
             }
         }

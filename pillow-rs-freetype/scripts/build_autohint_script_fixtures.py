@@ -906,6 +906,70 @@ def build_script_coverage() -> None:
     font.save(OUT_DIR / "script-coverage.ttf")
 
 
+def build_latin_x_height_rejection() -> None:
+    """Build a Latin face whose x-height rescale reaches C's rejection path."""
+    glyph_order = [
+        ".notdef",
+        "space",
+        "capital",
+        "small_f",
+        "x_height",
+        "descender",
+        "probe",
+    ]
+    glyphs = {
+        ".notdef": rectangle_glyph(50, 0, 450, 700),
+        "space": empty_glyph(),
+        "capital": rectangle_glyph(80, 0, 520, 2000),
+        "small_f": rectangle_glyph(90, 0, 500, 700),
+        "x_height": rectangle_glyph(100, 0, 480, 100),
+        "descender": rectangle_glyph(100, -200, 480, 100),
+        "probe": rectangle_glyph(70, 0, 530, 800),
+    }
+    metrics = {name: (600, 70) for name in glyph_order}
+    metrics["space"] = (300, 0)
+
+    cmap = {0x20: "space", 0x01D8: "probe"}
+    for codepoint in (0x54, 0x48, 0x45, 0x5A, 0x4F, 0x43, 0x51, 0x53, 0x4C, 0x55):
+        cmap[codepoint] = "capital"
+    for codepoint in (0x66, 0x69, 0x6A, 0x6B, 0x64, 0x62, 0x68):
+        cmap[codepoint] = "small_f"
+    for codepoint in (0x75, 0x76, 0x78, 0x7A, 0x6F, 0x65, 0x73, 0x63, 0x6E, 0x72):
+        cmap[codepoint] = "x_height"
+    for codepoint in (0x70, 0x71, 0x67, 0x79):
+        cmap[codepoint] = "descender"
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=2000, descent=-200)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint Latin X Height Rejection",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint Latin X Height Rejection Regular",
+            "fullName": "Autohint Latin X Height Rejection Regular",
+            "psName": "AutohintLatinXHeightRejection-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=2000,
+        sTypoDescender=-200,
+        usWinAscent=2000,
+        usWinDescent=200,
+    )
+    font.setupPost()
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "latin-x-height-rejection.ttf")
+
+
 def build_arabic_standard_fallback() -> None:
     glyph_order = [
         ".notdef",
@@ -2652,6 +2716,7 @@ def build_latin_low_upem() -> None:
 
 def main() -> None:
     build_script_coverage()
+    build_latin_x_height_rejection()
     build_arabic_standard_fallback()
     build_arabic_neutral_first()
     build_arabic_neutral_round_skip()

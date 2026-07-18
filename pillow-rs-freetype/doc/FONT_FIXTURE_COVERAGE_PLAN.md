@@ -3308,6 +3308,38 @@ from 1,096 / 1,294 to 1,098 / 1,294 branches, and from 3,856 / 4,241 to
 line and all newly exposed implementation regions are covered, so every
 measured rate except the unchanged function rate improves.
 
+## Latin x-height excessive-scale rejection
+
+Pinned FreeType 2.14.3 `af_latin_metrics_scale_dim`
+(`aflatin.c:1211-1306`) proposes a scale that aligns the lowercase x-height,
+but retains the original vertical scale when the tallest blue-zone extent
+would move by two pixels or more.  Rust already carried the same strict
+`-128 < dist && dist < 128` predicate; the first coverage divergence was that
+every public row accepted the proposal, leaving the C rejection outcome
+unproved.
+
+The deterministic `latin-x-height-rejection.ttf` separates a 100 FU lowercase
+x-height from a 2000 FU capital-blue extent.  The public
+`FT_Load_Glyph.matrix_load@latin-x-height-scale-rejection-force-autohint` row
+loads gid 6 at 2 ppem with `FT_LOAD_FORCE_AUTOHINT`, asserts route bit 42, and
+compares the complete slot through the pinned C oracle, Rust FFI, C ABI, WASM
+ABI, and safe public load.  At this size the proposed scale crosses C's
+two-pixel limit, so both implementations preserve the original scale.
+
+Focused Coverage MCP run `da4b0160-64a7-4a49-bb24-a5148e225fc4` passes
+1 / 1 selected runtime case.  Full managed run
+`2fd38bbb-6de3-43cd-a6d0-e08bdb2f1726` passes 7,065 / 7,065 runnable cases
+with 135 pending rows unchanged and ingests snapshot
+`8fa6894a-de7e-4027-b730-aeee09604864`.  Concrete cases rise from 7,199 to
+7,200 and route-audit real parity rises from 3,644 to 3,645.  Project coverage
+moves from 20,342 / 21,275 to 20,350 / 21,282 lines, from 4,920 / 5,495 to
+4,921 / 5,495 branches, and from 29,452 / 31,099 to 29,453 / 31,099 regions;
+functions remain 1,277 / 1,413.  `src/autohint/latin.rs` moves from
+2,673 / 2,880 to 2,681 / 2,887 lines, from 1,097 / 1,292 to 1,098 / 1,292
+branches, and from 3,866 / 4,241 to 3,867 / 4,241 regions; functions remain
+67 / 68.  The one previously missing branch outcome is now covered and the
+file has one fewer uncovered line despite the seven-line permanent marker.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
