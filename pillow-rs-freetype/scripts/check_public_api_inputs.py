@@ -770,7 +770,8 @@ def object_dict(value: object) -> dict[str, object]:
 def exact_error_public_family(operation: str, expect_error: bool) -> bool:
     """Require exact status and output for public error routes with dedicated runners."""
     return expect_error and (
-        operation.startswith("ftsizes.") or operation == "freetype.get_kerning"
+        operation.startswith("ftsizes.")
+        or operation in {"freetype.get_kerning", "freetype.get_subglyph_info"}
     )
 
 
