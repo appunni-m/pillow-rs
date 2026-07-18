@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_SIZE_REQUEST_TYPE_MAX` sentinel exact-error
+Current verified result after `FT_Request_Size` BBox divide-by-zero exact-error
 route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3748`
+  - `real-parity`: `3749`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `445`
+  - `generic-error-fallback`: `444`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1413,6 +1413,38 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_SIZE_REQUEST_TYPE_MAX.request_size_rejects_sentinel
+```
+
+### Issue Set W: `FT_Request_Size` BBox divide-by-zero exact-error route
+
+Previous blocker:
+
+- `fterrdef.FT_Err_Divide_By_Zero.invalid_size_transform_division_returns_error`
+  stayed in `generic-error-fallback` even though the fixture targets the
+  public `FT_Request_Size` BBox divide guards with an exact
+  `FT_Err_Divide_By_Zero` expectation. The runtime harness accepted the
+  expected error without exact pinned-C status/output comparison.
+
+Verified progress:
+
+- The pinned C oracle `emit_request_size` route calls `FT_Request_Size` with
+  two BBox request rows against the compact malformed-matrix fixture and
+  records each native error plus row metrics payload.
+- FreeType 2.14.3 `FT_Request_Metrics` returns `Divide_By_Zero` when BBox
+  width or height is zero before computing scales
+  (`src/base/ftobjs.c:3264-3335`).
+- Rust FFI, thin C ABI, and WASM ABI already matched the pinned C
+  divide-by-zero output; the unified harness now requires exact error
+  status/output comparison for this concrete public case.
+- The route audit now classifies
+  `fterrdef.FT_Err_Divide_By_Zero.invalid_size_transform_division_returns_error`
+  as `real-parity`, validated through pinned C FreeType, Rust FFI, thin C ABI,
+  and WASM ABI.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Divide_By_Zero.invalid_size_transform_division_returns_error
 ```
 
 ## Coverage Bulk Context
