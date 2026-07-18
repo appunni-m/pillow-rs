@@ -8263,7 +8263,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
                         == "freetype.FT_Set_Char_Size.error_probe_face_invalid_size_handle"))
             || (case.operation == "freetype.select_charmap"
                 && (lifecycle_handle_param_is_null(&case.inputs.params, "face")
-                    || case.case_id == "freetype.FT_Select_Charmap.error_missing_encoding"))
+                    || case.case_id == "freetype.FT_Select_Charmap.error_missing_encoding"
+                    || case.case_id == "freetype.FT_Select_Charmap.error_missing_unicode_charmap"))
             || (case.operation == "freetype.set_charmap"
                 && (lifecycle_handle_param_is_null(&case.inputs.params, "face")
                     || case.case_id == "freetype.FT_Set_Charmap.error_null_or_foreign_charmap"))
