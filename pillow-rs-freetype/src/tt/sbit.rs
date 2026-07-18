@@ -308,9 +308,7 @@ fn find_image_in_subtable(
             let entries_start = subtable_start.checked_add(12).ok_or_else(|| {
                 FontError::InvalidFont("embedded bitmap sparse array overflow".into())
             })?;
-            let entries = usize::try_from(num_glyphs).map_err(|_| {
-                FontError::InvalidFont("embedded bitmap sparse array too large".into())
-            })?;
+            let entries = num_glyphs as usize;
             let table_entries = entries.checked_add(1).ok_or_else(|| {
                 FontError::InvalidFont("embedded bitmap sparse array too large".into())
             })?;
@@ -368,9 +366,7 @@ fn find_image_in_subtable(
             let glyphs_start = subtable_start.checked_add(24).ok_or_else(|| {
                 FontError::InvalidFont("embedded bitmap sparse glyph array overflow".into())
             })?;
-            let entries = usize::try_from(num_glyphs).map_err(|_| {
-                FontError::InvalidFont("embedded bitmap sparse glyph array too large".into())
-            })?;
+            let entries = num_glyphs as usize;
             let glyphs_len = entries.checked_mul(2).ok_or_else(|| {
                 FontError::InvalidFont("embedded bitmap sparse glyph array too large".into())
             })?;
@@ -386,9 +382,7 @@ fn find_image_in_subtable(
                 if sparse_glyph != glyph_index {
                     continue;
                 }
-                let glyph_offset = u32::try_from(entry_index).map_err(|_| {
-                    FontError::InvalidFont("embedded bitmap sparse glyph array too large".into())
-                })?;
+                let glyph_offset = entry_index as u32;
                 let image_start = image_size.checked_mul(glyph_offset).ok_or_else(|| {
                     FontError::InvalidFont("embedded bitmap image offset overflow".into())
                 })?;
@@ -470,12 +464,8 @@ fn load_simple_image(
         .offset
         .checked_add(image_record.end)
         .ok_or_else(|| FontError::InvalidFont("embedded bitmap image offset overflow".into()))?;
-    let start = usize::try_from(start).map_err(|_| {
-        FontError::InvalidFont("embedded bitmap image offset does not fit usize".into())
-    })?;
-    let end = usize::try_from(end).map_err(|_| {
-        FontError::InvalidFont("embedded bitmap image offset does not fit usize".into())
-    })?;
+    let start = start as usize;
+    let end = end as usize;
     let image = ebdt
         .get(start..end)
         .ok_or_else(|| FontError::InvalidFont("embedded bitmap image exceeds data".into()))?;
@@ -580,12 +570,8 @@ fn load_compound_image(
         .offset
         .checked_add(image_record.end)
         .ok_or_else(|| FontError::InvalidFont("embedded bitmap image offset overflow".into()))?;
-    let start = usize::try_from(start).map_err(|_| {
-        FontError::InvalidFont("embedded bitmap image offset does not fit usize".into())
-    })?;
-    let end = usize::try_from(end).map_err(|_| {
-        FontError::InvalidFont("embedded bitmap image offset does not fit usize".into())
-    })?;
+    let start = start as usize;
+    let end = end as usize;
     let image = ebdt
         .get(start..end)
         .ok_or_else(|| FontError::InvalidFont("embedded bitmap image exceeds data".into()))?;
@@ -657,9 +643,9 @@ fn blank_compound_glyph(strike: SbitStrike, metrics: SbitMetrics) -> Result<Sbit
     let width = metric_dimension(metrics.width);
     let rows = metric_dimension(metrics.height);
     let (pixel_mode, row_bytes, num_grays) = bitmap_layout_for_bit_depth(strike.bit_depth, width)?;
-    let len = row_bytes.checked_mul(rows).ok_or_else(|| {
-        FontError::InvalidFont("embedded bitmap compound buffer length overflow".into())
-    })?;
+    // FreeType `sfnt/ttsbit.c:544-589` allocates from byte-sized SBIT metrics;
+    // those dimensions cap this private buffer length.
+    let len = row_bytes * rows;
     Ok(SbitGlyph {
         metrics,
         bitmap: SbitBitmap {
