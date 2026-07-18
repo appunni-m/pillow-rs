@@ -8239,9 +8239,15 @@ fn append_concrete_input_cases(path: &Path, case: InputCase, cases: &mut Vec<Inp
 }
 
 fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
-    // The public size-handle family has dedicated pinned-C, Rust FFI, C ABI,
+    // These public lifecycle families have dedicated pinned-C, Rust FFI, C ABI,
     // and WASM runners; expected errors must compare status and observations.
-    if case.expect_error && case.operation.starts_with("ftsizes.") {
+    if case.expect_error
+        && (case.operation.starts_with("ftsizes.")
+            || (case.operation == "freetype.done_face"
+                && lifecycle_handle_param(&case.inputs.params, "face") == Some("null"))
+            || (case.operation == "freetype.done_freetype"
+                && lifecycle_handle_param(&case.inputs.params, "library") == Some("null")))
+    {
         case.expectation.compare.compare_error_output = true;
     }
     case

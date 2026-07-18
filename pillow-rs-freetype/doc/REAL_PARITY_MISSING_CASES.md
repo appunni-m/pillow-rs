@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Done_FreeType(NULL)` exact-error route
+Current verified result after `FT_Done_Face(NULL)` exact-error route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3732`
+  - `real-parity`: `3733`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `461`
+  - `generic-error-fallback`: `460`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -602,6 +602,42 @@ make -C pillow-rs-freetype test-op OP=freetype.done_freetype
 Result: `3 / 3` operation rows passed, `0` failed, `0` pending, with the
 null-library error row classified as real parity.
 
+### Issue Set H: `FT_Done_Face` null-face exact error route
+
+Previous blocker:
+
+- `freetype.FT_Done_Face.error_null_face` was classified as
+  `generic-error-fallback`, so the audit did not distinguish the exact
+  `FT_Done_Face(NULL)` comparison from permissive error fallback rows.
+
+Verified progress:
+
+- The route audit now recognizes only the explicit null-face row as real parity:
+  operation `freetype.done_face`, case id
+  `freetype.FT_Done_Face.error_null_face`, and `face` handle `null`.
+- The fixture loader now requires exact error status/output comparison for
+  null-handle `FT_Done_Face` and `FT_Done_FreeType` lifecycle rows.
+- The broader foreign/poisoned handle row remains visible as incomplete safety
+  policy work; it is not claimed as exact C dereference parity.
+- Runtime behavior is unchanged: pinned C FreeType and the Rust/C/WASM routes
+  all return `FT_Err_Invalid_Face_Handle` (`35`) for `FT_Done_Face(NULL)`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Done_Face.error_null_face
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3733`, `generic-error-fallback` `460`.
+
+```bash
+make -C pillow-rs-freetype test-op OP=freetype.done_face
+```
+
+Result: `4 / 4` operation rows passed, `0` failed, `0` pending. The
+foreign/poisoned handle row remains outside real-parity classification.
+
 Focused non-coverage result:
 
 ```bash
@@ -730,6 +766,17 @@ make -C pillow-rs-freetype test
 
 Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
 audit: `real-parity` `3732`, `generic-error-fallback` `461`, `pending-route`
+`82`, and `pending-core` `7`.
+
+Full non-coverage result after the `FT_Done_Face` null-face exact-error route
+classification:
+
+```bash
+make -C pillow-rs-freetype test
+```
+
+Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
+audit: `real-parity` `3733`, `generic-error-fallback` `460`, `pending-route`
 `82`, and `pending-core` `7`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
