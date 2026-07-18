@@ -2053,6 +2053,68 @@
           ]
         },
         {
+          "id": "sbit-gray-index-format2-huge-image-size",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_gray_index_format2_huge_image_size.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT index-format-2 strike whose constant image size overflows the selected glyph's derived 32-bit image offset."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 3,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "expect_error": true,
+          "expectation": {
+            "compare": {
+              "compare_error_output": true
+            }
+          },
+          "coverage": [
+            "sbit:gray-index-format2-huge-image-size-public-error"
+          ]
+        },
+        {
+          "id": "sbit-gray-index-format2-huge-image-end",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_gray_index_format2_huge_image_end.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT index-format-2 strike whose constant image size lets the selected start offset fit but overflows the derived 32-bit image end offset."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 2,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "expect_error": true,
+          "expectation": {
+            "compare": {
+              "compare_error_output": true
+            }
+          },
+          "coverage": [
+            "sbit:gray-index-format2-huge-image-end-public-error"
+          ]
+        },
+        {
           "id": "sbit-gray-index-format4-sbits-only",
           "assets": {
             "font": {
@@ -2255,6 +2317,68 @@
           },
           "coverage": [
             "sbit:mono-index-format5-sparse-miss-public-error"
+          ]
+        },
+        {
+          "id": "sbit-mono-index-format5-huge-image-size",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_mono_index_format5_huge_image_size.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT index-format-5 sparse glyph array whose matched ordinal and constant image size overflow the derived 32-bit image offset."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 3,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "expect_error": true,
+          "expectation": {
+            "compare": {
+              "compare_error_output": true
+            }
+          },
+          "coverage": [
+            "sbit:mono-index-format5-huge-image-size-public-error"
+          ]
+        },
+        {
+          "id": "sbit-mono-index-format5-huge-image-start",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_mono_index_format5_huge_image_start.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT index-format-5 sparse glyph array whose matched ordinal overflows the derived 32-bit image start offset."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 3,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "expect_error": true,
+          "expectation": {
+            "compare": {
+              "compare_error_output": true
+            }
+          },
+          "coverage": [
+            "sbit:mono-index-format5-huge-image-start-public-error"
           ]
         },
         {
