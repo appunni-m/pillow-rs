@@ -703,6 +703,8 @@ fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness 
         && !matches!(
             case.case_id.as_str(),
             "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c"
+                | "ftimage.FT_Outline_Funcs.callback_order_matches_c"
+                | "ftimage.FT_Outline_Funcs.callback_error_propagates"
                 | "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c"
                 | "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order"
                 | "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks"
@@ -9848,6 +9850,8 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if matches!(
                 case.case_id.as_str(),
                 "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c"
+                    | "ftimage.FT_Outline_Funcs.callback_order_matches_c"
+                    | "ftimage.FT_Outline_Funcs.callback_error_propagates"
                     | "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c"
                     | "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order"
                     | "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks"
@@ -18138,6 +18142,9 @@ fn wasm_outline_transform_runtime_output(case: &InputCase) -> Result<RunOutput, 
 fn rust_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
     let outline = outline_render_snapshot(&outline_render_outline(case)?);
     match FT_Outline_Decompose_Trace(Some(&outline), &outline_decompose_transforms(case)?) {
+        Ok(runs) if case.case_id == "ftimage.FT_Outline_Funcs.callback_error_propagates" => {
+            outline_funcs_callback_error_output(case, runs)
+        }
         Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
             outline_decompose_callback_error_output(case, runs)
         }
@@ -18154,6 +18161,9 @@ fn c_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, Str
         outline_ptr,
         &outline_decompose_transforms(case)?,
     ) {
+        Ok(runs) if case.case_id == "ftimage.FT_Outline_Funcs.callback_error_propagates" => {
+            outline_funcs_callback_error_output(case, runs)
+        }
         Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
             outline_decompose_callback_error_output(case, runs)
         }
@@ -18170,6 +18180,9 @@ fn wasm_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, 
         outline_ptr,
         &outline_decompose_transforms(case)?,
     ) {
+        Ok(runs) if case.case_id == "ftimage.FT_Outline_Funcs.callback_error_propagates" => {
+            outline_funcs_callback_error_output(case, runs)
+        }
         Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
             outline_decompose_callback_error_output(case, runs)
         }
@@ -18202,6 +18215,27 @@ fn outline_decompose_transforms(case: &InputCase) -> Result<Vec<(FT_Int, FT_Pos)
                 ))
             })
             .collect();
+    }
+    if case.inputs.params.get("callback_return").is_some() {
+        return Ok(vec![(0, 0)]);
+    }
+    if case.inputs.params.get("shift").is_some() || case.inputs.params.get("delta").is_some() {
+        let shift = case
+            .inputs
+            .params
+            .get("shift")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| "shift must be an integer".to_string())?;
+        let delta = case
+            .inputs
+            .params
+            .get("delta")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| "delta must be an integer".to_string())?;
+        return Ok(vec![(
+            FT_Int::try_from(shift).map_err(|err| err.to_string())?,
+            FT_Pos::try_from(delta).map_err(|err| err.to_string())?,
+        )]);
     }
     let funcs = case
         .inputs
@@ -18295,6 +18329,80 @@ fn outline_decompose_callback_error_output(
             "return": error_code,
             "events_before_error": events_before_error,
         }),
+    ))
+}
+
+fn outline_funcs_callback_error_output(
+    case: &InputCase,
+    runs: Vec<FTOutlineDecomposeRun>,
+) -> Result<RunOutput, String> {
+    let callback_return = case
+        .inputs
+        .params
+        .get("callback_return")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| "callback_return must be an integer".to_string())?;
+    let error_code = i32::try_from(callback_return).map_err(|err| err.to_string())?;
+    let failure_points = case
+        .inputs
+        .params
+        .get("callback_failure_points")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "callback_failure_points must be an array".to_string())?;
+    let run = runs
+        .into_iter()
+        .next()
+        .ok_or_else(|| "callback error trace requires one run".to_string())?;
+    let events = run.events;
+    let rows = failure_points
+        .iter()
+        .map(|value| {
+            let label = value
+                .as_str()
+                .ok_or_else(|| "callback_failure_points[] must be strings".to_string())?;
+            let event_index = outline_callback_failure_event_index(&events, label)?;
+            Ok(json!({
+                "failure_point": label,
+                "events": events
+                    .iter()
+                    .take(event_index)
+                    .cloned()
+                    .map(outline_decompose_event_json)
+                    .collect::<Vec<_>>(),
+            }))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(error_with_output(
+        error_code,
+        json!({
+            "status": error_code,
+            "error": error_code,
+            "events_before_error": rows,
+        }),
+    ))
+}
+
+fn outline_callback_failure_event_index(
+    events: &[FTOutlineDecomposeEvent],
+    label: &str,
+) -> Result<usize, String> {
+    let (kind, occurrence) = label
+        .split_once('#')
+        .ok_or_else(|| format!("invalid callback failure label {label}"))?;
+    let target_occurrence = occurrence
+        .parse::<usize>()
+        .map_err(|err| format!("invalid callback failure occurrence {label}: {err}"))?;
+    let mut seen = 0usize;
+    for (index, event) in events.iter().enumerate() {
+        if event.kind == kind {
+            seen += 1;
+            if seen == target_occurrence {
+                return Ok(index);
+            }
+        }
+    }
+    Err(format!(
+        "callback failure label {label} did not match an event"
     ))
 }
 
