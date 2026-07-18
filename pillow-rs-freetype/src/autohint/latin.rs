@@ -2942,7 +2942,7 @@ pub fn apply_hints(
         // FreeType 2.14.3 dispatches these corresponding grid-fit steps to
         // `af_cjk_hint_edges` (afcjk.c:2301-2310) or `af_latin_hint_edges`
         // (aflatin.c:5050-5059). Keep our shared dispatcher on that boundary.
-        hint_edges(&mut hints, dim, widths, ppem);
+        hint_edges(&mut hints, dim, metrics, widths, ppem);
         if use_cjk_edges {
             super::cjk::align_edge_points(&mut hints, dim);
         } else {
@@ -3673,11 +3673,7 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension, metrics: &AfLatinMetric
     // runs. Without sorting first, SERIF can persist on edges processed too early.
     // For top_to_bottom scripts (Indic/Mongolian), sort descending.
     if axis.edges.len() > 1 {
-        let top_to_bottom = hints
-            .metrics
-            .as_ref()
-            .is_some_and(|m| m.top_to_bottom_hinting)
-            && dim == Dimension::Vert;
+        let top_to_bottom = metrics.top_to_bottom_hinting && dim == Dimension::Vert;
         let mut indices: Vec<usize> = (0..axis.edges.len()).collect();
         if top_to_bottom {
             indices.sort_by(|&a, &b| axis.edges[b].fpos.cmp(&axis.edges[a].fpos));
@@ -4244,12 +4240,15 @@ fn dump_edge_phase(_phase: &str, _dim: &str, _edges: &[AFEdge]) {}
 /// Each phase modifies `edge.pos` in-place. Phases are interdependent:
 /// stem snapping must complete before serifs can anchor to stems; blue
 /// snapping runs after stems are established.
-fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: i32) {
+fn hint_edges(
+    hints: &mut GlyphHints,
+    dim: Dimension,
+    metrics: &AfLatinMetrics,
+    std_widths: &[i32],
+    ppem: i32,
+) {
     let other_flags = hints.other_flags;
-    let extra_light = hints
-        .metrics
-        .as_ref()
-        .is_some_and(|m| m.axis[dim as usize].extra_light);
+    let extra_light = metrics.axis[dim as usize].extra_light;
     let axis = &mut hints.axis[dim as usize];
     let num_edges = axis.edges.len();
 
@@ -4264,11 +4263,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
     };
     dump_edge_phase("INITIAL", dim_label, &axis.edges);
 
-    if hints
-        .metrics
-        .as_ref()
-        .is_some_and(|metrics| metrics.no_advance_hinting)
-    {
+    if metrics.no_advance_hinting {
         // CJK metrics width initialization also enters this shared helper before
         // the main apply path switches to the dedicated CJK edge pipeline.
         super::cjk::hint_edges(hints, dim, std_widths);
@@ -4282,17 +4277,13 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
     // C: `if (dim == AF_DIMENSION_VERT) top_to_bottom = script_class->top_to_bottom`.
     // Applying top-to-bottom ordering to the horizontal dimension changes BOUND
     // checks and can collapse Indic stem edges.
-    let top_to_bottom_hinting = dim == Dimension::Vert
-        && hints
-            .metrics
-            .as_ref()
-            .is_some_and(|m| m.top_to_bottom_hinting);
+    let top_to_bottom_hinting = dim == Dimension::Vert && metrics.top_to_bottom_hinting;
 
     let mut anchor: usize = usize::MAX;
     let mut has_non_stem_edges = false;
 
     // ── Phase 1: Blue-zone alignment (aflatin.c:4247-4336) ──────────────
-    if dim == Dimension::Vert && hints.metrics.is_some() {
+    if dim == Dimension::Vert {
         for i in 0..num_edges {
             if axis.edges[i].flags & AF_EDGE_DONE != 0 {
                 continue;
