@@ -3483,6 +3483,46 @@ snapshot `27a091c5-83f4-439b-94e6-f422c10f0367`.  Concrete cases rise from
 branch is removed, both outcomes of the literal C range decision are covered,
 and the line, branch, and region rates all improve.
 
+## Variation PostScript-name length fallback
+
+Pinned FreeType 2.14.3 `sfnt_get_var_ps_name`
+(`sfdriver.c:804-1064`) resolves the variation PostScript prefix before the
+named-instance name, truncates that prefix to 91 bytes, and limits constructed
+names to 127 bytes.  If the result is too long, C hashes the complete
+NUL-terminated name with MurmurHash3-x86-128 using seed 123456789, then keeps
+the capped prefix and emits `-<32 uppercase hexadecimal digits>...`.  Rust
+previously returned the complete prefix/subfamily construction without either
+length rule.
+
+Core now follows the same ordering, prefix cap, NUL-inclusive hash input,
+32-bit wrapping arithmetic, word order, uppercase hexadecimal encoding, and
+suffix replacement.  The source-backed
+`variable-name-long-postscript.ttf` fixture supplies a 120-character prefix
+and 180-character named-instance subfamily.  Its exact public
+`FT_Get_Postscript_Name` row selects encoded face index 65536 and proves the
+result through the pinned C oracle, Rust FFI, C ABI, and WASM ABI.  The
+interface map ties this C manifest symbol to `Font::postscript_name`; the
+PIL-style `Font` conveniences remain intentionally outside the C manifest
+surface.
+
+Focused Coverage MCP run `16c6c237-c2a0-440a-b655-8b7871a919a2` passes the
+selected row 1 / 1.  Full managed run
+`249707c5-61cf-4d3a-b226-e31429730e35` passes all 7,068 runnable cases with
+135 pending rows unchanged and ingests snapshot
+`fadc1ecc-46fb-4860-a54a-6ea7bf1924d4`.  Concrete cases rise from 7,202 to
+7,203 with zero implicit rows, and route-audit real parity rises from 3,647
+to 3,648.  Project coverage moves from 20,462 / 21,407 to
+20,554 / 21,506 lines, from 4,956 / 5,549 to 4,962 / 5,559 branches, from
+1,278 / 1,414 to 1,281 / 1,417 functions, and from 29,586 / 31,245 to
+29,771 / 31,447 regions.  `src/font.rs` moves from 2,318 / 2,378 to
+2,410 / 2,477 lines, from 293 / 328 to 299 / 338 branches, from 199 / 218 to
+202 / 221 functions, and from 3,160 / 3,301 to 3,345 / 3,503 regions.  The
+line, branch, and region rates decrease slightly because exact C hashing adds
+99 instrumented lines and 202 regions; the public route covers 92 lines, six
+of ten branch outcomes, all three functions, and 185 regions.  Uncovered tail
+length outcomes remain visible rather than multiplying equivalent long-name
+fixtures.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:

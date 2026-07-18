@@ -459,6 +459,21 @@ def write_variable_missing_subfamily() -> None:
     replace_table_bytes(path, b"fvar", build_missing_subfamily_fvar())
 
 
+def write_variable_long_postscript_name() -> None:
+    records = variable_base_without_instance_names()
+    records.extend(
+        [
+            NameRecordSpec(3, 1, 0x0409, 25, utf16be("Prefix" * 20)),
+            NameRecordSpec(3, 1, 0x0409, 259, utf16be("Subfamily" * 20)),
+        ]
+    )
+    write_name_payload(
+        BASE_VARIABLE,
+        VARIABLE_OUT_DIR / "variable-name-long-postscript.ttf",
+        build_name_table(records),
+    )
+
+
 def build_missing_subfamily_fvar() -> bytes:
     payload = bytearray(table_payload(BASE_VARIABLE, b"fvar"))
     axes_offset = int.from_bytes(payload[4:6], "big")
@@ -653,6 +668,7 @@ def main() -> None:
     write_variable_windows_subfamily_fallback()
     write_variable_subfamily_conversion()
     write_variable_missing_subfamily()
+    write_variable_long_postscript_name()
 
 
 if __name__ == "__main__":

@@ -402,6 +402,23 @@
             ]
           },
           {
+            "id": "encoded-long-constructed-instance-name",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/variable/variable-name-long-postscript.ttf"
+              }
+            },
+            "params": {
+              "face_index": 65536
+            },
+            "coverage": [
+              "tt/name:variation-prefix-length-cap",
+              "tt/name:variation-postscript-name-checksum-fallback"
+            ]
+          },
+          {
             "id": "encoded-missing-subfamily-zero-coordinate",
             "assets": {
               "font": {
