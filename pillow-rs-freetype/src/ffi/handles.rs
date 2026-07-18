@@ -3171,6 +3171,19 @@ pub fn FT_Get_Advances(
     count: FT_UInt,
     load_flags: FT_Int32,
 ) -> Result<Vec<FT_Fixed>, FT_Error> {
+    // FreeType `FT_Get_Advances` in `src/base/ftadvanc.c:148-194`
+    // performs the unsigned `start + count` range check before the
+    // `count == 0` success return, so `start >= num_glyphs` is still an
+    // invalid glyph index even when no advances would be written.
+    let num = FT_UInt::from(face.inner.borrow().info().num_glyphs);
+    let end = start.wrapping_add(count);
+    if start >= num || end < start || end > num {
+        return Err(FT_Err_Invalid_Glyph_Index);
+    }
+    if count == 0 {
+        return Ok(Vec::new());
+    }
+
     let count_usize = usize::try_from(count).map_err(|_| FT_Err_Invalid_Argument)?;
     let mut advances = Vec::with_capacity(count_usize);
     for offset in 0..count {

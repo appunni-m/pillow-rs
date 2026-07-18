@@ -624,6 +624,29 @@
             "coverage": [
               "ftadvanc.get_advances:explicit-f6-r4294967294-4"
             ]
+          },
+          {
+            "id": "f7-r6253-0",
+            "assets": {
+              "font": {
+                "kind": "file",
+                "role": "font",
+                "path": "input/fonts/DejaVuSans.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "sentinel_array": "0x24681357",
+              "load_flags": [
+                "FT_LOAD_DEFAULT"
+              ],
+              "start": 6253,
+              "count": 0
+            },
+            "coverage": [
+              "ftadvanc.get_advances:invalid-start-before-zero-count"
+            ]
           }
         ]
       },
