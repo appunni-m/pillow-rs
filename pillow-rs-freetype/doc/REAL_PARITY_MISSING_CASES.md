@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Select_Charmap` missing-encoding
+Current verified result after `FT_Set_Charmap` null/foreign-charmap
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3758`
+  - `real-parity`: `3759`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `435`
+  - `generic-error-fallback`: `434`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1777,6 +1777,43 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Select_Charmap.error_missing_encoding
+```
+
+### Issue Set AG: `FT_Set_Charmap` null/foreign-charmap exact-error route
+
+Previous blocker:
+
+- `freetype.FT_Set_Charmap.error_null_or_foreign_charmap` stayed in
+  `generic-error-fallback`, even though the fixture targets concrete public
+  `FT_Set_Charmap` error calls for a null charmap and a charmap sourced from a
+  different face, with the selected charmap required to remain unchanged.
+
+Plan:
+
+1. Confirm the row is a concrete public call set with exact-error expectation.
+2. Enable exact status/output comparison for this public case.
+3. Run the focused public case through Rust FFI, thin C ABI, and WASM ABI.
+4. If exact comparison fails, fix the first Rust/core or ABI divergence. If it
+   passes, classify the existing behavior as real parity.
+5. Re-run the set-charmap lane, full parity, and non-coverage gates before
+   committing.
+
+Verified progress:
+
+- The fixture row calls `FT_Set_Charmap` against `input/fonts/DejaVuSans.ttf`
+  for both `null` and `from_other_face` charmap variants, using
+  `input/fonts/LiberationSerif-Regular.ttf` as the foreign face.
+- The unified harness now requires exact error status/output comparison for
+  this concrete public case.
+- Focused exact comparison passed for pinned C FreeType, Rust FFI, thin C ABI,
+  and WASM ABI; no core Rust logic change was required.
+- The route audit now classifies
+  `freetype.FT_Set_Charmap.error_null_or_foreign_charmap` as `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Set_Charmap.error_null_or_foreign_charmap
 ```
 
 ## Coverage Bulk Context

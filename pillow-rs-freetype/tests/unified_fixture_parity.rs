@@ -8265,7 +8265,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
                 && (lifecycle_handle_param_is_null(&case.inputs.params, "face")
                     || case.case_id == "freetype.FT_Select_Charmap.error_missing_encoding"))
             || (case.operation == "freetype.set_charmap"
-                && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
+                && (lifecycle_handle_param_is_null(&case.inputs.params, "face")
+                    || case.case_id == "freetype.FT_Set_Charmap.error_null_or_foreign_charmap"))
             || (case.operation == "freetype.select_size"
                 && (lifecycle_handle_param_is_null(&case.inputs.params, "face")
                     || case.case_id
