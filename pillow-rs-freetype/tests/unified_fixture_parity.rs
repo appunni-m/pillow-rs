@@ -1071,6 +1071,9 @@ fn name_lookup_runtime_supported(case: &InputCase) -> bool {
 }
 
 fn new_face_runtime_supported(case: &InputCase) -> bool {
+    if new_face_missing_path_case(case) {
+        return true;
+    }
     if has_probe_params(case) {
         return false;
     }
@@ -1088,6 +1091,12 @@ fn new_face_runtime_supported(case: &InputCase) -> bool {
         return case.expect_error;
     }
     has_runtime_font_source(case) && assets_are_runtime_resolved(case) && !has_probe_params(case)
+}
+
+fn new_face_missing_path_case(case: &InputCase) -> bool {
+    case.operation == "freetype.new_face"
+        && case.case == "error_missing_or_unknown_file"
+        && missing_pathname(case).is_ok()
 }
 
 fn cmap_format_runtime_supported(case: &InputCase) -> bool {
@@ -9240,6 +9249,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "freetype.new_face" => {
+            if new_face_missing_path_case(case) {
+                return Ok(vec![
+                    "--new-face-missing-path".to_string(),
+                    missing_pathname(case)?,
+                    face_index_param(params)?.to_string(),
+                ]);
+            }
             if lifecycle_handle_param(params, "pathname") == Some("null")
                 || lifecycle_handle_param(params, "library") == Some("null")
                 || lifecycle_handle_param(params, "aface") == Some("null")
@@ -10443,6 +10459,21 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.get_glyph_name" => rust_get_glyph_name(case),
         "freetype.get_name_index" => rust_get_name_index(case),
         "freetype.new_face" => {
+            if new_face_missing_path_case(case) {
+                // Pinned FreeType ftobjs.c:1604-1620 routes non-null pathnames through
+                // FT_OPEN_PATHNAME; builds/unix/ftsystem.c returns Cannot_Open_Resource
+                // for a missing file before face-index validation.
+                let library = FT_Init_FreeType();
+                return match FT_New_Face(
+                    &library,
+                    &missing_pathname(case)?,
+                    face_index_param(&case.inputs.params)?,
+                    20.0,
+                ) {
+                    Ok(_face) => Ok(ok(json!({"opened": true}))),
+                    Err(err) => Ok(error(err)),
+                };
+            }
             if lifecycle_handle_param(&case.inputs.params, "pathname") == Some("null") {
                 return Ok(error(FT_Err_Cannot_Open_Resource as FT_Error));
             }
@@ -17237,6 +17268,35 @@ fn asset_file_path(asset: &Asset) -> Option<&str> {
         Asset::Ref { id, path } => resolve_ref_file_path(id.as_deref(), path.as_deref()),
         Asset::InlineBytes { .. } | Asset::Other(_) => None,
     }
+}
+
+fn missing_pathname(case: &InputCase) -> Result<String, String> {
+    let asset = case
+        .inputs
+        .assets
+        .get("missing")
+        .ok_or_else(|| "missing FT_New_Face missing-path asset".to_string())?;
+    let path = match asset {
+        Asset::File { path, .. } => path.as_str(),
+        Asset::Ref {
+            path: Some(path), ..
+        } => path.as_str(),
+        Asset::Ref { id: Some(id), .. } => id.as_str(),
+        _ => {
+            return Err(format!(
+                "unsupported missing-path asset {}",
+                asset_label(asset)
+            ));
+        }
+    };
+    let pathname = fixture_dir().join(path);
+    if pathname.exists() {
+        return Err(format!(
+            "FT_New_Face missing-path fixture unexpectedly exists: {}",
+            pathname.display()
+        ));
+    }
+    Ok(pathname.to_string_lossy().into_owned())
 }
 
 fn resolve_ref_file_path<'a>(id: Option<&'a str>, path: Option<&'a str>) -> Option<&'a str> {
