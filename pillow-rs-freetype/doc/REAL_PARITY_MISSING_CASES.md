@@ -407,6 +407,17 @@ Verified progress:
   point emits `line_to`, and each contour closes back to its start point.
 - Rust FFI, C ABI, and WASM ABI now match pinned FreeType for the on-curve
   multi-contour row.
+- Added real cubic fixtures:
+  `outlines/synthetic/cubic-paired-controls.json` and
+  `outlines/synthetic/cubic-malformed.json`.
+- Native C oracle now records
+  `ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c` with paired cubic
+  controls and the row's two transform cases. The same row also records
+  `malformed_status` by calling pinned FreeType on `contour_starts_with_cubic`
+  and `unpaired_cubic_control`; both malformed cases return
+  `FT_Err_Invalid_Outline`.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for the cubic trace
+  and malformed cubic status row.
 
 Focused non-coverage result:
 
@@ -453,6 +464,12 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_CURVE_TAG_ON.on_curve_decom
 Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
 
 ```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
+
+```bash
 make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Decompose.callback_error_propagates
 ```
 
@@ -463,8 +480,8 @@ make -C pillow-rs-freetype test-op OP=ftoutln.outline_decompose
 ```
 
 Result after the line/conic/cubic fixture, shift/delta fixture, conic fixture,
-mixed callback fixture, on-curve fixture, and callback-error routes: `8 / 8`
-runtime parity rows passed, `0` failed, `7` pending.
+mixed callback fixture, on-curve fixture, cubic fixtures, and callback-error
+routes: `9 / 9` runtime parity rows passed, `0` failed, `6` pending.
 
 Full non-coverage result:
 
@@ -473,9 +490,9 @@ make -C pillow-rs-freetype test
 ```
 
 Result after the line/conic/cubic fixture, shift/delta fixture, conic fixture,
-mixed callback fixture, on-curve fixture, and callback-error routes:
-`7139 / 7139` runnable rows passed, `0` failed, `95` pending. Route audit:
-`real-parity` `3722`, `pending-route` `87`.
+mixed callback fixture, on-curve fixture, cubic fixtures, and callback-error
+routes: `7140 / 7140` runnable rows passed, `0` failed, `94` pending. Route
+audit: `real-parity` `3723`, `pending-route` `86`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
 

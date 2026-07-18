@@ -5463,6 +5463,7 @@ static int emit_outline_decompose(int argc, char** argv) {
         !streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates") &&
         !streq(case_id, "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c") &&
         !streq(case_id, "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c") &&
+        !streq(case_id, "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c") &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks") &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
@@ -5583,6 +5584,27 @@ static int emit_outline_decompose(int argc, char** argv) {
         contours[1] = 6;
         n_contours = 2;
         n_points = 7;
+    } else if (streq(case_id, "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c")) {
+        points[0].x = 0;
+        points[0].y = 0;
+        points[1].x = 64;
+        points[1].y = 96;
+        points[2].x = 128;
+        points[2].y = 96;
+        points[3].x = 192;
+        points[3].y = 0;
+        points[4].x = 256;
+        points[4].y = -96;
+        points[5].x = 320;
+        points[5].y = -96;
+        points[6].x = 384;
+        points[6].y = 0;
+        tags[1] = FT_CURVE_TAG_CUBIC;
+        tags[2] = FT_CURVE_TAG_CUBIC;
+        tags[4] = FT_CURVE_TAG_CUBIC;
+        tags[5] = FT_CURVE_TAG_CUBIC;
+        contours[0] = 6;
+        n_points = 7;
     }
     FT_Outline outline;
     outline.n_contours = n_contours;
@@ -5604,6 +5626,8 @@ static int emit_outline_decompose(int argc, char** argv) {
     } else if (streq(case_id, "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c")) {
         transform_count = 2;
     } else if (streq(case_id, "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c")) {
+        transform_count = 2;
+    } else if (streq(case_id, "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c")) {
         transform_count = 2;
     }
     if (streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates")) {
@@ -5696,6 +5720,9 @@ static int emit_outline_decompose(int argc, char** argv) {
         } else if (streq(case_id, "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c") && i == 1) {
             funcs.shift = 2;
             funcs.delta = 32;
+        } else if (streq(case_id, "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c") && i == 1) {
+            funcs.shift = 1;
+            funcs.delta = -16;
         } else {
             funcs.shift = shifts[i];
             funcs.delta = deltas[i];
@@ -5710,6 +5737,43 @@ static int emit_outline_decompose(int argc, char** argv) {
         printf(",");
         print_recorded_outline_event_points();
         printf(",\"user_seen\":%s}", recorded_outline_decompose_user_seen ? "true" : "false");
+    }
+    if (streq(case_id, "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c")) {
+        FT_Vector malformed_points[2][3] = {
+            {{0, 0}, {64, 64}, {128, 0}},
+            {{0, 0}, {64, 64}, {128, 0}},
+        };
+        unsigned char malformed_tags[2][3] = {
+            {FT_CURVE_TAG_CUBIC, FT_CURVE_TAG_CUBIC, FT_CURVE_TAG_ON},
+            {FT_CURVE_TAG_ON, FT_CURVE_TAG_CUBIC, FT_CURVE_TAG_ON},
+        };
+        unsigned short malformed_contours[2][1] = {{2}, {2}};
+        const char* malformed_ids[2] = {"contour_starts_with_cubic", "unpaired_cubic_control"};
+        printf("],\"malformed_status\":[");
+        for (int row = 0; row < 2; row++) {
+            FT_Outline malformed_outline;
+            malformed_outline.n_contours = 1;
+            malformed_outline.n_points = 3;
+            malformed_outline.points = malformed_points[row];
+            malformed_outline.tags = malformed_tags[row];
+            malformed_outline.contours = malformed_contours[row];
+            malformed_outline.flags = 0;
+            FT_Outline_Funcs funcs;
+            funcs.move_to = record_outline_move_to;
+            funcs.line_to = record_outline_line_to;
+            funcs.conic_to = record_outline_conic_to;
+            funcs.cubic_to = record_outline_cubic_to;
+            funcs.shift = 0;
+            funcs.delta = 0;
+            reset_recorded_outline_events();
+            FT_Error err = FT_Outline_Decompose(&malformed_outline, &funcs, recorded_outline_decompose_user_token);
+            if (row) {
+                printf(",");
+            }
+            printf("{\"id\":\"%s\",\"status\":%d}", malformed_ids[row], err);
+        }
+        printf("]}}\n");
+        return 0;
     }
     printf("]}}\n");
     return 0;
