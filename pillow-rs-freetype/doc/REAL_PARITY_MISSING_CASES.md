@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Set_Charmap` null-face exact-error route
-classification:
+Current verified result after `FT_Request_Size` null-face/null-request
+exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3745`
+  - `real-parity`: `3746`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `448`
+  - `generic-error-fallback`: `447`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1316,6 +1316,42 @@ Verified commands:
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Set_Charmap.error_null_face
 make -C pillow-rs-freetype test-op OP=freetype.set_charmap
+```
+
+### Issue Set T: `FT_Request_Size` null-face/null-request exact-error route
+
+Previous blocker:
+
+- `freetype.FT_Request_Size.error_null_face_or_request` stayed in
+  `generic-error-fallback` even though the fixture expected exact pinned-C
+  error behavior for both null `face` and null `request` variants. The runtime
+  harness accepted the expected error without exact C status/output comparison.
+- First divergence: the C oracle dispatcher only routed `request` and
+  `requests` payloads through `--request-size`, while this public case used
+  `variants`. Turning on exact comparison exposed the fallback immediately:
+  the fallback returned status `7`, while the real Rust path returned the
+  FreeType null-face status `35`.
+
+Verified progress:
+
+- The pinned C oracle `emit_request_size` route calls `FT_Request_Size` for
+  each request row, including `FT_Request_Size(NULL, &request)` and
+  `FT_Request_Size(face, NULL)`, and records the first native error plus each
+  row's status/error payload.
+- The oracle dispatcher now sends `variants` rows through that same
+  `--request-size` route instead of falling back.
+- The Rust FFI, thin C ABI, and WASM runners already route those same null
+  input variants directly; the unified harness now requires exact error
+  status/output comparison for this concrete public case.
+- The route audit now classifies
+  `freetype.FT_Request_Size.error_null_face_or_request` as `real-parity`,
+  validated through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Request_Size.error_null_face_or_request
+make -C pillow-rs-freetype test-op OP=freetype.request_size
 ```
 
 ## Coverage Bulk Context
