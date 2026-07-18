@@ -5493,12 +5493,39 @@
               "size": 20,
               "glyph_index": 1,
               "load_flags": [
-                "FT_LOAD_NO_AUTOHINT"
+                "FT_LOAD_NO_AUTOHINT",
+                "FT_LOAD_PEDANTIC"
               ]
             },
             "expect_error": true,
+            "expectation": {
+              "compare": {
+                "compare_error_output": true
+              }
+            },
             "coverage": [
               "tt/hinter:execution-too-long-opcode-guard"
+            ]
+          },
+          {
+            "id": "hinter-execution-too-long-loop-nonpedantic",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/glyf/hinter-execution-too-long-loop.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "size": 20,
+              "glyph_index": 1,
+              "load_flags": [
+                "FT_LOAD_NO_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "tt/hinter:execution-too-long-nonpedantic-suppression"
             ]
           },
           {
