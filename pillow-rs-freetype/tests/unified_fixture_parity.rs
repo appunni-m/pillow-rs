@@ -18354,6 +18354,8 @@ fn rust_outline_render_once(
         palette: ptr::null_mut(),
     };
     if flags & i32::try_from(FT_RASTER_FLAG_DIRECT).unwrap_or(0) != 0 {
+        let observed_clip_box =
+            outline_render_observed_direct_clip_box(&outline_model, flags, Some(clip_box));
         return match FT_Outline_Render_Direct_Spans(
             Some(&library),
             Some(&outline),
@@ -18364,6 +18366,7 @@ fn rust_outline_render_once(
             Ok(spans) => Ok(ok(outline_render_direct_payload(
                 spans,
                 outline_render_gray_spans_present(&case.inputs.params),
+                observed_clip_box,
             ))),
             Err(err) => Ok(error(err)),
         };
@@ -18487,6 +18490,16 @@ fn c_outline_render_once(
     };
     let direct_render = flags & i32::try_from(FT_RASTER_FLAG_DIRECT).unwrap_or(0) != 0;
     if direct_render {
+        let observed_clip_box = outline_render_observed_direct_clip_box(
+            &outline_model,
+            flags,
+            Some(FT_BBox {
+                xMin: clip_box.xMin,
+                yMin: clip_box.yMin,
+                xMax: clip_box.xMax,
+                yMax: clip_box.yMax,
+            }),
+        );
         let (err, spans, user_seen) = c_abi::abi_support_outline_render_direct_spans(
             library,
             outline_ptr,
@@ -18496,7 +18509,11 @@ fn c_outline_render_once(
         );
         c_done_library(library);
         return if err == FT_Err_Ok {
-            Ok(ok(c_outline_render_direct_payload(spans, user_seen)))
+            Ok(ok(c_outline_render_direct_payload(
+                spans,
+                user_seen,
+                observed_clip_box,
+            )))
         } else {
             Ok(error(err))
         };
@@ -18616,6 +18633,16 @@ fn wasm_outline_render_once(
     };
     let direct_render = flags & i32::try_from(FT_RASTER_FLAG_DIRECT).unwrap_or(0) != 0;
     if direct_render {
+        let observed_clip_box = outline_render_observed_direct_clip_box(
+            &outline_model,
+            flags,
+            Some(FT_BBox {
+                xMin: clip_box.xMin,
+                yMin: clip_box.yMin,
+                xMax: clip_box.xMax,
+                yMax: clip_box.yMax,
+            }),
+        );
         let (err, spans, user_seen) = wasm_abi::abi_support_outline_render_direct_spans(
             1,
             outline_ptr,
@@ -18624,7 +18651,11 @@ fn wasm_outline_render_once(
             OUTLINE_RENDER_USER_TOKEN as *mut c_void,
         );
         return if err == FT_Err_Ok {
-            Ok(ok(outline_render_direct_payload(spans, user_seen)))
+            Ok(ok(outline_render_direct_payload(
+                spans,
+                user_seen,
+                observed_clip_box,
+            )))
         } else {
             Ok(error(err))
         };
@@ -18819,7 +18850,11 @@ fn outline_render_gray_spans_present(params: &Value) -> bool {
         .is_none_or(|value| value != "NULL")
 }
 
-fn outline_render_direct_payload(spans: Vec<(i32, FT_Span)>, user_seen: bool) -> Value {
+fn outline_render_direct_payload(
+    spans: Vec<(i32, FT_Span)>,
+    user_seen: bool,
+    clip_box: FT_BBox,
+) -> Value {
     json!({
         "status": FT_Err_Ok,
         "spans": spans
@@ -18833,12 +18868,17 @@ fn outline_render_direct_payload(spans: Vec<(i32, FT_Span)>, user_seen: bool) ->
                 })
             })
             .collect::<Vec<_>>(),
+        "clip_box": ft_bbox_json(clip_box),
         "user_seen": user_seen,
         "target_preserved": true,
     })
 }
 
-fn c_outline_render_direct_payload(spans: Vec<(i32, c_abi::FT_Span)>, user_seen: bool) -> Value {
+fn c_outline_render_direct_payload(
+    spans: Vec<(i32, c_abi::FT_Span)>,
+    user_seen: bool,
+    clip_box: FT_BBox,
+) -> Value {
     let spans = spans
         .into_iter()
         .map(|(y, span)| {
@@ -18853,8 +18893,34 @@ fn c_outline_render_direct_payload(spans: Vec<(i32, c_abi::FT_Span)>, user_seen:
     json!({
         "status": FT_Err_Ok,
         "spans": spans,
+        "clip_box": ft_bbox_json(clip_box),
         "user_seen": user_seen,
         "target_preserved": true,
+    })
+}
+
+fn outline_render_observed_direct_clip_box(
+    outline: &fontdone::outline::Outline,
+    flags: i32,
+    supplied_clip_box: Option<FT_BBox>,
+) -> FT_BBox {
+    if flags & i32::try_from(FT_RASTER_FLAG_CLIP).unwrap_or(0) != 0 {
+        return supplied_clip_box.unwrap_or_default();
+    }
+    FT_BBox {
+        xMin: i64::from(outline.cbox_x_min),
+        yMin: i64::from(outline.cbox_y_min),
+        xMax: i64::from(outline.cbox_x_max),
+        yMax: i64::from(outline.cbox_y_max),
+    }
+}
+
+fn ft_bbox_json(bbox: FT_BBox) -> Value {
+    json!({
+        "xMin": bbox.xMin,
+        "yMin": bbox.yMin,
+        "xMax": bbox.xMax,
+        "yMax": bbox.yMax,
     })
 }
 

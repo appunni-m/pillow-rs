@@ -5209,7 +5209,8 @@ static int emit_outline_render(int argc, char** argv) {
     if (streq(case_id, "ftimage.FT_RASTER_FLAG_DIRECT.direct_gray_span_callback") ||
         streq(case_id, "ftimage.FT_RASTER_FLAG_DIRECT.direct_missing_callback_noop") ||
         streq(case_id, "ftimage.FT_Raster_Params.direct_span_render_matches_c") ||
-        streq(case_id, "ftimage.FT_Span.direct_span_values_match_c")) {
+        streq(case_id, "ftimage.FT_Span.direct_span_values_match_c") ||
+        streq(case_id, "ftoutln.FT_Outline_Render.direct_render_clip_and_spans")) {
         memset(buffer, 0xA5, sizeof(buffer));
         reset_recorded_outline_spans();
         params.flags = FT_RASTER_FLAG_AA | FT_RASTER_FLAG_DIRECT;
@@ -5230,6 +5231,8 @@ static int emit_outline_render(int argc, char** argv) {
         printf(",\"output\":{");
         printf("\"status\":%d,", err);
         print_recorded_outline_spans();
+        printf(",");
+        print_bbox_named("clip_box", params.clip_box);
         printf(",\"user_seen\":%s", recorded_outline_user_seen ? "true" : "false");
         printf(",\"target_preserved\":%s", target_preserved ? "true" : "false");
         printf("}}\n");
