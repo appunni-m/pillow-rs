@@ -1040,6 +1040,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Face null/done handle error policy validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "freetype.face_macro.is_named_instance"
+        and row.case_id
+        == "freetype.FT_IS_NAMED_INSTANCE.encoded_named_instance_face_index_returns_true"
+    ):
+        return "FT_IS_NAMED_INSTANCE encoded face-index error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "set_char_size"
         and row.case_id == "freetype.FT_Set_Char_Size.error_oversized_dimensions"
     ):

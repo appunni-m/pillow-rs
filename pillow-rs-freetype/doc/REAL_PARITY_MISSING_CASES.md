@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Set_Char_Size` invalid-pixel-size fterrdef
+Current verified result after `FT_IS_NAMED_INSTANCE` encoded face-index
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3776`
+  - `real-parity`: `3777`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `417`
+  - `generic-error-fallback`: `416`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2332,6 +2332,43 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Pixel_Size.set_char_size_rejects_oversized_dimensions
+```
+
+### Issue Set AW: `FT_IS_NAMED_INSTANCE` encoded face-index exact-error route
+
+Previous blocker:
+
+- `freetype.FT_IS_NAMED_INSTANCE.encoded_named_instance_face_index_returns_true`
+  had a real-parity success variant, but the `instance-past-instance-count`
+  variant stayed in `generic-error-fallback` because exact C error
+  status/output comparison was not required for that public macro route.
+
+Plan:
+
+1. Confirm the fixture splits the valid named-instance face index from the
+   invalid encoded instance index variant.
+2. Run the focused public case before classification to verify current Rust FFI,
+   thin C ABI, and WASM ABI behavior against pinned C FreeType.
+3. Enable exact error status/output comparison for this public case ID.
+4. Classify the expected-error variant as real parity only if exact comparison
+   passes.
+5. Re-run the focused face-macro case, full parity, and non-coverage gates
+   before committing.
+
+Verified progress:
+
+- The focused case passed both concrete rows against pinned C FreeType, Rust
+  FFI, thin C ABI, and WASM ABI before and after exact-error gating.
+- The unified harness now requires exact error status/output comparison for the
+  encoded face-index expected-error variant.
+- The route audit now classifies the invalid encoded instance-index variant of
+  `freetype.FT_IS_NAMED_INSTANCE.encoded_named_instance_face_index_returns_true`
+  as `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_IS_NAMED_INSTANCE.encoded_named_instance_face_index_returns_true
 ```
 
 ## Coverage Bulk Context
