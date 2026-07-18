@@ -3937,6 +3937,7 @@ fn compute_stem_width(
 
         // Step 1: Leave serif widths alone (aflatin.c:3998-4001).
         if (stem_flags & AF_EDGE_SERIF) != 0 && vertical && dist < 3 * 64 {
+            crate::autohint::coverage::record(crate::autohint::coverage::COV_STEM_SERIF);
             // goto Done_Width → return immediately, no quantization
             if sign != 0 {
                 dist = -dist;
@@ -3946,10 +3947,12 @@ fn compute_stem_width(
 
         // Step 2: Round-edge stem → snap to 1px (aflatin.c:4003-4006).
         if (base_flags & AF_EDGE_ROUND) != 0 {
+            crate::autohint::coverage::record(crate::autohint::coverage::COV_STEM_ROUND);
             if dist < 80 {
                 dist = 64;
             }
         } else if dist < 56 {
+            crate::autohint::coverage::record(crate::autohint::coverage::COV_STEM_THIN);
             // Step 3: Very thin stems → clamp to 56 (aflatin.c:4007-4008).
             dist = 56;
         }
@@ -3964,6 +3967,7 @@ fn compute_stem_width(
             }
 
             if delta < 40 {
+                crate::autohint::coverage::record(crate::autohint::coverage::COV_STEM_STANDARD);
                 // Within tolerance of standard width → snap to it, clamp min.
                 dist = stdw;
                 if dist < 48 {
@@ -3981,6 +3985,7 @@ fn compute_stem_width(
             }
 
             if dist < 3 * 64 {
+                crate::autohint::coverage::record(crate::autohint::coverage::COV_STEM_FRAC);
                 // Fractional-pixel quantization (aflatin.c:4035-4047).
                 delta = dist & 63;
                 dist &= -64; // truncate to integer pixel
@@ -4008,6 +4013,11 @@ fn compute_stem_width(
                     }
                     if bdelta < 0 {
                         bdelta = -bdelta;
+                    }
+                    if bdelta != 0 {
+                        crate::autohint::coverage::record(
+                            crate::autohint::coverage::COV_STEM_BDELTA,
+                        );
                     }
                 }
                 dist = (dist - bdelta + 32) & !63;
