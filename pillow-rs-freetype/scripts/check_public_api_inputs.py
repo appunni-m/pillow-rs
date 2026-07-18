@@ -1035,6 +1035,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Attach_Stream invalid-open-args/unsupported-driver error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "freetype.face_handle_error_policy"
+        and row.case_id == "freetype.FT_Face.null_and_done_handle_errors"
+    ):
+        return "FT_Face null/done handle error policy validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "freetype.done_freetype"
         and row.case_id == "freetype.FT_Done_FreeType.error_null_library"
         and lifecycle_handle(row, "library") == "null"
