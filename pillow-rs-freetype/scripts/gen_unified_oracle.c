@@ -8575,6 +8575,23 @@ static int emit_set_debug_hook(int argc, char** argv) {
     return 0;
 }
 
+static int emit_add_default_modules(int argc, char** argv) {
+    (void)argc;
+    int action = atoi(argv[2]);
+    if (action != 1) {
+        printf("{");
+        print_status(FT_Err_Unimplemented_Feature);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    printf("{");
+    FT_Add_Default_Modules(NULL);
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"return\":\"void\",\"crashed\":false,\"observable_writes\":\"none\"}}\n");
+    return 0;
+}
+
 static void print_lifecycle_result(FT_Error err) {
     print_status(err);
     if (err) {
@@ -11384,6 +11401,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--set-debug-hook")) {
         return emit_set_debug_hook(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--add-default-modules")) {
+        return emit_add_default_modules(argc, argv);
     }
     if ((argc == 3 || argc == 6) && streq(argv[1], "--done-freetype")) {
         return emit_done_freetype(argc, argv);

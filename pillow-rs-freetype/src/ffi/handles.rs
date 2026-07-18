@@ -2354,6 +2354,16 @@ pub fn FT_Get_TrueType_Engine_Type(library: Option<&FT_Library>) -> FT_TrueTypeE
     }
 }
 
+pub fn FT_Add_Default_Modules(library: Option<&mut FT_Library>) {
+    // FreeType 2.14.3 `src/base/ftinit.c:FT_Add_Default_Modules` returns
+    // `void`; null-library errors are swallowed while iterating
+    // `FT_Add_Module`.  For a live library, the public effect relevant to
+    // currently modeled modules is that the TrueType module becomes available.
+    if let Some(library) = library {
+        library.has_truetype_module = true;
+    }
+}
+
 pub fn FT_Set_Debug_Hook(
     library: Option<&mut FT_Library>,
     hook_index: FT_UInt,

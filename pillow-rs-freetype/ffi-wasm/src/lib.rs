@@ -1191,6 +1191,17 @@ pub fn abi_support_debug_hook_classes(
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_add_default_modules(library_present: i32) -> bool {
+    let mut library = if library_present != 0 {
+        Some(rust_ffi::FT_New_Library_Without_Default_Modules())
+    } else {
+        None
+    };
+    rust_ffi::FT_Add_Default_Modules(library.as_mut());
+    false
+}
+
+#[cfg(feature = "abi-test-support")]
 extern "C" fn abi_support_debug_hook_a(_arg: rust_ffi::FT_Pointer) -> rust_ffi::FT_Error {
     rust_ffi::FT_Err_Ok
 }

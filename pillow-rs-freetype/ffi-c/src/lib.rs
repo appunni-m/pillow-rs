@@ -1033,6 +1033,11 @@ pub extern "C" fn FT_Get_TrueType_Engine_Type(library: FT_Library) -> FT_TrueTyp
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Add_Default_Modules(library: FT_Library) {
+    rust_ffi::FT_Add_Default_Modules(library_mut(library));
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Set_Debug_Hook(
     library: FT_Library,
     hook_index: FT_UInt,

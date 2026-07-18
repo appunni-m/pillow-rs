@@ -7114,6 +7114,56 @@ fn wasm_set_debug_hook(case: &InputCase) -> Result<RunOutput, String> {
     Ok(ok(debug_hook_output(action, before, after)))
 }
 
+fn add_default_modules_action(case: &InputCase) -> Result<i32, String> {
+    if case
+        .case_id
+        .contains("ftmodapi.FT_Add_Default_Modules.null_library_no_return_error")
+    {
+        Ok(1)
+    } else {
+        Err(format!(
+            "unsupported FT_Add_Default_Modules case {}",
+            case.case_id
+        ))
+    }
+}
+
+fn add_default_modules_output() -> Value {
+    json!({
+        "return": "void",
+        "crashed": false,
+        "observable_writes": "none"
+    })
+}
+
+fn rust_add_default_modules(case: &InputCase) -> Result<RunOutput, String> {
+    let Ok(_action) = add_default_modules_action(case) else {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    };
+    FT_Add_Default_Modules(None);
+    Ok(ok(add_default_modules_output()))
+}
+
+fn c_add_default_modules(case: &InputCase) -> Result<RunOutput, String> {
+    let Ok(_action) = add_default_modules_action(case) else {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    };
+    c_abi::FT_Add_Default_Modules(std::ptr::null_mut());
+    Ok(ok(add_default_modules_output()))
+}
+
+fn wasm_add_default_modules(case: &InputCase) -> Result<RunOutput, String> {
+    let Ok(_action) = add_default_modules_action(case) else {
+        return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
+    };
+    let crashed = wasm_abi::abi_support_add_default_modules(0);
+    Ok(ok(json!({
+        "return": "void",
+        "crashed": crashed,
+        "observable_writes": "none"
+    })))
+}
+
 fn rust_done_freetype(case: &InputCase) -> Result<RunOutput, String> {
     if lifecycle_handle_param(&case.inputs.params, "library") == Some("null") {
         return Ok(lifecycle_result(FT_Done_FreeType(None)));
@@ -9688,6 +9738,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 Err(_) => return oracle_fallback_args(case),
             },
         ]),
+        "ftmodapi.add_default_modules" => Ok(vec![
+            "--add-default-modules".to_string(),
+            match add_default_modules_action(case) {
+                Ok(action) => action.to_string(),
+                Err(_) => return oracle_fallback_args(case),
+            },
+        ]),
         "freetype.done_freetype" => {
             if lifecycle_handle_param(params, "library") == Some("null") {
                 return Ok(vec!["--done-freetype".to_string(), "null".to_string()]);
@@ -10300,6 +10357,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             op,
             "ftmodapi.get_truetype_engine_type"
                 | "ftmodapi.set_debug_hook"
+                | "ftmodapi.add_default_modules"
                 | "freetype.face_check_truetype_patents"
                 | "freetype.face_set_unpatented_hinting"
                 | "ftotval.open_type_free"
@@ -10530,6 +10588,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             Ok(ok(rust_truetype_engine_output(&case.inputs.params)?))
         }
         "ftmodapi.set_debug_hook" => rust_set_debug_hook(case),
+        "ftmodapi.add_default_modules" => rust_add_default_modules(case),
         "freetype.done_freetype" => rust_done_freetype(case),
         "freetype.done_face" => rust_done_face(case),
         "freetype.face_check_truetype_patents" => rust_face_check_truetype_patents(case),
@@ -11166,6 +11225,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             Ok(ok(c_truetype_engine_output(&case.inputs.params)?))
         }
         "ftmodapi.set_debug_hook" => c_set_debug_hook(case),
+        "ftmodapi.add_default_modules" => c_add_default_modules(case),
         "freetype.done_freetype" => c_done_freetype_output(case),
         "freetype.done_face" => c_done_face_output(case),
         "freetype.face_check_truetype_patents" => c_face_check_truetype_patents(case),
@@ -11703,6 +11763,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             Ok(ok(wasm_truetype_engine_output(&case.inputs.params)?))
         }
         "ftmodapi.set_debug_hook" => wasm_set_debug_hook(case),
+        "ftmodapi.add_default_modules" => wasm_add_default_modules(case),
         "freetype.done_freetype" => wasm_done_freetype_output(case),
         "freetype.done_face" => wasm_done_face_output(case),
         "freetype.face_check_truetype_patents" => wasm_face_check_truetype_patents(case),
