@@ -530,24 +530,17 @@ fn load_bit_aligned_image(
     let width = metric_dimension(metrics.width);
     let rows = metric_dimension(metrics.height);
     let (pixel_mode, row_bytes, num_grays) = bitmap_layout_for_bit_depth(strike.bit_depth, width)?;
-    let line_bits = width
-        .checked_mul(usize::from(strike.bit_depth))
-        .ok_or_else(|| {
-            FontError::InvalidFont("embedded bitmap bit-aligned line overflow".into())
-        })?;
-    let total_bits = line_bits.checked_mul(rows).ok_or_else(|| {
-        FontError::InvalidFont("embedded bitmap bit-aligned buffer overflow".into())
-    })?;
+    // FreeType `sfnt/ttsbit.c:858-864` derives format-5 dimensions from
+    // EBLC byte metrics before checking the EBDT payload.  Those byte metrics
+    // bound the bit counts here, so malformed public fonts can truncate the
+    // payload but cannot overflow host-sized arithmetic in this decoder.
+    let line_bits = width * usize::from(strike.bit_depth);
+    let total_bits = line_bits * rows;
     let payload_len = total_bits.div_ceil(8);
     let payload = image.get(0..payload_len).ok_or_else(|| {
         FontError::InvalidFont("embedded bitmap bit-aligned image data truncated".into())
     })?;
-    let mut buffer = vec![
-        0;
-        row_bytes.checked_mul(rows).ok_or_else(|| {
-            FontError::InvalidFont("embedded bitmap bit-aligned target overflow".into())
-        })?
-    ];
+    let mut buffer = vec![0; row_bytes * rows];
     for bit_index in 0..total_bits {
         let source_byte = payload[bit_index / 8];
         let source_mask = 0x80u8 >> (bit_index & 7);
@@ -556,12 +549,7 @@ fn load_bit_aligned_image(
         }
         let row = bit_index / line_bits;
         let bit_in_row = bit_index % line_bits;
-        let target_index = row
-            .checked_mul(row_bytes)
-            .and_then(|start| start.checked_add(bit_in_row / 8))
-            .ok_or_else(|| {
-                FontError::InvalidFont("embedded bitmap bit-aligned target overflow".into())
-            })?;
+        let target_index = row * row_bytes + bit_in_row / 8;
         buffer[target_index] |= 0x80u8 >> (bit_in_row & 7);
     }
     Ok(SbitGlyph {
@@ -601,10 +589,11 @@ fn load_compound_image(
     let image = ebdt
         .get(start..end)
         .ok_or_else(|| FontError::InvalidFont("embedded bitmap image exceeds data".into()))?;
-    let (metrics, component_start) = match image_record.format {
-        8 => (read_small_metrics(image)?, 6usize),
-        9 => (read_big_metrics(image)?, 8usize),
-        _ => unreachable!("compound image loader only accepts image formats 8 and 9"),
+    let (metrics, component_start) = if image_record.format == 8 {
+        (read_small_metrics(image)?, 6usize)
+    } else {
+        debug_assert_eq!(image_record.format, 9);
+        (read_big_metrics(image)?, 8usize)
     };
     let mut glyph = blank_compound_glyph(strike, metrics)?;
     let num_components = read_u16(image, component_start)
@@ -612,9 +601,7 @@ fn load_compound_image(
     let records_start = component_start
         .checked_add(2)
         .ok_or_else(|| FontError::InvalidFont("embedded bitmap compound offset overflow".into()))?;
-    let records_len = usize::from(num_components).checked_mul(4).ok_or_else(|| {
-        FontError::InvalidFont("embedded bitmap compound record length overflow".into())
-    })?;
+    let records_len = usize::from(num_components) * 4;
     let records_end = records_start
         .checked_add(records_len)
         .ok_or_else(|| FontError::InvalidFont("embedded bitmap compound record overflow".into()))?;
@@ -625,9 +612,7 @@ fn load_compound_image(
     // compound metrics, ORs each recursively loaded component into that
     // canvas, then restores the root metrics.
     for component in records.chunks_exact(4) {
-        let gindex = read_u16(component, 0).ok_or_else(|| {
-            FontError::InvalidFont("embedded bitmap component glyph missing".into())
-        })?;
+        let gindex = u16::from_be_bytes([component[0], component[1]]);
         let dx = i32::from(component[2] as i8);
         let dy = i32::from(component[3] as i8);
         let component = strike.find_image(eblc, ebdt, gindex, recurse_count + 1)?;
