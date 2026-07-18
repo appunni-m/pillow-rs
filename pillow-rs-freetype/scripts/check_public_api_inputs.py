@@ -1065,6 +1065,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_Set_Charmap null/foreign-charmap errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "freetype.set_charmap"
+        and row.case_id == "freetype.FT_Set_Charmap.error_format14_charmap"
+    ):
+        return "FT_Set_Charmap format-14-charmap error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "freetype.set_charmap"
         and row.case_id
         == "fterrdef.FT_Err_Invalid_CharMap_Handle.set_charmap_rejects_foreign_or_null_charmap"
     ):
