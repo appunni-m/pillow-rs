@@ -8253,6 +8253,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.operation == "freetype.get_kerning"
             || case.operation == "freetype.get_subglyph_info"
             || case.case_id == "freetype.FT_Get_Track_Kerning.error_null_face_or_output"
+            || case.case_id == "freetype.FT_Get_Track_Kerning.sfnt_or_no_track_data_error"
             || (case.operation == "freetype.reference_face"
                 && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
             || (case.operation == "set_pixel_sizes"
