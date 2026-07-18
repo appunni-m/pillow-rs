@@ -170,6 +170,11 @@ Verified progress:
   `FT_Outline_Render` side effect: direct no-`CLIP` calls mutate
   `params.clip_box` to the outline CBox in integer pixels before rasterizing,
   while direct `CLIP` calls preserve the caller-provided bounds.
+- Added real `outline_model` fixture `outlines/cbox/mixed-extrema.json`.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for
+  `ftoutln.FT_Outline_Get_CBox.null_inputs_noop`: a null outline pointer
+  leaves the caller's sentinel `FT_BBox` unchanged, and a null output pointer
+  performs no write.
 
 Focused non-coverage result:
 
@@ -197,14 +202,14 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_OUTLINE_NONE
 
 Result: `4 / 4` runtime parity rows passed, `0` failed, `0` pending.
 
-Full non-coverage result after the clip-box direct-render parity fix:
+Full non-coverage result after the `FT_Outline_Get_CBox` null-input fixture:
 
 ```bash
 make -C pillow-rs-freetype test
 ```
 
-Result: `7131 / 7131` runnable rows passed, `0` failed, `103` pending. Route
-audit: `real-parity` `3714`, `pending-route` `95`.
+Result: `7132 / 7132` runnable rows passed, `0` failed, `102` pending. Route
+audit: `real-parity` `3715`, `pending-route` `94`.
 
 Focused non-coverage result:
 
@@ -219,6 +224,18 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_Raster_Params
 ```
 
 Result: `5 / 5` runtime parity rows passed, `0` failed, `0` pending.
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Get_CBox.null_inputs_noop
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Get_CBox
+```
+
+Result: `3 / 3` runtime parity rows passed, `0` failed, `0` pending.
 
 Broadened non-coverage result:
 
