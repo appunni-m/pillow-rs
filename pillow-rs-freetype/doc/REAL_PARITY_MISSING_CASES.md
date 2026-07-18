@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Set_Char_Size` oversized-dimensions
+Current verified result after `FT_Set_Char_Size` invalid-pixel-size fterrdef
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3775`
+  - `real-parity`: `3776`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `418`
+  - `generic-error-fallback`: `417`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2298,6 +2298,40 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Set_Char_Size.error_oversized_dimensions
+```
+
+### Issue Set AV: `FT_Set_Char_Size` invalid-pixel-size fterrdef exact-error route
+
+Previous blocker:
+
+- `fterrdef.FT_Err_Invalid_Pixel_Size.set_char_size_rejects_oversized_dimensions`
+  stayed in `generic-error-fallback`, even though the fixture targets the
+  public `FT_Set_Char_Size` invalid-pixel-size error for oversized dimensions.
+
+Plan:
+
+1. Confirm the row is a concrete public call with exact-error expectation.
+2. Run the focused public case before classification to verify existing Rust
+   FFI, thin C ABI, and WASM ABI behavior against pinned C FreeType.
+3. Enable exact status/output comparison for this public case ID.
+4. Classify the row as real parity only if exact comparison passes.
+5. Re-run the set-char-size lane, full parity, and non-coverage gates before
+   committing.
+
+Verified progress:
+
+- The focused row passed against pinned C FreeType, Rust FFI, thin C ABI, and
+  WASM ABI before reclassification.
+- The unified harness now requires exact error status/output comparison for
+  this concrete public case ID.
+- The route audit now classifies
+  `fterrdef.FT_Err_Invalid_Pixel_Size.set_char_size_rejects_oversized_dimensions`
+  as `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Pixel_Size.set_char_size_rejects_oversized_dimensions
 ```
 
 ## Coverage Bulk Context
