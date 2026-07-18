@@ -1475,6 +1475,24 @@ pub extern "C" fn FT_Outline_Render(
     }
 
     if params.flags & rust_ffi::FT_RASTER_FLAG_DIRECT as c_int != 0 {
+        if params.flags & rust_ffi::FT_RASTER_FLAG_CLIP as c_int == 0 {
+            if let (Some(_library), Some(outline_snapshot)) = (library_view, snapshot.as_ref()) {
+                let mut cbox = rust_ffi::FT_BBox::default();
+                rust_ffi::FT_Outline_Get_CBox(Some(outline_snapshot), Some(&mut cbox));
+                if cbox.xMin >= -0x1000000
+                    && cbox.yMin >= -0x1000000
+                    && cbox.xMax <= 0x1000000
+                    && cbox.yMax <= 0x1000000
+                {
+                    // FreeType 2.14.3 ftoutln.c:635-640 presets direct-mode
+                    // no-CLIP bounds from the outline CBox in integer pixels.
+                    params.clip_box.xMin = cbox.xMin >> 6;
+                    params.clip_box.yMin = cbox.yMin >> 6;
+                    params.clip_box.xMax = cbox.xMax.checked_add(63).unwrap_or(cbox.xMax) >> 6;
+                    params.clip_box.yMax = cbox.yMax.checked_add(63).unwrap_or(cbox.yMax) >> 6;
+                }
+            }
+        }
         return match rust_ffi::FT_Outline_Render_Direct_Spans(
             library_view,
             snapshot.as_ref(),

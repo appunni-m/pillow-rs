@@ -4842,6 +4842,15 @@ static int emit_outline_render(int argc, char** argv) {
         points[2].y = 24 * 64;
         points[3].x = -8 * 64;
         points[3].y = 24 * 64;
+    } else if (strstr(case_id, "ftimage.FT_Raster_Params.clip_box_matches_c")) {
+        points[0].x = -8 * 64;
+        points[0].y = 0;
+        points[1].x = 16 * 64;
+        points[1].y = 0;
+        points[2].x = 16 * 64;
+        points[2].y = 16 * 64;
+        points[3].x = -8 * 64;
+        points[3].y = 16 * 64;
     } else if (strstr(case_id, "@right-edge-clip-outside-target")) {
         points[0].x = 32 * 64;
         points[0].y = 0;
@@ -5254,6 +5263,43 @@ static int emit_outline_render(int argc, char** argv) {
         printf(",\"user_seen\":%s", recorded_outline_user_seen ? "true" : "false");
         printf(",\"target_preserved\":%s", target_preserved ? "true" : "false");
         printf("}}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+
+    if (streq(case_id, "ftimage.FT_Raster_Params.clip_box_matches_c")) {
+        const int flag_values[2] = {
+            FT_RASTER_FLAG_AA | FT_RASTER_FLAG_DIRECT,
+            FT_RASTER_FLAG_AA | FT_RASTER_FLAG_DIRECT | FT_RASTER_FLAG_CLIP
+        };
+        const FT_BBox clip_values[2] = {
+            { -999, -999, -998, -998 },
+            { 1, 2, 8, 10 }
+        };
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"results\":[");
+        for (int i = 0; i < 2; i++) {
+            if (i) {
+                printf(",");
+            }
+            memset(buffer, 0xA5, sizeof(buffer));
+            reset_recorded_outline_spans();
+            memset(&params, 0, sizeof(params));
+            params.target = &bitmap;
+            params.source = (void*)0x1;
+            params.flags = flag_values[i];
+            params.clip_box = clip_values[i];
+            params.user = recorded_outline_user_token;
+            params.gray_spans = record_outline_gray_spans;
+            err = FT_Outline_Render(library, &outline, &params);
+            printf("{\"status\":%d,", err);
+            print_bbox_named("mutated_clip_box", params.clip_box);
+            printf(",");
+            print_recorded_outline_spans();
+            printf("}");
+        }
+        printf("]}}\n");
         FT_Done_FreeType(library);
         return 0;
     }

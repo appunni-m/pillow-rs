@@ -18282,6 +18282,9 @@ fn outline_render_direct_fallback_runtime_output(case: &InputCase) -> Result<Run
 }
 
 fn rust_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftimage.FT_Raster_Params.clip_box_matches_c" {
+        return rust_outline_render_clip_box_cases(case);
+    }
     if let Some(flag_sets) = outline_render_flag_matrix(&case.inputs.params)? {
         let mut results = Vec::with_capacity(flag_sets.len());
         for (flags_label, flags) in flag_sets {
@@ -18405,6 +18408,9 @@ fn rust_outline_render_once(
 }
 
 fn c_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftimage.FT_Raster_Params.clip_box_matches_c" {
+        return c_outline_render_clip_box_cases(case);
+    }
     if let Some(flag_sets) = outline_render_flag_matrix(&case.inputs.params)? {
         let mut results = Vec::with_capacity(flag_sets.len());
         for (flags_label, flags) in flag_sets {
@@ -18552,6 +18558,9 @@ fn c_outline_render_once(
 }
 
 fn wasm_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftimage.FT_Raster_Params.clip_box_matches_c" {
+        return wasm_outline_render_clip_box_cases(case);
+    }
     if let Some(flag_sets) = outline_render_flag_matrix(&case.inputs.params)? {
         let mut results = Vec::with_capacity(flag_sets.len());
         for (flags_label, flags) in flag_sets {
@@ -18692,6 +18701,179 @@ fn wasm_outline_render_once(
     }
 }
 
+fn rust_outline_render_clip_box_cases(case: &InputCase) -> Result<RunOutput, String> {
+    let specs = outline_render_clip_box_case_specs(&case.inputs.params)?;
+    let library = FT_Init_FreeType();
+    let outline_model = outline_render_outline(case)?;
+    let outline = outline_render_snapshot(&outline_model);
+    let (width, rows) = outline_render_target_box(case)?;
+    let pitch = outline_render_target_pitch(case, width)?;
+    let pixel_mode = outline_render_target_pixel_mode(&case.inputs.params)?;
+    let buffer_len = usize::try_from(pitch.unsigned_abs())
+        .map_err(|err| err.to_string())?
+        .checked_mul(rows)
+        .ok_or_else(|| "outline target buffer length overflow".to_string())?;
+    let mut buffer = vec![0xA5; buffer_len];
+    let target = FT_Bitmap_C {
+        rows: u32::try_from(rows).map_err(|err| err.to_string())?,
+        width: u32::try_from(width).map_err(|err| err.to_string())?,
+        pitch,
+        buffer: buffer.as_mut_ptr(),
+        num_grays: outline_render_num_grays(pixel_mode),
+        pixel_mode: pixel_mode as u8,
+        palette_mode: 0,
+        palette: ptr::null_mut(),
+    };
+    let mut results = Vec::with_capacity(specs.len());
+    for spec in specs {
+        let observed_clip_box = outline_render_observed_direct_clip_box(
+            &outline_model,
+            spec.flags,
+            Some(spec.clip_box),
+        );
+        let spans = FT_Outline_Render_Direct_Spans(
+            Some(&library),
+            Some(&outline),
+            Some(&target),
+            spec.flags,
+            Some(spec.clip_box),
+            true,
+        )
+        .map_err(|err| format!("direct clip-box render failed: {err}"))?;
+        results.push(outline_render_clip_box_case_payload(
+            FT_Err_Ok,
+            observed_clip_box,
+            spans,
+        ));
+    }
+    Ok(ok(json!({ "results": results })))
+}
+
+fn c_outline_render_clip_box_cases(case: &InputCase) -> Result<RunOutput, String> {
+    let specs = outline_render_clip_box_case_specs(&case.inputs.params)?;
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let outline_model = outline_render_outline(case)?;
+    let mut outline = CRenderOutlineStorage::new(&outline_model);
+    let outline_ptr = outline.as_ptr();
+    let (width, rows) = outline_render_target_box(case)?;
+    let pitch = outline_render_target_pitch(case, width)?;
+    let pixel_mode = outline_render_target_pixel_mode(&case.inputs.params)?;
+    let buffer_len = usize::try_from(pitch.unsigned_abs())
+        .map_err(|err| err.to_string())?
+        .checked_mul(rows)
+        .ok_or_else(|| "outline target buffer length overflow".to_string())?;
+    let mut buffer = vec![0xA5; buffer_len];
+    let target = c_abi::FT_Bitmap {
+        rows: u32::try_from(rows).map_err(|err| err.to_string())?,
+        width: u32::try_from(width).map_err(|err| err.to_string())?,
+        pitch,
+        buffer: buffer.as_mut_ptr(),
+        num_grays: outline_render_num_grays(pixel_mode),
+        pixel_mode,
+        palette_mode: 0,
+        palette: ptr::null_mut(),
+    };
+    let mut results = Vec::with_capacity(specs.len());
+    for spec in specs {
+        let mut params = c_abi::FT_Raster_Params {
+            target: &target,
+            source: std::ptr::dangling::<c_void>(),
+            flags: spec.flags,
+            clip_box: c_abi::FT_BBox {
+                xMin: spec.clip_box.xMin,
+                yMin: spec.clip_box.yMin,
+                xMax: spec.clip_box.xMax,
+                yMax: spec.clip_box.yMax,
+            },
+            ..c_abi::FT_Raster_Params::default()
+        };
+        let (err, spans, _user_seen) = c_abi::abi_support_outline_render_direct_spans(
+            library,
+            outline_ptr,
+            &mut params,
+            true,
+            OUTLINE_RENDER_USER_TOKEN as *mut c_void,
+        );
+        let mutated_clip_box = FT_BBox {
+            xMin: params.clip_box.xMin,
+            yMin: params.clip_box.yMin,
+            xMax: params.clip_box.xMax,
+            yMax: params.clip_box.yMax,
+        };
+        results.push(c_outline_render_clip_box_case_payload(
+            err,
+            mutated_clip_box,
+            spans,
+        ));
+    }
+    c_done_library(library);
+    Ok(ok(json!({ "results": results })))
+}
+
+fn wasm_outline_render_clip_box_cases(case: &InputCase) -> Result<RunOutput, String> {
+    let specs = outline_render_clip_box_case_specs(&case.inputs.params)?;
+    let outline_model = outline_render_outline(case)?;
+    let mut outline = WasmRenderOutlineStorage::new(&outline_model);
+    let outline_ptr = outline.as_ptr();
+    let (width, rows) = outline_render_target_box(case)?;
+    let pitch = outline_render_target_pitch(case, width)?;
+    let pixel_mode = outline_render_target_pixel_mode(&case.inputs.params)?;
+    let buffer_len = usize::try_from(pitch.unsigned_abs())
+        .map_err(|err| err.to_string())?
+        .checked_mul(rows)
+        .ok_or_else(|| "outline target buffer length overflow".to_string())?;
+    let mut buffer = vec![0xA5; buffer_len];
+    let mut target = wasm_abi::FontdoneWasmBitmap {
+        rows: u32::try_from(rows).map_err(|err| err.to_string())?,
+        width: u32::try_from(width).map_err(|err| err.to_string())?,
+        pitch,
+        buffer: buffer.as_mut_ptr(),
+        buffer_len: buffer.len(),
+        num_grays: outline_render_num_grays(pixel_mode),
+        pixel_mode,
+        palette_mode: 0,
+        palette: ptr::null(),
+    };
+    let mut results = Vec::with_capacity(specs.len());
+    for spec in specs {
+        let mut params = wasm_abi::FontdoneWasmRasterParams {
+            target: &mut target,
+            source: std::ptr::dangling::<c_void>(),
+            flags: spec.flags,
+            clip_box: wasm_abi::FontdoneWasmBBox {
+                xMin: spec.clip_box.xMin,
+                yMin: spec.clip_box.yMin,
+                xMax: spec.clip_box.xMax,
+                yMax: spec.clip_box.yMax,
+            },
+            ..wasm_abi::FontdoneWasmRasterParams::default()
+        };
+        let (err, spans, _user_seen) = wasm_abi::abi_support_outline_render_direct_spans(
+            1,
+            outline_ptr,
+            &mut params,
+            true,
+            OUTLINE_RENDER_USER_TOKEN as *mut c_void,
+        );
+        let mutated_clip_box = FT_BBox {
+            xMin: params.clip_box.xMin,
+            yMin: params.clip_box.yMin,
+            xMax: params.clip_box.xMax,
+            yMax: params.clip_box.yMax,
+        };
+        results.push(outline_render_clip_box_case_payload(
+            err,
+            mutated_clip_box,
+            spans,
+        ));
+    }
+    Ok(ok(json!({ "results": results })))
+}
+
 fn outline_render_snapshot(outline: &fontdone::outline::Outline) -> FT_OutlineSnapshot {
     let tags = if outline.tags.len() == outline.points.len() {
         outline.tags.clone()
@@ -18732,6 +18914,67 @@ fn outline_render_flags(params: &Value) -> Result<i32, String> {
         .and_then(Value::as_array)
         .ok_or_else(|| "flags or raster_params.flags must be an array".to_string())?;
     outline_render_flag_symbols(flags)
+}
+
+#[derive(Clone, Copy)]
+struct OutlineRenderClipBoxCase {
+    flags: i32,
+    clip_box: FT_BBox,
+}
+
+fn outline_render_clip_box_case_specs(
+    params: &Value,
+) -> Result<Vec<OutlineRenderClipBoxCase>, String> {
+    let cases = params
+        .get("cases")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "params.cases must be an array".to_string())?;
+    cases
+        .iter()
+        .enumerate()
+        .map(|(index, case)| {
+            let flags = case
+                .get("flags")
+                .and_then(Value::as_str)
+                .ok_or_else(|| format!("params.cases[{index}].flags must be a string"))?;
+            let flags = outline_render_raster_flag_expr(flags)?;
+            let clip_box = outline_render_clip_box_case_value(
+                case.get("clip_box")
+                    .ok_or_else(|| format!("params.cases[{index}].clip_box is required"))?,
+            )?;
+            Ok(OutlineRenderClipBoxCase { flags, clip_box })
+        })
+        .collect()
+}
+
+fn outline_render_raster_flag_expr(symbol: &str) -> Result<i32, String> {
+    symbol.split('|').try_fold(0_i32, |combined, part| {
+        let value = i32::try_from(rust_constant(part.trim())?).map_err(|err| err.to_string())?;
+        Ok(combined | value)
+    })
+}
+
+fn outline_render_clip_box_case_value(value: &Value) -> Result<FT_BBox, String> {
+    if value.as_str().is_some() {
+        return Ok(FT_BBox {
+            xMin: -999,
+            yMin: -999,
+            xMax: -998,
+            yMax: -998,
+        });
+    }
+    let field = |name: &str| -> Result<i64, String> {
+        value
+            .get(name)
+            .and_then(Value::as_i64)
+            .ok_or_else(|| format!("clip_box.{name} must be an integer"))
+    };
+    Ok(FT_BBox {
+        xMin: field("xMin")?,
+        yMin: field("yMin")?,
+        xMax: field("xMax")?,
+        yMax: field("yMax")?,
+    })
 }
 
 fn outline_render_flag_matrix(params: &Value) -> Result<Option<Vec<(String, i32)>>, String> {
@@ -18901,6 +19144,50 @@ fn c_outline_render_direct_payload(
         "clip_box": ft_bbox_json(clip_box),
         "user_seen": user_seen,
         "target_preserved": true,
+    })
+}
+
+fn outline_render_clip_box_case_payload(
+    status: FT_Error,
+    mutated_clip_box: FT_BBox,
+    spans: Vec<(i32, FT_Span)>,
+) -> Value {
+    json!({
+        "status": status,
+        "mutated_clip_box": ft_bbox_json(mutated_clip_box),
+        "spans": spans
+            .into_iter()
+            .map(|(y, span)| {
+                json!({
+                    "y": y,
+                    "x": span.x,
+                    "len": span.len,
+                    "coverage": span.coverage,
+                })
+            })
+            .collect::<Vec<_>>(),
+    })
+}
+
+fn c_outline_render_clip_box_case_payload(
+    status: FT_Error,
+    mutated_clip_box: FT_BBox,
+    spans: Vec<(i32, c_abi::FT_Span)>,
+) -> Value {
+    json!({
+        "status": status,
+        "mutated_clip_box": ft_bbox_json(mutated_clip_box),
+        "spans": spans
+            .into_iter()
+            .map(|(y, span)| {
+                json!({
+                    "y": y,
+                    "x": u16::from_ne_bytes(span.x.to_ne_bytes()),
+                    "len": span.len,
+                    "coverage": span.coverage,
+                })
+            })
+            .collect::<Vec<_>>(),
     })
 }
 
