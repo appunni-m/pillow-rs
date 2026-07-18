@@ -40,7 +40,7 @@ Parity-only rule for this phase:
 
 ### Issue Set A: `ftoutln.outline_render` pending outline fixtures
 
-Current pending count by operation: `16` rows.
+Current pending count by operation: `15` rows.
 
 Largest blockers from the current parity run:
 
@@ -127,6 +127,15 @@ Verified progress:
   `ftimage.FT_OUTLINE_NONE.default_outline_render_baseline`.
 - Rust FFI, C ABI, and WASM ABI now match pinned FreeType for all three
   synthetic `FT_OUTLINE_NONE` baseline render variants.
+- Added real `outline_model` fixtures
+  `outlines/render/simple-filled-square.json` and
+  `outlines/render/direct-spans-clipped.json`.
+- Pinned C oracle now records the
+  `ftoutln.FT_Outline_Render.direct_render_clip_and_spans` direct-span route
+  instead of returning bitmap fallback output.
+- Rust FFI, C ABI, and WASM ABI direct-span test payloads now include the
+  observed public `clip_box`, matching pinned FreeType's no-`CLIP` cbox preset
+  behavior for this direct render row.
 
 Focused non-coverage result:
 
@@ -154,14 +163,14 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_OUTLINE_NONE
 
 Result: `4 / 4` runtime parity rows passed, `0` failed, `0` pending.
 
-Full non-coverage result after the `FT_OUTLINE_NONE` rows:
+Full non-coverage result after the direct-span clip row:
 
 ```bash
 make -C pillow-rs-freetype test
 ```
 
-Result: `7125 / 7125` runnable rows passed, `0` failed, `109` pending. Route
-audit: `real-parity` `3708`, `pending-route` `101`.
+Result: `7126 / 7126` runnable rows passed, `0` failed, `108` pending. Route
+audit: `real-parity` `3709`, `pending-route` `100`.
 
 Broadened non-coverage result:
 
@@ -169,8 +178,8 @@ Broadened non-coverage result:
 make -C pillow-rs-freetype test-op OP=ftoutln.outline_render
 ```
 
-Result after `FT_OUTLINE_NONE`: `73 / 73` runnable rows passed, `0` failed,
-`16` pending.
+Result after the direct-span clip row: `74 / 74` runnable rows passed, `0`
+failed, `15` pending.
 
 Current remaining `ftoutln.outline_render` blockers are missing explicit
 fixtures or non-fixture public harness surfaces, led by:
