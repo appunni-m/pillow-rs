@@ -4792,6 +4792,17 @@ static int emit_outline_render(int argc, char** argv) {
         points[7].y = 18 * 64;
         n_contours = 2;
         n_points = 8;
+    } else if (strstr(case_id, "ftimage.FT_OUTLINE_SINGLE_PASS.large_outline_raster_hint_behavior")) {
+        points[0].x = -64 * 64;
+        points[0].y = -64 * 64;
+        points[1].x = 96 * 64;
+        points[1].y = -64 * 64;
+        points[2].x = 96 * 64;
+        points[2].y = 96 * 64;
+        points[3].x = -64 * 64;
+        points[3].y = 96 * 64;
+        n_contours = 1;
+        n_points = 4;
     } else if (strstr(case_id, "@clipped-crossing-lines")) {
         points[0].x = -8 * 64;
         points[0].y = 8 * 64;
@@ -5235,6 +5246,32 @@ static int emit_outline_render(int argc, char** argv) {
     if (strstr(case_id, "ftimage.FT_OUTLINE_HIGH_PRECISION.raster_hint_behavior")) {
         const char* flag_names[2] = {"FT_OUTLINE_NONE", "FT_OUTLINE_HIGH_PRECISION"};
         const int flag_values[2] = {0, FT_OUTLINE_HIGH_PRECISION};
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"results\":[");
+        for (int i = 0; i < 2; i++) {
+            memset(buffer, 0, sizeof(buffer));
+            outline.flags = flag_values[i];
+            params.flags = FT_RASTER_FLAG_AA;
+            params.source = (void*)0x1;
+            err = FT_Outline_Render(library, &outline, &params);
+            if (i) {
+                printf(",");
+            }
+            printf("{\"flags\":\"%s\",\"status\":%d,", flag_names[i], err);
+            print_outline_bitmap_object(&bitmap);
+            printf(",\"params_source_is_outline\":");
+            printf("%s", params.source == (void*)&outline ? "true" : "false");
+            printf("}");
+        }
+        printf("]}}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+
+    if (strstr(case_id, "ftimage.FT_OUTLINE_SINGLE_PASS.large_outline_raster_hint_behavior")) {
+        const char* flag_names[2] = {"FT_OUTLINE_NONE", "FT_OUTLINE_SINGLE_PASS"};
+        const int flag_values[2] = {0, FT_OUTLINE_SINGLE_PASS};
         printf("{");
         print_status(0);
         printf(",\"output\":{\"results\":[");
