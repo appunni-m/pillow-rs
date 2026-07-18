@@ -5459,6 +5459,8 @@ static int emit_outline_decompose(int argc, char** argv) {
     (void)argc;
     const char* case_id = argv[2];
     if (!streq(case_id, "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c") &&
+        !streq(case_id, "ftimage.FT_Outline_Funcs.callback_order_matches_c") &&
+        !streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates") &&
         !streq(case_id, "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c") &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks") &&
@@ -5499,7 +5501,9 @@ static int emit_outline_decompose(int argc, char** argv) {
     unsigned short contours[4] = {3, 0, 0, 0};
     short n_contours = 1;
     short n_points = 4;
-    if (streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") ||
+    if (streq(case_id, "ftimage.FT_Outline_Funcs.callback_order_matches_c") ||
+        streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates") ||
+        streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
         points[0].x = 0;
         points[0].y = 0;
@@ -5571,12 +5575,56 @@ static int emit_outline_decompose(int argc, char** argv) {
     const int shifts[3] = {0, 1, 2};
     const FT_Pos deltas[3] = {0, 16, -32};
     int transform_count = 3;
-    if (streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") ||
+    if (streq(case_id, "ftimage.FT_Outline_Funcs.callback_order_matches_c") ||
+        streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates") ||
+        streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks") ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
         transform_count = 1;
     } else if (streq(case_id, "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c")) {
         transform_count = 2;
+    }
+    if (streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates")) {
+        const char* labels[4] = {"move_to#1", "line_to#1", "conic_to#1", "cubic_to#1"};
+        const int fail_indices[4] = {0, 1, 5, 9};
+        printf("{");
+        print_status(123);
+        printf(",\"output\":{\"status\":123,\"error\":123,\"events_before_error\":[");
+        for (int row = 0; row < 4; row++) {
+            FT_Outline_Funcs funcs;
+            funcs.move_to = record_outline_move_to;
+            funcs.line_to = record_outline_line_to;
+            funcs.conic_to = record_outline_conic_to;
+            funcs.cubic_to = record_outline_cubic_to;
+            funcs.shift = 0;
+            funcs.delta = 0;
+            reset_recorded_outline_events();
+            recorded_outline_decompose_fail_index = fail_indices[row];
+            recorded_outline_decompose_fail_error = 123;
+            (void)FT_Outline_Decompose(&outline, &funcs, recorded_outline_decompose_user_token);
+            if (row) {
+                printf(",");
+            }
+            printf("{\"failure_point\":\"%s\",\"events\":[", labels[row]);
+            for (int i = 0; i < recorded_outline_event_count; i++) {
+                if (i) {
+                    printf(",");
+                }
+                printf("{\"kind\":\"%s\",\"points\":[", recorded_outline_events[i].kind);
+                for (int j = 0; j < recorded_outline_events[i].count; j++) {
+                    if (j) {
+                        printf(",");
+                    }
+                    printf("{\"x\":%ld,\"y\":%ld}",
+                           recorded_outline_events[i].points[j].x,
+                           recorded_outline_events[i].points[j].y);
+                }
+                printf("]}");
+            }
+            printf("]}");
+        }
+        printf("]}}\n");
+        return 0;
     }
     if (streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
         FT_Outline_Funcs funcs;

@@ -383,11 +383,38 @@ Verified progress:
 - Rust FFI, C ABI, and WASM ABI now match pinned FreeType for the conic
   callback row, including FreeType's implied midpoint for consecutive conic
   controls.
+- Added real `outline_model` fixture
+  `outlines/synthetic/mixed-line-conic-cubic.json`.
+- Native C oracle now records
+  `ftimage.FT_Outline_Funcs.callback_order_matches_c` against that mixed
+  outline, covering line callbacks, consecutive-conic callbacks, cubic
+  callbacks, contour closure callbacks, and user-pointer observation.
+- Native C oracle now records
+  `ftimage.FT_Outline_Funcs.callback_error_propagates` for the same mixed
+  outline. It injects callback return `123` at the first `move_to`, `line_to`,
+  `conic_to`, and `cubic_to` callbacks. FreeType stops before recording the
+  failing callback and returns that exact callback value. The manifest row now
+  sets `compare_error_output: true` so this is exact error-output parity, not a
+  generic expected-error fallback.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for both
+  `FT_Outline_Funcs` callback-order and callback-error rows.
 
 Focused non-coverage result:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_Outline_Funcs.callback_order_matches_c
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_Outline_Funcs.callback_error_propagates
 ```
 
 Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
@@ -421,8 +448,8 @@ make -C pillow-rs-freetype test-op OP=ftoutln.outline_decompose
 ```
 
 Result after the line/conic/cubic fixture, shift/delta fixture, conic fixture,
-and callback-error route: `5 / 5` runtime parity rows passed, `0` failed,
-`10` pending.
+mixed callback fixture, and callback-error routes: `7 / 7` runtime parity rows
+passed, `0` failed, `8` pending.
 
 Full non-coverage result:
 
@@ -431,8 +458,9 @@ make -C pillow-rs-freetype test
 ```
 
 Result after the line/conic/cubic fixture, shift/delta fixture, conic fixture,
-and callback-error route: `7136 / 7136` runnable rows passed, `0` failed,
-`98` pending. Route audit: `real-parity` `3719`, `pending-route` `90`.
+mixed callback fixture, and callback-error routes: `7138 / 7138` runnable rows
+passed, `0` failed, `96` pending. Route audit: `real-parity` `3721`,
+`pending-route` `88`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
 
