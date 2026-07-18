@@ -3053,6 +3053,30 @@
             ]
           },
           {
+            "id": "arabic-current-neutral-blue-stem-force-autohint",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "role": "font",
+                "id": "fonts/autohint/arabic-neutral-first.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": {
+                "x": 0,
+                "y": 20
+              },
+              "glyph_index": 5,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ]
+            },
+            "coverage": [
+              "autohint/latin:current-neutral-blue-dedup"
+            ]
+          },
+          {
             "id": "latin-blue-overlap-cap-round-force-autohint",
             "assets": {
               "font": {

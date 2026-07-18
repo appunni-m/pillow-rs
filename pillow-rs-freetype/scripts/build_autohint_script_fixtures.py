@@ -979,6 +979,77 @@ def build_arabic_standard_fallback() -> None:
     font.save(OUT_DIR / "arabic-standard-fallback.ttf")
 
 
+def build_arabic_neutral_first() -> None:
+    """Put a neutral blue below a linked normal top blue."""
+    glyph_order = [
+        ".notdef",
+        "space",
+        "arabic_standard_ha",
+        "arabic_bounds_sample",
+        "arabic_join_sample",
+        "arabic_neutral_first_stem",
+    ]
+    glyphs = {
+        ".notdef": rectangle_glyph(80, -220, 520, 720),
+        "space": empty_glyph(),
+        "arabic_standard_ha": ring_glyph(80, 0, 520, 500, 200, 120, 400, 380),
+        # Arabic top and bottom strings overlap.  One shared rectangle keeps
+        # their normal zones at y=300 and y=-200 while U+0640 independently
+        # establishes the neutral zone at y=0.
+        "arabic_bounds_sample": rectangle_glyph(80, -200, 520, 300),
+        "arabic_join_sample": rectangle_glyph(80, 0, 520, 40),
+        "arabic_neutral_first_stem": rectangle_glyph(100, 0, 500, 300),
+    }
+    metrics = {
+        ".notdef": (600, 80),
+        "space": (300, 0),
+        "arabic_standard_ha": (620, 80),
+        "arabic_bounds_sample": (620, 80),
+        "arabic_join_sample": (620, 80),
+        "arabic_neutral_first_stem": (620, 100),
+    }
+    cmap = {
+        0x20: "space",
+        0x062D: "arabic_standard_ha",
+        0x0628: "arabic_neutral_first_stem",
+        0x0640: "arabic_join_sample",
+    }
+    for codepoint in (0x0627, 0x0625, 0x0644, 0x0643, 0x0637, 0x0638, 0x062A, 0x062B):
+        cmap[codepoint] = "arabic_bounds_sample"
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=820, descent=-220)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint Arabic Neutral First",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint Arabic Neutral First Regular",
+            "fullName": "Autohint Arabic Neutral First Regular",
+            "psName": "AutohintArabicNeutralFirst-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=820,
+        sTypoDescender=-220,
+        usWinAscent=820,
+        usWinDescent=220,
+    )
+    font.setupPost()
+
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "arabic-neutral-first.ttf")
+
+
 def build_cjk_empty_standard() -> None:
     glyph_order = [".notdef", "space", "hani_empty"]
     glyphs = {
@@ -2504,6 +2575,7 @@ def build_latin_low_upem() -> None:
 def main() -> None:
     build_script_coverage()
     build_arabic_standard_fallback()
+    build_arabic_neutral_first()
     build_cjk_empty_standard()
     build_latin_small_ignore()
     build_latin_remaining_topology()
