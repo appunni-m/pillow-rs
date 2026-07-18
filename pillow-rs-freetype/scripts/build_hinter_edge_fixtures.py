@@ -219,7 +219,11 @@ def write_fpgm_call_errors() -> None:
 
 def write_execution_too_long_loop() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
-    # C `TT_RunIns` stops this negative JMPR loop with Execution_Too_Long.
+    # Isolate the glyph loop from the control matrix's intentionally invalid
+    # shared programs.  Under FT_LOAD_PEDANTIC they otherwise fail first with
+    # Invalid_Reference, hiding C `TT_RunIns`'s negative-jump limit.
+    font["fpgm"].program = empty_program()
+    font["prep"].program = empty_program()
     # The bytecode lands back at the PUSHW so the operand stack stays bounded.
     font["glyf"]["base"].program = program_from_bytes(bytes.fromhex("b8 ff fd 1c"))
     save_font("hinter-execution-too-long-loop.ttf", font)
