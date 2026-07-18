@@ -4803,6 +4803,25 @@ static int emit_outline_render(int argc, char** argv) {
         points[3].y = 96 * 64;
         n_contours = 1;
         n_points = 4;
+    } else if (strstr(case_id, "ftimage.FT_OUTLINE_NONE.default_outline_render_baseline")) {
+        points[0].x = 8 * 64;
+        points[0].y = 8 * 64;
+        points[1].x = 24 * 64;
+        points[1].y = 8 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 24 * 64;
+        points[3].x = 8 * 64;
+        points[3].y = 24 * 64;
+        points[4].x = 16 * 64;
+        points[4].y = 4 * 64;
+        points[5].x = 17 * 64;
+        points[5].y = 4 * 64;
+        points[6].x = 17 * 64;
+        points[6].y = 28 * 64;
+        points[7].x = 16 * 64;
+        points[7].y = 28 * 64;
+        n_contours = 2;
+        n_points = 8;
     } else if (strstr(case_id, "@clipped-crossing-lines")) {
         points[0].x = -8 * 64;
         points[0].y = 8 * 64;
