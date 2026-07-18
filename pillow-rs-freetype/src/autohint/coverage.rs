@@ -104,6 +104,8 @@ pub const COV_HINT_PHASE2_BOUND_NEAR: u64 = 1 << 36;
 pub const COV_HINT_PHASE4_SERIF_OVERLAP: u64 = 1 << 37;
 /// vertical separation: a dimensionless contour retained C's extrema sentinels.
 pub const COV_VSEP_DIMENSIONLESS_CONTOUR: u64 = 1 << 38;
+/// vertical separation: no usable Latin blue pair, so use the scaled EM fallback.
+pub const COV_VSEP_EM_HEIGHT_FALLBACK: u64 = 1 << 39;
 
 /// Record a coverage bit for the current glyph.
 pub fn record(bit: u64) {

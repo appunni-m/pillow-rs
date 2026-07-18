@@ -3216,6 +3216,38 @@ either returns before that arm or takes its monochrome sub-arm.  The code is
 retained for fidelity with pinned C, while its unreachable lines remain
 visible as uncovered instead of being credited through a helper-only test.
 
+## Latin vertical-separation scaled-EM height fallback
+
+Pinned FreeType 2.14.3 `af_latin_hints_apply` (`aflatin.c:5000-5019`) uses
+two thirds of the lowercase blue-zone height for accent separation, then one
+half of the uppercase height, and finally four tenths of the scaled EM when
+neither complete pair exists.  A face with zero blue zones cannot prove the
+last arm: C remaps that Latin style to `NONE_DFLT` before the Latin apply
+pipeline, and Rust deliberately makes the same early return.
+
+The source-backed `latin-missing-standard.ttf` now preserves its existing
+glyph indices, adds U+00E1 as compact two-contour accent geometry, and maps
+`T` to the existing base glyph so only the capital-top blue zone exists.  That
+incomplete blue set keeps Latin hinting active without creating either a
+lowercase or uppercase pair.  One exact `FT_Load_Glyph.matrix_load` row at
+20 ppem selects gid 3 with `FT_LOAD_FORCE_AUTOHINT` and asserts route bit 39,
+proving the scaled-EM fallback through the pinned C oracle, Rust FFI, C ABI,
+WASM ABI, and safe public `Face::load_glyph` route.
+
+Focused Coverage MCP run `4842c027-1f3f-4418-abac-66924464d3c8` passes the
+retained row.  Full managed run `25b9a332-f3e7-4052-baf5-dd482aa1c55d`
+passes 7,062 / 7,062 runnable cases with 135 pending rows unchanged and
+ingests snapshot `53589d67-f132-4cf9-a155-c096453b3c10`.  Concrete cases rise
+from 7,196 to 7,197 and route-audit real parity rises from 3,641 to 3,642.
+Project coverage moves from 20,336 / 21,275 to 20,341 / 21,276 lines, from
+4,919 / 5,497 to 4,921 / 5,497 branches, and from 29,442 / 31,099 to
+29,451 / 31,100 regions; functions remain 1,277 / 1,413.
+`src/autohint/latin.rs` moves from 2,667 / 2,880 to 2,672 / 2,881 lines,
+from 1,096 / 1,294 to 1,098 / 1,294 branches, and from 3,856 / 4,241 to
+3,865 / 4,242 regions; functions remain 67 / 68.  The one added route-marker
+line and all newly exposed implementation regions are covered, so every
+measured rate except the unchanged function rate improves.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:

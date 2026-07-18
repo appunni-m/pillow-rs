@@ -2405,6 +2405,10 @@ fn vertical_separation_accent_height_limit(hints: &GlyphHints, adj_type: u32) ->
         return (top.shoot_width.cur - bottom.shoot_width.cur) / 2;
     }
 
+    // C: `af_latin_hints_apply` (`aflatin.c:5015-5019`) falls back to
+    // four tenths of the scaled EM when neither lowercase nor uppercase
+    // blue-zone pair exists.
+    crate::autohint::coverage::record(crate::autohint::coverage::COV_VSEP_EM_HEIGHT_FALLBACK);
     let Some(metrics) = hints.metrics.as_ref() else {
         return 0;
     };
