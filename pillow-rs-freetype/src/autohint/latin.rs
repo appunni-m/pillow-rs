@@ -1729,6 +1729,32 @@ pub fn metrics_scale_dim(
                 blue.flags |= AF_LATIN_BLUE_ACTIVE;
             }
         }
+
+        // Pinned FreeType 2.14.3 `af_latin_metrics_scale_dim` suppresses a
+        // secondary sub-top zone when its fitted interval overlaps any active
+        // primary zone; otherwise Khmer subscript tops behave like neutral
+        // blues (aflatin.c:1443-1481).
+        for blue_idx in 0..axis.blue_count {
+            let blue = axis.blues[blue_idx];
+            if blue.flags & (AF_LATIN_BLUE_SUB_TOP | AF_LATIN_BLUE_ACTIVE)
+                != (AF_LATIN_BLUE_SUB_TOP | AF_LATIN_BLUE_ACTIVE)
+            {
+                continue;
+            }
+
+            let overlaps_primary = axis.blues.iter().take(axis.blue_count).any(|other| {
+                other.flags & AF_LATIN_BLUE_SUB_TOP == 0
+                    && other.flags & AF_LATIN_BLUE_ACTIVE != 0
+                    && other.ref_width.fit <= blue.shoot_width.fit
+                    && other.shoot_width.fit >= blue.ref_width.fit
+            });
+            if overlaps_primary {
+                axis.blues[blue_idx].flags &= !AF_LATIN_BLUE_ACTIVE;
+                crate::autohint::coverage::record(
+                    crate::autohint::coverage::COV_SUB_TOP_BLUE_OVERLAP_SUPPRESSED,
+                );
+            }
+        }
     }
 
     (x_scale, v_scale)

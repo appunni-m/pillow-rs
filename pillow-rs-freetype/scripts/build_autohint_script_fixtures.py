@@ -970,6 +970,73 @@ def build_latin_x_height_rejection() -> None:
     font.save(OUT_DIR / "latin-x-height-rejection.ttf")
 
 
+def build_khmer_sub_top_overlap() -> None:
+    """Build overlapping primary and sub-top Khmer blue zones."""
+    glyph_order = [
+        ".notdef",
+        "space",
+        "standard",
+        "top_flat",
+        "top_round",
+        "sub_top",
+        "bottom",
+        "probe",
+    ]
+    glyphs = {
+        ".notdef": rectangle_glyph(60, 0, 500, 500),
+        "space": empty_glyph(),
+        "standard": rectangle_glyph(80, 0, 500, 500),
+        "top_flat": rectangle_glyph(80, 0, 500, 490),
+        "top_round": ring_glyph(80, 0, 500, 520, 160, 80, 420, 440),
+        "sub_top": rectangle_glyph(100, 0, 480, 520),
+        "bottom": rectangle_glyph(90, 0, 490, 450),
+        "probe": rectangle_glyph(70, 0, 530, 530),
+    }
+    metrics = {name: (600, 70) for name in glyph_order}
+    metrics["space"] = (300, 0)
+
+    cmap = {0x20: "space", 0x17E0: "standard", 0x1782: "probe"}
+    for codepoint in (0x1781, 0x1791, 0x1793):
+        cmap[codepoint] = "top_flat"
+    for codepoint in (0x17A7, 0x17A9, 0x17B6):
+        cmap[codepoint] = "top_round"
+    cmap[0x1780] = "sub_top"
+    for codepoint in (0x1783, 0x1785, 0x178B, 0x1794, 0x1798, 0x1799, 0x17B2):
+        cmap.setdefault(codepoint, "bottom")
+    for codepoint in (0x178F, 0x179A, 0x17A2, 0x1784, 0x179B):
+        cmap.setdefault(codepoint, "bottom")
+
+    font = FontBuilder(UNITS_PER_EM, isTTF=True)
+    font.setupGlyphOrder(glyph_order)
+    font.setupCharacterMap(cmap)
+    font.setupGlyf(glyphs)
+    font.setupHorizontalMetrics(metrics)
+    font.setupHorizontalHeader(ascent=600, descent=-100)
+    font.setupNameTable(
+        {
+            "familyName": "Autohint Khmer Sub Top Overlap",
+            "styleName": "Regular",
+            "uniqueFontIdentifier": "Autohint Khmer Sub Top Overlap Regular",
+            "fullName": "Autohint Khmer Sub Top Overlap Regular",
+            "psName": "AutohintKhmerSubTopOverlap-Regular",
+            "version": "Version 1.0",
+        }
+    )
+    font.setupOS2(
+        sTypoAscender=600,
+        sTypoDescender=-100,
+        usWinAscent=600,
+        usWinDescent=100,
+    )
+    font.setupPost()
+    head = font.font["head"]
+    head.created = 0
+    head.modified = 0
+    font.font.recalcTimestamp = False
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font.save(OUT_DIR / "khmer-sub-top-overlap.ttf")
+
+
 def build_arabic_standard_fallback() -> None:
     glyph_order = [
         ".notdef",
@@ -2717,6 +2784,7 @@ def build_latin_low_upem() -> None:
 def main() -> None:
     build_script_coverage()
     build_latin_x_height_rejection()
+    build_khmer_sub_top_overlap()
     build_arabic_standard_fallback()
     build_arabic_neutral_first()
     build_arabic_neutral_round_skip()
