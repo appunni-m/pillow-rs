@@ -56,6 +56,16 @@ static void* oracle_realloc(FT_Memory memory, long cur_size, long new_size, void
     return realloc(block, (size_t)new_size);
 }
 
+static FT_Error debug_hook_a(void* arg) {
+    (void)arg;
+    return FT_Err_Ok;
+}
+
+static FT_Error debug_hook_b(void* arg) {
+    (void)arg;
+    return FT_Err_Ok;
+}
+
 static int is_moveto_starts_each_contour_case(const char* case_id) {
     return streq(case_id, "ftimage.FT_Outline_MoveTo_Func.decompose_starts_each_contour@g36-f1") ||
            streq(case_id, "ftimage.FT_Outline_MoveTo_Func.decompose_starts_each_contour@g37-f2");
@@ -8499,6 +8509,72 @@ static int emit_truetype_engine_type(int argc, char** argv) {
     return 0;
 }
 
+static const char* debug_hook_class_name(FT_DebugHook_Func hook) {
+    if (hook == debug_hook_a) {
+        return "hook_a";
+    }
+    if (hook == debug_hook_b) {
+        return "hook_b";
+    }
+    if (hook) {
+        return "other";
+    }
+    return "null";
+}
+
+static void print_debug_hook_snapshot(FT_Library library) {
+    printf("[");
+    for (int i = 0; i < 4; i++) {
+        if (i) {
+            printf(",");
+        }
+        printf("\"%s\"", library ? debug_hook_class_name(library->debug_hooks[i]) : "null");
+    }
+    printf("]");
+}
+
+static int emit_set_debug_hook(int argc, char** argv) {
+    (void)argc;
+    int action = atoi(argv[2]);
+    FT_Library library = NULL;
+    if (action != 2) {
+        FT_Error err = FT_Init_FreeType(&library);
+        printf("{");
+        if (err) {
+            print_status(err);
+            printf(",\"output\":null}\n");
+            return 0;
+        }
+    } else {
+        printf("{");
+    }
+
+    print_status(FT_Err_Ok);
+    if (action == 1) {
+        FT_Set_Debug_Hook(library, FT_DEBUG_HOOK_TRUETYPE, debug_hook_a);
+        printf(",\"output\":{\"return\":\"void\",\"debug_hooks_snapshot\":");
+        print_debug_hook_snapshot(library);
+        printf(",\"stored_slot_identity\":\"%s\"}}\n", debug_hook_class_name(library->debug_hooks[0]));
+    } else if (action == 3) {
+        FT_Set_Debug_Hook(library, FT_DEBUG_HOOK_TRUETYPE, debug_hook_a);
+        printf(",\"output\":{\"return\":\"void\",\"debug_hooks_before\":");
+        print_debug_hook_snapshot(library);
+        FT_Set_Debug_Hook(library, 4, debug_hook_b);
+        FT_Set_Debug_Hook(library, FT_DEBUG_HOOK_TRUETYPE, NULL);
+        printf(",\"debug_hooks_after\":");
+        print_debug_hook_snapshot(library);
+        printf("}}\n");
+    } else {
+        FT_Set_Debug_Hook(NULL, FT_DEBUG_HOOK_TRUETYPE, debug_hook_a);
+        printf(",\"output\":{\"return\":\"void\",\"crashed\":false,\"observable_writes\":\"none\"}}\n");
+    }
+
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    return 0;
+}
+
 static void print_lifecycle_result(FT_Error err) {
     print_status(err);
     if (err) {
@@ -11305,6 +11381,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--get-truetype-engine-type")) {
         return emit_truetype_engine_type(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--set-debug-hook")) {
+        return emit_set_debug_hook(argc, argv);
     }
     if ((argc == 3 || argc == 6) && streq(argv[1], "--done-freetype")) {
         return emit_done_freetype(argc, argv);

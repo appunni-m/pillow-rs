@@ -65,6 +65,7 @@ pub type FT_Raster_Set_Mode_Func = FT_Raster_SetModeFunc;
 pub type FT_Raster_RenderFunc =
     Option<unsafe extern "C" fn(raster: FT_Raster, params: *const FT_Raster_Params) -> c_int>;
 pub type FT_Raster_Render_Func = FT_Raster_RenderFunc;
+pub type FT_DebugHook_Func = Option<extern "C" fn(arg: FT_Pointer) -> FT_Error>;
 pub type FT_Glyph_InitFunc =
     Option<unsafe extern "C" fn(glyph: FT_Glyph, slot: FT_Pointer) -> FT_Error>;
 pub type FT_Glyph_Init_Func = FT_Glyph_InitFunc;

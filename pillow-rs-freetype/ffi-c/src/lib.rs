@@ -46,6 +46,7 @@ pub type FT_Encoding = c_int;
 pub type FT_Sfnt_Tag = c_uint;
 pub type FT_LcdFilter = c_int;
 pub type FT_TrueTypeEngineType = c_int;
+pub type FT_DebugHook_Func = rust_ffi::FT_DebugHook_Func;
 
 pub type FT_Library = *mut FT_LibraryRec;
 pub type FT_Face = *mut FT_FaceRec;
@@ -1031,6 +1032,15 @@ pub extern "C" fn FT_Get_TrueType_Engine_Type(library: FT_Library) -> FT_TrueTyp
     rust_ffi::FT_Get_TrueType_Engine_Type(library_ref(library))
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Set_Debug_Hook(
+    library: FT_Library,
+    hook_index: FT_UInt,
+    debug_hook: FT_DebugHook_Func,
+) {
+    rust_ffi::FT_Set_Debug_Hook(library_mut(library), hook_index, debug_hook);
+}
+
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_new_library_without_default_modules() -> FT_Library {
     Box::into_raw(Box::new(FT_LibraryRec {
@@ -1047,6 +1057,15 @@ pub fn abi_support_library_has_truetype_module(library: FT_Library) -> bool {
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_library_has_truetype_engine_service(library: FT_Library) -> bool {
     rust_ffi::FT_Library_Has_TrueType_Engine_Service(library_ref(library))
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_debug_hook_classes(
+    library: FT_Library,
+    hook_a: FT_DebugHook_Func,
+    hook_b: FT_DebugHook_Func,
+) -> [FT_Int; 4] {
+    rust_ffi::FT_Library_Debug_Hook_Classes(library_ref(library), hook_a, hook_b)
 }
 
 #[unsafe(no_mangle)]

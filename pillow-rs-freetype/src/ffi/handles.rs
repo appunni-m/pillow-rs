@@ -20,12 +20,13 @@ use super::convert::{
 };
 use super::types::{
     FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bool, FT_Byte, FT_Bytes, FT_Char, FT_CharMap,
-    FT_CharMapRecPublic, FT_Color, FT_Encoding, FT_Error, FT_F26Dot6, FT_Fixed, FT_Glyph_Format,
-    FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_Long, FT_Matrix, FT_Orientation,
-    FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag,
-    FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec,
-    FT_Span, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector, TT_Header,
-    TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
+    FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F26Dot6, FT_Fixed,
+    FT_Glyph_Format, FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_Long, FT_Matrix,
+    FT_Orientation, FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag,
+    FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
+    FT_Size_RequestRec, FT_Span, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort,
+    FT_Vector, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript,
+    TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -1167,6 +1168,7 @@ pub fn FT_Bitmap_Blend(
 pub struct FT_Library {
     inner: api::Library,
     has_truetype_module: bool,
+    debug_hooks: [FT_DebugHook_Func; 4],
     _lcd_geometry: [FT_Vector; 3],
 }
 
@@ -1421,6 +1423,7 @@ pub fn FT_Init_FreeType() -> FT_Library {
     FT_Library {
         inner: api::Library::init(),
         has_truetype_module: true,
+        debug_hooks: [None; 4],
         _lcd_geometry: [
             FT_Vector { x: -21, y: 0 },
             FT_Vector { x: 0, y: 0 },
@@ -2348,6 +2351,51 @@ pub fn FT_Get_TrueType_Engine_Type(library: Option<&FT_Library>) -> FT_TrueTypeE
         FT_TRUETYPE_ENGINE_TYPE_PATENTED as FT_TrueTypeEngineType
     } else {
         FT_TRUETYPE_ENGINE_TYPE_NONE as FT_TrueTypeEngineType
+    }
+}
+
+pub fn FT_Set_Debug_Hook(
+    library: Option<&mut FT_Library>,
+    hook_index: FT_UInt,
+    debug_hook: FT_DebugHook_Func,
+) {
+    // FreeType 2.14.3 `src/base/ftobjs.c:FT_Set_Debug_Hook` mutates a slot
+    // only when all three public preconditions hold: library, hook, index < 4.
+    if let (Some(library), Some(debug_hook), Ok(index)) =
+        (library, debug_hook, usize::try_from(hook_index))
+        && let Some(slot) = library.debug_hooks.get_mut(index)
+    {
+        *slot = Some(debug_hook);
+    }
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Library_Debug_Hook_Classes(
+    library: Option<&FT_Library>,
+    hook_a: FT_DebugHook_Func,
+    hook_b: FT_DebugHook_Func,
+) -> [FT_Int; 4] {
+    library.map_or([0; 4], |library| {
+        library.debug_hooks.map(|hook| {
+            if same_debug_hook(hook, hook_a) {
+                1
+            } else if same_debug_hook(hook, hook_b) {
+                2
+            } else if hook.is_some() {
+                3
+            } else {
+                0
+            }
+        })
+    })
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+fn same_debug_hook(left: FT_DebugHook_Func, right: FT_DebugHook_Func) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) => std::ptr::fn_addr_eq(left, right),
+        (None, None) => true,
+        _ => false,
     }
 }
 
