@@ -707,6 +707,7 @@ fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness 
                 | "ftimage.FT_Outline_Funcs.callback_error_propagates"
                 | "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c"
                 | "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c"
+                | "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c"
                 | "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order"
                 | "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks"
                 | "ftoutln.FT_Outline_Decompose.callback_error_propagates"
@@ -9855,6 +9856,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                     | "ftimage.FT_Outline_Funcs.callback_error_propagates"
                     | "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c"
                     | "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c"
+                    | "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c"
                     | "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order"
                     | "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks"
                     | "ftoutln.FT_Outline_Decompose.callback_error_propagates"
@@ -18142,6 +18144,9 @@ fn wasm_outline_transform_runtime_output(case: &InputCase) -> Result<RunOutput, 
 }
 
 fn rust_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c" {
+        return rust_cubic_outline_decompose_runtime_output(case);
+    }
     let outline = outline_render_snapshot(&outline_render_outline(case)?);
     match FT_Outline_Decompose_Trace(Some(&outline), &outline_decompose_transforms(case)?) {
         Ok(runs) if case.case_id == "ftimage.FT_Outline_Funcs.callback_error_propagates" => {
@@ -18156,6 +18161,9 @@ fn rust_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, 
 }
 
 fn c_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c" {
+        return c_cubic_outline_decompose_runtime_output(case);
+    }
     let outline_model = outline_render_outline(case)?;
     let mut outline = CRenderOutlineStorage::new(&outline_model);
     let outline_ptr = outline.as_ptr();
@@ -18175,6 +18183,9 @@ fn c_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, Str
 }
 
 fn wasm_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c" {
+        return wasm_cubic_outline_decompose_runtime_output(case);
+    }
     let outline_model = outline_render_outline(case)?;
     let mut outline = WasmRenderOutlineStorage::new(&outline_model);
     let outline_ptr = outline.as_ptr();
@@ -18191,6 +18202,79 @@ fn wasm_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, 
         Ok(runs) => Ok(ok(outline_decompose_trace_payload(runs))),
         Err(err) => Ok(error(err)),
     }
+}
+
+fn rust_cubic_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    let outline = outline_render_snapshot(&outline_from_asset_key(case, "cff_outline")?);
+    let runs = FT_Outline_Decompose_Trace(Some(&outline), &outline_decompose_transforms(case)?)
+        .map_err(|err| format!("valid cubic decompose failed with {err}"))?;
+    let malformed_status = cubic_malformed_statuses(case)?
+        .into_iter()
+        .map(|(id, outline)| {
+            let snapshot = outline_render_snapshot(&outline);
+            let status = match FT_Outline_Decompose_Trace(Some(&snapshot), &[(0, 0)]) {
+                Ok(_) => FT_Err_Ok,
+                Err(err) => err,
+            };
+            json!({"id": id, "status": status})
+        })
+        .collect::<Vec<_>>();
+    Ok(ok(outline_decompose_trace_payload_with_malformed_status(
+        runs,
+        malformed_status,
+    )))
+}
+
+fn c_cubic_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    let outline_model = outline_from_asset_key(case, "cff_outline")?;
+    let mut outline = CRenderOutlineStorage::new(&outline_model);
+    let runs = c_abi::abi_support_outline_decompose_trace(
+        outline.as_ptr(),
+        &outline_decompose_transforms(case)?,
+    )
+    .map_err(|err| format!("valid cubic C ABI decompose failed with {err}"))?;
+    let malformed_status = cubic_malformed_statuses(case)?
+        .into_iter()
+        .map(|(id, outline_model)| {
+            let mut outline = CRenderOutlineStorage::new(&outline_model);
+            let status =
+                match c_abi::abi_support_outline_decompose_trace(outline.as_ptr(), &[(0, 0)]) {
+                    Ok(_) => FT_Err_Ok,
+                    Err(err) => err,
+                };
+            json!({"id": id, "status": status})
+        })
+        .collect::<Vec<_>>();
+    Ok(ok(outline_decompose_trace_payload_with_malformed_status(
+        runs,
+        malformed_status,
+    )))
+}
+
+fn wasm_cubic_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    let outline_model = outline_from_asset_key(case, "cff_outline")?;
+    let mut outline = WasmRenderOutlineStorage::new(&outline_model);
+    let runs = wasm_abi::abi_support_outline_decompose_trace(
+        outline.as_ptr(),
+        &outline_decompose_transforms(case)?,
+    )
+    .map_err(|err| format!("valid cubic WASM decompose failed with {err}"))?;
+    let malformed_status = cubic_malformed_statuses(case)?
+        .into_iter()
+        .map(|(id, outline_model)| {
+            let mut outline = WasmRenderOutlineStorage::new(&outline_model);
+            let status =
+                match wasm_abi::abi_support_outline_decompose_trace(outline.as_ptr(), &[(0, 0)]) {
+                    Ok(_) => FT_Err_Ok,
+                    Err(err) => err,
+                };
+            json!({"id": id, "status": status})
+        })
+        .collect::<Vec<_>>();
+    Ok(ok(outline_decompose_trace_payload_with_malformed_status(
+        runs,
+        malformed_status,
+    )))
 }
 
 fn outline_decompose_transforms(case: &InputCase) -> Result<Vec<(FT_Int, FT_Pos)>, String> {
@@ -18265,6 +18349,20 @@ fn outline_decompose_transforms(case: &InputCase) -> Result<Vec<(FT_Int, FT_Pos)
         FT_Int::try_from(shift).map_err(|err| err.to_string())?,
         FT_Pos::try_from(delta).map_err(|err| err.to_string())?,
     )])
+}
+
+fn outline_decompose_trace_payload_with_malformed_status(
+    runs: Vec<FTOutlineDecomposeRun>,
+    malformed_status: Vec<Value>,
+) -> Value {
+    let mut payload = outline_decompose_trace_payload(runs);
+    if let Some(object) = payload.as_object_mut() {
+        object.insert(
+            "malformed_status".to_string(),
+            Value::Array(malformed_status),
+        );
+    }
+    payload
 }
 
 fn outline_decompose_trace_payload(runs: Vec<FTOutlineDecomposeRun>) -> Value {
@@ -20217,6 +20315,67 @@ fn outline_render_fixture_outline(
         return Ok(None);
     }
     parse_outline_model_fixture(path, &value).map(Some)
+}
+
+fn outline_from_asset_key(
+    case: &InputCase,
+    asset_key: &str,
+) -> Result<fontdone::outline::Outline, String> {
+    let asset = case
+        .inputs
+        .assets
+        .get(asset_key)
+        .ok_or_else(|| format!("{asset_key} asset is required"))?;
+    let path = asset_file_path(asset).ok_or_else(|| format!("{asset_key} asset is unresolved"))?;
+    let bytes = cached_file_bytes(path)?;
+    let value: Value =
+        serde_json::from_slice(&bytes).map_err(|err| format!("parse {path}: {err}"))?;
+    if value.get("kind").and_then(Value::as_str) != Some("outline_model") {
+        return Err(format!("{path} must be an outline_model fixture"));
+    }
+    parse_outline_model_fixture(path, &value)
+}
+
+fn cubic_malformed_statuses(
+    case: &InputCase,
+) -> Result<Vec<(String, fontdone::outline::Outline)>, String> {
+    let asset = case
+        .inputs
+        .assets
+        .get("malformed_outline")
+        .ok_or_else(|| "malformed_outline asset is required".to_string())?;
+    let path = asset_file_path(asset)
+        .ok_or_else(|| "malformed_outline asset is unresolved".to_string())?;
+    let bytes = cached_file_bytes(path)?;
+    let value: Value =
+        serde_json::from_slice(&bytes).map_err(|err| format!("parse {path}: {err}"))?;
+    if value.get("kind").and_then(Value::as_str) != Some("outline_model_set") {
+        return Err(format!("{path} must be an outline_model_set fixture"));
+    }
+    let cases = value
+        .get("cases")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("{path} cases must be an array"))?;
+    cases
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let id = item
+                .get("id")
+                .and_then(Value::as_str)
+                .ok_or_else(|| format!("{path} cases[{index}].id must be a string"))?;
+            let mut outline_value = item.clone();
+            let object = outline_value
+                .as_object_mut()
+                .ok_or_else(|| format!("{path} cases[{index}] must be an object"))?;
+            object.insert(
+                "kind".to_string(),
+                Value::String("outline_model".to_string()),
+            );
+            parse_outline_model_fixture(&format!("{path}#{id}"), &outline_value)
+                .map(|outline| (id.to_string(), outline))
+        })
+        .collect()
 }
 
 fn parse_outline_model_fixture(

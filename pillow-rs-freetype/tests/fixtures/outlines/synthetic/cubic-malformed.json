@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "kind": "outline_model_set",
+  "cases": [
+    {
+      "id": "contour_starts_with_cubic",
+      "points": [
+        {"x": 0, "y": 0, "on_curve": false},
+        {"x": 64, "y": 64, "on_curve": false},
+        {"x": 128, "y": 0}
+      ],
+      "tags": [2, 2, 1],
+      "contours": [2],
+      "flags": 0
+    },
+    {
+      "id": "unpaired_cubic_control",
+      "points": [
+        {"x": 0, "y": 0},
+        {"x": 64, "y": 64, "on_curve": false},
+        {"x": 128, "y": 0}
+      ],
+      "tags": [1, 2, 1],
+      "contours": [2],
+      "flags": 0
+    }
+  ]
+}
