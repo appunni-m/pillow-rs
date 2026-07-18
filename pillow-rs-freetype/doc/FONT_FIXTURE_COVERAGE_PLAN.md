@@ -3182,6 +3182,35 @@ runnable cases with 135 pending rows unchanged and ingests snapshot
 and permanent route markers account for the larger instrumented denominator;
 covered lines, branches, and regions all increase.
 
+The later Phase-4 BOUND block at pinned `aflatin.c:4870-4904` is retained for
+source parity but has no legal public fixture route.  Phase 2 consumes every
+edge with a non-null stem link and marks both sides done; Phase 4 skips done
+edges and therefore sees only unfinished non-stem edges with null links.  Its
+inner `edge->link` predicates cannot succeed through a public outline, even
+though the defensive C block remains present.
+
+## Latin x-height vertical-scale acceptance
+
+Pinned FreeType 2.14.3 `af_latin_metrics_scale_dim`
+(`aflatin.c:1178-1306`) moves the lowercase x-height shoot toward the pixel
+grid, then accepts the derived vertical scale only when the tallest blue-zone
+extent moves by strictly less than two pixels.  Rust already matched that
+arithmetic.  The retained
+`FT_Load_Glyph.matrix_load@latin-x-height-scale-adjustment-force-autohint`
+row loads the generated Latin serif probe at 19 ppem, asserts the permanent
+x-height scale marker, and compares the complete slot through the pinned C
+oracle, Rust FFI, C ABI, and WASM ABI.  Focused Coverage MCP run
+`5991b978-961a-43ab-b11b-7072b9dd6acd` passes 2 / 2 selected cases.  Full
+managed run `db4cdb8e-d4c6-4bf7-9d45-cafefb8709ca` passes 7,063 / 7,063
+runnable cases with 135 pending rows unchanged and ingests snapshot
+`093d29db-fb68-40c3-8bb1-fb0c7275e8b8`.  Concrete cases rise from 7,197 to
+7,198 and route-audit real parity rises from 3,642 to 3,643.  Overall coverage
+moves from 20,341 / 21,276 to 20,342 / 21,277 lines and from 29,451 / 31,100
+to 29,452 / 31,101 regions; branches remain 4,921 / 5,497 and functions remain
+1,277 / 1,413.  `src/autohint/latin.rs` moves from 2,672 / 2,881 to
+2,673 / 2,882 lines and from 3,865 / 4,242 to 3,866 / 4,243 regions, with its
+1,098 / 1,294 branches and 67 / 68 functions unchanged.
+
 ## Latin smooth stem-width public routes
 
 Pinned FreeType 2.14.3 `af_latin_compute_stem_width`

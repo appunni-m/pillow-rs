@@ -1674,6 +1674,12 @@ pub fn metrics_scale_dim(
                 }
                 let dist = ft_mul_fix(max_height, new_scale - v_scale);
                 if -128 < dist && dist < 128 {
+                    // Pinned FreeType 2.14.3 `af_latin_metrics_scale_dim`
+                    // accepts the adjusted vertical scale only while the
+                    // tallest blue-zone extent moves by less than two pixels.
+                    crate::autohint::coverage::record(
+                        crate::autohint::coverage::COV_X_HEIGHT_SCALE_ADJUSTMENT,
+                    );
                     v_scale = new_scale;
                     trace!(target: "autohint::pipeline", "[XHT] adjusted v_scale={v_scale} dist={dist}");
                 }

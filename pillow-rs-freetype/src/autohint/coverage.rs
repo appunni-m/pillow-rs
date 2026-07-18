@@ -106,6 +106,8 @@ pub const COV_HINT_PHASE4_SERIF_OVERLAP: u64 = 1 << 37;
 pub const COV_VSEP_DIMENSIONLESS_CONTOUR: u64 = 1 << 38;
 /// vertical separation: no usable Latin blue pair, so use the scaled EM fallback.
 pub const COV_VSEP_EM_HEIGHT_FALLBACK: u64 = 1 << 39;
+/// metrics scaling: adjust the vertical scale to align the lowercase x-height.
+pub const COV_X_HEIGHT_SCALE_ADJUSTMENT: u64 = 1 << 40;
 
 /// Record a coverage bit for the current glyph.
 pub fn record(bit: u64) {
