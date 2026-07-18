@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_Advances` invalid-range/invalid-flags
+Current verified result after `FT_Get_Advance` probe-face invalid-size-handle
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3791`
+  - `real-parity`: `3792`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `402`
+  - `generic-error-fallback`: `401`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2549,6 +2549,43 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftadvanc.FT_Get_Advances.error_invalid_range_or_flags
+```
+
+### Issue Set BC: `FT_Get_Advance` probe-face exact-error route
+
+Previous blocker:
+
+- `fterrdef.FT_Err_Invalid_Size_Handle.null_or_detached_size_rejected` stayed
+  in `generic-error-fallback`.
+- Exact-error gating exposed that pinned C returned `Invalid_Glyph_Index` for
+  the negative face-index probe passed to `FT_Get_Advance`, while Rust returned
+  `Invalid_Size_Handle`.
+
+Plan:
+
+1. Keep the fixture intact; it exercises a real negative face-index probe with
+   no active `FT_Size`.
+2. Compare FreeType `src/base/ftadvanc.c:116-126` and the TrueType fast
+   advance path used by `FT_LOAD_NO_HINTING`.
+3. Preserve normal no-size-face `Invalid_Size_Handle` behavior, but match the
+   pinned probe-face C route for `FT_Get_Advance`.
+4. Require exact error comparison before route-audit classification.
+
+Verified progress:
+
+- Rust now matches pinned C for this `FT_Get_Advance` probe-face route:
+  negative face-index probe returns `Invalid_Glyph_Index` instead of
+  short-circuiting to `Invalid_Size_Handle`.
+- The focused row passes exact comparison against pinned C FreeType, Rust FFI,
+  thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `fterrdef.FT_Err_Invalid_Size_Handle.null_or_detached_size_rejected` as
+  `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Size_Handle.null_or_detached_size_rejected
 ```
 
 ## Coverage Bulk Context

@@ -1052,6 +1052,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_Get_Advance null-face/null-output error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftadvanc.get_advance"
+        and row.case_id
+        == "fterrdef.FT_Err_Invalid_Size_Handle.null_or_detached_size_rejected"
+    ):
+        return "FT_Get_Advance probe-face invalid-size-handle error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftadvanc.get_advance"
         and row.case_id == "ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY.fast_only_error_behavior"
     ):
         return "FT_ADVANCE_FLAG_FAST_ONLY error behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"

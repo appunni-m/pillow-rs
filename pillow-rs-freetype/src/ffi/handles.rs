@@ -3571,7 +3571,15 @@ pub fn FT_Get_Advance(
     glyph_index: FT_UInt,
     load_flags: FT_Int32,
 ) -> Result<FT_Fixed, FT_Error> {
-    if face.probe_only || !has_active_size(face) {
+    // FreeType `src/base/ftadvanc.c:116-126` checks glyph availability before
+    // any size-dependent fallback.  A negative face-index probe has no active
+    // size and the pinned C oracle reports `Invalid_Glyph_Index` for this
+    // `FT_Get_Advance` route instead of the otherwise natural
+    // `Invalid_Size_Handle`.
+    if face.probe_only {
+        return Err(FT_Err_Invalid_Glyph_Index);
+    }
+    if !has_active_size(face) {
         return Err(FT_Err_Invalid_Size_Handle);
     }
     let glyph_index = u16::try_from(glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
