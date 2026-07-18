@@ -3100,6 +3100,28 @@ contours plus exhaustive collinear delta sequences did not produce a legal
 public simple-outline route, so no coverage-only fixture or behavioral claim
 is retained for that branch.
 
+## Latin current-edge neutral-blue deduplication
+
+Pinned FreeType 2.14.3 `af_latin_hint_edges` in `aflatin.c` treats the two
+directions of a linked stem asymmetrically while producing the same rule: when
+both edges have blue zones, it clears the linked edge first if that edge is
+neutral; otherwise, if the current edge is neutral, it clears the current
+edge.  The existing Arabic fixture proved the linked-neutral arm only.
+`arabic-neutral-first.ttf` now establishes the U+0640 neutral zone at y=0 and
+the normal Arabic top zone at y=300, then exposes one linked U+0628 rectangle
+between those positions.  This reverses which sorted edge carries the neutral
+zone without adding a helper-only route.
+
+Focused Coverage MCP run `e5ef3f3f-9422-44f8-87f2-9790777c7609` passes 1 / 1
+through the C oracle, Rust FFI, C ABI, and WASM ABI.  Full run
+`75d7808f-ff0c-4eff-a360-7d6a6d5c6a3a` passes 7,054 / 7,054 with 135 pending
+rows unchanged; route-audit real parity rises from 3,633 to 3,634.  Snapshot
+`6f2dea46-ef14-4817-8b0e-a28c303a2197` moves `src/autohint/latin.rs` from
+2,626 / 2,838 to 2,629 / 2,838 lines, from 1,087 / 1,284 to 1,088 / 1,284
+branches, and from 3,827 / 4,212 to 3,829 / 4,212 regions; functions remain
+67 / 68.  LLVM's normalized source record reports line 4155 newly hit, while
+the file summary credits the complete three-line current-edge clearing arm.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
