@@ -432,6 +432,20 @@ Verified progress:
   in the tag byte.
 - Rust FFI, C ABI, and WASM ABI now match pinned FreeType for the high-bit tag
   classification trace and the emitted `masked_tags` vector.
+- Added real `outline_model` fixture
+  `outlines/multi-contour-negative-coordinates.json`.
+- Native C oracle now records both concrete variants of
+  `ftimage.FT_Outline_MoveTo_Func.decompose_starts_each_contour` against a
+  three-contour outline containing negative coordinates, line callbacks, conic
+  callbacks, and cubic callbacks. The first divergence during this conversion
+  was asset selection: the Rust/C-ABI/WASM runtime loaded the default square
+  while pinned C used the new negative-coordinate outline. The harness now
+  treats the existing `synthetic_outline` asset key as an `outline_model`
+  fixture key. The second divergence was oracle transform width: the C oracle
+  initially emitted one run while the public row defines two
+  `shift_delta_matrix` entries. The oracle now emits both runs.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for both MoveTo
+  contour-start variants and both callback coordinate transforms.
 
 Focused non-coverage result:
 
@@ -490,6 +504,12 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_CURVE_TAG.classifies_outlin
 Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
 
 ```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_Outline_MoveTo_Func.decompose_starts_each_contour
+```
+
+Result: `2 / 2` runtime parity rows passed, `0` failed, `0` pending.
+
+```bash
 make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Decompose.callback_error_propagates
 ```
 
@@ -501,8 +521,8 @@ make -C pillow-rs-freetype test-op OP=ftoutln.outline_decompose
 
 Result after the line/conic/cubic fixture, shift/delta fixture, conic fixture,
 mixed callback fixture, on-curve fixture, cubic fixtures, callback-error
-routes, and high-bit curve-tag fixture: `10 / 10` runtime parity rows passed,
-`0` failed, `5` pending.
+routes, high-bit curve-tag fixture, and MoveTo multi-contour fixture:
+`12 / 12` runtime parity rows passed, `0` failed, `3` pending.
 
 Full non-coverage result:
 
@@ -512,9 +532,9 @@ make -C pillow-rs-freetype test
 
 Result after the line/conic/cubic fixture, shift/delta fixture, conic fixture,
 mixed callback fixture, on-curve fixture, cubic fixtures, callback-error
-routes, and high-bit curve-tag fixture: `7141 / 7141` runnable rows passed,
-`0` failed, `93` pending. Route audit: `real-parity` `3724`,
-`pending-route` `85`.
+routes, high-bit curve-tag fixture, and MoveTo multi-contour fixture:
+`7143 / 7143` runnable rows passed, `0` failed, `91` pending. Route audit:
+`real-parity` `3726`, `pending-route` `83`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
 
