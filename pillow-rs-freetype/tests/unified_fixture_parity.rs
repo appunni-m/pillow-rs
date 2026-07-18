@@ -8257,6 +8257,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "freetype.FT_Attach_File.error_missing_or_unsupported_file"
             || case.case_id == "freetype.FT_Attach_Stream.error_null_face"
             || case.case_id == "freetype.FT_Attach_Stream.error_null_open_args"
+            || case.case_id
+                == "freetype.FT_Attach_Stream.error_invalid_open_args_or_unsupported_driver"
             || case.case_id == "freetype.FT_Get_Track_Kerning.error_null_face_or_output"
             || case.case_id == "freetype.FT_Get_Track_Kerning.sfnt_or_no_track_data_error"
             || (case.operation == "freetype.reference_face"
