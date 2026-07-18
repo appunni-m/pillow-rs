@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Request_Size` null-face/null-request
-exact-error route classification:
+Current verified result after `FT_Request_Size` ppem-overflow exact-error
+route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3746`
+  - `real-parity`: `3747`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `447`
+  - `generic-error-fallback`: `446`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1352,6 +1352,36 @@ Verified commands:
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Request_Size.error_null_face_or_request
 make -C pillow-rs-freetype test-op OP=freetype.request_size
+```
+
+### Issue Set U: `FT_Request_Size` ppem-overflow exact-error route
+
+Previous blocker:
+
+- `freetype.FT_Request_Size.error_ppem_overflow` stayed in
+  `generic-error-fallback` even though the fixture expected exact
+  `FT_Err_Invalid_Pixel_Size` behavior for a very large nominal request. The
+  runtime harness accepted the expected error without exact C status/output
+  comparison.
+
+Verified progress:
+
+- The pinned C oracle `emit_request_size` route calls `FT_Request_Size` with
+  the oversized nominal request and records the native error plus the row
+  status/metrics payload.
+- FreeType 2.14.3 `FT_Request_Size` dispatches through
+  `src/base/ftobjs.c:3438-3505`; the Rust implementation already matched the
+  observed ppem-overflow error through Rust FFI, thin C ABI, and WASM ABI.
+- The unified harness now requires exact error status/output comparison for
+  this concrete public case.
+- The route audit now classifies
+  `freetype.FT_Request_Size.error_ppem_overflow` as `real-parity`, validated
+  through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Request_Size.error_ppem_overflow
 ```
 
 ## Coverage Bulk Context

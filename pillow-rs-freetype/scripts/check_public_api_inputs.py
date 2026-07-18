@@ -1054,6 +1054,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Request_Size null-face/null-request errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "freetype.request_size"
+        and row.case_id == "freetype.FT_Request_Size.error_ppem_overflow"
+    ):
+        return "FT_Request_Size ppem-overflow error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "load_glyph"
         and row.case_id == "freetype.FT_Load_Glyph.error_null_face_or_invalid_flags.null_face"
         and lifecycle_handle_is_null(row, "face")
