@@ -9949,6 +9949,73 @@ static int emit_face_or_slot(int argc, char** argv) {
     if (streq(command, "--get-advance")) {
         FT_UInt glyph_index = (FT_UInt)strtoul(argv[7], NULL, 10);
         FT_Int32 load_flags = (FT_Int32)strtol(argv[8], NULL, 10);
+        if (argc == 11) {
+            FT_Fixed sentinel = (FT_Fixed)strtoll(argv[10], NULL, 10);
+            FT_Error first_error = 0;
+            char* probes_first = (char*)malloc(strlen(argv[9]) + 1);
+            char* probes_second = (char*)malloc(strlen(argv[9]) + 1);
+            if (!probes_first || !probes_second) {
+                free(probes_first);
+                free(probes_second);
+                FT_Done_Face(face);
+                FT_Done_FreeType(library);
+                free(data);
+                return 2;
+            }
+            memcpy(probes_first, argv[9], strlen(argv[9]) + 1);
+            memcpy(probes_second, argv[9], strlen(argv[9]) + 1);
+
+            char* token = strtok(probes_first, ",");
+            while (token) {
+                FT_Fixed advance = sentinel;
+                if (streq(token, "null_face")) {
+                    err = FT_Get_Advance(NULL, glyph_index, load_flags, &advance);
+                } else if (streq(token, "null_padvance")) {
+                    err = FT_Get_Advance(face, glyph_index, load_flags, NULL);
+                } else {
+                    err = FT_Err_Invalid_Argument;
+                }
+                if (!first_error && err) {
+                    first_error = err;
+                }
+                token = strtok(NULL, ",");
+            }
+
+            print_status(first_error);
+            printf(",\"output\":{\"rows\":[");
+            token = strtok(probes_second, ",");
+            int first = 1;
+            while (token) {
+                FT_Fixed advance = sentinel;
+                if (streq(token, "null_face")) {
+                    err = FT_Get_Advance(NULL, glyph_index, load_flags, &advance);
+                } else if (streq(token, "null_padvance")) {
+                    err = FT_Get_Advance(face, glyph_index, load_flags, NULL);
+                } else {
+                    err = FT_Err_Invalid_Argument;
+                }
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf(
+                    "{\"probe\":\"%s\",\"status\":%ld,\"error\":%ld,"
+                    "\"padvance\":%ld,\"padvance_preserved\":%s}",
+                    token,
+                    (long)err,
+                    (long)err,
+                    (long)advance,
+                    advance == sentinel ? "true" : "false");
+                token = strtok(NULL, ",");
+            }
+            printf("]}}\n");
+            free(probes_first);
+            free(probes_second);
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 0;
+        }
         FT_Fixed advance = 0;
         err = FT_Get_Advance(face, glyph_index, load_flags, &advance);
         print_status(err);
@@ -11550,7 +11617,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 8 && streq(argv[1], "--load-glyph-num-glyphs")) {
         return emit_face_or_slot(argc, argv);
     }
-    if (argc == 9 && streq(argv[1], "--get-advance")) {
+    if ((argc == 9 || argc == 11) && streq(argv[1], "--get-advance")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 10 && streq(argv[1], "--get-advances")) {

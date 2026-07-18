@@ -4565,6 +4565,20 @@ fn assert_font_getkerning_agrees(case: &InputCase, output: &RunOutput) -> Result
 }
 
 fn rust_get_advance_with_face(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    if get_advance_probe_labels(&case.inputs.params).is_ok() {
+        return get_advance_probe_output(&case.inputs.params, |probe, advance| match probe {
+            // The safe Rust FFI takes `&FT_Face` and returns the advance by
+            // value.  These branches represent the corresponding public C
+            // argument validation from FreeType `src/base/ftadvanc.c:116-120`.
+            "null_face" => FT_Err_Invalid_Face_Handle as FT_Error,
+            "null_padvance" => {
+                let _ = face;
+                let _ = advance;
+                FT_Err_Invalid_Argument
+            }
+            _ => FT_Err_Invalid_Argument,
+        });
+    }
     let output = match FT_Get_Advance(
         face,
         glyph_index_param(&case.inputs.params)?,
@@ -4575,6 +4589,35 @@ fn rust_get_advance_with_face(face: &FT_Face, case: &InputCase) -> Result<RunOut
     };
     assert_font_hori_advance_agrees(case, &output)?;
     Ok(output)
+}
+
+fn get_advance_probe_output<F>(params: &Value, mut run: F) -> Result<RunOutput, String>
+where
+    F: FnMut(&str, &mut FT_Fixed) -> FT_Error,
+{
+    let probes = get_advance_probe_labels(params)?;
+    let sentinel = i64_param(params, "sentinel_padvance")?;
+    let mut first_error = FT_Err_Ok;
+    let mut rows = Vec::with_capacity(probes.len());
+    for probe in probes {
+        let mut advance = sentinel;
+        let error = run(&probe, &mut advance);
+        if first_error == FT_Err_Ok && error != FT_Err_Ok {
+            first_error = error;
+        }
+        rows.push(json!({
+            "probe": probe,
+            "status": error,
+            "error": error,
+            "padvance": advance,
+            "padvance_preserved": advance == sentinel
+        }));
+    }
+    Ok(error_with_output(first_error, json!({"rows": rows})))
+}
+
+fn get_advance_probe_labels(params: &Value) -> Result<Vec<String>, String> {
+    string_array_param(params, "probes")
 }
 
 fn assert_font_hori_advance_agrees(case: &InputCase, output: &RunOutput) -> Result<(), String> {
@@ -8262,6 +8305,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "freetype.FT_Face.null_and_done_handle_errors"
             || case.case_id
                 == "freetype.FT_IS_NAMED_INSTANCE.encoded_named_instance_face_index_returns_true"
+            || case.case_id == "ftadvanc.FT_Get_Advance.error_null_face_or_output"
             || case.case_id == "freetype.FT_Get_Track_Kerning.error_null_face_or_output"
             || case.case_id == "freetype.FT_Get_Track_Kerning.sfnt_or_no_track_data_error"
             || (case.operation == "freetype.reference_face"
@@ -10171,6 +10215,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             push_face_size(params, &mut args)?;
             args.push(glyph_index_param(params)?.to_string());
             args.push(load_flags_param(params)?.to_string());
+            if params.get("probes").is_some() {
+                args.push(string_array_param(params, "probes")?.join(","));
+                args.push(i64_param(params, "sentinel_padvance")?.to_string());
+            }
             Ok(args)
         }
         "ftadvanc.get_advances" => {
@@ -11437,6 +11485,23 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             } else {
                 c_open_face(case)?
             };
+            if get_advance_probe_labels(&case.inputs.params).is_ok() {
+                let glyph_index = glyph_index_param(&case.inputs.params)?;
+                let load_flags = load_flags_param(&case.inputs.params)?;
+                let output =
+                    get_advance_probe_output(&case.inputs.params, |probe, advance| match probe {
+                        "null_face" => {
+                            c_abi::FT_Get_Advance(ptr::null_mut(), glyph_index, load_flags, advance)
+                        }
+                        "null_padvance" => {
+                            c_abi::FT_Get_Advance(face, glyph_index, load_flags, ptr::null_mut())
+                        }
+                        _ => FT_Err_Invalid_Argument,
+                    });
+                c_done_face(face);
+                c_done_library(library);
+                return output;
+            }
             let mut advance = 0;
             let err = c_abi::FT_Get_Advance(
                 face,
@@ -11961,6 +12026,25 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             } else {
                 wasm_open_face(case)?
             };
+            if get_advance_probe_labels(&case.inputs.params).is_ok() {
+                let glyph_index = glyph_index_param(&case.inputs.params)?;
+                let load_flags = load_flags_param(&case.inputs.params)?;
+                let output =
+                    get_advance_probe_output(&case.inputs.params, |probe, advance| match probe {
+                        "null_face" => {
+                            wasm_abi::fontdone_wasm_get_advance(0, glyph_index, load_flags, advance)
+                        }
+                        "null_padvance" => wasm_abi::fontdone_wasm_get_advance(
+                            handle,
+                            glyph_index,
+                            load_flags,
+                            ptr::null_mut(),
+                        ),
+                        _ => FT_Err_Invalid_Argument,
+                    });
+                wasm_done_face(handle);
+                return output;
+            }
             let mut advance = 0;
             let err = wasm_abi::fontdone_wasm_get_advance(
                 handle,

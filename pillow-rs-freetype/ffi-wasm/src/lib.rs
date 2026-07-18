@@ -2278,10 +2278,12 @@ pub extern "C" fn fontdone_wasm_get_advance(
     load_flags: FT_Int32,
     padvance: *mut FT_Fixed,
 ) -> FT_Error {
-    if padvance.is_null() {
-        return rust_ffi::FT_Err_Invalid_Argument;
-    }
     let Some(face) = face_ref(handle) else {
+        // FreeType `src/base/ftadvanc.c:116-120` checks `face` before
+        // `padvance`, so a missing face reports `Invalid_Face_Handle`.
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    if padvance.is_null() {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
     match rust_ffi::FT_Get_Advance(&face.face, glyph_index, load_flags) {
