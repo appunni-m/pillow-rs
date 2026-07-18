@@ -2022,6 +2022,37 @@
           ]
         },
         {
+          "id": "sbit-gray-index-format2-missing-big-metrics",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_gray_index_format2_missing_big_metrics.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT index-format-2 strike whose constant-size subtable stops inside the required big-metrics record."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 1,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "expect_error": true,
+          "expectation": {
+            "compare": {
+              "compare_error_output": true
+            }
+          },
+          "coverage": [
+            "sbit:gray-index-format2-missing-big-metrics-public-error"
+          ]
+        },
+        {
           "id": "sbit-gray-index-format4-sbits-only",
           "assets": {
             "font": {
@@ -2100,6 +2131,99 @@
           },
           "coverage": [
             "sbit:mono-index-format5-bit-aligned-bitmap-success"
+          ]
+        },
+        {
+          "id": "sbit-mono-image-format5-missing-metrics",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_mono_image_format5_missing_metrics.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT index-format-1 subtable selecting bit-aligned image-format-5 data without EBLC-provided big metrics."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 1,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "expect_error": true,
+          "expectation": {
+            "compare": {
+              "compare_error_output": true
+            }
+          },
+          "coverage": [
+            "sbit:mono-image-format5-missing-metrics-public-error"
+          ]
+        },
+        {
+          "id": "sbit-mono-index-format5-missing-big-metrics",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_mono_index_format5_missing_big_metrics.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT index-format-5 subtable whose constant metrics record is truncated before the sparse glyph-code count."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 1,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "expect_error": true,
+          "expectation": {
+            "compare": {
+              "compare_error_output": true
+            }
+          },
+          "coverage": [
+            "sbit:mono-index-format5-missing-big-metrics-public-error"
+          ]
+        },
+        {
+          "id": "sbit-mono-index-format5-truncated-image",
+          "assets": {
+            "font": {
+              "kind": "ref",
+              "role": "font",
+              "id": "fixtures/assets/fonts/sbit_mono_index_format5_truncated_image.ttf",
+              "requirements": "Synthetic scalable SFNT with one 20 ppem EBLC/EBDT index-format-5 bit-aligned bitmap whose EBDT image is shorter than the payload required by EBLC big metrics."
+            }
+          },
+          "params": {
+            "face_index": 0,
+            "pixel_size": {
+              "x": 0,
+              "y": 20
+            },
+            "glyph_index": 1,
+            "load_flags": [
+              "FT_LOAD_SBITS_ONLY"
+            ]
+          },
+          "expect_error": true,
+          "expectation": {
+            "compare": {
+              "compare_error_output": true
+            }
+          },
+          "coverage": [
+            "sbit:mono-index-format5-truncated-bit-aligned-image-public-error"
           ]
         },
         {
