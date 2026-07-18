@@ -704,7 +704,7 @@ struct Segment {
     y1: i32,
 }
 
-fn rasterize_mono_center(
+pub(crate) fn rasterize_mono_center(
     outline: &Outline,
     width: usize,
     height: usize,

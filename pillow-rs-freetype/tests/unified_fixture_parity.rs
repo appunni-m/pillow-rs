@@ -46,6 +46,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
+const OUTLINE_RENDER_USER_TOKEN: usize = 0x1234_5678;
+
 #[path = "support/generated_constant_lookup.rs"]
 mod generated_constant_lookup;
 use generated_constant_lookup::generated_rust_constant;
@@ -695,6 +697,13 @@ fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness 
     if let Some(reason) = build_dependent_runtime_reason(case) {
         return RuntimeReadiness::Pending {
             reason: format!("{operation}:{reason}"),
+        };
+    }
+    if operation == "ftoutln.outline_decompose" {
+        return RuntimeReadiness::Pending {
+            reason: format!(
+                "{operation}:pending-core outline callback trace route not implemented"
+            ),
         };
     }
     if !is_supported_runtime_operation(case, operation) {
@@ -18149,7 +18158,12 @@ fn outline_render_direct_fallback_runtime_output(case: &InputCase) -> Result<Run
                 raster.pixels
             };
             Ok(ok(outline_render_bitmap_payload(
-                width, height, pitch, &buffer, true,
+                width,
+                height,
+                pitch,
+                FT_PIXEL_MODE_GRAY,
+                &buffer,
+                true,
             )))
         }
         Err(fontdone::FontError::InvalidOutline(_)) => Ok(error(FT_Err_Invalid_Outline)),
@@ -18158,10 +18172,28 @@ fn outline_render_direct_fallback_runtime_output(case: &InputCase) -> Result<Run
 }
 
 fn rust_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if let Some(flag_sets) = outline_render_flag_matrix(&case.inputs.params)? {
+        let mut results = Vec::with_capacity(flag_sets.len());
+        for (flags_label, flags) in flag_sets {
+            let output = rust_outline_render_once(case, flags, true)?;
+            results.push(outline_render_result_payload(flags_label, output));
+        }
+        return Ok(ok(json!({ "results": results })));
+    }
+    let flags = outline_render_flags(&case.inputs.params)?;
+    rust_outline_render_once(case, flags, false)
+}
+
+fn rust_outline_render_once(
+    case: &InputCase,
+    flags: i32,
+    include_error_output: bool,
+) -> Result<RunOutput, String> {
     let library = FT_Init_FreeType();
     let outline = outline_render_snapshot(&outline_render_outline(case)?);
     let (width, rows) = outline_render_target_box(case)?;
     let pitch = outline_render_target_pitch(case, width)?;
+    let pixel_mode = outline_render_target_pixel_mode(&case.inputs.params)?;
     let buffer_len = usize::try_from(pitch.unsigned_abs())
         .map_err(|err| err.to_string())?
         .checked_mul(rows)
@@ -18174,18 +18206,32 @@ fn rust_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, Str
         };
         buffer_len
     ];
-    let flags = outline_render_flags(&case.inputs.params)?;
     let clip_box = outline_render_ffi_clip_box(&case.inputs.params)?;
     let target = FT_Bitmap_C {
         rows: u32::try_from(rows).map_err(|err| err.to_string())?,
         width: u32::try_from(width).map_err(|err| err.to_string())?,
         pitch,
         buffer: buffer.as_mut_ptr(),
-        num_grays: 256,
-        pixel_mode: FT_PIXEL_MODE_GRAY as u8,
+        num_grays: outline_render_num_grays(pixel_mode),
+        pixel_mode: pixel_mode as u8,
         palette_mode: 0,
         palette: ptr::null_mut(),
     };
+    if flags & i32::try_from(FT_RASTER_FLAG_DIRECT).unwrap_or(0) != 0 {
+        return match FT_Outline_Render_Direct_Spans(
+            Some(&library),
+            Some(&outline),
+            Some(&target),
+            flags,
+            outline_render_gray_spans_present(&case.inputs.params),
+        ) {
+            Ok(spans) => Ok(ok(outline_render_direct_payload(
+                spans,
+                outline_render_gray_spans_present(&case.inputs.params),
+            ))),
+            Err(err) => Ok(error(err)),
+        };
+    }
     match FT_Outline_Render(
         Some(&library),
         Some(&outline),
@@ -18197,18 +18243,41 @@ fn rust_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, Str
             width,
             rows,
             pitch,
+            pixel_mode,
             &rendered.buffer,
             true,
         ))),
-        Err(err) if case.expectation.compare.compare_error_output => Ok(error_with_output(
-            err,
-            outline_render_bitmap_payload(width, rows, pitch, &buffer, true),
-        )),
+        Err(err) if include_error_output || case.expectation.compare.compare_error_output => {
+            let output_buffer =
+                FT_Outline_Render_Error_Output(Some(&outline), Some(&target), flags)
+                    .map_or_else(|| buffer.clone(), |rendered| rendered.buffer);
+            Ok(error_with_output(
+                err,
+                outline_render_bitmap_payload(width, rows, pitch, pixel_mode, &output_buffer, true),
+            ))
+        }
         Err(err) => Ok(error(err)),
     }
 }
 
 fn c_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if let Some(flag_sets) = outline_render_flag_matrix(&case.inputs.params)? {
+        let mut results = Vec::with_capacity(flag_sets.len());
+        for (flags_label, flags) in flag_sets {
+            let output = c_outline_render_once(case, flags, true)?;
+            results.push(outline_render_result_payload(flags_label, output));
+        }
+        return Ok(ok(json!({ "results": results })));
+    }
+    let flags = outline_render_flags(&case.inputs.params)?;
+    c_outline_render_once(case, flags, false)
+}
+
+fn c_outline_render_once(
+    case: &InputCase,
+    flags: i32,
+    include_error_output: bool,
+) -> Result<RunOutput, String> {
     let mut library = ptr::null_mut();
     let init_error = c_abi::FT_Init_FreeType(&mut library);
     if init_error != FT_Err_Ok {
@@ -18219,6 +18288,7 @@ fn c_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String
     let outline_ptr = outline.as_ptr();
     let (width, rows) = outline_render_target_box(case)?;
     let pitch = outline_render_target_pitch(case, width)?;
+    let pixel_mode = outline_render_target_pixel_mode(&case.inputs.params)?;
     let buffer_len = usize::try_from(pitch.unsigned_abs())
         .map_err(|err| err.to_string())?
         .checked_mul(rows)
@@ -18236,8 +18306,8 @@ fn c_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String
         width: u32::try_from(width).map_err(|err| err.to_string())?,
         pitch,
         buffer: buffer.as_mut_ptr(),
-        num_grays: 256,
-        pixel_mode: FT_PIXEL_MODE_GRAY,
+        num_grays: outline_render_num_grays(pixel_mode),
+        pixel_mode,
         palette_mode: 0,
         palette: ptr::null_mut(),
     };
@@ -18245,7 +18315,7 @@ fn c_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String
     let mut params = c_abi::FT_Raster_Params {
         target: &target,
         source: std::ptr::dangling::<c_void>(),
-        flags: outline_render_flags(&case.inputs.params)?,
+        flags,
         clip_box: c_abi::FT_BBox {
             xMin: clip_box.xMin,
             yMin: clip_box.yMin,
@@ -18254,6 +18324,22 @@ fn c_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String
         },
         ..c_abi::FT_Raster_Params::default()
     };
+    let direct_render = flags & i32::try_from(FT_RASTER_FLAG_DIRECT).unwrap_or(0) != 0;
+    if direct_render {
+        let (err, spans, user_seen) = c_abi::abi_support_outline_render_direct_spans(
+            library,
+            outline_ptr,
+            &mut params,
+            outline_render_gray_spans_present(&case.inputs.params),
+            OUTLINE_RENDER_USER_TOKEN as *mut c_void,
+        );
+        c_done_library(library);
+        return if err == FT_Err_Ok {
+            Ok(ok(c_outline_render_direct_payload(spans, user_seen)))
+        } else {
+            Ok(error(err))
+        };
+    }
     let err = c_abi::FT_Outline_Render(library, outline_ptr, &mut params);
     c_done_library(library);
     if err == FT_Err_Ok {
@@ -18261,16 +18347,18 @@ fn c_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String
             width,
             rows,
             pitch,
+            pixel_mode,
             &buffer,
             params.source == outline_ptr.cast(),
         )))
-    } else if case.expectation.compare.compare_error_output {
+    } else if include_error_output || case.expectation.compare.compare_error_output {
         Ok(error_with_output(
             err,
             outline_render_bitmap_payload(
                 width,
                 rows,
                 pitch,
+                pixel_mode,
                 &buffer,
                 params.source == outline_ptr.cast(),
             ),
@@ -18281,11 +18369,29 @@ fn c_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String
 }
 
 fn wasm_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if let Some(flag_sets) = outline_render_flag_matrix(&case.inputs.params)? {
+        let mut results = Vec::with_capacity(flag_sets.len());
+        for (flags_label, flags) in flag_sets {
+            let output = wasm_outline_render_once(case, flags, true)?;
+            results.push(outline_render_result_payload(flags_label, output));
+        }
+        return Ok(ok(json!({ "results": results })));
+    }
+    let flags = outline_render_flags(&case.inputs.params)?;
+    wasm_outline_render_once(case, flags, false)
+}
+
+fn wasm_outline_render_once(
+    case: &InputCase,
+    flags: i32,
+    include_error_output: bool,
+) -> Result<RunOutput, String> {
     let outline_model = outline_render_outline(case)?;
     let mut outline = WasmRenderOutlineStorage::new(&outline_model);
     let outline_ptr = outline.as_ptr();
     let (width, rows) = outline_render_target_box(case)?;
     let pitch = outline_render_target_pitch(case, width)?;
+    let pixel_mode = outline_render_target_pixel_mode(&case.inputs.params)?;
     let buffer_len = usize::try_from(pitch.unsigned_abs())
         .map_err(|err| err.to_string())?
         .checked_mul(rows)
@@ -18304,8 +18410,8 @@ fn wasm_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, Str
         pitch,
         buffer: buffer.as_mut_ptr(),
         buffer_len: buffer.len(),
-        num_grays: 256,
-        pixel_mode: FT_PIXEL_MODE_GRAY,
+        num_grays: outline_render_num_grays(pixel_mode),
+        pixel_mode,
         palette_mode: 0,
         palette: ptr::null(),
     };
@@ -18313,7 +18419,7 @@ fn wasm_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, Str
     let mut params = wasm_abi::FontdoneWasmRasterParams {
         target: &mut target,
         source: std::ptr::dangling::<c_void>(),
-        flags: outline_render_flags(&case.inputs.params)?,
+        flags,
         clip_box: wasm_abi::FontdoneWasmBBox {
             xMin: clip_box.xMin,
             yMin: clip_box.yMin,
@@ -18322,22 +18428,39 @@ fn wasm_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, Str
         },
         ..wasm_abi::FontdoneWasmRasterParams::default()
     };
+    let direct_render = flags & i32::try_from(FT_RASTER_FLAG_DIRECT).unwrap_or(0) != 0;
+    if direct_render {
+        let (err, spans, user_seen) = wasm_abi::abi_support_outline_render_direct_spans(
+            1,
+            outline_ptr,
+            &mut params,
+            outline_render_gray_spans_present(&case.inputs.params),
+            OUTLINE_RENDER_USER_TOKEN as *mut c_void,
+        );
+        return if err == FT_Err_Ok {
+            Ok(ok(outline_render_direct_payload(spans, user_seen)))
+        } else {
+            Ok(error(err))
+        };
+    }
     let err = wasm_abi::fontdone_wasm_outline_render(1, outline_ptr, &mut params);
     if err == FT_Err_Ok {
         Ok(ok(outline_render_bitmap_payload(
             width,
             rows,
             pitch,
+            pixel_mode,
             &buffer,
             params.source == outline_ptr.cast(),
         )))
-    } else if case.expectation.compare.compare_error_output {
+    } else if include_error_output || case.expectation.compare.compare_error_output {
         Ok(error_with_output(
             err,
             outline_render_bitmap_payload(
                 width,
                 rows,
                 pitch,
+                pixel_mode,
                 &buffer,
                 params.source == outline_ptr.cast(),
             ),
@@ -18378,16 +18501,122 @@ fn outline_render_snapshot(outline: &fontdone::outline::Outline) -> FT_OutlineSn
 
 fn outline_render_flags(params: &Value) -> Result<i32, String> {
     let flags = params
-        .get("raster_params")
-        .and_then(|raster_params| raster_params.get("flags"))
+        .get("flags")
+        .or_else(|| {
+            params
+                .get("raster_params")
+                .and_then(|raster_params| raster_params.get("flags"))
+        })
         .and_then(Value::as_array)
-        .ok_or_else(|| "raster_params.flags must be an array".to_string())?;
+        .ok_or_else(|| "flags or raster_params.flags must be an array".to_string())?;
+    outline_render_flag_symbols(flags)
+}
+
+fn outline_render_flag_matrix(params: &Value) -> Result<Option<Vec<(String, i32)>>, String> {
+    let Some(flags) = params.get("flags_matrix").and_then(Value::as_array) else {
+        return Ok(None);
+    };
+    flags
+        .iter()
+        .map(|flag| {
+            let symbol = flag
+                .as_str()
+                .ok_or_else(|| "raster flag matrix entry must be a constant name".to_string())?;
+            let value = i32::try_from(rust_constant(symbol)?).map_err(|err| err.to_string())?;
+            Ok((symbol.to_string(), value))
+        })
+        .collect::<Result<Vec<_>, String>>()
+        .map(Some)
+}
+
+fn outline_render_flag_symbols(flags: &[Value]) -> Result<i32, String> {
     flags.iter().try_fold(0_i32, |combined, flag| {
         let symbol = flag
             .as_str()
             .ok_or_else(|| "raster flag must be a constant name".to_string())?;
         let value = i32::try_from(rust_constant(symbol)?).map_err(|err| err.to_string())?;
         Ok(combined | value)
+    })
+}
+
+fn outline_render_target_pixel_mode(params: &Value) -> Result<i32, String> {
+    params
+        .get("target_bitmap")
+        .and_then(|bitmap| bitmap.get("pixel_mode"))
+        .and_then(Value::as_str)
+        .map(|symbol| i32::try_from(rust_constant(symbol)?).map_err(|err| err.to_string()))
+        .transpose()
+        .map(|mode| mode.unwrap_or(FT_PIXEL_MODE_GRAY))
+}
+
+fn outline_render_num_grays(pixel_mode: i32) -> u16 {
+    match pixel_mode {
+        FT_PIXEL_MODE_MONO => 2,
+        FT_PIXEL_MODE_GRAY2 => 4,
+        FT_PIXEL_MODE_GRAY4 => 16,
+        _ => 256,
+    }
+}
+
+fn outline_render_result_payload(flags: String, output: RunOutput) -> Value {
+    let mut result = json!({
+        "flags": flags,
+        "status": output.status.error_code,
+    });
+    if !output.output.is_null() {
+        if let Some(bitmap) = output.output.get("bitmap") {
+            result["bitmap"] = bitmap.clone();
+        }
+        if let Some(value) = output.output.get("params_source_is_outline") {
+            result["params_source_is_outline"] = value.clone();
+        }
+    }
+    result
+}
+
+fn outline_render_gray_spans_present(params: &Value) -> bool {
+    params
+        .get("gray_spans")
+        .and_then(Value::as_str)
+        .is_none_or(|value| value != "NULL")
+}
+
+fn outline_render_direct_payload(spans: Vec<(i32, FT_Span)>, user_seen: bool) -> Value {
+    json!({
+        "status": FT_Err_Ok,
+        "spans": spans
+            .into_iter()
+            .map(|(y, span)| {
+                json!({
+                    "y": y,
+                    "x": span.x,
+                    "len": span.len,
+                    "coverage": span.coverage,
+                })
+            })
+            .collect::<Vec<_>>(),
+        "user_seen": user_seen,
+        "target_preserved": true,
+    })
+}
+
+fn c_outline_render_direct_payload(spans: Vec<(i32, c_abi::FT_Span)>, user_seen: bool) -> Value {
+    let spans = spans
+        .into_iter()
+        .map(|(y, span)| {
+            json!({
+                "y": y,
+                "x": u16::from_ne_bytes(span.x.to_ne_bytes()),
+                "len": span.len,
+                "coverage": span.coverage,
+            })
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "status": FT_Err_Ok,
+        "spans": spans,
+        "user_seen": user_seen,
+        "target_preserved": true,
     })
 }
 
@@ -19051,6 +19280,9 @@ fn wasm_outline_get_bitmap_invalid_target_json(bitmap: &wasm_abi::FontdoneWasmBi
 }
 
 fn outline_render_outline(case: &InputCase) -> Result<fontdone::outline::Outline, String> {
+    if let Some(outline) = outline_render_fixture_outline(case)? {
+        return Ok(outline);
+    }
     match outline_asset_id(case).unwrap_or("outlines/render/simple-filled-square.json") {
         "outlines/render/simple-filled-square.json" => Ok(outline_render_square()),
         "outlines/render/direct-spans-clipped.json" => Ok(outline_render_square()),
@@ -19159,6 +19391,171 @@ fn outline_render_outline(case: &InputCase) -> Result<fontdone::outline::Outline
             Ok(outline_render_invalid_cubic_second_not_cubic())
         }
         _ => Ok(outline_render_square()),
+    }
+}
+
+fn outline_render_fixture_outline(
+    case: &InputCase,
+) -> Result<Option<fontdone::outline::Outline>, String> {
+    let Some(asset) = case.inputs.assets.get("outline") else {
+        return Ok(None);
+    };
+    let Some(path) = asset_file_path(asset) else {
+        return Ok(None);
+    };
+    let bytes = cached_file_bytes(path)?;
+    let value: Value =
+        serde_json::from_slice(&bytes).map_err(|err| format!("parse {path}: {err}"))?;
+    if value.get("kind").and_then(Value::as_str) != Some("outline_model") {
+        return Ok(None);
+    }
+    parse_outline_model_fixture(path, &value).map(Some)
+}
+
+fn parse_outline_model_fixture(
+    path: &str,
+    value: &Value,
+) -> Result<fontdone::outline::Outline, String> {
+    let points_value = value
+        .get("points")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("{path} points must be an array"))?;
+    let mut points = Vec::with_capacity(points_value.len());
+    for (index, point) in points_value.iter().enumerate() {
+        let x = outline_fixture_i32(path, point, "x")?;
+        let y = outline_fixture_i32(path, point, "y")?;
+        points.push(fontdone::outline::OutlinePoint {
+            x,
+            y,
+            on_curve: true,
+        });
+        if point.get("on_curve").is_some() {
+            points[index].on_curve = point
+                .get("on_curve")
+                .and_then(Value::as_bool)
+                .ok_or_else(|| format!("{path} points[{index}].on_curve must be a bool"))?;
+        }
+    }
+
+    let tags = outline_fixture_u8_array(path, value, "tags")?;
+    if !tags.is_empty() && tags.len() != points.len() {
+        return Err(format!(
+            "{path} tags length {} must match points length {}",
+            tags.len(),
+            points.len()
+        ));
+    }
+    if !tags.is_empty() {
+        for (point, tag) in points.iter_mut().zip(tags.iter().copied()) {
+            point.on_curve = tag & 1 != 0;
+        }
+    }
+
+    let contours = outline_fixture_i16_array(path, value, "contours")?;
+    let contour_dropouts = outline_fixture_u8_array(path, value, "contour_dropouts")?;
+    let flags = value
+        .get("flags")
+        .and_then(Value::as_i64)
+        .map_or(Ok(0), |raw| {
+            u32::try_from(raw).map_err(|err| format!("{path} flags out of range: {err}"))
+        })?;
+    let (cbox_x_min, cbox_y_min, cbox_x_max, cbox_y_max) =
+        outline_fixture_cbox(value).unwrap_or_else(|| derive_outline_fixture_cbox(&points));
+
+    Ok(fontdone::outline::Outline {
+        n_contours: i32::try_from(contours.len())
+            .map_err(|err| format!("{path} contour count out of range: {err}"))?,
+        contours,
+        points,
+        tags,
+        contour_dropouts,
+        flags,
+        cbox_x_min,
+        cbox_y_min,
+        cbox_x_max,
+        cbox_y_max,
+    })
+}
+
+fn outline_fixture_i32(path: &str, value: &Value, field: &str) -> Result<i32, String> {
+    let raw = value
+        .get(field)
+        .and_then(Value::as_i64)
+        .ok_or_else(|| format!("{path} point.{field} must be an integer"))?;
+    i32::try_from(raw).map_err(|err| format!("{path} point.{field} out of range: {err}"))
+}
+
+fn outline_fixture_i16_array(path: &str, value: &Value, field: &str) -> Result<Vec<i16>, String> {
+    let Some(items) = value.get(field).and_then(Value::as_array) else {
+        return Ok(Vec::new());
+    };
+    items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let raw = item
+                .as_i64()
+                .ok_or_else(|| format!("{path} {field}[{index}] must be an integer"))?;
+            i16::try_from(raw).map_err(|err| format!("{path} {field}[{index}] out of range: {err}"))
+        })
+        .collect()
+}
+
+fn outline_fixture_u8_array(path: &str, value: &Value, field: &str) -> Result<Vec<u8>, String> {
+    let Some(items) = value.get(field).and_then(Value::as_array) else {
+        return Ok(Vec::new());
+    };
+    items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let raw = item
+                .as_u64()
+                .ok_or_else(|| format!("{path} {field}[{index}] must be an unsigned integer"))?;
+            u8::try_from(raw).map_err(|err| format!("{path} {field}[{index}] out of range: {err}"))
+        })
+        .collect()
+}
+
+fn outline_fixture_cbox(value: &Value) -> Option<(i32, i32, i32, i32)> {
+    let cbox = value.get("cbox")?;
+    Some((
+        i32::try_from(cbox.get("x_min")?.as_i64()?).ok()?,
+        i32::try_from(cbox.get("y_min")?.as_i64()?).ok()?,
+        i32::try_from(cbox.get("x_max")?.as_i64()?).ok()?,
+        i32::try_from(cbox.get("y_max")?.as_i64()?).ok()?,
+    ))
+}
+
+fn derive_outline_fixture_cbox(points: &[fontdone::outline::OutlinePoint]) -> (i32, i32, i32, i32) {
+    let Some(first) = points.first() else {
+        return (0, 0, 0, 0);
+    };
+    let (mut x_min, mut y_min, mut x_max, mut y_max) = (first.x, first.y, first.x, first.y);
+    for point in points.iter().skip(1) {
+        x_min = x_min.min(point.x);
+        y_min = y_min.min(point.y);
+        x_max = x_max.max(point.x);
+        y_max = y_max.max(point.y);
+    }
+    (
+        floor_26_6(x_min),
+        floor_26_6(y_min),
+        ceil_26_6(x_max),
+        ceil_26_6(y_max),
+    )
+}
+
+fn floor_26_6(value: i32) -> i32 {
+    value.div_euclid(64)
+}
+
+fn ceil_26_6(value: i32) -> i32 {
+    let floor = value.div_euclid(64);
+    if value.rem_euclid(64) == 0 {
+        floor
+    } else {
+        floor.saturating_add(1)
     }
 }
 
@@ -19783,6 +20180,7 @@ fn outline_render_bitmap_payload(
     width: usize,
     height: usize,
     pitch: i32,
+    pixel_mode: i32,
     buffer: &[u8],
     params_source_is_outline: bool,
 ) -> Value {
@@ -19792,8 +20190,8 @@ fn outline_render_bitmap_payload(
             "width": width,
             "rows": height,
             "pitch": pitch,
-            "pixel_mode": FT_PIXEL_MODE_GRAY,
-            "num_grays": 256,
+            "pixel_mode": pixel_mode,
+            "num_grays": outline_render_num_grays(pixel_mode),
             "buffer_hex": hex_bytes(buffer)
         }
     })
@@ -22405,6 +22803,15 @@ fn validate_outline_render_output(
     label: &str,
     case: &InputCase,
 ) -> Result<(), String> {
+    if output.get("results").is_some() {
+        return require_path(output, "/results", label, case);
+    }
+    if output.get("spans").is_some() {
+        require_path(output, "/status", label, case)?;
+        require_path(output, "/spans", label, case)?;
+        require_path(output, "/user_seen", label, case)?;
+        return require_path(output, "/target_preserved", label, case);
+    }
     require_path(output, "/params_source_is_outline", label, case)?;
     require_path(output, "/bitmap/width", label, case)?;
     require_path(output, "/bitmap/rows", label, case)?;

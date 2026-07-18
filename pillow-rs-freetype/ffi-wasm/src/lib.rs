@@ -702,7 +702,8 @@ pub extern "C" fn fontdone_wasm_new_size(handle: usize) -> FontdoneWasmStatus {
     if error == rust_ffi::FT_Err_Ok {
         let size_handle = size as usize;
         face.size_handles.push(size_handle);
-        face.size_metrics.insert(size_handle, face.face.size_metrics);
+        face.size_metrics
+            .insert(size_handle, face.face.size_metrics);
         register_wasm_size_handle(handle, size_handle);
     }
     FontdoneWasmStatus {
@@ -728,7 +729,8 @@ pub extern "C" fn fontdone_wasm_new_size_out(handle: usize, out: *mut usize) -> 
     if error == rust_ffi::FT_Err_Ok {
         let size_handle = size as usize;
         face.size_handles.push(size_handle);
-        face.size_metrics.insert(size_handle, face.face.size_metrics);
+        face.size_metrics
+            .insert(size_handle, face.face.size_metrics);
         register_wasm_size_handle(handle, size_handle);
         // SAFETY: `out` was checked for null and is only written with an opaque handle value.
         unsafe { *out.as_ptr() = size_handle };
@@ -844,8 +846,7 @@ pub extern "C" fn fontdone_wasm_outline_get_bitmap(
         palette_mode: target.palette_mode,
         palette: target.palette.cast_mut(),
     };
-    match rust_ffi::FT_Outline_Get_Bitmap(library.as_ref(), snapshot.as_ref(), Some(&bitmap_view))
-    {
+    match rust_ffi::FT_Outline_Get_Bitmap(library.as_ref(), snapshot.as_ref(), Some(&bitmap_view)) {
         Ok(rendered) => {
             copy_rendered_bitmap_to_wasm(target, &rendered);
             rust_ffi::FT_Err_Ok
@@ -891,6 +892,18 @@ pub extern "C" fn fontdone_wasm_outline_render(
         // renderer call, including calls that return a renderer error.
         params.source = outline.cast();
     }
+    if params.flags & rust_ffi::FT_RASTER_FLAG_DIRECT as FT_Int != 0 {
+        return match rust_ffi::FT_Outline_Render_Direct_Spans(
+            library.as_ref(),
+            snapshot.as_ref(),
+            bitmap_view.as_ref(),
+            params.flags,
+            !params.gray_spans.is_null(),
+        ) {
+            Ok(_) => rust_ffi::FT_Err_Ok,
+            Err(err) => err,
+        };
+    }
     match rust_ffi::FT_Outline_Render(
         library.as_ref(),
         snapshot.as_ref(),
@@ -910,7 +923,62 @@ pub extern "C" fn fontdone_wasm_outline_render(
             }
             rust_ffi::FT_Err_Ok
         }
-        Err(err) => err,
+        Err(err) => {
+            if !params.target.is_null() {
+                if let Some(rendered) = rust_ffi::FT_Outline_Render_Error_Output(
+                    snapshot.as_ref(),
+                    bitmap_view.as_ref(),
+                    params.flags,
+                ) {
+                    // SAFETY: the WASM descriptor points at writable linear-memory
+                    // bitmap storage for this synchronous call.
+                    let target = unsafe { &mut *params.target };
+                    copy_rendered_bitmap_to_wasm(target, &rendered);
+                }
+            }
+            err
+        }
+    }
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_outline_render_direct_spans(
+    library_present: i32,
+    outline: *const FontdoneWasmOutline,
+    params: *mut FontdoneWasmRasterParams,
+    gray_spans_present: bool,
+    user_token: *mut c_void,
+) -> (FT_Error, Vec<(i32, rust_ffi::FT_Span)>, bool) {
+    let Some(params) = (unsafe { params.as_mut() }) else {
+        return (rust_ffi::FT_Err_Invalid_Argument, Vec::new(), false);
+    };
+    params.user = user_token;
+    params.gray_spans = if gray_spans_present {
+        std::ptr::dangling::<c_void>()
+    } else {
+        ptr::null()
+    };
+    let library = if library_present != 0 {
+        Some(rust_ffi::FT_Init_FreeType())
+    } else {
+        None
+    };
+    let snapshot = outline_snapshot_from_wasm(outline);
+    let target = unsafe { params.target.as_ref() };
+    let bitmap_view = target.map(wasm_bitmap_to_rust);
+    match rust_ffi::FT_Outline_Render_Direct_Spans(
+        library.as_ref(),
+        snapshot.as_ref(),
+        bitmap_view.as_ref(),
+        params.flags,
+        gray_spans_present,
+    ) {
+        Ok(spans) => (
+            rust_ffi::FT_Err_Ok,
+            spans,
+            gray_spans_present && params.user == user_token,
+        ),
+        Err(err) => (err, Vec::new(), false),
     }
 }
 
@@ -938,9 +1006,9 @@ pub extern "C" fn fontdone_wasm_outline_transform(
     outline: *const FontdoneWasmOutline,
     matrix: *const FontdoneWasmMatrix,
 ) {
-    let (Some(mut snapshot), Some(matrix)) =
-        (outline_snapshot_from_wasm(outline), unsafe { matrix.as_ref() })
-    else {
+    let (Some(mut snapshot), Some(matrix)) = (outline_snapshot_from_wasm(outline), unsafe {
+        matrix.as_ref()
+    }) else {
         return;
     };
     let matrix = rust_ffi::FT_Matrix {
@@ -959,9 +1027,7 @@ pub extern "C" fn fontdone_wasm_library_set_lcd_filter(filter: FT_LcdFilter) -> 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn fontdone_wasm_library_set_lcd_filter_weights(
-    weights: *mut c_uchar,
-) -> FT_Error {
+pub extern "C" fn fontdone_wasm_library_set_lcd_filter_weights(weights: *mut c_uchar) -> FT_Error {
     rust_ffi::FT_Library_SetLcdFilterWeights(None, weights)
 }
 
@@ -990,10 +1056,7 @@ pub extern "C" fn fontdone_wasm_library_set_lcd_geometry(
         }
         Some(vectors)
     };
-    rust_ffi::FT_Library_SetLcdGeometry(
-        library.as_mut(),
-        rust_sub,
-    )
+    rust_ffi::FT_Library_SetLcdGeometry(library.as_mut(), rust_sub)
 }
 
 #[unsafe(no_mangle)]
@@ -1557,14 +1620,8 @@ pub extern "C" fn fontdone_wasm_get_kerning(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn fontdone_wasm_select_charmap(
-    handle: usize,
-    encoding: FT_Encoding,
-) -> FT_Error {
-    rust_ffi::FT_Select_Charmap(
-        face_mut(handle).map(|face| &mut face.face),
-        encoding,
-    )
+pub extern "C" fn fontdone_wasm_select_charmap(handle: usize, encoding: FT_Encoding) -> FT_Error {
+    rust_ffi::FT_Select_Charmap(face_mut(handle).map(|face| &mut face.face), encoding)
 }
 
 #[unsafe(no_mangle)]
@@ -1732,7 +1789,8 @@ pub extern "C" fn fontdone_wasm_get_font_format(
     let Some(out) = (unsafe { out.as_mut() }) else {
         return 0;
     };
-    let Some(format) = face_ref(handle).and_then(|face| rust_ffi::FT_Get_Font_Format(Some(&face.face)))
+    let Some(format) =
+        face_ref(handle).and_then(|face| rust_ffi::FT_Get_Font_Format(Some(&face.face)))
     else {
         *out = FontdoneWasmString::default();
         return 0;
@@ -1772,10 +1830,7 @@ pub extern "C" fn fontdone_wasm_get_default_named_instance(
 ) -> FT_Error {
     // SAFETY: the caller provides writable storage for the scalar output or null.
     let instance_index = unsafe { instance_index.as_mut() };
-    rust_ffi::FT_Get_Default_Named_Instance(
-        face_ref(handle).map(|face| &face.face),
-        instance_index,
-    )
+    rust_ffi::FT_Get_Default_Named_Instance(face_ref(handle).map(|face| &face.face), instance_index)
 }
 
 #[unsafe(no_mangle)]
@@ -2020,7 +2075,12 @@ pub extern "C" fn fontdone_wasm_library_version(
     let mut major = 0;
     let mut minor = 0;
     let mut patch = 0;
-    rust_ffi::FT_Library_Version(library, Some(&mut major), Some(&mut minor), Some(&mut patch));
+    rust_ffi::FT_Library_Version(
+        library,
+        Some(&mut major),
+        Some(&mut minor),
+        Some(&mut patch),
+    );
     if !amajor.is_null() {
         // SAFETY: `amajor` is non-null and caller provides writable storage.
         unsafe { *amajor = major };
@@ -2454,9 +2514,8 @@ fn copy_outline_snapshot_to_wasm(
     };
     if !outline.points.is_null() {
         // SAFETY: the WASM descriptor promises `n_points` writable vectors.
-        let points = unsafe {
-            slice::from_raw_parts_mut(outline.points, usize::from(outline.n_points))
-        };
+        let points =
+            unsafe { slice::from_raw_parts_mut(outline.points, usize::from(outline.n_points)) };
         for (target, source) in points.iter_mut().zip(&snapshot.points) {
             target.x = source.x;
             target.y = source.y;
@@ -2475,10 +2534,7 @@ fn copy_outline_snapshot_to_wasm(
     }
 }
 
-fn copy_rendered_bitmap_to_wasm(
-    target: &mut FontdoneWasmBitmap,
-    rendered: &rust_ffi::FT_Bitmap,
-) {
+fn copy_rendered_bitmap_to_wasm(target: &mut FontdoneWasmBitmap, rendered: &rust_ffi::FT_Bitmap) {
     let rows = usize::try_from(target.rows).unwrap_or(0);
     let width = usize::try_from(target.width).unwrap_or(0);
     let pitch_abs = usize::try_from(target.pitch.unsigned_abs()).unwrap_or(0);

@@ -3,6 +3,8 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(non_camel_case_types, non_snake_case)]
 
+#[cfg(feature = "abi-test-support")]
+use std::cell::RefCell;
 use std::ffi::{
     CStr, CString, c_char, c_int, c_long, c_short, c_uchar, c_uint, c_ulong, c_ushort, c_void,
 };
@@ -10,6 +12,13 @@ use std::ptr::{self, NonNull};
 use std::slice;
 
 use fontdone::ffi as rust_ffi;
+
+#[cfg(feature = "abi-test-support")]
+thread_local! {
+    static TEST_OUTLINE_RENDER_SPANS: RefCell<Vec<(c_int, FT_Span)>> = const { RefCell::new(Vec::new()) };
+    static TEST_OUTLINE_RENDER_USER_SEEN: RefCell<bool> = const { RefCell::new(false) };
+    static TEST_OUTLINE_RENDER_USER_TOKEN: RefCell<*mut c_void> = const { RefCell::new(ptr::null_mut()) };
+}
 
 pub type FT_Error = c_int;
 pub type FT_Bool = c_uchar;
@@ -144,9 +153,8 @@ pub struct FT_Span {
     pub coverage: c_uchar,
 }
 
-pub type FT_SpanFunc = Option<
-    unsafe extern "C" fn(y: c_int, count: c_int, spans: *const FT_Span, user: *mut c_void),
->;
+pub type FT_SpanFunc =
+    Option<unsafe extern "C" fn(y: c_int, count: c_int, spans: *const FT_Span, user: *mut c_void)>;
 pub type FT_Raster_BitTest_Func =
     Option<unsafe extern "C" fn(y: c_int, x: c_int, user: *mut c_void) -> c_int>;
 pub type FT_Raster_BitSet_Func =
@@ -215,8 +223,11 @@ pub extern "C" fn FT_Bitmap_Copy(
         rust_ffi::FT_Bitmap_Set_Owned_Buffer(Some(&mut source_view), bytes);
     }
 
-    let err =
-        rust_ffi::FT_Bitmap_Copy(library_ref(library), Some(&source_view), Some(&mut target_view));
+    let err = rust_ffi::FT_Bitmap_Copy(
+        library_ref(library),
+        Some(&source_view),
+        Some(&mut target_view),
+    );
     if err == rust_ffi::FT_Err_Ok {
         copy_rust_bitmap_record_to_c(target_ref, &target_view);
     }
@@ -969,7 +980,9 @@ pub extern "C" fn FT_Done_FreeType(library: FT_Library) -> FT_Error {
         unsafe {
             let library = Box::from_raw(library.as_ptr());
             if !library.internal.is_null() {
-                drop(Box::from_raw(library.internal.cast::<rust_ffi::FT_Library>()));
+                drop(Box::from_raw(
+                    library.internal.cast::<rust_ffi::FT_Library>(),
+                ));
             }
         }
         rust_ffi::FT_Err_Ok
@@ -979,10 +992,7 @@ pub extern "C" fn FT_Done_FreeType(library: FT_Library) -> FT_Error {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn FT_Library_SetLcdFilter(
-    _library: FT_Library,
-    filter: FT_LcdFilter,
-) -> FT_Error {
+pub extern "C" fn FT_Library_SetLcdFilter(_library: FT_Library, filter: FT_LcdFilter) -> FT_Error {
     rust_ffi::FT_Library_SetLcdFilter(None, filter)
 }
 
@@ -1013,16 +1023,11 @@ pub extern "C" fn FT_Library_SetLcdGeometry(
         }
         Some(vectors)
     };
-    rust_ffi::FT_Library_SetLcdGeometry(
-        library_mut(library),
-        rust_sub,
-    )
+    rust_ffi::FT_Library_SetLcdGeometry(library_mut(library), rust_sub)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn FT_Get_TrueType_Engine_Type(
-    library: FT_Library,
-) -> FT_TrueTypeEngineType {
+pub extern "C" fn FT_Get_TrueType_Engine_Type(library: FT_Library) -> FT_TrueTypeEngineType {
     rust_ffi::FT_Get_TrueType_Engine_Type(library_ref(library))
 }
 
@@ -1178,11 +1183,7 @@ pub extern "C" fn FT_Vector_Polarize(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn FT_Vector_From_Polar(
-    vector: *mut FT_Vector,
-    length: FT_Fixed,
-    angle: FT_Angle,
-) {
+pub extern "C" fn FT_Vector_From_Polar(vector: *mut FT_Vector, length: FT_Fixed, angle: FT_Angle) {
     let vector = non_null_mut(vector);
     let mut rust_vector = vector.map(|vector| {
         // SAFETY: `vector` is non-null and points to a C ABI `FT_Vector`.
@@ -1423,8 +1424,11 @@ pub extern "C" fn FT_Outline_Get_Bitmap(
             palette: bitmap.palette,
         }
     };
-    match rust_ffi::FT_Outline_Get_Bitmap(library_ref(library), snapshot.as_ref(), Some(&bitmap_view))
-    {
+    match rust_ffi::FT_Outline_Get_Bitmap(
+        library_ref(library),
+        snapshot.as_ref(),
+        Some(&bitmap_view),
+    ) {
         Ok(rendered) => {
             // SAFETY: `bitmap` is non-null and still points to caller-owned storage.
             let bitmap = unsafe { bitmap.as_mut() };
@@ -1470,6 +1474,45 @@ pub extern "C" fn FT_Outline_Render(
         params.source = outline.cast();
     }
 
+    if params.flags & rust_ffi::FT_RASTER_FLAG_DIRECT as c_int != 0 {
+        return match rust_ffi::FT_Outline_Render_Direct_Spans(
+            library_view,
+            snapshot.as_ref(),
+            bitmap_view.as_ref(),
+            params.flags,
+            params.gray_spans.is_some(),
+        ) {
+            Ok(spans) => {
+                if let Some(callback) = params.gray_spans {
+                    for row in spans.chunk_by(|left, right| left.0 == right.0) {
+                        let y = row[0].0;
+                        let c_spans = row
+                            .iter()
+                            .map(|(_, span)| FT_Span {
+                                x: i16::from_ne_bytes(span.x.to_ne_bytes()),
+                                len: span.len,
+                                coverage: span.coverage,
+                            })
+                            .collect::<Vec<_>>();
+                        // SAFETY: `c_spans` lives for the synchronous callback
+                        // invocation, and `params.user` is the caller-provided
+                        // opaque pointer FreeType passes through unchanged.
+                        unsafe {
+                            callback(
+                                y,
+                                c_int::try_from(c_spans.len()).unwrap_or(c_int::MAX),
+                                c_spans.as_ptr(),
+                                params.user,
+                            );
+                        }
+                    }
+                }
+                rust_ffi::FT_Err_Ok
+            }
+            Err(err) => err,
+        };
+    }
+
     match rust_ffi::FT_Outline_Render(
         library_view,
         snapshot.as_ref(),
@@ -1486,8 +1529,66 @@ pub extern "C" fn FT_Outline_Render(
             }
             rust_ffi::FT_Err_Ok
         }
-        Err(err) => err,
+        Err(err) => {
+            if let (Some(target), Some(rendered)) = (
+                target,
+                rust_ffi::FT_Outline_Render_Error_Output(
+                    snapshot.as_ref(),
+                    bitmap_view.as_ref(),
+                    params.flags,
+                ),
+            ) {
+                copy_rendered_bitmap_to_c(target, &rendered);
+            }
+            err
+        }
     }
+}
+
+#[cfg(feature = "abi-test-support")]
+unsafe extern "C" fn abi_support_outline_render_gray_spans(
+    y: c_int,
+    count: c_int,
+    spans: *const FT_Span,
+    user: *mut c_void,
+) {
+    TEST_OUTLINE_RENDER_USER_TOKEN.with(|token| {
+        TEST_OUTLINE_RENDER_USER_SEEN.with(|seen| {
+            *seen.borrow_mut() = user == *token.borrow();
+        });
+    });
+    if count <= 0 || spans.is_null() {
+        return;
+    }
+    // SAFETY: FreeType span callbacks provide `count` initialized records
+    // valid for this synchronous callback invocation.
+    let spans = unsafe { slice::from_raw_parts(spans, usize::try_from(count).unwrap_or(0)) };
+    TEST_OUTLINE_RENDER_SPANS.with(|recorded| {
+        recorded
+            .borrow_mut()
+            .extend(spans.iter().copied().map(|span| (y, span)));
+    });
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_outline_render_direct_spans(
+    library: FT_Library,
+    outline: *const FT_Outline,
+    params: *mut FT_Raster_Params,
+    gray_spans_present: bool,
+    user_token: *mut c_void,
+) -> (FT_Error, Vec<(c_int, FT_Span)>, bool) {
+    TEST_OUTLINE_RENDER_SPANS.with(|spans| spans.borrow_mut().clear());
+    TEST_OUTLINE_RENDER_USER_SEEN.with(|seen| *seen.borrow_mut() = false);
+    TEST_OUTLINE_RENDER_USER_TOKEN.with(|token| *token.borrow_mut() = user_token);
+    if let Some(params) = unsafe { params.as_mut() } {
+        params.user = user_token;
+        params.gray_spans = gray_spans_present.then_some(abi_support_outline_render_gray_spans);
+    }
+    let error = FT_Outline_Render(library, outline, params);
+    let spans = TEST_OUTLINE_RENDER_SPANS.with(|recorded| recorded.borrow().clone());
+    let user_seen = TEST_OUTLINE_RENDER_USER_SEEN.with(|seen| *seen.borrow());
+    (error, spans, user_seen)
 }
 
 #[unsafe(no_mangle)]
@@ -1508,12 +1609,8 @@ pub extern "C" fn FT_Outline_Reverse(outline: *mut FT_Outline) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn FT_Outline_Transform(
-    outline: *const FT_Outline,
-    matrix: *const FT_Matrix,
-) {
-    let (Some(mut snapshot), Some(matrix)) =
-        (outline_snapshot_from_c(outline), non_null(matrix))
+pub extern "C" fn FT_Outline_Transform(outline: *const FT_Outline, matrix: *const FT_Matrix) {
+    let (Some(mut snapshot), Some(matrix)) = (outline_snapshot_from_c(outline), non_null(matrix))
     else {
         return;
     };
@@ -1993,8 +2090,11 @@ pub extern "C" fn FT_Get_Sfnt_Name(
         return rust_ffi::FT_Get_Sfnt_Name(face_state(face).map(|state| &state.inner), idx, None);
     };
     let mut name = rust_ffi::FT_SfntName::default();
-    let error =
-        rust_ffi::FT_Get_Sfnt_Name(face_state(face).map(|state| &state.inner), idx, Some(&mut name));
+    let error = rust_ffi::FT_Get_Sfnt_Name(
+        face_state(face).map(|state| &state.inner),
+        idx,
+        Some(&mut name),
+    );
     if error == rust_ffi::FT_Err_Ok {
         // SAFETY: `out` is non-null and caller provides writable storage.
         unsafe {
@@ -2278,20 +2378,13 @@ pub extern "C" fn FT_Get_SubGlyph_Info(
     let Some(slot_ptr) = non_null_mut(slot) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
-    let (
-        Some(p_index),
-        Some(p_flags),
-        Some(p_arg1),
-        Some(p_arg2),
-        Some(p_transform),
-    ) = (
+    let (Some(p_index), Some(p_flags), Some(p_arg1), Some(p_arg2), Some(p_transform)) = (
         non_null_mut(p_index),
         non_null_mut(p_flags),
         non_null_mut(p_arg1),
         non_null_mut(p_arg2),
         non_null_mut(p_transform),
-    )
-    else {
+    ) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
 
@@ -2595,7 +2688,8 @@ fn copy_outline_snapshot_to_c(
     let outline = unsafe { outline.as_mut() };
     if !outline.points.is_null() {
         // SAFETY: the public descriptor promises `n_points` writable vectors.
-        let points = unsafe { slice::from_raw_parts_mut(outline.points, usize::from(outline.n_points)) };
+        let points =
+            unsafe { slice::from_raw_parts_mut(outline.points, usize::from(outline.n_points)) };
         for (target, source) in points.iter_mut().zip(&snapshot.points) {
             target.x = source.x;
             target.y = source.y;
