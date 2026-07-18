@@ -248,6 +248,27 @@ def gray_format3_tables() -> tuple[bytes, bytes]:
     return eblc, ebdt
 
 
+def gray_index_format2_tables() -> tuple[bytes, bytes]:
+    # EBLC index format 2 stores a constant image size plus big metrics in the
+    # index subtable.  Pinned FreeType still accepts a byte-aligned image-format
+    # 1 EBDT payload and reloads the small metrics from the image bytes.
+    image = bytes([2, 2, 1, 2, 3]) + bytes([0x22, 0x44, 0x88, 0xFF])
+    index_array = struct.pack(">HHI", 1, 1, 8)
+    big_metrics = bytes([2, 2, 1, 2, 3, 0, 0, 3])
+    index_subtable = struct.pack(">HHI", 2, 1, 4) + struct.pack(">I", len(image)) + big_metrics
+    index_tables = index_array + index_subtable
+    strike = bitmap_size_table(
+        8 + 48,
+        len(index_tables),
+        1,
+        1,
+        bit_depth=8,
+    )
+    eblc = struct.pack(">II", 0x00020000, 1) + strike + index_tables
+    ebdt = struct.pack(">I", 0x00020000) + image
+    return eblc, ebdt
+
+
 def with_eblc_version(eblc: bytes, version: int) -> bytes:
     return struct.pack(">I", version) + eblc[4:]
 
@@ -697,6 +718,11 @@ def build_gray_format3_bitmap() -> None:
     save_sbit_font("sbit_gray_format3.ttf", eblc, ebdt)
 
 
+def build_gray_index_format2_bitmap() -> None:
+    eblc, ebdt = gray_index_format2_tables()
+    save_sbit_font("sbit_gray_index_format2.ttf", eblc, ebdt)
+
+
 def build_sbit_table_tag_and_strike_probes() -> None:
     eblc, ebdt = gray_format1_tables()
     save_sbit_font("sbit_cblc_cbdt_gray_format1.ttf", eblc, ebdt, table_tags=("CBLC", "CBDT"))
@@ -793,6 +819,7 @@ def main() -> None:
     build_unsupported_image_format_bitmap()
     build_missing_small_metrics_width_bitmap()
     build_gray_format3_bitmap()
+    build_gray_index_format2_bitmap()
     build_sbit_table_tag_and_strike_probes()
     build_sbit_error_branch_fixtures()
     build_composite_missing_subglyphs()
