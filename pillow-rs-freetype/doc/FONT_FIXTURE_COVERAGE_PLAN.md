@@ -3182,6 +3182,40 @@ runnable cases with 135 pending rows unchanged and ingests snapshot
 and permanent route markers account for the larger instrumented denominator;
 covered lines, branches, and regions all increase.
 
+## Latin smooth stem-width public routes
+
+Pinned FreeType 2.14.3 `af_latin_compute_stem_width`
+(`aflatin.c:3940-4157`) leaves short serifs unchanged, treats round and thin
+stems specially, snaps near-standard widths, quantizes sub-three-pixel widths,
+and applies the small-PPEM `bdelta` correction before rounding large smooth
+stems.  Rust already matched that arithmetic, but its six existing route bits
+were never recorded, so no public fixture could prove which decisions a load
+actually exercised.  The implementation now records those established bits
+without changing the returned width.
+
+Five exact `FT_Load_Glyph.matrix_load` variants use `basic-latin.ttf` and
+`arabic-neutral-first.ttf` at 2, 3, 8, and 11 ppem to prove all six smooth
+decisions through the pinned C oracle, Rust FFI, C ABI, WASM ABI, and the safe
+public `Face::load_glyph` route.  Focused Coverage MCP run
+`c26ab7b3-2f2d-4688-85bc-216716b99121` passes 5 / 5.
+
+Full managed run `9057fe6d-0bcb-4f7f-9d9d-b12a852c42b4` passes
+7,061 / 7,061 runnable cases with 135 pending rows unchanged and ingests
+snapshot `9dace02d-f9a2-4deb-a44f-4ac96d1f0a76`.  Concrete cases rise from
+7,191 to 7,196 and route-audit real parity rises from 3,636 to 3,641.
+`src/autohint/latin.rs` moves from 2,657 / 2,870 to 2,667 / 2,880 lines,
+from 1,094 / 1,292 to 1,096 / 1,294 branches, and from 3,849 / 4,234 to
+3,856 / 4,241 regions; functions remain 67 / 68.  Every added marker line,
+branch outcome, and region is covered, so all three file rates improve.
+
+The adjacent strong anti-aliased horizontal arm was audited but deliberately
+received no synthetic route.  `af_latin_hints_init` enables horizontal width
+snapping for MONO and LCD only, disables stem adjustment for LCD, and marks
+MONO as monochrome (`aflatin.c:2646-2700`).  Consequently every public mode
+either returns before that arm or takes its monochrome sub-arm.  The code is
+retained for fidelity with pinned C, while its unreachable lines remain
+visible as uncovered instead of being credited through a helper-only test.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
