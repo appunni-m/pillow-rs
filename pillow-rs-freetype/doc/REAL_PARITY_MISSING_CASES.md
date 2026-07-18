@@ -398,6 +398,15 @@ Verified progress:
   generic expected-error fallback.
 - Rust FFI, C ABI, and WASM ABI now match pinned FreeType for both
   `FT_Outline_Funcs` callback-order and callback-error rows.
+- Added real `outline_model` fixture
+  `outlines/synthetic/on-curve-lines-multicontour.json`.
+- Native C oracle now records
+  `ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c` with two
+  line-only on-curve contours and the row's two transform cases. This pins
+  FreeType's behavior that each contour starts with `move_to`, every on-curve
+  point emits `line_to`, and each contour closes back to its start point.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for the on-curve
+  multi-contour row.
 
 Focused non-coverage result:
 
@@ -438,6 +447,12 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_CURVE_TAG_CONIC.conic_decom
 Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
 
 ```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
+
+```bash
 make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Decompose.callback_error_propagates
 ```
 
@@ -448,8 +463,8 @@ make -C pillow-rs-freetype test-op OP=ftoutln.outline_decompose
 ```
 
 Result after the line/conic/cubic fixture, shift/delta fixture, conic fixture,
-mixed callback fixture, and callback-error routes: `7 / 7` runtime parity rows
-passed, `0` failed, `8` pending.
+mixed callback fixture, on-curve fixture, and callback-error routes: `8 / 8`
+runtime parity rows passed, `0` failed, `7` pending.
 
 Full non-coverage result:
 
@@ -458,9 +473,9 @@ make -C pillow-rs-freetype test
 ```
 
 Result after the line/conic/cubic fixture, shift/delta fixture, conic fixture,
-mixed callback fixture, and callback-error routes: `7138 / 7138` runnable rows
-passed, `0` failed, `96` pending. Route audit: `real-parity` `3721`,
-`pending-route` `88`.
+mixed callback fixture, on-curve fixture, and callback-error routes:
+`7139 / 7139` runnable rows passed, `0` failed, `95` pending. Route audit:
+`real-parity` `3722`, `pending-route` `87`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
 
