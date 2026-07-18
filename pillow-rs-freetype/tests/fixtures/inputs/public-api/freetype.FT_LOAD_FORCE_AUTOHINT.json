@@ -1030,6 +1030,29 @@
             ]
           },
           {
+            "id": "script-bengali-serif-pointer-order",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/script-coverage.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 2440,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ],
+              "assert_autohint_coverage_bits_include": [
+                46
+              ]
+            },
+            "coverage": [
+              "autohint/latin:top-to-bottom-serif-pointer-order"
+            ]
+          },
+          {
             "id": "script-latin-tilde-top2-centering",
             "assets": {
               "font": {

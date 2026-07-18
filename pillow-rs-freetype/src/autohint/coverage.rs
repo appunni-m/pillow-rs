@@ -118,6 +118,8 @@ pub const COV_SUB_TOP_BLUE_OVERLAP_SUPPRESSED: u64 = 1 << 43;
 pub const COV_BLUE_IGNORE_CAPITAL_BOTTOM: u64 = 1 << 44;
 /// blue metrics: replace a short extremum with a qualifying long segment.
 pub const COV_BLUE_LONG_SEGMENT_REPLACED: u64 = 1 << 45;
+/// hint_edges Phase 4: reversed edge pointers leave C's serif-overlap scan empty.
+pub const COV_HINT_PHASE4_SERIF_REVERSED_EMPTY: u64 = 1 << 46;
 
 /// Record a coverage bit for the current glyph.
 pub fn record(bit: u64) {

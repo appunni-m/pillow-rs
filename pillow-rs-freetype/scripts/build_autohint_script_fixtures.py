@@ -497,6 +497,17 @@ def serif_overlap_break_glyph():
     )
 
 
+def serif_pointer_order_glyph():
+    """Rotated serif topology for a top-to-bottom vertical-dimension scan."""
+    return rectangles_glyph(
+        [
+            (70, 100, 570, 150),
+            (70, 70, 190, 180),
+            (100, 85, 160, 95),
+        ]
+    )
+
+
 def latin_wide_segment_filter_glyph():
     return mixed_contour_glyph(
         [
@@ -774,6 +785,7 @@ def build_script_coverage() -> None:
     glyph_order.append("latin_disjoint_top_accent")
     glyph_order.append("latin_serif_m_symmetry")
     glyph_order.append("latin_serif_overlap_break")
+    glyph_order.append("beng_serif_pointer_order")
     glyph_order.append("latin_tilde_top2_centering")
     glyph_order.append("latin_vertical_cusp")
     glyph_order.append("latin_nonbase_tilde")
@@ -857,6 +869,9 @@ def build_script_coverage() -> None:
     glyphs["latin_serif_overlap_break"] = serif_overlap_break_glyph()
     metrics["latin_serif_overlap_break"] = (620, 70)
     cmap[0x0244] = "latin_serif_overlap_break"
+    glyphs["beng_serif_pointer_order"] = serif_pointer_order_glyph()
+    metrics["beng_serif_pointer_order"] = (620, 70)
+    cmap[0x0988] = "beng_serif_pointer_order"
     glyphs["latin_tilde_top2_centering"] = top_tilde_centering_glyph()
     metrics["latin_tilde_top2_centering"] = (700, 100)
     cmap[0x1EB4] = "latin_tilde_top2_centering"

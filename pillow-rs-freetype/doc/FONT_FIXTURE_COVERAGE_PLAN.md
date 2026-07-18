@@ -3449,6 +3449,40 @@ functions remain 68 / 69.  The rates decrease slightly because the exact C
 search introduces 100 instrumented lines and 42 branch outcomes, but 85 lines,
 26 branches, and 113 regions are exercised by real public parity routes.
 
+## Top-to-bottom serif pointer ordering
+
+Pinned `af_latin_hint_edges` (`aflatin.c:4651-4720`) does not normalize the
+two indices when checking whether an intermediate edge invalidates a nominal
+serif.  It selects `top` and `bottom` from the signed original-position delta,
+then walks literal pointers from `bottom + 1` while the pointer remains below
+`top`.  Scripts whose vertical edges use top-to-bottom ordering can therefore
+have an intentionally empty scan even when one or more edge records lie
+between the endpoints.  Rust previously used `min(index)..max(index)` and
+examined those records, changing the C decision.
+
+The compact script fixture now maps U+0988 to a Bengali glyph whose vertical
+serif topology contains such an intervening edge.  Its public
+`FT_LOAD_FORCE_AUTOHINT` row compares the complete pinned-C, Rust FFI, C ABI,
+and WASM ABI slot and asserts route bit 46.  That bit is recorded only when
+the C pointer range is reversed and at least one record would have been
+visited by the old normalized Rust range.  Translating the generated outline
+to its declared 70-unit left side bearing keeps the probe isolated from an
+unrelated horizontal-bearing variable.
+
+Focused Coverage MCP run `f352467b-aa27-4f37-a1e9-d1b9d1df618c` passes the
+selected row.  Full managed run `e29c7ee6-8077-41d3-b8b1-0106fb79f373`
+passes all 7,067 runnable cases with 135 pending rows unchanged and ingests
+snapshot `27a091c5-83f4-439b-94e6-f422c10f0367`.  Concrete cases rise from
+7,201 to 7,202 with zero implicit rows, and route-audit real parity rises from
+3,646 to 3,647.  Project coverage moves from 20,458 / 21,404 to
+20,462 / 21,407 lines, from 4,954 / 5,549 to 4,956 / 5,549 branches, and from
+29,587 / 31,247 to 29,586 / 31,245 regions; functions remain 1,278 / 1,414.
+`src/autohint/latin.rs` moves from 2,789 / 3,009 to 2,793 / 3,012 lines, from
+1,131 / 1,346 to 1,133 / 1,346 branches, and from 4,001 / 4,389 to
+4,000 / 4,387 regions; functions remain 68 / 69.  The normalized pointer-order
+branch is removed, both outcomes of the literal C range decision are covered,
+and the line, branch, and region rates all improve.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:

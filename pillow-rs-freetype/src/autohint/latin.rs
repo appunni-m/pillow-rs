@@ -4698,10 +4698,20 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
             let serif_idx = axis.edges[i].serif;
             if serif_idx != usize::MAX {
                 crate::autohint::coverage::record(crate::autohint::coverage::COV_HINT_PHASE4_SERIF);
-                delta = axis.edges[serif_idx].opos - axis.edges[i].opos;
-                if delta < 0 {
-                    delta = -delta;
-                }
+                let signed_delta = axis.edges[serif_idx].opos - axis.edges[i].opos;
+                // Pinned af_latin_hint_edges selects `top` and `bottom` from
+                // the signed delta, then walks literal edge pointers from
+                // `bottom + 1` while they remain below `top`
+                // (aflatin.c:4651-4720).  Top-to-bottom scripts store edges
+                // in descending fpos order, so this pointer range can be
+                // empty even when indices lie between the two endpoints.
+                let (top_idx, bottom_idx) = if signed_delta < 0 {
+                    delta = -signed_delta;
+                    (i, serif_idx)
+                } else {
+                    delta = signed_delta;
+                    (serif_idx, i)
+                };
                 // Only check overlap when delta < 1.5px (C: aflatin.c:4767)
                 if delta < 64 + 32 {
                     // C: reads first/last points of first/last segments (4 pts per edge)
@@ -4725,27 +4735,27 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                         i32::max(seg_v_max(s_fi), seg_v_max(s_li)),
                         i32::max(seg_v_max(s_fs), seg_v_max(s_ls)),
                     );
-                    // Walk intermediate edges for v-overlap
-                    let lo = serif_idx.min(i);
-                    let hi = serif_idx.max(i);
                     let mut overlap = false;
-                    for j in (lo + 1)..hi {
-                        if j == i || j == serif_idx {
-                            continue;
+                    if bottom_idx < top_idx {
+                        for j in (bottom_idx + 1)..top_idx {
+                            let sj_f = axis.edges[j].first;
+                            let sj_l = axis.edges[j].last;
+                            if sj_f == usize::MAX || sj_l == usize::MAX {
+                                continue;
+                            }
+                            let ej_min = i32::min(seg_v_min(sj_f), seg_v_min(sj_l));
+                            let ej_max = i32::max(seg_v_max(sj_f), seg_v_max(sj_l));
+                            if !((ej_min < v_min && ej_max < v_min)
+                                || (ej_min > v_max && ej_max > v_max))
+                            {
+                                overlap = true;
+                                break;
+                            }
                         }
-                        let sj_f = axis.edges[j].first;
-                        let sj_l = axis.edges[j].last;
-                        if sj_f == usize::MAX || sj_l == usize::MAX {
-                            continue;
-                        }
-                        let ej_min = i32::min(seg_v_min(sj_f), seg_v_min(sj_l));
-                        let ej_max = i32::max(seg_v_max(sj_f), seg_v_max(sj_l));
-                        if !((ej_min < v_min && ej_max < v_min)
-                            || (ej_min > v_max && ej_max > v_max))
-                        {
-                            overlap = true;
-                            break;
-                        }
+                    } else if bottom_idx.saturating_sub(top_idx) > 1 {
+                        crate::autohint::coverage::record(
+                            crate::autohint::coverage::COV_HINT_PHASE4_SERIF_REVERSED_EMPTY,
+                        );
                     }
                     if overlap {
                         crate::autohint::coverage::record(
