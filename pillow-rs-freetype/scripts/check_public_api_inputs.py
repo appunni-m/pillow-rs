@@ -1045,6 +1045,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Set_Char_Size oversized-dimensions error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "set_char_size"
+        and row.case_id
+        == "fterrdef.FT_Err_Invalid_Pixel_Size.set_char_size_rejects_oversized_dimensions"
+    ):
+        return "FT_Set_Char_Size invalid-pixel-size fterrdef route validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "freetype.done_freetype"
         and row.case_id == "freetype.FT_Done_FreeType.error_null_library"
         and lifecycle_handle(row, "library") == "null"
