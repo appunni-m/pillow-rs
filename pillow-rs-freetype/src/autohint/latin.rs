@@ -1156,10 +1156,6 @@ pub fn metrics_init_widths(
         0,
     );
 
-    if hints.num_points() == 0 {
-        return;
-    }
-
     for dim in 0..2 {
         let dimension = if dim == 0 {
             Dimension::Horz
@@ -1216,16 +1212,15 @@ pub fn metrics_init_widths(
     }
 }
 
-/// Pull the width array and count from axis hints.
+/// Pull the width array and count from metrics.
 ///
 /// Returns owned data to avoid borrow conflicts during stem width extraction.
-fn extract_widths(hints: &GlyphHints, dim: Dimension) -> (usize, [AfWidth; AF_LATIN_MAX_WIDTHS]) {
-    if let Some(ref met) = hints.metrics {
-        let a = &met.axis[dim as usize];
-        (a.width_count, a.widths)
-    } else {
-        (0, [AfWidth::default(); AF_LATIN_MAX_WIDTHS])
-    }
+fn extract_widths(
+    metrics: &AfLatinMetrics,
+    dim: Dimension,
+) -> (usize, [AfWidth; AF_LATIN_MAX_WIDTHS]) {
+    let a = &metrics.axis[dim as usize];
+    (a.width_count, a.widths)
 }
 
 // ── Blue zone strings — dynamically selected from afblue.dat ───────────────
@@ -2922,7 +2917,7 @@ pub fn apply_hints(
     if do_horz {
         compute_segments(&mut hints, Dimension::Horz);
         {
-            let (wc, widths) = extract_widths(&hints, Dimension::Horz);
+            let (wc, widths) = extract_widths(metrics, Dimension::Horz);
             horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
             if use_cjk_edges {
                 // FreeType 2.14.3's `af_glyph_hints_reload` resets segment
@@ -2956,7 +2951,7 @@ pub fn apply_hints(
     compute_segments(&mut hints, Dimension::Vert);
     let vert_widths_26_6: Vec<i32>;
     {
-        let (wc, widths) = extract_widths(&hints, Dimension::Vert);
+        let (wc, widths) = extract_widths(metrics, Dimension::Vert);
         vert_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
         if use_cjk_edges {
             // Keep Latin segment roundness flags for CJK; see the horizontal
