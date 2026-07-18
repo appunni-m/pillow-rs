@@ -1933,6 +1933,9 @@ fn apply_blue_zone_ignore_adjustments(hints: &mut GlyphHints, adj_type: u32) {
                 ignore_top_blue_alignment(hints, top, bottom);
             }
             if ignore_capital_bottom {
+                crate::autohint::coverage::record(
+                    crate::autohint::coverage::COV_BLUE_IGNORE_CAPITAL_BOTTOM,
+                );
                 ignore_bottom_blue_alignment(hints, top, bottom);
             }
         }

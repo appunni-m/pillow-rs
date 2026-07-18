@@ -114,6 +114,8 @@ pub const COV_BLUE_NEUTRAL_ROUND_SKIP: u64 = 1 << 41;
 pub const COV_X_HEIGHT_SCALE_REJECTED: u64 = 1 << 42;
 /// metrics scaling: deactivate an active sub-top zone that overlaps an active primary zone.
 pub const COV_SUB_TOP_BLUE_OVERLAP_SUPPRESSED: u64 = 1 << 43;
+/// blue-zone adjustments: suppress capital-bottom alignment for a flagged glyph.
+pub const COV_BLUE_IGNORE_CAPITAL_BOTTOM: u64 = 1 << 44;
 
 /// Record a coverage bit for the current glyph.
 pub fn record(bit: u64) {
