@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Done_Face(NULL)` exact-error route
+Current verified result after `FT_Get_Kerning` null error route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3733`
+  - `real-parity`: `3735`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `460`
+  - `generic-error-fallback`: `458`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -638,6 +638,42 @@ make -C pillow-rs-freetype test-op OP=freetype.done_face
 Result: `4 / 4` operation rows passed, `0` failed, `0` pending. The
 foreign/poisoned handle row remains outside real-parity classification.
 
+### Issue Set I: `FT_Get_Kerning` null-face/null-output exact error routes
+
+Previous blocker:
+
+- `freetype.FT_Get_Kerning.error_null_face_or_output@null-face` and
+  `freetype.FT_Get_Kerning.error_null_face_or_output@null-output` were
+  classified as `generic-error-fallback`, even though they already had
+  dedicated pinned C oracle commands and Rust FFI, C ABI, and WASM ABI runners.
+
+Verified progress:
+
+- The fixture loader now requires exact error status/output comparison for
+  expected-error `freetype.get_kerning` rows.
+- The route audit now treats the two kerning null-error rows as real parity via
+  the existing explicit C oracle and backend routes.
+- Runtime behavior is unchanged:
+  - `FT_Get_Kerning(NULL, ..., &akerning)` returns
+    `FT_Err_Invalid_Face_Handle`.
+  - `FT_Get_Kerning(face, ..., NULL)` returns `FT_Err_Invalid_Argument`.
+  - Rust FFI, C ABI, and WASM ABI preserve the same status and output snapshots.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Get_Kerning.error_null_face_or_output
+```
+
+Result: `2 / 2` runtime parity rows passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3735`, `generic-error-fallback` `458`.
+
+```bash
+make -C pillow-rs-freetype test-op OP=freetype.get_kerning
+```
+
+Result: `12 / 12` operation rows passed, `0` failed, `0` pending.
+
 Focused non-coverage result:
 
 ```bash
@@ -777,6 +813,17 @@ make -C pillow-rs-freetype test
 
 Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
 audit: `real-parity` `3733`, `generic-error-fallback` `460`, `pending-route`
+`82`, and `pending-core` `7`.
+
+Full non-coverage result after the `FT_Get_Kerning` null error route
+classification:
+
+```bash
+make -C pillow-rs-freetype test
+```
+
+Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
+audit: `real-parity` `3735`, `generic-error-fallback` `458`, `pending-route`
 `82`, and `pending-core` `7`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
