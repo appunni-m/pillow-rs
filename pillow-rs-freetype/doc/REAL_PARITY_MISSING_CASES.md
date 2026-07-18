@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Set_Char_Size` probe-face invalid-size-handle
+Current verified result after `FT_Select_Size` past-end strike-index
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3753`
+  - `real-parity`: `3754`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `440`
+  - `generic-error-fallback`: `439`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1591,6 +1591,44 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Set_Char_Size.error_probe_face_invalid_size_handle
+```
+
+### Issue Set AB: `FT_Select_Size` past-end strike-index exact-error route
+
+Previous blocker:
+
+- `freetype.FT_Select_Size.error_strike_index_past_end_direct` stayed in
+  `generic-error-fallback`, even though the fixture targets a concrete pinned-C
+  `FT_Select_Size` call against a bitmap-strike face and expects
+  `FT_Err_Invalid_Argument` for a strike index past the available strikes.
+
+Plan:
+
+1. Confirm the row has a real bitmap-strike font asset and exact-error
+   expectation.
+2. Enable exact status/output comparison for this one public row.
+3. Run the focused public case through Rust FFI, thin C ABI, and WASM ABI.
+4. If exact comparison fails, fix the first Rust/core or ABI divergence. If it
+   passes, classify the existing behavior as real parity.
+5. Re-run the select-size lane, full parity, and non-coverage gates before
+   committing.
+
+Verified progress:
+
+- The fixture row uses `fixtures/assets/fonts/sbit_gray_format1.ttf` with a
+  direct past-end strike index.
+- The unified harness now requires exact error status/output comparison for
+  this concrete public row.
+- Focused exact comparison passed for pinned C FreeType, Rust FFI, thin C ABI,
+  and WASM ABI; no core Rust logic change was required.
+- The route audit now classifies
+  `freetype.FT_Select_Size.error_strike_index_past_end_direct` as
+  `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Select_Size.error_strike_index_past_end_direct
 ```
 
 ## Coverage Bulk Context
