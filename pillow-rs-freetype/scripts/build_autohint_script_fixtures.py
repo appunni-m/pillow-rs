@@ -1329,6 +1329,7 @@ def build_latin_small_ignore() -> None:
         "latin_oslash",
         "latin_small_top",
         "latin_g_cedilla",
+        "latin_k_cedilla_dimensionless",
     ]
     glyphs = {
         ".notdef": rectangle_glyph(80, -120, 520, 720),
@@ -1357,6 +1358,17 @@ def build_latin_small_ignore() -> None:
                 (220, -70, 360, -20),
             ]
         ),
+        # U+0136 selects pinned FreeType's AF_ADJUST_DOWN route.  The third
+        # contour is dimensionless so the bottom separation scan observes C's
+        # FT_LONG_MAX/FT_LONG_MIN sentinel contour while the real lowest
+        # cedilla contour remains the selected adjustment target.
+        "latin_k_cedilla_dimensionless": mixed_contour_glyph(
+            [
+                (90, 0, 520, 560),
+                (220, -70, 360, -20),
+                [(300, 120, True), (340, 120, True)],
+            ]
+        ),
     }
     metrics = {
         ".notdef": (600, 80),
@@ -1367,6 +1379,7 @@ def build_latin_small_ignore() -> None:
         "latin_oslash": (620, 90),
         "latin_small_top": (620, 90),
         "latin_g_cedilla": (620, 90),
+        "latin_k_cedilla_dimensionless": (620, 90),
     }
     cmap = {
         0x20: "space",
@@ -1376,6 +1389,7 @@ def build_latin_small_ignore() -> None:
         0x00F8: "latin_oslash",
         0x0188: "latin_small_top",
         0x0122: "latin_g_cedilla",
+        0x0136: "latin_k_cedilla_dimensionless",
     }
 
     font = FontBuilder(UNITS_PER_EM, isTTF=True)

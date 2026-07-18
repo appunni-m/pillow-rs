@@ -304,6 +304,29 @@
             ]
           },
           {
+            "id": "latin-adjust-bottom-dimensionless-contour",
+            "assets": {
+              "font": {
+                "kind": "ref",
+                "id": "fonts/autohint/latin-small-ignore.ttf"
+              }
+            },
+            "params": {
+              "face_index": 0,
+              "pixel_size": 20,
+              "char_code": 310,
+              "load_flags": [
+                "FT_LOAD_FORCE_AUTOHINT"
+              ],
+              "assert_autohint_coverage_bits_include": [
+                38
+              ]
+            },
+            "coverage": [
+              "autohint/latin:bottom-separation-dimensionless-contour-sentinel"
+            ]
+          },
+          {
             "id": "latin-adjust-bottom-tilde",
             "assets": {
               "font": {
