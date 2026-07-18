@@ -5335,6 +5335,32 @@ static int emit_outline_render(int argc, char** argv) {
         return 0;
     }
 
+    if (strstr(case_id, "ftimage.FT_OUTLINE_OVERLAP.non_overlap_no_spurious_change")) {
+        const char* flag_names[2] = {"FT_OUTLINE_NONE", "FT_OUTLINE_OVERLAP"};
+        const int flag_values[2] = {0, FT_OUTLINE_OVERLAP};
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"results\":[");
+        for (int i = 0; i < 2; i++) {
+            memset(buffer, 0, sizeof(buffer));
+            outline.flags = flag_values[i];
+            params.flags = FT_RASTER_FLAG_AA;
+            params.source = (void*)0x1;
+            err = FT_Outline_Render(library, &outline, &params);
+            if (i) {
+                printf(",");
+            }
+            printf("{\"flags\":\"%s\",\"status\":%d,", flag_names[i], err);
+            print_outline_bitmap_object(&bitmap);
+            printf(",\"params_source_is_outline\":");
+            printf("%s", params.source == (void*)&outline ? "true" : "false");
+            printf("}");
+        }
+        printf("]}}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+
     err = FT_Outline_Render(library, &outline, &params);
     printf("{");
     print_status(err);

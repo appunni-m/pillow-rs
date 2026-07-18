@@ -145,6 +145,14 @@ Verified progress:
   from `FT_Outline_Get_CBox` when `CLIP` is absent, preserves signed
   `FT_Span.x` bit patterns for negative direct spans, and skips target-buffer
   writes in direct callback mode.
+- Added real `outline_model` fixture
+  `outlines/synthetic/simple-non-overlap.json`.
+- Pinned C oracle now emits the
+  `ftimage.FT_OUTLINE_OVERLAP.non_overlap_no_spurious_change` outline flag
+  matrix: `FT_OUTLINE_NONE` and `FT_OUTLINE_OVERLAP`.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for the synthetic
+  non-overlapping outline; `FT_OUTLINE_OVERLAP` causes no spurious bitmap
+  change for this non-overlap input.
 
 Focused non-coverage result:
 
@@ -172,14 +180,14 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_OUTLINE_NONE
 
 Result: `4 / 4` runtime parity rows passed, `0` failed, `0` pending.
 
-Full non-coverage result after the `FT_RASTER_FLAG_CLIP` direct-span rows:
+Full non-coverage result after the `FT_OUTLINE_OVERLAP` non-overlap row:
 
 ```bash
 make -C pillow-rs-freetype test
 ```
 
-Result: `7128 / 7128` runnable rows passed, `0` failed, `106` pending. Route
-audit: `real-parity` `3711`, `pending-route` `98`.
+Result: `7129 / 7129` runnable rows passed, `0` failed, `105` pending. Route
+audit: `real-parity` `3712`, `pending-route` `97`.
 
 Broadened non-coverage result:
 
@@ -187,8 +195,8 @@ Broadened non-coverage result:
 make -C pillow-rs-freetype test-op OP=ftoutln.outline_render
 ```
 
-Result after the `FT_RASTER_FLAG_CLIP` direct-span rows: `76 / 76` runnable
-rows passed, `0` failed, `13` pending.
+Result after the `FT_OUTLINE_OVERLAP` non-overlap row: `77 / 77` runnable rows
+passed, `0` failed, `12` pending.
 
 Current remaining `ftoutln.outline_render` blockers are missing explicit
 fixtures or non-fixture public harness surfaces, led by:
