@@ -3056,27 +3056,157 @@ fn named_instance_postscript_name(
 ) -> Option<String> {
     let fvar = fvar.as_ref()?;
     let instance = fvar.instances.get(named_instance.checked_sub(1)?)?;
+    // `sfnt_get_var_ps_name` resolves and caps the prefix before consulting a
+    // named instance's explicit PostScript name.  The 91-byte cap reserves
+    // room for `-`, a 128-bit checksum, and `...` within MAX_PS_NAME_LEN.
+    let mut prefix = tt::name::variations_postscript_prefix(name)?;
+    prefix.truncate(VARIATION_PS_PREFIX_MAX_LEN);
     if let Some(name_id) = instance.postscript_name_id
         && let Some(name) = tt::name::name_string(name, name_id)
     {
-        return Some(name);
+        return Some(limit_variation_postscript_name(&prefix, name));
     }
-    let prefix = tt::name::variations_postscript_prefix(name)?;
     let Some(subfamily) = tt::name::name_string(name, instance.subfamily_name_id) else {
         // FreeType `sfnt_get_var_ps_name` in `src/sfnt/sfdriver.c` falls through
         // to `construct_instance_name` when a named instance lacks a usable
         // subfamily name, using non-default fvar coordinates plus axis tags.
-        return Some(synthesize_instance_postscript_name(
+        return Some(limit_variation_postscript_name(
             &prefix,
-            &fvar.axes,
-            &instance.coords,
+            synthesize_instance_postscript_name(&prefix, &fvar.axes, &instance.coords),
         ));
     };
     let mut result = String::with_capacity(prefix.len() + 1 + subfamily.len());
     result.push_str(&prefix);
     result.push('-');
     result.extend(subfamily.chars().filter(|ch| ch.is_ascii_alphanumeric()));
-    Some(result)
+    Some(limit_variation_postscript_name(&prefix, result))
+}
+
+const VARIATION_PS_NAME_MAX_LEN: usize = 127;
+const VARIATION_PS_PREFIX_MAX_LEN: usize = VARIATION_PS_NAME_MAX_LEN - (1 + 32 + 3);
+
+/// Apply FreeType's `sfnt_get_var_ps_name` length fallback.
+///
+/// Pinned `sfdriver.c:1017-1061` hashes the constructed C string including its
+/// terminating NUL, then keeps the already-capped prefix and replaces the
+/// remainder with `-<MurmurHash3-x86-128>...`.
+fn limit_variation_postscript_name(prefix: &str, result: String) -> String {
+    if result.len() < VARIATION_PS_NAME_MAX_LEN {
+        return result;
+    }
+
+    let mut hash_input = Vec::with_capacity(result.len() + 1);
+    hash_input.extend_from_slice(result.as_bytes());
+    hash_input.push(0);
+    let hash = murmur_hash_3_x86_128(&hash_input, 123_456_789);
+
+    let mut limited = String::with_capacity(prefix.len() + 36);
+    limited.push_str(prefix);
+    limited.push('-');
+    for word in hash {
+        use std::fmt::Write as _;
+        let _ = write!(limited, "{word:08X}");
+    }
+    limited.push_str("...");
+    limited
+}
+
+fn murmur_hash_3_x86_128(bytes: &[u8], seed: u32) -> [u32; 4] {
+    const C1: u32 = 0x239B_961B;
+    const C2: u32 = 0xAB0E_9789;
+    const C3: u32 = 0x38B3_4AE5;
+    const C4: u32 = 0xA1E3_8B93;
+
+    let mut h1 = seed;
+    let mut h2 = seed;
+    let mut h3 = seed;
+    let mut h4 = seed;
+
+    let mut blocks = bytes.chunks_exact(16);
+    for block in &mut blocks {
+        let mut k1 = u32::from_le_bytes([block[0], block[1], block[2], block[3]]);
+        let mut k2 = u32::from_le_bytes([block[4], block[5], block[6], block[7]]);
+        let mut k3 = u32::from_le_bytes([block[8], block[9], block[10], block[11]]);
+        let mut k4 = u32::from_le_bytes([block[12], block[13], block[14], block[15]]);
+
+        k1 = k1.wrapping_mul(C1).rotate_left(15).wrapping_mul(C2);
+        h1 ^= k1;
+        h1 = h1.rotate_left(19).wrapping_add(h2);
+        h1 = h1.wrapping_mul(5).wrapping_add(0x561C_CD1B);
+
+        k2 = k2.wrapping_mul(C2).rotate_left(16).wrapping_mul(C3);
+        h2 ^= k2;
+        h2 = h2.rotate_left(17).wrapping_add(h3);
+        h2 = h2.wrapping_mul(5).wrapping_add(0x0BCA_A747);
+
+        k3 = k3.wrapping_mul(C3).rotate_left(17).wrapping_mul(C4);
+        h3 ^= k3;
+        h3 = h3.rotate_left(15).wrapping_add(h4);
+        h3 = h3.wrapping_mul(5).wrapping_add(0x96CD_1C35);
+
+        k4 = k4.wrapping_mul(C4).rotate_left(18).wrapping_mul(C1);
+        h4 ^= k4;
+        h4 = h4.rotate_left(13).wrapping_add(h1);
+        h4 = h4.wrapping_mul(5).wrapping_add(0x32AC_3B17);
+    }
+
+    let tail = blocks.remainder();
+    let mut k1 = 0u32;
+    let mut k2 = 0u32;
+    let mut k3 = 0u32;
+    let mut k4 = 0u32;
+    for (index, byte) in tail.iter().copied().enumerate() {
+        let shift = (index % 4) * 8;
+        match index / 4 {
+            0 => k1 |= u32::from(byte) << shift,
+            1 => k2 |= u32::from(byte) << shift,
+            2 => k3 |= u32::from(byte) << shift,
+            3 => k4 |= u32::from(byte) << shift,
+            _ => unreachable!(),
+        }
+    }
+    if tail.len() > 12 {
+        h4 ^= k4.wrapping_mul(C4).rotate_left(18).wrapping_mul(C1);
+    }
+    if tail.len() > 8 {
+        h3 ^= k3.wrapping_mul(C3).rotate_left(17).wrapping_mul(C4);
+    }
+    if tail.len() > 4 {
+        h2 ^= k2.wrapping_mul(C2).rotate_left(16).wrapping_mul(C3);
+    }
+    if !tail.is_empty() {
+        h1 ^= k1.wrapping_mul(C1).rotate_left(15).wrapping_mul(C2);
+    }
+
+    let len = bytes.len() as u32;
+    h1 ^= len;
+    h2 ^= len;
+    h3 ^= len;
+    h4 ^= len;
+
+    h1 = h1.wrapping_add(h2).wrapping_add(h3).wrapping_add(h4);
+    h2 = h2.wrapping_add(h1);
+    h3 = h3.wrapping_add(h1);
+    h4 = h4.wrapping_add(h1);
+
+    h1 = murmur_fmix32(h1);
+    h2 = murmur_fmix32(h2);
+    h3 = murmur_fmix32(h3);
+    h4 = murmur_fmix32(h4);
+
+    h1 = h1.wrapping_add(h2).wrapping_add(h3).wrapping_add(h4);
+    h2 = h2.wrapping_add(h1);
+    h3 = h3.wrapping_add(h1);
+    h4 = h4.wrapping_add(h1);
+    [h1, h2, h3, h4]
+}
+
+fn murmur_fmix32(mut value: u32) -> u32 {
+    value ^= value >> 16;
+    value = value.wrapping_mul(0x85EB_CA6B);
+    value ^= value >> 13;
+    value = value.wrapping_mul(0xC2B2_AE35);
+    value ^ (value >> 16)
 }
 
 fn synthesize_instance_postscript_name(
