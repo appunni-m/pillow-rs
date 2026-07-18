@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_Advance` invalid-glyph/invalid-flags
+Current verified result after `FT_ADVANCE_FLAG_FAST_ONLY`
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3783`
+  - `real-parity`: `3784`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `410`
+  - `generic-error-fallback`: `409`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2480,6 +2480,39 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftadvanc.FT_Get_Advance.error_invalid_glyph_or_flags
+```
+
+### Issue Set BA: `FT_ADVANCE_FLAG_FAST_ONLY` exact-error route
+
+Previous blocker:
+
+- `ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY.fast_only_error_behavior` stayed in
+  `generic-error-fallback`.
+- The focused same-input runtime already matched pinned C FreeType, Rust FFI,
+  thin C ABI, and WASM ABI, but the harness still allowed it as a generic
+  expected-error row instead of enforcing exact status and output comparison.
+
+Plan:
+
+1. Keep the fixture intact; it exercises public
+   `FT_LOAD_DEFAULT | FT_ADVANCE_FLAG_FAST_ONLY` behavior through
+   `FT_Get_Advance`.
+2. Require exact error status and `padvance` sentinel comparison.
+3. Classify the concrete row as real parity only after focused exact parity
+   passes.
+
+Verified progress:
+
+- The focused FAST_ONLY row passes exact comparison against pinned C FreeType,
+  Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY.fast_only_error_behavior` as
+  `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY.fast_only_error_behavior
 ```
 
 ## Coverage Bulk Context
