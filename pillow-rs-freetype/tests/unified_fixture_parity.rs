@@ -8257,6 +8257,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
                 && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
             || (case.operation == "freetype.select_charmap"
                 && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
+            || (case.operation == "freetype.set_charmap"
+                && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
             || (case.operation == "freetype.select_size"
                 && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
             || (case.operation == "load_char"
