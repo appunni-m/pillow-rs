@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Attach_File` missing/unsupported-file
+Current verified result after `FT_Attach_Stream` null-face
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3768`
+  - `real-parity`: `3769`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `425`
+  - `generic-error-fallback`: `424`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2131,6 +2131,39 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Attach_File.error_missing_or_unsupported_file
+```
+
+### Issue Set AQ: `FT_Attach_Stream` null-face exact-error route
+
+Previous blocker:
+
+- `freetype.FT_Attach_Stream.error_null_face` stayed in
+  `generic-error-fallback`, even though the fixture targets the concrete public
+  `FT_Attach_Stream` error for a null face handle.
+
+Plan:
+
+1. Confirm the row is a concrete public call with exact-error expectation.
+2. Run the focused public case before classification to verify existing Rust
+   FFI, thin C ABI, and WASM ABI behavior against pinned C FreeType.
+3. Enable exact status/output comparison for this public case only.
+4. Classify the row as real parity only if exact comparison passes.
+5. Re-run the attach-stream lane, full parity, and non-coverage gates before
+   committing.
+
+Verified progress:
+
+- The focused row already passed against pinned C FreeType, Rust FFI, thin C
+  ABI, and WASM ABI before reclassification.
+- The unified harness now requires exact error status/output comparison for
+  this concrete public case.
+- The route audit now classifies
+  `freetype.FT_Attach_Stream.error_null_face` as `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Attach_Stream.error_null_face
 ```
 
 ## Coverage Bulk Context
