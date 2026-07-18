@@ -3182,6 +3182,37 @@ runnable cases with 135 pending rows unchanged and ingests snapshot
 and permanent route markers account for the larger instrumented denominator;
 covered lines, branches, and regions all increase.
 
+### Latin bottom dimensionless-contour separation route
+
+Pinned FreeType 2.14.3 uses the same sentinel extrema rule on the bottom
+separation side as on the earlier top-side route.  In
+`af_glyph_hints_apply_vertical_separation_adjustments`
+(`aflatin.c:3831-3870`), C selects the lowest real contour for
+`AF_ADJUST_DOWN`, then scans all other contours.  A two-point dimensionless
+contour remains at `FT_LONG_MAX`/`FT_LONG_MIN`; the bottom distance predicate
+rejects it before the value can affect the selected adjustment distance.
+
+`latin-small-ignore.ttf` now appends U+0136 as a compact K-cedilla-style glyph
+with a real bottom accent plus a two-point dimensionless contour.  U+0136 is
+selected by the pinned adjustment database (`afadjust.c:184`) as
+`AF_ADJUST_DOWN`, so the new
+`FT_LOAD_FORCE_AUTOHINT@latin-adjust-bottom-dimensionless-contour` row reaches
+the bottom sentinel branch through public `FT_Load_Char` behavior rather than
+a helper-only route.  Focused parity run
+`63b9883d-05bd-43be-8b0f-95409449a614` passes the C oracle, Rust FFI, C ABI,
+and WASM comparison; focused condition-coverage run
+`9de9b795-3ddc-4a4d-891c-f9d9df2c206f` ingests snapshot
+`b805e774-bfb4-45e4-8593-d1e65be51c92` and proves lines 2759-2761 plus 2770
+are covered by the retained public row.  Full managed coverage run
+`4dcc695a-c502-4d9d-a26d-e348847c3dee` passes
+`real-parity-verify normalize-unified-condition-coverage`, ingests snapshot
+`4c297b97-3140-4346-9d89-8bd838a88305`, and records 7208 concrete cases with
+3654 real-parity rows while the 135 route-or-core pending rows remain
+unchanged.  Against baseline snapshot `57a961a0-a56f-4131-8130-b2cab079ae23`,
+`latin.rs` improves from 2798/3017 to 2802/3017 lines, 1133/1346 to
+1136/1346 branches, and 4001/4388 to 4004/4388 regions; project coverage
+improves by the same +4 lines, +3 branches, and +3 regions.
+
 The later Phase-4 BOUND block at pinned `aflatin.c:4870-4904` is retained for
 source parity but has no legal public fixture route.  Phase 2 consumes every
 edge with a non-null stem link and marks both sides done; Phase 4 skips done
