@@ -40,7 +40,7 @@ Parity-only rule for this phase:
 
 ### Issue Set A: `ftoutln.outline_render` pending outline fixtures
 
-Current pending count by operation: `19` rows.
+Current pending count by operation: `16` rows.
 
 Largest blockers from the current parity run:
 
@@ -52,6 +52,7 @@ Largest blockers from the current parity run:
   `FT_OUTLINE_SINGLE_PASS` verified progress below)
 - `3` rows: missing `outlines/synthetic/dropout-thin-stems-scantype.json`
 - `3` rows: missing `outlines/synthetic/simple-overlap-thin-matrix.json`
+  (fixed for the `FT_OUTLINE_NONE` baseline rows by verified progress below)
 - additional outline-render rows reference other missing synthetic outline
   assets.
 
@@ -118,6 +119,14 @@ Verified progress:
   synthetic `FT_OUTLINE_SINGLE_PASS` `FT_Outline_Render` variants. This does
   not claim glyph-slot mono `FT_Render_Glyph` parity for `OUTLINE_SINGLE_PASS`;
   that separate surface is still tracked below.
+- Added real `outline_model` fixture
+  `outlines/synthetic/simple-overlap-thin-matrix.json`.
+- Unified harness now loads `synthetic_outlines` outline-model assets and
+  supports a single `outline_flags` list for `FT_Outline.flags`.
+- Pinned C oracle now renders the same overlap/thin-stem topology for
+  `ftimage.FT_OUTLINE_NONE.default_outline_render_baseline`.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for all three
+  synthetic `FT_OUTLINE_NONE` baseline render variants.
 
 Focused non-coverage result:
 
@@ -139,14 +148,20 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_OUTLINE_SINGLE_PASS
 
 Result: `7 / 7` runtime parity rows passed, `0` failed, `0` pending.
 
-Full non-coverage result after the `FT_OUTLINE_SINGLE_PASS` rows:
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_OUTLINE_NONE
+```
+
+Result: `4 / 4` runtime parity rows passed, `0` failed, `0` pending.
+
+Full non-coverage result after the `FT_OUTLINE_NONE` rows:
 
 ```bash
 make -C pillow-rs-freetype test
 ```
 
-Result: `7122 / 7122` runnable rows passed, `0` failed, `112` pending. Route
-audit: `real-parity` `3705`, `pending-route` `104`.
+Result: `7125 / 7125` runnable rows passed, `0` failed, `109` pending. Route
+audit: `real-parity` `3708`, `pending-route` `101`.
 
 Broadened non-coverage result:
 
@@ -154,15 +169,15 @@ Broadened non-coverage result:
 make -C pillow-rs-freetype test-op OP=ftoutln.outline_render
 ```
 
-Result after `FT_OUTLINE_SINGLE_PASS`: `70 / 70` runnable rows passed, `0`
-failed, `19` pending.
+Result after `FT_OUTLINE_NONE`: `73 / 73` runnable rows passed, `0` failed,
+`16` pending.
 
 Current remaining `ftoutln.outline_render` blockers are missing explicit
 fixtures or non-fixture public harness surfaces, led by:
-`dropout-thin-stems-scantype.json`, `simple-overlap-thin-matrix.json`,
-`crossing-clip-boundaries.json`, `cw-ccw-orientation-pairs.json`, and
-`params-logging-renderer.json`. Keep fixing these as separate exact C oracle
-routes; do not reintroduce generic square fallback for missing assets.
+`dropout-thin-stems-scantype.json`, `crossing-clip-boundaries.json`,
+`cw-ccw-orientation-pairs.json`, and `params-logging-renderer.json`. Keep
+fixing these as separate exact C oracle routes; do not reintroduce generic
+square fallback for missing assets.
 
 ### Issue Set B: `FT_RASTER_FLAG_DIRECT` direct-span callback parity
 

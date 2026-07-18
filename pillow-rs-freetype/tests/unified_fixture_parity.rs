@@ -18303,6 +18303,14 @@ fn rust_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, Str
         }
         return Ok(ok(json!({ "results": results })));
     }
+    if let Some(outline_flags) = outline_render_outline_flags(&case.inputs.params)? {
+        return rust_outline_render_once(
+            case,
+            i32::try_from(FT_RASTER_FLAG_AA).map_err(|err| err.to_string())?,
+            Some(outline_flags),
+            false,
+        );
+    }
     let flags = outline_render_flags(&case.inputs.params)?;
     rust_outline_render_once(case, flags, None, false)
 }
@@ -18409,6 +18417,14 @@ fn c_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String
             results.push(outline_render_result_payload(flags_label, output));
         }
         return Ok(ok(json!({ "results": results })));
+    }
+    if let Some(outline_flags) = outline_render_outline_flags(&case.inputs.params)? {
+        return c_outline_render_once(
+            case,
+            i32::try_from(FT_RASTER_FLAG_AA).map_err(|err| err.to_string())?,
+            Some(outline_flags),
+            false,
+        );
     }
     let flags = outline_render_flags(&case.inputs.params)?;
     c_outline_render_once(case, flags, None, false)
@@ -18534,6 +18550,14 @@ fn wasm_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, Str
             results.push(outline_render_result_payload(flags_label, output));
         }
         return Ok(ok(json!({ "results": results })));
+    }
+    if let Some(outline_flags) = outline_render_outline_flags(&case.inputs.params)? {
+        return wasm_outline_render_once(
+            case,
+            i32::try_from(FT_RASTER_FLAG_AA).map_err(|err| err.to_string())?,
+            Some(outline_flags),
+            false,
+        );
     }
     let flags = outline_render_flags(&case.inputs.params)?;
     wasm_outline_render_once(case, flags, None, false)
@@ -18712,6 +18736,35 @@ fn outline_render_outline_flag_matrix(
         })
         .collect::<Result<Vec<_>, String>>()
         .map(Some)
+}
+
+fn outline_render_outline_flags(params: &Value) -> Result<Option<u32>, String> {
+    let Some(flags) = params.get("outline_flags").and_then(Value::as_array) else {
+        return Ok(None);
+    };
+    outline_render_outline_flag_symbols(flags).map(Some)
+}
+
+fn outline_render_outline_flag_symbols(flags: &[Value]) -> Result<u32, String> {
+    flags.iter().try_fold(0_u32, |combined, flag| {
+        let symbol = flag
+            .as_str()
+            .ok_or_else(|| "outline flag must be a constant name".to_string())?;
+        let value = outline_render_outline_flag_expr(symbol)?;
+        Ok(combined | value)
+    })
+}
+
+fn outline_render_outline_flag_expr(symbol: &str) -> Result<u32, String> {
+    symbol.split('|').try_fold(0_u32, |combined, part| {
+        let part = part.trim();
+        let value = if part == "FT_OUTLINE_NONE" {
+            0
+        } else {
+            u32::try_from(rust_constant(part)?).map_err(|err| err.to_string())?
+        };
+        Ok(combined | value)
+    })
 }
 
 fn outline_render_flag_symbols(flags: &[Value]) -> Result<i32, String> {
@@ -19582,7 +19635,12 @@ fn outline_render_outline(case: &InputCase) -> Result<fontdone::outline::Outline
 fn outline_render_fixture_outline(
     case: &InputCase,
 ) -> Result<Option<fontdone::outline::Outline>, String> {
-    let Some(asset) = case.inputs.assets.get("outline") else {
+    let Some(asset) = case
+        .inputs
+        .assets
+        .get("outline")
+        .or_else(|| case.inputs.assets.get("synthetic_outlines"))
+    else {
         return Ok(None);
     };
     let Some(path) = asset_file_path(asset) else {
