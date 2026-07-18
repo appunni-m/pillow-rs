@@ -3191,6 +3191,7 @@ pub fn FT_Set_Char_Size(
         }
         Err(SizeRequestError::DivideByZero) => FT_Err_Divide_By_Zero as FT_Error,
         Err(SizeRequestError::InvalidPixelSize) => FT_Err_Invalid_Pixel_Size,
+        Err(SizeRequestError::InvalidPpem) => FT_Err_Invalid_PPem as FT_Error,
     }
 }
 
@@ -3254,6 +3255,7 @@ pub fn FT_Request_Size(face: Option<&mut FT_Face>, req: Option<&FT_Size_RequestR
         }
         Err(SizeRequestError::DivideByZero) => FT_Err_Divide_By_Zero as FT_Error,
         Err(SizeRequestError::InvalidPixelSize) => FT_Err_Invalid_Pixel_Size,
+        Err(SizeRequestError::InvalidPpem) => FT_Err_Invalid_PPem as FT_Error,
     }
 }
 

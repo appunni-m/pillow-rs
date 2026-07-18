@@ -351,6 +351,7 @@ pub struct SizeRequest {
 pub enum SizeRequestError {
     DivideByZero,
     InvalidPixelSize,
+    InvalidPpem,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2910,6 +2911,12 @@ impl SizeMetrics {
 
         let x_ppem = ppem_from_scaled_26dot6(scaled_w)?;
         let y_ppem = ppem_from_scaled_26dot6(scaled_h)?;
+        if data.cff.is_none() && (x_ppem == 0 || y_ppem == 0) {
+            // FreeType 2.14.3 TrueType driver `tt_size_request` calls
+            // `FT_Request_Metrics`, then rejects zero ppem in `tt_size_reset`
+            // (`src/truetype/ttdriver.c:349-410`, `ttobjs.c:1247-1248`).
+            return Err(SizeRequestError::InvalidPpem);
+        }
         Ok(SizeMetrics {
             x_ppem,
             y_ppem,
