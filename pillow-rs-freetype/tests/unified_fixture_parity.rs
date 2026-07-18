@@ -8256,7 +8256,9 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
                     || case.case_id
                         == "freetype.FT_Set_Pixel_Sizes.error_probe_face_invalid_size_handle"))
             || (case.operation == "set_char_size"
-                && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
+                && (lifecycle_handle_param_is_null(&case.inputs.params, "face")
+                    || case.case_id
+                        == "freetype.FT_Set_Char_Size.error_probe_face_invalid_size_handle"))
             || (case.operation == "freetype.select_charmap"
                 && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
             || (case.operation == "freetype.set_charmap"
