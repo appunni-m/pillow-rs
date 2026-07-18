@@ -898,6 +898,7 @@ pub extern "C" fn fontdone_wasm_outline_render(
             snapshot.as_ref(),
             bitmap_view.as_ref(),
             params.flags,
+            Some(clip_box),
             !params.gray_spans.is_null(),
         ) {
             Ok(_) => rust_ffi::FT_Err_Ok,
@@ -941,6 +942,15 @@ pub extern "C" fn fontdone_wasm_outline_render(
     }
 }
 
+fn wasm_bbox_to_rust(bbox: &FontdoneWasmBBox) -> rust_ffi::FT_BBox {
+    rust_ffi::FT_BBox {
+        xMin: bbox.xMin,
+        yMin: bbox.yMin,
+        xMax: bbox.xMax,
+        yMax: bbox.yMax,
+    }
+}
+
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_outline_render_direct_spans(
     library_present: i32,
@@ -971,13 +981,13 @@ pub fn abi_support_outline_render_direct_spans(
         snapshot.as_ref(),
         bitmap_view.as_ref(),
         params.flags,
+        Some(wasm_bbox_to_rust(&params.clip_box)),
         gray_spans_present,
     ) {
-        Ok(spans) => (
-            rust_ffi::FT_Err_Ok,
-            spans,
-            gray_spans_present && params.user == user_token,
-        ),
+        Ok(spans) => {
+            let user_seen = gray_spans_present && params.user == user_token && !spans.is_empty();
+            (rust_ffi::FT_Err_Ok, spans, user_seen)
+        }
         Err(err) => (err, Vec::new(), false),
     }
 }

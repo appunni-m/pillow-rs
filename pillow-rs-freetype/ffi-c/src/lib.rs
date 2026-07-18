@@ -1480,6 +1480,12 @@ pub extern "C" fn FT_Outline_Render(
             snapshot.as_ref(),
             bitmap_view.as_ref(),
             params.flags,
+            Some(rust_ffi::FT_BBox {
+                xMin: params.clip_box.xMin,
+                yMin: params.clip_box.yMin,
+                xMax: params.clip_box.xMax,
+                yMax: params.clip_box.yMax,
+            }),
             params.gray_spans.is_some(),
         ) {
             Ok(spans) => {
