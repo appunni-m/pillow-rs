@@ -153,6 +153,13 @@ Verified progress:
 - Rust FFI, C ABI, and WASM ABI now match pinned FreeType for the synthetic
   non-overlapping outline; `FT_OUTLINE_OVERLAP` causes no spurious bitmap
   change for this non-overlap input.
+- Added real `outline_model` fixtures
+  `outlines/render/empty-outline.json` and
+  `outlines/synthetic/empty-outline.json`.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for the explicit
+  `FT_Outline_Render` empty-outline route and the public
+  `FT_Outline.empty_outline_success` row. The same synthetic fixture also
+  keeps the `FT_PIXEL_MODE_NONE.empty_bitmap_state` route exact.
 
 Focused non-coverage result:
 
@@ -180,14 +187,14 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_OUTLINE_NONE
 
 Result: `4 / 4` runtime parity rows passed, `0` failed, `0` pending.
 
-Full non-coverage result after the `FT_OUTLINE_OVERLAP` non-overlap row:
+Full non-coverage result after the explicit empty-outline fixtures:
 
 ```bash
 make -C pillow-rs-freetype test
 ```
 
-Result: `7129 / 7129` runnable rows passed, `0` failed, `105` pending. Route
-audit: `real-parity` `3712`, `pending-route` `97`.
+Result: `7130 / 7130` runnable rows passed, `0` failed, `104` pending. Route
+audit: `real-parity` `3713`, `pending-route` `96`.
 
 Broadened non-coverage result:
 
@@ -195,8 +202,8 @@ Broadened non-coverage result:
 make -C pillow-rs-freetype test-op OP=ftoutln.outline_render
 ```
 
-Result after the `FT_OUTLINE_OVERLAP` non-overlap row: `77 / 77` runnable rows
-passed, `0` failed, `12` pending.
+Result after the explicit empty-outline fixtures: `78 / 78` runnable rows
+passed, `0` failed, `11` pending.
 
 Current remaining `ftoutln.outline_render` blockers are missing explicit
 fixtures or non-fixture public harness surfaces, led by:
