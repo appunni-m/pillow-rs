@@ -42,4 +42,9 @@ pub use handles::{
     FT_Vector_Length, FT_Vector_Polarize, FT_Vector_Rotate, FT_Vector_Transform, FT_Vector_Unit,
     FTOutlineDecomposeEvent, FTOutlineDecomposeRun,
 };
+#[cfg(any(test, feature = "abi-test-support"))]
+pub use handles::{
+    FT_Library_Has_TrueType_Engine_Service, FT_Library_Has_TrueType_Module,
+    FT_New_Library_Without_Default_Modules,
+};
 pub use types::*;

@@ -6908,37 +6908,51 @@ fn wasm_library_version_output(params: &Value) -> Result<Value, String> {
 }
 
 fn rust_truetype_engine_output(params: &Value) -> Result<Value, String> {
-    let library = if truetype_engine_library_present_arg(params)? != 0 {
-        Some(FT_Init_FreeType())
-    } else {
-        None
+    let library = match truetype_engine_library_present_arg(params)? {
+        0 => None,
+        2 => Some(FT_New_Library_Without_Default_Modules()),
+        _ => Some(FT_Init_FreeType()),
     };
     Ok(json!({
-        "engine_type": FT_Get_TrueType_Engine_Type(library.as_ref())
+        "engine_type": FT_Get_TrueType_Engine_Type(library.as_ref()),
+        "module_present": FT_Library_Has_TrueType_Module(library.as_ref()),
+        "service_present": FT_Library_Has_TrueType_Engine_Service(library.as_ref())
     }))
 }
 
 fn c_truetype_engine_output(params: &Value) -> Result<Value, String> {
-    let live = truetype_engine_library_present_arg(params)? != 0;
+    let library_kind = truetype_engine_library_present_arg(params)?;
     let mut library = std::ptr::null_mut();
-    if live {
+    if library_kind == 1 {
         let err = c_abi::FT_Init_FreeType(&mut library);
         if err != FT_Err_Ok {
             return Err(format!("FT_Init_FreeType returned {err}"));
         }
+    } else if library_kind == 2 {
+        library = c_abi::abi_support_new_library_without_default_modules();
     }
     let engine_type = c_abi::FT_Get_TrueType_Engine_Type(library);
-    if live {
+    let module_present = c_abi::abi_support_library_has_truetype_module(library);
+    let service_present = c_abi::abi_support_library_has_truetype_engine_service(library);
+    if library_kind != 0 {
         c_done_library(library);
     }
-    Ok(json!({ "engine_type": engine_type }))
+    Ok(json!({
+        "engine_type": engine_type,
+        "module_present": module_present,
+        "service_present": service_present
+    }))
 }
 
 fn wasm_truetype_engine_output(params: &Value) -> Result<Value, String> {
+    let (engine_type, module_present, service_present) =
+        wasm_abi::abi_support_truetype_engine_observation(truetype_engine_library_present_arg(
+            params,
+        )?);
     Ok(json!({
-        "engine_type": wasm_abi::fontdone_wasm_get_truetype_engine_type(
-            truetype_engine_library_present_arg(params)?
-        )
+        "engine_type": engine_type,
+        "module_present": module_present,
+        "service_present": service_present
     }))
 }
 
@@ -28683,6 +28697,7 @@ fn truetype_engine_library_present_arg(params: &Value) -> Result<i32, String> {
     {
         "null" => Ok(0),
         "new_from_FT_Init_FreeType" => Ok(1),
+        "new_from_FT_New_Library_without_default_modules" => Ok(2),
         other => Err(format!(
             "unsupported TrueType engine library scenario {other}"
         )),

@@ -15,7 +15,7 @@ crate-type = ["cdylib", "rlib"]
 fontdone = { path = ".." }
 
 [features]
-abi-test-support = []
+abi-test-support = ["fontdone/abi-test-support"]
 
 [lints.rust]
 future-incompatible = { level = "deny", priority = -1 }

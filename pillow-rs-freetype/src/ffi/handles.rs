@@ -1166,6 +1166,7 @@ pub fn FT_Bitmap_Blend(
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FT_Library {
     inner: api::Library,
+    has_truetype_module: bool,
     _lcd_geometry: [FT_Vector; 3],
 }
 
@@ -1419,11 +1420,20 @@ pub struct FT_GlyphSlot {
 pub fn FT_Init_FreeType() -> FT_Library {
     FT_Library {
         inner: api::Library::init(),
+        has_truetype_module: true,
         _lcd_geometry: [
             FT_Vector { x: -21, y: 0 },
             FT_Vector { x: 0, y: 0 },
             FT_Vector { x: 21, y: 0 },
         ],
+    }
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_New_Library_Without_Default_Modules() -> FT_Library {
+    FT_Library {
+        has_truetype_module: false,
+        ..FT_Init_FreeType()
     }
 }
 
@@ -2331,11 +2341,24 @@ pub fn FT_Library_SetLcdGeometry(
 }
 
 pub fn FT_Get_TrueType_Engine_Type(library: Option<&FT_Library>) -> FT_TrueTypeEngineType {
-    if library.is_some() {
+    // FreeType 2.14.3 `src/base/ftobjs.c:FT_Get_TrueType_Engine_Type` first
+    // looks up the "truetype" module; a library created by `FT_New_Library`
+    // without default modules therefore returns `NONE`, same as a null library.
+    if library.is_some_and(|library| library.has_truetype_module) {
         FT_TRUETYPE_ENGINE_TYPE_PATENTED as FT_TrueTypeEngineType
     } else {
         FT_TRUETYPE_ENGINE_TYPE_NONE as FT_TrueTypeEngineType
     }
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Library_Has_TrueType_Module(library: Option<&FT_Library>) -> bool {
+    library.is_some_and(|library| library.has_truetype_module)
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Library_Has_TrueType_Engine_Service(library: Option<&FT_Library>) -> bool {
+    FT_Library_Has_TrueType_Module(library)
 }
 
 pub fn FT_Set_Transform(

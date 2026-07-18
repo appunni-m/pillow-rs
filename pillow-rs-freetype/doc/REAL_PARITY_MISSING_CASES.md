@@ -447,6 +447,41 @@ Verified progress:
 - Rust FFI, C ABI, and WASM ABI now match pinned FreeType for both MoveTo
   contour-start variants and both callback coordinate transforms.
 
+### Issue Set D: `FT_Get_TrueType_Engine_Type` missing module lifecycle
+
+Previous blocker:
+
+- `ftmodapi.FT_Get_TrueType_Engine_Type.missing_truetype_module_returns_none`
+  was classified as `pending-route` because the runtime and oracle only modeled
+  a null library or a default `FT_Init_FreeType` library.
+
+Verified progress:
+
+- Native C oracle now constructs a library with `FT_New_Library` and no
+  `FT_Add_Default_Modules`, then records `FT_Get_Module(library, "truetype")`
+  and `FT_Get_TrueType_Engine_Type`.
+- Pinned FreeType returns `FT_TRUETYPE_ENGINE_TYPE_NONE` when the library lacks
+  the `truetype` module.
+- `fontdone` now tracks whether an `FT_Library` has the TrueType module instead
+  of treating every non-null library as bytecode-interpreter capable.
+- C ABI and WASM ABI remain thin test routes for this fixture: they construct
+  or observe the core library state and do not implement module or engine
+  behavior in the wrappers.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Get_TrueType_Engine_Type
+```
+
+Result: `3 / 3` runtime parity rows passed, `0` failed, `0` pending.
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftmodapi.get_truetype_engine_type
+```
+
+Result: `6 / 6` runtime parity rows passed, `0` failed, `0` pending.
+
 Focused non-coverage result:
 
 ```bash
@@ -535,6 +570,16 @@ mixed callback fixture, on-curve fixture, cubic fixtures, callback-error
 routes, high-bit curve-tag fixture, and MoveTo multi-contour fixture:
 `7143 / 7143` runnable rows passed, `0` failed, `91` pending. Route audit:
 `real-parity` `3726`, `pending-route` `83`.
+
+Full non-coverage result after the `FT_Get_TrueType_Engine_Type` missing-module
+lifecycle route:
+
+```bash
+make -C pillow-rs-freetype test
+```
+
+Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
+audit: `real-parity` `3727`, `pending-route` `82`, `pending-core` `7`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
 
