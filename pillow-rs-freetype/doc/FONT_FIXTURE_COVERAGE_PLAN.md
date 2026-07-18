@@ -3790,6 +3790,47 @@ The next `FT_Get_Advances` candidate is the no-active-size/probe-face route,
 but keep it separate from this range-ordering change so each C behavior and
 coverage delta remains independently reviewable.
 
+## SBIT private conversion cleanup
+
+The duplicate audit found no duplicate SBIT public rows or duplicated SBIT
+asset bytes: all 57 compact `sbit_*.ttf` assets are referenced, have distinct
+contents, and the 335 SBIT/bitmap-related public rows have unique case IDs and
+unique semantic inputs.  Therefore the remaining `tt/sbit.rs` gaps should not
+be attacked by adding more equivalent fixtures.
+
+Pinned FreeType stores EBLC offsets, glyph counts, and EBDT image offsets as
+32-bit SFNT fields (`sfnt/ttsbit.c:1241-1441`), and SBIT bitmap dimensions are
+byte metrics allocated by `tt_sbit_decoder_alloc_bitmap`
+(`sfnt/ttsbit.c:544-589`).  Rust previously carried extra
+`usize::try_from(u32)` and `u32::try_from(entry_index)` error closures plus a
+compound-buffer multiplication guard that cannot fail on supported native and
+wasm32 targets after the existing checked EBLC slice arithmetic and byte-metric
+bounds.  The real malformed-table checks remain: range-array multiplication,
+subtable additions, sparse-array length arithmetic, EBDT range addition, and
+payload/truncation checks still return deterministic Rust errors rather than
+wrapping.
+
+No fixture, oracle, expected output, route classifier, or threshold changed.
+Focused `FT_Load_Glyph.matrix_load` parity passed 305 / 305 rows, and focused
+`fterrdef.FT_Err_Missing_Bitmap.sbit_glyph_without_image` parity passed 13 / 13
+rows.  Focused SBIT condition-coverage run
+`993fecab-93e1-494b-bb85-47ae22e63517` passed and ingested snapshot
+`5770187e-8e21-4276-8327-2b652a084bcd`.
+
+Full managed `fontdone-ftmm-real-parity-coverage` run
+`c6726c35-b079-4e35-8be0-38cf2b9ad176` passed `real-parity-verify`, route
+audit, no-runtime-FFI, API/ABI compatibility, fmt, clippy, and normalized
+condition coverage, ingesting snapshot
+`a811bb3c-cb9a-4a30-88ac-2954f4a6a23e`.  Against snapshot
+`f666eccd-e322-4e7a-b184-70cf90b143f0`, project covered lines remain
+20,774 while total lines drop 21,677 -> 21,645, moving line rate
+95.8343% -> 95.9760%; covered branches remain 4,974 / 5,534.  `tt/sbit.rs`
+moves from 673 / 840 to 673 / 808 lines, from 43 / 114 to 43 / 106
+functions, and from 1,043 / 1,310 to 1,026 / 1,261 regions, with branch
+coverage still 72 / 72.  Route audit remains 7,235 concrete cases and
+3,685 real-parity rows; this is a denominator cleanup of C-unreachable private
+closures, not a new public-route claim.
+
 ## Immediate Next Actions
 
 Work must resume here unless a newer user request changes priority:
