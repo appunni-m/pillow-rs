@@ -8244,6 +8244,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
     if case.expect_error
         && (case.operation.starts_with("ftsizes.")
             || case.operation == "freetype.get_kerning"
+            || case.operation == "freetype.get_subglyph_info"
             || (case.operation == "freetype.done_face"
                 && lifecycle_handle_param(&case.inputs.params, "face") == Some("null"))
             || (case.operation == "freetype.done_freetype"

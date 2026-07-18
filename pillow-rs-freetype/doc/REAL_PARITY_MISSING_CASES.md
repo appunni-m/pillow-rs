@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_Kerning` null error route
+Current verified result after `FT_Get_SubGlyph_Info` null-slot error route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3735`
+  - `real-parity`: `3736`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `458`
+  - `generic-error-fallback`: `457`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -674,6 +674,42 @@ make -C pillow-rs-freetype test-op OP=freetype.get_kerning
 
 Result: `12 / 12` operation rows passed, `0` failed, `0` pending.
 
+### Issue Set J: `FT_Get_SubGlyph_Info` null-slot exact error route
+
+Previous blocker:
+
+- `freetype.FT_Get_SubGlyph_Info.error_null_slot` was classified as
+  `generic-error-fallback`, even though it already had a pinned C oracle
+  command and Rust FFI, C ABI, and WASM ABI null-slot runners.
+
+Verified progress:
+
+- The fixture loader now requires exact error status/output comparison for
+  expected-error `freetype.get_subglyph_info` rows.
+- The route audit now treats the null-slot row as real parity through the
+  existing explicit C oracle and backend routes.
+- The null-output row remains a wrapper-null-validation route because pinned C
+  dereferences those output pointers after slot/subglyph validation; it is not
+  claimed as native C null-output parity.
+- Runtime behavior is unchanged: pinned C FreeType and the Rust/C/WASM routes
+  all return `FT_Err_Invalid_Slot_Handle` for
+  `FT_Get_SubGlyph_Info(NULL, ...)`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Get_SubGlyph_Info.error_null_slot
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3736`, `generic-error-fallback` `457`.
+
+```bash
+make -C pillow-rs-freetype test-op OP=freetype.get_subglyph_info
+```
+
+Result: `11 / 11` operation rows passed, `0` failed, `0` pending.
+
 Focused non-coverage result:
 
 ```bash
@@ -824,6 +860,17 @@ make -C pillow-rs-freetype test
 
 Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
 audit: `real-parity` `3735`, `generic-error-fallback` `458`, `pending-route`
+`82`, and `pending-core` `7`.
+
+Full non-coverage result after the `FT_Get_SubGlyph_Info` null-slot error route
+classification:
+
+```bash
+make -C pillow-rs-freetype test
+```
+
+Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
+audit: `real-parity` `3736`, `generic-error-fallback` `457`, `pending-route`
 `82`, and `pending-core` `7`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
