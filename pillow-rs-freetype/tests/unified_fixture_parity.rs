@@ -2483,7 +2483,7 @@ impl BackendComparisonWorker {
             }
             "load_char" => rust_load_char_public_api(case),
             "load_glyph" => {
-                if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+                if lifecycle_handle_param_is_null(&case.inputs.params, "face") {
                     return Ok(error(FT_Err_Invalid_Face_Handle as FT_Error));
                 }
                 let load_flags = load_flags_param(&case.inputs.params)?;
@@ -2742,6 +2742,9 @@ impl BackendComparisonWorker {
                 c_load_char_output(face, &case.inputs.params)
             }
             "load_glyph" => {
+                if lifecycle_handle_param_is_null(&case.inputs.params, "face") {
+                    return c_load_glyph_output(std::ptr::null_mut(), &case.inputs.params);
+                }
                 let face = self.c_face(case)?;
                 c_load_glyph_output(face, &case.inputs.params)
             }
@@ -2988,6 +2991,9 @@ impl BackendComparisonWorker {
                 wasm_load_char_output(handle, &case.inputs.params)
             }
             "load_glyph" => {
+                if lifecycle_handle_param_is_null(&case.inputs.params, "face") {
+                    return wasm_load_glyph_output(0, &case.inputs.params);
+                }
                 let handle = self.wasm_face(case)?;
                 wasm_load_glyph_output(handle, &case.inputs.params)
             }
@@ -8246,9 +8252,9 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.operation == "freetype.get_kerning"
             || case.operation == "freetype.get_subglyph_info"
             || (case.operation == "load_char"
-                && lifecycle_handle_param(&case.inputs.params, "face") == Some("null"))
+                && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
             || (case.operation == "load_glyph"
-                && lifecycle_handle_param(&case.inputs.params, "face") == Some("null"))
+                && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
             || (case.operation == "freetype.done_face"
                 && lifecycle_handle_param(&case.inputs.params, "face") == Some("null"))
             || (case.operation == "freetype.done_freetype"
@@ -9860,7 +9866,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 return oracle_fallback_args(case);
             }
             let selector = glyph_index_selector_param(params)?;
-            if lifecycle_handle_param(params, "face") == Some("null") {
+            if lifecycle_handle_param_is_null(params, "face") {
                 let glyph_index = match selector {
                     GlyphIndexSelector::Index(glyph_index) => glyph_index,
                     GlyphIndexSelector::FromCharCode(_) | GlyphIndexSelector::NumGlyphs => 0,
@@ -10610,7 +10616,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_geometry" => rust_set_lcd_geometry(case),
         "load_char" => rust_load_char_public_api(case),
         "load_glyph" => {
-            if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+            if lifecycle_handle_param_is_null(&case.inputs.params, "face") {
                 return Ok(error(FT_Err_Invalid_Face_Handle as FT_Error));
             }
             let face = open_face(case)?;
@@ -11256,7 +11262,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "load_glyph" => {
-            if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+            if lifecycle_handle_param_is_null(&case.inputs.params, "face") {
                 return c_load_glyph_output(std::ptr::null_mut(), &case.inputs.params);
             }
             let (library, face) = c_open_face(case)?;
@@ -11793,7 +11799,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "load_glyph" => {
-            if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+            if lifecycle_handle_param_is_null(&case.inputs.params, "face") {
                 return wasm_load_glyph_output(0, &case.inputs.params);
             }
             let handle = wasm_open_face(case)?;
@@ -24200,6 +24206,10 @@ fn string_param<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
 
 fn lifecycle_handle_param<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
     value.get(key).and_then(Value::as_str)
+}
+
+fn lifecycle_handle_param_is_null(value: &Value, key: &str) -> bool {
+    lifecycle_handle_param(value, key).is_some_and(|handle| handle.eq_ignore_ascii_case("null"))
 }
 
 fn param_is_null(value: &Value, key: &str) -> bool {

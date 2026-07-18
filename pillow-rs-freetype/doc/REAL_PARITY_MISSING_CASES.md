@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Load_Glyph` null-face error route
+Current verified result after `FT_Err_Invalid_Face_Handle` load-glyph null-face
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3738`
+  - `real-parity`: `3739`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `455`
+  - `generic-error-fallback`: `454`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -783,6 +783,43 @@ make -C pillow-rs-freetype test-op OP=load_glyph
 
 Result: `587 / 587` operation rows passed, `0` failed, `0` pending.
 
+### Issue Set M: `FT_Err_Invalid_Face_Handle` uppercase NULL load-glyph route
+
+Previous blocker:
+
+- `fterrdef.FT_Err_Invalid_Face_Handle.face_api_rejects_null_face` was
+  classified as `generic-error-fallback`.
+- The row used `face: "NULL"` and also carried a font asset. The harness
+  recognized lowercase `null` in the earlier `FT_Load_Glyph` row, but this
+  uppercase spelling let the C oracle, C ABI, and WASM ABI routes open a real
+  face and load glyph zero instead of exercising `FT_Load_Glyph(NULL, ...)`.
+
+Verified progress:
+
+- Public `load_glyph` routing now treats `null` and `NULL` as the same null
+  handle for the pinned C oracle, Rust FFI, C ABI, and WASM ABI paths.
+- The fixture loader now requires exact error status/output comparison for the
+  `fterrdef.FT_Err_Invalid_Face_Handle.face_api_rejects_null_face` row.
+- The route audit now treats that row as real parity through the corrected
+  explicit C oracle and backend routes.
+- Runtime behavior now matches pinned C FreeType: `FT_Load_Glyph(NULL, 0,
+  FT_LOAD_DEFAULT)` returns `FT_Err_Invalid_Face_Handle` with null slot output.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Face_Handle.face_api_rejects_null_face
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3739`, `generic-error-fallback` `454`.
+
+```bash
+make -C pillow-rs-freetype test-op OP=load_glyph
+```
+
+Result: `587 / 587` operation rows passed, `0` failed, `0` pending.
+
 Focused non-coverage result:
 
 ```bash
@@ -935,7 +972,8 @@ Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
 audit: `real-parity` `3735`, `generic-error-fallback` `458`, `pending-route`
 `82`, and `pending-core` `7`.
 
-Full non-coverage result after the `FT_Load_Glyph` null-face error route
+Full non-coverage result after the `FT_Err_Invalid_Face_Handle` load-glyph
+null-face route
 classification:
 
 ```bash
@@ -943,7 +981,7 @@ make -C pillow-rs-freetype test
 ```
 
 Result: `7144 / 7144` runnable rows passed, `0` failed, `90` pending. Route
-audit: `real-parity` `3738`, `generic-error-fallback` `455`, `pending-route`
+audit: `real-parity` `3739`, `generic-error-fallback` `454`, `pending-route`
 `82`, and `pending-core` `7`.
 
 Result: `7110 / 7110` runnable rows passed, `0` failed, `124` pending.
