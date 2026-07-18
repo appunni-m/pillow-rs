@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Request_Size` ppem-overflow exact-error
+Current verified result after `FT_SIZE_REQUEST_TYPE_MAX` sentinel exact-error
 route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3747`
+  - `real-parity`: `3748`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `446`
+  - `generic-error-fallback`: `445`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1382,6 +1382,37 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Request_Size.error_ppem_overflow
+```
+
+### Issue Set V: `FT_SIZE_REQUEST_TYPE_MAX` sentinel exact-error route
+
+Previous blocker:
+
+- `freetype.FT_SIZE_REQUEST_TYPE_MAX.request_size_rejects_sentinel` stayed in
+  `generic-error-fallback` even though it exercises the public
+  `FT_Request_Size` path with the sentinel enum value. The runtime harness
+  accepted the expected error without exact pinned-C status/output comparison.
+
+Verified progress:
+
+- The pinned C oracle `emit_request_size` route calls `FT_Request_Size` with
+  the sentinel `FT_SIZE_REQUEST_TYPE_MAX` request type and records the native
+  error plus the row status/metrics payload.
+- FreeType 2.14.3 `FT_Request_Size` rejects request types at or beyond
+  `FT_SIZE_REQUEST_TYPE_MAX` before metrics mutation
+  (`src/base/ftobjs.c:3438-3505`).
+- Rust FFI, thin C ABI, and WASM ABI already matched the pinned C sentinel
+  rejection output; the unified harness now requires exact error status/output
+  comparison for this concrete public case.
+- The route audit now classifies
+  `freetype.FT_SIZE_REQUEST_TYPE_MAX.request_size_rejects_sentinel` as
+  `real-parity`, validated through pinned C FreeType, Rust FFI, thin C ABI,
+  and WASM ABI.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_SIZE_REQUEST_TYPE_MAX.request_size_rejects_sentinel
 ```
 
 ## Coverage Bulk Context

@@ -8263,7 +8263,9 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
                 && lifecycle_handle_param_is_null(&case.inputs.params, "face"))
             || (case.operation == "freetype.request_size"
                 && (case.case_id == "freetype.FT_Request_Size.error_null_face_or_request"
-                    || case.case_id == "freetype.FT_Request_Size.error_ppem_overflow"))
+                    || case.case_id == "freetype.FT_Request_Size.error_ppem_overflow"
+                    || case.case_id
+                        == "freetype.FT_SIZE_REQUEST_TYPE_MAX.request_size_rejects_sentinel"))
             || (case.operation == "load_char"
                 && (lifecycle_handle_param_is_null(&case.inputs.params, "face")
                     || case.case_id == "freetype.FT_Load_Char.error_null_face_or_invalid_flags"))
