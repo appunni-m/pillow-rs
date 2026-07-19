@@ -816,6 +816,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmm.FT_Set_MM_WeightVector.error_null_weightvector_with_nonzero_len",
         "ftmm.FT_Set_MM_WeightVector.error_unsupported_on_true_type_variations",
         "ftmm.FT_Set_Var_Design_Coordinates.error_null_coords_with_nonzero_count",
+        "ftoutln.FT_Outline_Decompose.invalid_outline_or_interface_errors",
         "ftmm.FT_Set_Var_Blend_Coordinates.error_null_coords_with_nonzero_count",
         "ftmm.FT_Set_MM_Blend_Coordinates.error_null_coords_with_nonzero_count",
         "ftmm.FT_Set_MM_Design_Coordinates.error_null_coords_with_nonzero_count",

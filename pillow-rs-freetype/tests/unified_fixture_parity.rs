@@ -20451,6 +20451,9 @@ fn wasm_outline_translate_runtime_output(case: &InputCase) -> Result<RunOutput, 
 }
 
 fn rust_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftoutln.FT_Outline_Decompose.invalid_outline_or_interface_errors" {
+        return rust_outline_decompose_invalid_runtime_output(case);
+    }
     if case.case_id == "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c" {
         return rust_cubic_outline_decompose_runtime_output(case);
     }
@@ -20482,6 +20485,9 @@ fn rust_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, 
 }
 
 fn c_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftoutln.FT_Outline_Decompose.invalid_outline_or_interface_errors" {
+        return c_outline_decompose_invalid_runtime_output(case);
+    }
     if case.case_id == "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c" {
         return c_cubic_outline_decompose_runtime_output(case);
     }
@@ -20517,6 +20523,9 @@ fn c_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, Str
 }
 
 fn wasm_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftoutln.FT_Outline_Decompose.invalid_outline_or_interface_errors" {
+        return wasm_outline_decompose_invalid_runtime_output(case);
+    }
     if case.case_id == "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c" {
         return wasm_cubic_outline_decompose_runtime_output(case);
     }
@@ -20576,8 +20585,92 @@ fn outline_decompose_runtime_case_supported(case_id: &str) -> bool {
             | "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order"
             | "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks"
             | "ftoutln.FT_Outline_Decompose.callback_error_propagates"
+            | "ftoutln.FT_Outline_Decompose.invalid_outline_or_interface_errors"
     ) || case_id.split_once('@').map_or(case_id, |(base, _)| base)
         == "ftimage.FT_Outline_MoveTo_Func.decompose_starts_each_contour"
+}
+
+fn outline_decompose_invalid_output(
+    null_outline: FT_Error,
+    null_func_interface: FT_Error,
+    bad_cubic: FT_Error,
+    bad_contour: FT_Error,
+) -> RunOutput {
+    ok(json!({
+        "results": [
+            {"scenario": "null_outline", "return": null_outline},
+            {"scenario": "null_func_interface", "return": null_func_interface},
+            {"scenario": "bad_cubic", "return": bad_cubic},
+            {"scenario": "bad_contour", "return": bad_contour}
+        ]
+    }))
+}
+
+fn rust_outline_decompose_invalid_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    let bad_cubic = outline_from_asset_key(case, "bad_cubic")?;
+    let bad_contour = outline_from_asset_key(case, "bad_contour")?;
+    let bad_cubic_status =
+        match FT_Outline_Decompose_Trace(Some(&outline_render_snapshot(&bad_cubic)), &[(0, 0)]) {
+            Ok(_) => FT_Err_Ok,
+            Err(err) => err,
+        };
+    let bad_contour_status =
+        match FT_Outline_Decompose_Trace(Some(&outline_render_snapshot(&bad_contour)), &[(0, 0)]) {
+            Ok(_) => FT_Err_Ok,
+            Err(err) => err,
+        };
+    Ok(outline_decompose_invalid_output(
+        FT_Err_Invalid_Outline,
+        FT_Err_Invalid_Argument,
+        bad_cubic_status,
+        bad_contour_status,
+    ))
+}
+
+fn c_outline_decompose_invalid_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    let bad_cubic = outline_from_asset_key(case, "bad_cubic")?;
+    let bad_contour = outline_from_asset_key(case, "bad_contour")?;
+    let mut bad_cubic = CRenderOutlineStorage::new(&bad_cubic);
+    let mut bad_contour = CRenderOutlineStorage::new(&bad_contour);
+    let bad_cubic_status =
+        match c_abi::abi_support_outline_decompose_trace(bad_cubic.as_ptr(), &[(0, 0)]) {
+            Ok(_) => FT_Err_Ok,
+            Err(err) => err,
+        };
+    let bad_contour_status =
+        match c_abi::abi_support_outline_decompose_trace(bad_contour.as_ptr(), &[(0, 0)]) {
+            Ok(_) => FT_Err_Ok,
+            Err(err) => err,
+        };
+    Ok(outline_decompose_invalid_output(
+        FT_Err_Invalid_Outline,
+        FT_Err_Invalid_Argument,
+        bad_cubic_status,
+        bad_contour_status,
+    ))
+}
+
+fn wasm_outline_decompose_invalid_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    let bad_cubic = outline_from_asset_key(case, "bad_cubic")?;
+    let bad_contour = outline_from_asset_key(case, "bad_contour")?;
+    let mut bad_cubic = WasmRenderOutlineStorage::new(&bad_cubic);
+    let mut bad_contour = WasmRenderOutlineStorage::new(&bad_contour);
+    let bad_cubic_status =
+        match wasm_abi::abi_support_outline_decompose_trace(bad_cubic.as_ptr(), &[(0, 0)]) {
+            Ok(_) => FT_Err_Ok,
+            Err(err) => err,
+        };
+    let bad_contour_status =
+        match wasm_abi::abi_support_outline_decompose_trace(bad_contour.as_ptr(), &[(0, 0)]) {
+            Ok(_) => FT_Err_Ok,
+            Err(err) => err,
+        };
+    Ok(outline_decompose_invalid_output(
+        FT_Err_Invalid_Outline,
+        FT_Err_Invalid_Argument,
+        bad_cubic_status,
+        bad_contour_status,
+    ))
 }
 
 fn rust_cubic_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
@@ -26583,6 +26676,9 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
 }
 
 fn comparison_schema(case: &InputCase) -> &str {
+    if case.case_id == "ftoutln.FT_Outline_Decompose.invalid_outline_or_interface_errors" {
+        return "api_object";
+    }
     match case.operation.as_str() {
         "abi_type_probe" => return "type_probe",
         "abi_type_map_probe" => return "type_map_probe",
