@@ -811,6 +811,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format",
         "freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel",
         "ftimage.FT_RASTER_FLAG_AA.mono_rejects_aa",
+        "tttables.FT_Sfnt_Table_Info.invalid_index_or_arguments",
     }
 
 
@@ -1135,6 +1136,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel"
     ):
         return "FT_RENDER_MODE_MAX render rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "sfnt.table_info"
+        and row.case_id == "tttables.FT_Sfnt_Table_Info.invalid_index_or_arguments"
+    ):
+        return "FT_Sfnt_Table_Info invalid-index/argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "freetype.face_handle_error_policy"
         and row.case_id == "freetype.FT_Face.null_and_done_handle_errors"
