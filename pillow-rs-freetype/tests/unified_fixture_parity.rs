@@ -8334,6 +8334,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "freetype.FT_Attach_Stream.error_null_open_args"
             || case.case_id
                 == "freetype.FT_Attach_Stream.error_invalid_open_args_or_unsupported_driver"
+            || case.case_id == "ftbdf.FT_Get_BDF_Property.error_null_face_or_output"
             || case.case_id == "freetype.FT_Load_Glyph.matrix_load"
             || case.case_id
                 == "freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags"
