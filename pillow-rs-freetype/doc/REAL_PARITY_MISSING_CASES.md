@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Library_SetLcdFilterWeights` exact-error route
+Current verified result after `FT_Library_SetLcdGeometry` exact-error route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3816`
+  - `real-parity`: `3818`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `379`
+  - `generic-error-fallback`: `377`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3162,6 +3162,42 @@ Verified commands:
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftlcdfil.FT_Library_SetLcdFilterWeights.error_null_library
 make -C pillow-rs-freetype test-case CASE=ftlcdfil.FT_Library_SetLcdFilterWeights.error_null_weights
+```
+
+### Issue Set BV: `FT_Library_SetLcdGeometry` exact-error routes
+
+Previous blocker:
+
+- `ftlcdfil.FT_Library_SetLcdGeometry.error_null_library` and
+  `ftlcdfil.FT_Library_SetLcdGeometry.error_null_geometry` stayed in
+  `generic-error-fallback`.
+- The fixtures require exact behavior from `freetype/src/base/ftlcdfil.c`, but
+  the harness still accepted these rows as generic expected-error rows instead
+  of enforcing exact error output and unchanged-geometry observation where
+  applicable.
+
+Plan:
+
+1. Keep the fixtures intact; they exercise public
+   `FT_Library_SetLcdGeometry` error behavior for null library and null
+   geometry pointer inputs.
+2. Require exact error comparison for both case IDs.
+3. Classify each row as real parity only after focused same-input parity
+   passes through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The two focused `FT_Library_SetLcdGeometry` rows pass exact comparison
+  against pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies these case IDs as `real-parity`:
+  - `ftlcdfil.FT_Library_SetLcdGeometry.error_null_library`
+  - `ftlcdfil.FT_Library_SetLcdGeometry.error_null_geometry`
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftlcdfil.FT_Library_SetLcdGeometry.error_null_library
+make -C pillow-rs-freetype test-case CASE=ftlcdfil.FT_Library_SetLcdGeometry.error_null_geometry
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
