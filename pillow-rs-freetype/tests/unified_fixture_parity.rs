@@ -8437,9 +8437,12 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "fterrdef.FT_Err_Hmtx_Table_Missing.incremental_metrics_exception_matches_c"
             || case.case_id == "fterrdef.FT_Err_Horiz_Header_Missing.sfnt_missing_hhea_table"
+            || case.case_id == "fterrdef.FT_Err_Invalid_CodeRange.truetype_invalid_coderange"
             || case.case_id
                 == "fterrdef.FT_Err_Invalid_Frame_Operation.stream_frame_access_rejects_invalid_sequence"
             || case.case_id == "fterrdef.FT_Err_Invalid_Frame_Read.stream_frame_bounds_rejected"
+            || case.case_id
+                == "fterrdef.FT_Err_Invalid_Stream_Read.png_embedded_bitmap_read_failure"
             || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Handle.null_stream_rejected"
             || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Operation.stream_operation_failure"
             || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Seek.stream_seek_failure"
@@ -8453,9 +8456,11 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "fterrdef.FT_Err_Invalid_Horiz_Metrics.sfnt_hmtx_metrics_rejected"
             || case.case_id == "fterrdef.FT_Err_Invalid_Offset.table_offset_bounds_rejected"
             || case.case_id == "fterrdef.FT_Err_Invalid_Outline.malformed_outline_rejected"
+            || case.case_id == "fterrdef.FT_Err_Invalid_SVG_Document.svg_document_failure_policy"
             || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Skip.pcf_table_skip_failure"
             || case.case_id == "fterrdef.FT_Err_Invalid_Slot_Handle.null_or_invalid_slot_rejected"
             || case.case_id == "fterrdef.FT_Err_Invalid_Table.malformed_sfnt_table_rejected"
+            || case.case_id == "fterrdef.FT_Err_Locations_Missing.glyf_present_loca_missing"
             || case.case_id == "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name"
             || case.case_id == "fterrdef.FT_Err_Invalid_Handle.generic_object_handle_validation"
             || case.case_id == "fterrdef.FT_Err_Invalid_Pixel_Size.bitmap_strike_mismatch"
@@ -8463,6 +8468,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "fterrdef.FT_Err_Array_Too_Large.allocator_growth_overflow_returns_error"
             || case.case_id == "fterrdef.FT_Err_Bad_Argument.svg_preset_slot_bad_argument"
+            || case.case_id == "fterrdef.FT_Err_Ignore.parser_ignore_sentinel_not_public_success"
             || case.case_id == "fterrdef.FT_Err_Missing_Module.no_driver_matches_face"
             || case.case_id == "fterrdef.FT_Err_Out_Of_Memory.allocator_failure_injection"
             || case.case_id == "fterrdef.FT_Err_Out_Of_Memory.cache_flush_then_oom"
@@ -8472,6 +8478,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
                 == "fterrdef.FT_Err_Raster_Negative_Height.monochrome_raster_negative_height"
             || case.case_id == "fterrdef.FT_Err_Raster_Uninitialized.raster_render_without_pool"
             || case.case_id == "fterrdef.FT_Err_Table_Missing.sfnt_required_table_missing"
+            || case.case_id == "fterrdef.FT_Err_Too_Many_Caches.cache_manager_cache_limit"
             || case.case_id == "fterrdef.FT_Err_Unknown_File_Format.face_open_unknown_format"
             || case.case_id
                 == "fterrdef.FT_Err_Unknown_File_Format.malformed_container_probe_unknown"
@@ -8492,6 +8499,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftimage.FT_Raster_Span_Func.missing_span_callback_errors"
             || case.case_id == "ftimage.FT_Bitmap.invalid_target_buffer_errors"
             || case.case_id == "ftimage.FT_PIXEL_MODE_NONE.invalid_render_target_errors"
+            || case.case_id == "ftimage.FT_RASTER_FLAG_DIRECT.mono_rejects_direct"
             || case.case_id == "ftimage.FT_RASTER_FLAG_SDF.non_sdf_raster_rejects_sdf_shape"
             || case.case_id == "ftimage.FT_Raster.null_raster_errors"
             || case.case_id == "ftimage.FT_Raster_Funcs.render_callback_error_contract"
