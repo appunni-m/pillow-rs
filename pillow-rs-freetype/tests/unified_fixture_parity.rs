@@ -8362,6 +8362,9 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftcolor.FT_Palette_Data_Get.error_null_face_or_output"
             || case.case_id == "ftcolor.FT_Palette_Data_Get.error_color_layers_disabled"
             || case.case_id == "ftcolor.FT_Palette_Select.error_null_face_or_invalid_palette_index"
+            || case.case_id == "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face"
+            || case.case_id
+                == "ftcolor.FT_Palette_Set_Foreground_Color.error_color_layers_disabled"
             || case.case_id
                 == "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output"
             || case.case_id
@@ -8389,6 +8392,14 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftcache.FTC_SBitCache_LookupScaler.clears_outputs_before_lookup"
             || case.case_id == "ftcache.FTC_SBitCache_New.error_outputs_null_cache"
             || case.case_id == "ftcache.FTC_SBitCache_New.invalid_arguments_match_c"
+            || case.case_id == "ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source"
+            || case.case_id
+                == "ftbzip2.FT_Stream_OpenBzip2.error_invalid_or_truncated_bzip2_header"
+            || case.case_id == "ftgxval.FT_ClassicKern_Validate.rejects_invalid_arguments"
+            || case.case_id
+                == "ftgxval.FT_ClassicKern_Validate.reports_unimplemented_or_invalid_table"
+            || case.case_id == "ftgxval.FT_VALIDATE_APPLE.absent_or_invalid_kern_table"
+            || case.case_id == "ftgxval.FT_VALIDATE_CKERN.malformed_table_error_matches_c"
             || case.case_id == "ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument"
             || case.case_id == "ftpfr.FT_Get_PFR_Advance.null_face_or_output_errors"
             || case.case_id == "ftpfr.FT_Get_PFR_Kerning.null_face_or_vector_errors"
