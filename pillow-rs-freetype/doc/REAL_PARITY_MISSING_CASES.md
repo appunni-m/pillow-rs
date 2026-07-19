@@ -1,5 +1,54 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: FTC CMap null-cache exact-error route ordering
+
+Status: three-concrete-row audit cleanup completed on 2026-07-20 for pinned
+FreeType 2.14.3 `FTC_CMapCache_Lookup` null-cache behavior.
+
+Implemented real parity rows:
+
+- `ftcache.FTC_CMapCache_Lookup.error_null_cache_returns_zero` (3 concrete
+  variants)
+
+Finding:
+
+- The unified runtime harness already executes these rows through a maintained
+  cache exact-error/null-result lane and compares pinned C oracle, Rust FFI, C
+  ABI, and WASM ABI output.
+- The static route audit still parked the rows behind the broad FTC cache
+  subsystem pending bucket because the broad pending classifier ran before the
+  existing exact-error/null-route promotion.
+- The route audit now checks concrete exact-error and focused real-parity
+  reasons before broad subsystem pending buckets, while unresolved future assets
+  and non-runnable success/lifecycle rows remain pending.
+
+Rejected candidates:
+
+- `FTC_Manager_Done.success_null_or_invalid_library_noop`,
+  `FTC_Manager_RemoveFaceID.success_null_manager_noop`, and
+  `FTC_Node_Unref.null_or_invalid_inputs_noop` remain pending because focused
+  runtime filters currently select them as `runnable=0`.
+- Palette non-SFNT/null-output rows and OpenType absent-table rows also remain
+  pending for the same reason; promoting them would be placeholder accounting.
+- `ftparams` unpatented/sbix/incremental/stem-darkening rows remain pending
+  because they require `FT_Open_Args` parameter semantics, not an unrelated
+  existing property or face-toggle route.
+
+Impact:
+
+- `real-parity`: `4452 -> 4455`
+- `compile-contract`: stays `2265`
+- `pending-route`: `503 -> 500`
+- `pending-core`: stays `1`
+- `generic-fallback`: stays `0`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=error_null_cache_returns_zero
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: `FT_Open_Args` typographic-name null-data route
 
 Status: two-row runtime route completed on 2026-07-20 for pinned FreeType
