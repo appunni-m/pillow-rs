@@ -2285,6 +2285,7 @@ impl BackendComparisonWorker {
                     | "freetype.get_kerning"
                     | "freetype.get_subglyph_info"
                     | "ftotval.open_type_validate"
+                    | "ftmm.done_mm_var"
                     | "ftmm.get_default_named_instance"
                     | "ftmm.set_named_instance"
                     | "ftsizes.new_size"
@@ -7550,6 +7551,70 @@ fn add_default_module_probe_names_arg(params: &Value) -> Result<String, String> 
     Ok(add_default_module_probe_names(params)?.join(","))
 }
 
+fn done_mm_var_library_present(params: &Value) -> i32 {
+    i32::from(!param_is_null(params, "library"))
+}
+
+fn done_mm_var_descriptor_present(params: &Value) -> i32 {
+    i32::from(!param_is_null(params, "descriptor"))
+}
+
+fn done_mm_var_output(err: FT_Error, descriptor_present: i32) -> RunOutput {
+    if err == FT_Err_Ok {
+        ok(json!({
+            "free_events": if descriptor_present != 0 { "descriptor" } else { "none" }
+        }))
+    } else {
+        error(err)
+    }
+}
+
+fn rust_done_mm_var(case: &InputCase) -> Result<RunOutput, String> {
+    let library = (done_mm_var_library_present(&case.inputs.params) != 0).then(FT_Init_FreeType);
+    let mut descriptor =
+        (done_mm_var_descriptor_present(&case.inputs.params) != 0).then(FT_MM_Var::default);
+    let err = FT_Done_MM_Var(library.as_ref(), descriptor.as_mut());
+    Ok(done_mm_var_output(
+        err,
+        done_mm_var_descriptor_present(&case.inputs.params),
+    ))
+}
+
+fn c_done_mm_var(case: &InputCase) -> Result<RunOutput, String> {
+    let mut library = std::ptr::null_mut();
+    if done_mm_var_library_present(&case.inputs.params) != 0 {
+        let err = c_abi::FT_Init_FreeType(&mut library);
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+    }
+    let mut descriptor = FT_MM_Var::default();
+    let descriptor_ptr = if done_mm_var_descriptor_present(&case.inputs.params) != 0 {
+        &mut descriptor
+    } else {
+        std::ptr::null_mut()
+    };
+    let err = c_abi::FT_Done_MM_Var(library, descriptor_ptr);
+    if !library.is_null() {
+        c_done_library(library);
+    }
+    Ok(done_mm_var_output(
+        err,
+        done_mm_var_descriptor_present(&case.inputs.params),
+    ))
+}
+
+fn wasm_done_mm_var(case: &InputCase) -> Result<RunOutput, String> {
+    let err = wasm_abi::abi_support_done_mm_var(
+        done_mm_var_library_present(&case.inputs.params),
+        done_mm_var_descriptor_present(&case.inputs.params),
+    );
+    Ok(done_mm_var_output(
+        err,
+        done_mm_var_descriptor_present(&case.inputs.params),
+    ))
+}
+
 fn rust_done_freetype(case: &InputCase) -> Result<RunOutput, String> {
     if lifecycle_handle_param(&case.inputs.params, "library") == Some("null") {
         return Ok(lifecycle_result(FT_Done_FreeType(None)));
@@ -10545,6 +10610,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
             Ok(args)
         }
+        "ftmm.done_mm_var" => Ok(vec![
+            "--done-mm-var".to_string(),
+            done_mm_var_library_present(params).to_string(),
+            done_mm_var_descriptor_present(params).to_string(),
+        ]),
         "freetype.done_freetype" => {
             if lifecycle_handle_param(params, "library") == Some("null") {
                 return Ok(vec!["--done-freetype".to_string(), "null".to_string()]);
@@ -11174,6 +11244,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "freetype.get_kerning"
                 | "freetype.get_subglyph_info"
                 | "ftotval.open_type_validate"
+                | "ftmm.done_mm_var"
                 | "ftmm.get_default_named_instance"
                 | "ftmm.set_named_instance"
                 | "ftsizes.new_size"
@@ -11431,6 +11502,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmodapi.set_debug_hook" => rust_set_debug_hook(case),
         "ftmodapi.add_default_modules" => rust_add_default_modules(case),
+        "ftmm.done_mm_var" => rust_done_mm_var(case),
         "freetype.done_freetype" => rust_done_freetype(case),
         "freetype.done_face" => rust_done_face(case),
         "freetype.face_check_truetype_patents" => rust_face_check_truetype_patents(case),
@@ -12102,6 +12174,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmodapi.set_debug_hook" => c_set_debug_hook(case),
         "ftmodapi.add_default_modules" => c_add_default_modules(case),
+        "ftmm.done_mm_var" => c_done_mm_var(case),
         "freetype.done_freetype" => c_done_freetype_output(case),
         "freetype.done_face" => c_done_face_output(case),
         "freetype.face_check_truetype_patents" => c_face_check_truetype_patents(case),
@@ -12691,6 +12764,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmodapi.set_debug_hook" => wasm_set_debug_hook(case),
         "ftmodapi.add_default_modules" => wasm_add_default_modules(case),
+        "ftmm.done_mm_var" => wasm_done_mm_var(case),
         "freetype.done_freetype" => wasm_done_freetype_output(case),
         "freetype.done_face" => wasm_done_face_output(case),
         "freetype.face_check_truetype_patents" => wasm_face_check_truetype_patents(case),
@@ -27099,6 +27173,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "ftlcdfil.set_lcd_filter"
             | "ftlcdfil.set_lcd_filter_weights"
             | "ftlcdfil.set_lcd_geometry"
+            | "ftmm.done_mm_var"
             | "ftmm.get_default_named_instance"
             | "ftmm.set_named_instance" => "api_object",
             "ftmodapi.get_truetype_engine_type" => "truetype_engine_type",

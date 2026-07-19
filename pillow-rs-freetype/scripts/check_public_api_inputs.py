@@ -1385,6 +1385,15 @@ def add_default_modules_real_parity_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def done_mm_var_real_parity_reason(row: ConcreteInput) -> str | None:
+    if (
+        row.operation == "ftmm.done_mm_var"
+        and row.subject == "ftmm.FT_Done_MM_Var"
+    ):
+        return "FT_Done_MM_Var library/descriptor ownership behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    return None
+
+
 def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     exact_error_reasons = {
         (
@@ -3132,6 +3141,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     add_default_modules_real_reason = add_default_modules_real_parity_reason(row)
     if add_default_modules_real_reason:
         return ("real-parity", add_default_modules_real_reason)
+    done_mm_var_real_reason = done_mm_var_real_parity_reason(row)
+    if done_mm_var_real_reason:
+        return ("real-parity", done_mm_var_real_reason)
     wrapper_null_reason = wrapper_null_validation_reason(row)
     if wrapper_null_reason:
         return ("wrapper-null-validation", wrapper_null_reason)

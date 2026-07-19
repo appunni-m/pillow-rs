@@ -49,6 +49,7 @@ pub type FT_LcdFilter = c_int;
 pub type FT_TrueTypeEngineType = c_int;
 pub type FT_DebugHook_Func = rust_ffi::FT_DebugHook_Func;
 pub type FT_StrokerBorder = c_int;
+pub type FT_MM_Var = rust_ffi::FT_MM_Var;
 
 pub type FT_Library = *mut FT_LibraryRec;
 pub type FT_Face = *mut FT_FaceRec;
@@ -1015,6 +1016,20 @@ pub extern "C" fn FT_Done_FreeType(library: FT_Library) -> FT_Error {
     } else {
         35 // matches C runtime: FT_Done_FreeType(NULL)
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Done_MM_Var(library: FT_Library, amaster: *mut FT_MM_Var) -> FT_Error {
+    let Some(library) = library_ref(library) else {
+        return rust_ffi::FT_Done_MM_Var(None, None);
+    };
+    let amaster = non_null_mut(amaster).map(|mut amaster| {
+        // SAFETY: `amaster` is non-null and the caller provides a writable
+        // FT_MM_Var descriptor owned by this API.  The current pure-Rust core
+        // only observes null-vs-non-null ownership for this public route.
+        unsafe { amaster.as_mut() }
+    });
+    rust_ffi::FT_Done_MM_Var(Some(library), amaster)
 }
 
 #[unsafe(no_mangle)]

@@ -1402,6 +1402,17 @@ pub fn abi_support_init_free_type_created_library() -> bool {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_done_mm_var(library_present: i32, descriptor_present: i32) -> i32 {
+    let library = if library_present != 0 {
+        Some(rust_ffi::FT_Init_FreeType())
+    } else {
+        None
+    };
+    let mut descriptor = (descriptor_present != 0).then(rust_ffi::FT_MM_Var::default);
+    rust_ffi::FT_Done_MM_Var(library.as_ref(), descriptor.as_mut())
+}
+
+#[cfg(feature = "abi-test-support")]
 extern "C" fn abi_support_debug_hook_a(_arg: rust_ffi::FT_Pointer) -> rust_ffi::FT_Error {
     rust_ffi::FT_Err_Ok
 }
