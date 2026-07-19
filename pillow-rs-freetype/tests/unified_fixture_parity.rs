@@ -8902,6 +8902,21 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "freetype.FT_Attach_Stream.error_invalid_open_args_or_unsupported_driver"
             || case.case_id == "freetype.FT_New_Face.error_null_library_or_aface"
+            || case.case_id == "fterrdef.FT_Err_Bbx_Too_Big.bdf_bitmap_size_overflow_returns_error"
+            || case.case_id
+                == "fterrdef.FT_Err_Corrupted_Font_Glyphs.bdf_glyph_parse_failure_returns_error"
+            || case.case_id
+                == "fterrdef.FT_Err_Corrupted_Font_Header.bdf_header_parse_failure_returns_error"
+            || case.case_id == "fterrdef.FT_Err_Missing_Bbx_Field.bdf_bitmap_before_bbx"
+            || case.case_id == "fterrdef.FT_Err_Missing_Encoding_Field.bdf_glyph_without_encoding"
+            || case.case_id == "fterrdef.FT_Err_Missing_Font_Field.bdf_chars_before_font"
+            || case.case_id
+                == "fterrdef.FT_Err_Missing_Fontboundingbox_Field.bdf_chars_before_fontboundingbox"
+            || case.case_id == "fterrdef.FT_Err_Missing_Size_Field.bdf_chars_before_size"
+            || case.case_id
+                == "fterrdef.FT_Err_Missing_Startchar_Field.bdf_encoding_before_startchar"
+            || case.case_id
+                == "fterrdef.FT_Err_Missing_Startchar_Field.bdf_nested_startchar_before_endchar"
             || case.case_id == "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none"
             || case.case_id == "ftbdf.FT_Get_BDF_Property.error_null_face_or_output"
             || case.case_id
@@ -26670,6 +26685,17 @@ fn font_error_to_ft(error: FontError) -> FT_Error {
         FontError::InvalidArgument(_) => FT_Err_Invalid_Argument,
         FontError::MissingBitmap => FT_Err_Missing_Bitmap as FT_Error,
         FontError::InvalidComposite => FT_Err_Invalid_Composite as FT_Error,
+        FontError::BdfBbxTooBig => FT_Err_Bbx_Too_Big as FT_Error,
+        FontError::BdfCorruptedFontHeader => FT_Err_Corrupted_Font_Header as FT_Error,
+        FontError::BdfCorruptedFontGlyphs => FT_Err_Corrupted_Font_Glyphs as FT_Error,
+        FontError::BdfMissingBbxField => FT_Err_Missing_Bbx_Field as FT_Error,
+        FontError::BdfMissingEncodingField => FT_Err_Missing_Encoding_Field as FT_Error,
+        FontError::BdfMissingFontField => FT_Err_Missing_Font_Field as FT_Error,
+        FontError::BdfMissingFontboundingboxField => {
+            FT_Err_Missing_Fontboundingbox_Field as FT_Error
+        }
+        FontError::BdfMissingSizeField => FT_Err_Missing_Size_Field as FT_Error,
+        FontError::BdfMissingStartcharField => FT_Err_Missing_Startchar_Field as FT_Error,
     }
 }
 

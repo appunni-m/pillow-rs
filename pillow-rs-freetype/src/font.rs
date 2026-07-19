@@ -369,6 +369,136 @@ fn winfnt_font_data(data: &[u8], size_pt: f32, header: &WinFntHeader) -> Arc<Fon
     font_data
 }
 
+fn bdf_text(data: &[u8]) -> Option<&str> {
+    if !data.starts_with(b"STARTFONT") {
+        return None;
+    }
+    std::str::from_utf8(data).ok()
+}
+
+fn parse_bdf_bbx(line: &str) -> Option<(i64, i64)> {
+    let mut parts = line.split_whitespace();
+    if parts.next()? != "BBX" {
+        return None;
+    }
+    let width = parts.next()?.parse().ok()?;
+    let height = parts.next()?.parse().ok()?;
+    Some((width, height))
+}
+
+fn bdf_bitmap_too_large(width: i64, height: i64) -> bool {
+    if width <= 0 || height <= 0 {
+        return false;
+    }
+    let bytes_per_row = (width + 7) / 8;
+    bytes_per_row > 0xFFFF || bytes_per_row.saturating_mul(height) > 0xFFFF
+}
+
+// FreeType's BDF driver classifies these malformed inputs during
+// FT_New_Memory_Face before a usable face exists.  This mirrors the
+// constructor-time state checks in bdf/bdflib.c for public error parity only;
+// successful BDF face loading/rendering remains intentionally unsupported.
+fn parse_bdf_constructor_error(data: &[u8]) -> Option<FontError> {
+    let text = bdf_text(data)?;
+    let mut has_font = false;
+    let mut has_size = false;
+    let mut has_font_bounding_box = false;
+    let mut saw_chars = false;
+    let mut in_glyph = false;
+    let mut glyph_has_encoding = false;
+    let mut glyph_has_bbx = false;
+
+    for raw_line in text.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let keyword = line.split_whitespace().next().unwrap_or("");
+        match keyword {
+            "FONT" => has_font = true,
+            "SIZE" => has_size = true,
+            "FONTBOUNDINGBOX" => has_font_bounding_box = true,
+            "CHARS" => {
+                saw_chars = true;
+                if !has_font {
+                    return Some(FontError::BdfMissingFontField);
+                }
+                if !has_size {
+                    return Some(FontError::BdfMissingSizeField);
+                }
+                if !has_font_bounding_box {
+                    return Some(FontError::BdfMissingFontboundingboxField);
+                }
+            }
+            "STARTCHAR" => {
+                if !saw_chars || in_glyph {
+                    return Some(FontError::BdfMissingStartcharField);
+                }
+                in_glyph = true;
+                glyph_has_encoding = false;
+                glyph_has_bbx = false;
+            }
+            "ENCODING" => {
+                if !in_glyph {
+                    return Some(FontError::BdfMissingStartcharField);
+                }
+                glyph_has_encoding = true;
+            }
+            "BBX" => {
+                if !in_glyph {
+                    return Some(FontError::BdfMissingStartcharField);
+                }
+                let Some((width, height)) = parse_bdf_bbx(line) else {
+                    return Some(FontError::BdfCorruptedFontGlyphs);
+                };
+                if bdf_bitmap_too_large(width, height) {
+                    return Some(FontError::BdfBbxTooBig);
+                }
+                glyph_has_bbx = true;
+            }
+            "BITMAP" => {
+                if !in_glyph {
+                    return Some(FontError::BdfMissingStartcharField);
+                }
+                if !glyph_has_encoding {
+                    return Some(FontError::BdfMissingEncodingField);
+                }
+                if !glyph_has_bbx {
+                    return Some(FontError::BdfMissingBbxField);
+                }
+            }
+            "ENDCHAR" => {
+                if !in_glyph {
+                    return Some(FontError::BdfMissingStartcharField);
+                }
+                if !glyph_has_encoding {
+                    return Some(FontError::BdfMissingEncodingField);
+                }
+                if !glyph_has_bbx {
+                    return Some(FontError::BdfMissingBbxField);
+                }
+                in_glyph = false;
+            }
+            "ENDFONT" if in_glyph => {
+                return Some(FontError::BdfCorruptedFontGlyphs);
+            }
+            _ => {}
+        }
+    }
+
+    // FreeType bdflib.c reports header corruption when a BDF stream reaches
+    // EOF before CHARS after a valid STARTFONT line.
+    if !saw_chars {
+        return Some(FontError::BdfCorruptedFontHeader);
+    }
+    if in_glyph {
+        return Some(FontError::BdfCorruptedFontGlyphs);
+    }
+    Some(FontError::InvalidFont(
+        "BDF faces are not implemented".into(),
+    ))
+}
+
 fn type1_cleartext(data: &[u8]) -> Option<&[u8]> {
     if data.len() >= 6 && data[0] == 0x80 && data[1] == 0x01 {
         let len = u32::from_le_bytes([data[2], data[3], data[4], data[5]]) as usize;
@@ -800,6 +930,9 @@ impl Font {
     ) -> Result<Self, FontError> {
         if matches!(read_u16_le(data, 0), Some(0x0200 | 0x0300)) {
             return Self::winfnt_face(data, face_index, size_pt);
+        }
+        if let Some(error) = parse_bdf_constructor_error(data) {
+            return Err(error);
         }
         if type1_cleartext(data).is_some() {
             return Self::type1_face(data, face_index, size_pt);

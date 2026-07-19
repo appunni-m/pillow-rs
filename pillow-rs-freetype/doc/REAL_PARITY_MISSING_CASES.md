@@ -41,6 +41,13 @@ Rejected future-asset probes:
   `ftlist.FT_List_Iterate.iterator_can_mutate_current_node`: exact promotion
   failed with C error `7`; keep fallback-classified until the list success
   runner calls the public list endpoint across C, Rust, C ABI, and WASM.
+- `fterrdef.FT_Err_Missing_Startfont_Field.bdf_first_line_not_startfont`: the
+  deterministic malformed-BDF generator made this row runnable, but pinned C
+  FreeType returns `FT_Err_Unknown_File_Format` (`85`) for a first line that is
+  not `STARTFONT`, not `FT_Err_Missing_Startfont_Field` (`176`). Keep it out of
+  exact-error promotion until the test plan identifies a public input that
+  actually reaches the named BDF error.
+
 Promoted rows:
 
 - `freetype.FT_Init_FreeType.creates_library_handle`
@@ -64,6 +71,9 @@ Promoted rows:
 - `ftwinfnt.FT_WinFNT_ID_*.charset_roundtrip_from_header`: `18 / 18` concrete
   charset rows now pass exact pinned-C/Rust FFI/C ABI/WASM comparison through
   `winfnt.get_header`.
+- `new_memory_face` malformed BDF constructor errors: `10 / 10` BDF-specific
+  rows now compare exact pinned-C/Rust FFI/C ABI/WASM error output after adding
+  deterministic fixtures and explicit Rust BDF constructor error classification.
 
 Focused non-coverage proof before promotion:
 
@@ -74,6 +84,7 @@ make -C pillow-rs-freetype test-op OP=ftstroke.cubic_to
 make -C pillow-rs-freetype test-op OP=ftstroke.line_to
 make -C pillow-rs-freetype test-op OP=ftstroke.get_counts
 make -C pillow-rs-freetype test-op OP=ftwinfnt.get_winfnt_header
+make -C pillow-rs-freetype test-op OP=new_memory_face
 make -C pillow-rs-freetype test-op OP=freetype.init_free_type
 make -C pillow-rs-freetype test-op OP=ftmodapi.add_default_modules
 make -C pillow-rs-freetype test-op OP=ftmm.done_mm_var
@@ -87,6 +98,11 @@ Results:
 - `winfnt.get_header`: `18 / 18` runnable charset rows passed, with one
   separate `fttypes.FT_UShort.winfnt_header_field_contract` row still pending
   because `fonts/winfnt/ushort-fields-known.fnt` is not a tracked fixture.
+- `new_memory_face`: `96 / 96` runnable rows passed; this includes the 10 newly
+  exact malformed-BDF constructor rows. Ten unrelated constructor rows remain
+  pending by fixture/route: preferred-family/subfamily SFNT assets, name-table
+  malformed SFNT assets, invalid `post`, TTC offset overflow, broken SFNT, and
+  the non-promoted `Missing_Startfont` row described above.
 - `freetype.init_free_type`: `3 / 3` runnable rows passed after adding the
   explicit pinned-C, Rust FFI, C ABI, and WASM route.
 - `ftmodapi.add_default_modules`: `2 / 2` runnable rows passed after adding
