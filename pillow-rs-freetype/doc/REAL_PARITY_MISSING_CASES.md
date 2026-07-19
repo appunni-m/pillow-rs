@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_LOAD_TARGET_MODE` invalid render-target route
+Current verified result after `FT_New_Memory_Face` null file-base route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3847`
+  - `real-parity`: `3848`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `348`
+  - `generic-error-fallback`: `347`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3900,6 +3900,39 @@ Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode
+```
+
+### Issue Set CQ: `FT_New_Memory_Face` null file-base route
+
+Previous blocker:
+
+- `freetype.FT_New_Memory_Face.error_null_file_base` stayed in
+  `generic-error-fallback`.
+- The fixture already pins exact C behavior for a valid library, null
+  `file_base`, nonzero `file_size`, and `face_index=0`: `FT_New_Memory_Face`
+  returns `FT_Err_Invalid_Argument` before constructing `FT_Open_Args` or
+  delegating to `ft_open_face_internal`
+  (`freetype/src/base/ftobjs.c:1629-1647`).
+
+Plan:
+
+1. Keep the fixture intact; it already records the exact public error expected
+   for the same input.
+2. Require exact error comparison for the return status on the same input.
+3. Classify the row as real parity only after focused same-input parity passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused null file-base row passes exact comparison against pinned C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `freetype.FT_New_Memory_Face.error_null_file_base` as `real-parity`.
+
+Verified command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_New_Memory_Face.error_null_file_base
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker

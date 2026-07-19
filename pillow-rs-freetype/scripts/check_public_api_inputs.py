@@ -800,6 +800,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmm.FT_Set_MM_Blend_Coordinates.error_null_coords_with_nonzero_count",
         "ftmm.FT_Set_MM_Design_Coordinates.error_null_coords_with_nonzero_count",
         "freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode",
+        "freetype.FT_New_Memory_Face.error_null_file_base",
         "freetype.FT_Render_Glyph.invalid_render_mode",
         "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format",
         "freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel",
@@ -1065,6 +1066,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "freetype.FT_Attach_Stream.error_invalid_open_args_or_unsupported_driver"
     ):
         return "FT_Attach_Stream invalid-open-args/unsupported-driver error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "new_memory_face"
+        and row.case_id == "freetype.FT_New_Memory_Face.error_null_file_base"
+    ):
+        return "FT_New_Memory_Face null file_base errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "load_glyph"
         and row.case_id == "freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode"
