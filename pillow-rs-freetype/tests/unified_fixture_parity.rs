@@ -8366,6 +8366,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
                 == "ftmm.FT_Get_Var_Blend_Coordinates.error_non_variable_or_invalid_face"
             || case.case_id == "ftmm.FT_Get_MM_Blend_Coordinates.invalid_face_or_coords_error"
             || case.case_id == "ftmm.FT_Get_MM_Var.null_output_error"
+            || case.case_id == "ftmm.FT_Get_MM_Var.invalid_or_non_variable_face_error"
             || case.case_id
                 == "ftmm.FT_Set_Var_Design_Coordinates.error_null_coords_with_nonzero_count"
             || case.case_id
