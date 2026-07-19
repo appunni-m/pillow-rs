@@ -809,6 +809,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument",
         "ftpfr.FT_Get_PFR_Advance.null_face_or_output_errors",
         "ftpfr.FT_Get_PFR_Kerning.null_face_or_vector_errors",
+        "ftpfr.FT_Get_PFR_Metrics.non_pfr_outputs_valid_values_and_unknown_format",
         "freetype.FT_Load_Glyph.matrix_load",
         "freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags",
         "freetype.FT_LOAD_FORCE_AUTOHINT.load_glyph_force_autohint_behavior",
@@ -1193,6 +1194,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftpfr.FT_Get_PFR_Kerning.null_face_or_vector_errors"
     ):
         return "FT_Get_PFR_Kerning null-face/vector errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftpfr.get_pfr_metrics"
+        and row.case_id
+        == "ftpfr.FT_Get_PFR_Metrics.non_pfr_outputs_valid_values_and_unknown_format"
+    ):
+        return "FT_Get_PFR_Metrics non-PFR-face output/error behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftoutln.outline_render"
         and row.case_id == "ftimage.FT_RASTER_FLAG_AA.mono_rejects_aa"

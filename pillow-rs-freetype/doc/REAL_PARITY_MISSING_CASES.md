@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_PFR_Kerning` null-face/vector
+Current verified result after `FT_Get_PFR_Metrics` non-PFR-face
 exact-error classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3967`
+  - `real-parity`: `3969`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `228`
+  - `generic-error-fallback`: `226`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -692,6 +692,40 @@ make -C pillow-rs-freetype test-case CASE=ftpfr.FT_Get_PFR_Kerning.null_face_or_
 
 Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
 audit: `real-parity` `3967`, `generic-error-fallback` `228`.
+
+### Issue Set Current: `FT_Get_PFR_Metrics` non-PFR-face exact-error/output route
+
+Previous blocker:
+
+- `ftpfr.FT_Get_PFR_Metrics.non_pfr_outputs_valid_values_and_unknown_format`
+  had two concrete PFR public rows classified as `generic-error-fallback`.
+- The rows already ran through pinned C FreeType, Rust FFI, thin C ABI, and
+  WASM ABI, but fallback classification only proved that an error happened.
+
+Fix plan:
+
+1. Promote only the concrete `FT_Get_PFR_Metrics` non-PFR-face rows to
+   exact-error comparison.
+2. Keep the existing non-PFR font input and optional-output variants unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI
+   `FT_Get_PFR_Metrics`, and WASM ABI before counting the rows as
+   `real-parity`.
+
+Verified progress:
+
+- Exact comparison passed for both concrete PFR metrics non-PFR-face rows.
+- The previously fallback-classified rows now validate exact status/output
+  against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed for these rows.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftpfr.FT_Get_PFR_Metrics.non_pfr_outputs_valid_values_and_unknown_format
+```
+
+Result: `2 / 2` runtime parity rows passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3969`, `generic-error-fallback` `226`.
 
 ### Issue Set Current: `FT_Get_BDF_Property` missing-property exact-error route
 
