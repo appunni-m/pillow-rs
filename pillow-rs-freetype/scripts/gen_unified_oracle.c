@@ -6316,6 +6316,68 @@ static int emit_outline_transform(int argc, char** argv) {
     return 2;
 }
 
+static int emit_outline_translate(int argc, char** argv) {
+    if (argc != 3) {
+        return 1;
+    }
+    const char* case_id = argv[2];
+    print_ok_output_prefix();
+    if (strstr(case_id, ".null_outline_noop")) {
+        FT_Outline_Translate(NULL, 64, -64);
+        printf("{\"sentinel_memory_changed\":false}}\n");
+        return 0;
+    }
+
+    long x_offset = strstr(case_id, ".empty_outline_success_noop") ? 64 : 17;
+    long y_offset = strstr(case_id, ".empty_outline_success_noop") ? 64 : -33;
+    FT_Outline outline;
+    FT_Vector points[4] = {
+        {-96, -32},
+        {128, -64},
+        {160, 96},
+        {-64, 128},
+    };
+    unsigned char tags[4] = {
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+    };
+    unsigned short contours[1] = {3};
+    outline.n_contours = 1;
+    outline.n_points = 4;
+    outline.points = points;
+    outline.tags = tags;
+    outline.contours = contours;
+    outline.flags = 0;
+    if (strstr(case_id, ".empty_outline_success_noop")) {
+        outline.n_contours = 0;
+        outline.n_points = 0;
+    }
+    if (strstr(case_id, ".offsets_all_points")) {
+        printf("{\"points_before\":");
+        print_mutated_points(points, 4);
+        FT_Outline_Translate(&outline, x_offset, y_offset);
+        FT_BBox cbox;
+        FT_Outline_Get_CBox(&outline, &cbox);
+        printf(",\"points_after\":");
+        print_mutated_points(points, 4);
+        printf(",\"cbox_after\":{\"xMin\":%ld,\"yMin\":%ld,\"xMax\":%ld,\"yMax\":%ld}}}\n",
+               cbox.xMin,
+               cbox.yMin,
+               cbox.xMax,
+               cbox.yMax);
+        return 0;
+    }
+    if (strstr(case_id, ".empty_outline_success_noop")) {
+        FT_Outline_Translate(&outline, x_offset, y_offset);
+        printf("{\"n_points\":%d,\"points_after\":[]}}\n", outline.n_points);
+        return 0;
+    }
+    fprintf(stderr, "unsupported outline translate case: %s\n", case_id);
+    return 2;
+}
+
 static int face_macro_value(FT_Face face, const char* macro_name, int* out) {
     if (streq(macro_name, "FT_HAS_COLOR")) {
         *out = FT_HAS_COLOR(face);
@@ -11567,6 +11629,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--outline-transform")) {
         return emit_outline_transform(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--outline-translate")) {
+        return emit_outline_translate(argc, argv);
     }
     if (argc == 7 && (streq(argv[1], "--new-memory-face") || streq(argv[1], "--set-pixel-sizes") || streq(argv[1], "--size-metrics"))) {
         return emit_face_or_slot(argc, argv);

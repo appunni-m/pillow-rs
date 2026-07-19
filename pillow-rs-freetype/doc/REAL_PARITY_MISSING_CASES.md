@@ -6119,6 +6119,65 @@ Verified commands:
 make -C pillow-rs-freetype test-case CASE=ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output
 ```
 
+### Issue Set BF: WinFNT header charset rows are not exact parity yet
+
+Current blocker:
+
+- The 19 `winfnt.get_header` rows are a related bucket, but they must remain
+  generic fallback for now.
+- A focused generic-fallback probe can report pass because it does not require
+  the pinned C oracle output for the declared WinFNT header case IDs.
+- Promoting `winfnt.get_header` to a real-parity operation caused exact runs to
+  call the native oracle route, and the C oracle returned error `7` for the 18
+  `charset_roundtrip_from_header` case IDs.
+- Therefore these rows are not proven C/Rust/C-ABI/WASM parity. Do not add
+  missing `.fnt` files as duplicate placeholders, and do not classify the
+  operation as real parity until the concrete C oracle/input route exists.
+
+Rejected rows:
+
+- `fttypes.FT_UShort.winfnt_header_field_contract`
+- `ftwinfnt.FT_WinFNT_ID_CP1250.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_CP1251.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_CP1252.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_CP1253.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_CP1254.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_CP1255.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_CP1256.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_CP1257.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_CP1258.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_CP1361.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_CP874.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_CP932.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_CP936.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_CP949.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_CP950.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_MAC.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_OEM.charset_roundtrip_from_header`
+- `ftwinfnt.FT_WinFNT_ID_SYMBOL.charset_roundtrip_from_header`
+
+Required fix:
+
+1. Add real deterministic WinFNT inputs or explicit native C oracle generation
+   for the header charset matrix.
+2. Ensure the Rust FFI, C ABI, and WASM ABI read the same concrete header data
+   as the pinned C oracle.
+3. Promote only after focused exact runs pass with real oracle output, then run
+   the full unified parity suite.
+
+Rejected verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=charset_roundtrip_from_header
+```
+
+Result after attempted promotion:
+
+```text
+runtime_parity: passed=0 failed=18 total=18 failure_buckets=rust ffi:value:18
+native oracle returned unexpected error 7 for each charset_roundtrip_from_header row
+```
+
 ## Coverage Bulk Context
 
 Current condition-coverage bulk context from

@@ -10528,6 +10528,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--outline-transform".to_string(),
             case.case_id.clone(),
         ]),
+        "ftoutln.outline_translate" => Ok(vec![
+            "--outline-translate".to_string(),
+            case.case_id.clone(),
+        ]),
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => Ok(vec![
             "--outline-render".to_string(),
             if case.subject == "ftoutln.FT_Outline_Render"
@@ -11140,6 +11144,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftoutln.get_orientation" => rust_outline_orientation_runtime_output(case),
         "ftoutln.outline_reverse" => rust_outline_reverse_runtime_output(case),
         "ftoutln.outline_transform" => rust_outline_transform_runtime_output(case),
+        "ftoutln.outline_translate" => rust_outline_translate_runtime_output(case),
         "ftoutln.outline_render" => rust_outline_render_runtime_output(case),
         "ftoutln.outline_render_direct" => outline_render_direct_fallback_runtime_output(case),
         "ftoutln.outline_decompose" => rust_outline_decompose_runtime_output(case),
@@ -11842,6 +11847,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftoutln.get_orientation" => c_outline_orientation_runtime_output(case),
         "ftoutln.outline_reverse" => c_outline_reverse_runtime_output(case),
         "ftoutln.outline_transform" => c_outline_transform_runtime_output(case),
+        "ftoutln.outline_translate" => c_outline_translate_runtime_output(case),
         "ftoutln.outline_render" => c_outline_render_runtime_output(case),
         "ftoutln.outline_render_direct" => outline_render_direct_fallback_runtime_output(case),
         "ftoutln.outline_decompose" => c_outline_decompose_runtime_output(case),
@@ -12403,6 +12409,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftoutln.get_orientation" => wasm_outline_orientation_runtime_output(case),
         "ftoutln.outline_reverse" => wasm_outline_reverse_runtime_output(case),
         "ftoutln.outline_transform" => wasm_outline_transform_runtime_output(case),
+        "ftoutln.outline_translate" => wasm_outline_translate_runtime_output(case),
         "ftoutln.outline_render" => wasm_outline_render_runtime_output(case),
         "ftoutln.outline_render_direct" => outline_render_direct_fallback_runtime_output(case),
         "ftoutln.outline_decompose" => wasm_outline_decompose_runtime_output(case),
@@ -18605,6 +18612,15 @@ fn transform_outline_model() -> MutableOutlineModel {
     }
 }
 
+fn translate_outline_model() -> MutableOutlineModel {
+    MutableOutlineModel {
+        points: vec![(-96, -32), (128, -64), (160, 96), (-64, 128)],
+        tags: vec![1; 4],
+        contours: vec![3],
+        flags: 0,
+    }
+}
+
 fn outline_points_json(points: &[(i64, i64)]) -> Value {
     json!(
         points
@@ -19014,6 +19030,156 @@ fn wasm_outline_transform_runtime_output(case: &InputCase) -> Result<RunOutput, 
     outline_transform_runtime_output(
         case,
         wasm_transform_mutable_outline,
+        wasm_observe_mutable_outline,
+    )
+}
+
+fn outline_translate_offsets(case: &InputCase) -> (i64, i64) {
+    let params = &case.inputs.params;
+    (
+        i64_param(params, "xOffset").unwrap_or(17),
+        i64_param(params, "yOffset").unwrap_or(-33),
+    )
+}
+
+fn outline_translate_runtime_output<F, G>(
+    case: &InputCase,
+    mut translate: F,
+    mut observe: G,
+) -> Result<RunOutput, String>
+where
+    F: FnMut(Option<&mut MutableOutlineModel>, i64, i64),
+    G: FnMut(&MutableOutlineModel) -> ([i64; 4], i64),
+{
+    let (x_offset, y_offset) = outline_translate_offsets(case);
+    if case.case_id.ends_with(".null_outline_noop") {
+        translate(None, x_offset, y_offset);
+        return Ok(ok(json!({"sentinel_memory_changed": false})));
+    }
+
+    let mut model = if case.case_id.ends_with(".empty_outline_success_noop") {
+        MutableOutlineModel {
+            points: Vec::new(),
+            tags: Vec::new(),
+            contours: Vec::new(),
+            flags: 0,
+        }
+    } else {
+        translate_outline_model()
+    };
+    let points_before = outline_points_json(&model.points);
+    translate(Some(&mut model), x_offset, y_offset);
+    if case.case_id.ends_with(".offsets_all_points") {
+        let (cbox, _) = observe(&model);
+        return Ok(ok(json!({
+            "points_before": points_before,
+            "points_after": outline_points_json(&model.points),
+            "cbox_after": {
+                "xMin": cbox[0],
+                "yMin": cbox[1],
+                "xMax": cbox[2],
+                "yMax": cbox[3]
+            }
+        })));
+    }
+    if case.case_id.ends_with(".empty_outline_success_noop") {
+        return Ok(ok(json!({
+            "n_points": model.points.len(),
+            "points_after": outline_points_json(&model.points)
+        })));
+    }
+    Err(format!(
+        "unsupported outline translate case {}",
+        case.case_id
+    ))
+}
+
+fn rust_translate_mutable_outline(
+    model: Option<&mut MutableOutlineModel>,
+    x_offset: i64,
+    y_offset: i64,
+) {
+    let Some(model) = model else {
+        FT_Outline_Translate(None, x_offset, y_offset);
+        return;
+    };
+    let mut snapshot = rust_snapshot_from_mutable(model);
+    FT_Outline_Translate(Some(&mut snapshot), x_offset, y_offset);
+    update_mutable_from_rust_snapshot(model, snapshot);
+}
+
+fn rust_outline_translate_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_translate_runtime_output(
+        case,
+        rust_translate_mutable_outline,
+        rust_observe_mutable_outline,
+    )
+}
+
+fn c_translate_mutable_outline(
+    model: Option<&mut MutableOutlineModel>,
+    x_offset: i64,
+    y_offset: i64,
+) {
+    let Some(model) = model else {
+        c_abi::FT_Outline_Translate(ptr::null(), x_offset, y_offset);
+        return;
+    };
+    let mut points = model
+        .points
+        .iter()
+        .map(|&(x, y)| c_abi::FT_Vector { x, y })
+        .collect::<Vec<_>>();
+    let mut tags = model.tags.clone();
+    let mut contours = model.contours.clone();
+    let outline = c_abi::FT_Outline {
+        n_contours: u16::try_from(contours.len()).unwrap_or(u16::MAX),
+        n_points: u16::try_from(points.len()).unwrap_or(u16::MAX),
+        points: points.as_mut_ptr(),
+        tags: tags.as_mut_ptr(),
+        contours: contours.as_mut_ptr(),
+        flags: model.flags,
+    };
+    c_abi::FT_Outline_Translate(&outline, x_offset, y_offset);
+    model.points = points.into_iter().map(|point| (point.x, point.y)).collect();
+}
+
+fn c_outline_translate_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_translate_runtime_output(case, c_translate_mutable_outline, c_observe_mutable_outline)
+}
+
+fn wasm_translate_mutable_outline(
+    model: Option<&mut MutableOutlineModel>,
+    x_offset: i64,
+    y_offset: i64,
+) {
+    let Some(model) = model else {
+        wasm_abi::fontdone_wasm_outline_translate(ptr::null(), x_offset, y_offset);
+        return;
+    };
+    let mut points = model
+        .points
+        .iter()
+        .map(|&(x, y)| wasm_abi::FontdoneWasmVector { x, y })
+        .collect::<Vec<_>>();
+    let mut tags = model.tags.clone();
+    let mut contours = model.contours.clone();
+    let outline = wasm_abi::FontdoneWasmOutline {
+        n_contours: u16::try_from(contours.len()).unwrap_or(u16::MAX),
+        n_points: u16::try_from(points.len()).unwrap_or(u16::MAX),
+        points: points.as_mut_ptr(),
+        tags: tags.as_mut_ptr(),
+        contours: contours.as_mut_ptr(),
+        flags: model.flags,
+    };
+    wasm_abi::fontdone_wasm_outline_translate(&outline, x_offset, y_offset);
+    model.points = points.into_iter().map(|point| (point.x, point.y)).collect();
+}
+
+fn wasm_outline_translate_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_translate_runtime_output(
+        case,
+        wasm_translate_mutable_outline,
         wasm_observe_mutable_outline,
     )
 }
