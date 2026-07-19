@@ -147,6 +147,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_outline_get_cbox",
     "fontdone_wasm_glyph_get_cbox",
     "fontdone_wasm_get_glyph",
+    "fontdone_wasm_glyph_copy",
     "fontdone_wasm_outline_get_bbox",
     "fontdone_wasm_outline_get_bitmap",
     "fontdone_wasm_outline_render",
@@ -2121,6 +2122,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftglyph.FT_Get_Glyph.error_null_slot_or_output"
     ):
         return "FT_Get_Glyph null slot/output errors validate exact public FT_Error rows through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftglyph.glyph_copy"
+        and row.case_id == "ftglyph.FT_Glyph_Copy.error_null_source_target_or_class"
+    ):
+        return "FT_Glyph_Copy null source/target/class errors validate exact public FT_Error rows and target preservation through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "new_memory_face"
         and row.case_id == "fterrdef.FT_Err_Invalid_Library_Handle.library_api_rejects_null_library"

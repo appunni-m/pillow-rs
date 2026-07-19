@@ -15050,6 +15050,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if case.operation == "ftglyph.get_glyph" && params.get("probes").is_some() {
                 return Ok(vec!["--get-glyph-null-inputs".to_string()]);
             }
+            if case.operation == "ftglyph.glyph_copy" && params.get("probes").is_some() {
+                return Ok(vec!["--glyph-copy-null-inputs".to_string()]);
+            }
             let mut args = vec!["--glyph-record".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
@@ -15741,6 +15744,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftglyph.get_glyph" if case.inputs.params.get("probes").is_some() => {
             rust_get_glyph_null_inputs()
+        }
+        "ftglyph.glyph_copy" if case.inputs.params.get("probes").is_some() => {
+            rust_glyph_copy_null_inputs()
         }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let face = open_face(case)?;
@@ -16447,6 +16453,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftglyph.get_glyph" if case.inputs.params.get("probes").is_some() => {
             c_get_glyph_null_inputs()
         }
+        "ftglyph.glyph_copy" if case.inputs.params.get("probes").is_some() => {
+            c_glyph_copy_null_inputs()
+        }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let (library, face) = c_open_face(case)?;
             let output = c_outline_operation(face, case);
@@ -17057,6 +17066,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftglyph.get_glyph" if case.inputs.params.get("probes").is_some() => {
             wasm_get_glyph_null_inputs()
+        }
+        "ftglyph.glyph_copy" if case.inputs.params.get("probes").is_some() => {
+            wasm_glyph_copy_null_inputs()
         }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let handle = wasm_open_face(case)?;
@@ -19020,6 +19032,90 @@ fn wasm_get_glyph_null_inputs() -> Result<RunOutput, String> {
         get_glyph_error_row("null_aglyph", null_output_error, "null"),
     ];
     Ok(get_glyph_null_inputs_output(rows))
+}
+
+fn glyph_copy_error_row(probe: &str, error: FT_Error, target_pointer_class: &str) -> Value {
+    json!({
+        "probe": probe,
+        "error": error,
+        "target_pointer_class": target_pointer_class
+    })
+}
+
+fn glyph_copy_null_inputs_output(rows: Vec<Value>) -> RunOutput {
+    let first_error = rows
+        .iter()
+        .filter_map(|row| row.get("error").and_then(Value::as_i64))
+        .find(|error| *error != 0)
+        .unwrap_or(FT_Err_Ok as i64) as FT_Error;
+    error_with_output(
+        first_error,
+        json!({
+            "rows": rows,
+            "target_write_order": "early Invalid_Argument preserves non-null target before copy allocation"
+        }),
+    )
+}
+
+fn rust_glyph_copy_null_inputs() -> Result<RunOutput, String> {
+    let rows = vec![
+        glyph_copy_error_row("null_source", FT_Glyph_Copy(false, true, false), "non_null"),
+        glyph_copy_error_row("null_target", FT_Glyph_Copy(false, false, false), "null"),
+        glyph_copy_error_row(
+            "source_null_clazz",
+            FT_Glyph_Copy(true, true, false),
+            "non_null",
+        ),
+    ];
+    Ok(glyph_copy_null_inputs_output(rows))
+}
+
+fn c_glyph_copy_null_inputs() -> Result<RunOutput, String> {
+    let mut target = 1usize as c_abi::FT_Glyph;
+    let null_source_error = c_abi::FT_Glyph_Copy(ptr::null_mut(), &mut target);
+    let null_source_target_class = if target.is_null() { "null" } else { "non_null" };
+
+    let null_target_error = c_abi::FT_Glyph_Copy(ptr::null_mut(), ptr::null_mut());
+
+    let mut source = c_abi::FT_GlyphRec::default();
+    target = 1usize as c_abi::FT_Glyph;
+    let null_class_error = c_abi::FT_Glyph_Copy(&mut source, &mut target);
+    let null_class_target_class = if target.is_null() { "null" } else { "non_null" };
+
+    let rows = vec![
+        glyph_copy_error_row("null_source", null_source_error, null_source_target_class),
+        glyph_copy_error_row("null_target", null_target_error, "null"),
+        glyph_copy_error_row(
+            "source_null_clazz",
+            null_class_error,
+            null_class_target_class,
+        ),
+    ];
+    Ok(glyph_copy_null_inputs_output(rows))
+}
+
+fn wasm_glyph_copy_null_inputs() -> Result<RunOutput, String> {
+    let mut target = 1usize;
+    let null_source_error = wasm_abi::fontdone_wasm_glyph_copy(ptr::null(), &mut target);
+    let null_source_target_class = if target == 0 { "null" } else { "non_null" };
+
+    let null_target_error = wasm_abi::fontdone_wasm_glyph_copy(ptr::null(), ptr::null_mut());
+
+    let source = wasm_abi::FontdoneWasmGlyph::default();
+    target = 1usize;
+    let null_class_error = wasm_abi::fontdone_wasm_glyph_copy(&source, &mut target);
+    let null_class_target_class = if target == 0 { "null" } else { "non_null" };
+
+    let rows = vec![
+        glyph_copy_error_row("null_source", null_source_error, null_source_target_class),
+        glyph_copy_error_row("null_target", null_target_error, "null"),
+        glyph_copy_error_row(
+            "source_null_clazz",
+            null_class_error,
+            null_class_target_class,
+        ),
+    ];
+    Ok(glyph_copy_null_inputs_output(rows))
 }
 
 fn outline_operation_output(

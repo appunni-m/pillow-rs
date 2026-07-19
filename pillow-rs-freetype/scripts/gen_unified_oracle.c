@@ -5131,6 +5131,38 @@ static int emit_get_glyph_null_inputs(void) {
     return 0;
 }
 
+static void print_glyph_copy_error_row(const char* probe, FT_Error err, FT_Glyph target) {
+    printf("{\"probe\":\"%s\",\"error\":%d,\"target_pointer_class\":\"%s\"}",
+           probe,
+           err,
+           target ? "non_null" : "null");
+}
+
+static int emit_glyph_copy_null_inputs(void) {
+    FT_Glyph target = (FT_Glyph)0x1;
+    FT_Error null_source_error = FT_Glyph_Copy(NULL, &target);
+    FT_Glyph null_source_target = target;
+
+    FT_Error null_target_error = FT_Glyph_Copy(NULL, NULL);
+
+    FT_GlyphRec source;
+    memset(&source, 0, sizeof(source));
+    target = (FT_Glyph)0x1;
+    FT_Error null_class_error = FT_Glyph_Copy(&source, &target);
+    FT_Glyph null_class_target = target;
+
+    printf("{");
+    print_status(null_source_error ? null_source_error : (null_target_error ? null_target_error : null_class_error));
+    printf(",\"output\":{\"rows\":[");
+    print_glyph_copy_error_row("null_source", null_source_error, null_source_target);
+    printf(",");
+    print_glyph_copy_error_row("null_target", null_target_error, NULL);
+    printf(",");
+    print_glyph_copy_error_row("source_null_clazz", null_class_error, null_class_target);
+    printf("],\"target_write_order\":\"early Invalid_Argument preserves non-null target before copy allocation\"}}\n");
+    return 0;
+}
+
 static void print_sbit_payload(FT_GlyphSlot slot) {
     FT_Bitmap* bitmap = &slot->bitmap;
     long len = 0;
@@ -14347,6 +14379,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--get-glyph-null-inputs")) {
         return emit_get_glyph_null_inputs();
+    }
+    if (argc == 2 && streq(argv[1], "--glyph-copy-null-inputs")) {
+        return emit_glyph_copy_null_inputs();
     }
     if (argc == 3 && streq(argv[1], "--ft-list")) {
         return emit_ft_list(argv[2]);

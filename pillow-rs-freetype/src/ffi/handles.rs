@@ -1590,6 +1590,20 @@ pub fn FT_Get_Glyph(slot_present: bool, aglyph_present: bool) -> FT_Error {
     FT_Err_Unimplemented_Feature as FT_Error
 }
 
+pub fn FT_Glyph_Copy(
+    source_present: bool,
+    target_present: bool,
+    source_has_class: bool,
+) -> FT_Error {
+    // FreeType `src/base/ftglyph.c:542-559` checks target, source, and
+    // `source->clazz` before clearing `*target`; these early errors preserve a
+    // non-null target sentinel.
+    if !target_present || !source_present || !source_has_class {
+        return FT_Err_Invalid_Argument;
+    }
+    FT_Err_Unimplemented_Feature as FT_Error
+}
+
 pub fn FT_Outline_Get_BBox(
     outline: Option<&FT_OutlineSnapshot>,
     abbox: Option<&mut FT_BBox>,

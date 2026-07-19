@@ -214,18 +214,13 @@
       "schema": "glyph_copy",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "font": { "kind": "ref", "role": "font", "id": "input/fonts/DejaVuSans.ttf" },
-          "malformed_facade": {
-            "kind": "ref",
-            "id": "facades/glyph/malformed-slot-and-class-cases.json",
-            "asset_kind": "fixture"
-          }
-        },
+        "assets": {},
         "params": {
-          "null_source": true,
-          "null_target": true,
-          "source_null_clazz": true,
+          "probes": [
+            "null_source",
+            "null_target",
+            "source_null_clazz"
+          ],
           "sentinel_target": "non_null"
         }
       },
@@ -237,7 +232,7 @@
         "status": "error",
         "output_shape": {
           "return": "FT_Error",
-          "target_write": "non-null target is written to null before later failure checks"
+          "target_write": "target is not written for null source or null class; null target has no output storage"
         },
         "compare": {
           "mode": "exact_error",
