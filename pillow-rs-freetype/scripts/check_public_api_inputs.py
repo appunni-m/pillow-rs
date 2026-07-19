@@ -145,6 +145,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_face_check_truetype_patents",
     "fontdone_wasm_face_set_unpatented_hinting",
     "fontdone_wasm_outline_get_cbox",
+    "fontdone_wasm_glyph_get_cbox",
     "fontdone_wasm_outline_get_bbox",
     "fontdone_wasm_outline_get_bitmap",
     "fontdone_wasm_outline_render",
@@ -2109,6 +2110,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "fterrdef.FT_Err_Invalid_Argument.null_output_or_bad_flag_arguments"
     ):
         return "FT_Get_Glyph_Name null-output error validates public FT_Error in output.status through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftglyph.glyph_get_cbox"
+        and row.case_id == "ftglyph.FT_Glyph_Get_CBox.success_null_or_no_bbox_zeroes_output"
+    ):
+        return "FT_Glyph_Get_CBox zeroes non-null acbox before null glyph/class/bbox-hook exits through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "new_memory_face"
         and row.case_id == "fterrdef.FT_Err_Invalid_Library_Handle.library_api_rejects_null_library"

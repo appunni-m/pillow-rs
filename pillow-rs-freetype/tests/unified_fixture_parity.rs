@@ -14982,6 +14982,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "ftglyph.glyph_get_cbox" => {
+            if params.get("probes").is_some() {
+                return Ok(vec![
+                    "--glyph-get-cbox-null-or-no-bbox".to_string(),
+                    glyph_cbox_sentinel_arg(params)?,
+                    u32_param(params, "bbox_mode")?.to_string(),
+                ]);
+            }
             let mut args = vec!["--glyph-get-cbox".to_string()];
             if push_font_source(case, &mut args).is_err() {
                 return oracle_fallback_args(case);
@@ -15726,6 +15733,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftbbox.outline_get_bbox" if case.inputs.params.get("probes").is_some() => {
             rust_outline_get_bbox_null_inputs(&case.inputs.params)
         }
+        "ftglyph.glyph_get_cbox" if case.inputs.params.get("probes").is_some() => {
+            rust_glyph_get_cbox_null_or_no_bbox(&case.inputs.params)
+        }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let face = open_face(case)?;
             rust_outline_operation(&face, case)
@@ -16425,6 +16435,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftbbox.outline_get_bbox" if case.inputs.params.get("probes").is_some() => {
             c_outline_get_bbox_null_inputs(&case.inputs.params)
         }
+        "ftglyph.glyph_get_cbox" if case.inputs.params.get("probes").is_some() => {
+            c_glyph_get_cbox_null_or_no_bbox(&case.inputs.params)
+        }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let (library, face) = c_open_face(case)?;
             let output = c_outline_operation(face, case);
@@ -17029,6 +17042,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftbbox.outline_get_bbox" if case.inputs.params.get("probes").is_some() => {
             wasm_outline_get_bbox_null_inputs(&case.inputs.params)
+        }
+        "ftglyph.glyph_get_cbox" if case.inputs.params.get("probes").is_some() => {
+            wasm_glyph_get_cbox_null_or_no_bbox(&case.inputs.params)
         }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let handle = wasm_open_face(case)?;
@@ -18438,6 +18454,46 @@ fn outline_get_cbox_sentinel_arg(params: &Value) -> Result<String, String> {
     ))
 }
 
+fn glyph_cbox_sentinel(params: &Value) -> Result<JsonBBox, String> {
+    let value = params
+        .get("sentinel_acbox")
+        .ok_or_else(|| "glyph_get_cbox missing sentinel_acbox".to_string())?;
+    Ok(JsonBBox {
+        x_min: i64_value(
+            value
+                .get("xMin")
+                .ok_or_else(|| "sentinel_acbox missing xMin".to_string())?,
+            "sentinel_acbox.xMin",
+        )?,
+        y_min: i64_value(
+            value
+                .get("yMin")
+                .ok_or_else(|| "sentinel_acbox missing yMin".to_string())?,
+            "sentinel_acbox.yMin",
+        )?,
+        x_max: i64_value(
+            value
+                .get("xMax")
+                .ok_or_else(|| "sentinel_acbox missing xMax".to_string())?,
+            "sentinel_acbox.xMax",
+        )?,
+        y_max: i64_value(
+            value
+                .get("yMax")
+                .ok_or_else(|| "sentinel_acbox missing yMax".to_string())?,
+            "sentinel_acbox.yMax",
+        )?,
+    })
+}
+
+fn glyph_cbox_sentinel_arg(params: &Value) -> Result<String, String> {
+    let sentinel = glyph_cbox_sentinel(params)?;
+    Ok(format!(
+        "{},{},{},{}",
+        sentinel.x_min, sentinel.y_min, sentinel.x_max, sentinel.y_max
+    ))
+}
+
 fn dummy_rust_outline_snapshot() -> FT_OutlineSnapshot {
     FT_OutlineSnapshot {
         points: vec![FT_Vector { x: 17, y: -23 }],
@@ -18712,6 +18768,191 @@ fn wasm_outline_get_cbox_null_inputs(params: &Value) -> Result<RunOutput, String
         bbox_from_wasm_public_bbox(cbox),
         false,
     ))
+}
+
+fn glyph_cbox_zero_probe_row(probe: &str, bbox: JsonBBox) -> Value {
+    json!({
+        "probe": probe,
+        "bbox": bbox_json(bbox)
+    })
+}
+
+fn glyph_get_cbox_null_or_no_bbox_output(rows: Vec<Value>) -> RunOutput {
+    ok(json!({
+        "rows": rows,
+        "write_classification": "non-null acbox zeroed before glyph/class/bbox-hook checks"
+    }))
+}
+
+fn rust_glyph_get_cbox_null_or_no_bbox(params: &Value) -> Result<RunOutput, String> {
+    let sentinel = glyph_cbox_sentinel(params)?;
+    let bbox_mode = u32_param(params, "bbox_mode")?;
+    let mut rows = Vec::new();
+
+    let mut bbox = FT_BBox {
+        xMin: sentinel.x_min,
+        yMin: sentinel.y_min,
+        xMax: sentinel.x_max,
+        yMax: sentinel.y_max,
+    };
+    FT_Glyph_Get_CBox(None, bbox_mode, Some(&mut bbox));
+    rows.push(glyph_cbox_zero_probe_row(
+        "null_glyph",
+        bbox_from_rust_bbox(bbox),
+    ));
+
+    bbox = FT_BBox {
+        xMin: sentinel.x_min,
+        yMin: sentinel.y_min,
+        xMax: sentinel.x_max,
+        yMax: sentinel.y_max,
+    };
+    FT_Glyph_Get_CBox(
+        Some(FT_GlyphCBoxSnapshot {
+            has_class: false,
+            has_bbox_hook: false,
+            cbox: None,
+        }),
+        bbox_mode,
+        Some(&mut bbox),
+    );
+    rows.push(glyph_cbox_zero_probe_row(
+        "null_clazz",
+        bbox_from_rust_bbox(bbox),
+    ));
+
+    bbox = FT_BBox {
+        xMin: sentinel.x_min,
+        yMin: sentinel.y_min,
+        xMax: sentinel.x_max,
+        yMax: sentinel.y_max,
+    };
+    FT_Glyph_Get_CBox(
+        Some(FT_GlyphCBoxSnapshot {
+            has_class: true,
+            has_bbox_hook: false,
+            cbox: None,
+        }),
+        bbox_mode,
+        Some(&mut bbox),
+    );
+    rows.push(glyph_cbox_zero_probe_row(
+        "no_bbox_hook",
+        bbox_from_rust_bbox(bbox),
+    ));
+
+    FT_Glyph_Get_CBox(
+        Some(FT_GlyphCBoxSnapshot {
+            has_class: true,
+            has_bbox_hook: false,
+            cbox: None,
+        }),
+        bbox_mode,
+        None,
+    );
+    rows.push(json!({"probe": "null_acbox", "bbox": null}));
+
+    Ok(glyph_get_cbox_null_or_no_bbox_output(rows))
+}
+
+fn c_glyph_get_cbox_null_or_no_bbox(params: &Value) -> Result<RunOutput, String> {
+    let sentinel = glyph_cbox_sentinel(params)?;
+    let bbox_mode = u32_param(params, "bbox_mode")?;
+    let mut rows = Vec::new();
+
+    let mut bbox = c_abi::FT_BBox {
+        xMin: sentinel.x_min,
+        yMin: sentinel.y_min,
+        xMax: sentinel.x_max,
+        yMax: sentinel.y_max,
+    };
+    c_abi::FT_Glyph_Get_CBox(ptr::null_mut(), bbox_mode, &mut bbox);
+    rows.push(glyph_cbox_zero_probe_row(
+        "null_glyph",
+        bbox_from_c_bbox(bbox),
+    ));
+
+    let mut glyph = c_abi::FT_GlyphRec::default();
+    bbox = c_abi::FT_BBox {
+        xMin: sentinel.x_min,
+        yMin: sentinel.y_min,
+        xMax: sentinel.x_max,
+        yMax: sentinel.y_max,
+    };
+    c_abi::FT_Glyph_Get_CBox(&mut glyph, bbox_mode, &mut bbox);
+    rows.push(glyph_cbox_zero_probe_row(
+        "null_clazz",
+        bbox_from_c_bbox(bbox),
+    ));
+
+    let clazz = c_abi::FT_Glyph_Class::default();
+    glyph.clazz = &clazz;
+    bbox = c_abi::FT_BBox {
+        xMin: sentinel.x_min,
+        yMin: sentinel.y_min,
+        xMax: sentinel.x_max,
+        yMax: sentinel.y_max,
+    };
+    c_abi::FT_Glyph_Get_CBox(&mut glyph, bbox_mode, &mut bbox);
+    rows.push(glyph_cbox_zero_probe_row(
+        "no_bbox_hook",
+        bbox_from_c_bbox(bbox),
+    ));
+
+    c_abi::FT_Glyph_Get_CBox(&mut glyph, bbox_mode, ptr::null_mut());
+    rows.push(json!({"probe": "null_acbox", "bbox": null}));
+
+    Ok(glyph_get_cbox_null_or_no_bbox_output(rows))
+}
+
+fn wasm_glyph_get_cbox_null_or_no_bbox(params: &Value) -> Result<RunOutput, String> {
+    let sentinel = glyph_cbox_sentinel(params)?;
+    let bbox_mode = u32_param(params, "bbox_mode")?;
+    let mut rows = Vec::new();
+
+    let mut bbox = wasm_abi::FontdoneWasmBBox {
+        xMin: sentinel.x_min,
+        yMin: sentinel.y_min,
+        xMax: sentinel.x_max,
+        yMax: sentinel.y_max,
+    };
+    wasm_abi::fontdone_wasm_glyph_get_cbox(ptr::null(), bbox_mode, &mut bbox);
+    rows.push(glyph_cbox_zero_probe_row(
+        "null_glyph",
+        bbox_from_wasm_public_bbox(bbox),
+    ));
+
+    let mut glyph = wasm_abi::FontdoneWasmGlyph::default();
+    bbox = wasm_abi::FontdoneWasmBBox {
+        xMin: sentinel.x_min,
+        yMin: sentinel.y_min,
+        xMax: sentinel.x_max,
+        yMax: sentinel.y_max,
+    };
+    wasm_abi::fontdone_wasm_glyph_get_cbox(&glyph, bbox_mode, &mut bbox);
+    rows.push(glyph_cbox_zero_probe_row(
+        "null_clazz",
+        bbox_from_wasm_public_bbox(bbox),
+    ));
+
+    let clazz = wasm_abi::FontdoneWasmGlyphClass::default();
+    glyph.clazz = &clazz;
+    bbox = wasm_abi::FontdoneWasmBBox {
+        xMin: sentinel.x_min,
+        yMin: sentinel.y_min,
+        xMax: sentinel.x_max,
+        yMax: sentinel.y_max,
+    };
+    wasm_abi::fontdone_wasm_glyph_get_cbox(&glyph, bbox_mode, &mut bbox);
+    rows.push(glyph_cbox_zero_probe_row(
+        "no_bbox_hook",
+        bbox_from_wasm_public_bbox(bbox),
+    ));
+
+    wasm_abi::fontdone_wasm_glyph_get_cbox(&glyph, bbox_mode, ptr::null_mut());
+    rows.push(json!({"probe": "null_acbox", "bbox": null}));
+
+    Ok(glyph_get_cbox_null_or_no_bbox_output(rows))
 }
 
 fn outline_operation_output(
@@ -31754,7 +31995,14 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
                 require_path(output, "/cbox", label, case)
             }
         }
-        "glyph_cbox" => require_path(output, "/boxes", label, case),
+        "glyph_cbox" => {
+            if output.get("rows").is_some() {
+                require_path(output, "/rows", label, case)?;
+                require_path(output, "/write_classification", label, case)
+            } else {
+                require_path(output, "/boxes", label, case)
+            }
+        }
         "glyph_to_bitmap" => {
             require_path(output, "/format", label, case)?;
             require_path(output, "/advance/x", label, case)?;

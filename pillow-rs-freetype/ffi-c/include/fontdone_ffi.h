@@ -41,6 +41,7 @@ typedef struct FT_LibraryRec_* FT_Library;
 typedef struct FT_FaceRec_* FT_Face;
 typedef struct FT_SizeRec_* FT_Size;
 typedef struct FT_GlyphSlotRec_* FT_GlyphSlot;
+typedef struct FT_GlyphRec_* FT_Glyph;
 typedef struct FT_CharMapRec_* FT_CharMap;
 typedef struct FT_ListNodeRec_* FT_ListNode;
 typedef struct FT_ListRec_* FT_List;
@@ -177,6 +178,24 @@ typedef struct FT_Outline_ {
   FT_UShort* contours;
   FT_Int flags;
 } FT_Outline;
+
+typedef struct FT_Glyph_Class_ {
+  FT_Long glyph_size;
+  FT_Glyph_Format glyph_format;
+  FT_Pointer glyph_init;
+  FT_Pointer glyph_done;
+  FT_Pointer glyph_copy;
+  FT_Pointer glyph_transform;
+  FT_Pointer glyph_bbox;
+  FT_Pointer glyph_prepare;
+} FT_Glyph_Class;
+
+typedef struct FT_GlyphRec_ {
+  FT_Pointer library;
+  const FT_Glyph_Class* clazz;
+  FT_Glyph_Format format;
+  FT_Vector advance;
+} FT_GlyphRec;
 
 typedef struct FT_Glyph_Metrics_ {
   FT_Pos width;
@@ -380,6 +399,7 @@ FT_Error FT_Activate_Size(FT_Size size);
 FT_Bool FT_Face_CheckTrueTypePatents(FT_Face face);
 FT_Bool FT_Face_SetUnpatentedHinting(FT_Face face, FT_Bool value);
 void FT_Outline_Get_CBox(const FT_Outline* outline, FT_BBox* acbox);
+void FT_Glyph_Get_CBox(FT_Glyph glyph, FT_UInt bbox_mode, FT_BBox* acbox);
 FT_Error FT_Outline_Get_BBox(const FT_Outline* outline, FT_BBox* abbox);
 FT_Error FT_Outline_Get_Bitmap(FT_Library library, const FT_Outline* outline, FT_Bitmap* abitmap);
 FT_Error FT_Outline_Render(FT_Library library, FT_Outline* outline, FT_Raster_Params* params);

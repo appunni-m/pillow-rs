@@ -196,23 +196,15 @@
       "schema": "glyph_cbox",
       "expect_error": false,
       "inputs": {
-        "assets": {
-          "malformed_facade": {
-            "kind": "ref",
-            "id": "facades/glyph/malformed-slot-and-class-cases.json",
-            "asset_kind": "fixture"
-          },
-          "svg_font": {
-            "kind": "ref",
-            "id": "fonts/svg/ot-svg-glyphs.ttf",
-            "asset_kind": "font",
-            "optional": true
-          }
-        },
+        "assets": {},
         "params": {
-          "null_glyph": true,
-          "null_clazz": true,
-          "no_bbox_hook_class": "svg_if_enabled",
+          "probes": [
+            "null_glyph",
+            "null_clazz",
+            "no_bbox_hook",
+            "null_acbox"
+          ],
+          "bbox_mode": 0,
           "sentinel_acbox": {
             "xMin": 11,
             "yMin": 22,
@@ -235,7 +227,7 @@
         "compare": {
           "mode": "nullness",
           "paths": [
-            "bbox",
+            "rows",
             "write_classification"
           ]
         },
