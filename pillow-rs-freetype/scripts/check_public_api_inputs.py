@@ -801,6 +801,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmm.FT_Set_MM_Design_Coordinates.error_null_coords_with_nonzero_count",
         "freetype.FT_Load_Glyph.matrix_load",
         "freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags",
+        "freetype.FT_LOAD_FORCE_AUTOHINT.load_glyph_force_autohint_behavior",
         "freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode",
         "freetype.FT_New_Memory_Face.error_null_file_base",
         "freetype.FT_New_Memory_Face.error_null_library_or_aface",
@@ -1112,6 +1113,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags"
     ):
         return "FT_Load_Glyph out-of-range/null-face/invalid-flag errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "load_glyph"
+        and row.case_id == "freetype.FT_LOAD_FORCE_AUTOHINT.load_glyph_force_autohint_behavior"
+    ):
+        return "FT_LOAD_FORCE_AUTOHINT load-glyph behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "load_glyph"
         and row.case_id == "freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode"
