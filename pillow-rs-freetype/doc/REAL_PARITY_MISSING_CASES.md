@@ -10,19 +10,19 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after SFNT/render-callback public API exact classification:
+Current verified result after module/load public API exact classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `4116`
+  - `real-parity`: `4126`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `79`
+  - `generic-error-fallback`: `69`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -249,6 +249,48 @@ make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Table_Missing.sfnt_req
 
 Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
 audit: `real-parity` `4116`, `generic-error-fallback` `79`.
+
+### Issue Set Current: module/load public API exact error routes
+
+Previous blocker:
+
+- Singleton public error rows across SFNT, TrueType, Type1, Type42, WinFNT,
+  render-mode validation, slot validation, malformed outlines, malformed SFNT
+  tables, and missing cmap operations were still classified as
+  `generic-error-fallback`.
+- These rows had runnable pinned C, Rust FFI, thin C ABI, and WASM ABI coverage,
+  but fallback classification accepted any error instead of requiring exact
+  public status/output equality.
+
+Promoted rows:
+
+- `ftmoderr.FT_Mod_Err_SFNT.prefixed_error_base`
+- `ftmoderr.FT_Mod_Err_TrueType.prefixed_error_base`
+- `ftmoderr.FT_Mod_Err_Type1.prefixed_error_base`
+- `ftmoderr.FT_Mod_Err_Type42.prefixed_error_base`
+- `ftmoderr.FT_Mod_Err_Winfonts.prefixed_error_base`
+- `fterrdef.FT_Err_Cannot_Render_Glyph.unsupported_render_mode_returns_error`
+- `fterrdef.FT_Err_Invalid_Slot_Handle.null_or_invalid_slot_rejected`
+- `fterrdef.FT_Err_Invalid_Outline.malformed_outline_rejected`
+- `fterrdef.FT_Err_Invalid_Table.malformed_sfnt_table_rejected`
+- `fterrdef.FT_Err_CMap_Table_Missing.sfnt_without_cmap_returns_error_where_required`
+
+Verified progress:
+
+- Exact comparison passed for all ten promoted rows.
+- No runtime behavior change was needed; the existing pure-Rust implementation,
+  C ABI, and WASM ABI outputs already matched pinned C FreeType for the
+  promoted rows once the fallback guard was removed.
+- Route audit classifies all ten promoted rows as `real-parity`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmoderr.FT_Mod_Err_SFNT.prefixed_error_base
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
+audit: `real-parity` `4126`, `generic-error-fallback` `69`.
 
 ### Issue Set Current: `FT_Open_Face` invalid source-flag exact-error route
 
