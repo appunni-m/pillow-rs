@@ -1324,6 +1324,37 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def ftdriver_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for driver/autohinter properties that do not have a maintained route."""
+    ftdriver_rows_without_maintained_route = {
+        "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip",
+        "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.glyph_to_script_map_runtime",
+        "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation",
+        "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.glyph_to_script_map_runtime",
+        "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip",
+        "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.glyph_to_script_map_runtime",
+        "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip",
+        "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.glyph_to_script_map_runtime",
+        "ftdriver.FT_CFF_HINTING_ADOBE.hinting_engine_property_runtime",
+        "ftdriver.FT_CFF_HINTING_FREETYPE.hinting_engine_property_runtime",
+        "ftdriver.FT_HINTING_ADOBE.hinting_engine_property_runtime",
+        "ftdriver.FT_HINTING_FREETYPE.hinting_engine_property_runtime",
+        "ftdriver.FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script",
+        "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit",
+        "ftdriver.FT_Prop_IncreaseXHeight.limit_changes_autohint_x_height",
+        "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version",
+    }
+    if row.case_id not in ftdriver_rows_without_maintained_route:
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "Driver property, autohinter script, glyph-to-script map, x-height, "
+        "and hinting-engine success behavior requires a maintained driver "
+        "route; keeping it generic would be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3656,6 +3687,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftmodapi_pending = ftmodapi_subsystem_pending_reason(row)
     if ftmodapi_pending:
         return ("pending-route", ftmodapi_pending)
+    ftdriver_pending = ftdriver_subsystem_pending_reason(row)
+    if ftdriver_pending:
+        return ("pending-route", ftdriver_pending)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",

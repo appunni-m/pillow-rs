@@ -1,5 +1,62 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `ftdriver` driver/autohinter property route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `299c28d2f`: `real-parity=4465`,
+  `generic-fallback=141`, `pending-route=373`, `pending-core=7`.
+
+Finding:
+
+- Existing driver rows with runtime assets are classified separately as real
+  parity when they have pinned C/Rust/C-ABI/WASM proof.
+- The remaining `ftdriver` rows cover `FT_AUTOHINTER_SCRIPT_*`,
+  `FT_Prop_GlyphToScriptMap`, `FT_Prop_IncreaseXHeight`,
+  `FT_HINTING_*`, `FT_CFF_HINTING_*`, and
+  `TT_INTERPRETER_VERSION_40` default-property behavior.
+- Those rows had stayed in `generic-fallback` with the reason
+  `no explicit maintained route classification`.
+- They are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
+  driver-property route that applies `FT_Property_Set`/`FT_Property_Get`, loads
+  glyphs after property mutation, compares autohinter script map effects,
+  x-height changes, hinting-engine choices, and default interpreter version
+  behavior across all ABI lanes.
+
+Classification change:
+
+- 16 `ftdriver` rows moved from `generic-fallback` to `pending-route`.
+- Existing exact driver rows remain `real-parity`; the classifier is
+  intentionally exact-case scoped.
+- New route audit counts: `real-parity=4465`, `generic-fallback=125`,
+  `pending-route=389`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add a maintained driver-property route instead of per-row expected output
+   shortcuts. It must run the same operation sequence through pinned C
+   FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement pure-Rust property state first: autohinter script map
+   get/set semantics, glyph-to-script-map mutation effects, increase-x-height
+   property storage and glyph-output effects, CFF/TT hinting-engine properties,
+   and default interpreter-version reporting.
+3. Compare exact return codes, property values, pointer/nullness behavior,
+   property persistence, glyph-output deltas after mutation, script-selection
+   effects, and build-dependent hinting-engine classifications.
+4. Keep already-routed exact driver rows real; do not demote them while building
+   the broader driver-property route.
+5. Promote rows only after focused `ftdriver` runtime proves exact C oracle,
+   Rust FFI, C ABI, and WASM ABI output for the same input.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftdriver
+```
+
 ### Issue Set Current: `ftmodapi` module/library lifecycle route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.
