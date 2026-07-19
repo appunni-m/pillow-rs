@@ -5740,7 +5740,8 @@ static int emit_outline_decompose(int argc, char** argv) {
         !is_outline_callback_return_matrix_case(case_id) &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks") &&
-        !streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
+        !streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates") &&
+        !streq(case_id, "ftoutln.FT_Outline_Decompose.invalid_outline_or_interface_errors")) {
         printf("{");
         print_status(FT_Err_Unimplemented_Feature);
         printf(",\"output\":null}\n");
@@ -5934,6 +5935,67 @@ static int emit_outline_decompose(int argc, char** argv) {
     outline.tags = tags;
     outline.contours = contours;
     outline.flags = 0;
+
+    if (streq(case_id, "ftoutln.FT_Outline_Decompose.invalid_outline_or_interface_errors")) {
+        FT_Outline_Funcs funcs;
+        funcs.move_to = record_outline_move_to;
+        funcs.line_to = record_outline_line_to;
+        funcs.conic_to = record_outline_conic_to;
+        funcs.cubic_to = record_outline_cubic_to;
+        funcs.shift = 0;
+        funcs.delta = 0;
+
+        FT_Vector bad_cubic_points[3] = {{0, 0}, {64, 64}, {128, 0}};
+        unsigned char bad_cubic_tags[3] = {
+            FT_CURVE_TAG_CUBIC,
+            FT_CURVE_TAG_CUBIC,
+            FT_CURVE_TAG_ON,
+        };
+        unsigned short bad_cubic_contours[1] = {2};
+        FT_Outline bad_cubic;
+        bad_cubic.n_contours = 1;
+        bad_cubic.n_points = 3;
+        bad_cubic.points = bad_cubic_points;
+        bad_cubic.tags = bad_cubic_tags;
+        bad_cubic.contours = bad_cubic_contours;
+        bad_cubic.flags = 0;
+
+        FT_Vector bad_contour_points[4] = {
+            {0, 0},
+            {64, 0},
+            {64, 64},
+            {0, 64},
+        };
+        unsigned char bad_contour_tags[4] = {
+            FT_CURVE_TAG_ON,
+            FT_CURVE_TAG_ON,
+            FT_CURVE_TAG_ON,
+            FT_CURVE_TAG_ON,
+        };
+        unsigned short bad_contour_contours[2] = {2, 1};
+        FT_Outline bad_contour;
+        bad_contour.n_contours = 2;
+        bad_contour.n_points = 4;
+        bad_contour.points = bad_contour_points;
+        bad_contour.tags = bad_contour_tags;
+        bad_contour.contours = bad_contour_contours;
+        bad_contour.flags = 0;
+
+        FT_Error err_null_outline = FT_Outline_Decompose(NULL, &funcs, recorded_outline_decompose_user_token);
+        FT_Error err_null_funcs = FT_Outline_Decompose(&outline, NULL, recorded_outline_decompose_user_token);
+        FT_Error err_bad_cubic = FT_Outline_Decompose(&bad_cubic, &funcs, recorded_outline_decompose_user_token);
+        FT_Error err_bad_contour = FT_Outline_Decompose(&bad_contour, &funcs, recorded_outline_decompose_user_token);
+
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"results\":[");
+        printf("{\"scenario\":\"null_outline\",\"return\":%d},", err_null_outline);
+        printf("{\"scenario\":\"null_func_interface\",\"return\":%d},", err_null_funcs);
+        printf("{\"scenario\":\"bad_cubic\",\"return\":%d},", err_bad_cubic);
+        printf("{\"scenario\":\"bad_contour\",\"return\":%d}", err_bad_contour);
+        printf("]}}\n");
+        return 0;
+    }
 
     const int shifts[3] = {0, 1, 2};
     const FT_Pos deltas[3] = {0, 16, -32};
