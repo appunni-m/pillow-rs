@@ -1246,6 +1246,23 @@ pub extern "C" fn fontdone_wasm_glyph_copy(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_glyph_to_bitmap(
+    the_glyph_present: i32,
+    glyph_present: i32,
+    library_present: i32,
+    class_present: i32,
+    prepare_hook_present: i32,
+) -> FT_Error {
+    rust_ffi::FT_Glyph_To_Bitmap(
+        the_glyph_present != 0,
+        glyph_present != 0,
+        library_present != 0,
+        class_present != 0,
+        prepare_hook_present != 0,
+    )
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_outline_get_bbox(
     outline: *const FontdoneWasmOutline,
     abbox: *mut FontdoneWasmBBox,

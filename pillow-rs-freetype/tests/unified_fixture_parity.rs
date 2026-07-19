@@ -15002,6 +15002,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "ftglyph.glyph_to_bitmap" => {
+            if case.case_id
+                == "ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format"
+                && glyph_to_bitmap_invalid_inputs_supported(&case.inputs.params)
+            {
+                return Ok(vec!["--glyph-to-bitmap-invalid-inputs".to_string()]);
+            }
             let mut args = vec!["--glyph-to-bitmap".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
@@ -15768,6 +15774,12 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_outline_get_bitmap(case)
         }
         "ftglyph.glyph_to_bitmap" => {
+            if case.case_id
+                == "ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format"
+                && glyph_to_bitmap_invalid_inputs_supported(&case.inputs.params)
+            {
+                return rust_glyph_to_bitmap_invalid_inputs();
+            }
             let face = open_face(case)?;
             rust_glyph_to_bitmap(&face, case)
         }
@@ -16482,6 +16494,12 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_outline_get_bitmap(case)
         }
         "ftglyph.glyph_to_bitmap" => {
+            if case.case_id
+                == "ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format"
+                && glyph_to_bitmap_invalid_inputs_supported(&case.inputs.params)
+            {
+                return c_glyph_to_bitmap_invalid_inputs();
+            }
             let (library, face) = c_open_face(case)?;
             let output = c_glyph_to_bitmap(face, case);
             c_done_face(face);
@@ -17094,6 +17112,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_outline_get_bitmap(case)
         }
         "ftglyph.glyph_to_bitmap" => {
+            if case.case_id
+                == "ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format"
+                && glyph_to_bitmap_invalid_inputs_supported(&case.inputs.params)
+            {
+                return wasm_glyph_to_bitmap_invalid_inputs();
+            }
             let handle = wasm_open_face(case)?;
             let output = wasm_glyph_to_bitmap(handle, case);
             wasm_done_face(handle);
@@ -19116,6 +19140,172 @@ fn wasm_glyph_copy_null_inputs() -> Result<RunOutput, String> {
         ),
     ];
     Ok(glyph_copy_null_inputs_output(rows))
+}
+
+fn glyph_to_bitmap_invalid_inputs_supported(params: &Value) -> bool {
+    params
+        .get("null_the_glyph")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        && params
+            .get("null_deref_glyph")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        && params
+            .get("null_library")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        && params
+            .get("null_clazz")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        && params
+            .get("no_prepare_hook")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+}
+
+fn glyph_to_bitmap_error_row(probe: &str, error: FT_Error, caller_handle_class: &str) -> Value {
+    json!({
+        "probe": probe,
+        "error": error,
+        "caller_handle_class": caller_handle_class
+    })
+}
+
+fn glyph_to_bitmap_invalid_inputs_output(rows: Vec<Value>) -> RunOutput {
+    let first_error = rows
+        .iter()
+        .filter_map(|row| row.get("error").and_then(Value::as_i64))
+        .find(|error| *error != 0)
+        .unwrap_or(FT_Err_Ok as i64) as FT_Error;
+    error_with_output(
+        first_error,
+        json!({
+            "rows": rows,
+            "caller_write_order": "early Invalid_Argument preserves caller glyph handle before bitmap allocation"
+        }),
+    )
+}
+
+fn rust_glyph_to_bitmap_invalid_inputs() -> Result<RunOutput, String> {
+    let rows = vec![
+        glyph_to_bitmap_error_row(
+            "null_the_glyph",
+            FT_Glyph_To_Bitmap(false, false, false, false, false),
+            "null",
+        ),
+        glyph_to_bitmap_error_row(
+            "null_deref_glyph",
+            FT_Glyph_To_Bitmap(true, false, false, false, false),
+            "null",
+        ),
+        glyph_to_bitmap_error_row(
+            "null_library",
+            FT_Glyph_To_Bitmap(true, true, false, true, true),
+            "non_null",
+        ),
+        glyph_to_bitmap_error_row(
+            "null_clazz",
+            FT_Glyph_To_Bitmap(true, true, true, false, false),
+            "non_null",
+        ),
+        glyph_to_bitmap_error_row(
+            "no_prepare_hook",
+            FT_Glyph_To_Bitmap(true, true, true, true, false),
+            "non_null",
+        ),
+    ];
+    Ok(glyph_to_bitmap_invalid_inputs_output(rows))
+}
+
+fn c_glyph_to_bitmap_invalid_inputs() -> Result<RunOutput, String> {
+    let null_the_glyph_error =
+        c_abi::FT_Glyph_To_Bitmap(ptr::null_mut(), FT_RENDER_MODE_NORMAL, ptr::null(), 0);
+
+    let mut null_glyph = ptr::null_mut();
+    let null_deref_error =
+        c_abi::FT_Glyph_To_Bitmap(&mut null_glyph, FT_RENDER_MODE_NORMAL, ptr::null(), 0);
+    let null_deref_class = if null_glyph.is_null() {
+        "null"
+    } else {
+        "non_null"
+    };
+
+    let mut clazz = c_abi::FT_Glyph_Class {
+        glyph_prepare: 1usize as c_abi::FT_Pointer,
+        ..Default::default()
+    };
+    let mut glyph_rec = c_abi::FT_GlyphRec {
+        library: ptr::null_mut(),
+        clazz: &clazz,
+        ..Default::default()
+    };
+    let mut glyph = &mut glyph_rec as c_abi::FT_Glyph;
+    let null_library_error =
+        c_abi::FT_Glyph_To_Bitmap(&mut glyph, FT_RENDER_MODE_NORMAL, ptr::null(), 0);
+    let null_library_class = if glyph.is_null() { "null" } else { "non_null" };
+
+    glyph_rec = c_abi::FT_GlyphRec {
+        library: 1usize as c_abi::FT_Pointer,
+        clazz: ptr::null(),
+        ..Default::default()
+    };
+    glyph = &mut glyph_rec;
+    let null_clazz_error =
+        c_abi::FT_Glyph_To_Bitmap(&mut glyph, FT_RENDER_MODE_NORMAL, ptr::null(), 0);
+    let null_clazz_class = if glyph.is_null() { "null" } else { "non_null" };
+
+    clazz = c_abi::FT_Glyph_Class::default();
+    glyph_rec = c_abi::FT_GlyphRec {
+        library: 1usize as c_abi::FT_Pointer,
+        clazz: &clazz,
+        ..Default::default()
+    };
+    glyph = &mut glyph_rec;
+    let no_prepare_error =
+        c_abi::FT_Glyph_To_Bitmap(&mut glyph, FT_RENDER_MODE_NORMAL, ptr::null(), 0);
+    let no_prepare_class = if glyph.is_null() { "null" } else { "non_null" };
+
+    let rows = vec![
+        glyph_to_bitmap_error_row("null_the_glyph", null_the_glyph_error, "null"),
+        glyph_to_bitmap_error_row("null_deref_glyph", null_deref_error, null_deref_class),
+        glyph_to_bitmap_error_row("null_library", null_library_error, null_library_class),
+        glyph_to_bitmap_error_row("null_clazz", null_clazz_error, null_clazz_class),
+        glyph_to_bitmap_error_row("no_prepare_hook", no_prepare_error, no_prepare_class),
+    ];
+    Ok(glyph_to_bitmap_invalid_inputs_output(rows))
+}
+
+fn wasm_glyph_to_bitmap_invalid_inputs() -> Result<RunOutput, String> {
+    let rows = vec![
+        glyph_to_bitmap_error_row(
+            "null_the_glyph",
+            wasm_abi::fontdone_wasm_glyph_to_bitmap(0, 0, 0, 0, 0),
+            "null",
+        ),
+        glyph_to_bitmap_error_row(
+            "null_deref_glyph",
+            wasm_abi::fontdone_wasm_glyph_to_bitmap(1, 0, 0, 0, 0),
+            "null",
+        ),
+        glyph_to_bitmap_error_row(
+            "null_library",
+            wasm_abi::fontdone_wasm_glyph_to_bitmap(1, 1, 0, 1, 1),
+            "non_null",
+        ),
+        glyph_to_bitmap_error_row(
+            "null_clazz",
+            wasm_abi::fontdone_wasm_glyph_to_bitmap(1, 1, 1, 0, 0),
+            "non_null",
+        ),
+        glyph_to_bitmap_error_row(
+            "no_prepare_hook",
+            wasm_abi::fontdone_wasm_glyph_to_bitmap(1, 1, 1, 1, 0),
+            "non_null",
+        ),
+    ];
+    Ok(glyph_to_bitmap_invalid_inputs_output(rows))
 }
 
 fn outline_operation_output(

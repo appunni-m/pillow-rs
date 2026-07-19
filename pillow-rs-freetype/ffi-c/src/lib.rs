@@ -1913,6 +1913,51 @@ pub extern "C" fn FT_Glyph_Copy(source: FT_Glyph, target: *mut FT_Glyph) -> FT_E
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Glyph_To_Bitmap(
+    the_glyph: *mut FT_Glyph,
+    _render_mode: FT_Render_Mode,
+    _origin: *const FT_Vector,
+    _destroy: FT_Bool,
+) -> FT_Error {
+    let (glyph_present, library_present, class_present, prepare_hook_present) =
+        if the_glyph.is_null() {
+            (false, false, false, false)
+        } else {
+            // SAFETY: `the_glyph` is non-null and this thin wrapper only reads
+            // the caller handle to reproduce FreeType's early argument checks.
+            let glyph = unsafe { *the_glyph };
+            if glyph.is_null() {
+                (false, false, false, false)
+            } else {
+                // SAFETY: `glyph` is non-null and this wrapper reads only the
+                // root fields used before FreeType allocates or renders.
+                let glyph_ref = unsafe { &*glyph };
+                let class_present = !glyph_ref.clazz.is_null();
+                let prepare_hook_present = if class_present {
+                    // SAFETY: `clazz` is non-null and only the function-pointer
+                    // nullness is observed, matching the C Bad-path guard.
+                    unsafe { !(*glyph_ref.clazz).glyph_prepare.is_null() }
+                } else {
+                    false
+                };
+                (
+                    true,
+                    !glyph_ref.library.is_null(),
+                    class_present,
+                    prepare_hook_present,
+                )
+            }
+        };
+    rust_ffi::FT_Glyph_To_Bitmap(
+        !the_glyph.is_null(),
+        glyph_present,
+        library_present,
+        class_present,
+        prepare_hook_present,
+    )
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Outline_Get_BBox(outline: *const FT_Outline, abbox: *mut FT_BBox) -> FT_Error {
     if abbox.is_null() {
         return rust_ffi::FT_Err_Invalid_Argument as FT_Error;

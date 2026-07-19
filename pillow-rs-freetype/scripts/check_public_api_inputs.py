@@ -148,6 +148,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_glyph_get_cbox",
     "fontdone_wasm_get_glyph",
     "fontdone_wasm_glyph_copy",
+    "fontdone_wasm_glyph_to_bitmap",
     "fontdone_wasm_outline_get_bbox",
     "fontdone_wasm_outline_get_bitmap",
     "fontdone_wasm_outline_render",
@@ -1366,6 +1367,19 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
         ):
             continue
         if (
+            reason
+            == "malformed_facade references missing fixture facades/glyph/malformed-slot-and-class-cases.json"
+            and row.operation == "ftglyph.glyph_to_bitmap"
+            and row.case_id
+            == "ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format"
+            and row.params.get("null_the_glyph") is True
+            and row.params.get("null_deref_glyph") is True
+            and row.params.get("null_library") is True
+            and row.params.get("null_clazz") is True
+            and row.params.get("no_prepare_hook") is True
+        ):
+            continue
+        if (
             reason in {
                 "font is marked required_future_asset",
                 "font_bytes is marked required_future_asset",
@@ -2127,6 +2141,17 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftglyph.FT_Glyph_Copy.error_null_source_target_or_class"
     ):
         return "FT_Glyph_Copy null source/target/class errors validate exact public FT_Error rows and target preservation through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftglyph.glyph_to_bitmap"
+        and row.case_id
+        == "ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format"
+        and row.params.get("null_the_glyph") is True
+        and row.params.get("null_deref_glyph") is True
+        and row.params.get("null_library") is True
+        and row.params.get("null_clazz") is True
+        and row.params.get("no_prepare_hook") is True
+    ):
+        return "FT_Glyph_To_Bitmap early invalid argument paths validate exact public FT_Error rows and caller-handle preservation through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "new_memory_face"
         and row.case_id == "fterrdef.FT_Err_Invalid_Library_Handle.library_api_rejects_null_library"
