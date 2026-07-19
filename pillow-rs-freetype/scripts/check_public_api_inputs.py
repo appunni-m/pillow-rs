@@ -1062,6 +1062,7 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
         "freetype.FT_HAS_FIXED_SIZES.bitmap_strike_font_true",
         "freetype.FT_HAS_GLYPH_NAMES.glyph_names_font_true",
         "freetype.FT_HAS_GLYPH_NAMES.no_glyph_names_control_false",
+        "freetype.FT_New_Memory_Face.success_named_instance_index",
         "freetype.FT_Open_Face.success_open_variation_named_instance",
         "freetype.FT_Request_Size.success_bitmap_request_match",
         "freetype.FT_Select_Charmap.success_select_present_encoding",
@@ -1069,7 +1070,10 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
     for name, asset in sorted(row.assets.items()):
         reason = unresolved_asset_reason(asset, name)
         if (
-            reason == "font is marked required_future_asset"
+            reason in {
+                "font is marked required_future_asset",
+                "font_bytes is marked required_future_asset",
+            }
             and row.case_id in existing_primary_font_cases
         ):
             continue

@@ -17,5 +17,14 @@ if [ ! -f CMakeCache.txt ]; then
     -DFT_DISABLE_BROTLI=ON \
     -DFT_DISABLE_HARFBUZZ=ON
 fi
-cmake --build . -j$(nproc)
+if [ -n "${FONTDONE_BUILD_JOBS:-}" ]; then
+  build_jobs="${FONTDONE_BUILD_JOBS}"
+elif command -v nproc >/dev/null 2>&1; then
+  build_jobs="$(nproc)"
+elif command -v sysctl >/dev/null 2>&1; then
+  build_jobs="$(sysctl -n hw.ncpu)"
+else
+  build_jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
+fi
+cmake --build . -j"${build_jobs}"
 echo "FreeType 2.14.3 built at ${ROOT}/freetype/build"
