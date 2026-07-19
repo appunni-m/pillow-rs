@@ -1,5 +1,66 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `freetype` core face/size/slot route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `e615ce588`: `real-parity=4465`,
+  `generic-fallback=67`, `pending-route=447`, `pending-core=7`.
+
+Finding:
+
+- The remaining core `freetype` rows cover `FT_Attach_File`,
+  `FT_Attach_Stream`, `FT_Bitmap_Size`, external-stream face ownership,
+  variation face flags after selection, `FT_Face`/`FT_FaceRec` public record
+  ownership and fields, `FT_GlyphSlot` reuse, `FT_LOAD_SVG_ONLY`,
+  `FT_Open_Args`, `FT_Parameter`, `FT_RENDER_MODE_NORMAL`,
+  `FT_STYLE_FLAG_BOLD`, `FT_Size`, `FT_SizeRec`, and Type1 AFM track kerning.
+- Those rows had stayed in `generic-fallback` with the reason
+  `no explicit maintained route classification`.
+- They are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
+  core route that exercises the same attach/open/load/size/property sequence
+  through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI, then compares
+  exact public record fields, handle ownership/nullness, slot reuse side
+  effects, load-target/SVG behavior, and track-kerning results.
+
+Classification change:
+
+- 20 core `freetype` concrete rows moved from `generic-fallback` to
+  `pending-route`; the active-size and size-record cases each expand to three
+  concrete rows.
+- Other non-core generic rows remain untouched; this classifier is exact-case
+  scoped.
+- New route audit counts: `real-parity=4465`, `generic-fallback=47`,
+  `pending-route=467`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add a maintained core face/size/slot route instead of per-row expected
+   output shortcuts. It must run the same operation sequence through pinned C
+   FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement pure-Rust behavior first: attach-file/stream dispatch, external
+   stream ownership flags, face record population, owned slot/size/charmap
+   handles, active size switching, slot reuse mutation, available bitmap-size
+   records, load target/render mode mapping, SVG-only load behavior,
+   style/variation flags, parameter pass-through, and Type1 AFM track kerning.
+3. Compare exact return codes, public struct fields, string/pointer nullness,
+   handle identity/stability, ownership flags, active size record values,
+   slot mutation effects, load/render output differences, and track-kerning
+   scalar outputs.
+4. Keep already-routed core exact-error and real runtime rows real; do not
+   demote them while building the broader core route.
+5. Promote rows only after focused `freetype` runtime proves exact C oracle,
+   Rust FFI, C ABI, and WASM ABI output for the same input.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=freetype
+```
+
 ### Issue Set Current: `ftimage` image/raster route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.
