@@ -7470,6 +7470,40 @@ static int emit_outline_get_orientation(int argc, char** argv) {
         );
         print_orientation_observation("positive", ORIENTATION_OUTLINE_POSITIVE, &emitted);
         print_orientation_observation("negative", ORIENTATION_OUTLINE_NEGATIVE, &emitted);
+    } else if (strstr(case_id, "FT_Orientation.orientation_algorithm_contract")) {
+        print_orientation_observation("positive", ORIENTATION_OUTLINE_POSITIVE, &emitted);
+        print_orientation_observation("negative", ORIENTATION_OUTLINE_NEGATIVE, &emitted);
+        print_orientation_observation(
+            "collapsed_horizontal",
+            ORIENTATION_OUTLINE_COLLAPSED,
+            &emitted
+        );
+        print_orientation_observation(
+            "collapsed_vertical",
+            ORIENTATION_OUTLINE_COLLAPSED_VERTICAL,
+            &emitted
+        );
+        print_orientation_observation("zero_area", ORIENTATION_OUTLINE_ZERO_AREA, &emitted);
+        print_orientation_observation(
+            "oversized_x_min",
+            ORIENTATION_OUTLINE_OVERSIZED_X_MIN,
+            &emitted
+        );
+        print_orientation_observation(
+            "oversized_y_min",
+            ORIENTATION_OUTLINE_OVERSIZED_Y_MIN,
+            &emitted
+        );
+        print_orientation_observation(
+            "oversized_x_max",
+            ORIENTATION_OUTLINE_OVERSIZED,
+            &emitted
+        );
+        print_orientation_observation(
+            "oversized_y_max",
+            ORIENTATION_OUTLINE_OVERSIZED_Y_MAX,
+            &emitted
+        );
     } else if (strstr(case_id, "FT_Outline_Get_Orientation.collapsed_and_oversized_return_none")) {
         print_orientation_observation(
             "collapsed_horizontal",
@@ -7507,7 +7541,8 @@ static int emit_outline_get_orientation(int argc, char** argv) {
     } else if (strstr(case_id, "FT_ORIENTATION_TRUETYPE.negative_area_returns_truetype") ||
                strstr(case_id, "FT_ORIENTATION_FILL_RIGHT.alias_matches_truetype_orientation")) {
         print_orientation_observation("negative", ORIENTATION_OUTLINE_NEGATIVE, &emitted);
-    } else if (strstr(case_id, "FT_ORIENTATION_POSTSCRIPT.positive_area_returns_postscript")) {
+    } else if (strstr(case_id, "FT_ORIENTATION_POSTSCRIPT.positive_area_returns_postscript") ||
+               strstr(case_id, "FT_ORIENTATION_FILL_LEFT.returned_for_positive_area")) {
         print_orientation_observation("positive", ORIENTATION_OUTLINE_POSITIVE, &emitted);
     } else if (strstr(case_id, "FT_ORIENTATION_NONE.returned_for_collapsed_or_zero_area")) {
         print_orientation_observation("collapsed", ORIENTATION_OUTLINE_COLLAPSED, &emitted);
