@@ -802,6 +802,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode",
         "freetype.FT_New_Memory_Face.error_null_file_base",
         "freetype.FT_New_Memory_Face.error_null_library_or_aface",
+        "freetype.FT_New_Memory_Face.error_bad_size_or_unknown_format",
         "freetype.FT_Open_Face.error_invalid_source_flags",
         "freetype.FT_Open_Face.error_null_library_args_or_aface",
         "freetype.FT_Render_Glyph.invalid_render_mode",
@@ -1080,6 +1081,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "freetype.FT_New_Memory_Face.error_null_library_or_aface"
     ):
         return "FT_New_Memory_Face null library/aface errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "new_memory_face"
+        and row.case_id == "freetype.FT_New_Memory_Face.error_bad_size_or_unknown_format"
+    ):
+        return "FT_New_Memory_Face bad-size/unknown-format errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "new_memory_face"
         and row.case_id == "freetype.FT_Open_Face.error_null_library_args_or_aface"
