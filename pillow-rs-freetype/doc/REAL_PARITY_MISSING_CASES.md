@@ -10,21 +10,21 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_CID_Is_Internally_CID_Keyed`
-non-CID/null-face
+Current verified result after `FT_Get_CID_Registry_Ordering_Supplement`
+non-CID/null-output
 exact-error classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3962`
+  - `real-parity`: `3963`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `233`
+  - `generic-error-fallback`: `232`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -661,6 +661,41 @@ make -C pillow-rs-freetype test-case CASE=ftcid.FT_Get_CID_Is_Internally_CID_Key
 
 Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
 audit: `real-parity` `3962`, `generic-error-fallback` `233`.
+
+### Issue Set Current: `FT_Get_CID_Registry_Ordering_Supplement` non-CID/null-output exact-error route
+
+Previous blocker:
+
+- `ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs`
+  had a concrete FTCID public error row classified as
+  `generic-error-fallback`.
+- The row already ran through pinned C FreeType, Rust FFI, thin C ABI, and WASM
+  ABI, but fallback classification only proved that an error happened.
+
+Fix plan:
+
+1. Promote only the concrete `FT_Get_CID_Registry_Ordering_Supplement`
+   non-CID/null-output row to exact-error comparison.
+2. Keep the existing non-CID font input unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI
+   `FT_Get_CID_Registry_Ordering_Supplement`, and WASM ABI before counting the
+   row as `real-parity`.
+
+Verified progress:
+
+- Exact comparison passed for the concrete FTCID non-CID/null-output row.
+- The previously fallback-classified error row now validates exact
+  status/output against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed for this row.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs
+```
+
+Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3963`, `generic-error-fallback` `232`.
 
 ### Issue Set A: `ftoutln.outline_render` pending outline fixtures
 
