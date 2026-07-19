@@ -2468,6 +2468,92 @@ classification exposed real failures:
 Status: not promoted.  The rows need fixture/oracle repair or implementation
 fixes before they can be moved out of `generic-fallback`.
 
+Follow-up failed probe:
+
+- A smaller ten-row subset was tested next:
+  `freetype.open_face_pair`, `freetype.open_face_stream`,
+  `freetype.parameter_dispatch`, `freetype.face_owned_handles`,
+  `freetype.active_size_handle`, and `freetype.size_record_state`.
+- Focused operation runs passed under generic fallback, but a full strict route
+  run after temporary promotion exposed the real issue: pinned C returned
+  `FT_Err_Invalid_File_Format` (`7`) for all ten rows.  The generic route had
+  accepted those shared errors, so promoting them would be a green placeholder.
+- The promotion was reverted.  These rows require fixture/oracle repair before
+  route classification can become real parity.
+- `freetype.attach_file`, `freetype.attach_stream`, `freetype.open_face_args`,
+  `freetype.inspect_face_rec`, `freetype.inspect_available_sizes`, and
+  `freetype.enumerate_charmaps` also remain unpromoted because their focused
+  lanes or route audit expose unresolved attachment/font assets.
+
+### Issue Set Current: FT_List route promotion probe
+
+Problem:
+
+- `ftlist.list_add`, `ftlist.list_finalize`, and `ftlist.list_find` looked like
+  a clean eleven-row future batch because they do not depend on font assets and
+  their focused operation runs pass under generic fallback.
+
+Probe:
+
+- Temporarily adding those three operations to `REAL_PARITY_OPERATIONS` moved
+  eleven concrete rows from `generic-fallback` to `real-parity` with no
+  `pending-route` increase in the route audit.
+- Full strict runtime parity rejected the promotion: the pinned C oracle
+  returned `FT_Err_Invalid_File_Format` (`7`) for all eleven `FT_List_*`
+  success/null-shape rows once they were classified as real routes.
+
+Status: not promoted.  The `FT_List_*` rows need real C oracle fixture routing
+or generator repair before they can count as public-route parity.  Focused
+generic fallback success is not sufficient evidence.
+
+### Issue Set Current: future-batch route promotion audit
+
+Problem:
+
+- A 10+ row future-batch promotion was requested to avoid delaying future
+  surfaces.  Several raw `generic-fallback` rows looked runnable from focused
+  operation filters, but strict full parity showed that most were still
+  accepting C-oracle fallback errors.
+
+Failed probes:
+
+- Face/open/lifecycle rows:
+  `freetype.open_face_pair`, `freetype.open_face_stream`,
+  `freetype.parameter_dispatch`, `freetype.face_owned_handles`,
+  `freetype.active_size_handle`, and `freetype.size_record_state`.
+  Temporary promotion produced ten strict failures; pinned C returned
+  `FT_Err_Invalid_File_Format` (`7`) for every row.
+- `FT_List_Add`, `FT_List_Finalize`, and `FT_List_Find` looked like an
+  eleven-row asset-free batch.  Temporary operation promotion produced eleven
+  strict failures; pinned C returned `FT_Err_Invalid_File_Format` (`7`) for
+  every row.
+- `FT_Stroker` primitive success/no-op rows
+  (`ConicTo.coincident_control_and_end_noop`,
+  `CubicTo.coincident_controls_and_end_noop`, `LineTo.zero_length_line_noop`,
+  and `Stroker_New.valid_library_allocates_stroker`) produced four strict
+  failures; pinned C returned `FT_Err_Invalid_File_Format` (`7`) for every row.
+- A mixed thirteen-row batch across `FT_Outline_Get_Bitmap`, `FT_List_Iterate`,
+  `FT_New_Glyph`, `FT_Add_Module`, and module lifecycle produced twelve strict
+  failures for the same C-oracle fallback reason.
+
+Verified progress:
+
+- Only `ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph` survived
+  strict full parity in that mixed batch.  The route audit now classifies that
+  row as real parity through the existing pinned C oracle, Rust FFI, C ABI, and
+  WASM ABI routes.
+- Route audit moved one row from `generic-fallback` to `real-parity`:
+  `real-parity` `4291 -> 4292`, `generic-fallback` `639 -> 638`, with
+  `pending-route` unchanged at `49`.
+- Full non-coverage parity passes with `6802 / 6802` runtime rows and `432`
+  pending rows.
+
+Next required work:
+
+- Do not promote the failed batches by operation.  Add real C-oracle dispatch
+  and matching Rust/C-ABI/WASM route support first, then re-run full strict
+  parity.  Focused generic fallback success is not sufficient evidence.
+
 Verified progress:
 
 - Added real `outline_model` fixture
