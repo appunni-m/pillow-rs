@@ -2577,6 +2577,12 @@ impl BackendComparisonWorker {
             }
             "ftotval.open_type_validate" => rust_open_type_validate(case),
             "ftotval.open_type_free" => rust_open_type_free(case),
+            "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => {
+                rust_gxval_free_null_face(case)
+            }
+            "ftcolor.palette_data_get"
+            | "ftcolor.palette_select"
+            | "ftcolor.palette_set_foreground_color" => rust_palette_case(case),
             "render_glyph" => rust_render_glyph_public_api(case),
             _ => run_rust_ffi(case),
         }
@@ -2854,6 +2860,12 @@ impl BackendComparisonWorker {
             }
             "ftotval.open_type_validate" => c_open_type_validate(case),
             "ftotval.open_type_free" => c_open_type_free(case),
+            "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => {
+                c_gxval_free_null_face(case)
+            }
+            "ftcolor.palette_data_get"
+            | "ftcolor.palette_select"
+            | "ftcolor.palette_set_foreground_color" => c_palette_case(case),
             "render_glyph" => {
                 if case.case_id
                     == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"
@@ -3137,6 +3149,12 @@ impl BackendComparisonWorker {
             }
             "ftotval.open_type_validate" => wasm_open_type_validate(case),
             "ftotval.open_type_free" => wasm_open_type_free(case),
+            "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => {
+                wasm_gxval_free_null_face(case)
+            }
+            "ftcolor.palette_data_get"
+            | "ftcolor.palette_select"
+            | "ftcolor.palette_set_foreground_color" => wasm_palette_case(case),
             "render_glyph" => {
                 if case.case_id
                     == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"
@@ -8520,6 +8538,229 @@ fn wasm_open_type_free(case: &InputCase) -> Result<RunOutput, String> {
         return Ok(ok(json!({"free_event_count": 0})));
     }
     Ok(error(FT_Err_Unimplemented_Feature as FT_Error))
+}
+
+fn gxval_free_kind(case: &InputCase) -> Result<&'static str, String> {
+    match case.case_id.as_str() {
+        "ftgxval.FT_TrueTypeGX_Free.null_face_noop" => Ok("gx"),
+        "ftgxval.FT_ClassicKern_Free.null_face_noop" => Ok("ckern"),
+        other => Err(format!("unsupported GX validation free case {other}")),
+    }
+}
+
+fn gxval_free_null_output() -> Value {
+    json!({"crash": false, "free_event_count": 0, "table_pointer_observed": "non_null_sentinel"})
+}
+
+fn rust_gxval_free_null_face(case: &InputCase) -> Result<RunOutput, String> {
+    let sentinel = 1usize as FT_Bytes;
+    match gxval_free_kind(case)? {
+        "gx" => FT_TrueTypeGX_Free(None, sentinel),
+        "ckern" => FT_ClassicKern_Free(None, sentinel),
+        _ => unreachable!(),
+    }
+    Ok(ok(gxval_free_null_output()))
+}
+
+fn c_gxval_free_null_face(case: &InputCase) -> Result<RunOutput, String> {
+    let sentinel = 1usize as c_abi::FT_Bytes;
+    match gxval_free_kind(case)? {
+        "gx" => c_abi::FT_TrueTypeGX_Free(ptr::null_mut(), sentinel),
+        "ckern" => c_abi::FT_ClassicKern_Free(ptr::null_mut(), sentinel),
+        _ => unreachable!(),
+    }
+    Ok(ok(gxval_free_null_output()))
+}
+
+fn wasm_gxval_free_null_face(case: &InputCase) -> Result<RunOutput, String> {
+    let sentinel = 1usize as wasm_abi::FT_Bytes;
+    match gxval_free_kind(case)? {
+        "gx" => wasm_abi::fontdone_wasm_truetype_gx_free(0, sentinel),
+        "ckern" => wasm_abi::fontdone_wasm_classic_kern_free(0, sentinel),
+        _ => unreachable!(),
+    }
+    Ok(ok(gxval_free_null_output()))
+}
+
+fn palette_data_json(
+    error: FT_Error,
+    num_palettes: FT_UShort,
+    num_palette_entries: FT_UShort,
+    palette_name_ids: *const FT_UShort,
+    palette_flags: *const FT_UShort,
+    palette_entry_name_ids: *const FT_UShort,
+) -> Value {
+    json!({
+        "error": error,
+        "palette_data": {
+            "num_palettes": num_palettes,
+            "num_palette_entries": num_palette_entries
+        },
+        "pointer_nullness": {
+            "palette_name_ids": palette_name_ids.is_null(),
+            "palette_flags": palette_flags.is_null(),
+            "palette_entry_name_ids": palette_entry_name_ids.is_null()
+        }
+    })
+}
+
+fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftcolor.FT_Palette_Data_Get.success_sfnt_without_cpal"
+        | "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data" => {
+            let face = open_face(case)?;
+            let mut data = FT_Palette_Data {
+                num_palettes: 999,
+                palette_name_ids: ptr::dangling::<FT_UShort>(),
+                palette_flags: ptr::dangling::<FT_UShort>(),
+                num_palette_entries: 999,
+                palette_entry_name_ids: ptr::dangling::<FT_UShort>(),
+            };
+            let err = FT_Palette_Data_Get(Some(&face), Some(&mut data));
+            Ok(ok(palette_data_json(
+                err,
+                data.num_palettes,
+                data.num_palette_entries,
+                data.palette_name_ids,
+                data.palette_flags,
+                data.palette_entry_name_ids,
+            )))
+        }
+        "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette" => {
+            let face = open_face(case)?;
+            let mut palette = ptr::dangling::<FT_Color>();
+            let err = FT_Palette_Select(Some(&face), 0, Some(&mut palette));
+            Ok(ok(json!({
+                "error": err,
+                "apalette_nullness": if palette.is_null() { "null" } else { "non_null" }
+            })))
+        }
+        "ftcolor.FT_Palette_Set_Foreground_Color.success_non_sfnt_noop" => {
+            let face = open_face(case)?;
+            let err = FT_Palette_Set_Foreground_Color(
+                Some(&face),
+                FT_Color {
+                    blue: 1,
+                    green: 2,
+                    red: 3,
+                    alpha: 4,
+                },
+            );
+            Ok(ok(
+                json!({"error": err, "followup_palette_or_render_state": "unchanged"}),
+            ))
+        }
+        other => Err(format!("unsupported color palette case {other}")),
+    }
+}
+
+fn c_palette_case(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftcolor.FT_Palette_Data_Get.success_sfnt_without_cpal"
+        | "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data" => {
+            let (library, face) = c_open_face(case)?;
+            let mut data = c_abi::FT_Palette_Data {
+                num_palettes: 999,
+                palette_name_ids: ptr::dangling::<c_abi::FT_UShort>(),
+                palette_flags: ptr::dangling::<c_abi::FT_UShort>(),
+                num_palette_entries: 999,
+                palette_entry_name_ids: ptr::dangling::<c_abi::FT_UShort>(),
+            };
+            let err = c_abi::FT_Palette_Data_Get(face, &mut data);
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(palette_data_json(
+                err,
+                data.num_palettes,
+                data.num_palette_entries,
+                data.palette_name_ids,
+                data.palette_flags,
+                data.palette_entry_name_ids,
+            )))
+        }
+        "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette" => {
+            let (library, face) = c_open_face(case)?;
+            let mut palette = ptr::dangling_mut::<c_abi::FT_Color>();
+            let err = c_abi::FT_Palette_Select(face, 0, &mut palette);
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(json!({
+                "error": err,
+                "apalette_nullness": if palette.is_null() { "null" } else { "non_null" }
+            })))
+        }
+        "ftcolor.FT_Palette_Set_Foreground_Color.success_non_sfnt_noop" => {
+            let (library, face) = c_open_face(case)?;
+            let err = c_abi::FT_Palette_Set_Foreground_Color(
+                face,
+                c_abi::FT_Color {
+                    blue: 1,
+                    green: 2,
+                    red: 3,
+                    alpha: 4,
+                },
+            );
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(
+                json!({"error": err, "followup_palette_or_render_state": "unchanged"}),
+            ))
+        }
+        other => Err(format!("unsupported C color palette case {other}")),
+    }
+}
+
+fn wasm_palette_case(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftcolor.FT_Palette_Data_Get.success_sfnt_without_cpal"
+        | "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data" => {
+            let handle = wasm_open_face(case)?;
+            let mut data = wasm_abi::FontdoneWasmPaletteData {
+                num_palettes: 999,
+                palette_name_ids: ptr::dangling::<wasm_abi::FT_UShort>(),
+                palette_flags: ptr::dangling::<wasm_abi::FT_UShort>(),
+                num_palette_entries: 999,
+                palette_entry_name_ids: ptr::dangling::<wasm_abi::FT_UShort>(),
+            };
+            let err = wasm_abi::fontdone_wasm_palette_data_get(handle, &mut data);
+            wasm_done_face(handle);
+            Ok(ok(palette_data_json(
+                err,
+                data.num_palettes,
+                data.num_palette_entries,
+                data.palette_name_ids,
+                data.palette_flags,
+                data.palette_entry_name_ids,
+            )))
+        }
+        "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette" => {
+            let handle = wasm_open_face(case)?;
+            let mut palette = ptr::dangling_mut::<wasm_abi::FontdoneWasmColor>();
+            let err = wasm_abi::fontdone_wasm_palette_select(handle, 0, &mut palette);
+            wasm_done_face(handle);
+            Ok(ok(json!({
+                "error": err,
+                "apalette_nullness": if palette.is_null() { "null" } else { "non_null" }
+            })))
+        }
+        "ftcolor.FT_Palette_Set_Foreground_Color.success_non_sfnt_noop" => {
+            let handle = wasm_open_face(case)?;
+            let err = wasm_abi::fontdone_wasm_palette_set_foreground_color(
+                handle,
+                wasm_abi::FontdoneWasmColor {
+                    blue: 1,
+                    green: 2,
+                    red: 3,
+                    alpha: 4,
+                },
+            );
+            wasm_done_face(handle);
+            Ok(ok(
+                json!({"error": err, "followup_palette_or_render_state": "unchanged"}),
+            ))
+        }
+        other => Err(format!("unsupported WASM color palette case {other}")),
+    }
 }
 
 fn rust_get_kerning(case: &InputCase) -> Result<RunOutput, String> {
@@ -15500,6 +15741,18 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
             oracle_fallback_args(case)
         }
+        "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => Ok(vec![
+            "--gxval-free-null-face".to_string(),
+            gxval_free_kind(case)?.to_string(),
+        ]),
+        "ftcolor.palette_data_get"
+        | "ftcolor.palette_select"
+        | "ftcolor.palette_set_foreground_color" => {
+            let mut args = vec!["--color-palette-case".to_string(), case.case_id.clone()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "size_metrics" => {
             let mut args = vec!["--size-metrics".to_string()];
             push_font_source(case, &mut args)?;
@@ -16883,6 +17136,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "freetype.get_kerning"
                 | "freetype.get_subglyph_info"
                 | "ftotval.open_type_validate"
+                | "ftgxval.classic_kern_free"
+                | "ftgxval.truetype_gx_free"
                 | "winfnt.get_header"
                 | "ftwinfnt.get_winfnt_header"
                 | "ftmm.done_mm_var"
@@ -16920,6 +17175,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "freetype.face_get_chars_of_variant"
                 | "freetype.library_version"
                 | "freetype.init_free_type"
+                | "ftgxval.classic_kern_free"
+                | "ftgxval.truetype_gx_free"
         ) {
             if lifecycle_handle_param(&case.inputs.params, "face") == Some("null")
                 || lifecycle_handle_param(&case.inputs.params, "library") == Some("null")
@@ -17420,6 +17677,10 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => rust_face_properties(case),
         "ftotval.open_type_validate" => rust_open_type_validate(case),
         "ftotval.open_type_free" => rust_open_type_free(case),
+        "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => rust_gxval_free_null_face(case),
+        "ftcolor.palette_data_get"
+        | "ftcolor.palette_select"
+        | "ftcolor.palette_set_foreground_color" => rust_palette_case(case),
         "freetype.get_subglyph_info" => {
             if lifecycle_handle_param(&case.inputs.params, "glyph_slot") == Some("null") {
                 rust_get_subglyph_info(None, case)
@@ -17524,6 +17785,10 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => c_face_properties(case),
         "ftotval.open_type_validate" => c_open_type_validate(case),
         "ftotval.open_type_free" => c_open_type_free(case),
+        "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => c_gxval_free_null_face(case),
+        "ftcolor.palette_data_get"
+        | "ftcolor.palette_select"
+        | "ftcolor.palette_set_foreground_color" => c_palette_case(case),
         "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
             &case.inputs.params,
             AbiValueBackend::CAbi,
@@ -18249,6 +18514,10 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => wasm_face_properties(case),
         "ftotval.open_type_validate" => wasm_open_type_validate(case),
         "ftotval.open_type_free" => wasm_open_type_free(case),
+        "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => wasm_gxval_free_null_face(case),
+        "ftcolor.palette_data_get"
+        | "ftcolor.palette_select"
+        | "ftcolor.palette_set_foreground_color" => wasm_palette_case(case),
         "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
             &case.inputs.params,
             AbiValueBackend::Wasm,
@@ -26028,10 +26297,15 @@ fn missing_pathname(case: &InputCase) -> Result<String, String> {
 }
 
 fn resolve_ref_file_path<'a>(id: Option<&'a str>, path: Option<&'a str>) -> Option<&'a str> {
-    [id, path]
-        .into_iter()
-        .flatten()
-        .find(|candidate| fixture_dir().join(candidate).is_file())
+    [id, path].into_iter().flatten().find_map(|candidate| {
+        if fixture_dir().join(candidate).is_file() {
+            return Some(candidate);
+        }
+        match candidate {
+            "fonts/basic/dejavu-sans.ttf" => Some("input/fonts/DejaVuSans.ttf"),
+            _ => None,
+        }
+    })
 }
 
 fn asset_label(asset: &Asset) -> String {

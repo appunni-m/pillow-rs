@@ -275,6 +275,33 @@ pub struct FT_Color {
     pub alpha: FT_Byte,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FT_Palette_Data {
+    pub num_palettes: FT_UShort,
+    pub palette_name_ids: *const FT_UShort,
+    pub palette_flags: *const FT_UShort,
+    pub num_palette_entries: FT_UShort,
+    pub palette_entry_name_ids: *const FT_UShort,
+}
+
+fn rust_color_from_c(color: FT_Color) -> rust_ffi::FT_Color {
+    rust_ffi::FT_Color {
+        blue: color.blue,
+        green: color.green,
+        red: color.red,
+        alpha: color.alpha,
+    }
+}
+
+fn copy_palette_data_to_c(out: &mut FT_Palette_Data, value: rust_ffi::FT_Palette_Data) {
+    out.num_palettes = value.num_palettes;
+    out.palette_name_ids = value.palette_name_ids;
+    out.palette_flags = value.palette_flags;
+    out.num_palette_entries = value.num_palette_entries;
+    out.palette_entry_name_ids = value.palette_entry_name_ids;
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Bitmap_Init(abitmap: *mut FT_Bitmap) {
     // FreeType accepts NULL here and otherwise overwrites the public record
@@ -624,6 +651,64 @@ pub extern "C" fn FT_Bitmap_Blend(
         atarget_offset_ref.y = rust_target_offset.y;
     }
     err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Palette_Data_Get(
+    face: FT_Face,
+    apalette_data: *mut FT_Palette_Data,
+) -> FT_Error {
+    let Some(out) = (unsafe { apalette_data.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let mut rust_out = rust_ffi::FT_Palette_Data::default();
+    let err = rust_ffi::FT_Palette_Data_Get(face_state(face).map(|state| &state.inner), Some(&mut rust_out));
+    if err == rust_ffi::FT_Err_Ok {
+        copy_palette_data_to_c(out, rust_out);
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Palette_Select(
+    face: FT_Face,
+    palette_index: FT_UShort,
+    apalette: *mut *mut FT_Color,
+) -> FT_Error {
+    let mut rust_palette: *const rust_ffi::FT_Color = ptr::null();
+    let err = rust_ffi::FT_Palette_Select(
+        face_state(face).map(|state| &state.inner),
+        palette_index,
+        (!apalette.is_null()).then_some(&mut rust_palette),
+    );
+    if err == rust_ffi::FT_Err_Ok && !apalette.is_null() {
+        // SAFETY: `apalette` is non-null and caller provided writable storage.
+        unsafe {
+            *apalette = rust_palette.cast::<FT_Color>().cast_mut();
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Palette_Set_Foreground_Color(
+    face: FT_Face,
+    foreground_color: FT_Color,
+) -> FT_Error {
+    rust_ffi::FT_Palette_Set_Foreground_Color(
+        face_state(face).map(|state| &state.inner),
+        rust_color_from_c(foreground_color),
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_TrueTypeGX_Free(face: FT_Face, table: FT_Bytes) {
+    rust_ffi::FT_TrueTypeGX_Free(face_state(face).map(|state| &state.inner), table);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_ClassicKern_Free(face: FT_Face, table: FT_Bytes) {
+    rust_ffi::FT_ClassicKern_Free(face_state(face).map(|state| &state.inner), table);
 }
 
 #[repr(C)]

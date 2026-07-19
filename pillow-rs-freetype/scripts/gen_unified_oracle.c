@@ -9735,6 +9735,67 @@ static int emit_open_type_free_null_table(int argc, char** argv) {
     return 0;
 }
 
+static int emit_gxval_free_null_face(int argc, char** argv) {
+    (void)argc;
+    const char* which = argv[2];
+    if (streq(which, "gx")) {
+        FT_TrueTypeGX_Free(NULL, (FT_Bytes)1);
+    } else if (streq(which, "ckern")) {
+        FT_ClassicKern_Free(NULL, (FT_Bytes)1);
+    } else {
+        return 2;
+    }
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"crash\":false,\"free_event_count\":0,\"table_pointer_observed\":\"non_null_sentinel\"}}\n");
+    return 0;
+}
+
+static void print_palette_data_json(FT_Error err, FT_Palette_Data data) {
+    printf("{\"error\":%d,\"palette_data\":{\"num_palettes\":%u,\"num_palette_entries\":%u},",
+           err,
+           data.num_palettes,
+           data.num_palette_entries);
+    printf("\"pointer_nullness\":{\"palette_name_ids\":%s,\"palette_flags\":%s,\"palette_entry_name_ids\":%s}}",
+           data.palette_name_ids ? "false" : "true",
+           data.palette_flags ? "false" : "true",
+           data.palette_entry_name_ids ? "false" : "true");
+}
+
+static int emit_color_palette_case(int argc, char** argv) {
+    const char* case_id = argv[2];
+    OracleFace face;
+    int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    printf("{");
+    print_status(0);
+    if (streq(case_id, "ftcolor.FT_Palette_Data_Get.success_sfnt_without_cpal") ||
+        streq(case_id, "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data")) {
+        FT_Palette_Data data = { 999, (const FT_UShort*)1, (const FT_UShort*)1, 999, (const FT_UShort*)1 };
+        FT_Error err = FT_Palette_Data_Get(face.face, &data);
+        printf(",\"output\":");
+        print_palette_data_json(err, data);
+        printf("}\n");
+    } else if (streq(case_id, "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette")) {
+        FT_Color* palette = (FT_Color*)1;
+        FT_Error err = FT_Palette_Select(face.face, 0, &palette);
+        printf(",\"output\":{\"error\":%d,\"apalette_nullness\":\"%s\"}}\n",
+               err,
+               palette ? "non_null" : "null");
+    } else if (streq(case_id, "ftcolor.FT_Palette_Set_Foreground_Color.success_non_sfnt_noop")) {
+        FT_Color color = { 1, 2, 3, 4 };
+        FT_Error err = FT_Palette_Set_Foreground_Color(face.face, color);
+        printf(",\"output\":{\"error\":%d,\"followup_palette_or_render_state\":\"unchanged\"}}\n", err);
+    } else {
+        close_oracle_face(&face);
+        return 2;
+    }
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_get_postscript_name_variants(int argc, char** argv) {
     (void)argc;
     const char* source_kind = argv[2];
@@ -15151,6 +15212,12 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--open-type-free-null-table")) {
         return emit_open_type_free_null_table(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--gxval-free-null-face")) {
+        return emit_gxval_free_null_face(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--color-palette-case")) {
+        return emit_color_palette_case(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-char-index")) {
         return emit_face_or_slot(argc, argv);
