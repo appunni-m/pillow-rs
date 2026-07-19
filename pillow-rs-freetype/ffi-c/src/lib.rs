@@ -1463,6 +1463,60 @@ pub extern "C" fn FT_Property_Set(
     )
 }
 
+fn face_property_from_abi(parameter: &FT_Parameter) -> rust_ffi::FT_Face_Property {
+    let value = match parameter.tag as i64 {
+        rust_ffi::FT_PARAM_TAG_STEM_DARKENING if !parameter.data.is_null() => {
+            // SAFETY: FreeType requires `FT_PARAM_TAG_STEM_DARKENING` data to
+            // point to an `FT_Bool` for the duration of `FT_Face_Properties`.
+            Some(rust_ffi::FT_Face_Property_Value::Bool(unsafe {
+                *parameter.data.cast::<FT_Bool>()
+            }))
+        }
+        rust_ffi::FT_PARAM_TAG_RANDOM_SEED if !parameter.data.is_null() => {
+            // SAFETY: FreeType requires `FT_PARAM_TAG_RANDOM_SEED` data to
+            // point to an `FT_Int32` for the duration of `FT_Face_Properties`.
+            Some(rust_ffi::FT_Face_Property_Value::Int32(unsafe {
+                *parameter.data.cast::<FT_Int32>()
+            }))
+        }
+        _ => None,
+    };
+    rust_ffi::FT_Face_Property {
+        tag: parameter.tag,
+        value,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Face_Properties(
+    face: FT_Face,
+    num_properties: FT_UInt,
+    properties: *mut FT_Parameter,
+) -> FT_Error {
+    if num_properties > 0 && properties.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let props = if num_properties == 0 {
+        Vec::new()
+    } else {
+        let Ok(count) = usize::try_from(num_properties) else {
+            return rust_ffi::FT_Err_Invalid_Argument;
+        };
+        // SAFETY: The C ABI requires `properties` to address `num_properties`
+        // readable `FT_Parameter` records when `num_properties > 0`.
+        unsafe { slice::from_raw_parts(properties, count) }
+            .iter()
+            .map(face_property_from_abi)
+            .collect()
+    };
+    let face = face_state_mut(face).map(|state| &mut state.inner);
+    rust_ffi::FT_Face_Properties(face, Some(&props))
+}
+
+pub fn abi_face_properties_state(face: FT_Face) -> Option<rust_ffi::FT_Face_Properties_State> {
+    face_state(face).map(|state| rust_ffi::FT_Face_Properties_Get_State(&state.inner))
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Add_Default_Modules(library: FT_Library) {
     rust_ffi::FT_Add_Default_Modules(library_mut(library));

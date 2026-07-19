@@ -1866,6 +1866,37 @@ pub extern "C" fn fontdone_wasm_property_set_then_get(
     )
 }
 
+fn wasm_face_property(tag_selector: i32, value_kind: i32, value: i32) -> rust_ffi::FT_Face_Property {
+    let tag = match tag_selector {
+        1 => rust_ffi::FT_PARAM_TAG_STEM_DARKENING as FT_ULong,
+        2 => rust_ffi::FT_PARAM_TAG_RANDOM_SEED as FT_ULong,
+        3 => rust_ffi::FT_PARAM_TAG_LCD_FILTER_WEIGHTS as FT_ULong,
+        _ => 0x6261_6421,
+    };
+    let value = match value_kind {
+        1 => Some(rust_ffi::FT_Face_Property_Value::Bool(FT_Bool::from(value != 0))),
+        2 => Some(rust_ffi::FT_Face_Property_Value::Int32(value)),
+        _ => None,
+    };
+    rust_ffi::FT_Face_Property { tag, value }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_face_properties_one(
+    handle: usize,
+    tag_selector: i32,
+    value_kind: i32,
+    value: i32,
+) -> FT_Error {
+    let property = wasm_face_property(tag_selector, value_kind, value);
+    let face = face_mut(handle).map(|state| &mut state.face);
+    rust_ffi::FT_Face_Properties(face, Some(slice::from_ref(&property)))
+}
+
+pub fn abi_face_properties_state(handle: usize) -> Option<rust_ffi::FT_Face_Properties_State> {
+    face_ref(handle).map(|state| rust_ffi::FT_Face_Properties_Get_State(&state.face))
+}
+
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_truetype_engine_observation(library_present: i32) -> (i32, bool, bool) {
     let library = match library_present {

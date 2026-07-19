@@ -3410,6 +3410,202 @@ fn gasp_json(value: i32, ppem: u32) -> Value {
     })
 }
 
+fn face_properties_state_json(face: &FT_Face) -> Value {
+    face_properties_state_record_json(FT_Face_Properties_Get_State(face))
+}
+
+fn face_properties_state_record_json(state: FT_Face_Properties_State) -> Value {
+    json!({
+        "no_stem_darkening": state.no_stem_darkening,
+        "random_seed": state.random_seed
+    })
+}
+
+fn face_properties_output(error_code: FT_Error, face: Option<&FT_Face>) -> RunOutput {
+    if error_code != FT_Err_Ok {
+        return error(error_code);
+    }
+    ok(json!({
+        "return": error_code,
+        "face_state": face.map(face_properties_state_json)
+    }))
+}
+
+fn rust_face_properties(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        let property = FT_Face_Property {
+            tag: FT_PARAM_TAG_STEM_DARKENING as FT_ULong,
+            value: Some(FT_Face_Property_Value::Bool(0)),
+        };
+        let err = FT_Face_Properties(None, Some(std::slice::from_ref(&property)));
+        return Ok(face_properties_output(err, None));
+    }
+
+    let mut face = open_face(case)?;
+    let properties = match case.case_id.as_str() {
+        "freetype.FT_Face_Properties.success_supported_face_properties" => vec![
+            FT_Face_Property {
+                tag: FT_PARAM_TAG_STEM_DARKENING as FT_ULong,
+                value: Some(FT_Face_Property_Value::Bool(1)),
+            },
+            FT_Face_Property {
+                tag: FT_PARAM_TAG_RANDOM_SEED as FT_ULong,
+                value: Some(FT_Face_Property_Value::Int32(12345)),
+            },
+        ],
+        "freetype.FT_Face_Properties.success_zero_properties_noop" => Vec::new(),
+        "freetype.FT_Face_Properties.error_invalid_property_tag_or_value" => {
+            vec![FT_Face_Property {
+                tag: 0x6261_6421,
+                value: Some(FT_Face_Property_Value::Int32(1)),
+            }]
+        }
+        "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.malformed_data_does_not_read_as_weights" => {
+            vec![FT_Face_Property {
+                tag: FT_PARAM_TAG_LCD_FILTER_WEIGHTS as FT_ULong,
+                value: None,
+            }]
+        }
+        "ftparams.FT_PARAM_TAG_RANDOM_SEED.null_or_wrong_size_errors" => {
+            vec![FT_Face_Property {
+                tag: FT_PARAM_TAG_RANDOM_SEED as FT_ULong,
+                value: None,
+            }]
+        }
+        other => return Err(format!("unsupported FT_Face_Properties case {other}")),
+    };
+    let err = FT_Face_Properties(Some(&mut face), Some(&properties));
+    Ok(face_properties_output(err, Some(&face)))
+}
+
+fn c_face_properties_state_json(face: c_abi::FT_Face) -> Result<Value, String> {
+    c_abi::abi_face_properties_state(face)
+        .map(face_properties_state_record_json)
+        .ok_or_else(|| "missing C ABI face properties state".to_string())
+}
+
+fn c_face_properties(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let output = match case.case_id.as_str() {
+        "freetype.FT_Face_Properties.success_supported_face_properties" => {
+            let mut stem_darkening: c_abi::FT_Bool = 1;
+            let mut seed: c_abi::FT_Int32 = 12345;
+            let mut properties = [
+                c_abi::FT_Parameter {
+                    tag: FT_PARAM_TAG_STEM_DARKENING as c_abi::FT_ULong,
+                    data: (&mut stem_darkening as *mut c_abi::FT_Bool).cast(),
+                },
+                c_abi::FT_Parameter {
+                    tag: FT_PARAM_TAG_RANDOM_SEED as c_abi::FT_ULong,
+                    data: (&mut seed as *mut c_abi::FT_Int32).cast(),
+                },
+            ];
+            c_face_properties_output(
+                face,
+                properties.len() as c_abi::FT_UInt,
+                properties.as_mut_ptr(),
+            )
+        }
+        "freetype.FT_Face_Properties.success_zero_properties_noop" => {
+            c_face_properties_output(face, 0, ptr::null_mut())
+        }
+        "freetype.FT_Face_Properties.error_invalid_property_tag_or_value" => {
+            let mut value: c_abi::FT_Int32 = 1;
+            let mut property = c_abi::FT_Parameter {
+                tag: 0x6261_6421,
+                data: (&mut value as *mut c_abi::FT_Int32).cast(),
+            };
+            c_face_properties_output(face, 1, &mut property)
+        }
+        "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.malformed_data_does_not_read_as_weights" => {
+            let mut property = c_abi::FT_Parameter {
+                tag: FT_PARAM_TAG_LCD_FILTER_WEIGHTS as c_abi::FT_ULong,
+                data: ptr::null_mut(),
+            };
+            c_face_properties_output(face, 1, &mut property)
+        }
+        "ftparams.FT_PARAM_TAG_RANDOM_SEED.null_or_wrong_size_errors" => {
+            let mut property = c_abi::FT_Parameter {
+                tag: FT_PARAM_TAG_RANDOM_SEED as c_abi::FT_ULong,
+                data: ptr::null_mut(),
+            };
+            c_face_properties_output(face, 1, &mut property)
+        }
+        other => Err(format!("unsupported C ABI FT_Face_Properties case {other}")),
+    };
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
+fn c_face_properties_output(
+    face: c_abi::FT_Face,
+    num_properties: c_abi::FT_UInt,
+    properties: *mut c_abi::FT_Parameter,
+) -> Result<RunOutput, String> {
+    let err = c_abi::FT_Face_Properties(face, num_properties, properties);
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    Ok(ok(json!({
+        "return": err,
+        "face_state": c_face_properties_state_json(face)?
+    })))
+}
+
+fn wasm_face_properties(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let output = match case.case_id.as_str() {
+        "freetype.FT_Face_Properties.success_supported_face_properties" => {
+            let first = wasm_abi::fontdone_wasm_face_properties_one(handle, 1, 1, 1);
+            if first != FT_Err_Ok {
+                Ok(error(first))
+            } else {
+                wasm_face_properties_output(
+                    handle,
+                    wasm_abi::fontdone_wasm_face_properties_one(handle, 2, 2, 12345),
+                )
+            }
+        }
+        "freetype.FT_Face_Properties.success_zero_properties_noop" => {
+            wasm_face_properties_output(handle, FT_Err_Ok)
+        }
+        "freetype.FT_Face_Properties.error_invalid_property_tag_or_value" => {
+            wasm_face_properties_output(
+                handle,
+                wasm_abi::fontdone_wasm_face_properties_one(handle, 0, 2, 1),
+            )
+        }
+        "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.malformed_data_does_not_read_as_weights" => {
+            wasm_face_properties_output(
+                handle,
+                wasm_abi::fontdone_wasm_face_properties_one(handle, 3, 0, 0),
+            )
+        }
+        "ftparams.FT_PARAM_TAG_RANDOM_SEED.null_or_wrong_size_errors" => {
+            wasm_face_properties_output(
+                handle,
+                wasm_abi::fontdone_wasm_face_properties_one(handle, 2, 0, 0),
+            )
+        }
+        other => Err(format!("unsupported WASM FT_Face_Properties case {other}")),
+    };
+    wasm_done_face(handle);
+    output
+}
+
+fn wasm_face_properties_output(handle: usize, err: FT_Error) -> Result<RunOutput, String> {
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let state = wasm_abi::abi_face_properties_state(handle)
+        .ok_or_else(|| "missing WASM face properties state".to_string())?;
+    Ok(ok(json!({
+        "return": err,
+        "face_state": face_properties_state_record_json(state)
+    })))
+}
+
 fn rust_get_gasp(case: &InputCase) -> Result<RunOutput, String> {
     let ppem = u32_param(&case.inputs.params, "ppem")?;
     if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
@@ -14666,6 +14862,18 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         | "ftmodapi.property_set_then_get"
         | "ftdriver.interpreter_version_default"
         | "FT_Property_Get" => Ok(vec!["--property-case".to_string(), case.case_id.clone()]),
+        "freetype.face_properties" => {
+            let mut args = vec!["--face-properties-case".to_string(), case.case_id.clone()];
+            if lifecycle_handle_param(params, "face") != Some("null") {
+                push_font_source(case, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+            } else {
+                return Err(
+                    "pinned FT_Face_Properties null-face case segfaults in C oracle".to_string(),
+                );
+            }
+            Ok(args)
+        }
         "face_macro_flags" => Ok(vec![
             "--face-macro-flags".to_string(),
             face_macro_param(case)?.to_string(),
@@ -16861,12 +17069,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 Ok(error(FT_Err_Invalid_File_Format))
             }
         }
-        "freetype.face_properties" => {
-            if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
-                return Ok(error(FT_Err_Invalid_Face_Handle as FT_Error));
-            }
-            Ok(error(FT_Err_Unimplemented_Feature as FT_Error))
-        }
+        "freetype.face_properties" => rust_face_properties(case),
         "ftotval.open_type_validate" => rust_open_type_validate(case),
         "ftotval.open_type_free" => rust_open_type_free(case),
         "freetype.get_subglyph_info" => {
@@ -16969,8 +17172,8 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.set_transform"
         | "freetype.get_transform"
         | "freetype.reference_face"
-        | "freetype.face_properties"
         | "freetype.new_face" => run_rust_ffi(case),
+        "freetype.face_properties" => c_face_properties(case),
         "ftotval.open_type_validate" => c_open_type_validate(case),
         "ftotval.open_type_free" => c_open_type_free(case),
         "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
@@ -17685,8 +17888,8 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.set_transform"
         | "freetype.get_transform"
         | "freetype.reference_face"
-        | "freetype.face_properties"
         | "freetype.new_face" => run_rust_ffi(case),
+        "freetype.face_properties" => wasm_face_properties(case),
         "ftotval.open_type_validate" => wasm_open_type_validate(case),
         "ftotval.open_type_free" => wasm_open_type_free(case),
         "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(

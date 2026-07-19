@@ -166,6 +166,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_outline_transform",
     "fontdone_wasm_outline_translate",
     "fontdone_wasm_get_truetype_engine_type",
+    "fontdone_wasm_face_properties_one",
     "fontdone_wasm_property_get",
     "fontdone_wasm_property_set_then_get",
     "fontdone_wasm_library_set_lcd_filter",
@@ -293,6 +294,7 @@ REAL_PARITY_OPERATIONS = {
     "freetype.charmap_ownership",
     "freetype.get_charmap_index",
     "freetype.face_flags",
+    "freetype.face_properties",
     "freetype.get_fstype_flags",
     "freetype.get_kerning",
     "freetype.ceil_fix",
@@ -411,9 +413,7 @@ REAL_PARITY_OPERATIONS = {
     "ftsizes.activate_select_size_sequence",
 }
 
-EXPLICIT_UNSUPPORTED_OPERATIONS = {
-    "freetype.face_properties",
-}
+EXPLICIT_UNSUPPORTED_OPERATIONS = set()
 
 AUDIT_ONLY_PENDING_CORE_CASES = {
     "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation",
@@ -1731,6 +1731,11 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "tracked bitmap-only control font is not C-openable for this macro; "
             "pinned C returns error 85, so exact macro success would be a green placeholder"
         ),
+        "freetype.FT_Face_Properties.error_null_face": (
+            "pinned FreeType 2.14.3 FT_Face_Properties dereferences face for "
+            "num_properties > 0 and segfaults on a null face; counting a Rust "
+            "Invalid_Face_Handle as C parity would be a green placeholder"
+        ),
     }
     if row.case_id in unresolved_future_asset_cases:
         return unresolved_future_asset_cases[row.case_id]
@@ -2109,6 +2114,15 @@ def future_batch_unresolved_asset_pending_reason(row: ConcreteInput) -> str | No
 
 
 def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
+    face_properties_rows = {
+        "freetype.FT_Face_Properties.success_supported_face_properties",
+        "freetype.FT_Face_Properties.success_zero_properties_noop",
+        "freetype.FT_Face_Properties.error_invalid_property_tag_or_value",
+        "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.malformed_data_does_not_read_as_weights",
+        "ftparams.FT_PARAM_TAG_RANDOM_SEED.null_or_wrong_size_errors",
+    }
+    if row.operation == "freetype.face_properties" and row.case_id in face_properties_rows:
+        return "FT_Face_Properties scalar tags validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (row.operation, row.case_id) in FTERRDEF_EXACT_ERROR_BATCH:
         return "fterrdef load-glyph exact error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
