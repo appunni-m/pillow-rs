@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Render_Glyph` invalid render-mode route
+Current verified result after `FT_RENDER_MODE_MAX` render rejection route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3844`
+  - `real-parity`: `3845`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `351`
+  - `generic-error-fallback`: `350`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3795,6 +3795,39 @@ Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Render_Glyph.invalid_render_mode
+```
+
+### Issue Set CN: `FT_RENDER_MODE_MAX` render rejection route
+
+Previous blocker:
+
+- `freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel` stayed in
+  `generic-error-fallback`.
+- The fixture requires exact behavior from `freetype/src/base/ftobjs.c:4983-4994`
+  and `freetype/src/base/ftobjs.c:4733-4855`: `FT_RENDER_MODE_MAX` is a
+  sentinel outside the renderable mode range, so a loaded outline slot reaches
+  renderer dispatch and is rejected with the public FreeType error.
+
+Plan:
+
+1. Keep the fixture intact; it exercises a concrete local font with
+   `render_mode` set to `FT_RENDER_MODE_MAX`.
+2. Require exact error comparison for the return status on the same input.
+3. Classify the row as real parity only after focused same-input parity passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused sentinel render-mode row passes exact comparison against pinned C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel` as
+  `real-parity`.
+
+Verified command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
