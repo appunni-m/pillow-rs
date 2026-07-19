@@ -1578,6 +1578,18 @@ pub fn FT_Glyph_Get_CBox(
     }
 }
 
+pub fn FT_Get_Glyph(slot_present: bool, aglyph_present: bool) -> FT_Error {
+    // FreeType `src/base/ftglyph.c:632-645` checks the slot pointer before the
+    // output pointer and returns before reading slot internals on either error.
+    if !slot_present {
+        return FT_Err_Invalid_Slot_Handle as FT_Error;
+    }
+    if !aglyph_present {
+        return FT_Err_Invalid_Argument;
+    }
+    FT_Err_Unimplemented_Feature as FT_Error
+}
+
 pub fn FT_Outline_Get_BBox(
     outline: Option<&FT_OutlineSnapshot>,
     abbox: Option<&mut FT_BBox>,
