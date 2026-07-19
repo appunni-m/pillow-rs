@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_PFR_Advance` non-PFR-face
+Current verified result after `FT_Get_PFR_Advance` null-face/output
 exact-error classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3965`
+  - `real-parity`: `3966`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `230`
+  - `generic-error-fallback`: `229`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -624,6 +624,40 @@ make -C pillow-rs-freetype test-case CASE=ftpfr.FT_Get_PFR_Advance.non_pfr_retur
 
 Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
 audit: `real-parity` `3965`, `generic-error-fallback` `230`.
+
+### Issue Set Current: `FT_Get_PFR_Advance` null-face/output exact-error route
+
+Previous blocker:
+
+- `ftpfr.FT_Get_PFR_Advance.null_face_or_output_errors` had a concrete PFR
+  public error row classified as `generic-error-fallback`.
+- The row already ran through pinned C FreeType, Rust FFI, thin C ABI, and WASM
+  ABI, but fallback classification only proved that an error happened.
+
+Fix plan:
+
+1. Promote only the concrete `FT_Get_PFR_Advance` null-face/output row to
+   exact-error comparison.
+2. Keep the existing null-argument input variants unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI
+   `FT_Get_PFR_Advance`, and WASM ABI before counting the row as
+   `real-parity`.
+
+Verified progress:
+
+- Exact comparison passed for the concrete PFR advance null-face/output row.
+- The previously fallback-classified error row now validates exact
+  status/output against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed for this row.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftpfr.FT_Get_PFR_Advance.null_face_or_output_errors
+```
+
+Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3966`, `generic-error-fallback` `229`.
 
 ### Issue Set Current: `FT_Get_BDF_Property` missing-property exact-error route
 
