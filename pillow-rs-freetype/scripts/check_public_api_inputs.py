@@ -791,6 +791,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmm.FT_Get_MM_WeightVector.len_without_buffer_error",
         "ftmm.FT_Get_MM_WeightVector.unsupported_face_error",
         "ftmm.FT_Get_Multi_Master.true_type_or_opentype_variation_error",
+        "ftmm.FT_Get_Multi_Master.invalid_or_non_variable_face_error",
         "ftmm.FT_Set_MM_Design_Coordinates.error_non_adobe_variation_face",
         "ftmm.FT_Set_MM_WeightVector.error_null_weightvector_with_nonzero_len",
         "ftmm.FT_Set_MM_WeightVector.error_unsupported_on_true_type_variations",
@@ -1310,6 +1311,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftmm.FT_Get_Multi_Master.true_type_or_opentype_variation_error"
     ):
         return "FT_Get_Multi_Master TrueType/OpenType variation errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_multi_master"
+        and row.case_id == "ftmm.FT_Get_Multi_Master.invalid_or_non_variable_face_error"
+    ):
+        return "FT_Get_Multi_Master invalid/non-variable-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.set_mm_design_coordinates"
         and row.case_id
