@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_MM_WeightVector` len-without-buffer route
+Current verified result after `FT_Get_MM_WeightVector` unsupported-face route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3835`
+  - `real-parity`: `3836`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `360`
+  - `generic-error-fallback`: `359`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3554,6 +3554,41 @@ Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_WeightVector.len_without_buffer_error
+```
+
+### Issue Set CG: `FT_Get_MM_WeightVector` unsupported-face route
+
+Previous blocker:
+
+- `ftmm.FT_Get_MM_WeightVector.unsupported_face_error` stayed in
+  `generic-error-fallback`.
+- The fixture requires exact behavior from `freetype/src/base/ftmm.c:38-58`
+  and `freetype/src/base/ftmm.c:253-274`: null faces return
+  `FT_Err_Invalid_Face_Handle`, non-MM/static faces return
+  `FT_Err_Invalid_Argument`, and valid output buffers are preserved on errors.
+- The fixture source reference previously grouped this with the setter area;
+  this promotion is specifically for the public getter wrapper.
+
+Plan:
+
+1. Keep the fixture intact; it exercises the public
+   `FT_Get_MM_WeightVector` wrapper over unsupported face rows.
+2. Require exact error comparison for row status, `len`, and preserved
+   `weightvector` output.
+3. Classify the row as real parity only after focused same-input parity passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused unsupported-face row passes exact comparison against pinned C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmm.FT_Get_MM_WeightVector.unsupported_face_error` as `real-parity`.
+
+Verified command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_WeightVector.unsupported_face_error
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker

@@ -8368,6 +8368,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftmm.FT_Get_MM_Var.null_output_error"
             || case.case_id == "ftmm.FT_Get_MM_Var.invalid_or_non_variable_face_error"
             || case.case_id == "ftmm.FT_Get_MM_WeightVector.len_without_buffer_error"
+            || case.case_id == "ftmm.FT_Get_MM_WeightVector.unsupported_face_error"
             || case.case_id
                 == "ftmm.FT_Set_Var_Design_Coordinates.error_null_coords_with_nonzero_count"
             || case.case_id
