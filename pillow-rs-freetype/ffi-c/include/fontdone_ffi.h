@@ -66,6 +66,29 @@ typedef struct FT_Parameter_ {
   void* data;
 } FT_Parameter;
 
+typedef struct FT_Var_Axis_ {
+  char* name;
+  FT_Fixed minimum;
+  FT_Fixed def;
+  FT_Fixed maximum;
+  FT_ULong tag;
+  FT_UInt strid;
+} FT_Var_Axis;
+
+typedef struct FT_Var_Named_Style_ {
+  FT_Fixed* coords;
+  FT_UInt strid;
+  FT_UInt psid;
+} FT_Var_Named_Style;
+
+typedef struct FT_MM_Var_ {
+  FT_UInt num_axis;
+  FT_UInt num_designs;
+  FT_UInt num_namedstyles;
+  FT_Var_Axis* axis;
+  FT_Var_Named_Style* namedstyle;
+} FT_MM_Var;
+
 typedef struct FT_Open_Args_ {
   FT_UInt flags;
   const FT_Byte* memory_base;
@@ -253,6 +276,7 @@ struct FT_LibraryRec_ {
 
 FT_Error FT_Init_FreeType(FT_Library* alibrary);
 FT_Error FT_Done_FreeType(FT_Library library);
+FT_Error FT_Done_MM_Var(FT_Library library, FT_MM_Var* amaster);
 FT_Error FT_Library_SetLcdFilter(FT_Library library, FT_LcdFilter filter);
 FT_Error FT_Library_SetLcdFilterWeights(FT_Library library, FT_Byte* weights);
 FT_Error FT_Library_SetLcdGeometry(FT_Library library, FT_Vector* sub);

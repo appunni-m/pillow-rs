@@ -21,8 +21,8 @@ use super::convert::{
 use super::types::{
     FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bool, FT_Byte, FT_Bytes, FT_Char, FT_CharMap,
     FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F26Dot6, FT_Fixed,
-    FT_Glyph_Format, FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_Long, FT_Matrix,
-    FT_Orientation, FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag,
+    FT_Glyph_Format, FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_Long, FT_MM_Var,
+    FT_Matrix, FT_Orientation, FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag,
     FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
     FT_Size_RequestRec, FT_Span, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort,
     FT_Vector, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript,
@@ -1468,6 +1468,15 @@ pub fn FT_Done_FreeType(library: Option<FT_Library>) -> FT_Error {
     } else {
         35 // matches FreeType 2.14.3 runtime: FT_Done_FreeType(NULL)
     }
+}
+
+pub fn FT_Done_MM_Var(library: Option<&FT_Library>, _amaster: Option<&mut FT_MM_Var>) -> FT_Error {
+    // FreeType 2.14.3 `src/base/ftmm.c:150-163` checks the library before
+    // freeing; `FT_FREE(NULL)` is a successful no-op for a live library.
+    if library.is_none() {
+        return FT_Err_Invalid_Library_Handle as FT_Error;
+    }
+    FT_Err_Ok
 }
 
 pub fn FT_Done_Face(face: Option<FT_Face>) -> FT_Error {

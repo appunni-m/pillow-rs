@@ -9650,6 +9650,34 @@ static int emit_add_default_modules(int argc, char** argv) {
     return 0;
 }
 
+static int emit_done_mm_var(int argc, char** argv) {
+    (void)argc;
+    int library_present = atoi(argv[2]);
+    int descriptor_present = atoi(argv[3]);
+    FT_Library library = NULL;
+    FT_Error err = FT_Err_Ok;
+    if (library_present) {
+        err = FT_Init_FreeType(&library);
+    }
+    FT_MM_Var descriptor;
+    memset(&descriptor, 0, sizeof(descriptor));
+    FT_MM_Var* descriptor_ptr = descriptor_present ? &descriptor : NULL;
+    if (!err) {
+        err = FT_Done_MM_Var(library, descriptor_ptr);
+    }
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{\"free_events\":\"%s\"}}\n", descriptor_present ? "descriptor" : "none");
+    }
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    return 0;
+}
+
 static void print_lifecycle_result(FT_Error err) {
     print_status(err);
     if (err) {
@@ -12989,6 +13017,9 @@ static int dispatch(int argc, char** argv) {
     }
     if ((argc == 3 || argc == 4) && streq(argv[1], "--add-default-modules")) {
         return emit_add_default_modules(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--done-mm-var")) {
+        return emit_done_mm_var(argc, argv);
     }
     if ((argc == 3 || argc == 6) && streq(argv[1], "--done-freetype")) {
         return emit_done_freetype(argc, argv);

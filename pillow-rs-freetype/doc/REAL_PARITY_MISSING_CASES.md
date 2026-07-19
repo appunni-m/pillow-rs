@@ -36,9 +36,6 @@ Rejected future-asset probes:
   `ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior`: exact
   promotion failed with C error `7`; keep fallback-classified until the
   outline-bitmap dropout route is made public-exact.
-- `ftmm.FT_Done_MM_Var.null_descriptor_success`: exact promotion failed with C
-  error `7`; keep fallback-classified until the null-descriptor success route
-  is proven against the pinned C endpoint.
 - `ftlist.FT_List_Iterate.iterates_all_nodes_success` and
   `ftlist.FT_List_Iterate.iterator_can_mutate_current_node`: exact promotion
   failed with C error `7`; keep fallback-classified until the list success
@@ -52,6 +49,7 @@ Promoted rows:
   output pointer; the C ABI wrapper validates this pointer before creating the
   Rust library handle.
 - `ftmodapi.FT_Add_Default_Modules.installs_default_module_table`
+- `ftmm.FT_Done_MM_Var.null_descriptor_success`
 - `ftotval.FT_OpenType_Validate.selected_tables_success`
 - `ftwinfnt.FT_Get_WinFNT_Header.winfnt_face_copies_header_success`
 - `ftwinfnt.FT_WinFNT_HeaderRec.copied_header_values_match_file`
@@ -67,6 +65,7 @@ make -C pillow-rs-freetype test-op OP=ftstroke.get_counts
 make -C pillow-rs-freetype test-op OP=ftwinfnt.get_winfnt_header
 make -C pillow-rs-freetype test-op OP=freetype.init_free_type
 make -C pillow-rs-freetype test-op OP=ftmodapi.add_default_modules
+make -C pillow-rs-freetype test-op OP=ftmm.done_mm_var
 ```
 
 Results:
@@ -79,6 +78,8 @@ Results:
   explicit pinned-C, Rust FFI, C ABI, and WASM route.
 - `ftmodapi.add_default_modules`: `2 / 2` runnable rows passed after adding
   the exact module-table mutation route.
+- `ftmm.done_mm_var`: `3 / 3` runnable rows passed after adding the exact
+  library/null-descriptor route.
 - Each selected stroker operation passed `4 / 4` only while fallback-classified;
   exact promotion failed with C error `7`, so those rows were not retained.
 - No fixture input, oracle output, expected value, threshold, or runtime logic
