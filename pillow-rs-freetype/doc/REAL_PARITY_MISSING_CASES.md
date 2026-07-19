@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Set_MM_Design_Coordinates` non-Adobe route
+Current verified result after `FT_Set_MM_WeightVector` null-weightvector route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3838`
+  - `real-parity`: `3839`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `357`
+  - `generic-error-fallback`: `356`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3660,6 +3660,38 @@ Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_Design_Coordinates.error_non_adobe_variation_face
+```
+
+### Issue Set CJ: `FT_Set_MM_WeightVector` null-weightvector route
+
+Previous blocker:
+
+- `ftmm.FT_Set_MM_WeightVector.error_null_weightvector_with_nonzero_len`
+  stayed in `generic-error-fallback`.
+- The fixture requires exact behavior from `freetype/src/base/ftmm.c:212-223`:
+  the public wrapper returns `FT_Err_Invalid_Argument` before multiple-master
+  service lookup when `len` is nonzero and `weightvector` is null.
+
+Plan:
+
+1. Keep the fixture intact; it exercises the public `FT_Set_MM_WeightVector`
+   wrapper with a real Adobe MM face and a null weight-vector pointer.
+2. Require exact error comparison for the return status on the same input.
+3. Classify the row as real parity only after focused same-input parity passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused null-weightvector row passes exact comparison against pinned C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmm.FT_Set_MM_WeightVector.error_null_weightvector_with_nonzero_len` as
+  `real-parity`.
+
+Verified command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_WeightVector.error_null_weightvector_with_nonzero_len
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
