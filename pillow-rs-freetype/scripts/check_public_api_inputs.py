@@ -76,6 +76,11 @@ FTMM_SUCCESS_OPERATIONS = {
     "ftmm.set_var_design_coordinates",
 }
 
+FTDRIVER_SUCCESS_OPERATIONS = {
+    "ftdriver.interpreter_version_glyph_output",
+    "ftdriver.interpreter_version_property",
+}
+
 API_SURFACE_EXCLUSIONS = {
     # Public header setup hooks, not user-callable API subjects.
     "fterrors.FT_NOERRORDEF_",
@@ -1559,6 +1564,12 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         and has_runtime_asset(row)
     ):
         return "FT multiple-master/variation success output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation in FTDRIVER_SUCCESS_OPERATIONS
+        and row.expectation_status in {"ok", "build_dependent"}
+        and has_runtime_asset(row)
+    ):
+        return "FT driver property/interpreter success output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     case_reasons = {
         "ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph": "FT_New_Glyph supported empty glyph allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map": "FT_Property_Get glyph-to-script-map output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
