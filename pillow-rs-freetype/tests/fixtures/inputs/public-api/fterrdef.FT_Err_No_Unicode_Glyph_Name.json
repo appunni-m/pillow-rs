@@ -67,7 +67,7 @@
           "fixture": {
             "kind": "ref",
             "role": "font_or_public_input",
-            "id": "fixtures/assets/fonts/postscript_names_no_unicode.pfa",
+            "id": "assets/fonts/postscript_names_no_unicode.pfa",
             "requirements": "PostScript/CFF/Type1 face whose glyph names have no recognized Unicode names, so the PS names cmap builder returns No_Unicode_Glyph_Name."
           }
         },
@@ -97,6 +97,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "error",
             "error_symbol",
@@ -121,7 +122,7 @@
           "fixture": {
             "kind": "ref",
             "role": "font_or_public_input",
-            "id": "fixtures/assets/fonts/postscript_names_no_unicode_nonfatal.pfa",
+            "id": "assets/fonts/postscript_names_no_unicode_nonfatal.pfa",
             "requirements": "Face-load path where caller suppresses No_Unicode_Glyph_Name and continues or reports an alternate C error exactly."
           }
         },
@@ -151,6 +152,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "error",
             "error_symbol",
