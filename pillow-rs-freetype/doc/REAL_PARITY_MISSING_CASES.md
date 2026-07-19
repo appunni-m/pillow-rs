@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_Var_Blend_Coordinates` invalid-face route
+Current verified result after `FT_Get_MM_Blend_Coordinates` invalid-input route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3831`
+  - `real-parity`: `3832`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `364`
+  - `generic-error-fallback`: `363`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3420,6 +3420,42 @@ Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Var_Blend_Coordinates.error_non_variable_or_invalid_face
+```
+
+### Issue Set CC: `FT_Get_MM_Blend_Coordinates` invalid-input route
+
+Previous blocker:
+
+- `ftmm.FT_Get_MM_Blend_Coordinates.invalid_face_or_coords_error` stayed in
+  `generic-error-fallback`.
+- The fixture requires exact behavior from `freetype/src/base/ftmm.c:545-571`:
+  null coordinate output returns `FT_Err_Invalid_Argument` before service
+  lookup, null face is rejected by `ft_face_get_mm_service`, and non-variable
+  static faces return `FT_Err_Invalid_Argument`.
+- Valid output buffers are preserved on the error scenarios.
+
+Plan:
+
+1. Keep the fixture intact; it exercises the public
+   `FT_Get_MM_Blend_Coordinates` wrapper over null-coordinate, null-face, and
+   non-variable-face argument rows.
+2. Require exact error comparison for each row status and preserved coordinate
+   output.
+3. Classify the row as real parity only after focused same-input parity passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused invalid-input row passes exact comparison against pinned C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmm.FT_Get_MM_Blend_Coordinates.invalid_face_or_coords_error` as
+  `real-parity`.
+
+Verified command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_Blend_Coordinates.invalid_face_or_coords_error
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
