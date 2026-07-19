@@ -5075,6 +5075,61 @@ static void print_glyph_to_bitmap_payload(FT_GlyphSlot slot, FT_Render_Mode rend
     }
 }
 
+static void print_glyph_to_bitmap_error_row(const char* probe, FT_Error error, FT_Glyph glyph) {
+    printf("{\"probe\":\"%s\",\"error\":%d,\"caller_handle_class\":\"%s\"}",
+           probe,
+           error,
+           glyph ? "non_null" : "null");
+}
+
+static int emit_glyph_to_bitmap_invalid_inputs(void) {
+    FT_Error error;
+    FT_Glyph glyph = NULL;
+    FT_GlyphRec glyph_rec;
+    FT_Glyph_Class clazz;
+
+    printf("{\"status\":{\"kind\":\"error\",\"error_code\":%d},\"output\":{\"rows\":[",
+           FT_Err_Invalid_Argument);
+
+    error = FT_Glyph_To_Bitmap(NULL, FT_RENDER_MODE_NORMAL, NULL, 0);
+    print_glyph_to_bitmap_error_row("null_the_glyph", error, NULL);
+
+    glyph = NULL;
+    error = FT_Glyph_To_Bitmap(&glyph, FT_RENDER_MODE_NORMAL, NULL, 0);
+    printf(",");
+    print_glyph_to_bitmap_error_row("null_deref_glyph", error, glyph);
+
+    FT_ZERO(&glyph_rec);
+    FT_ZERO(&clazz);
+    clazz.glyph_prepare = (FT_Glyph_PrepareFunc)1;
+    glyph_rec.library = NULL;
+    glyph_rec.clazz = &clazz;
+    glyph = &glyph_rec;
+    error = FT_Glyph_To_Bitmap(&glyph, FT_RENDER_MODE_NORMAL, NULL, 0);
+    printf(",");
+    print_glyph_to_bitmap_error_row("null_library", error, glyph);
+
+    FT_ZERO(&glyph_rec);
+    glyph_rec.library = (FT_Library)1;
+    glyph_rec.clazz = NULL;
+    glyph = &glyph_rec;
+    error = FT_Glyph_To_Bitmap(&glyph, FT_RENDER_MODE_NORMAL, NULL, 0);
+    printf(",");
+    print_glyph_to_bitmap_error_row("null_clazz", error, glyph);
+
+    FT_ZERO(&glyph_rec);
+    FT_ZERO(&clazz);
+    glyph_rec.library = (FT_Library)1;
+    glyph_rec.clazz = &clazz;
+    glyph = &glyph_rec;
+    error = FT_Glyph_To_Bitmap(&glyph, FT_RENDER_MODE_NORMAL, NULL, 0);
+    printf(",");
+    print_glyph_to_bitmap_error_row("no_prepare_hook", error, glyph);
+
+    printf("],\"caller_write_order\":\"early Invalid_Argument preserves caller glyph handle before bitmap allocation\"}}\n");
+    return 0;
+}
+
 static void print_glyph_record_payload(FT_Glyph glyph) {
     printf("\"output\":{\"glyph\":{");
     printf("\"format\":%ld,", (long)glyph->format);
@@ -14382,6 +14437,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--glyph-copy-null-inputs")) {
         return emit_glyph_copy_null_inputs();
+    }
+    if (argc == 2 && streq(argv[1], "--glyph-to-bitmap-invalid-inputs")) {
+        return emit_glyph_to_bitmap_invalid_inputs();
     }
     if (argc == 3 && streq(argv[1], "--ft-list")) {
         return emit_ft_list(argv[2]);

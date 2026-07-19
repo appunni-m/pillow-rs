@@ -29,7 +29,7 @@ pub use handles::{
     FT_Get_Name_Index, FT_Get_Next_Char, FT_Get_Postscript_Name, FT_Get_Sfnt_LangTag,
     FT_Get_Sfnt_Name, FT_Get_Sfnt_Name_Count, FT_Get_Sfnt_Table, FT_Get_SubGlyph_Info,
     FT_Get_Transform, FT_Get_TrueType_Engine_Type, FT_Get_WinFNT_Header, FT_Get_X11_Font_Format,
-    FT_Glyph_Copy, FT_Glyph_Get_CBox, FT_GlyphSlot, FT_GlyphSlot_AdjustWeight,
+    FT_Glyph_Copy, FT_Glyph_Get_CBox, FT_Glyph_To_Bitmap, FT_GlyphSlot, FT_GlyphSlot_AdjustWeight,
     FT_GlyphSlot_Embolden, FT_GlyphSlot_Oblique, FT_GlyphSlot_Own_Bitmap, FT_GlyphSlot_Slant,
     FT_Init_FreeType, FT_Library, FT_Library_SetLcdFilter, FT_Library_SetLcdFilterWeights,
     FT_Library_SetLcdGeometry, FT_Library_Version, FT_List_Add, FT_List_Finalize_Clear,

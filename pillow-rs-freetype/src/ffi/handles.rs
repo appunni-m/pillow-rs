@@ -1604,6 +1604,27 @@ pub fn FT_Glyph_Copy(
     FT_Err_Unimplemented_Feature as FT_Error
 }
 
+pub fn FT_Glyph_To_Bitmap(
+    the_glyph_present: bool,
+    glyph_present: bool,
+    library_present: bool,
+    class_present: bool,
+    prepare_hook_present: bool,
+) -> FT_Error {
+    // FreeType `src/base/ftglyph.c:771-800` funnels all early invalid pointer
+    // states and glyph classes without `glyph_prepare` through the `Bad` label
+    // as `Invalid_Argument`, before allocating or modifying the caller handle.
+    if !the_glyph_present
+        || !glyph_present
+        || !library_present
+        || !class_present
+        || !prepare_hook_present
+    {
+        return FT_Err_Invalid_Argument;
+    }
+    FT_Err_Unimplemented_Feature as FT_Error
+}
+
 pub fn FT_Outline_Get_BBox(
     outline: Option<&FT_OutlineSnapshot>,
     abbox: Option<&mut FT_BBox>,
