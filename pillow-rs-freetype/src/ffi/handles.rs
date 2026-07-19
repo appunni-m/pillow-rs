@@ -2089,6 +2089,22 @@ pub fn FT_Outline_Transform(outline: Option<&mut FT_OutlineSnapshot>, matrix: Op
     }
 }
 
+pub fn FT_Outline_Translate(
+    outline: Option<&mut FT_OutlineSnapshot>,
+    x_offset: FT_Pos,
+    y_offset: FT_Pos,
+) {
+    let Some(outline) = outline else {
+        return;
+    };
+    // FreeType `src/base/ftoutln.c:520-537` mutates each vector with
+    // ADD_LONG-style coordinate addition and has no error channel.
+    for point in &mut outline.points {
+        point.x = point.x.wrapping_add(x_offset);
+        point.y = point.y.wrapping_add(y_offset);
+    }
+}
+
 pub fn FT_OpenType_Free(_face: Option<&FT_Face>, _table: FT_Bytes) {}
 
 pub fn FT_OpenType_Validate(

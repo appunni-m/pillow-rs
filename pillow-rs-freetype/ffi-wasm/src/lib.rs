@@ -1078,6 +1078,19 @@ pub extern "C" fn fontdone_wasm_outline_transform(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_translate(
+    outline: *const FontdoneWasmOutline,
+    x_offset: i64,
+    y_offset: i64,
+) {
+    let Some(mut snapshot) = outline_snapshot_from_wasm(outline) else {
+        return;
+    };
+    rust_ffi::FT_Outline_Translate(Some(&mut snapshot), x_offset, y_offset);
+    copy_outline_snapshot_to_wasm(outline.cast_mut(), &snapshot, false);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_library_set_lcd_filter(filter: FT_LcdFilter) -> FT_Error {
     rust_ffi::FT_Library_SetLcdFilter(None, filter)
 }

@@ -1756,6 +1756,19 @@ pub extern "C" fn FT_Outline_Transform(outline: *const FT_Outline, matrix: *cons
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_Translate(
+    outline: *const FT_Outline,
+    x_offset: FT_Pos,
+    y_offset: FT_Pos,
+) {
+    let Some(mut snapshot) = outline_snapshot_from_c(outline) else {
+        return;
+    };
+    rust_ffi::FT_Outline_Translate(Some(&mut snapshot), x_offset, y_offset);
+    copy_outline_snapshot_to_c(outline.cast_mut(), &snapshot, false);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Set_Char_Size(
     face: FT_Face,
     char_width: FT_F26Dot6,

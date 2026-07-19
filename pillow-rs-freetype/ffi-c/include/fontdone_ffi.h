@@ -291,6 +291,7 @@ FT_Error FT_Outline_Render(FT_Library library, FT_Outline* outline, FT_Raster_Pa
 FT_Orientation FT_Outline_Get_Orientation(const FT_Outline* outline);
 void FT_Outline_Reverse(FT_Outline* outline);
 void FT_Outline_Transform(const FT_Outline* outline, const FT_Matrix* matrix);
+void FT_Outline_Translate(const FT_Outline* outline, FT_Pos xOffset, FT_Pos yOffset);
 FT_Error FT_Set_Char_Size(FT_Face face, FT_F26Dot6 char_width, FT_F26Dot6 char_height, FT_UInt horz_resolution, FT_UInt vert_resolution);
 FT_Error FT_Set_Pixel_Sizes(FT_Face face, FT_UInt pixel_width, FT_UInt pixel_height);
 FT_Error FT_Request_Size(FT_Face face, FT_Size_Request req);
