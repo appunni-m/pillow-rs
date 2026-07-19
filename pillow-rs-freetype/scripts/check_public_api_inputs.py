@@ -1148,6 +1148,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_New_Library null-input error/output preservation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftmodapi.new_library"
+        and row.case_id == "ftmodapi.FT_New_Library.allocation_failure_preserves_output"
+    ):
+        return "FT_New_Library allocator-failure output preservation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftmodapi.remove_module"
         and row.case_id == "ftmodapi.FT_Remove_Module.rejects_null_library"
         and lifecycle_handle(row, "library") == "null"
