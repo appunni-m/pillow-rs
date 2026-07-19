@@ -93,6 +93,18 @@ SFNT_METADATA_SUCCESS_OPERATIONS = {
     "sfnt.enumerate_charmaps_and_names",
 }
 
+FTRENDER_SUCCESS_OPERATIONS = {
+    "ftrender.set_renderer_then_render",
+}
+
+FTLOGGING_SUCCESS_OPERATIONS = {
+    "ftlogging.set_default_log_handler",
+    "ftlogging.set_log_handler",
+    "ftlogging.set_log_handler_then_default",
+    "ftlogging.trace_set_default_level",
+    "ftlogging.trace_set_level",
+}
+
 API_SURFACE_EXCLUSIONS = {
     # Public header setup hooks, not user-callable API subjects.
     "fterrors.FT_NOERRORDEF_",
@@ -1594,6 +1606,16 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         and has_runtime_asset(row)
     ):
         return "SFNT/charmap metadata runtime output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation in FTRENDER_SUCCESS_OPERATIONS
+        and row.expectation_status in {"ok", "build_dependent"}
+    ):
+        return "FT renderer selection output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation in FTLOGGING_SUCCESS_OPERATIONS
+        and row.expectation_status in {"ok", "build_dependent"}
+    ):
+        return "FT debug logging output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     case_reasons = {
         "ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph": "FT_New_Glyph supported empty glyph allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map": "FT_Property_Get glyph-to-script-map output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",

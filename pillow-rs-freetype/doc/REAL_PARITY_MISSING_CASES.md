@@ -55,6 +55,22 @@ Rejected future-asset probes:
 
 Promoted rows:
 
+- `ftrender` renderer-selection plus `ftlogging` debug logging behavior batch:
+  `16 / 16` rows promoted from `generic-fallback` to `real-parity`.  The
+  promoted rows are limited to strict-success public behavior rows:
+  `ftrender.set_renderer_then_render`, `ftlogging.set_default_log_handler`,
+  `ftlogging.set_log_handler`, `ftlogging.set_log_handler_then_default`,
+  `ftlogging.trace_set_default_level`, and `ftlogging.trace_set_level`.
+  Focused refreshed parity passed `ftrender` `27 / 27` runnable rows and
+  `ftlogging` `14 / 14` runnable rows.  Strict promotion attempts rejected
+  `ftlogging` ABI import-contract rows because the pinned oracle returned
+  error `7` for those cases, so those rows remain generic.
+- Current route audit after this batch: `real-parity` `4434`,
+  `generic-fallback` `522`, `pending-route` `23`.
+- Rejected in this pass: broad `ftstroke` promotion (`64` strict failures with
+  pinned-oracle error `7`) and `freetype.open_face_with_params` / `ftparams`
+  promotion (`6` strict failures with pinned-oracle error `7`).  They remain
+  `generic-fallback` until the underlying route/oracle behavior is made exact.
 - `ftmodapi` module flags plus SFNT/charmap metadata batch: `14 / 14`
   runtime-asset rows promoted from `generic-fallback` to `real-parity`.  The
   promoted rows are limited to existing runtime assets and existing exact
