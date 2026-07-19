@@ -1524,6 +1524,216 @@ pub fn FT_Outline_Get_CBox(outline: Option<&FT_OutlineSnapshot>, acbox: Option<&
     };
 }
 
+pub fn FT_Outline_Get_BBox(
+    outline: Option<&FT_OutlineSnapshot>,
+    abbox: Option<&mut FT_BBox>,
+) -> FT_Error {
+    let Some(abbox) = abbox else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let Some(outline_snapshot) = outline else {
+        return FT_Err_Invalid_Outline as FT_Error;
+    };
+    if outline_snapshot.points.is_empty() || outline_snapshot.contours.is_empty() {
+        *abbox = FT_BBox::default();
+        return FT_Err_Ok;
+    }
+    let Some(outline) = outline_snapshot_to_core(outline_snapshot) else {
+        return FT_Err_Invalid_Outline as FT_Error;
+    };
+    if FT_Outline_Check(Some(outline_snapshot)) != FT_Err_Ok {
+        return FT_Err_Invalid_Outline as FT_Error;
+    }
+
+    match outline_exact_bbox_from_core(&outline) {
+        Ok(bbox) => {
+            *abbox = bbox;
+            FT_Err_Ok
+        }
+        Err(error) => error,
+    }
+}
+
+fn outline_exact_bbox_from_core(outline: &crate::outline::Outline) -> Result<FT_BBox, FT_Error> {
+    let mut cbox = FT_BBox {
+        xMin: 0x7FFF_FFFF,
+        yMin: 0x7FFF_FFFF,
+        xMax: -0x7FFF_FFFF,
+        yMax: -0x7FFF_FFFF,
+    };
+    let mut bbox = cbox;
+    for (index, point) in outline.points.iter().enumerate() {
+        bbox_update_point(&mut cbox, point.x.into(), point.y.into());
+        if outline_trace_curve_tag(outline, index) == 1 {
+            bbox_update_point(&mut bbox, point.x.into(), point.y.into());
+        }
+    }
+
+    if cbox.xMin < bbox.xMin
+        || cbox.xMax > bbox.xMax
+        || cbox.yMin < bbox.yMin
+        || cbox.yMax > bbox.yMax
+    {
+        // FreeType 2.14.3 `src/base/ftbbox.c:474-547` computes the on-point
+        // bbox first, then delegates to `FT_Outline_Decompose` only when
+        // off-curve controls can extend it.  Reuse the same public decompose
+        // walker so malformed cubic/tag sequences return Invalid_Outline.
+        bbox = outline_decompose_bbox(outline, bbox)?;
+    }
+    Ok(bbox)
+}
+
+fn outline_decompose_bbox(
+    outline: &crate::outline::Outline,
+    mut bbox: FT_BBox,
+) -> Result<FT_BBox, FT_Error> {
+    let run = outline_decompose_trace_run(outline, 0, 0)?;
+    let mut last = FT_Vector::default();
+    for event in run.events {
+        match (event.kind, event.points.as_slice()) {
+            ("move_to", [to]) => {
+                bbox_update_point(&mut bbox, to.x, to.y);
+                last = *to;
+            }
+            ("line_to", [to]) => {
+                last = *to;
+            }
+            ("conic_to", [control, to]) => {
+                bbox_update_point(&mut bbox, to.x, to.y);
+                if control.x < bbox.xMin || control.x > bbox.xMax {
+                    bbox_conic_check(last.x, control.x, to.x, &mut bbox.xMin, &mut bbox.xMax);
+                }
+                if control.y < bbox.yMin || control.y > bbox.yMax {
+                    bbox_conic_check(last.y, control.y, to.y, &mut bbox.yMin, &mut bbox.yMax);
+                }
+                last = *to;
+            }
+            ("cubic_to", [control1, control2, to]) => {
+                if control1.x < bbox.xMin
+                    || control1.x > bbox.xMax
+                    || control2.x < bbox.xMin
+                    || control2.x > bbox.xMax
+                {
+                    bbox_cubic_check(
+                        last.x,
+                        control1.x,
+                        control2.x,
+                        to.x,
+                        &mut bbox.xMin,
+                        &mut bbox.xMax,
+                    );
+                }
+                if control1.y < bbox.yMin
+                    || control1.y > bbox.yMax
+                    || control2.y < bbox.yMin
+                    || control2.y > bbox.yMax
+                {
+                    bbox_cubic_check(
+                        last.y,
+                        control1.y,
+                        control2.y,
+                        to.y,
+                        &mut bbox.yMin,
+                        &mut bbox.yMax,
+                    );
+                }
+                last = *to;
+            }
+            _ => return Err(FT_Err_Invalid_Outline as FT_Error),
+        }
+    }
+    Ok(bbox)
+}
+
+fn bbox_update_point(bbox: &mut FT_BBox, x: FT_Pos, y: FT_Pos) {
+    bbox.xMin = bbox.xMin.min(x);
+    bbox.yMin = bbox.yMin.min(y);
+    bbox.xMax = bbox.xMax.max(x);
+    bbox.yMax = bbox.yMax.max(y);
+}
+
+fn bbox_conic_check(y1: FT_Pos, y2: FT_Pos, y3: FT_Pos, min: &mut FT_Pos, max: &mut FT_Pos) {
+    let y1 = y1 - y2;
+    let y3 = y3 - y2;
+    let y = y2 + FT_MulDiv(y1, y3, y1 + y3);
+    *min = (*min).min(y);
+    *max = (*max).max(y);
+}
+
+fn bbox_cubic_check(
+    p1: FT_Pos,
+    p2: FT_Pos,
+    p3: FT_Pos,
+    p4: FT_Pos,
+    min: &mut FT_Pos,
+    max: &mut FT_Pos,
+) {
+    if p2 > *max || p3 > *max {
+        *max += cubic_peak(p1 - *max, p2 - *max, p3 - *max, p4 - *max);
+    }
+    if p2 < *min || p3 < *min {
+        *min -= cubic_peak(*min - p1, *min - p2, *min - p3, *min - p4);
+    }
+}
+
+fn cubic_peak(mut q1: FT_Pos, mut q2: FT_Pos, mut q3: FT_Pos, mut q4: FT_Pos) -> FT_Pos {
+    let mask =
+        (q1.unsigned_abs() | q2.unsigned_abs() | q3.unsigned_abs() | q4.unsigned_abs()) as u32;
+    let mut shift = 27 - (31 - mask.leading_zeros() as i32);
+    if shift > 0 {
+        if shift > 2 {
+            shift = 2;
+        }
+        q1 *= 1 << shift;
+        q2 *= 1 << shift;
+        q3 *= 1 << shift;
+        q4 *= 1 << shift;
+    } else {
+        q1 >>= -shift;
+        q2 >>= -shift;
+        q3 >>= -shift;
+        q4 >>= -shift;
+    }
+
+    let mut peak = 0;
+    while q2 > 0 || q3 > 0 {
+        if q1 + q2 > q3 + q4 {
+            q4 += q3;
+            q3 += q2;
+            q2 += q1;
+            q4 += q3;
+            q3 += q2;
+            q4 = (q4 + q3) >> 3;
+            q3 >>= 2;
+            q2 >>= 1;
+        } else {
+            q1 += q2;
+            q2 += q3;
+            q3 += q4;
+            q1 += q2;
+            q2 += q3;
+            q1 = (q1 + q2) >> 3;
+            q2 >>= 2;
+            q3 >>= 1;
+        }
+
+        if q1 == q2 && q1 >= q3 {
+            peak = q1;
+            break;
+        }
+        if q3 == q4 && q2 <= q4 {
+            peak = q4;
+            break;
+        }
+    }
+
+    if shift > 0 {
+        peak >> shift
+    } else {
+        peak << -shift
+    }
+}
+
 pub fn FT_Outline_Get_Bitmap(
     library: Option<&FT_Library>,
     outline: Option<&FT_OutlineSnapshot>,

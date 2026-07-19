@@ -1338,9 +1338,11 @@ Other rejected or deferred candidates checked in the same pass:
   exercise the `non_unicode_charmap_font` selection metadata. This remains a
   route/fixture-model issue, not a safe classification-only promotion.
 - `ftbbox.FT_Outline_Get_BBox.error_malformed_outline`: the standalone public
-  `FT_Outline_Get_BBox` symbol is not implemented in Rust FFI/C ABI/WASM yet;
-  existing bbox parity is derived from loaded glyph snapshots. This remains a
-  core public endpoint/route implementation task.
+  `FT_Outline_Get_BBox` symbol now exists in Rust FFI/C ABI/WASM and loaded
+  glyph bbox rows assert the real helper matches stored slot bboxes. This row
+  still references missing fixture asset `input/outlines/malformed-outline.bin`,
+  so the remaining work is a maintained malformed-outline fixture/oracle route,
+  not a classifier-only promotion.
 - `ftmm.FT_Get_Default_Named_Instance.service_without_default_instance_success`:
   still requires a real Adobe Multiple Master Type1 fixture exposing the
   service-with-null-callback behavior. It must not be replaced with a variable
@@ -7109,6 +7111,20 @@ Verified progress:
   `ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output` as `real-parity`.
 - Route audit moved `real-parity` `4204 -> 4205` and
   `generic-error-fallback` `34 -> 33`.
+
+2026-07-19 update:
+
+- `FT_Outline_Get_BBox` is now a public Rust FFI helper with thin C ABI and
+  WASM ABI wrappers. The helper matches pinned FreeType
+  `src/base/ftbbox.c:474-547`: null output returns `Invalid_Argument`, null
+  outline returns `Invalid_Outline`, empty outlines write zero, and non-trivial
+  outlines use the same decompose fallback for conic/cubic extrema.
+- The unified harness now calls the real Rust FFI, C ABI, and WASM ABI BBox
+  endpoints for loaded glyph BBox rows and for the null probe row.
+- Focused subject result:
+  `make -C pillow-rs-freetype test-case CASE=ftbbox.FT_Outline_Get_BBox`
+  reported `runtime_parity: passed=8 failed=0 total=8`, with one pending row
+  remaining for the missing malformed-outline fixture asset.
 
 Verified commands:
 

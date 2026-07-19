@@ -1156,6 +1156,33 @@ pub extern "C" fn fontdone_wasm_outline_get_cbox(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_get_bbox(
+    outline: *const FontdoneWasmOutline,
+    abbox: *mut FontdoneWasmBBox,
+) -> FT_Error {
+    if abbox.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument as FT_Error;
+    }
+    let Some(snapshot) = outline_snapshot_from_wasm(outline) else {
+        return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
+    };
+    let mut bbox = rust_ffi::FT_BBox::default();
+    let error = rust_ffi::FT_Outline_Get_BBox(Some(&snapshot), Some(&mut bbox));
+    if error == rust_ffi::FT_Err_Ok {
+        // SAFETY: `abbox` is non-null and the caller provides writable `FontdoneWasmBBox` storage.
+        unsafe {
+            *abbox = FontdoneWasmBBox {
+                xMin: bbox.xMin,
+                yMin: bbox.yMin,
+                xMax: bbox.xMax,
+                yMax: bbox.yMax,
+            };
+        }
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_outline_get_bitmap(
     library_present: i32,
     outline: *const FontdoneWasmOutline,

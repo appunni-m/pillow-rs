@@ -145,6 +145,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_face_check_truetype_patents",
     "fontdone_wasm_face_set_unpatented_hinting",
     "fontdone_wasm_outline_get_cbox",
+    "fontdone_wasm_outline_get_bbox",
     "fontdone_wasm_outline_get_bitmap",
     "fontdone_wasm_outline_render",
     "fontdone_wasm_outline_check",
