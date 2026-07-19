@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_MM_WeightVector` unsupported-face route
+Current verified result after `FT_Get_Multi_Master` variation-face route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3836`
+  - `real-parity`: `3837`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `359`
+  - `generic-error-fallback`: `358`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3589,6 +3589,41 @@ Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_WeightVector.unsupported_face_error
+```
+
+### Issue Set CH: `FT_Get_Multi_Master` TrueType/OpenType variation route
+
+Previous blocker:
+
+- `ftmm.FT_Get_Multi_Master.true_type_or_opentype_variation_error` stayed in
+  `generic-error-fallback`.
+- The fixture requires exact behavior from `freetype/src/base/ftmm.c:88-111`:
+  the public wrapper asks the multiple-master service for the legacy
+  `get_mm` entry, initializes the result to `FT_Err_Invalid_Argument`, and
+  preserves the sentinel `FT_Multi_Master` descriptor when that legacy Adobe MM
+  service entry is unavailable on TrueType/OpenType variation faces.
+
+Plan:
+
+1. Keep the fixture intact; it exercises the public `FT_Get_Multi_Master`
+   wrapper against a TrueType/OpenType variation face.
+2. Require exact error comparison for return status and preserved descriptor
+   output.
+3. Classify the row as real parity only after focused same-input parity passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused TrueType/OpenType variation row passes exact comparison against
+  pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmm.FT_Get_Multi_Master.true_type_or_opentype_variation_error` as
+  `real-parity`.
+
+Verified command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Multi_Master.true_type_or_opentype_variation_error
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
