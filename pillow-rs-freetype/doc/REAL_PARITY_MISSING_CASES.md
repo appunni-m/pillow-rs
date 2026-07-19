@@ -8057,3 +8057,62 @@ make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Post_Table_For
 make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Name_Table_Missing
 make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_File_Format.new_memory_face_rejects_broken_sfnt
 ```
+
+### Issue Set Current: generic-fallback route promotion audit
+
+Baseline before this batch:
+
+- Route audit at `c26dccc96`: `real-parity=4462`,
+  `generic-fallback=501`, `pending-route=16`, `pending-core=7`.
+
+Attempted route promotions:
+
+- `ftoutln.outline_get_orientation` (`ftoutln.FT_Orientation`): exact
+  classification exposed two missing synthetic orientation fixtures as
+  explicit pending-route rows. The focused runtime selected two runnable rows
+  and passed both.
+- `freetype.active_size_handle` / `freetype.size_record_state` and
+  `ftglyph.glyph_transform` were rejected for promotion. They passed while
+  generic fallback tolerated oracle errors, but failed once exact route
+  classification required the pinned-C oracle to produce success output.
+
+Rejected exact checks:
+
+```text
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Size
+runtime_parity: passed=36 failed=6 total=42
+rust ffi: freetype.FT_Size.active_size_handle_runtime@s10 oracle returned unexpected error 7
+rust ffi: freetype.FT_Size.active_size_handle_runtime@s16 oracle returned unexpected error 7
+rust ffi: freetype.FT_Size.active_size_handle_runtime@s24 oracle returned unexpected error 7
+rust ffi: freetype.FT_SizeRec.active_size_record_runtime@s1 oracle returned unexpected error 7
+rust ffi: freetype.FT_SizeRec.active_size_record_runtime@s2 oracle returned unexpected error 7
+rust ffi: freetype.FT_SizeRec.active_size_record_runtime@s3 oracle returned unexpected error 7
+
+make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_Transform
+runtime_parity: passed=1 failed=2 total=3
+rust ffi: ftglyph.FT_Glyph_Transform.success_outline_matrix_delta oracle returned unexpected error 7
+rust ffi: ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only oracle returned unexpected error 7
+```
+
+Route audit after accepted promotion:
+
+- `real-parity=4462`
+- `generic-fallback=499`
+- `pending-route=18`
+- `pending-core=7`
+
+The pending-route increase is intentional de-placeholdering. These rows were
+previously hidden under generic fallback and now remain visible until the
+required assets exist:
+
+- `ftoutln.FT_Orientation.orientation_algorithm_contract` needs
+  `outline/orientation/invalid-collapsed-oversized.json`.
+- `ftoutln.FT_ORIENTATION_FILL_LEFT.returned_for_positive_area` needs
+  `outline/orientation/postscript-positive-area.json`.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Orientation
+make -C pillow-rs-freetype route-audit
+```
