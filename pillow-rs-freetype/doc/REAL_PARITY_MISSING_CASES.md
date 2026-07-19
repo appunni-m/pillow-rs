@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_RENDER_MODE_MAX` render rejection route
+Current verified result after `FT_Render_Glyph` unsupported slot-format route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3845`
+  - `real-parity`: `3846`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `350`
+  - `generic-error-fallback`: `349`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3828,6 +3828,42 @@ Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel
+```
+
+### Issue Set CO: `FT_Render_Glyph` unsupported slot-format route
+
+Previous blocker:
+
+- `freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format` stayed
+  in `generic-error-fallback`.
+- The routed fixture variant requires exact behavior from
+  `freetype/src/base/ftobjs.c:4983-4994` and
+  `freetype/src/base/ftobjs.c:4733-4855`: a loaded composite glyph slot
+  produced by `FT_LOAD_NO_RECURSE` reaches renderer dispatch, where renderers
+  return `FT_Err_Cannot_Render_Glyph` for unsupported glyph image formats.
+
+Plan:
+
+1. Keep the fixture intact; classify only the concrete routed composite-slot
+   variant and leave the separate unrouted slot-state variant pending until a
+   public runner exists.
+2. Require exact error comparison for the return status on the same input.
+3. Classify the routed row as real parity only after focused same-input parity
+   passes through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused composite-slot row passes exact comparison against pinned C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format` as
+  `real-parity` for the routed concrete row.
+- The harness still reports the unrouted slot-state row as pending.
+
+Verified command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
