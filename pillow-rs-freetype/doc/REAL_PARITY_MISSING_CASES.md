@@ -1,5 +1,63 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `ftparams` open-face parameter route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `7bdbf4a7c`: `real-parity=4465`,
+  `generic-fallback=98`, `pending-route=416`, `pending-core=7`.
+
+Finding:
+
+- The remaining `ftparams` rows cover `FT_PARAM_TAG_IGNORE_SBIX`,
+  `FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY`,
+  `FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY`,
+  `FT_PARAM_TAG_INCREMENTAL`, `FT_PARAM_TAG_RANDOM_SEED`,
+  `FT_PARAM_TAG_STEM_DARKENING`, and
+  `FT_PARAM_TAG_UNPATENTED_HINTING`.
+- Those rows had stayed in `generic-fallback` with the reason
+  `no explicit maintained route classification`.
+- They are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
+  open-face parameter route that passes identical `FT_Open_Args` parameter
+  arrays through pinned C FreeType, Rust FFI, C ABI, and WASM, then compares
+  exact face metadata, glyph-load behavior, property side effects, accepted
+  null data, unsupported/build-dependent behavior, and parameter dispatch
+  semantics.
+
+Classification change:
+
+- 13 `ftparams` rows moved from `generic-fallback` to `pending-route`.
+- Other generic `freetype.open_face*` rows remain untouched; this classifier is
+  exact-case scoped.
+- New route audit counts: `real-parity=4465`, `generic-fallback=85`,
+  `pending-route=429`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add a maintained open-face parameter route instead of per-row expected output
+   shortcuts. It must run the same operation sequence through pinned C
+   FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement pure-Rust parameter dispatch first: sbix ignore behavior,
+   typographic family/subfamily fallback, incremental interface routing,
+   random-seed face property effects, stem-darkening toggles, unpatented
+   hinting no-op/acceptance semantics, and null-data handling.
+3. Compare exact return codes, face flags, family/subfamily strings, glyph-load
+   outputs after parameter mutation, build-dependent support classifications,
+   accepted null-data behavior, and preservation of unsupported inputs.
+4. Keep already-routed open-face and exact-error rows real; do not demote them
+   while building the broader parameter route.
+5. Promote rows only after focused `ftparams` runtime proves exact C oracle,
+   Rust FFI, C ABI, and WASM ABI output for the same input.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftparams
+```
+
 ### Issue Set Current: `ftglyph` glyph-object route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.

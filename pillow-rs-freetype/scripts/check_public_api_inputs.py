@@ -1411,6 +1411,35 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def ftparams_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for FT_Open_Args parameters that do not have a maintained route."""
+    ftparams_rows_without_maintained_route = {
+        "ftparams.FT_PARAM_TAG_IGNORE_SBIX.open_face_ignores_sbix",
+        "ftparams.FT_PARAM_TAG_IGNORE_SBIX.unsupported_or_non_sbix_no_spurious_failure",
+        "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.open_face_uses_legacy_family_name",
+        "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.null_data_accepted",
+        "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.open_face_uses_legacy_subfamily_name",
+        "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.null_data_accepted",
+        "ftparams.FT_PARAM_TAG_INCREMENTAL.incremental_interface_used_for_glyph_load",
+        "ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c",
+        "ftparams.FT_PARAM_TAG_RANDOM_SEED.valid_seed_sets_face_property",
+        "ftparams.FT_PARAM_TAG_STEM_DARKENING.cff_type1_toggle_changes_supported_output",
+        "ftparams.FT_PARAM_TAG_STEM_DARKENING.unsupported_or_null_data_matches_c_error",
+        "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.open_face_no_effect",
+        "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.null_data_accepted_or_ignored",
+    }
+    if row.case_id not in ftparams_rows_without_maintained_route:
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "FT_Open_Args parameter tag behavior for sbix, typographic names, "
+        "incremental loading, random seed, stem darkening, and unpatented "
+        "hinting requires a maintained parameter route; keeping it generic "
+        "would be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3752,6 +3781,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftglyph_pending = ftglyph_subsystem_pending_reason(row)
     if ftglyph_pending:
         return ("pending-route", ftglyph_pending)
+    ftparams_pending = ftparams_subsystem_pending_reason(row)
+    if ftparams_pending:
+        return ("pending-route", ftparams_pending)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",
