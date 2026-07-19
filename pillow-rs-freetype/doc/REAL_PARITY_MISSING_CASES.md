@@ -408,6 +408,66 @@ make -C pillow-rs-freetype test-case CASE=ftmoderr.FT_Mod_Err_Smooth.prefixed_er
 Results: `1 / 1` and `3 / 3` runtime parity rows passed, `0` failed, `0`
 pending. Route audit: `real-parity` `4147`, `generic-error-fallback` `48`.
 
+### Issue Set Current: `FT_Outline_Get_Bitmap` delegated error parity
+
+Previous blocker:
+
+- `ftimage.FT_PIXEL_MODE_NONE.invalid_render_target_errors` and
+  `ftoutln.FT_Outline_Get_Bitmap.null_bitmap_and_delegate_errors` were still
+  classified as `generic-error-fallback`.
+- Earlier exact probes exposed real implementation gaps: Rust FFI used the
+  generic no-font expected-error shortcut and returned
+  `FT_Err_Invalid_Face_Handle` (`35`) instead of pinned C's
+  `FT_Err_Invalid_Argument` (`6`) for the null-bitmap scenario.
+- After bypassing the generic shortcut, the oversized-outline scenario still
+  diverged: pinned C returned `FT_Err_Invalid_Outline` (`20`), while Rust
+  returned success.
+
+Fix:
+
+- Exclude `ftoutln.outline_get_bitmap` from the generic no-font expected-error
+  shortcut so its dedicated public runner owns the null/delegated scenarios.
+- Match FreeType 2.14.3 `src/base/ftoutln.c:669-689` delegation to
+  `FT_Outline_Render` by rejecting cboxes outside +/-0x1000000 with
+  `FT_Err_Invalid_Outline` before rasterizing.
+- Preserve the adjacent existing exact route
+  `ftimage.FT_Bitmap.invalid_target_buffer_errors` by routing it through the
+  dedicated outline-bitmap runner and matching FreeType 2.14.3
+  `src/smooth/ftgrays.c:2012-2019`: non-empty bitmap targets with NULL storage
+  return `FT_Err_Invalid_Argument` with no output payload.
+- Promote both rows to exact-error comparison across pinned C oracle, Rust FFI,
+  thin C ABI, and WASM ABI.
+
+Promoted rows:
+
+- `ftimage.FT_PIXEL_MODE_NONE.invalid_render_target_errors`
+- `ftoutln.FT_Outline_Get_Bitmap.null_bitmap_and_delegate_errors`
+
+Rejected exact-error candidates:
+
+- `ftcache.FTC_SBitCache_Lookup.rejects_null_sbit_output`: exact promotion
+  failed because pinned C returned `Ok`. This row remains a fixture/oracle
+  policy issue, not an exact-error row.
+
+Verified progress:
+
+- Focused exact comparison passed for both promoted rows.
+- Regression guard `ftimage.FT_Bitmap.invalid_target_buffer_errors` also passed
+  focused exact comparison after the shared route fix.
+- Route audit classifies both promoted rows as `real-parity`.
+
+Focused non-coverage results:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Get_Bitmap.null_bitmap_and_delegate_errors
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_PIXEL_MODE_NONE.invalid_render_target_errors
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_Bitmap.invalid_target_buffer_errors
+```
+
+Results: each focused probe passed `1 / 1` runtime parity row, `0` failed,
+`0` pending. Route audit after promotion: `real-parity` `4149`,
+`generic-error-fallback` `46`.
+
 ### Issue Set Current: `FT_Open_Face` invalid source-flag exact-error route
 
 Previous blocker:

@@ -1502,6 +1502,21 @@ pub fn FT_Outline_Get_Bitmap(
     let Some(abitmap) = abitmap else {
         return Err(FT_Err_Invalid_Argument as FT_Error);
     };
+    let Some(outline_snapshot) = outline else {
+        return Err(FT_Err_Invalid_Outline as FT_Error);
+    };
+    let mut cbox = FT_BBox::default();
+    FT_Outline_Get_CBox(Some(outline_snapshot), Some(&mut cbox));
+    if cbox.xMin < -0x1000000
+        || cbox.yMin < -0x1000000
+        || cbox.xMax > 0x1000000
+        || cbox.yMax > 0x1000000
+    {
+        // FreeType 2.14.3 `src/base/ftoutln.c:669-689` delegates
+        // `FT_Outline_Get_Bitmap` to `FT_Outline_Render`; the gray renderer
+        // rejects cboxes outside +/-0x1000000 as Invalid_Outline.
+        return Err(FT_Err_Invalid_Outline as FT_Error);
+    }
     let Some(outline) = outline.and_then(outline_snapshot_to_core) else {
         return Err(FT_Err_Invalid_Outline as FT_Error);
     };
@@ -1510,6 +1525,12 @@ pub fn FT_Outline_Get_Bitmap(
     // FreeType rejects FT_PIXEL_MODE_NONE targets before rendering
     // (src/smooth/ftgrays.c:2010-2019, src/raster/ftraster.c:2696-2703).
     if abitmap.pixel_mode == FT_PIXEL_MODE_NONE as u8 {
+        return Err(FT_Err_Invalid_Argument as FT_Error);
+    }
+    if width != 0 && rows != 0 && abitmap.pitch != 0 && abitmap.buffer.is_null() {
+        // FreeType 2.14.3 `src/smooth/ftgrays.c:2012-2019` rejects a
+        // non-empty target bitmap with NULL storage as Invalid_Argument
+        // before caller storage is written.
         return Err(FT_Err_Invalid_Argument as FT_Error);
     }
     let raster = crate::grays::rasterize_in_box(outline, width, rows).map_err(error_to_ft)?;
