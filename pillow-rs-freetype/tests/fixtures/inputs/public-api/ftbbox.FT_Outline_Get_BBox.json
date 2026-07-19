@@ -378,17 +378,17 @@
         "assets": {
           "font": { "kind": "ref", "role": "font", "id": "input/fonts/DejaVuSans.ttf" },
           "outline": {
-            "kind": "file",
+            "kind": "ref",
             "role": "outline",
-            "path": "input/outlines/malformed-outline.bin"
+            "id": "outlines/synthetic/malformed-outline-cases.json",
+            "asset_kind": "outline_model_set"
           }
         },
         "params": {
           "malformations": [
-            "negative_n_points",
-            "contour_end_before_start",
-            "last_contour_exceeds_points",
-            "invalid_tag_sequence"
+            "first_point_cubic",
+            "unpaired_cubic",
+            "last_contour_not_n_points_minus_one"
           ],
           "sentinel_bbox": {
             "xMin": 111,
@@ -410,6 +410,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "rows[*].malformation",
             "rows[*].status",
@@ -419,7 +420,7 @@
         },
         "error": "C_oracle_outline_error",
         "fixture_requirements": [
-          "input/outlines/malformed-outline.bin should encode synthetic FT_Outline records for harness construction"
+          "outlines/synthetic/malformed-outline-cases.json should encode non-null array-backed synthetic FT_Outline records for harness construction; raw null-internal-pointer and negative-count cases remain separate facade work."
         ],
         "source_refs": [
           "freetype/src/base/ftbbox.c",

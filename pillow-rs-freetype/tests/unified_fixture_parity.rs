@@ -14953,6 +14953,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                     outline_bbox_sentinel_arg(params)?,
                 ]);
             }
+            if params.get("malformations").is_some() {
+                return Ok(vec![
+                    "--outline-get-bbox-malformed".to_string(),
+                    outline_bbox_sentinel_arg(params)?,
+                ]);
+            }
             let mut args = vec!["--outline-get-bbox".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
@@ -15745,6 +15751,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftbbox.outline_get_bbox" if case.inputs.params.get("probes").is_some() => {
             rust_outline_get_bbox_null_inputs(&case.inputs.params)
         }
+        "ftbbox.outline_get_bbox" if case.inputs.params.get("malformations").is_some() => {
+            rust_outline_get_bbox_malformed(&case.inputs.params)
+        }
         "ftglyph.glyph_get_cbox" if case.inputs.params.get("probes").is_some() => {
             rust_glyph_get_cbox_null_or_no_bbox(&case.inputs.params)
         }
@@ -16461,6 +16470,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftbbox.outline_get_bbox" if case.inputs.params.get("probes").is_some() => {
             c_outline_get_bbox_null_inputs(&case.inputs.params)
         }
+        "ftbbox.outline_get_bbox" if case.inputs.params.get("malformations").is_some() => {
+            c_outline_get_bbox_malformed(&case.inputs.params)
+        }
         "ftglyph.glyph_get_cbox" if case.inputs.params.get("probes").is_some() => {
             c_glyph_get_cbox_null_or_no_bbox(&case.inputs.params)
         }
@@ -17082,6 +17094,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftbbox.outline_get_bbox" if case.inputs.params.get("probes").is_some() => {
             wasm_outline_get_bbox_null_inputs(&case.inputs.params)
+        }
+        "ftbbox.outline_get_bbox" if case.inputs.params.get("malformations").is_some() => {
+            wasm_outline_get_bbox_malformed(&case.inputs.params)
         }
         "ftglyph.glyph_get_cbox" if case.inputs.params.get("probes").is_some() => {
             wasm_glyph_get_cbox_null_or_no_bbox(&case.inputs.params)
@@ -18607,6 +18622,119 @@ fn outline_bbox_probe_row(probe: &str, error: FT_Error, bbox: JsonBBox) -> Value
         "status": if error == FT_Err_Ok { "ok" } else { "error" },
         "error": error,
         "bbox": bbox_json(bbox),
+    })
+}
+
+#[derive(Clone, Copy)]
+enum BBoxMalformedOutlineKind {
+    FirstPointCubic,
+    UnpairedCubic,
+    LastContourNotNPointsMinusOne,
+}
+
+fn bbox_malformed_outline_cases() -> Vec<(&'static str, BBoxMalformedOutlineKind)> {
+    vec![
+        (
+            "first_point_cubic",
+            BBoxMalformedOutlineKind::FirstPointCubic,
+        ),
+        ("unpaired_cubic", BBoxMalformedOutlineKind::UnpairedCubic),
+        (
+            "last_contour_not_n_points_minus_one",
+            BBoxMalformedOutlineKind::LastContourNotNPointsMinusOne,
+        ),
+    ]
+}
+
+fn bbox_malformed_outline_model(kind: BBoxMalformedOutlineKind) -> MutableOutlineModel {
+    match kind {
+        BBoxMalformedOutlineKind::FirstPointCubic => MutableOutlineModel {
+            points: vec![(0, 0), (64, 64), (128, 0)],
+            tags: vec![2, 2, 1],
+            contours: vec![2],
+            flags: 0,
+        },
+        BBoxMalformedOutlineKind::UnpairedCubic => MutableOutlineModel {
+            points: vec![(0, 0), (64, 64), (128, 0)],
+            tags: vec![1, 2, 1],
+            contours: vec![2],
+            flags: 0,
+        },
+        BBoxMalformedOutlineKind::LastContourNotNPointsMinusOne => MutableOutlineModel {
+            points: vec![(0, 0), (64, 0), (64, 64), (512, 512)],
+            tags: vec![1, 1, 1, 0],
+            contours: vec![2],
+            flags: 0,
+        },
+    }
+}
+
+fn outline_bbox_malformed_output<F>(params: &Value, mut get_bbox: F) -> Result<RunOutput, String>
+where
+    F: FnMut(BBoxMalformedOutlineKind, JsonBBox) -> (FT_Error, JsonBBox),
+{
+    let sentinel = outline_bbox_sentinel(params)?;
+    let mut first_error = FT_Err_Ok;
+    let mut rows = Vec::new();
+
+    for (label, kind) in bbox_malformed_outline_cases() {
+        let (err, bbox) = get_bbox(kind, sentinel);
+        if first_error == FT_Err_Ok && err != FT_Err_Ok {
+            first_error = err;
+        }
+        rows.push(json!({
+            "malformation": label,
+            "status": if err == FT_Err_Ok { "ok" } else { "error" },
+            "error": err,
+            "bbox": bbox_json(bbox),
+        }));
+    }
+
+    Ok(outline_bbox_null_inputs_output(rows, first_error))
+}
+
+fn rust_outline_get_bbox_malformed(params: &Value) -> Result<RunOutput, String> {
+    outline_bbox_malformed_output(params, |kind, sentinel| {
+        let model = bbox_malformed_outline_model(kind);
+        let outline = rust_snapshot_from_mutable(&model);
+        let mut bbox = FT_BBox {
+            xMin: sentinel.x_min,
+            yMin: sentinel.y_min,
+            xMax: sentinel.x_max,
+            yMax: sentinel.y_max,
+        };
+        let err = FT_Outline_Get_BBox(Some(&outline), Some(&mut bbox));
+        (err, bbox_from_rust_bbox(bbox))
+    })
+}
+
+fn c_outline_get_bbox_malformed(params: &Value) -> Result<RunOutput, String> {
+    outline_bbox_malformed_output(params, |kind, sentinel| {
+        let model = bbox_malformed_outline_model(kind);
+        let mut storage = CMutableOutlineStorage::new(model);
+        let mut bbox = c_abi::FT_BBox {
+            xMin: sentinel.x_min,
+            yMin: sentinel.y_min,
+            xMax: sentinel.x_max,
+            yMax: sentinel.y_max,
+        };
+        let err = c_abi::FT_Outline_Get_BBox(storage.as_mut_ptr(), &mut bbox);
+        (err, bbox_from_c_bbox(bbox))
+    })
+}
+
+fn wasm_outline_get_bbox_malformed(params: &Value) -> Result<RunOutput, String> {
+    outline_bbox_malformed_output(params, |kind, sentinel| {
+        let model = bbox_malformed_outline_model(kind);
+        let mut storage = WasmMutableOutlineStorage::new(model);
+        let mut bbox = wasm_abi::FontdoneWasmBBox {
+            xMin: sentinel.x_min,
+            yMin: sentinel.y_min,
+            xMax: sentinel.x_max,
+            yMax: sentinel.y_max,
+        };
+        let err = wasm_abi::fontdone_wasm_outline_get_bbox(storage.as_mut_ptr(), &mut bbox);
+        (err, bbox_from_wasm_public_bbox(bbox))
     })
 }
 
