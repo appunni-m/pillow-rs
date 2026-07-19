@@ -71,6 +71,10 @@ static int is_moveto_starts_each_contour_case(const char* case_id) {
            streq(case_id, "ftimage.FT_Outline_MoveTo_Func.decompose_starts_each_contour@g37-f2");
 }
 
+static int is_moveto_callback_error_case(const char* case_id) {
+    return streq(case_id, "ftimage.FT_Outline_MoveTo_Func.decompose_propagates_callback_error");
+}
+
 static void print_json_bool(int value);
 static void print_slot_body(FT_GlyphSlot slot, FT_UInt glyph_index);
 
@@ -5492,6 +5496,7 @@ static int emit_outline_decompose(int argc, char** argv) {
     if (!streq(case_id, "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c") &&
         !streq(case_id, "ftimage.FT_Outline_Funcs.callback_order_matches_c") &&
         !streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates") &&
+        !is_moveto_callback_error_case(case_id) &&
         !streq(case_id, "ftimage.FT_CURVE_TAG.classifies_outline_tags") &&
         !is_moveto_starts_each_contour_case(case_id) &&
         !streq(case_id, "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c") &&
@@ -5538,6 +5543,7 @@ static int emit_outline_decompose(int argc, char** argv) {
     short n_points = 4;
     if (streq(case_id, "ftimage.FT_Outline_Funcs.callback_order_matches_c") ||
         streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates") ||
+        is_moveto_callback_error_case(case_id) ||
         streq(case_id, "ftimage.FT_CURVE_TAG.classifies_outline_tags") ||
         is_moveto_starts_each_contour_case(case_id) ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") ||
@@ -5696,6 +5702,7 @@ static int emit_outline_decompose(int argc, char** argv) {
     int transform_count = 3;
     if (streq(case_id, "ftimage.FT_Outline_Funcs.callback_order_matches_c") ||
         streq(case_id, "ftimage.FT_Outline_Funcs.callback_error_propagates") ||
+        is_moveto_callback_error_case(case_id) ||
         streq(case_id, "ftimage.FT_CURVE_TAG.classifies_outline_tags") ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") ||
         streq(case_id, "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks") ||
@@ -5750,6 +5757,23 @@ static int emit_outline_decompose(int argc, char** argv) {
             printf("]}");
         }
         printf("]}}\n");
+        return 0;
+    }
+    if (is_moveto_callback_error_case(case_id)) {
+        FT_Outline_Funcs funcs;
+        funcs.move_to = record_outline_move_to;
+        funcs.line_to = record_outline_line_to;
+        funcs.conic_to = record_outline_conic_to;
+        funcs.cubic_to = record_outline_cubic_to;
+        funcs.shift = 0;
+        funcs.delta = 0;
+        reset_recorded_outline_events();
+        recorded_outline_decompose_fail_index = 0;
+        recorded_outline_decompose_fail_error = 123;
+        FT_Error err = FT_Outline_Decompose(&outline, &funcs, recorded_outline_decompose_user_token);
+        printf("{");
+        print_status(err);
+        printf(",\"output\":{\"status\":%d,\"events\":[],\"first_error_callback\":\"move_to\"}}\n", err);
         return 0;
     }
     if (streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {

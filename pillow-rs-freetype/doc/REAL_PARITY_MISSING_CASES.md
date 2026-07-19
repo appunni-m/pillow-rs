@@ -109,6 +109,54 @@ Rejected related probe:
   `#![deny(unsafe_code)]`. Keep those rows pending until a design preserves
   the thin-wrapper/core-safety boundary.
 
+### Issue Set Current: MoveTo callback exact-error route
+
+Previous blocker:
+
+- `ftimage.FT_Outline_MoveTo_Func.decompose_propagates_callback_error` was a
+  generic expected-error fallback. Marking it exact initially exposed the real
+  blocker: the runtime classified it as pending because the maintained
+  `ftoutln.outline_decompose` callback trace route did not include the
+  `FT_Outline_MoveTo_Func` error case.
+
+Promoted row:
+
+- `ftimage.FT_Outline_MoveTo_Func.decompose_propagates_callback_error`
+
+Verified progress:
+
+- The pinned native oracle now calls `FT_Outline_Decompose` with a `move_to`
+  callback that returns `123` before recording an event, matching FreeType
+  `src/base/ftoutln.c:99-102` immediate callback-error propagation.
+- Rust FFI, thin C ABI, and WASM ABI parity runners now emit the same exact
+  public error output for that row.
+- Focused exact parity passed: `1 / 1` runtime row passed, `0` failed,
+  `0` pending.
+- Route audit moved one row from `generic-error-fallback` to `real-parity`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_Outline_MoveTo_Func.decompose_propagates_callback_error
+```
+
+Result: `1 / 1` focused runtime row passed, `0` failed, `0` pending.
+
+Rejected exact-error probes:
+
+- `freetype.FT_New_Face.error_null_library_or_aface`: exact-error promotion
+  failed because the current pinned oracle route returns a top-level `Ok`
+  wrapper with per-variant error rows, so the exact-error guard rejects it.
+- `fterrdef.FT_Err_Invalid_Argument.null_output_or_bad_flag_arguments`:
+  exact-error promotion failed for the same top-level `Ok` wrapper shape.
+- `ftlcdfil.FT_Library_SetLcdGeometry.unimplemented_with_subpixel_filtering`:
+  exact-error promotion failed for the same top-level `Ok` wrapper shape.
+- The adjacent `FT_Outline_LineTo_Func`, `FT_Outline_ConicTo_Func`, and
+  `FT_Outline_CubicTo_Func` callback-error rows are still `pending-route`
+  because they use the older `ftimage.outline_decompose` operation and missing
+  fixture names. They need a deliberate fixture/operation migration, not a
+  metadata-only exact-error promotion.
+
 ### Issue Set Current: named-instance memory-face stale route plus rejected exact-error batch
 
 Previous blocker:
