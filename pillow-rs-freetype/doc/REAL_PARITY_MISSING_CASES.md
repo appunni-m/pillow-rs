@@ -1,5 +1,46 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `FT_Set_Default_Properties` environment route
+
+Status: three-row runtime route completed on 2026-07-20 for pinned FreeType
+2.14.3 default property environment parsing.
+
+Implemented real parity rows:
+
+- `ftmodapi.FT_Set_Default_Properties.no_environment_noop`
+- `ftmodapi.FT_Set_Default_Properties.parses_supported_environment_property`
+- `ftmodapi.FT_Set_Default_Properties.ignores_malformed_or_failed_properties`
+
+Finding:
+
+- The supported environment-property row was already classified as
+  `real-parity`, but it did not have an explicit maintained operation dispatch
+  in the unified harness. The route now explicitly compares all three rows
+  through pinned C oracle, Rust FFI, C ABI support path, and WASM ABI support
+  path.
+- Pinned C `FT_Set_Default_Properties` (`src/base/ftinit.c`) reads
+  `FREETYPE_PROPERTIES`, parses whitespace-separated
+  `module:property=value` tokens with a 128-byte component limit, calls
+  `ft_property_string_set`, and deliberately ignores all setter errors.
+- For the currently supported public property, `truetype:interpreter-version`,
+  pinned C parses the string value with `ft_strtol`; value `35` applies, while
+  malformed tokens, missing modules/properties, and null library calls leave
+  observable interpreter-version state unchanged or unobservable.
+
+Impact:
+
+- `real-parity`: `4442 -> 4444`
+- `compile-contract`: stays `2258`
+- `pending-route`: `520 -> 518`
+- `pending-core`: stays `1`
+- `generic-fallback`: stays `0`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftmodapi.set_default_properties
+```
+
 ### Issue Set Current: late ABI scalar/header contract cleanup
 
 Status: eight-row audit cleanup completed on 2026-07-20 for pinned FreeType

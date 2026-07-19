@@ -11090,6 +11090,28 @@ static void oracle_property_set_then_get(int module_selector,
     FT_Done_FreeType(library);
 }
 
+static FT_UInt oracle_default_properties_value(int library_present, const char* env) {
+    FT_Library library = NULL;
+    unsetenv("FREETYPE_PROPERTIES");
+    if (library_present && FT_Init_FreeType(&library)) {
+        return PROPERTY_SENTINEL;
+    }
+    if (env) {
+        setenv("FREETYPE_PROPERTIES", env, 1);
+    } else {
+        unsetenv("FREETYPE_PROPERTIES");
+    }
+    FT_Set_Default_Properties(library);
+    unsetenv("FREETYPE_PROPERTIES");
+    if (!library) {
+        return PROPERTY_SENTINEL;
+    }
+    FT_UInt value = PROPERTY_SENTINEL;
+    FT_Property_Get(library, "truetype", "interpreter-version", &value);
+    FT_Done_FreeType(library);
+    return value;
+}
+
 static void print_face_properties_state(FT_Face face) {
     printf("{\"no_stem_darkening\":%d,\"random_seed\":%d}",
            face && face->internal ? face->internal->no_stem_darkening : -9999,
@@ -11295,6 +11317,37 @@ static int emit_property_case(int argc, char** argv) {
                TT_INTERPRETER_VERSION_40,
                value_after);
         printf("]}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftmodapi.FT_Set_Default_Properties.no_environment_noop")) {
+        FT_UInt before = oracle_default_properties_value(1, NULL);
+        FT_UInt after = oracle_default_properties_value(1, NULL);
+        printf(",\"output\":{\"property_before\":%u,\"property_after\":%u}}\n",
+               before,
+               after);
+        return 0;
+    }
+    if (streq(case_id, "ftmodapi.FT_Set_Default_Properties.parses_supported_environment_property")) {
+        FT_UInt after = oracle_default_properties_value(1, "truetype:interpreter-version=35");
+        printf(",\"output\":{\"environment_properties_enabled\":%s,\"property_after\":%u}}\n",
+               after == TT_INTERPRETER_VERSION_35 ? "true" : "false",
+               after);
+        return 0;
+    }
+    if (streq(case_id, "ftmodapi.FT_Set_Default_Properties.ignores_malformed_or_failed_properties")) {
+        FT_UInt malformed = oracle_default_properties_value(1, "malformed");
+        FT_UInt missing = oracle_default_properties_value(1, "missing:property=1");
+        FT_UInt null_library = oracle_default_properties_value(0, "truetype:interpreter-version=35");
+        printf(",\"output\":{\"return\":\"void\",\"crashed\":false,\"rows\":[");
+        printf("{\"scenario\":\"malformed\",\"property_after\":%u},", malformed);
+        printf("{\"scenario\":\"missing_property\",\"property_after\":%u},", missing);
+        printf("{\"scenario\":\"null_library\",\"property_after\":");
+        if (null_library == PROPERTY_SENTINEL) {
+            printf("null");
+        } else {
+            printf("%u", null_library);
+        }
+        printf("}]}}\n");
         return 0;
     }
     printf(",\"output\":{\"unsupported_case\":\"%s\"}}\n", case_id);

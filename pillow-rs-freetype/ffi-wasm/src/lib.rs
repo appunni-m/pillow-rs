@@ -1866,6 +1866,29 @@ pub extern "C" fn fontdone_wasm_property_set_then_get(
     )
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_set_default_properties(library_present: i32, env: Option<&str>) -> Option<FT_UInt> {
+    let mut library = if library_present == 0 {
+        None
+    } else {
+        Some(rust_ffi::FT_Init_FreeType())
+    };
+    rust_ffi::FT_Set_Default_Properties_From_Env(library.as_mut(), env);
+    let library = library.as_ref()?;
+    let mut value = 0;
+    let error = rust_ffi::FT_Property_Get(
+        Some(library),
+        Some("truetype"),
+        Some("interpreter-version"),
+        Some(&mut value),
+    );
+    if error == rust_ffi::FT_Err_Ok {
+        Some(value)
+    } else {
+        None
+    }
+}
+
 fn wasm_face_property(tag_selector: i32, value_kind: i32, value: i32) -> rust_ffi::FT_Face_Property {
     let tag = match tag_selector {
         1 => rust_ffi::FT_PARAM_TAG_STEM_DARKENING as FT_ULong,
