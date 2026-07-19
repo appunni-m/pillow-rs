@@ -176,14 +176,14 @@
       "case_id": "ftimage.FT_Curve_Tag_Touch_X.ignored_by_curve_tag_mask",
       "subject": "ftimage.FT_Curve_Tag_Touch_X",
       "case": "ignored_by_curve_tag_mask",
-      "operation": "ftimage.outline_decompose",
+      "operation": "ftoutln.outline_decompose",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
         "assets": {
           "outline_fixture": {
             "kind": "ref",
-            "id": "outlines/touch-bit-tag-mask.json"
+            "id": "outlines/synthetic/tags-with-touch-and-scan-bits.json"
           }
         },
         "params": {

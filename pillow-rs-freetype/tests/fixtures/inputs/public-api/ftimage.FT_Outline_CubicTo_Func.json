@@ -57,14 +57,14 @@
       "case_id": "ftimage.FT_Outline_CubicTo_Func.callback_abi_matches_c",
       "subject": "ftimage.FT_Outline_CubicTo_Func",
       "case": "callback_abi_matches_c",
-      "operation": "ftimage.outline_decompose",
+      "operation": "ftoutln.outline_decompose",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
         "assets": {
           "outline_fixture": {
             "kind": "ref",
-            "id": "outlines/cubic-valid-and-malformed.json"
+            "id": "outlines/synthetic/cubic-paired-controls.json"
           }
         },
         "params": {

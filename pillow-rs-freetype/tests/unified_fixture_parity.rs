@@ -20539,9 +20539,17 @@ fn outline_decompose_runtime_case_supported(case_id: &str) -> bool {
             | "ftimage.FT_Outline_Funcs.callback_error_propagates"
             | "ftimage.FT_Outline_MoveTo_Func.decompose_propagates_callback_error"
             | "ftimage.FT_CURVE_TAG.classifies_outline_tags"
+            | "ftimage.FT_Curve_Tag_Touch_X.ignored_by_curve_tag_mask"
+            | "ftimage.FT_Curve_Tag_Touch_Y.ignored_by_curve_tag_mask"
             | "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c"
+            | "ftimage.FT_Curve_Tag_On.curve_tag_classifies_on_curve_points"
+            | "ftimage.FT_Outline_LineTo_Func.callback_abi_matches_c"
             | "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c"
+            | "ftimage.FT_Curve_Tag_Conic.curve_tag_classifies_conic_points"
+            | "ftimage.FT_Outline_ConicTo_Func.callback_abi_matches_c"
             | "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c"
+            | "ftimage.FT_Curve_Tag_Cubic.curve_tag_classifies_cubic_points"
+            | "ftimage.FT_Outline_CubicTo_Func.callback_abi_matches_c"
             | "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order"
             | "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks"
             | "ftoutln.FT_Outline_Decompose.callback_error_propagates"
@@ -20623,6 +20631,9 @@ fn wasm_cubic_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOu
 }
 
 fn outline_decompose_transforms(case: &InputCase) -> Result<Vec<(FT_Int, FT_Pos)>, String> {
+    if case.inputs.params.get("tag_pairs").is_some() {
+        return Ok(vec![(0, 0)]);
+    }
     if let Some(values) = case
         .inputs
         .params
@@ -22955,6 +22966,7 @@ fn outline_render_fixture_outline(
         .inputs
         .assets
         .get("outline")
+        .or_else(|| case.inputs.assets.get("outline_fixture"))
         .or_else(|| case.inputs.assets.get("synthetic_outline"))
         .or_else(|| case.inputs.assets.get("synthetic_outlines"))
     else {

@@ -158,14 +158,14 @@
       "case_id": "ftimage.FT_Curve_Tag_Cubic.curve_tag_classifies_cubic_points",
       "subject": "ftimage.FT_Curve_Tag_Cubic",
       "case": "curve_tag_classifies_cubic_points",
-      "operation": "ftimage.outline_decompose",
+      "operation": "ftoutln.outline_decompose",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
         "assets": {
           "outline_fixture": {
             "kind": "ref",
-            "id": "outlines/cubic-valid-and-malformed.json"
+            "id": "outlines/synthetic/cubic-paired-controls.json"
           }
         },
         "params": {

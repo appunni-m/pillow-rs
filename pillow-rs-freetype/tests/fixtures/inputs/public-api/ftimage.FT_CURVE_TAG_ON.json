@@ -151,14 +151,14 @@
       "case_id": "ftimage.FT_Curve_Tag_On.curve_tag_classifies_on_curve_points",
       "subject": "ftimage.FT_Curve_Tag_On",
       "case": "curve_tag_classifies_on_curve_points",
-      "operation": "ftimage.outline_decompose",
+      "operation": "ftoutln.outline_decompose",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
         "assets": {
           "outline_fixture": {
             "kind": "ref",
-            "id": "outlines/on-curve-lines-and-mixed.json"
+            "id": "outlines/synthetic/on-curve-lines-multicontour.json"
           }
         },
         "params": {

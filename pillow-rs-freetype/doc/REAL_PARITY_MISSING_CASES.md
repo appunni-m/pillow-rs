@@ -7002,3 +7002,47 @@ Focused runtime:
   route placeholder reason.
 - `ftbdf.get_bdf_charset_id`: `1 / 1` runnable row passed, `4` pending; two
   unresolved BDF assets and two exact-error route placeholders.
+
+### Issue Set Current: ftimage outline-decompose callback aliases
+
+Problem:
+
+- Eight `ftimage.*` outline-decompose rows were still `pending-route` even
+  though they exercise the same public `FT_Outline_Decompose` route already
+  covered by `ftoutln.outline_decompose`.
+- The rows used the stale operation name `ftimage.outline_decompose` and stale
+  non-standard fixture IDs such as `outlines/conic-consecutive-and-closing.json`
+  instead of the maintained canonical fixtures under `outlines/synthetic/`.
+- The harness only loaded outline assets from `outline`/`synthetic_outline`
+  keys, so rows using the explicit `outline_fixture` key silently fell back to
+  the default square until the row became executable.
+
+Fix:
+
+- Normalize the eight non-error rows onto `ftoutln.outline_decompose`.
+- Point them to existing standard fixtures:
+  - `outlines/synthetic/conic-single-and-consecutive.json`
+  - `outlines/synthetic/cubic-paired-controls.json`
+  - `outlines/synthetic/on-curve-lines-multicontour.json`
+  - `outlines/synthetic/tags-with-touch-and-scan-bits.json`
+- Teach the runtime harness to consume `outline_fixture`.
+- Add exact C oracle aliases for the new public-input case IDs while preserving
+  the older canonical case behavior.
+- Use the public-input `(shift=1, delta=32)` matrix for these alias rows.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftoutln.outline_decompose
+```
+
+Result: `21 / 21` runnable rows passed, `2` pending. Route audit moved eight
+rows from `pending-route` to `real-parity`: `real-parity` `4223`,
+`pending-route` `84`.
+
+Remaining blocker:
+
+- The three `ftimage.FT_Outline_{Conic,Cubic,Line}To_Func.decompose_propagates_callback_error`
+  rows still use `callback_return_values` and need a dedicated exact-error
+  output matrix route. Do not promote them through the existing single-error
+  callback route or by accepting any error.
