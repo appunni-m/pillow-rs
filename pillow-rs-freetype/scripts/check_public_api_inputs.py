@@ -825,6 +825,11 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output",
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.non_cid_or_null_face_errors_and_clears_output",
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs",
+        "ftcache.FTC_CMapCache_Lookup.error_null_cache_returns_zero",
+        "ftcache.FTC_CMapCache_New.error_null_manager_or_output",
+        "ftcache.FTC_ImageCache_Lookup.error_null_aglyph",
+        "ftcache.FTC_ImageCache_Lookup.error_invalid_cache_type_face_or_glyph",
+        "ftcache.FTC_ImageCache_LookupScaler.error_null_scaler_or_aglyph",
         "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments",
         "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table",
         "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments",
@@ -1335,6 +1340,33 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs"
     ):
         return "FT_Get_CID_Registry_Ordering_Supplement non-CID/null-output errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.cmap_cache_lookup"
+        and row.case_id == "ftcache.FTC_CMapCache_Lookup.error_null_cache_returns_zero"
+    ):
+        return "FTC_CMapCache_Lookup null-cache zero result validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.cmap_cache_new"
+        and row.case_id == "ftcache.FTC_CMapCache_New.error_null_manager_or_output"
+    ):
+        return "FTC_CMapCache_New null-manager/output errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.image_cache_lookup"
+        and row.case_id == "ftcache.FTC_ImageCache_Lookup.error_null_aglyph"
+    ):
+        return "FTC_ImageCache_Lookup null-aglyph errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.image_cache_lookup"
+        and row.case_id
+        == "ftcache.FTC_ImageCache_Lookup.error_invalid_cache_type_face_or_glyph"
+    ):
+        return "FTC_ImageCache_Lookup invalid-cache/type/face/glyph errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.image_cache_lookup_scaler"
+        and row.case_id
+        == "ftcache.FTC_ImageCache_LookupScaler.error_null_scaler_or_aglyph"
+    ):
+        return "FTC_ImageCache_LookupScaler null-scaler/aglyph errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftgxval.truetype_gx_validate"
         and row.case_id == "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments"
