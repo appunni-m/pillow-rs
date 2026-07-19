@@ -7169,3 +7169,55 @@ make -C pillow-rs-freetype test-op OP=ftoutln.outline_decompose
 Result: `24 / 24` runnable rows passed, `2` pending. Route audit moved three
 more rows from `pending-route` to `real-parity`: `real-parity` `4226`,
 `pending-route` `81`.
+
+### Issue Set Current: raw `FT_Outline` invalid internal pointers
+
+Problem:
+
+- `ftimage.FT_Outline.invalid_outline_errors` declares a five-scenario invalid
+  outline matrix for `FT_Outline_Decompose`.
+- Three scenarios are ordinary malformed outline data:
+  `first_point_cubic`, `unpaired_cubic`, and
+  `last_contour_not_n_points_minus_one`.
+- Two scenarios are raw C-record states with nonzero counts and null internal
+  pointers: `null_points_nonzero_count` and
+  `null_contours_nonzero_count`.
+
+Finding:
+
+- Added the reusable fixture set
+  `outlines/synthetic/malformed-outline-cases.json` for the three non-null
+  malformed outline models.
+- An attempted exact route that called pinned FreeType 2.14.3
+  `FT_Outline_Decompose` on the raw null-internal-pointer records crashed the
+  oracle process with `SIGSEGV` before producing a public `FT_Error` matrix.
+- Therefore the current fixture expectation that those raw internal-pointer
+  cases return `FT_Err_Invalid_Outline` is not proven for
+  `FT_Outline_Decompose` by the pinned C oracle.
+- Rust/C-ABI/WASM wrappers can defensively reject the raw descriptors before
+  building a safe snapshot, but counting that as same-input C parity would be a
+  green placeholder while the C oracle crashes.
+
+Required fix:
+
+1. Keep `ftimage.FT_Outline.invalid_outline_errors` pending-route until the raw
+   null-pointer scenarios are reclassified or isolated behind an oracle-safe
+   public API that actually returns `FT_Err_Invalid_Outline`.
+2. If the fixture is wrong for `FT_Outline_Decompose`, update the fixture note
+   or split the row instead of deleting the test.
+3. Only promote the non-null malformed outline scenarios when they can be
+   compared as their own exact row, or after the raw pointer expectation is
+   corrected with pinned C evidence.
+
+Rejected verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_Outline.invalid_outline_errors
+```
+
+Observed failure during attempted promotion:
+
+```text
+runtime oracle comparison failed: exit=signal: 11 (SIGSEGV)
+runtime_parity: passed=0 failed=1 total=1
+```
