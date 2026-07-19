@@ -1763,6 +1763,7 @@ fn ft_new_memory_face_with_name_options(
         Ok(inner) => {
             let metrics = rust_size_metrics_to_abi(inner.size_metrics);
             let rust_size = inner.size;
+            let initial_slot = rust_ffi::FT_Empty_GlyphSlot(&inner);
             let mut face = Box::new(FT_FaceRec {
                 glyph: ptr::null_mut(),
                 size: Box::into_raw(Box::new(FT_SizeRec {
@@ -1780,6 +1781,11 @@ fn ft_new_memory_face_with_name_options(
             state.push_size_record(face.size);
             state.refresh_charmaps(face_ptr);
             face.internal = Box::into_raw(state).cast::<c_void>();
+            face.glyph = Box::into_raw(Box::new(rust_slot_to_abi(
+                initial_slot,
+                face_ptr,
+                rust_ffi::FT_LOAD_DEFAULT,
+            )));
             // SAFETY: `out` is a valid out pointer checked above.
             unsafe { *out.as_ptr() = Box::into_raw(face) };
             rust_ffi::FT_Err_Ok

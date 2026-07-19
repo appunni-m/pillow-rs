@@ -1,5 +1,43 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `FT_GLYPH_FORMAT_NONE` empty-slot route
+
+Status: implemented as real parity on 2026-07-20.
+
+Finding:
+
+- `ftimage.FT_GLYPH_FORMAT_NONE.reset_slot_uses_none` was blocked in
+  `pending-core` because new-face and failed-load glyph-slot state was not
+  exposed consistently through Rust FFI, thin C ABI, and WASM ABI.
+- Pinned C FreeType creates a live `face->glyph` slot when a face opens. Before
+  any successful glyph load, that public slot uses `FT_GLYPH_FORMAT_NONE` and
+  zero public metrics/advance/bitmap fields. A failed invalid glyph load does
+  not replace that slot.
+
+Implementation:
+
+- Added a pure-Rust empty glyph-slot constructor with `GlyphFormat::None` and
+  zero public fields.
+- Initialized C ABI and WASM face handles with that empty slot instead of a
+  missing slot.
+- Added a maintained `freetype.slot_format_probe` route that compares
+  `new_face_before_load` and `failed_load_invalid_glyph_index` rows through
+  pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Impact:
+
+- `ftimage.FT_GLYPH_FORMAT_NONE.reset_slot_uses_none` moved from
+  `pending-core` to `real-parity`.
+- Route audit count target after this batch: `real-parity=4466`,
+  `pending-core=6`, `pending-route=514`, `generic-fallback=0`.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_GLYPH_FORMAT_NONE
+```
+
 ### Issue Set Current: residual public-surface route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.
@@ -4828,8 +4866,8 @@ repo-visible buckets for handoff and subagent selection.
 
 | Subject | Operation | Case | Dependency blocking real route |
 |---|---|---|---|
-| `freetype.FT_Render_Glyph` | `render_glyph` | `error_unloaded_or_unsupported_slot_format.unrouted_slot_states` | Unloaded and unsupported synthetic glyph-slot states need explicit public runner support. Do not route this through C/WASM wrapper-only branches: `fontdone::ffi::FT_GlyphSlot` owns a private `api::GlyphSlot`, so the real fix needs a safe core/test-support constructor for unloaded and unsupported-format public slot states, then thin C ABI and WASM runners that only pass those states through. Focused verification target: `make -C pillow-rs-freetype test-case CASE=freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states`. |
 | `ftbitmap.FT_GlyphSlot_Own_Bitmap` | `glyphslot_own_bitmap` | allocation failure | Deterministic allocator fault injection must be maintained before this row can run as real parity. The existing C oracle and Rust/C/WASM runners deliberately reject `error_copy_allocation_failure` until a shared allocation-failure harness can force the bitmap deep-copy allocation to fail in all lanes without editing expected outputs. Focused verification target: `make -C pillow-rs-freetype test-case CASE=ftbitmap.FT_GlyphSlot_Own_Bitmap.error_copy_allocation_failure`. |
+| `freetype.FT_Render_Glyph` | `render_glyph` | `error_unloaded_or_unsupported_slot_format.unrouted_slot_states` | Unloaded render behavior still needs explicit public runner support for `FT_Render_Glyph` itself. The empty-slot state is now observable through `freetype.slot_format_probe`, but rendering an unloaded or synthetic unsupported-format slot must still compare exact C error and mutation behavior without routing through C/WASM wrapper-only branches. Focused verification target: `make -C pillow-rs-freetype test-case CASE=freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states`. |
 | `ftmm.FT_Set_Named_Instance` | `ftmm.set_named_instance` | `success_adobe_mm_resets_default` | Adobe MM named-instance reset requires real Adobe MM support. |
 | `ftmm.FT_Set_Named_Instance` | `ftmm.set_named_instance` | `output_changes_to_named_instance` | Named-instance glyph-output parity requires `gvar`/`HVAR` support. |
 | `ftmm.FT_Var_Named_Style` | `ftmm.set_named_instance` | `selected_instance_matches_descriptor` | Named-style coordinate parity requires `FT_MM_Var` support. |

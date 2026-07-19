@@ -1896,11 +1896,6 @@ def has_null_lifecycle_handle(row: ConcreteInput) -> bool:
 
 
 def pending_core_reason(row: ConcreteInput) -> str | None:
-    if row.case_id == "ftimage.FT_GLYPH_FORMAT_NONE.reset_slot_uses_none":
-        return (
-            "unloaded glyph slot lifecycle is not exposed by the Rust FFI, "
-            "C ABI, or WASM ABI wrappers"
-        )
     if (
         row.operation == "ftbitmap.glyphslot_own_bitmap"
         and row.case == "error_copy_allocation_failure"
@@ -2144,6 +2139,7 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftgxval.FT_VALIDATE_mort_INDEX.indexes_mort_output_slot": "FT_TrueTypeGX_Validate mort output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_morx.validates_morx_table_slot": "FT_TrueTypeGX_Validate morx table slot validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_morx_INDEX.indexes_morx_output_slot": "FT_TrueTypeGX_Validate morx output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftimage.FT_GLYPH_FORMAT_NONE.reset_slot_uses_none": "FT_GLYPH_FORMAT_NONE new-face and failed-load slot state validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftmodapi.FT_DEBUG_HOOK_TRUETYPE.debug_hook_index_import_contract": "FT_Set_Debug_Hook TrueType hook index contract validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftmodapi.FT_Set_Default_Properties.parses_supported_environment_property": "FT_Set_Default_Properties environment handling validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftpfr.FT_Get_PFR_Advance.pfr_glyph_advance_success": "PFR advance output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",

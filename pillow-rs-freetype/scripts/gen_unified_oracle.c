@@ -4404,6 +4404,39 @@ static int print_render_glyph_sequence(
     return 0;
 }
 
+static int print_slot_format_probe_rows(FT_Face face, const char* probes_arg) {
+    char* probes = (char*)malloc(strlen(probes_arg) + 1);
+    if (!probes) {
+        return 2;
+    }
+    memcpy(probes, probes_arg, strlen(probes_arg) + 1);
+
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    char* probe = strtok(probes, ",");
+    int row_index = 0;
+    while (probe) {
+        FT_Error status = 0;
+        if (streq(probe, "new_face_before_load")) {
+            status = 0;
+        } else if (streq(probe, "failed_load_invalid_glyph_index")) {
+            status = FT_Load_Glyph(face, (FT_UInt)(face->num_glyphs + 1), FT_LOAD_DEFAULT);
+        } else {
+            free(probes);
+            return 2;
+        }
+        if (row_index) printf(",");
+        printf("{\"probe\":\"%s\",\"status\":%d,\"slot\":{", probe, status);
+        print_slot_body(face->glyph, 0);
+        printf("}}");
+        row_index++;
+        probe = strtok(NULL, ",");
+    }
+    printf("]}}\n");
+    free(probes);
+    return 0;
+}
+
 static void print_bbox_named(const char* name, FT_BBox bbox);
 static void print_vector_named(const char* name, FT_Vector vector);
 static void print_metrics_named(const char* name, FT_Glyph_Metrics metrics);
@@ -12620,6 +12653,13 @@ static int emit_face_or_slot(int argc, char** argv) {
         free(data);
         return result ? 2 : 0;
     }
+    if (streq(command, "--slot-format-probe")) {
+        int result = print_slot_format_probe_rows(face, argv[7]);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return result ? 2 : 0;
+    }
 
     FT_UInt glyph_index = 0;
     FT_Int32 load_flags = 0;
@@ -14592,7 +14632,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 9 && (streq(argv[1], "--load-char") || streq(argv[1], "--load-glyph") || streq(argv[1], "--load-glyph-from-char") || streq(argv[1], "--inspect-glyph-metrics") || streq(argv[1], "--inspect-glyph-slot") || streq(argv[1], "--load-glyph-outline") || streq(argv[1], "--outline-get-bbox") || streq(argv[1], "--outline-get-cbox"))) {
         return emit_face_or_slot(argc, argv);
     }
-    if (argc == 8 && (streq(argv[1], "--glyphslot-slant") || streq(argv[1], "--glyphslot-oblique") || streq(argv[1], "--glyphslot-adjust-weight") || streq(argv[1], "--glyphslot-embolden"))) {
+    if (argc == 8 && (streq(argv[1], "--glyphslot-slant") || streq(argv[1], "--glyphslot-oblique") || streq(argv[1], "--glyphslot-adjust-weight") || streq(argv[1], "--glyphslot-embolden") || streq(argv[1], "--slot-format-probe"))) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 5 && streq(argv[1], "--glyphslot-null-noop")) {

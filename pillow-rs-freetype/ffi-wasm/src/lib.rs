@@ -780,6 +780,7 @@ fn make_wasm_face_state(face: rust_ffi::FT_Face) -> Box<WasmFaceState> {
     if active_size != 0 {
         size_metrics.insert(active_size, face.size_metrics);
     }
+    let initial_slot = rust_ffi::FT_Empty_GlyphSlot(&face);
     Box::new(WasmFaceState {
         face,
         active_size,
@@ -789,7 +790,7 @@ fn make_wasm_face_state(face: rust_ffi::FT_Face) -> Box<WasmFaceState> {
             vec![active_size]
         },
         size_metrics,
-        slot: None,
+        slot: Some(initial_slot),
         variant_list: Vec::new(),
     })
 }

@@ -677,9 +677,6 @@ fn build_dependent_runtime_reason(case: &InputCase) -> Option<&'static str> {
 
 fn unrouted_slot_state_runtime_reason(case: &InputCase) -> Option<&'static str> {
     match case.case_id.as_str() {
-        "ftimage.FT_GLYPH_FORMAT_NONE.reset_slot_uses_none" => {
-            Some("unloaded glyph slot lifecycle is not exposed by the Rust FFI or ABI wrappers")
-        }
         "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states" => {
             Some("unloaded and unsupported glyph-slot states need explicit public runner support")
         }
@@ -14908,6 +14905,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
             Ok(args)
         }
+        "freetype.slot_format_probe" => {
+            let mut args = vec!["--slot-format-probe".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(string_array_param(params, "probes")?.join(","));
+            Ok(args)
+        }
         "freetype.get_subglyph_info" => {
             if lifecycle_handle_param(params, "glyph_slot") == Some("null") {
                 return Ok(vec![
@@ -15754,6 +15758,10 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             let face = open_face(case)?;
             rust_inspect_glyph_slot(&face, case)
         }
+        "freetype.slot_format_probe" => {
+            let face = open_face(case)?;
+            rust_slot_format_probe(&face, &case.inputs.params)
+        }
         "ftbbox.outline_get_bbox" if case.inputs.params.get("probes").is_some() => {
             rust_outline_get_bbox_null_inputs(&case.inputs.params)
         }
@@ -16474,6 +16482,13 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output
         }
+        "freetype.slot_format_probe" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_slot_format_probe(face, &case.inputs.params);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
         "ftbbox.outline_get_bbox" if case.inputs.params.get("probes").is_some() => {
             c_outline_get_bbox_null_inputs(&case.inputs.params)
         }
@@ -17100,6 +17115,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_done_face(handle);
             output
         }
+        "freetype.slot_format_probe" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_slot_format_probe(handle, &case.inputs.params);
+            wasm_done_face(handle);
+            output
+        }
         "ftbbox.outline_get_bbox" if case.inputs.params.get("probes").is_some() => {
             wasm_outline_get_bbox_null_inputs(&case.inputs.params)
         }
@@ -17339,6 +17360,26 @@ fn rust_inspect_glyph_slot(face: &FT_Face, case: &InputCase) -> Result<RunOutput
     }
 }
 
+fn rust_slot_format_probe(face: &FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let mut slot = FT_Empty_GlyphSlot(face);
+    slot_format_probe_rows(params, |probe| match probe {
+        "new_face_before_load" => Ok((FT_Err_Ok, slot_json(&slot))),
+        "failed_load_invalid_glyph_index" => {
+            let invalid = FT_UInt::try_from(face.num_glyphs.saturating_add(1))
+                .map_err(|err| format!("num_glyphs invalid for FT_UInt: {err}"))?;
+            let err = match FT_Load_Glyph(face, invalid, FT_LOAD_DEFAULT) {
+                Ok(loaded) => {
+                    slot = loaded;
+                    FT_Err_Ok
+                }
+                Err(err) => err,
+            };
+            Ok((err, slot_json(&slot)))
+        }
+        other => Err(format!("unsupported slot format probe {other}")),
+    })
+}
+
 fn rust_load_glyph_for_inspection(
     face: &FT_Face,
     case: &InputCase,
@@ -17381,6 +17422,20 @@ fn c_inspect_glyph_slot(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOut
     }
 }
 
+fn c_slot_format_probe(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+    slot_format_probe_rows(params, |probe| match probe {
+        "new_face_before_load" => Ok((FT_Err_Ok, c_slot_json(face)?)),
+        "failed_load_invalid_glyph_index" => {
+            let invalid = FT_UInt::try_from(info.num_glyphs.saturating_add(1))
+                .map_err(|err| format!("num_glyphs invalid for FT_UInt: {err}"))?;
+            let err = c_abi::FT_Load_Glyph(face, invalid, FT_LOAD_DEFAULT);
+            Ok((err, c_slot_json(face)?))
+        }
+        other => Err(format!("unsupported slot format probe {other}")),
+    })
+}
+
 fn c_load_glyph_for_inspection(
     face: c_abi::FT_Face,
     case: &InputCase,
@@ -17419,6 +17474,37 @@ fn wasm_inspect_glyph_metrics(handle: usize, case: &InputCase) -> Result<RunOutp
 fn wasm_inspect_glyph_slot(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
     let err = wasm_load_glyph_for_inspection(handle, case, true)?;
     wasm_slot_output(handle, err)
+}
+
+fn wasm_slot_format_probe(handle: usize, params: &Value) -> Result<RunOutput, String> {
+    let info =
+        wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+    slot_format_probe_rows(params, |probe| match probe {
+        "new_face_before_load" => Ok((FT_Err_Ok, wasm_slot_json(handle)?)),
+        "failed_load_invalid_glyph_index" => {
+            let invalid = FT_UInt::try_from(info.num_glyphs.saturating_add(1))
+                .map_err(|err| format!("num_glyphs invalid for FT_UInt: {err}"))?;
+            let err = wasm_abi::fontdone_wasm_load_glyph(handle, invalid, FT_LOAD_DEFAULT);
+            Ok((err, wasm_slot_json(handle)?))
+        }
+        other => Err(format!("unsupported slot format probe {other}")),
+    })
+}
+
+fn slot_format_probe_rows(
+    params: &Value,
+    mut run_probe: impl FnMut(&str) -> Result<(FT_Error, Value), String>,
+) -> Result<RunOutput, String> {
+    let mut rows = Vec::new();
+    for probe in string_array_param(params, "probes")? {
+        let (status, slot) = run_probe(&probe)?;
+        rows.push(json!({
+            "probe": probe,
+            "status": status,
+            "slot": slot,
+        }));
+    }
+    Ok(ok(json!({ "rows": rows })))
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -32667,6 +32753,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             return "api_void";
         }
         "freetype.get_transform" => return "api_object",
+        "freetype.slot_format_probe" => return "api_object",
         "freetype.reference_face" => return "api_object",
         "freetype.ceil_fix"
         | "freetype.floor_fix"
