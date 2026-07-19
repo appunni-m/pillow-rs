@@ -4099,6 +4099,30 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     header_or_layout_reason = header_or_layout_compile_contract_reason(row)
     if header_or_layout_reason:
         return ("compile-contract", header_or_layout_reason)
+    lifecycle_null_reason = lifecycle_null_real_parity_reason(row)
+    if lifecycle_null_reason:
+        return ("real-parity", lifecycle_null_reason)
+    inspect_module_flags_real_reason = inspect_module_flags_real_parity_reason(row)
+    if inspect_module_flags_real_reason:
+        return ("real-parity", inspect_module_flags_real_reason)
+    get_module_real_reason = get_module_real_parity_reason(row)
+    if get_module_real_reason:
+        return ("real-parity", get_module_real_reason)
+    interpreter_version_property_real_reason = interpreter_version_property_real_parity_reason(row)
+    if interpreter_version_property_real_reason:
+        return ("real-parity", interpreter_version_property_real_reason)
+    future_batch_pending = future_batch_unresolved_asset_pending_reason(row)
+    if future_batch_pending:
+        return ("pending-route", future_batch_pending)
+    future_batch_real_reason = future_batch_real_parity_reason(row)
+    if future_batch_real_reason:
+        return ("real-parity", future_batch_real_reason)
+    focused_success_real_reason = focused_success_real_parity_reason(row)
+    if focused_success_real_reason:
+        return ("real-parity", focused_success_real_reason)
+    done_mm_var_real_reason = done_mm_var_real_parity_reason(row)
+    if done_mm_var_real_reason:
+        return ("real-parity", done_mm_var_real_reason)
     ftstroke_pending = ftstroke_stroker_pending_reason(row)
     if ftstroke_pending:
         return ("pending-route", ftstroke_pending)
