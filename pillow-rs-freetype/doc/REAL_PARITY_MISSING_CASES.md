@@ -2301,6 +2301,82 @@ Fix plan:
 
 Status: in progress.
 
+Probe result:
+
+```bash
+make -C pillow-rs-freetype test-ffi-compat
+make -C pillow-rs-freetype test-op OP=load_glyph
+```
+
+Temporarily enabling exact-error comparison for these 26 rows moved route audit
+from `pending-route` `71` to `45` and `real-parity` `4236` to `4262`, but the
+focused runtime lane correctly failed `26` rows.  The route promotion was not
+kept.
+
+Observed blockers:
+
+- `25` rows returned `Ok` from the pinned C oracle for the current maintained
+  fixture inputs even though the row expects an `FT_Err_*` load error.  These
+  fixture/oracle assumptions need repair before the rows can become exact
+  parity.
+- `fterrdef.FT_Err_Corrupted_Font_Header.autohint_zero_units_per_em_returns_error`
+  did produce a C error, but Rust returned error code `7` where pinned C
+  returned error code `8`.  The row name/expectation mentions
+  `FT_Err_Corrupted_Font_Header`, but pinned C did not return the generated
+  `0xB9` value in this probe; this needs exact fixture/oracle repair before
+  implementation work can be trusted.
+
+### Issue Set Current: open-face route family promotion probe
+
+Problem:
+
+- Open-face route rows had dedicated pinned-C, Rust FFI, C ABI, and WASM
+  runners, but several operations were still classified as `generic-fallback`
+  because they were missing from the maintained real-parity operation set.
+- The related surface covers `FT_Open_Args`, external stream ownership,
+  style-flag pair opening, parameter-tag opening, incremental nullness/default
+  behavior, and wasm/C wrapper handling of the same public open-face routes.
+
+Probe:
+
+- Temporarily promoting these operations to `REAL_PARITY_OPERATIONS` was tested:
+  `freetype.open_face_args`, `freetype.open_face_stream`,
+  `freetype.open_face_pair`, `freetype.open_face_with_params`,
+  `freetype.open_face_incremental`, `ftsystem.open_face_with_external_stream`,
+  `ftincrem.open_face_incremental_nullness`,
+  `ftincrem.open_face_parameter_cast`,
+  `ftincrem.open_face_with_incremental_parameter`, and
+  `ftincrem.open_face_without_incremental_parameter`.
+- The promotion was not kept because real comparison exposed route/input
+  mismatches instead of passing parity.
+
+Commands:
+
+```bash
+make -C pillow-rs-freetype test-op OP=freetype.open_face_with_params
+make -C pillow-rs-freetype test-op OP=freetype.open_face_args
+make -C pillow-rs-freetype test-op OP=freetype.open_face_stream
+make -C pillow-rs-freetype test-op OP=freetype.open_face_pair
+make -C pillow-rs-freetype test-op OP=ftsystem.open_face_with_external_stream
+make -C pillow-rs-freetype test-op OP=ftincrem.open_face_incremental_nullness
+make -C pillow-rs-freetype test-op OP=ftincrem.open_face_without_incremental_parameter
+make -C pillow-rs-freetype test-op OP=freetype.open_face_incremental
+```
+
+Generic fallback comparison reported `15` runnable rows passing, but exact route
+classification exposed real failures:
+
+- `freetype.open_face_stream` produced pinned C `FT_Err_Invalid_File_Format`
+  (`7`) for a row currently declared success.
+- Several `freetype.open_face_with_params`, `freetype.open_face_pair`,
+  `ftincrem.open_face_incremental_nullness`,
+  `ftincrem.open_face_without_incremental_parameter`, and
+  `freetype.open_face_incremental` rows failed value comparison once promoted.
+- Four related rows stayed pending due unresolved future assets.
+
+Status: not promoted.  The rows need fixture/oracle repair or implementation
+fixes before they can be moved out of `generic-fallback`.
+
 Verified progress:
 
 - Added real `outline_model` fixture
