@@ -46,13 +46,14 @@ Rejected future-asset probes:
   `ftlist.FT_List_Iterate.iterator_can_mutate_current_node`: exact promotion
   failed with C error `7`; keep fallback-classified until the list success
   runner calls the public list endpoint across C, Rust, C ABI, and WASM.
-- `freetype.FT_Init_FreeType.creates_library_handle` and
-  `freetype.FT_Init_FreeType.created_library_reports_version_and_modules`:
-  exact promotion failed with C error `7`; keep fallback-classified until the
-  success library-state route is implemented for all ABI lanes.
-
 Promoted rows:
 
+- `freetype.FT_Init_FreeType.creates_library_handle`
+- `freetype.FT_Init_FreeType.created_library_reports_version_and_modules`
+- `freetype.FT_Init_FreeType.error_null_output_pointer`: pinned C FreeType
+  2.14.3 returns `FT_Err_Invalid_Face_Handle` (`35`) for a null `alibrary`
+  output pointer; the C ABI wrapper validates this pointer before creating the
+  Rust library handle.
 - `ftotval.FT_OpenType_Validate.selected_tables_success`
 - `ftwinfnt.FT_Get_WinFNT_Header.winfnt_face_copies_header_success`
 - `ftwinfnt.FT_WinFNT_HeaderRec.copied_header_values_match_file`
@@ -66,6 +67,7 @@ make -C pillow-rs-freetype test-op OP=ftstroke.cubic_to
 make -C pillow-rs-freetype test-op OP=ftstroke.line_to
 make -C pillow-rs-freetype test-op OP=ftstroke.get_counts
 make -C pillow-rs-freetype test-op OP=ftwinfnt.get_winfnt_header
+make -C pillow-rs-freetype test-op OP=freetype.init_free_type
 ```
 
 Results:
@@ -74,6 +76,8 @@ Results:
   existing asset-pending rows left visible.
 - `ftwinfnt.get_winfnt_header`: `5 / 5` runnable rows passed, with two
   existing asset-pending rows left visible.
+- `freetype.init_free_type`: `3 / 3` runnable rows passed after adding the
+  explicit pinned-C, Rust FFI, C ABI, and WASM route.
 - Each selected stroker operation passed `4 / 4` only while fallback-classified;
   exact promotion failed with C error `7`, so those rows were not retained.
 - No fixture input, oracle output, expected value, threshold, or runtime logic

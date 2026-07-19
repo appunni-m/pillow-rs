@@ -12090,6 +12090,83 @@ static int emit_library_version(int argc, char** argv) {
     return 0;
 }
 
+static int emit_init_free_type(int argc, char** argv) {
+    const char* mode = argv[2];
+    if (streq(mode, "null")) {
+        FT_Error err = FT_Init_FreeType(NULL);
+        printf("{");
+        print_status(err);
+        printf(",\"output\":{\"library_created\":false}}\n");
+        return 0;
+    }
+
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    if (streq(mode, "identity")) {
+        printf("{");
+        print_status(0);
+        printf(
+            ",\"output\":{\"library\":{\"nullness\":\"%s\",\"identity_class\":\"fresh\"}}}\n",
+            library ? "non_null" : "null"
+        );
+        if (library) FT_Done_FreeType(library);
+        return 0;
+    }
+
+    if (streq(mode, "version-and-load")) {
+        if (argc < 6) {
+            if (library) FT_Done_FreeType(library);
+            fprintf(stderr, "version-and-load init command requires source and face_index\n");
+            return 2;
+        }
+        const char* source_kind = argv[3];
+        const char* source_value = argv[4];
+        FT_Long face_index = atol(argv[5]);
+        unsigned char* data = NULL;
+        long data_len = 0;
+        FT_Error new_face_error = FT_Err_Cannot_Open_Resource;
+        FT_Error load_glyph_error = FT_Err_Invalid_Face_Handle;
+        FT_Face face = NULL;
+        int major = 0;
+        int minor = 0;
+        int patch = 0;
+
+        FT_Library_Version(library, &major, &minor, &patch);
+        if (streq(source_kind, "file") && load_file(source_value, &data, &data_len) == 0) {
+            new_face_error = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+            if (!new_face_error) {
+                load_glyph_error = FT_Load_Glyph(face, 0, FT_LOAD_DEFAULT);
+            }
+        }
+
+        printf("{");
+        print_status(0);
+        printf(
+            ",\"output\":{\"version\":{\"major\":%d,\"minor\":%d,\"patch\":%d},\"face_load_probe\":{\"new_face_error\":%ld,\"load_glyph_error\":%ld}}}\n",
+            major,
+            minor,
+            patch,
+            (long)new_face_error,
+            (long)load_glyph_error
+        );
+        if (face) FT_Done_Face(face);
+        if (library) FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (library) FT_Done_FreeType(library);
+    fprintf(stderr, "unsupported init-free-type mode %s\n", mode);
+    return 2;
+}
+
 static int handle_error(int argc, char** argv) {
     if (argc < 3) {
         fprintf(stderr, "--error requires an error code argument\n");
@@ -12604,6 +12681,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--library-version")) {
         return emit_library_version(argc, argv);
+    }
+    if ((argc == 3 || argc == 6) && streq(argv[1], "--init-free-type")) {
+        return emit_init_free_type(argc, argv);
     }
     if (argc == 6 && streq(argv[1], "--face-flags")) {
         return emit_face_flags(argc, argv);
