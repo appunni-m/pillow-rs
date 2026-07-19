@@ -1,5 +1,62 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: compressed/external stream route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `d36af6e5f`: `real-parity=4465`,
+  `generic-fallback=33`, `pending-route=481`, `pending-core=7`.
+
+Finding:
+
+- The remaining compressed/external stream rows cover `FT_Stream_OpenBzip2`,
+  `FT_Gzip_Uncompress`, `FT_Stream_OpenGzip`, `FT_Stream_OpenLZW`,
+  `FT_Memory`, `FT_Stream`, and `FT_StreamRec`.
+- Those rows had stayed in `generic-fallback` with the reason
+  `no explicit maintained route classification`.
+- They are not same-input C/Rust/C-ABI/WASM parity. There are no maintained
+  stream subsystem routes that open matching compressed buffers and callback
+  streams, observe decompressed bytes, validate close ownership, inspect public
+  stream record fields, and compare custom allocator/callback events across all
+  ABI lanes.
+
+Classification change:
+
+- 4 `ftbzip2`, 2 `ftgzip`, 2 `ftlzw`, and 4 `ftsystem` rows moved from
+  `generic-fallback` to `pending-route`.
+- New route audit counts: `real-parity=4465`, `generic-fallback=21`,
+  `pending-route=493`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add maintained compressed-stream and external-stream routes instead of
+   per-row expected output shortcuts. They must run equivalent buffer/stream
+   operation sequences through pinned C FreeType, Rust FFI, thin C ABI, and
+   WASM ABI.
+2. Implement pure-Rust gzip, bzip2, and LZW stream behavior first: open/read
+   sequencing, decompressed byte output, source stream ownership, close behavior,
+   and build-policy classification for unavailable compressors.
+3. Implement pure-Rust external stream and memory callback behavior first:
+   stream record field population, read/close callback dispatch, custom
+   allocator event ordering, and ownership/lifetime semantics.
+4. Compare exact return codes, output bytes, public `FT_StreamRec` fields,
+   callback event sequences, nullness/ownership behavior, and ABI-visible
+   records for the same input.
+5. Promote rows only after focused `ftbzip2`, `ftgzip`, `ftlzw`, and `ftsystem`
+   runtime proves exact C oracle, Rust FFI, C ABI, and WASM ABI output.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftbzip2
+make -C pillow-rs-freetype test-case CASE=ftgzip
+make -C pillow-rs-freetype test-case CASE=ftlzw
+make -C pillow-rs-freetype test-case CASE=ftsystem
+```
+
 ### Issue Set Current: `ftwinfnt`/`otsvg` specialized public-record route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.

@@ -1533,6 +1533,33 @@ def specialized_record_subsystem_pending_reason(row: ConcreteInput) -> str | Non
     )
 
 
+def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for compressed and external stream behavior without a maintained route."""
+    stream_rows_without_maintained_route = {
+        "ftbzip2.FT_Stream_OpenBzip2.lifecycle_close_does_not_close_source",
+        "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy",
+        "ftbzip2.FT_Stream_OpenBzip2.success_open_valid_bzip2_stream",
+        "ftbzip2.FT_Stream_OpenBzip2.success_read_decompressed_bytes",
+        "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer",
+        "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream",
+        "ftlzw.FT_Stream_OpenLZW.import_contract",
+        "ftlzw.FT_Stream_OpenLZW.opens_valid_lzw_stream",
+        "ftsystem.FT_Memory.custom_allocator_runtime_events",
+        "ftsystem.FT_Stream.external_stream_runtime_contract",
+        "ftsystem.FT_StreamRec.callback_stream_field_contract",
+        "ftsystem.FT_StreamRec.memory_stream_field_contract",
+    }
+    if row.case_id not in stream_rows_without_maintained_route:
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "Compressed stream, external stream, stream record, and custom memory "
+        "callback behavior requires maintained stream subsystem routes; keeping "
+        "it generic would be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3886,6 +3913,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     specialized_record_pending = specialized_record_subsystem_pending_reason(row)
     if specialized_record_pending:
         return ("pending-route", specialized_record_pending)
+    stream_pending = stream_subsystem_pending_reason(row)
+    if stream_pending:
+        return ("pending-route", stream_pending)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",
