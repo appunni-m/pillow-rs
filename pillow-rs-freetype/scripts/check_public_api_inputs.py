@@ -2292,6 +2292,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_List_Iterate success traversal validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftlist.list_iterate"
+        and row.case_id == "ftlist.FT_List_Iterate.iterator_can_mutate_current_node"
+    ):
+        return "FT_List_Iterate callback mutation validates snapshot-next traversal through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftlist.list_iterate"
         and row.case_id == "ftlist.FT_List_Iterate.stops_on_callback_error"
     ):
         return "FT_List_Iterate callback-error propagation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"

@@ -507,25 +507,72 @@ typedef struct IterateTrace_ {
     int user_matches[8];
     int visited_count;
     void* expected_user;
+    const char* mode;
+    FT_List list;
+    FT_List side_list;
+    FT_Memory side_memory;
+    int side_finalized;
+    const char* event_visit[8];
+    const char* event_mutation[8];
+    const char* event_found[8];
+    const char* event_side_freed[8][8];
+    int event_side_freed_count[8];
+    int event_count;
 } IterateTrace;
 
 static IterateTrace* current_iterate_trace = NULL;
 
-static FT_Error iterate_record_callback(FT_ListNode node, void* user) {
-    IterateTrace* trace = current_iterate_trace;
-    const char* label = "foreign";
+static const char* iterate_node_token(IterateTrace* trace, FT_ListNode node) {
+    if (!node) return "null";
     for (int i = 0; i < 3; i++) {
         if (node == trace->nodes[i]) {
-            label = trace->node_labels[i];
-            break;
+            return trace->node_labels[i];
         }
     }
-    if (strcmp(label, "node_a") == 0) trace->visited[trace->visited_count] = "data_a";
-    else if (strcmp(label, "node_b") == 0) trace->visited[trace->visited_count] = "data_b";
-    else if (strcmp(label, "node_c") == 0) trace->visited[trace->visited_count] = "data_c";
-    else trace->visited[trace->visited_count] = label;
+    return "foreign";
+}
+
+static const char* iterate_data_token_for_node(IterateTrace* trace, FT_ListNode node) {
+    const char* label = iterate_node_token(trace, node);
+    if (strcmp(label, "node_a") == 0) return "data_a";
+    if (strcmp(label, "node_b") == 0) return "data_b";
+    if (strcmp(label, "node_c") == 0) return "data_c";
+    return label;
+}
+
+static FT_Error iterate_record_callback(FT_ListNode node, void* user) {
+    IterateTrace* trace = current_iterate_trace;
+    trace->visited[trace->visited_count] = iterate_data_token_for_node(trace, node);
     trace->user_matches[trace->visited_count] = user == trace->expected_user;
     trace->visited_count++;
+    return FT_Err_Ok;
+}
+
+static FT_Error iterate_mutation_callback(FT_ListNode node, void* user) {
+    IterateTrace* trace = current_iterate_trace;
+    (void)user;
+    const char* visit = iterate_data_token_for_node(trace, node);
+    trace->visited[trace->visited_count++] = visit;
+    int event = trace->event_count++;
+    trace->event_visit[event] = visit;
+    trace->event_mutation[event] = trace->mode;
+    trace->event_found[event] = NULL;
+    trace->event_side_freed_count[event] = 0;
+    if (strcmp(trace->mode, "remove_current") == 0) {
+        FT_List_Remove(trace->list, node);
+    } else if (strcmp(trace->mode, "move_current_to_head") == 0) {
+        FT_List_Up(trace->list, node);
+    } else if (strcmp(trace->mode, "find_current_data") == 0) {
+        trace->event_found[event] = iterate_node_token(trace, FT_List_Find(trace->list, node->data));
+    } else if (strcmp(trace->mode, "finalize_side_list") == 0 && !trace->side_finalized) {
+        FinalizeTrace* finalize_trace = (FinalizeTrace*)trace->side_memory->user;
+        FT_List_Finalize(trace->side_list, NULL, trace->side_memory, NULL);
+        trace->side_finalized = 1;
+        trace->event_side_freed_count[event] = finalize_trace->freed_count;
+        for (int i = 0; i < finalize_trace->freed_count; i++) {
+            trace->event_side_freed[event][i] = finalize_trace->freed[i];
+        }
+    }
     return FT_Err_Ok;
 }
 
@@ -541,6 +588,27 @@ static void iterate_print_visited(IterateTrace* trace) {
     for (int i = 0; i < trace->visited_count; i++) {
         if (i) printf(",");
         printf("\"%s\"", trace->visited[i]);
+    }
+    printf("]");
+}
+
+static void iterate_print_events(IterateTrace* trace) {
+    printf("[");
+    for (int i = 0; i < trace->event_count; i++) {
+        if (i) printf(",");
+        printf("{\"visit\":\"%s\",\"mutation\":\"%s\"", trace->event_visit[i], trace->event_mutation[i]);
+        if (trace->event_found[i]) {
+            printf(",\"found\":\"%s\"", trace->event_found[i]);
+        }
+        if (strcmp(trace->event_mutation[i], "finalize_side_list") == 0) {
+            printf(",\"side_freed\":[");
+            for (int j = 0; j < trace->event_side_freed_count[i]; j++) {
+                if (j) printf(",");
+                printf("\"%s\"", trace->event_side_freed[i][j]);
+            }
+            printf("]");
+        }
+        printf("}");
     }
     printf("]");
 }
@@ -887,6 +955,67 @@ static int emit_ft_list(const char* case_id) {
                                     i == 2 ? &node_b : NULL,
                                     i == 2 ? &node_c : NULL);
             printf("}");
+        }
+        printf("]}");
+    } else if (streq(case_id, "ftlist.FT_List_Iterate.iterator_can_mutate_current_node")) {
+        const char* modes[4] = {
+            "remove_current",
+            "move_current_to_head",
+            "find_current_data",
+            "finalize_side_list",
+        };
+        printf("{\"rows\":[");
+        for (int i = 0; i < 4; i++) {
+            node_a = (FT_ListNodeRec){ NULL, NULL, &data_a };
+            node_b = (FT_ListNodeRec){ NULL, NULL, &data_b };
+            node_c = (FT_ListNodeRec){ NULL, NULL, &data_c };
+            node_a.next = &node_b;
+            node_b.prev = &node_a;
+            node_b.next = &node_c;
+            node_c.prev = &node_b;
+            list = (FT_ListRec){ &node_a, &node_c };
+
+            unsigned char side_a_data = 4;
+            unsigned char side_b_data = 5;
+            FinalizeTrace finalize_trace = { 0 };
+            finalize_trace.data[0] = &side_a_data;
+            finalize_trace.data[1] = &side_b_data;
+            finalize_trace.node_labels[0] = "side_a";
+            finalize_trace.node_labels[1] = "side_b";
+            struct FT_MemoryRec_ side_memory = { &finalize_trace, oracle_alloc, finalize_record_free, oracle_realloc };
+            FT_ListNode side_a = finalize_new_node(&finalize_trace, 0);
+            FT_ListNode side_b = finalize_new_node(&finalize_trace, 1);
+            finalize_link_two(side_a, side_b);
+            FT_ListRec side_list = { side_a, side_b };
+
+            IterateTrace trace = { 0 };
+            trace.nodes[0] = &node_a;
+            trace.nodes[1] = &node_b;
+            trace.nodes[2] = &node_c;
+            trace.node_labels[0] = "node_a";
+            trace.node_labels[1] = "node_b";
+            trace.node_labels[2] = "node_c";
+            trace.mode = modes[i];
+            trace.list = &list;
+            trace.side_list = &side_list;
+            trace.side_memory = &side_memory;
+            current_iterate_trace = &trace;
+            FT_Error err = FT_List_Iterate(&list, iterate_mutation_callback, NULL);
+            current_iterate_trace = NULL;
+
+            if (i) printf(",");
+            printf("{\"mutation\":\"%s\",\"status\":%d,\"visited_data_tokens\":", modes[i], err);
+            iterate_print_visited(&trace);
+            printf(",\"callback_events\":");
+            iterate_print_events(&trace);
+            printf(",\"final_topology\":");
+            print_ft_list_topology3(&list, &data_a, &data_b, &data_c, &node_a, &node_b, &node_c);
+            printf("}");
+
+            if (!trace.side_finalized) {
+                free(side_a);
+                free(side_b);
+            }
         }
         printf("]}");
     } else if (streq(case_id, "ftlist.FT_List_Find.success_finds_first_matching_node") ||
