@@ -100,6 +100,71 @@ Rejected batch probes:
   not runnable because `input/fonts/bdf/charset-registry.bdf` is missing; keep
   under the documented BDF charset fixture gap.
 
+### Issue Set Current: stale existing-asset route batch
+
+Previous blocker:
+
+- Several rows still had `required_future_asset` route blockers even though
+  the referenced assets now exist in `tests/fixtures`.
+- `freetype.FT_Get_Char_Index.active_charmap_present_and_missing_codes`
+  needed the runner to honor `non_unicode_if_fixture_present`; otherwise it
+  opened the primary Unicode `font` and did not exercise the Apple Roman
+  fixture requested by the row.
+- `freetype.FT_New_Face.success_negative_face_index_probe` and
+  `freetype.FT_Open_Face.error_unknown_format_or_out_of_range_face` also
+  referenced existing assets that were still classified as future work.
+
+Promoted rows:
+
+- `freetype.FT_Get_Char_Index.active_charmap_present_and_missing_codes@cp0`
+- `freetype.FT_Get_Char_Index.active_charmap_present_and_missing_codes@cp65`
+- `freetype.FT_Get_Char_Index.active_charmap_present_and_missing_codes@cp90`
+- `freetype.FT_Get_Char_Index.active_charmap_present_and_missing_codes@cp1114111`
+- `freetype.FT_Get_Char_Index.active_charmap_present_and_missing_codes@cp4294967295`
+- `freetype.FT_Get_Char_Index.active_charmap_present_and_missing_codes@cp4294967296`
+- `freetype.FT_New_Face.success_negative_face_index_probe`
+- `freetype.FT_Open_Face.error_unknown_format_or_out_of_range_face`
+
+Verified progress:
+
+- Focused exact parity passed for all eight promoted concrete rows.
+- The `FT_Get_Char_Index` runner now opens `non_unicode_charmap_font` only when
+  the case explicitly requests `non_unicode_if_fixture_present`, so the C
+  oracle, Rust FFI, C ABI, and WASM ABI compare the same Apple Roman input.
+- Route audit moved eight rows from `pending-route` to `real-parity`.
+- Current route audit after the change: `real-parity` `4175`,
+  `pending-route` `63`, `generic-error-fallback` `39`,
+  `generic-fallback` `696`.
+
+Focused non-coverage results:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Get_Char_Index.active_charmap_present_and_missing_codes
+make -C pillow-rs-freetype test-case CASE=freetype.FT_New_Face.success_negative_face_index_probe
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Open_Face.error_unknown_format_or_out_of_range_face
+```
+
+Results:
+
+- `FT_Get_Char_Index.active_charmap_present_and_missing_codes`: `14 / 14`
+  focused runtime rows passed, `0` failed, `0` pending.
+- `FT_New_Face.success_negative_face_index_probe`: `1 / 1` focused runtime row
+  passed, `0` failed, `0` pending.
+- `FT_Open_Face.error_unknown_format_or_out_of_range_face`: `1 / 1` focused
+  runtime row passed, `0` failed, `0` pending.
+
+Rejected probes:
+
+- `freetype.FT_ENCODING_NONE.representative_runtime_observation`: exact probe
+  failed because pinned C returned error `23`; keep pending until the fixture
+  or route is corrected against C behavior.
+- `freetype.FT_HAS_HORIZONTAL.no_horizontal_metrics_control`: exact probe
+  failed because pinned C returned error `85`; keep pending.
+- `freetype.FT_IS_SCALABLE.bitmap_only_face_returns_false`: exact probe failed
+  because pinned C returned error `85`; keep pending.
+- `ftcache.FTC_SBitCache_Lookup.missing_bitmap_has_null_buffer`: exact probe
+  failed because pinned C returned error `6`; keep pending.
+
 ### Issue Set Current: batched public API exact error routes
 
 Previous blocker:
