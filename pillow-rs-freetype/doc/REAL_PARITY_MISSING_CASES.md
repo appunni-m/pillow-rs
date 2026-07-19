@@ -3690,12 +3690,53 @@ repo-visible buckets for handoff and subagent selection.
 
 | Subject | Operation | Case | Dependency blocking real route |
 |---|---|---|---|
-| `freetype.FT_Render_Glyph` | `render_glyph` | `error_unloaded_or_unsupported_slot_format.unrouted_slot_states` | Unloaded and unsupported synthetic glyph-slot states need explicit public runner support. |
-| `ftbitmap.FT_GlyphSlot_Own_Bitmap` | `glyphslot_own_bitmap` | allocation failure | Deterministic allocator fault injection must be maintained before this row can run as real parity. |
+| `freetype.FT_Render_Glyph` | `render_glyph` | `error_unloaded_or_unsupported_slot_format.unrouted_slot_states` | Unloaded and unsupported synthetic glyph-slot states need explicit public runner support. Do not route this through C/WASM wrapper-only branches: `fontdone::ffi::FT_GlyphSlot` owns a private `api::GlyphSlot`, so the real fix needs a safe core/test-support constructor for unloaded and unsupported-format public slot states, then thin C ABI and WASM runners that only pass those states through. Focused verification target: `make -C pillow-rs-freetype test-case CASE=freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states`. |
+| `ftbitmap.FT_GlyphSlot_Own_Bitmap` | `glyphslot_own_bitmap` | allocation failure | Deterministic allocator fault injection must be maintained before this row can run as real parity. The existing C oracle and Rust/C/WASM runners deliberately reject `error_copy_allocation_failure` until a shared allocation-failure harness can force the bitmap deep-copy allocation to fail in all lanes without editing expected outputs. Focused verification target: `make -C pillow-rs-freetype test-case CASE=ftbitmap.FT_GlyphSlot_Own_Bitmap.error_copy_allocation_failure`. |
 | `ftmm.FT_Set_Named_Instance` | `ftmm.set_named_instance` | `success_adobe_mm_resets_default` | Adobe MM named-instance reset requires real Adobe MM support. |
 | `ftmm.FT_Set_Named_Instance` | `ftmm.set_named_instance` | `output_changes_to_named_instance` | Named-instance glyph-output parity requires `gvar`/`HVAR` support. |
 | `ftmm.FT_Var_Named_Style` | `ftmm.set_named_instance` | `selected_instance_matches_descriptor` | Named-style coordinate parity requires `FT_MM_Var` support. |
 | `tttables.TT_VertHeader` | `sfnt.get_sfnt_table.record` | `sfnt_table_present_runtime.mvar_variation` | `MVAR` variation table behavior must be implemented before this SFNT table row can run. |
+
+### Issue Set Current: FT_List public route implementation plan
+
+Problem:
+
+- `FT_List_Add`, `FT_List_Finalize`, `FT_List_Find`,
+  `FT_List_Iterate`, `FT_List_Remove`, and `FT_List_Up` are present in the
+  public manifest and fixtures, but the current C ABI and WASM layers do not
+  export these list functions, and `fontdone::ffi` only defines the raw
+  `FT_ListRec`/`FT_ListNodeRec` layout types.
+- Temporary route promotions for `FT_List_Add`, `FT_List_Finalize`,
+  `FT_List_Find`, and the two `FT_List_Iterate` success rows failed strict
+  parity because the C oracle fell through to `FT_Err_Invalid_File_Format`
+  (`7`). The two existing `FT_List_Iterate` error rows only exercise generic
+  invalid-argument behavior; they are not enough to prove list traversal.
+
+Required fix:
+
+1. Add safe core-owned list operations in `fontdone::ffi` that take Rust
+   references or typed callback adapters. This is the behavior owner.
+2. Add thin C ABI exports that only validate raw pointers, adapt callbacks, and
+   call the core functions. Do not implement list topology logic in
+   `ffi-c/src/lib.rs`.
+3. Add equivalent WASM ABI test-support exports only if the public route audit
+   expects JS/WASM coverage for these rows; they must delegate to the same core
+   list operations.
+4. Extend the pinned C oracle dispatch in `scripts/gen_unified_oracle.c` for
+   the synthetic list fixtures instead of accepting the fallback `error 7`.
+5. Add the missing facade fixtures under `tests/fixtures/facades/list/` with
+   input topology/callback descriptions only. Do not embed oracle outputs.
+6. Promote rows case-by-case only after strict full parity passes; do not add
+   broad `ftlist.*` operation classification.
+
+Rejected shortcuts:
+
+- Do not mark `ftlist.*` operations as `REAL_PARITY_OPERATIONS` before real C
+  oracle dispatch exists.
+- Do not satisfy the success rows by accepting matching errors. Exact success
+  rows must return the same topology/callback output as pinned C.
+- Do not put list mutation behavior solely in C ABI or WASM wrappers; wrappers
+  must stay thin.
 
 ### Issue Set O: `FT_Set_Char_Size` null-face exact-error route
 
