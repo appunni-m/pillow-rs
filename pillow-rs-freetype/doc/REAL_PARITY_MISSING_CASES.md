@@ -1,5 +1,72 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: residual public-surface route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `da78c660c`: `real-parity=4465`,
+  `generic-fallback=11`, `pending-route=503`, `pending-core=7`.
+
+Finding:
+
+- The remaining generic rows cover `FT_Get_CID_Registry_Ordering_Supplement`,
+  `FT_Err_Missing_Property`, `FT_Err_Ok`, `FT_OpenType_Free`,
+  `FT_VALIDATE_BASE`, `FT_ORIENTATION_FILL_LEFT`, `FT_Get_PFR_Kerning`,
+  `FT_Get_PFR_Metrics`, and malformed `TT_MaxProfile` table behavior.
+- There are 11 concrete rows and 10 unique case IDs because
+  `ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success` appears in two concrete audit
+  rows.
+- Those rows had stayed in `generic-fallback` with the reason
+  `no explicit maintained route classification`.
+- They are not same-input C/Rust/C-ABI/WASM parity. There are no maintained
+  residual public-surface routes that drive matching CID, property/status,
+  OpenType validation/free, outline orientation, PFR metric/kerning, and
+  malformed table inputs across all ABI lanes.
+
+Classification change:
+
+- 1 `ftcid`, 3 `fterrdef`, 2 `ftotval`, 1 `ftoutln`, 3 `ftpfr`, and
+  1 `tttables` rows moved from `generic-fallback` to `pending-route`.
+- New route audit counts: `real-parity=4465`, `generic-fallback=0`,
+  `pending-route=514`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add maintained residual public-surface routes instead of per-row expected
+   output shortcuts. Each route must run the same input through pinned C
+   FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement pure-Rust CID registry/ordering/supplement behavior first,
+   including public header signature expectations and non-CID fallback paths.
+3. Implement pure-Rust property/status behavior first: known property success,
+   `FT_Err_Ok` lifecycle behavior, and success status without masking output
+   mismatches.
+4. Implement pure-Rust OpenType validation/free behavior first: absent table
+   null output, validated table ownership, and face-memory lifetime semantics.
+5. Implement pure-Rust outline orientation and PFR behavior first: reverse
+   orientation toggling, PFR metrics, and non-PFR kerning fallback semantics.
+6. Implement pure-Rust malformed TrueType table behavior first: `maxp` parse
+   errors must preserve the same public error source as C FreeType.
+7. Compare exact return codes, output records, nullness, ownership/free events,
+   orientation state, metric values, kerning values, and error classifications
+   for the same input.
+8. Promote rows only after focused `ftcid`, `fterrdef`, `ftotval`, `ftoutln`,
+   `ftpfr`, and `tttables` runtime proves exact C oracle, Rust FFI, C ABI, and
+   WASM ABI output.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftcid
+make -C pillow-rs-freetype test-case CASE=fterrdef
+make -C pillow-rs-freetype test-case CASE=ftotval
+make -C pillow-rs-freetype test-case CASE=ftoutln
+make -C pillow-rs-freetype test-case CASE=ftpfr
+make -C pillow-rs-freetype test-case CASE=tttables
+```
+
 ### Issue Set Current: callback/provider route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.
