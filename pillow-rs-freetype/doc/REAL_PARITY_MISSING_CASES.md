@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_Var_Blend_Coordinates` exact-error route
+Current verified result after `FT_Get_Var_Blend_Coordinates` invalid-face route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3830`
+  - `real-parity`: `3831`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `365`
+  - `generic-error-fallback`: `364`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3370,9 +3370,8 @@ Plan:
    observation.
 3. Classify the row as real parity only after focused same-input parity passes
    through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
-4. Keep
-   `ftmm.FT_Get_Var_Blend_Coordinates.error_non_variable_or_invalid_face`
-   outside this promotion until separately proven.
+4. Keep sibling invalid/non-variable-face scenarios outside this promotion
+   until separately proven.
 
 Verified progress:
 
@@ -3385,6 +3384,42 @@ Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Var_Blend_Coordinates.error_null_coords
+```
+
+### Issue Set CB: `FT_Get_Var_Blend_Coordinates` invalid/non-variable-face route
+
+Previous blocker:
+
+- `ftmm.FT_Get_Var_Blend_Coordinates.error_non_variable_or_invalid_face`
+  stayed in `generic-error-fallback`.
+- The fixture requires exact behavior from `freetype/src/base/ftmm.c:574-600`
+  and `freetype/src/base/ftmm.c:31-52`: null faces return
+  `FT_Err_Invalid_Face_Handle`, while static faces without a multiple-master
+  service return `FT_Err_Invalid_Argument`.
+- Both scenarios preserve the sentinel output coordinate buffer.
+
+Plan:
+
+1. Keep the fixture intact; it exercises the public
+   `FT_Get_Var_Blend_Coordinates` wrapper for a null face and a static
+   non-variable face.
+2. Require exact error comparison for scenario, return status, and preserved
+   coordinate output.
+3. Classify the row as real parity only after focused same-input parity passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused invalid/non-variable-face row passes exact comparison against
+  pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmm.FT_Get_Var_Blend_Coordinates.error_non_variable_or_invalid_face` as
+  `real-parity`.
+
+Verified command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Var_Blend_Coordinates.error_non_variable_or_invalid_face
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
