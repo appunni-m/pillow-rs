@@ -10,19 +10,19 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after second batched ftcache exact-error classification:
+Current verified result after final batched ftcache SBit exact classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `4038`
+  - `real-parity`: `4042`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `157`
+  - `generic-error-fallback`: `153`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1033,6 +1033,52 @@ make -C pillow-rs-freetype test-case CASE=<each listed case id>
 
 Result: nine focused exact rows passed. Route audit:
 `real-parity` `4038`, `generic-error-fallback` `157`.
+
+### Issue Set Current: final batched ftcache SBit exact routes
+
+Previous blocker:
+
+- Six SBit cache rows remained under `generic-error-fallback`.
+- Four rows passed exact comparison and can be promoted.
+- `ftcache.FTC_SBitCache_Lookup.rejects_null_sbit_output` and
+  `ftcache.FTC_SBitCache_Lookup.clears_outputs_before_lookup` remain
+  unpromoted: exact-error classification would require an error, but the pinned
+  C oracle returns `Ok`. Those rows need a value-contract fix/classification,
+  not a forced exact-error promotion.
+
+Fix plan:
+
+1. Promote only the concrete rows that pass focused exact comparison:
+   - `ftcache.FTC_SBitCache_LookupScaler.rejects_null_sbit_or_scaler`
+   - `ftcache.FTC_SBitCache_LookupScaler.clears_outputs_before_lookup`
+   - `ftcache.FTC_SBitCache_New.error_outputs_null_cache`
+   - `ftcache.FTC_SBitCache_New.invalid_arguments_match_c`
+2. Keep the two `ftcache.FTC_SBitCache_Lookup` rows visible as remaining
+   fallback until their `Ok` status and output-value contract are handled
+   correctly.
+3. Keep all fixture inputs, oracle outputs, and comparison rules unchanged.
+4. Verify exact status/output through Rust FFI, thin C ABI, and WASM ABI before
+   counting these rows as `real-parity`.
+
+Verified progress:
+
+- Focused generic-mode probes passed for all five candidate rows before
+  promotion.
+- Exact comparison after promotion passed for four rows.
+- `ftcache.FTC_SBitCache_Lookup.clears_outputs_before_lookup` was not promoted:
+  exact rerun reported `requires an exact C error, but the oracle returned ok`.
+- The previously fallback-classified rows now validate exact status/output
+  against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed for these rows.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=<each listed case id>
+```
+
+Result: four focused exact rows passed. Route audit:
+`real-parity` `4042`, `generic-error-fallback` `153`.
 
 ### Issue Set Current: `FT_Get_BDF_Property` missing-property exact-error route
 
