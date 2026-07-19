@@ -39,6 +39,19 @@ pub type FT_ListNode = *mut FontdoneWasmListNode;
 pub type FT_List = *mut FontdoneWasmList;
 pub type FT_List_Iterator =
     Option<unsafe extern "C" fn(node: FT_ListNode, user: FT_Pointer) -> FT_Error>;
+pub type FT_Memory = *mut FontdoneWasmMemory;
+pub type FT_Alloc_Func = Option<extern "C" fn(memory: FT_Memory, size: FT_Long) -> FT_Pointer>;
+pub type FT_Free_Func = Option<extern "C" fn(memory: FT_Memory, block: FT_Pointer)>;
+pub type FT_Realloc_Func = Option<
+    extern "C" fn(
+        memory: FT_Memory,
+        cur_size: FT_Long,
+        new_size: FT_Long,
+        block: FT_Pointer,
+    ) -> FT_Pointer,
+>;
+pub type FT_List_Destructor =
+    Option<extern "C" fn(memory: FT_Memory, data: FT_Pointer, user: FT_Pointer)>;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -60,6 +73,15 @@ pub struct FontdoneWasmListNode {
 pub struct FontdoneWasmList {
     pub head: FT_ListNode,
     pub tail: FT_ListNode,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmMemory {
+    pub user: FT_Pointer,
+    pub alloc: FT_Alloc_Func,
+    pub free: FT_Free_Func,
+    pub realloc: FT_Realloc_Func,
 }
 
 #[repr(C)]
@@ -368,6 +390,34 @@ pub extern "C" fn fontdone_wasm_list_iterate(
         cur = next;
     }
     error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_list_finalize(
+    list: FT_List,
+    destroy: FT_List_Destructor,
+    memory: FT_Memory,
+    user: FT_Pointer,
+) {
+    let (Some(list_ref), Some(memory_ref)) = (unsafe { list.as_mut() }, unsafe { memory.as_ref() })
+    else {
+        return;
+    };
+
+    let mut cur = list_ref.head;
+    while let Some(cur_ref) = unsafe { cur.as_ref() } {
+        let next = cur_ref.next;
+        if let Some(destroy) = destroy {
+            destroy(memory, cur_ref.data, user);
+        }
+        if let Some(free) = memory_ref.free {
+            free(memory, cur.cast());
+        }
+        cur = next;
+    }
+
+    list_ref.head = ptr::null_mut();
+    list_ref.tail = ptr::null_mut();
 }
 
 #[unsafe(no_mangle)]

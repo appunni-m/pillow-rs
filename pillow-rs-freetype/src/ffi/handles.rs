@@ -22,9 +22,10 @@ use super::convert::{
 use super::types::{
     FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bool, FT_Byte, FT_Bytes, FT_Char, FT_CharMap,
     FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F26Dot6, FT_Fixed,
-    FT_Glyph_Format, FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_ListNode, FT_ListNodeRec,
-    FT_ListRec, FT_Long, FT_MM_Var, FT_Matrix, FT_Orientation, FT_OutlineSnapshot, FT_Pointer,
-    FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
+    FT_Glyph_Format, FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_List_Destructor,
+    FT_ListNode, FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Var, FT_Matrix, FT_Memory,
+    FT_MemoryRec, FT_Orientation, FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode,
+    FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
     FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_TrueTypeEngineType,
     FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector, FT_WinFNT_HeaderRec, TT_Header,
     TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
@@ -2723,6 +2724,36 @@ pub fn FT_List_Up(
         head.prev = node as *mut FT_ListNodeRec;
     }
     list.head = node as *mut FT_ListNodeRec;
+}
+
+pub fn FT_List_Finalize_Node(
+    node: &FT_ListNodeRec,
+    destroy: FT_List_Destructor,
+    memory: &FT_MemoryRec,
+    memory_ptr: FT_Memory,
+    user: FT_Pointer,
+) {
+    // FreeType `src/base/ftutil.c` snapshots `next`, calls the optional
+    // destructor with `(memory, node->data, user)`, then frees the node itself.
+    // Safe core receives each node explicitly; raw list traversal stays in the
+    // thin ABI wrappers.
+    if let Some(destroy) = destroy {
+        destroy(memory_ptr, node.data, user);
+    }
+    if let Some(free) = memory.free {
+        free(
+            memory_ptr,
+            (node as *const FT_ListNodeRec).cast_mut().cast(),
+        );
+    }
+}
+
+pub fn FT_List_Finalize_Clear(list: Option<&mut FT_ListRec>, memory: Option<&FT_MemoryRec>) {
+    let (Some(list), Some(_memory)) = (list, memory) else {
+        return;
+    };
+    list.head = std::ptr::null_mut();
+    list.tail = std::ptr::null_mut();
 }
 
 pub fn FT_List_Iterate_Next(node: &FT_ListNodeRec) -> FT_ListNode {

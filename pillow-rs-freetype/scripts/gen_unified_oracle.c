@@ -391,6 +391,89 @@ static void print_ft_list_topology4(FT_List list,
     printf("],\"data_tokens\":[\"data_0\",\"data_a\",\"data_b\",\"data_c\"]}");
 }
 
+static const char* finalize_data_token(void* data, void* data_a, void* data_b, void* data_c) {
+    if (data == data_a) return "data_a";
+    if (data == data_b) return "data_b";
+    if (data == data_c) return "data_c";
+    return data ? "foreign" : "null";
+}
+
+typedef struct FinalizeTrace_ {
+    FT_ListNode nodes[3];
+    void* data[3];
+    const char* node_labels[3];
+    const char* data_labels[3];
+    const char* freed[8];
+    const char* destroyed_data[8];
+    const char* destroyed_memory[8];
+    const char* destroyed_user[8];
+    int freed_count;
+    int destroyed_count;
+    FT_Memory expected_memory;
+    void* expected_user;
+} FinalizeTrace;
+
+static void finalize_record_free(FT_Memory memory, void* block) {
+    FinalizeTrace* trace = (FinalizeTrace*)memory->user;
+    const char* label = "foreign";
+    for (int i = 0; i < 3; i++) {
+        if (block == trace->nodes[i]) {
+            label = trace->node_labels[i];
+            break;
+        }
+    }
+    trace->freed[trace->freed_count++] = label;
+    free(block);
+}
+
+static void finalize_record_destructor(FT_Memory memory, void* data, void* user) {
+    FinalizeTrace* trace = (FinalizeTrace*)memory->user;
+    trace->destroyed_memory[trace->destroyed_count] = memory == trace->expected_memory ? "memory" : "foreign";
+    trace->destroyed_user[trace->destroyed_count] = user == trace->expected_user ? "user" : "foreign";
+    trace->destroyed_data[trace->destroyed_count] =
+        finalize_data_token(data, trace->data[0], trace->data[1], trace->data[2]);
+    trace->destroyed_count++;
+}
+
+static FT_ListNode finalize_new_node(FinalizeTrace* trace, int index) {
+    FT_ListNode node = (FT_ListNode)calloc(1, sizeof(FT_ListNodeRec));
+    node->data = trace->data[index];
+    trace->nodes[index] = node;
+    return node;
+}
+
+static void finalize_link_two(FT_ListNode a, FT_ListNode b) {
+    a->next = b;
+    b->prev = a;
+}
+
+static void finalize_print_string_array(const char* key, const char** values, int count) {
+    printf("\"%s\":[", key);
+    for (int i = 0; i < count; i++) {
+        if (i) printf(",");
+        printf("\"%s\"", values[i]);
+    }
+    printf("]");
+}
+
+static void finalize_print_trace(FinalizeTrace* trace, FT_List list) {
+    printf("{");
+    finalize_print_string_array("freed_nodes", trace->freed, trace->freed_count);
+    printf(",\"destructor_call_count\":%d", trace->destroyed_count);
+    printf(",\"destructor_calls\":[");
+    for (int i = 0; i < trace->destroyed_count; i++) {
+        if (i) printf(",");
+        printf("{\"memory\":\"%s\",\"data\":\"%s\",\"user\":\"%s\"}",
+               trace->destroyed_memory[i],
+               trace->destroyed_data[i],
+               trace->destroyed_user[i]);
+    }
+    printf("],\"data_freed_by_destructor\":%s", trace->destroyed_count ? "true" : "false");
+    printf(",\"list_after\":{\"head\":\"%s\",\"tail\":\"%s\"}}",
+           list && list->head ? "non_null" : "null",
+           list && list->tail ? "non_null" : "null");
+}
+
 static void print_ft_list_find_result(FT_List list,
                                       void* data,
                                       FT_ListNode node_a,
@@ -628,6 +711,73 @@ static int emit_ft_list(const char* case_id) {
         printf(",");
         print_ft_list_node("node_b", &node_b, &data_a, &data_b, &data_c, &node_a, &node_b, NULL);
         printf("]}]}");
+    } else if (streq(case_id, "ftlist.FT_List_Finalize.success_destroys_all_nodes")) {
+        FinalizeTrace trace = { 0 };
+        trace.data[0] = &data_a;
+        trace.data[1] = &data_b;
+        trace.data[2] = &data_c;
+        trace.node_labels[0] = "node_a";
+        trace.node_labels[1] = "node_b";
+        trace.node_labels[2] = "node_c";
+        struct FT_MemoryRec_ memory = { &trace, oracle_alloc, finalize_record_free, oracle_realloc };
+        trace.expected_memory = &memory;
+        trace.expected_user = (void*)0x7111;
+        FT_ListNode a = finalize_new_node(&trace, 0);
+        FT_ListNode b = finalize_new_node(&trace, 1);
+        FT_ListNode c = finalize_new_node(&trace, 2);
+        finalize_link_two(a, b);
+        finalize_link_two(b, c);
+        list = (FT_ListRec){ a, c };
+        FT_List_Finalize(&list, finalize_record_destructor, &memory, trace.expected_user);
+        finalize_print_trace(&trace, &list);
+    } else if (streq(case_id, "ftlist.FT_List_Finalize.success_null_destructor_frees_nodes_only")) {
+        FinalizeTrace trace = { 0 };
+        trace.data[0] = &data_a;
+        trace.data[1] = &data_b;
+        trace.node_labels[0] = "node_a";
+        trace.node_labels[1] = "node_b";
+        struct FT_MemoryRec_ memory = { &trace, oracle_alloc, finalize_record_free, oracle_realloc };
+        trace.expected_memory = &memory;
+        trace.expected_user = (void*)0x7111;
+        FT_ListNode a = finalize_new_node(&trace, 0);
+        FT_ListNode b = finalize_new_node(&trace, 1);
+        finalize_link_two(a, b);
+        list = (FT_ListRec){ a, b };
+        FT_List_Finalize(&list, NULL, &memory, trace.expected_user);
+        finalize_print_trace(&trace, &list);
+    } else if (streq(case_id, "ftlist.FT_List_Finalize.null_list_or_memory_noop")) {
+        FinalizeTrace trace = { 0 };
+        trace.data[0] = &data_a;
+        trace.data[1] = &data_b;
+        trace.node_labels[0] = "node_a";
+        trace.node_labels[1] = "node_b";
+        struct FT_MemoryRec_ memory = { &trace, oracle_alloc, finalize_record_free, oracle_realloc };
+        trace.expected_memory = &memory;
+        trace.expected_user = (void*)0x7111;
+        FT_ListNode a = finalize_new_node(&trace, 0);
+        FT_ListNode b = finalize_new_node(&trace, 1);
+        finalize_link_two(a, b);
+        list = (FT_ListRec){ a, b };
+        FT_List_Finalize(NULL, finalize_record_destructor, &memory, trace.expected_user);
+        int null_list_unchanged = list.head == a && list.tail == b && trace.freed_count == 0 && trace.destroyed_count == 0;
+        FT_List_Finalize(&list, finalize_record_destructor, NULL, trace.expected_user);
+        int null_memory_unchanged = list.head == a && list.tail == b && trace.freed_count == 0 && trace.destroyed_count == 0;
+        printf("{\"rows\":[{\"variant\":\"null_list\",\"list_unchanged\":%s,\"destructor_call_count\":0,\"freed_node_count\":0},{\"variant\":\"null_memory\",\"list_unchanged\":%s,\"destructor_call_count\":0,\"freed_node_count\":0}]}",
+               null_list_unchanged ? "true" : "false",
+               null_memory_unchanged ? "true" : "false");
+        free(b);
+        free(a);
+    } else if (streq(case_id, "ftlist.FT_List_Finalize.destructor_receives_memory_data_user")) {
+        FinalizeTrace trace = { 0 };
+        trace.data[0] = &data_a;
+        trace.node_labels[0] = "node_a";
+        struct FT_MemoryRec_ memory = { &trace, oracle_alloc, finalize_record_free, oracle_realloc };
+        trace.expected_memory = &memory;
+        trace.expected_user = (void*)0x7111;
+        FT_ListNode a = finalize_new_node(&trace, 0);
+        list = (FT_ListRec){ a, a };
+        FT_List_Finalize(&list, finalize_record_destructor, &memory, trace.expected_user);
+        finalize_print_trace(&trace, &list);
     } else if (streq(case_id, "ftlist.FT_List_Find.success_finds_first_matching_node") ||
                streq(case_id, "ftlist.FT_List_Find.missing_data_returns_null") ||
                streq(case_id, "ftlist.FT_List_Find.null_list_returns_null") ||

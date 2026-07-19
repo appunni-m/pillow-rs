@@ -44,6 +44,7 @@ typedef struct FT_GlyphSlotRec_* FT_GlyphSlot;
 typedef struct FT_CharMapRec_* FT_CharMap;
 typedef struct FT_ListNodeRec_* FT_ListNode;
 typedef struct FT_ListRec_* FT_List;
+typedef struct FT_MemoryRec_* FT_Memory;
 
 typedef struct FT_ListNodeRec_ {
   FT_ListNode prev;
@@ -57,6 +58,17 @@ typedef struct FT_ListRec_ {
 } FT_ListRec;
 
 typedef FT_Error (*FT_List_Iterator)(FT_ListNode node, void* user);
+typedef void* (*FT_Alloc_Func)(FT_Memory memory, long size);
+typedef void (*FT_Free_Func)(FT_Memory memory, void* block);
+typedef void* (*FT_Realloc_Func)(FT_Memory memory, long cur_size, long new_size, void* block);
+typedef void (*FT_List_Destructor)(FT_Memory memory, void* data, void* user);
+
+typedef struct FT_MemoryRec_ {
+  void* user;
+  FT_Alloc_Func alloc;
+  FT_Free_Func free;
+  FT_Realloc_Func realloc;
+} FT_MemoryRec;
 
 typedef struct FT_Vector_ {
   FT_Pos x;
@@ -406,6 +418,7 @@ FT_ListNode FT_List_Find(FT_List list, void* data);
 void FT_List_Remove(FT_List list, FT_ListNode node);
 void FT_List_Up(FT_List list, FT_ListNode node);
 FT_Error FT_List_Iterate(FT_List list, FT_List_Iterator iterator, void* user);
+void FT_List_Finalize(FT_List list, FT_List_Destructor destroy, FT_Memory memory, void* user);
 FT_Error FT_Get_Glyph_Name(FT_Face face, FT_UInt glyph_index, void* buffer, FT_UInt buffer_max);
 FT_UInt FT_Get_Name_Index(FT_Face face, const char* glyph_name);
 const char* FT_Get_Postscript_Name(FT_Face face);

@@ -21,6 +21,7 @@
 #![allow(missing_docs)]
 #![allow(unused_crate_dependencies)]
 
+use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{CString, c_void};
@@ -2640,6 +2641,7 @@ impl BackendComparisonWorker {
             "ftlist.list_add" => c_ftlist_add(case),
             "ftlist.list_insert" => c_ftlist_insert(case),
             "ftlist.list_find" => c_ftlist_find(case),
+            "ftlist.list_finalize" => c_ftlist_finalize(case),
             "ftlist.list_remove" => c_ftlist_remove(case),
             "ftlist.list_up" => c_ftlist_up(case),
             "size_metrics" => {
@@ -2911,6 +2913,7 @@ impl BackendComparisonWorker {
             "ftlist.list_add" => wasm_ftlist_add(case),
             "ftlist.list_insert" => wasm_ftlist_insert(case),
             "ftlist.list_find" => wasm_ftlist_find(case),
+            "ftlist.list_finalize" => wasm_ftlist_finalize(case),
             "ftlist.list_remove" => wasm_ftlist_remove(case),
             "ftlist.list_up" => wasm_ftlist_up(case),
             "size_metrics" => {
@@ -3586,6 +3589,289 @@ fn rust_ftlist_insert(case: &InputCase) -> Result<RunOutput, String> {
             ]})))
         }
         other => Err(format!("unsupported rust FT_List_Insert case {other}")),
+    }
+}
+
+#[derive(Default)]
+struct ListFinalizeTrace {
+    node_ptrs: Vec<(*mut c_void, &'static str)>,
+    data_ptrs: Vec<(FT_Pointer, &'static str)>,
+    freed_nodes: Vec<&'static str>,
+    destructor_calls: Vec<ListFinalizeDestructorCall>,
+    expected_memory: *mut c_void,
+    expected_user: FT_Pointer,
+}
+
+struct ListFinalizeDestructorCall {
+    memory: &'static str,
+    data: &'static str,
+    user: &'static str,
+}
+
+impl ListFinalizeTrace {
+    fn node_token(&self, ptr_value: *mut c_void) -> &'static str {
+        self.node_ptrs
+            .iter()
+            .find_map(|(ptr, label)| (*ptr == ptr_value).then_some(*label))
+            .unwrap_or(if ptr_value.is_null() {
+                "null"
+            } else {
+                "foreign"
+            })
+    }
+
+    fn data_token(&self, ptr_value: FT_Pointer) -> &'static str {
+        self.data_ptrs
+            .iter()
+            .find_map(|(ptr, label)| (*ptr == ptr_value).then_some(*label))
+            .unwrap_or(if ptr_value.is_null() {
+                "null"
+            } else {
+                "foreign"
+            })
+    }
+
+    fn record_free(&mut self, block: FT_Pointer) {
+        let label = self.node_token(block);
+        self.freed_nodes.push(label);
+    }
+
+    fn record_destructor(&mut self, memory: *mut c_void, data: FT_Pointer, user: FT_Pointer) {
+        let memory = if memory == self.expected_memory {
+            "memory"
+        } else {
+            "foreign"
+        };
+        let user = if user == self.expected_user {
+            "user"
+        } else {
+            "foreign"
+        };
+        let data = self.data_token(data);
+        self.destructor_calls
+            .push(ListFinalizeDestructorCall { memory, data, user });
+    }
+
+    fn output(&self, head: *mut c_void, tail: *mut c_void) -> Value {
+        json!({
+            "freed_nodes": self.freed_nodes,
+            "destructor_call_count": self.destructor_calls.len(),
+            "destructor_calls": self.destructor_calls.iter().map(|call| {
+                json!({"memory": call.memory, "data": call.data, "user": call.user})
+            }).collect::<Vec<_>>(),
+            "data_freed_by_destructor": !self.destructor_calls.is_empty(),
+            "list_after": {
+                "head": if head.is_null() { "null" } else { "non_null" },
+                "tail": if tail.is_null() { "null" } else { "non_null" }
+            }
+        })
+    }
+}
+
+extern "C" fn rust_finalize_free(_memory: FT_Memory, block: FT_Pointer) {
+    LIST_FINALIZE_TRACE.with_borrow_mut(|trace| trace.record_free(block));
+}
+
+extern "C" fn rust_finalize_destructor(memory: FT_Memory, data: FT_Pointer, user: FT_Pointer) {
+    LIST_FINALIZE_TRACE.with_borrow_mut(|trace| trace.record_destructor(memory.cast(), data, user));
+}
+
+extern "C" fn c_finalize_free(_memory: c_abi::FT_Memory, block: FT_Pointer) {
+    LIST_FINALIZE_TRACE.with_borrow_mut(|trace| trace.record_free(block));
+}
+
+extern "C" fn c_finalize_destructor(memory: c_abi::FT_Memory, data: FT_Pointer, user: FT_Pointer) {
+    LIST_FINALIZE_TRACE.with_borrow_mut(|trace| trace.record_destructor(memory.cast(), data, user));
+}
+
+extern "C" fn wasm_finalize_free(_memory: wasm_abi::FT_Memory, block: FT_Pointer) {
+    LIST_FINALIZE_TRACE.with_borrow_mut(|trace| trace.record_free(block));
+}
+
+extern "C" fn wasm_finalize_destructor(
+    memory: wasm_abi::FT_Memory,
+    data: FT_Pointer,
+    user: FT_Pointer,
+) {
+    LIST_FINALIZE_TRACE.with_borrow_mut(|trace| trace.record_destructor(memory.cast(), data, user));
+}
+
+thread_local! {
+    static LIST_FINALIZE_TRACE: RefCell<ListFinalizeTrace> = RefCell::new(ListFinalizeTrace::default());
+}
+
+fn reset_finalize_trace(
+    node_ptrs: Vec<(*mut c_void, &'static str)>,
+    data_ptrs: Vec<(FT_Pointer, &'static str)>,
+    expected_memory: *mut c_void,
+    expected_user: FT_Pointer,
+) {
+    LIST_FINALIZE_TRACE.with_borrow_mut(|trace| {
+        *trace = ListFinalizeTrace {
+            node_ptrs,
+            data_ptrs,
+            expected_memory,
+            expected_user,
+            ..Default::default()
+        };
+    });
+}
+
+fn finalize_trace_output(head: *mut c_void, tail: *mut c_void) -> Value {
+    LIST_FINALIZE_TRACE.with_borrow(|trace| trace.output(head, tail))
+}
+
+fn finalize_data_ptrs(
+    data_a: FT_Pointer,
+    data_b: FT_Pointer,
+    data_c: FT_Pointer,
+) -> Vec<(FT_Pointer, &'static str)> {
+    vec![(data_a, "data_a"), (data_b, "data_b"), (data_c, "data_c")]
+}
+
+fn rust_ftlist_finalize(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Finalize.success_destroys_all_nodes" => {
+            let (mut data_a, mut data_b, mut data_c, mut user) = (1_u8, 2_u8, 3_u8, 4_u8);
+            let (data_a, data_b, data_c) = (
+                (&mut data_a as *mut u8).cast::<c_void>(),
+                (&mut data_b as *mut u8).cast::<c_void>(),
+                (&mut data_c as *mut u8).cast::<c_void>(),
+            );
+            let user = (&mut user as *mut u8).cast::<c_void>();
+            let (mut node_a, mut node_b, mut node_c) =
+                rust_three_list_nodes(data_a, data_b, data_c);
+            rust_link_three(&mut node_a, &mut node_b, &mut node_c);
+            let mut list = FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_c,
+            };
+            let memory_ptr: FT_Memory = ptr::null_mut();
+            let memory = FT_MemoryRec {
+                user: ptr::null_mut(),
+                alloc: None,
+                free: Some(rust_finalize_free),
+                realloc: None,
+            };
+            reset_finalize_trace(
+                vec![
+                    ((&mut node_a as *mut FT_ListNodeRec).cast(), "node_a"),
+                    ((&mut node_b as *mut FT_ListNodeRec).cast(), "node_b"),
+                    ((&mut node_c as *mut FT_ListNodeRec).cast(), "node_c"),
+                ],
+                finalize_data_ptrs(data_a, data_b, data_c),
+                memory_ptr.cast(),
+                user,
+            );
+            for node in [&node_a, &node_b, &node_c] {
+                FT_List_Finalize_Node(
+                    node,
+                    Some(rust_finalize_destructor),
+                    &memory,
+                    memory_ptr,
+                    user,
+                );
+            }
+            FT_List_Finalize_Clear(Some(&mut list), Some(&memory));
+            Ok(ok(finalize_trace_output(
+                list.head.cast(),
+                list.tail.cast(),
+            )))
+        }
+        "ftlist.FT_List_Finalize.success_null_destructor_frees_nodes_only" => {
+            let (mut data_a, mut data_b, mut data_c, mut user) = (1_u8, 2_u8, 3_u8, 4_u8);
+            let (data_a, data_b, data_c) = (
+                (&mut data_a as *mut u8).cast::<c_void>(),
+                (&mut data_b as *mut u8).cast::<c_void>(),
+                (&mut data_c as *mut u8).cast::<c_void>(),
+            );
+            let user = (&mut user as *mut u8).cast::<c_void>();
+            let (mut node_a, mut node_b, _) = rust_two_list_nodes(data_a, data_b);
+            rust_link_two(&mut node_a, &mut node_b);
+            let mut list = FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_b,
+            };
+            let memory_ptr: FT_Memory = ptr::null_mut();
+            let memory = FT_MemoryRec {
+                user: ptr::null_mut(),
+                alloc: None,
+                free: Some(rust_finalize_free),
+                realloc: None,
+            };
+            reset_finalize_trace(
+                vec![
+                    ((&mut node_a as *mut FT_ListNodeRec).cast(), "node_a"),
+                    ((&mut node_b as *mut FT_ListNodeRec).cast(), "node_b"),
+                ],
+                finalize_data_ptrs(data_a, data_b, data_c),
+                memory_ptr.cast(),
+                user,
+            );
+            for node in [&node_a, &node_b] {
+                FT_List_Finalize_Node(node, None, &memory, memory_ptr, user);
+            }
+            FT_List_Finalize_Clear(Some(&mut list), Some(&memory));
+            Ok(ok(finalize_trace_output(
+                list.head.cast(),
+                list.tail.cast(),
+            )))
+        }
+        "ftlist.FT_List_Finalize.null_list_or_memory_noop" => {
+            let mut list = FT_ListRec {
+                head: 1usize as FT_ListNode,
+                tail: 2usize as FT_ListNode,
+            };
+            let memory = FT_MemoryRec::default();
+            FT_List_Finalize_Clear(None, Some(&memory));
+            let row1 = json!({"variant": "null_list", "list_unchanged": list.head == 1usize as FT_ListNode && list.tail == 2usize as FT_ListNode, "destructor_call_count": 0, "freed_node_count": 0});
+            FT_List_Finalize_Clear(Some(&mut list), None);
+            let row2 = json!({"variant": "null_memory", "list_unchanged": list.head == 1usize as FT_ListNode && list.tail == 2usize as FT_ListNode, "destructor_call_count": 0, "freed_node_count": 0});
+            Ok(ok(json!({"rows": [row1, row2]})))
+        }
+        "ftlist.FT_List_Finalize.destructor_receives_memory_data_user" => {
+            let (mut data_a, mut data_b, mut data_c, mut user) = (1_u8, 2_u8, 3_u8, 4_u8);
+            let (data_a, data_b, data_c) = (
+                (&mut data_a as *mut u8).cast::<c_void>(),
+                (&mut data_b as *mut u8).cast::<c_void>(),
+                (&mut data_c as *mut u8).cast::<c_void>(),
+            );
+            let user = (&mut user as *mut u8).cast::<c_void>();
+            let mut node_a = FT_ListNodeRec {
+                data: data_a,
+                ..Default::default()
+            };
+            let mut list = FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_a,
+            };
+            let memory_ptr: FT_Memory = ptr::null_mut();
+            let memory = FT_MemoryRec {
+                user: ptr::null_mut(),
+                alloc: None,
+                free: Some(rust_finalize_free),
+                realloc: None,
+            };
+            reset_finalize_trace(
+                vec![((&mut node_a as *mut FT_ListNodeRec).cast(), "node_a")],
+                finalize_data_ptrs(data_a, data_b, data_c),
+                memory_ptr.cast(),
+                user,
+            );
+            FT_List_Finalize_Node(
+                &node_a,
+                Some(rust_finalize_destructor),
+                &memory,
+                memory_ptr,
+                user,
+            );
+            FT_List_Finalize_Clear(Some(&mut list), Some(&memory));
+            Ok(ok(finalize_trace_output(
+                list.head.cast(),
+                list.tail.cast(),
+            )))
+        }
+        other => Err(format!("unsupported rust FT_List_Finalize case {other}")),
     }
 }
 
@@ -4501,6 +4787,139 @@ fn c_ftlist_insert(case: &InputCase) -> Result<RunOutput, String> {
     }
 }
 
+fn c_ftlist_finalize(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Finalize.success_destroys_all_nodes" => {
+            let (mut data_a, mut data_b, mut data_c, mut user) = (1_u8, 2_u8, 3_u8, 4_u8);
+            let (data_a, data_b, data_c) = (
+                (&mut data_a as *mut u8).cast::<c_void>(),
+                (&mut data_b as *mut u8).cast::<c_void>(),
+                (&mut data_c as *mut u8).cast::<c_void>(),
+            );
+            let user = (&mut user as *mut u8).cast::<c_void>();
+            let (mut node_a, mut node_b, mut node_c) = c_three_list_nodes(data_a, data_b, data_c);
+            c_link_three(&mut node_a, &mut node_b, &mut node_c);
+            let mut list = c_abi::FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_c,
+            };
+            let mut memory = c_abi::FT_MemoryRec {
+                user: ptr::null_mut(),
+                alloc: None,
+                free: Some(c_finalize_free),
+                realloc: None,
+            };
+            reset_finalize_trace(
+                vec![
+                    ((&mut node_a as *mut c_abi::FT_ListNodeRec).cast(), "node_a"),
+                    ((&mut node_b as *mut c_abi::FT_ListNodeRec).cast(), "node_b"),
+                    ((&mut node_c as *mut c_abi::FT_ListNodeRec).cast(), "node_c"),
+                ],
+                finalize_data_ptrs(data_a, data_b, data_c),
+                (&mut memory as c_abi::FT_Memory).cast(),
+                user,
+            );
+            c_abi::FT_List_Finalize(&mut list, Some(c_finalize_destructor), &mut memory, user);
+            Ok(ok(finalize_trace_output(
+                list.head.cast(),
+                list.tail.cast(),
+            )))
+        }
+        "ftlist.FT_List_Finalize.success_null_destructor_frees_nodes_only" => {
+            let (mut data_a, mut data_b, mut data_c, mut user) = (1_u8, 2_u8, 3_u8, 4_u8);
+            let (data_a, data_b, data_c) = (
+                (&mut data_a as *mut u8).cast::<c_void>(),
+                (&mut data_b as *mut u8).cast::<c_void>(),
+                (&mut data_c as *mut u8).cast::<c_void>(),
+            );
+            let user = (&mut user as *mut u8).cast::<c_void>();
+            let (mut node_a, mut node_b) = c_two_list_nodes(data_a, data_b);
+            c_link_two(&mut node_a, &mut node_b);
+            let mut list = c_abi::FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_b,
+            };
+            let mut memory = c_abi::FT_MemoryRec {
+                user: ptr::null_mut(),
+                alloc: None,
+                free: Some(c_finalize_free),
+                realloc: None,
+            };
+            reset_finalize_trace(
+                vec![
+                    ((&mut node_a as *mut c_abi::FT_ListNodeRec).cast(), "node_a"),
+                    ((&mut node_b as *mut c_abi::FT_ListNodeRec).cast(), "node_b"),
+                ],
+                finalize_data_ptrs(data_a, data_b, data_c),
+                (&mut memory as c_abi::FT_Memory).cast(),
+                user,
+            );
+            c_abi::FT_List_Finalize(&mut list, None, &mut memory, user);
+            Ok(ok(finalize_trace_output(
+                list.head.cast(),
+                list.tail.cast(),
+            )))
+        }
+        "ftlist.FT_List_Finalize.null_list_or_memory_noop" => {
+            let mut list = c_abi::FT_ListRec {
+                head: 1usize as c_abi::FT_ListNode,
+                tail: 2usize as c_abi::FT_ListNode,
+            };
+            let mut memory = c_abi::FT_MemoryRec::default();
+            c_abi::FT_List_Finalize(
+                ptr::null_mut(),
+                Some(c_finalize_destructor),
+                &mut memory,
+                ptr::null_mut(),
+            );
+            let row1 = json!({"variant": "null_list", "list_unchanged": list.head == 1usize as c_abi::FT_ListNode && list.tail == 2usize as c_abi::FT_ListNode, "destructor_call_count": 0, "freed_node_count": 0});
+            c_abi::FT_List_Finalize(
+                &mut list,
+                Some(c_finalize_destructor),
+                ptr::null_mut(),
+                ptr::null_mut(),
+            );
+            let row2 = json!({"variant": "null_memory", "list_unchanged": list.head == 1usize as c_abi::FT_ListNode && list.tail == 2usize as c_abi::FT_ListNode, "destructor_call_count": 0, "freed_node_count": 0});
+            Ok(ok(json!({"rows": [row1, row2]})))
+        }
+        "ftlist.FT_List_Finalize.destructor_receives_memory_data_user" => {
+            let (mut data_a, mut data_b, mut data_c, mut user) = (1_u8, 2_u8, 3_u8, 4_u8);
+            let (data_a, data_b, data_c) = (
+                (&mut data_a as *mut u8).cast::<c_void>(),
+                (&mut data_b as *mut u8).cast::<c_void>(),
+                (&mut data_c as *mut u8).cast::<c_void>(),
+            );
+            let user = (&mut user as *mut u8).cast::<c_void>();
+            let mut node_a = c_abi::FT_ListNodeRec {
+                data: data_a,
+                ..Default::default()
+            };
+            let mut list = c_abi::FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_a,
+            };
+            let mut memory = c_abi::FT_MemoryRec {
+                user: ptr::null_mut(),
+                alloc: None,
+                free: Some(c_finalize_free),
+                realloc: None,
+            };
+            reset_finalize_trace(
+                vec![((&mut node_a as *mut c_abi::FT_ListNodeRec).cast(), "node_a")],
+                finalize_data_ptrs(data_a, data_b, data_c),
+                (&mut memory as c_abi::FT_Memory).cast(),
+                user,
+            );
+            c_abi::FT_List_Finalize(&mut list, Some(c_finalize_destructor), &mut memory, user);
+            Ok(ok(finalize_trace_output(
+                list.head.cast(),
+                list.tail.cast(),
+            )))
+        }
+        other => Err(format!("unsupported c FT_List_Finalize case {other}")),
+    }
+}
+
 fn c_ftlist_find(case: &InputCase) -> Result<RunOutput, String> {
     let mut missing = 1_u8;
     let mut other = 2_u8;
@@ -5132,6 +5551,168 @@ fn wasm_ftlist_insert(case: &InputCase) -> Result<RunOutput, String> {
             ]})))
         }
         other => Err(format!("unsupported wasm FT_List_Insert case {other}")),
+    }
+}
+
+fn wasm_ftlist_finalize(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Finalize.success_destroys_all_nodes" => {
+            let (mut data_a, mut data_b, mut data_c, mut user) = (1_u8, 2_u8, 3_u8, 4_u8);
+            let (data_a, data_b, data_c) = (
+                (&mut data_a as *mut u8).cast::<c_void>(),
+                (&mut data_b as *mut u8).cast::<c_void>(),
+                (&mut data_c as *mut u8).cast::<c_void>(),
+            );
+            let user = (&mut user as *mut u8).cast::<c_void>();
+            let (mut node_a, mut node_b, mut node_c) =
+                wasm_three_list_nodes(data_a, data_b, data_c);
+            wasm_link_three(&mut node_a, &mut node_b, &mut node_c);
+            let mut list = wasm_abi::FontdoneWasmList {
+                head: &mut node_a,
+                tail: &mut node_c,
+            };
+            let mut memory = wasm_abi::FontdoneWasmMemory {
+                user: ptr::null_mut(),
+                alloc: None,
+                free: Some(wasm_finalize_free),
+                realloc: None,
+            };
+            reset_finalize_trace(
+                vec![
+                    (
+                        (&mut node_a as *mut wasm_abi::FontdoneWasmListNode).cast(),
+                        "node_a",
+                    ),
+                    (
+                        (&mut node_b as *mut wasm_abi::FontdoneWasmListNode).cast(),
+                        "node_b",
+                    ),
+                    (
+                        (&mut node_c as *mut wasm_abi::FontdoneWasmListNode).cast(),
+                        "node_c",
+                    ),
+                ],
+                finalize_data_ptrs(data_a, data_b, data_c),
+                (&mut memory as wasm_abi::FT_Memory).cast(),
+                user,
+            );
+            wasm_abi::fontdone_wasm_list_finalize(
+                &mut list,
+                Some(wasm_finalize_destructor),
+                &mut memory,
+                user,
+            );
+            Ok(ok(finalize_trace_output(
+                list.head.cast(),
+                list.tail.cast(),
+            )))
+        }
+        "ftlist.FT_List_Finalize.success_null_destructor_frees_nodes_only" => {
+            let (mut data_a, mut data_b, mut data_c, mut user) = (1_u8, 2_u8, 3_u8, 4_u8);
+            let (data_a, data_b, data_c) = (
+                (&mut data_a as *mut u8).cast::<c_void>(),
+                (&mut data_b as *mut u8).cast::<c_void>(),
+                (&mut data_c as *mut u8).cast::<c_void>(),
+            );
+            let user = (&mut user as *mut u8).cast::<c_void>();
+            let (mut node_a, mut node_b) = wasm_two_list_nodes(data_a, data_b);
+            wasm_link_two(&mut node_a, &mut node_b);
+            let mut list = wasm_abi::FontdoneWasmList {
+                head: &mut node_a,
+                tail: &mut node_b,
+            };
+            let mut memory = wasm_abi::FontdoneWasmMemory {
+                user: ptr::null_mut(),
+                alloc: None,
+                free: Some(wasm_finalize_free),
+                realloc: None,
+            };
+            reset_finalize_trace(
+                vec![
+                    (
+                        (&mut node_a as *mut wasm_abi::FontdoneWasmListNode).cast(),
+                        "node_a",
+                    ),
+                    (
+                        (&mut node_b as *mut wasm_abi::FontdoneWasmListNode).cast(),
+                        "node_b",
+                    ),
+                ],
+                finalize_data_ptrs(data_a, data_b, data_c),
+                (&mut memory as wasm_abi::FT_Memory).cast(),
+                user,
+            );
+            wasm_abi::fontdone_wasm_list_finalize(&mut list, None, &mut memory, user);
+            Ok(ok(finalize_trace_output(
+                list.head.cast(),
+                list.tail.cast(),
+            )))
+        }
+        "ftlist.FT_List_Finalize.null_list_or_memory_noop" => {
+            let mut list = wasm_abi::FontdoneWasmList {
+                head: 1usize as wasm_abi::FT_ListNode,
+                tail: 2usize as wasm_abi::FT_ListNode,
+            };
+            let mut memory = wasm_abi::FontdoneWasmMemory::default();
+            wasm_abi::fontdone_wasm_list_finalize(
+                ptr::null_mut(),
+                Some(wasm_finalize_destructor),
+                &mut memory,
+                ptr::null_mut(),
+            );
+            let row1 = json!({"variant": "null_list", "list_unchanged": list.head == 1usize as wasm_abi::FT_ListNode && list.tail == 2usize as wasm_abi::FT_ListNode, "destructor_call_count": 0, "freed_node_count": 0});
+            wasm_abi::fontdone_wasm_list_finalize(
+                &mut list,
+                Some(wasm_finalize_destructor),
+                ptr::null_mut(),
+                ptr::null_mut(),
+            );
+            let row2 = json!({"variant": "null_memory", "list_unchanged": list.head == 1usize as wasm_abi::FT_ListNode && list.tail == 2usize as wasm_abi::FT_ListNode, "destructor_call_count": 0, "freed_node_count": 0});
+            Ok(ok(json!({"rows": [row1, row2]})))
+        }
+        "ftlist.FT_List_Finalize.destructor_receives_memory_data_user" => {
+            let (mut data_a, mut data_b, mut data_c, mut user) = (1_u8, 2_u8, 3_u8, 4_u8);
+            let (data_a, data_b, data_c) = (
+                (&mut data_a as *mut u8).cast::<c_void>(),
+                (&mut data_b as *mut u8).cast::<c_void>(),
+                (&mut data_c as *mut u8).cast::<c_void>(),
+            );
+            let user = (&mut user as *mut u8).cast::<c_void>();
+            let mut node_a = wasm_abi::FontdoneWasmListNode {
+                data: data_a,
+                ..Default::default()
+            };
+            let mut list = wasm_abi::FontdoneWasmList {
+                head: &mut node_a,
+                tail: &mut node_a,
+            };
+            let mut memory = wasm_abi::FontdoneWasmMemory {
+                user: ptr::null_mut(),
+                alloc: None,
+                free: Some(wasm_finalize_free),
+                realloc: None,
+            };
+            reset_finalize_trace(
+                vec![(
+                    (&mut node_a as *mut wasm_abi::FontdoneWasmListNode).cast(),
+                    "node_a",
+                )],
+                finalize_data_ptrs(data_a, data_b, data_c),
+                (&mut memory as wasm_abi::FT_Memory).cast(),
+                user,
+            );
+            wasm_abi::fontdone_wasm_list_finalize(
+                &mut list,
+                Some(wasm_finalize_destructor),
+                &mut memory,
+                user,
+            );
+            Ok(ok(finalize_trace_output(
+                list.head.cast(),
+                list.tail.cast(),
+            )))
+        }
+        other => Err(format!("unsupported wasm FT_List_Finalize case {other}")),
     }
 }
 
@@ -12165,7 +12746,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--bitmap-done".to_string(),
             string_param(params, "scenario")?.to_string(),
         ]),
-        "ftlist.list_add" | "ftlist.list_insert" | "ftlist.list_find" | "ftlist.list_remove"
+        "ftlist.list_add"
+        | "ftlist.list_insert"
+        | "ftlist.list_find"
+        | "ftlist.list_finalize"
+        | "ftlist.list_remove"
         | "ftlist.list_up" => Ok(vec!["--ft-list".to_string(), case.case_id.clone()]),
         "ftbitmap.bitmap_embolden" => Ok(vec![
             "--bitmap-embolden".to_string(),
@@ -13774,6 +14359,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlist.list_add" => rust_ftlist_add(case),
         "ftlist.list_insert" => rust_ftlist_insert(case),
         "ftlist.list_find" => rust_ftlist_find(case),
+        "ftlist.list_finalize" => rust_ftlist_finalize(case),
         "ftlist.list_remove" => rust_ftlist_remove(case),
         "ftlist.list_up" => rust_ftlist_up(case),
         operation if operation.starts_with("freetype.face_macro") => {
