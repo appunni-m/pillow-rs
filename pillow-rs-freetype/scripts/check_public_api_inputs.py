@@ -845,6 +845,16 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel",
         "fterrdef.FT_Err_Raster_Overflow.raster_buffer_or_cell_overflow",
         "ftimage.FT_RASTER_FLAG_AA.mono_rejects_aa",
+        "ftstroke.FT_Stroker_BeginSubPath.invalid_arguments",
+        "ftstroke.FT_Stroker_ConicTo.invalid_arguments",
+        "ftstroke.FT_Stroker_CubicTo.invalid_arguments",
+        "ftstroke.FT_Stroker_EndSubPath.invalid_stroker",
+        "ftstroke.FT_Stroker_GetBorderCounts.invalid_stroker_or_border",
+        "ftstroke.FT_Stroker_GetCounts.invalid_stroker",
+        "ftstroke.FT_Glyph_Stroke.invalid_glyph_arguments",
+        "ftstroke.FT_Glyph_Stroke.failure_sets_output_null_when_preserving_original",
+        "ftstroke.FT_Glyph_StrokeBorder.invalid_glyph_arguments",
+        "ftstroke.FT_Stroker_LineTo.invalid_arguments",
         "tttables.FT_Load_Sfnt_Table.missing_table_or_invalid_face_error",
         "tttables.FT_Sfnt_Table_Info.invalid_index_or_arguments",
     }
@@ -1305,6 +1315,58 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs"
     ):
         return "FT_Get_CID_Registry_Ordering_Supplement non-CID/null-output errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.begin_subpath"
+        and row.case_id == "ftstroke.FT_Stroker_BeginSubPath.invalid_arguments"
+    ):
+        return "FT_Stroker_BeginSubPath invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.conic_to"
+        and row.case_id == "ftstroke.FT_Stroker_ConicTo.invalid_arguments"
+    ):
+        return "FT_Stroker_ConicTo invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.cubic_to"
+        and row.case_id == "ftstroke.FT_Stroker_CubicTo.invalid_arguments"
+    ):
+        return "FT_Stroker_CubicTo invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.end_subpath"
+        and row.case_id == "ftstroke.FT_Stroker_EndSubPath.invalid_stroker"
+    ):
+        return "FT_Stroker_EndSubPath invalid-stroker errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.get_border_counts"
+        and row.case_id
+        == "ftstroke.FT_Stroker_GetBorderCounts.invalid_stroker_or_border"
+    ):
+        return "FT_Stroker_GetBorderCounts invalid-stroker/border errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.get_counts"
+        and row.case_id == "ftstroke.FT_Stroker_GetCounts.invalid_stroker"
+    ):
+        return "FT_Stroker_GetCounts invalid-stroker errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.glyph_stroke"
+        and row.case_id == "ftstroke.FT_Glyph_Stroke.invalid_glyph_arguments"
+    ):
+        return "FT_Glyph_Stroke invalid-glyph errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.glyph_stroke"
+        and row.case_id
+        == "ftstroke.FT_Glyph_Stroke.failure_sets_output_null_when_preserving_original"
+    ):
+        return "FT_Glyph_Stroke failure output-null policy validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.glyph_stroke_border"
+        and row.case_id == "ftstroke.FT_Glyph_StrokeBorder.invalid_glyph_arguments"
+    ):
+        return "FT_Glyph_StrokeBorder invalid-glyph errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.line_to"
+        and row.case_id == "ftstroke.FT_Stroker_LineTo.invalid_arguments"
+    ):
+        return "FT_Stroker_LineTo invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftpfr.get_pfr_advance"
         and row.case_id == "ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument"
