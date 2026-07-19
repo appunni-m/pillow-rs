@@ -3690,7 +3690,61 @@ fn rust_ftlist_add(case: &InputCase) -> Result<RunOutput, String> {
     }
 }
 
+fn ensure_ft_list_topology_facade(case: &InputCase) -> Result<(), String> {
+    let asset = case
+        .inputs
+        .assets
+        .get("list_facade")
+        .ok_or_else(|| format!("{} missing list_facade asset", case.case_id))?;
+    let path = asset_file_path(asset)
+        .ok_or_else(|| format!("{} list_facade asset is unresolved", case.case_id))?;
+    let facade_path = fixture_dir().join(path);
+    let text = fs::read_to_string(&facade_path).map_err(|err| {
+        format!(
+            "{} failed to read list topology facade {}: {err}",
+            case.case_id,
+            facade_path.display()
+        )
+    })?;
+    let value: Value = serde_json::from_str(&text).map_err(|err| {
+        format!(
+            "{} failed to parse list topology facade {}: {err}",
+            case.case_id,
+            facade_path.display()
+        )
+    })?;
+    if value.get("version").and_then(Value::as_u64) != Some(1) {
+        return Err(format!(
+            "{} list topology facade must declare version 1",
+            case.case_id
+        ));
+    }
+    if value.get("subject").and_then(Value::as_str) != Some("ftlist-topology-facade") {
+        return Err(format!(
+            "{} list topology facade has unexpected subject",
+            case.case_id
+        ));
+    }
+    let Some(cases) = value.get("cases").and_then(Value::as_array) else {
+        return Err(format!(
+            "{} list topology facade must contain cases",
+            case.case_id
+        ));
+    };
+    if !cases
+        .iter()
+        .any(|entry| entry.get("case_id").and_then(Value::as_str) == Some(case.case_id.as_str()))
+    {
+        return Err(format!(
+            "{} is not described by list topology facade {}",
+            case.case_id, path
+        ));
+    }
+    Ok(())
+}
+
 fn rust_ftlist_insert(case: &InputCase) -> Result<RunOutput, String> {
+    ensure_ft_list_topology_facade(case)?;
     match case.case_id.as_str() {
         "ftlist.FT_List_Insert.insert_empty_list" => {
             let (mut data_0, mut data_a, mut data_b, mut data_c) = (0_u8, 1_u8, 2_u8, 3_u8);
@@ -4633,6 +4687,7 @@ fn rust_ftlist_find(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn rust_ftlist_remove(case: &InputCase) -> Result<RunOutput, String> {
+    ensure_ft_list_topology_facade(case)?;
     match case.case_id.as_str() {
         "ftlist.FT_List_Remove.remove_head_middle_tail" => {
             let mut rows = Vec::new();
@@ -4744,6 +4799,7 @@ fn rust_ftlist_remove(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn rust_ftlist_up(case: &InputCase) -> Result<RunOutput, String> {
+    ensure_ft_list_topology_facade(case)?;
     match case.case_id.as_str() {
         "ftlist.FT_List_Up.move_tail_or_middle_to_head" => {
             let mut rows = Vec::new();
@@ -5429,6 +5485,7 @@ fn c_ftlist_add(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn c_ftlist_insert(case: &InputCase) -> Result<RunOutput, String> {
+    ensure_ft_list_topology_facade(case)?;
     match case.case_id.as_str() {
         "ftlist.FT_List_Insert.insert_empty_list" => {
             let (mut data_0, mut data_a, mut data_b, mut data_c) = (0_u8, 1_u8, 2_u8, 3_u8);
@@ -5942,6 +5999,7 @@ fn c_find_visited(
 }
 
 fn c_ftlist_remove(case: &InputCase) -> Result<RunOutput, String> {
+    ensure_ft_list_topology_facade(case)?;
     match case.case_id.as_str() {
         "ftlist.FT_List_Remove.remove_head_middle_tail" => {
             let mut rows = Vec::new();
@@ -6041,6 +6099,7 @@ fn c_ftlist_remove(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn c_ftlist_up(case: &InputCase) -> Result<RunOutput, String> {
+    ensure_ft_list_topology_facade(case)?;
     match case.case_id.as_str() {
         "ftlist.FT_List_Up.move_tail_or_middle_to_head" => {
             let mut rows = Vec::new();
@@ -6364,6 +6423,7 @@ fn wasm_ftlist_add(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn wasm_ftlist_insert(case: &InputCase) -> Result<RunOutput, String> {
+    ensure_ft_list_topology_facade(case)?;
     match case.case_id.as_str() {
         "ftlist.FT_List_Insert.insert_empty_list" => {
             let (mut data_0, mut data_a, mut data_b, mut data_c) = (0_u8, 1_u8, 2_u8, 3_u8);
@@ -6926,6 +6986,7 @@ fn wasm_find_visited(
 }
 
 fn wasm_ftlist_remove(case: &InputCase) -> Result<RunOutput, String> {
+    ensure_ft_list_topology_facade(case)?;
     match case.case_id.as_str() {
         "ftlist.FT_List_Remove.remove_head_middle_tail" => {
             let mut rows = Vec::new();
@@ -7025,6 +7086,7 @@ fn wasm_ftlist_remove(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn wasm_ftlist_up(case: &InputCase) -> Result<RunOutput, String> {
+    ensure_ft_list_topology_facade(case)?;
     match case.case_id.as_str() {
         "ftlist.FT_List_Up.move_tail_or_middle_to_head" => {
             let mut rows = Vec::new();

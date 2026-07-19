@@ -1,5 +1,67 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `FT_List_Insert/Remove/Up` topology facade route
+
+Status: implemented as real parity on 2026-07-20 for the pinned FreeType
+2.14.3 list-topology behavior in `src/base/ftutil.c:282-365`.
+
+Implemented real parity rows:
+
+- `ftlist.FT_List_Insert.insert_empty_list`
+- `ftlist.FT_List_Insert.insert_non_empty_list`
+- `ftlist.FT_List_Insert.null_list_or_node_noop`
+- `ftlist.FT_List_Remove.remove_head_middle_tail`
+- `ftlist.FT_List_Remove.remove_only_node`
+- `ftlist.FT_List_Remove.null_list_or_node_noop`
+- `ftlist.FT_List_Remove.membership_not_checked`
+- `ftlist.FT_List_Up.move_tail_or_middle_to_head`
+- `ftlist.FT_List_Up.already_head_noop`
+- `ftlist.FT_List_Up.null_list_or_node_noop`
+
+Finding:
+
+- The Rust, C ABI, WASM ABI, and pinned C oracle runners already implemented
+  exact list topology comparison for these rows, but the declared facade input
+  `facades/list/ft-list-topologies.json` was missing.
+- Counting those rows without a maintained facade would have hidden an
+  unresolved input dependency. The fixture now describes the shared topology
+  vocabulary and source references, and the harness validates that every
+  runnable list-topology case is explicitly present in that facade before
+  executing Rust, C ABI, or WASM output comparison.
+
+C behavior verified:
+
+- `FT_List_Insert` prepends the node, updates the old head's `prev`, preserves
+  the existing tail, and treats null list or node arguments as no-op.
+- `FT_List_Remove` patches links using the node's own `prev`/`next`, clears
+  list head/tail around the removed node, preserves node data, and does not
+  perform membership validation.
+- `FT_List_Up` moves a non-head node to list head, updates tail only when the
+  old tail moves, preserves the relative order of the other nodes, and treats
+  null list or node arguments as no-op.
+
+Impact:
+
+- `real-parity`: `4420 -> 4430`
+- `pending-route`: `571 -> 561`
+- `pending-core`: stays `1`
+- `generic-fallback`: stays `0`
+
+Remaining list-route blocker:
+
+- The three `import_contract` rows for `FT_List_Insert`, `FT_List_Remove`, and
+  `FT_List_Up` remain `pending-route`; they are part of the callback/provider
+  and public import-contract route surface, not the topology mutation surface.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=FT_List_Insert
+make -C pillow-rs-freetype test-case CASE=FT_List_Remove
+make -C pillow-rs-freetype test-case CASE=FT_List_Up
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: `FT_Face_Properties` scalar face-property route
 
 Status: scalar `FT_Face_Properties` route implemented on 2026-07-20 for the

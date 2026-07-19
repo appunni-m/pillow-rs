@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "subject": "ftlist-topology-facade",
+  "purpose": "Shared topology vocabulary for FT_List_Insert, FT_List_Remove, and FT_List_Up public parity rows. The executable harness constructs these nodes in each backend, and this facade keeps the declared non-font input resolvable and auditable.",
+  "source_refs": [
+    "freetype/include/freetype/ftlist.h:105-154",
+    "freetype/src/base/ftutil.c:282-365"
+  ],
+  "node_tokens": {
+    "N0": {
+      "data_token": "D0",
+      "role": "inserted or sentinel argument node"
+    },
+    "N1": {
+      "data_token": "D1",
+      "role": "first resident list node"
+    },
+    "N2": {
+      "data_token": "D2",
+      "role": "second resident list node"
+    },
+    "N3": {
+      "data_token": "D3",
+      "role": "third resident list node"
+    }
+  },
+  "semantics": {
+    "insert": "FT_List_Insert prepends node and preserves an existing tail; null list or node is a no-op.",
+    "remove": "FT_List_Remove patches links from the node's own prev/next fields; it does not perform membership validation.",
+    "up": "FT_List_Up moves a non-head node to the head, preserves relative order of the remaining nodes, and treats null list or node as a no-op."
+  },
+  "cases": [
+    {
+      "case_id": "ftlist.FT_List_Insert.insert_empty_list",
+      "initial_order": [],
+      "operation": "insert",
+      "node": "N0"
+    },
+    {
+      "case_id": "ftlist.FT_List_Insert.insert_non_empty_list",
+      "initial_orders": [
+        [
+          "N1"
+        ],
+        [
+          "N1",
+          "N2",
+          "N3"
+        ]
+      ],
+      "operation": "insert",
+      "node": "N0"
+    },
+    {
+      "case_id": "ftlist.FT_List_Insert.null_list_or_node_noop",
+      "initial_order": [
+        "N1",
+        "N2"
+      ],
+      "operation": "insert",
+      "argument_matrix": [
+        {
+          "list": null,
+          "node": "N0"
+        },
+        {
+          "list": "valid_list",
+          "node": null
+        }
+      ]
+    },
+    {
+      "case_id": "ftlist.FT_List_Remove.remove_head_middle_tail",
+      "initial_order": [
+        "N1",
+        "N2",
+        "N3"
+      ],
+      "operation": "remove",
+      "remove_nodes": [
+        "N1",
+        "N2",
+        "N3"
+      ]
+    },
+    {
+      "case_id": "ftlist.FT_List_Remove.remove_only_node",
+      "initial_order": [
+        "N1"
+      ],
+      "operation": "remove",
+      "remove_node": "N1"
+    },
+    {
+      "case_id": "ftlist.FT_List_Remove.null_list_or_node_noop",
+      "initial_order": [
+        "N1",
+        "N2"
+      ],
+      "operation": "remove",
+      "argument_matrix": [
+        {
+          "list": null,
+          "node": "N1"
+        },
+        {
+          "list": "valid_list",
+          "node": null
+        }
+      ]
+    },
+    {
+      "case_id": "ftlist.FT_List_Remove.membership_not_checked",
+      "initial_order": [
+        "N2"
+      ],
+      "operation": "remove",
+      "foreign_node": {
+        "node": "N0",
+        "prev": "N1",
+        "next": "N3",
+        "data_token": "D2"
+      }
+    },
+    {
+      "case_id": "ftlist.FT_List_Up.move_tail_or_middle_to_head",
+      "operation": "up",
+      "rows": [
+        {
+          "initial_order": [
+            "N1",
+            "N2",
+            "N3"
+          ],
+          "move": "N2"
+        },
+        {
+          "initial_order": [
+            "N1",
+            "N2",
+            "N3"
+          ],
+          "move": "N3"
+        },
+        {
+          "initial_order": [
+            "N1",
+            "N2"
+          ],
+          "move": "N2"
+        }
+      ]
+    },
+    {
+      "case_id": "ftlist.FT_List_Up.already_head_noop",
+      "operation": "up",
+      "rows": [
+        {
+          "initial_order": [
+            "N1"
+          ],
+          "move": "N1"
+        },
+        {
+          "initial_order": [
+            "N1",
+            "N2",
+            "N3"
+          ],
+          "move": "N1"
+        }
+      ]
+    },
+    {
+      "case_id": "ftlist.FT_List_Up.null_list_or_node_noop",
+      "initial_order": [
+        "N1",
+        "N2"
+      ],
+      "operation": "up",
+      "argument_matrix": [
+        {
+          "list": null,
+          "node": "N2"
+        },
+        {
+          "list": "valid_list",
+          "node": null
+        }
+      ]
+    }
+  ]
+}
