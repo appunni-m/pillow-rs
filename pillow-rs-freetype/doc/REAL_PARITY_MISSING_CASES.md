@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_Multi_Master` variation-face route
+Current verified result after `FT_Set_MM_Design_Coordinates` non-Adobe route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3837`
+  - `real-parity`: `3838`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `358`
+  - `generic-error-fallback`: `357`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3624,6 +3624,42 @@ Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Multi_Master.true_type_or_opentype_variation_error
+```
+
+### Issue Set CI: `FT_Set_MM_Design_Coordinates` non-Adobe variation route
+
+Previous blocker:
+
+- `ftmm.FT_Set_MM_Design_Coordinates.error_non_adobe_variation_face` stayed in
+  `generic-error-fallback`.
+- The fixture requires exact behavior from `freetype/src/base/ftmm.c:169-184`:
+  the public wrapper rejects nonzero null coordinates before service lookup,
+  otherwise asks for the multiple-master service, initializes the result to
+  `FT_Err_Invalid_Argument`, and only calls `service->set_mm_design` when the
+  legacy Adobe MM design-coordinate setter exists. TrueType/OpenType variation
+  faces use the variation design-coordinate setter instead, and static faces do
+  not expose the Adobe MM setter.
+
+Plan:
+
+1. Keep the fixture intact; it exercises both variable and static non-Adobe
+   faces through the public `FT_Set_MM_Design_Coordinates` wrapper.
+2. Require exact error comparison for the return status on the same input.
+3. Classify the row as real parity only after focused same-input parity passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused non-Adobe variation/static-face row passes exact comparison
+  against pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmm.FT_Set_MM_Design_Coordinates.error_non_adobe_variation_face` as
+  `real-parity`.
+
+Verified command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_Design_Coordinates.error_non_adobe_variation_face
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
