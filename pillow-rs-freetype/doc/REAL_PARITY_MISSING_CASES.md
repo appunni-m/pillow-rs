@@ -2390,6 +2390,25 @@ Verified progress:
   `ftoutln.FT_Outline_Get_CBox.null_inputs_noop`: a null outline pointer
   leaves the caller's sentinel `FT_BBox` unchanged, and a null output pointer
   performs no write.
+- Added real maintained outline/module fixtures for the future outline-render
+  batch:
+  `outlines/synthetic/dropout-thin-stems-scantype.json`,
+  `outlines/synthetic/overlapping-contours.json`,
+  `outlines/synthetic/cw-ccw-orientation-pairs.json`,
+  `outlines/synthetic/span-wide-overflow.json`,
+  `outlines/render/cbox-beyond-render-limit.json`, and
+  `modules/raster/params-logging-renderer.json`.
+- Pinned C oracle now emits exact outputs for ten previously pending
+  `ftoutln.outline_render` rows covering dropout flags, even-odd fill,
+  reverse-fill orientation, raster parameter forwarding, renderer fallback
+  errors, and wide `FT_Span` callback behavior.
+- Rust FFI, C ABI, and WASM ABI now match pinned FreeType for
+  `ftimage.FT_Span.wide_outline_span_limit`: the C smooth direct sweep assigns
+  `FT_Span.len` with a plain `(unsigned short)` cast, so a 66559-pixel span
+  wraps to `1023` rather than saturating to `65535` or returning an error.
+- The previous `wide_outline_span_limit` expected-error assumption was wrong
+  for pinned FreeType 2.14.3 and the maintained fixture; the row now expects
+  success and compares the exact callback stream.
 
 Focused non-coverage result:
 
@@ -2451,6 +2470,20 @@ make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Get_CBox
 ```
 
 Result: `3 / 3` runtime parity rows passed, `0` failed, `0` pending.
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_Span.wide_outline_span_limit
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending.
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftoutln.outline_render
+```
+
+Result: `89 / 89` runtime parity rows passed, `0` failed, `0` pending. Route
+audit: `real-parity` `4236`, `pending-route` `71`,
+`generic-error-fallback` absent (`0`).
 
 Broadened non-coverage result:
 
