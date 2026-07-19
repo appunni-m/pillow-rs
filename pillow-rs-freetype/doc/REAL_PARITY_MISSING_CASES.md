@@ -8528,7 +8528,7 @@ units, not as a single monolithic implementation task.
 | COLR/color/palette traversal | 130 | `ftcolor.*`, `otsvg.*`, SVG/color glyph load probes | `src/tables.rs`, new color table module if added, `src/font.rs`, `src/ffi/*`, `ffi-c/src/lib.rs`, `ffi-wasm/src/lib.rs`, `tests/fixtures/inputs/public-api/ftcolor.*.json` | COLR/CPAL/SVG data model and iterator ABI, then C/Rust/ABI fixture runner routes. |
 | FTC cache subsystem | 112 | `ftcache.*` manager, cmap/image/sbit cache, node lifecycle | new cache module if added, `src/font.rs`, `src/tt/sbit.rs`, `src/ffi/*`, C/WASM wrappers, `ftcache.*.json` inputs | Manager-owned face/size/cache-node handles with exact FreeType error/null behavior. |
 | Stroker geometry | 86 | `ftstroke.*` parse, export, glyph stroke/border, counts | new stroker module if added, `src/outline.rs`, `src/render.rs`, `src/ffi/*`, C/WASM wrappers, `ftstroke.*.json` inputs | Pure-Rust stroker path construction and exact border/count/export geometry. |
-| Multiple-master and variable fonts | 84 | `ftmm.*`, named instances, variation table rows | `src/tt/fvar.rs`, `src/tables.rs`, `src/font.rs`, `src/scaler.rs`, C/WASM wrappers, `ftmm.*.json` inputs | Complete Adobe MM reset semantics and `gvar`/`HVAR`/`MVAR` behavior before the three remaining pending-core rows can become real. |
+| Multiple-master and variable fonts | 84 | `ftmm.*`, named instances, variation table rows | `src/tt/fvar.rs`, `src/tt/varstore.rs`, new `src/tt/mvar.rs`, `src/tables.rs`, `src/font.rs`, `src/scaler.rs`, C/WASM wrappers, `ftmm.*.json` and `tttables.*.json` inputs | Complete Adobe MM reset semantics and `MVAR` vertical-header behavior before the two remaining pending-core rows can become real. |
 | Error-path asset routing | 54 | `fterrdef.*` error rows across face load, render, module, stream paths | `tests/unified_fixture_parity.rs`, public-api input rows, runner/oracle routing, then relevant core modules | Replace no-asset expected-error placeholders with concrete C oracle inputs and Rust route execution. |
 | Outline/image/raster callbacks | 88 | `ftimage.*`, `ftoutln.*`, `ftrender.*` decompose/render/raster routes | `src/outline.rs`, `src/render.rs`, `src/grays.rs`, `src/ffi/*`, C/WASM wrappers | Callback-compatible outline decomposition, bitmap extraction, renderer mode state, and exact error propagation. |
 | Module/property APIs | 72 | `ftmodapi.*`, `ftdriver.*`, `ftparams.*`, `freetype.face_properties*` | `src/api.rs`, `src/font.rs`, `src/autohint/*`, `src/tt/hinter/*`, `src/ffi/*`, C/WASM wrappers | Decide exact supported-vs-unsupported module surface, then route properties through real core state. |
@@ -8701,10 +8701,10 @@ removed.
    reaches SVG glyph loading.
 3. `ftstroke` stroker core: own stroker create/configure/parse/count/export
    routes. Do not mix with generic outline decomposition fixes.
-4. `ftmm` variable-font descriptors and named instances: own `ftmm.*`, the
-   remaining Adobe MM reset row, and named-instance `gvar`/`HVAR` glyph-output
-   row; leave the `MVAR` SFNT row as a separate follow-up if `MVAR` is not
-   implemented.
+4. `ftmm` variable-font descriptors and named instances: own `ftmm.*` and the
+   remaining Adobe MM reset row.  The named-instance `gvar`/`HVAR` glyph-output
+   row is real parity as of `49a539875`; do not re-add its pending guard.
+   Track `MVAR` SFNT table mutation as Issue Set BK below.
 5. Error-path concrete assets: own `generic-error-fallback`,
    `null-error-fallback`, and `void-fallback` rows, converting placeholders to
    concrete C/Rust route checks without changing expected outputs.
@@ -9211,6 +9211,90 @@ Verification for the classification batch:
 
 ```bash
 make -C pillow-rs-freetype route-audit
+```
+
+### Issue Set Current: MVAR vertical-header SFNT table mutation
+
+Status: still `pending-core` after `49a539875`.
+
+Current verified ledger:
+
+- Focused `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance` now
+  passes exact C oracle, Rust FFI, C ABI, and WASM ABI parity.
+- Route audit at `49a539875`: `real-parity=4470`, `pending-core=2`,
+  `pending-route=514`.
+- Full runtime parity at `49a539875`: `6612/6612` runnable passed,
+  `pending=622`.
+
+Remaining core row owned by this issue set:
+
+- `tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation`
+
+Finding:
+
+- The maintained fixture
+  `tests/fixtures/input/fonts/variation/mvar-vertical-metrics.ttf` is generated
+  by `make -C pillow-rs-freetype font-fixture-mvar`.  Pinned C FreeType
+  observes its vertical-header MVAR deltas: default `Ascender=880`,
+  `Descender=-120`, `Line_Gap=20`, `caret_Slope_Rise=1`,
+  `caret_Slope_Run=0`, `caret_Offset=0`; after setting design coordinates to
+  the maximum `wght` instance, C reports `Ascender=912`, `Descender=-144`,
+  `Line_Gap=32`, `caret_Slope_Rise=3`, `caret_Slope_Run=3`,
+  `caret_Offset=4`.
+- `FontData` currently parses `fvar`, `gvar`, and `HVAR`; it has no parsed
+  `MVAR` table.
+- `FT_Get_Sfnt_Table(face, FT_SFNT_VHEA)` currently returns a static
+  `TT_VertHeader` parsed from `vhea`.  It does not apply variation-coordinate
+  deltas to the public vertical header record after
+  `FT_Set_Var_Design_Coordinates`.
+- An unguarded focused run after adding the asset failed because the current
+  harness still routes variation-sequence oracle output to fallback `null` and
+  the Rust runner only reports pointer nullness/record kind.  Keep the row
+  explicitly runtime-pending until exact default/changed record fields are
+  implemented on all lanes.
+- Pinned FreeType applies this through `tt_apply_mvar`:
+  - `freetype/src/truetype/ttgxvar.c:1406-1472` maps MVAR tags to public
+    face/table fields.
+  - `freetype/src/truetype/ttgxvar.c:1480-1612` parses the MVAR value records
+    and shared item variation store.
+  - `freetype/src/truetype/ttgxvar.c:1633-1755` applies item deltas after
+    variation coordinates change.
+
+Required fix plan:
+
+1. Keep the maintained fixture generator target for
+   `input/fonts/variation/mvar-vertical-metrics.ttf` reproducible.  The font
+   contains `fvar`, `vhea`, `vmtx`, and an `MVAR` table with observable deltas
+   for `VASC`, `VDSC`, `VLGP`, `VCRS`, `VCRN`, and `VCOF`.
+2. Add a pure-Rust `src/tt/mvar.rs` parser that reuses
+   `src/tt/varstore.rs` for the item variation store and value-record delta
+   lookup.  Do not add runtime FreeType calls or FFI shortcuts.
+3. Store parsed `MVAR` on `FontData` and apply deltas when variation
+   coordinates change, preserving unmodified base `vhea` values so repeated
+   coordinate changes do not accumulate deltas.
+4. Update the `FT_Get_Sfnt_Table` backing `TT_VertHeader` record after
+   `FT_Set_Var_Design_Coordinates`, `FT_Set_Var_Blend_Coordinates`,
+   `FT_Set_MM_Blend_Coordinates`, and named-instance changes that affect the
+   same normalized coordinates.
+5. Route the variation-sequence `sfnt.get_sfnt_table.record` row through the
+   maintained Rust/C/WASM harness instead of oracle fallback only after the same
+   default/changed record output matches pinned C exactly.
+6. Promote
+   `tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation` from
+   `pending-core` only after focused parity proves exact default and changed
+   `TT_VertHeader` record fields through pinned C, Rust FFI, thin C ABI, and
+   WASM ABI.
+
+Focused verification before promotion:
+
+```bash
+make -C pillow-rs-freetype font-fixture-mvar
+make -C pillow-rs-freetype test-case CASE=tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation
+make fontdone-test
+make fontdone-ffi
+make fontdone-ffi-compat
+make -C pillow-rs-freetype fmt
+make -C pillow-rs-freetype clippy
 ```
 
 ### Issue Set Current: `t1tables` Type1 runtime table route placeholders
