@@ -8338,6 +8338,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftbdf.FT_Get_BDF_Property.error_null_face_or_output"
             || case.case_id
                 == "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike"
+            || case.case_id
+                == "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output"
             || case.case_id == "freetype.FT_Load_Glyph.matrix_load"
             || case.case_id
                 == "freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags"
