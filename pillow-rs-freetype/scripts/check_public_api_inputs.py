@@ -819,6 +819,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmm.FT_Set_Var_Blend_Coordinates.error_null_coords_with_nonzero_count",
         "ftmm.FT_Set_MM_Blend_Coordinates.error_null_coords_with_nonzero_count",
         "ftmm.FT_Set_MM_Design_Coordinates.error_null_coords_with_nonzero_count",
+        "freetype.FT_New_Face.error_null_library_or_aface",
         "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none",
         "ftbdf.FT_Get_BDF_Property.error_null_face_or_output",
         "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike",
