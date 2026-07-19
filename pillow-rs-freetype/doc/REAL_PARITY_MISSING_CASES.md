@@ -10,19 +10,19 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after final batched ftcache SBit exact classification:
+Current verified result after GX/bzip2/palette exact classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `4042`
+  - `real-parity`: `4050`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `153`
+  - `generic-error-fallback`: `145`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1079,6 +1079,48 @@ make -C pillow-rs-freetype test-case CASE=<each listed case id>
 
 Result: four focused exact rows passed. Route audit:
 `real-parity` `4042`, `generic-error-fallback` `153`.
+
+### Issue Set Current: GX validation, bzip2, and palette foreground exact routes
+
+Previous blocker:
+
+- Eight concrete public rows across classic kern validation, bzip2 streams, and
+  palette foreground color were classified as `generic-error-fallback`.
+- The rows already ran through pinned C FreeType, Rust FFI, thin C ABI, and
+  WASM ABI, but fallback classification only proved that a broad fallback path
+  ran.
+
+Fix plan:
+
+1. Promote only the concrete rows that pass focused exact comparison:
+   - `ftgxval.FT_ClassicKern_Validate.rejects_invalid_arguments`
+   - `ftgxval.FT_ClassicKern_Validate.reports_unimplemented_or_invalid_table`
+   - `ftgxval.FT_VALIDATE_APPLE.absent_or_invalid_kern_table`
+   - `ftgxval.FT_VALIDATE_CKERN.malformed_table_error_matches_c`
+   - `ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source`
+   - `ftbzip2.FT_Stream_OpenBzip2.error_invalid_or_truncated_bzip2_header`
+   - `ftcolor.FT_Palette_Set_Foreground_Color.error_null_face`
+   - `ftcolor.FT_Palette_Set_Foreground_Color.error_color_layers_disabled`
+2. Keep all fixture inputs, oracle outputs, and comparison rules unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI, and WASM ABI before
+   counting these rows as `real-parity`.
+
+Verified progress:
+
+- Focused generic-mode probes passed for all eight rows before promotion.
+- Exact comparison after promotion passed for all eight rows.
+- The previously fallback-classified rows now validate exact status/output
+  against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed for these rows.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=<each listed case id>
+```
+
+Result: all eight focused exact rows passed. Route audit:
+`real-parity` `4050`, `generic-error-fallback` `145`.
 
 ### Issue Set Current: `FT_Get_BDF_Property` missing-property exact-error route
 

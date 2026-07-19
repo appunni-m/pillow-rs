@@ -822,6 +822,8 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftcolor.FT_Palette_Data_Get.error_null_face_or_output",
         "ftcolor.FT_Palette_Data_Get.error_color_layers_disabled",
         "ftcolor.FT_Palette_Select.error_null_face_or_invalid_palette_index",
+        "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face",
+        "ftcolor.FT_Palette_Set_Foreground_Color.error_color_layers_disabled",
         "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output",
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.non_cid_or_null_face_errors_and_clears_output",
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs",
@@ -843,6 +845,12 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftcache.FTC_SBitCache_LookupScaler.clears_outputs_before_lookup",
         "ftcache.FTC_SBitCache_New.error_outputs_null_cache",
         "ftcache.FTC_SBitCache_New.invalid_arguments_match_c",
+        "ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source",
+        "ftbzip2.FT_Stream_OpenBzip2.error_invalid_or_truncated_bzip2_header",
+        "ftgxval.FT_ClassicKern_Validate.rejects_invalid_arguments",
+        "ftgxval.FT_ClassicKern_Validate.reports_unimplemented_or_invalid_table",
+        "ftgxval.FT_VALIDATE_APPLE.absent_or_invalid_kern_table",
+        "ftgxval.FT_VALIDATE_CKERN.malformed_table_error_matches_c",
         "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments",
         "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table",
         "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments",
@@ -1336,6 +1344,17 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Palette_Select null-face/invalid-index rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftcolor.palette_set_foreground_color"
+        and row.case_id == "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face"
+    ):
+        return "FT_Palette_Set_Foreground_Color null-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.palette_set_foreground_color"
+        and row.case_id
+        == "ftcolor.FT_Palette_Set_Foreground_Color.error_color_layers_disabled"
+    ):
+        return "FT_Palette_Set_Foreground_Color disabled-color-layers errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftcid.get_cid_from_glyph_index"
         and row.case_id
         == "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output"
@@ -1450,6 +1469,38 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftcache.FTC_SBitCache_New.invalid_arguments_match_c"
     ):
         return "FTC_SBitCache_New invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftbzip2.stream_open_bzip2"
+        and row.case_id == "ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source"
+    ):
+        return "FT_Stream_OpenBzip2 null-stream/source errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftbzip2.stream_open_bzip2"
+        and row.case_id
+        == "ftbzip2.FT_Stream_OpenBzip2.error_invalid_or_truncated_bzip2_header"
+    ):
+        return "FT_Stream_OpenBzip2 invalid/truncated-header errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgxval.classic_kern_validate"
+        and row.case_id == "ftgxval.FT_ClassicKern_Validate.rejects_invalid_arguments"
+    ):
+        return "FT_ClassicKern_Validate invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgxval.classic_kern_validate"
+        and row.case_id
+        == "ftgxval.FT_ClassicKern_Validate.reports_unimplemented_or_invalid_table"
+    ):
+        return "FT_ClassicKern_Validate unimplemented/invalid-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgxval.classic_kern_validate"
+        and row.case_id == "ftgxval.FT_VALIDATE_APPLE.absent_or_invalid_kern_table"
+    ):
+        return "FT_VALIDATE_APPLE absent/invalid-kern-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgxval.classic_kern_validate"
+        and row.case_id == "ftgxval.FT_VALIDATE_CKERN.malformed_table_error_matches_c"
+    ):
+        return "FT_VALIDATE_CKERN malformed-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftgxval.truetype_gx_validate"
         and row.case_id == "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments"
