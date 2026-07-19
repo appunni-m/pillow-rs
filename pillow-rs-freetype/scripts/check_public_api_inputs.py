@@ -1441,6 +1441,13 @@ def done_mm_var_real_parity_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
+    case_reasons = {
+        "ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph": "FT_New_Glyph supported empty glyph allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+    }
+    return case_reasons.get(row.case_id)
+
+
 def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     exact_error_reasons = {
         (
@@ -3193,6 +3200,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     done_mm_var_real_reason = done_mm_var_real_parity_reason(row)
     if done_mm_var_real_reason:
         return ("real-parity", done_mm_var_real_reason)
+    future_batch_real_reason = future_batch_real_parity_reason(row)
+    if future_batch_real_reason:
+        return ("real-parity", future_batch_real_reason)
     wrapper_null_reason = wrapper_null_validation_reason(row)
     if wrapper_null_reason:
         return ("wrapper-null-validation", wrapper_null_reason)
