@@ -8207,6 +8207,62 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: `ftcolor` COLR/CPAL success route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `8ce9477e8`: `real-parity=4465`,
+  `generic-fallback=339`, `pending-route=175`, `pending-core=7`.
+
+Finding:
+
+- The route audit already has exact real parity for selected `ftcolor` null,
+  malformed, disabled-color-layers, invalid iterator, invalid root transform,
+  and unsupported paint-format rejection rows.
+- The remaining COLR/CPAL paint graph, composite mode, transform, clipbox,
+  layer iterator, colorline, palette data/select/foreground-color, and paint
+  record success rows had stayed in `generic-fallback` with the reason
+  `no explicit maintained route classification`.
+- Those rows are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
+  color subsystem route that opens COLR/CPAL fixtures, walks
+  `FT_Get_Color_Glyph_Paint`, `FT_Get_Paint`, `FT_Get_Paint_Layers`,
+  `FT_Get_Colorline_Stops`, palette APIs, and clipbox APIs, then compares exact
+  public structs, iterator state, palette entries, root transforms, composite
+  modes, and output preservation.
+
+Classification change:
+
+- 108 `ftcolor.*` rows moved from `generic-fallback` to `pending-route`.
+- 22 existing exact `ftcolor` rows remain `real-parity`.
+- New route audit counts: `real-parity=4465`, `generic-fallback=231`,
+  `pending-route=283`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add a maintained COLR/CPAL route instead of per-row expected output
+   shortcuts. It must run the same operation sequence through pinned C
+   FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement the pure-Rust COLR/CPAL parsing, paint graph traversal, palette,
+   clipbox, layer, and colorline iterator state first. The C and WASM ABI
+   layers may only own handle validation, record copying, and lifetime
+   bookkeeping.
+3. Compare exact public scalar and record output for paint formats, affine
+   transforms, composite modes, color stops, layer iterators, palette counts and
+   BGRA entries, foreground-color policy, clipbox coordinates, null-output
+   preservation, and end-of-iteration behavior.
+4. Keep the already-routed `ftcolor` rejection rows real; do not demote them
+   while building the broader color success route.
+5. Promote rows only after focused `ftcolor` runtime proves exact C oracle,
+   Rust FFI, C ABI, and WASM ABI output for the same input.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: `FTC_*` cache subsystem success/lifecycle route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.
