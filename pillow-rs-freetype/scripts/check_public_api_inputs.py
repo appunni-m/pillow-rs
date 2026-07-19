@@ -878,12 +878,23 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "fterrdef.FT_Err_Invalid_Stream_Seek.stream_seek_failure",
         "fterrdef.FT_Err_Invalid_Character_Code.char_index_name_lookup_invalid_code",
         "fterrdef.FT_Err_Invalid_Driver_Handle.module_driver_handle_validation",
+        "fterrdef.FT_Err_Invalid_Outline.rust_invalid_outline_mapping",
+        "fterrdef.FT_Err_Invalid_PPem.tt_size_reset_zero_ppem",
         "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name",
         "fterrdef.FT_Err_Invalid_Handle.generic_object_handle_validation",
         "fterrdef.FT_Err_Invalid_Pixel_Size.bitmap_strike_mismatch",
         "fterrdef.FT_Err_Nested_Frame_Access.stream_nested_frame_guard",
+        "fterrdef.FT_Err_Array_Too_Large.allocator_growth_overflow_returns_error",
+        "fterrdef.FT_Err_Out_Of_Memory.allocator_failure_injection",
+        "fterrdef.FT_Err_Unimplemented_Feature.optional_module_feature_disabled",
         "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
         "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c",
+        "ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch",
+        "ftoutln.FT_Outline_Done.invalid_library_or_outline_errors",
+        "ftoutln.FT_Outline_Embolden.invalid_or_indeterminate_orientation_errors",
+        "ftoutln.FT_Outline_EmboldenXY.invalid_orientation_or_null_errors",
+        "ftoutln.FT_Outline_New.invalid_arguments_and_limits",
+        "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.face_property_ignored",
         "ftcolor.FT_Palette_Select.error_color_layers_disabled",
         "ftlcdfil.FT_Library_SetLcdFilter.unimplemented_without_subpixel_filtering",
         "ftlcdfil.FT_Library_SetLcdFilterWeights.unimplemented_without_subpixel_filtering",
@@ -892,6 +903,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmm.FT_Get_Var_Axis_Flags.out_of_range_axis_error",
         "ftsnames.FT_Get_Sfnt_LangTag.format0_invalid_table_error",
         "tttables.FT_Sfnt_Table_Info.invalid_face_error",
+        "tttables.TT_Postscript.invalid_post_format_error_runtime",
         "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments",
         "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table",
         "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments",
@@ -1182,6 +1194,14 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "fterrdef.FT_Err_Invalid_Pixel_Size.bitmap_strike_mismatch",
         ): "FT_Request_Size bitmap-strike mismatch error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
+            "FT_Set_Char_Size_then_FT_Load_Glyph",
+            "fterrdef.FT_Err_Invalid_PPem.tt_size_reset_zero_ppem",
+        ): "FT_Set_Char_Size then FT_Load_Glyph zero-ppem error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "FT_Stream_OpenBzip2",
+            "fterrdef.FT_Err_Unimplemented_Feature.optional_module_feature_disabled",
+        ): "FT_Stream_OpenBzip2 disabled optional-module error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
             "FT_Property_Get",
             "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
         ): "FT_Property_Get glyph-to-script-map invalid-face error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
@@ -1198,9 +1218,49 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "ftcolor.FT_Palette_Select.error_color_layers_disabled",
         ): "FT_Palette_Select color-layers-disabled error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
+            "allocation_failure_harness.array_growth",
+            "fterrdef.FT_Err_Array_Too_Large.allocator_growth_overflow_returns_error",
+        ): "allocator array-growth overflow error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "allocation_failure_harness.fail_after_n",
+            "fterrdef.FT_Err_Out_Of_Memory.allocator_failure_injection",
+        ): "allocator fail-after-N out-of-memory error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ffi_error_mapping",
+            "fterrdef.FT_Err_Invalid_Outline.rust_invalid_outline_mapping",
+        ): "FFI invalid-outline error mapping validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "face.new",
+            "tttables.TT_Postscript.invalid_post_format_error_runtime",
+        ): "TT_Postscript invalid-post-format runtime error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "freetype.face_properties_then_render",
+            "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.face_property_ignored",
+        ): "FT_Face_Properties LCD filter weights ignored behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
             "ftglyph.done_glyph",
             "fterrdef.FT_Err_Invalid_Handle.generic_object_handle_validation",
         ): "FT_Done_Glyph invalid-handle error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftoutln.outline_copy",
+            "ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch",
+        ): "FT_Outline_Copy invalid-pointer/size mismatch error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftoutln.outline_done",
+            "ftoutln.FT_Outline_Done.invalid_library_or_outline_errors",
+        ): "FT_Outline_Done invalid-library/outline errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftoutln.outline_embolden",
+            "ftoutln.FT_Outline_Embolden.invalid_or_indeterminate_orientation_errors",
+        ): "FT_Outline_Embolden invalid/indeterminate-orientation errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftoutln.outline_embolden_xy",
+            "ftoutln.FT_Outline_EmboldenXY.invalid_orientation_or_null_errors",
+        ): "FT_Outline_EmboldenXY invalid-orientation/null errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftoutln.outline_new",
+            "ftoutln.FT_Outline_New.invalid_arguments_and_limits",
+        ): "FT_Outline_New invalid-argument/limit errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "freetype.new_size",
             "fterrdef.FT_Err_Invalid_Driver_Handle.module_driver_handle_validation",
